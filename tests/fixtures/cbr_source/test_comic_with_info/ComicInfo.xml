@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<ComicInfo>
+    <Title>Test Comic</Title>
+    <Series>Test Series</Series>
+    <Number>1</Number>
+    <Volume>1</Volume>
+    <Writer>Test Writer</Writer>
+    <Publisher>Test Publisher</Publisher>
+    <Year>2024</Year>
+    <PageCount>3</PageCount>
+</ComicInfo>

@@ -1,0 +1,13 @@
+database:
+  db_type: sqlite
+  sqlite:
+    path: data.db
+    pragmas:
+      foreign_keys: ON
+      journal_mode: WAL
+
+application:
+  name: Codex
+  host: 127.0.0.1
+  port: 8080
+  debug: true

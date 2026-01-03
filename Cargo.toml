@@ -1,0 +1,52 @@
+[package]
+name = "codex"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["rar"]
+rar = ["dep:unrar"]
+
+[dependencies]
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1.0"
+
+# Configuration
+config = "0.14"
+
+# Archive formats
+zip = "2.1"
+unrar = { version = "0.5", optional = true }
+
+# PDF parsing
+lopdf = "0.34"
+
+# Image processing
+image = "0.25"
+
+# Hashing
+sha2 = "0.10"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# XML parsing (for ComicInfo.xml)
+quick-xml = { version = "0.36", features = ["serialize"] }
+
+# File system utilities
+walkdir = "2.5"
+
+# Date/time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Table formatting
+tabled = "0.20"
+
+[dev-dependencies]
+tempfile = "3.13"

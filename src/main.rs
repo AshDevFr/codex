@@ -1,0 +1,66 @@
+mod commands;
+mod config;
+mod parsers;
+mod scanner;
+mod utils;
+
+use clap::{Parser, Subcommand};
+use commands::{scan_command, serve_command};
+use std::path::PathBuf;
+
+#[derive(Parser)]
+#[command(name = "codex")]
+#[command(about = "A digital library media server", long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Scan a directory or file and analyze its contents (debugging tool)
+    Scan {
+        /// Path to directory or file to scan
+        #[arg(value_name = "PATH")]
+        path: PathBuf,
+
+        /// Output in JSON format (single object or array)
+        #[arg(short, long)]
+        json: bool,
+
+        /// Include detailed page information
+        #[arg(short, long)]
+        pages: bool,
+
+        /// Enable verbose output
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Start the media server
+    Serve {
+        /// Path to configuration file
+        #[arg(short, long, default_value = "codex.yaml")]
+        config: PathBuf,
+    },
+}
+
+fn main() -> anyhow::Result<()> {
+    let cli = Cli::parse();
+
+    match cli.command {
+        Commands::Scan {
+            path,
+            json,
+            pages,
+            verbose,
+        } => {
+            scan_command(path, json, pages, verbose)?;
+        }
+        Commands::Serve { config } => {
+            serve_command(config)?;
+        }
+    }
+
+    Ok(())
+}
