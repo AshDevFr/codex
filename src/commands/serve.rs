@@ -90,7 +90,17 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Build router using API module
     info!("========================================");
     info!("Building HTTP router...");
-    let mut app = crate::api::create_router(api_state);
+
+    // Display API configuration
+    info!("API Configuration:");
+    info!("  Base path: {}", config.api.base_path);
+    info!("  CORS enabled: {}", config.api.cors_enabled);
+    if config.api.cors_enabled {
+        info!("  CORS origins: {:?}", config.api.cors_origins);
+    }
+    info!("  Max page size: {}", config.api.max_page_size);
+
+    let mut app = crate::api::create_router(api_state, &config.api);
 
     // Conditionally mount Swagger UI if enabled
     if config.api.enable_swagger {

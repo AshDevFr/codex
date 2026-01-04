@@ -1,24 +1,50 @@
 use crate::api::{extractors::AuthState, handlers};
+use crate::config::ApiConfig;
 use axum::{
     routing::{delete, get, post, put},
     Router,
 };
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
+use tower_http::cors::{Any, CorsLayer};
 
 /// Create the main API router with all routes
 ///
 /// Includes health check and all API v1 endpoints
-pub fn create_router(state: Arc<AuthState>) -> Router {
+pub fn create_router(state: Arc<AuthState>, api_config: &ApiConfig) -> Router {
     // Clone the database connection for the health check route
     let db_for_health = state.db.clone();
 
-    Router::new()
+    let mut router = Router::new()
         // Health check (public, no auth)
         .route("/health", get(handlers::health_check))
         .with_state(db_for_health)
         // API v1 routes
-        .nest("/api/v1", api_v1_routes(state))
+        .nest("/api/v1", api_v1_routes(state));
+
+    // Add CORS middleware if enabled
+    if api_config.cors_enabled {
+        let cors = if api_config.cors_origins.contains(&"*".to_string()) {
+            // Allow all origins
+            CorsLayer::permissive()
+        } else {
+            // Allow specific origins
+            let origins: Vec<_> = api_config
+                .cors_origins
+                .iter()
+                .filter_map(|o| o.parse().ok())
+                .collect();
+
+            CorsLayer::new()
+                .allow_origin(origins)
+                .allow_methods(Any)
+                .allow_headers(Any)
+        };
+
+        router = router.layer(cors);
+    }
+
+    router
 }
 
 /// Create API v1 routes

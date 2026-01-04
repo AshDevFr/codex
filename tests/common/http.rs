@@ -1,6 +1,7 @@
 use axum::Router;
 use codex::api::extractors::AuthState;
 use codex::api::routes::create_router;
+use codex::config::ApiConfig;
 use codex::utils::jwt::JwtService;
 use http_body_util::BodyExt;
 use hyper::{body::Bytes, Request, StatusCode};
@@ -19,9 +20,22 @@ pub fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
     Arc::new(AuthState { db, jwt_service })
 }
 
+/// Helper to create a test API config
+pub fn create_test_api_config() -> ApiConfig {
+    ApiConfig {
+        base_path: "/api/v1".to_string(),
+        enable_swagger: false,
+        swagger_path: "/docs".to_string(),
+        cors_enabled: true,
+        cors_origins: vec!["*".to_string()],
+        max_page_size: 100,
+    }
+}
+
 /// Helper to create the API router with test state
 pub fn create_test_router(state: Arc<AuthState>) -> Router {
-    create_router(state)
+    let api_config = create_test_api_config();
+    create_router(state, &api_config)
 }
 
 /// Helper to make an HTTP request and get the response
