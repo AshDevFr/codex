@@ -1,36 +1,12 @@
-use codex::api::permissions::{parse_permissions, serialize_permissions, Permission, ADMIN_PERMISSIONS, READONLY_PERMISSIONS};
-use codex::config::{DatabaseConfig, DatabaseType, SQLiteConfig};
-use codex::db::entities::{api_keys, users};
-use codex::db::repositories::{ApiKeyRepository, UserRepository};
-use codex::db::Database;
-use codex::utils::{jwt::JwtService, password};
+#[path = "../common/mod.rs"]
+mod common;
+
 use chrono::Utc;
-use std::collections::{HashMap, HashSet};
-use tempfile::TempDir;
-use uuid::Uuid;
-
-/// Helper to create a test SQLite database with migrations applied
-async fn setup_test_db() -> (sea_orm::DatabaseConnection, TempDir) {
-    let temp_dir = TempDir::new().unwrap();
-    let db_path = temp_dir.path().join("test.db");
-
-    let mut pragmas = HashMap::new();
-    pragmas.insert("foreign_keys".to_string(), "ON".to_string());
-
-    let config = DatabaseConfig {
-        db_type: DatabaseType::SQLite,
-        postgres: None,
-        sqlite: Some(SQLiteConfig {
-            path: db_path.to_str().unwrap().to_string(),
-            pragmas: Some(pragmas),
-        }),
-    };
-
-    let db = Database::new(&config).await.unwrap();
-    db.run_migrations().await.unwrap();
-    let conn = db.sea_orm_connection().clone();
-    (conn, temp_dir)
-}
+use codex::api::permissions::{parse_permissions, serialize_permissions, Permission, ADMIN_PERMISSIONS, READONLY_PERMISSIONS};
+use codex::db::repositories::{ApiKeyRepository, UserRepository};
+use codex::utils::{jwt::JwtService, password};
+use common::*;
+use std::collections::HashSet;
 
 /// Test the complete user authentication flow
 #[tokio::test]
@@ -41,16 +17,7 @@ async fn test_user_authentication_flow() {
     let plain_password = "secure_password_123";
     let password_hash = password::hash_password(plain_password).unwrap();
 
-    let user = users::Model {
-        id: Uuid::new_v4(),
-        username: "authtest".to_string(),
-        email: "authtest@example.com".to_string(),
-        password_hash: password_hash.clone(),
-        is_admin: false,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-        last_login_at: None,
-    };
+    let user = create_test_user("authtest", "authtest@example.com", &password_hash, false);
 
     let created_user = UserRepository::create(&db, &user).await.unwrap();
     assert_eq!(created_user.username, "authtest");
@@ -80,16 +47,7 @@ async fn test_jwt_token_flow() {
     let (db, _temp_dir) = setup_test_db().await;
 
     // Create a user
-    let user = users::Model {
-        id: Uuid::new_v4(),
-        username: "jwttest".to_string(),
-        email: "jwt@example.com".to_string(),
-        password_hash: "hash123".to_string(),
-        is_admin: true,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-        last_login_at: None,
-    };
+    let user = create_test_user("jwttest", "jwt@example.com", "hash123", true);
 
     let created_user = UserRepository::create(&db, &user).await.unwrap();
 
@@ -119,16 +77,7 @@ async fn test_api_key_flow() {
     let (db, _temp_dir) = setup_test_db().await;
 
     // 1. Create a user
-    let user = users::Model {
-        id: Uuid::new_v4(),
-        username: "apikeytest".to_string(),
-        email: "apikey@example.com".to_string(),
-        password_hash: "hash123".to_string(),
-        is_admin: false,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-        last_login_at: None,
-    };
+    let user = create_test_user("apikeytest", "apikey@example.com", "hash123", false);
 
     let created_user = UserRepository::create(&db, &user).await.unwrap();
 
@@ -141,19 +90,13 @@ async fn test_api_key_flow() {
     permissions.insert(Permission::BooksRead);
     permissions.insert(Permission::PagesRead);
 
-    let api_key = api_keys::Model {
-        id: Uuid::new_v4(),
-        user_id: created_user.id,
-        name: "Test API Key".to_string(),
-        key_hash: key_hash.clone(),
-        key_prefix: "codex_abc".to_string(),
-        permissions: serialize_permissions(&permissions),
-        is_active: true,
-        expires_at: None,
-        last_used_at: None,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-    };
+    let api_key = create_test_api_key(
+        created_user.id,
+        "Test API Key",
+        &key_hash,
+        "codex_abc",
+        serialize_permissions(&permissions),
+    );
 
     let created_key = ApiKeyRepository::create(&db, &api_key).await.unwrap();
     assert_eq!(created_key.name, "Test API Key");
@@ -222,16 +165,7 @@ async fn test_user_with_multiple_api_keys() {
     let (db, _temp_dir) = setup_test_db().await;
 
     // Create a user
-    let user = users::Model {
-        id: Uuid::new_v4(),
-        username: "multikey".to_string(),
-        email: "multikey@example.com".to_string(),
-        password_hash: "hash123".to_string(),
-        is_admin: false,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-        last_login_at: None,
-    };
+    let user = create_test_user("multikey", "multikey@example.com", "hash123", false);
 
     let created_user = UserRepository::create(&db, &user).await.unwrap();
 
@@ -247,19 +181,13 @@ async fn test_user_with_multiple_api_keys() {
     ];
 
     for (name, permissions) in keys {
-        let api_key = api_keys::Model {
-            id: Uuid::new_v4(),
-            user_id: created_user.id,
-            name: name.to_string(),
-            key_hash: format!("hash_{}", name),
-            key_prefix: format!("codex_{}", name),
-            permissions: serialize_permissions(&permissions),
-            is_active: true,
-            expires_at: None,
-            last_used_at: None,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        };
+        let api_key = create_test_api_key(
+            created_user.id,
+            name,
+            &format!("hash_{}", name),
+            &format!("codex_{}", name),
+            serialize_permissions(&permissions),
+        );
 
         ApiKeyRepository::create(&db, &api_key).await.unwrap();
     }
@@ -312,33 +240,19 @@ async fn test_password_edge_cases() {
 async fn test_api_key_expiration() {
     let (db, _temp_dir) = setup_test_db().await;
 
-    let user = users::Model {
-        id: Uuid::new_v4(),
-        username: "expiretest".to_string(),
-        email: "expire@example.com".to_string(),
-        password_hash: "hash123".to_string(),
-        is_admin: false,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-        last_login_at: None,
-    };
+    let user = create_test_user("expiretest", "expire@example.com", "hash123", false);
 
     let created_user = UserRepository::create(&db, &user).await.unwrap();
 
     // Create API key with expiration in the past
-    let expired_key = api_keys::Model {
-        id: Uuid::new_v4(),
-        user_id: created_user.id,
-        name: "Expired Key".to_string(),
-        key_hash: "expired_hash".to_string(),
-        key_prefix: "codex_exp".to_string(),
-        permissions: serialize_permissions(&READONLY_PERMISSIONS),
-        is_active: true,
-        expires_at: Some(Utc::now() - chrono::Duration::days(1)),
-        last_used_at: None,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-    };
+    let mut expired_key = create_test_api_key(
+        created_user.id,
+        "Expired Key",
+        "expired_hash",
+        "codex_exp",
+        serialize_permissions(&READONLY_PERMISSIONS),
+    );
+    expired_key.expires_at = Some(Utc::now() - chrono::Duration::days(1));
 
     let created = ApiKeyRepository::create(&db, &expired_key).await.unwrap();
 

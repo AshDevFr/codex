@@ -1,30 +1,14 @@
-use codex::config::{DatabaseConfig, DatabaseType, SQLiteConfig};
-use codex::db::{Database, repositories::{LibraryRepository, SeriesRepository, BookRepository, PageRepository}};
-use codex::db::entities::{libraries, series, books, pages, users, read_progress};
-use codex::models::ScanningStrategy;
-use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, Set, ActiveModelTrait, PaginatorTrait};
-use tempfile::TempDir;
-use uuid::Uuid;
+#[path = "../common/mod.rs"]
+mod common;
+
 use chrono::Utc;
+use codex::db::repositories::{LibraryRepository, SeriesRepository, BookRepository, PageRepository};
+use codex::db::entities::{libraries, series, books, users, read_progress};
+use codex::models::ScanningStrategy;
+use common::*;
+use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, PaginatorTrait, IntoActiveModel, Set, ActiveModelTrait};
+use uuid::Uuid;
 
-/// Helper to create a test database
-async fn create_test_db() -> (Database, TempDir) {
-    let temp_dir = TempDir::new().unwrap();
-    let db_path = temp_dir.path().join("test.db");
-
-    let config = DatabaseConfig {
-        db_type: DatabaseType::SQLite,
-        postgres: None,
-        sqlite: Some(SQLiteConfig {
-            path: db_path.to_str().unwrap().to_string(),
-            pragmas: None,
-        }),
-    };
-
-    let db = Database::new(&config).await.unwrap();
-    db.run_migrations().await.unwrap();
-    (db, temp_dir)
-}
 
 // ============================================================================
 // Library CRUD Tests
@@ -32,7 +16,7 @@ async fn create_test_db() -> (Database, TempDir) {
 
 #[tokio::test]
 async fn test_library_insert_and_select() {
-    let (db, _temp_dir) = create_test_db().await;
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
     let conn = db.sea_orm_connection();
 
     // Create library using repository
@@ -60,7 +44,7 @@ async fn test_library_insert_and_select() {
 
 #[tokio::test]
 async fn test_library_update() {
-    let (db, _temp_dir) = create_test_db().await;
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
     let conn = db.sea_orm_connection();
 
     // Create library
@@ -91,7 +75,7 @@ async fn test_library_update() {
 
 #[tokio::test]
 async fn test_library_delete() {
-    let (db, _temp_dir) = create_test_db().await;
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
     let conn = db.sea_orm_connection();
 
     // Create library
@@ -125,7 +109,7 @@ async fn test_library_delete() {
 
 #[tokio::test]
 async fn test_series_book_relationship() {
-    let (db, _temp_dir) = create_test_db().await;
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
     let conn = db.sea_orm_connection();
 
     // Create library
@@ -144,22 +128,7 @@ async fn test_series_book_relationship() {
         .unwrap();
 
     // Create book
-    let now = Utc::now();
-    let book_model = books::Model {
-        id: Uuid::new_v4(),
-        series_id: series.id,
-        title: None,
-        number: None,
-        file_path: "/test/book.cbz".to_string(),
-        file_name: "book.cbz".to_string(),
-        file_size: 1024,
-        file_hash: "test_hash".to_string(),
-        format: "cbz".to_string(),
-        page_count: 10,
-        modified_at: now,
-        created_at: now,
-        updated_at: now,
-    };
+    let book_model = create_test_book(series.id, "/test/book.cbz", "book.cbz", "test_hash", "cbz", 10);
 
     let book = BookRepository::create(conn, &book_model).await.unwrap();
 
@@ -181,7 +150,7 @@ async fn test_series_book_relationship() {
 
 #[tokio::test]
 async fn test_cascade_delete_library_to_series() {
-    let (db, _temp_dir) = create_test_db().await;
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
     let conn = db.sea_orm_connection();
 
     // Create library and series
@@ -219,22 +188,12 @@ async fn test_cascade_delete_library_to_series() {
 
 #[tokio::test]
 async fn test_user_read_progress() {
-    let (db, _temp_dir) = create_test_db().await;
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
     let conn = db.sea_orm_connection();
 
     // Create user using ActiveModel
-    let now = Utc::now();
-    let user = users::ActiveModel {
-        id: Set(Uuid::new_v4()),
-        username: Set("testuser".to_string()),
-        email: Set("test@example.com".to_string()),
-        password_hash: Set("hashed_password".to_string()),
-        is_admin: Set(false),
-        created_at: Set(now),
-        updated_at: Set(now),
-        last_login_at: Set(None),
-    };
-    let user = user.insert(conn).await.unwrap();
+    let user = create_test_user("testuser", "test@example.com", "hashed_password", false);
+    let user = user.into_active_model().insert(conn).await.unwrap();
 
     // Create library, series, and book for progress tracking
     let library = LibraryRepository::create(
@@ -250,22 +209,7 @@ async fn test_user_read_progress() {
         .await
         .unwrap();
 
-    let now = Utc::now();
-    let book_model = books::Model {
-        id: Uuid::new_v4(),
-        series_id: series.id,
-        title: None,
-        number: None,
-        file_path: "/book.cbz".to_string(),
-        file_name: "book.cbz".to_string(),
-        file_size: 1024,
-        file_hash: "test_hash".to_string(),
-        format: "cbz".to_string(),
-        page_count: 10,
-        modified_at: now,
-        created_at: now,
-        updated_at: now,
-    };
+    let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "test_hash", "cbz", 10);
     let book = BookRepository::create(conn, &book_model).await.unwrap();
 
     // Create read progress using ActiveModel
@@ -309,36 +253,17 @@ async fn test_user_read_progress() {
 
 #[tokio::test]
 async fn test_unique_username_constraint() {
-    let (db, _temp_dir) = create_test_db().await;
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
     let conn = db.sea_orm_connection();
 
     // Create first user
-    let now = Utc::now();
-    let user1 = users::ActiveModel {
-        id: Set(Uuid::new_v4()),
-        username: Set("testuser".to_string()),
-        email: Set("test1@example.com".to_string()),
-        password_hash: Set("hash1".to_string()),
-        is_admin: Set(false),
-        created_at: Set(now),
-        updated_at: Set(now),
-        last_login_at: Set(None),
-    };
-    user1.insert(conn).await.unwrap();
+    let user1 = create_test_user("testuser", "test1@example.com", "hash1", false);
+    user1.into_active_model().insert(conn).await.unwrap();
 
     // Try to insert second user with same username (should fail)
-    let user2 = users::ActiveModel {
-        id: Set(Uuid::new_v4()),
-        username: Set("testuser".to_string()), // Same username
-        email: Set("test2@example.com".to_string()),
-        password_hash: Set("hash2".to_string()),
-        is_admin: Set(false),
-        created_at: Set(now),
-        updated_at: Set(now),
-        last_login_at: Set(None),
-    };
+    let user2 = create_test_user("testuser", "test2@example.com", "hash2", false);
 
-    let result = user2.insert(conn).await;
+    let result = user2.into_active_model().insert(conn).await;
     assert!(result.is_err());
 
     db.close().await;
@@ -346,7 +271,7 @@ async fn test_unique_username_constraint() {
 
 #[tokio::test]
 async fn test_unique_file_path_constraint() {
-    let (db, _temp_dir) = create_test_db().await;
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
     let conn = db.sea_orm_connection();
 
     // Setup library and series
@@ -364,40 +289,11 @@ async fn test_unique_file_path_constraint() {
         .unwrap();
 
     // Insert first book
-    let now = Utc::now();
-    let book1_model = books::Model {
-        id: Uuid::new_v4(),
-        series_id: series.id,
-        title: None,
-        number: None,
-        file_path: "/same/path/book.cbz".to_string(),
-        file_name: "book.cbz".to_string(),
-        file_size: 1024,
-        file_hash: "hash1".to_string(),
-        format: "cbz".to_string(),
-        page_count: 10,
-        modified_at: now,
-        created_at: now,
-        updated_at: now,
-    };
+    let book1_model = create_test_book(series.id, "/same/path/book.cbz", "book.cbz", "hash1", "cbz", 10);
     BookRepository::create(conn, &book1_model).await.unwrap();
 
     // Try to insert second book with same file path (should fail)
-    let book2_model = books::Model {
-        id: Uuid::new_v4(),
-        series_id: series.id,
-        title: None,
-        number: None,
-        file_path: "/same/path/book.cbz".to_string(), // Same path
-        file_name: "book.cbz".to_string(),
-        file_size: 1024,
-        file_hash: "hash2".to_string(),
-        format: "cbz".to_string(),
-        page_count: 10,
-        modified_at: now,
-        created_at: now,
-        updated_at: now,
-    };
+    let book2_model = create_test_book(series.id, "/same/path/book.cbz", "book.cbz", "hash2", "cbz", 10);
 
     let result = BookRepository::create(conn, &book2_model).await;
     assert!(result.is_err());
@@ -411,7 +307,7 @@ async fn test_unique_file_path_constraint() {
 
 #[tokio::test]
 async fn test_file_hash_index_lookup() {
-    let (db, _temp_dir) = create_test_db().await;
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
     let conn = db.sea_orm_connection();
 
     // Setup
@@ -430,22 +326,7 @@ async fn test_file_hash_index_lookup() {
 
     // Insert book with specific hash
     let test_hash = "abc123hash";
-    let now = Utc::now();
-    let book_model = books::Model {
-        id: Uuid::new_v4(),
-        series_id: series.id,
-        title: None,
-        number: None,
-        file_path: "/book1.cbz".to_string(),
-        file_name: "book1.cbz".to_string(),
-        file_size: 1024,
-        file_hash: test_hash.to_string(),
-        format: "cbz".to_string(),
-        page_count: 10,
-        modified_at: now,
-        created_at: now,
-        updated_at: now,
-    };
+    let book_model = create_test_book(series.id, "/book1.cbz", "book1.cbz", test_hash, "cbz", 10);
     BookRepository::create(conn, &book_model).await.unwrap();
 
     // Query by hash (should use index)
@@ -467,7 +348,7 @@ async fn test_file_hash_index_lookup() {
 
 #[tokio::test]
 async fn test_pages_insert_and_query() {
-    let (db, _temp_dir) = create_test_db().await;
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
     let conn = db.sea_orm_connection();
 
     // Setup
@@ -484,37 +365,12 @@ async fn test_pages_insert_and_query() {
         .await
         .unwrap();
 
-    let now = Utc::now();
-    let book_model = books::Model {
-        id: Uuid::new_v4(),
-        series_id: series.id,
-        title: None,
-        number: None,
-        file_path: "/book.cbz".to_string(),
-        file_name: "book.cbz".to_string(),
-        file_size: 1024,
-        file_hash: "test_hash".to_string(),
-        format: "cbz".to_string(),
-        page_count: 10,
-        modified_at: now,
-        created_at: now,
-        updated_at: now,
-    };
+    let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "test_hash", "cbz", 10);
     let book = BookRepository::create(conn, &book_model).await.unwrap();
 
     // Insert pages
     for i in 1..=3 {
-        let page_model = pages::Model {
-            id: Uuid::new_v4(),
-            book_id: book.id,
-            page_number: i,
-            file_name: format!("page{:03}.jpg", i),
-            format: "jpeg".to_string(),
-            width: 800,
-            height: 1200,
-            file_size: 1024,
-            created_at: Utc::now(),
-        };
+        let page_model = create_test_page(book.id, i, &format!("page{:03}.jpg", i), "jpeg");
         PageRepository::create(conn, &page_model).await.unwrap();
     }
 
@@ -538,7 +394,7 @@ async fn test_pages_insert_and_query() {
 
 #[tokio::test]
 async fn test_database_reconnect() {
-    let (db, temp_dir) = create_test_db().await;
+    let (db, temp_dir) = setup_test_db_wrapper().await;
     let db_path = temp_dir.path().join("test.db");
 
     // Close first connection
@@ -569,7 +425,7 @@ async fn test_database_reconnect() {
 
 #[tokio::test]
 async fn test_health_check() {
-    let (db, _temp_dir) = create_test_db().await;
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
 
     // Health check should pass
     assert!(db.health_check().await.is_ok());

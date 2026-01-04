@@ -14,6 +14,8 @@ pub struct Model {
     pub email: String,
     pub password_hash: String,
     pub is_admin: bool,
+    pub is_active: bool,
+    pub permissions: serde_json::Value,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub last_login_at: Option<DateTime<Utc>>,

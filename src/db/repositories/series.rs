@@ -82,6 +82,16 @@ impl SeriesRepository {
             .context("Failed to list series by library")
     }
 
+    /// Get all series across all libraries
+    pub async fn list_all(db: &DatabaseConnection) -> Result<Vec<series::Model>> {
+        Series::find()
+            .order_by_asc(series::Column::SortName)
+            .order_by_asc(series::Column::Name)
+            .all(db)
+            .await
+            .context("Failed to list all series")
+    }
+
     /// Search series by normalized name
     pub async fn search_by_name(
         db: &DatabaseConnection,

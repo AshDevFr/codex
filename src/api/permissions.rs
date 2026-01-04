@@ -94,17 +94,13 @@ impl FromStr for Permission {
 
 /// Parse permissions from JSON string
 pub fn parse_permissions(json: &str) -> Result<HashSet<Permission>, serde_json::Error> {
-    let perms: Vec<String> = serde_json::from_str(json)?;
-    let result = perms
-        .iter()
-        .filter_map(|s| Permission::from_str(s).ok())
-        .collect();
-    Ok(result)
+    let perms: Vec<Permission> = serde_json::from_str(json)?;
+    Ok(perms.into_iter().collect())
 }
 
 /// Serialize permissions to JSON string
 pub fn serialize_permissions(permissions: &HashSet<Permission>) -> String {
-    let perms: Vec<&str> = permissions.iter().map(|p| p.as_str()).collect();
+    let perms: Vec<Permission> = permissions.iter().cloned().collect();
     serde_json::to_string(&perms).unwrap_or_else(|_| "[]".to_string())
 }
 
@@ -190,7 +186,7 @@ mod tests {
 
     #[test]
     fn test_parse_permissions() {
-        let json = r#"["libraries:read", "books:read", "pages:read"]"#;
+        let json = r#"["libraries-read", "books-read", "pages-read"]"#;
         let perms = parse_permissions(json).unwrap();
 
         assert_eq!(perms.len(), 3);

@@ -1,24 +1,10 @@
 use crate::config::{Config, DatabaseType, EnvOverride};
 use crate::db::Database;
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::{IntoResponse, Json},
-    routing::get,
-    Router,
-};
-use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tracing::{info, warn};
+use tracing::info;
 use tracing_subscriber::{util::SubscriberInitExt, EnvFilter};
 
-#[derive(Clone)]
-struct AppState {
-    db: Database,
-    config: Arc<Config>,
-    _log_guard: Option<Arc<tracing_appender::non_blocking::WorkerGuard>>,
-}
 
 /// Serve command handler - starts the media server
 pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
@@ -92,21 +78,30 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     db.health_check().await?;
     info!("Database health check passed");
 
-    // Create application state
-    let state = AppState {
-        db,
-        config: Arc::new(config.clone()),
-        _log_guard: log_guard.map(Arc::new),
-    };
+    // Create application state for API
+    let api_state = Arc::new(crate::api::AuthState {
+        db: db.sea_orm_connection().clone(),
+        jwt_service: Arc::new(crate::utils::jwt::JwtService::new(
+            config.auth.jwt_secret.clone(),
+            config.auth.jwt_expiry_hours,
+        )),
+    });
 
-    // Build router
+    // Build router using API module
     info!("========================================");
     info!("Building HTTP router...");
-    let app = Router::new()
-        .route("/health", get(health_check))
-        .with_state(state);
+    let app = crate::api::create_router(api_state);
     info!("Registered routes:");
-    info!("  GET /health - Health check endpoint");
+    info!("  GET  /health - Health check endpoint");
+    info!("  POST /api/v1/auth/login - Login endpoint");
+    info!("  POST /api/v1/auth/logout - Logout endpoint");
+    info!("  GET  /api/v1/libraries - List libraries");
+    info!("  GET  /api/v1/series - List series");
+    info!("  GET  /api/v1/books - List books");
+    info!("  GET  /api/v1/users - List users (admin)");
+
+    // Keep log guard alive
+    let _log_guard = log_guard;
 
     // Start server
     info!("========================================");
@@ -126,32 +121,6 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Health check endpoint - checks database connectivity
-async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
-    // Check database health
-    let db_status = match state.db.health_check().await {
-        Ok(_) => {
-            info!("Health check: database OK");
-            "healthy"
-        }
-        Err(e) => {
-            warn!("Health check: database error: {}", e);
-            "unhealthy"
-        }
-    };
-
-    let response = json!({
-        "status": if db_status == "healthy" { "healthy" } else { "unhealthy" },
-        "database": db_status,
-        "version": env!("CARGO_PKG_VERSION"),
-    });
-
-    if db_status == "healthy" {
-        (StatusCode::OK, Json(response))
-    } else {
-        (StatusCode::SERVICE_UNAVAILABLE, Json(response))
-    }
-}
 
 /// Initialize tracing with both console and file output based on config
 /// Returns an optional guard that must be kept alive for the duration of the application

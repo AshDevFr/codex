@@ -9,6 +9,7 @@ mod m20260103_000006_create_book_metadata_records;
 mod m20260103_000007_create_metadata_sources;
 mod m20260103_000008_create_read_progress;
 mod m20260103_000009_create_api_keys;
+mod m20260103_000010_add_user_permissions;
 
 pub struct Migrator;
 
@@ -25,6 +26,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260103_000007_create_metadata_sources::Migration),
             Box::new(m20260103_000008_create_read_progress::Migration),
             Box::new(m20260103_000009_create_api_keys::Migration),
+            Box::new(m20260103_000010_add_user_permissions::Migration),
         ]
     }
 }

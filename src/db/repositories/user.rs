@@ -15,6 +15,8 @@ impl UserRepository {
             email: Set(model.email.clone()),
             password_hash: Set(model.password_hash.clone()),
             is_admin: Set(model.is_admin),
+            is_active: Set(model.is_active),
+            permissions: Set(model.permissions.clone()),
             created_at: Set(model.created_at),
             updated_at: Set(model.updated_at),
             last_login_at: Set(model.last_login_at),
@@ -70,11 +72,11 @@ impl UserRepository {
     }
 
     /// Update user
-    pub async fn update(db: &DatabaseConnection, model: &users::Model) -> Result<()> {
+    pub async fn update(db: &DatabaseConnection, model: &users::Model) -> Result<users::Model> {
         let mut active_model: users::ActiveModel = model.clone().into();
         active_model.updated_at = Set(Utc::now());
-        active_model.update(db).await?;
-        Ok(())
+        let result = active_model.update(db).await?;
+        Ok(result)
     }
 
     /// Delete user
@@ -105,6 +107,8 @@ mod tests {
             email: "test@example.com".to_string(),
             password_hash: "hash123".to_string(),
             is_admin: false,
+            is_active: true,
+            permissions: serde_json::json!([]),
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_login_at: None,
@@ -130,6 +134,8 @@ mod tests {
             email: "findme@example.com".to_string(),
             password_hash: "hash123".to_string(),
             is_admin: false,
+            is_active: true,
+            permissions: serde_json::json!([]),
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_login_at: None,
@@ -154,6 +160,8 @@ mod tests {
             email: "login@example.com".to_string(),
             password_hash: "hash123".to_string(),
             is_admin: false,
+            is_active: true,
+            permissions: serde_json::json!([]),
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_login_at: None,

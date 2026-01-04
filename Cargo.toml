@@ -84,3 +84,6 @@ utoipa-swagger-ui = { version = "8.0", features = ["axum"] }
 
 [dev-dependencies]
 tempfile = "3.13"
+tower = { version = "0.4", features = ["util"] }
+http-body-util = "0.1"
+hyper = { version = "1.0", features = ["full"] }

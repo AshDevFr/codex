@@ -43,6 +43,19 @@ impl ApiKeyRepository {
         Ok(key)
     }
 
+    /// Get API keys by prefix (for authentication lookup)
+    pub async fn get_by_prefix(
+        db: &DatabaseConnection,
+        key_prefix: &str,
+    ) -> Result<Vec<api_keys::Model>> {
+        let keys = ApiKey::find()
+            .filter(api_keys::Column::KeyPrefix.eq(key_prefix))
+            .filter(api_keys::Column::IsActive.eq(true))
+            .all(db)
+            .await?;
+        Ok(keys)
+    }
+
     /// Get API key by ID
     pub async fn get_by_id(
         db: &DatabaseConnection,
@@ -122,6 +135,8 @@ mod tests {
             email: "test@example.com".to_string(),
             password_hash: "hash123".to_string(),
             is_admin: false,
+            is_active: true,
+            permissions: serde_json::json!([]),
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_login_at: None,

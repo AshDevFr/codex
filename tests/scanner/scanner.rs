@@ -1,3 +1,4 @@
+#[path = "../common/mod.rs"]
 mod common;
 
 use codex::scanner::{analyze_file, detect_format};
