@@ -1,12 +1,12 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait,
-    QueryFilter, QueryOrder, QuerySelect, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect, Set,
 };
 use uuid::Uuid;
 
-use crate::db::entities::{series, prelude::*};
+use crate::db::entities::{prelude::*, series};
 
 /// Repository for Series operations
 pub struct SeriesRepository;
@@ -51,17 +51,11 @@ impl SeriesRepository {
             updated_at: Set(now),
         };
 
-        series
-            .insert(db)
-            .await
-            .context("Failed to create series")
+        series.insert(db).await.context("Failed to create series")
     }
 
     /// Get a series by ID
-    pub async fn get_by_id(
-        db: &DatabaseConnection,
-        id: Uuid,
-    ) -> Result<Option<series::Model>> {
+    pub async fn get_by_id(db: &DatabaseConnection, id: Uuid) -> Result<Option<series::Model>> {
         Series::find_by_id(id)
             .one(db)
             .await
@@ -109,10 +103,7 @@ impl SeriesRepository {
     }
 
     /// Update series
-    pub async fn update(
-        db: &DatabaseConnection,
-        series_model: &series::Model,
-    ) -> Result<()> {
+    pub async fn update(db: &DatabaseConnection, series_model: &series::Model) -> Result<()> {
         let active = series::ActiveModel {
             id: Set(series_model.id),
             library_id: Set(series_model.library_id),
@@ -132,10 +123,7 @@ impl SeriesRepository {
             updated_at: Set(Utc::now()),
         };
 
-        active
-            .update(db)
-            .await
-            .context("Failed to update series")?;
+        active.update(db).await.context("Failed to update series")?;
 
         Ok(())
     }
@@ -173,8 +161,8 @@ impl SeriesRepository {
 mod tests {
     use super::*;
     use crate::db::repositories::LibraryRepository;
-    use crate::db::ScanningStrategy;
     use crate::db::test_helpers::create_test_db;
+    use crate::db::ScanningStrategy;
 
     #[tokio::test]
     async fn test_create_series() {
@@ -293,15 +281,18 @@ mod tests {
         .await
         .unwrap();
 
-        let mut series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Original Name")
-            .await
-            .unwrap();
+        let mut series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Original Name")
+                .await
+                .unwrap();
 
         series.name = "Updated Name".to_string();
         series.normalized_name = SeriesRepository::normalize_name(&series.name);
         series.summary = Some("Updated summary".to_string());
 
-        SeriesRepository::update(db.sea_orm_connection(), &series).await.unwrap();
+        SeriesRepository::update(db.sea_orm_connection(), &series)
+            .await
+            .unwrap();
 
         let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
             .await
@@ -360,7 +351,9 @@ mod tests {
             .await
             .unwrap();
 
-        SeriesRepository::delete(db.sea_orm_connection(), series.id).await.unwrap();
+        SeriesRepository::delete(db.sea_orm_connection(), series.id)
+            .await
+            .unwrap();
 
         let result = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
             .await

@@ -169,6 +169,12 @@ db-reset: ## Reset database (DELETES ALL DATA!)
 		echo "$(GREEN)Cancelled$(NC)"; \
 	fi
 
+db-seed: ## Create initial admin user and API key
+	cargo run -- seed --config config/config.sqlite.yaml
+
+db-seed-release: ## Create initial admin user using release build
+	./target/release/codex seed --config config/config.sqlite.yaml
+
 ## Maintenance
 
 clean-docker: ## Remove Docker images and containers

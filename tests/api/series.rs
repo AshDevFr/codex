@@ -10,11 +10,17 @@ use common::*;
 use hyper::StatusCode;
 
 // Helper to create admin and token
-async fn create_admin_and_token(db: &sea_orm::DatabaseConnection, state: &codex::api::extractors::AuthState) -> String {
+async fn create_admin_and_token(
+    db: &sea_orm::DatabaseConnection,
+    state: &codex::api::extractors::AuthState,
+) -> String {
     let password_hash = password::hash_password("admin123").unwrap();
     let user = create_test_user("admin", "admin@example.com", &password_hash, true);
     let created = UserRepository::create(db, &user).await.unwrap();
-    state.jwt_service.generate_token(created.id, created.username, created.is_admin).unwrap()
+    state
+        .jwt_service
+        .generate_token(created.id, created.username, created.is_admin)
+        .unwrap()
 }
 
 // ============================================================================
@@ -26,22 +32,24 @@ async fn test_list_series_all() {
     let (db, _temp_dir) = setup_test_db().await;
 
     // Create library and series
-    let library = LibraryRepository::create(
-        &db,
-        "Library",
-        "/lib",
-        ScanningStrategy::Default
-    ).await.unwrap();
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
 
-    SeriesRepository::create(&db, library.id, "Series 1").await.unwrap();
-    SeriesRepository::create(&db, library.id, "Series 2").await.unwrap();
+    SeriesRepository::create(&db, library.id, "Series 1")
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Series 2")
+        .await
+        .unwrap();
 
     let state = create_test_auth_state(db.clone());
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state);
 
     let request = get_request_with_auth("/api/v1/series", &token);
-    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) = make_json_request(app, request).await;
+    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let series = response.unwrap();
@@ -53,31 +61,35 @@ async fn test_list_series_by_library() {
     let (db, _temp_dir) = setup_test_db().await;
 
     // Create two libraries with series
-    let library1 = LibraryRepository::create(
-        &db,
-        "Library 1",
-        "/lib1",
-        ScanningStrategy::Default
-    ).await.unwrap();
+    let library1 = LibraryRepository::create(&db, "Library 1", "/lib1", ScanningStrategy::Default)
+        .await
+        .unwrap();
 
-    let library2 = LibraryRepository::create(
-        &db,
-        "Library 2",
-        "/lib2",
-        ScanningStrategy::Default
-    ).await.unwrap();
+    let library2 = LibraryRepository::create(&db, "Library 2", "/lib2", ScanningStrategy::Default)
+        .await
+        .unwrap();
 
-    SeriesRepository::create(&db, library1.id, "Lib1 Series 1").await.unwrap();
-    SeriesRepository::create(&db, library1.id, "Lib1 Series 2").await.unwrap();
-    SeriesRepository::create(&db, library2.id, "Lib2 Series 1").await.unwrap();
+    SeriesRepository::create(&db, library1.id, "Lib1 Series 1")
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library1.id, "Lib1 Series 2")
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library2.id, "Lib2 Series 1")
+        .await
+        .unwrap();
 
     let state = create_test_auth_state(db.clone());
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state);
 
     // Query series for library 1
-    let request = get_request_with_auth(&format!("/api/v1/series?library_id={}", library1.id), &token);
-    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) = make_json_request(app, request).await;
+    let request = get_request_with_auth(
+        &format!("/api/v1/series?library_id={}", library1.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let series = response.unwrap();
@@ -92,7 +104,8 @@ async fn test_list_series_without_auth() {
     let app = create_test_router(state);
 
     let request = get_request("/api/v1/series");
-    let (status, response): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     let error = response.unwrap();
@@ -103,20 +116,15 @@ async fn test_list_series_without_auth() {
 async fn test_list_series_pagination() {
     let (db, _temp_dir) = setup_test_db().await;
 
-    let library = LibraryRepository::create(
-        &db,
-        "Library",
-        "/lib",
-        ScanningStrategy::Default
-    ).await.unwrap();
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
 
     // Create 5 series
     for i in 1..=5 {
-        SeriesRepository::create(
-            &db,
-            library.id,
-            &format!("Series {}", i)
-        ).await.unwrap();
+        SeriesRepository::create(&db, library.id, &format!("Series {}", i))
+            .await
+            .unwrap();
     }
 
     let state = create_test_auth_state(db.clone());
@@ -125,7 +133,8 @@ async fn test_list_series_pagination() {
 
     // List all series (pagination parameters are ignored now)
     let request = get_request_with_auth("/api/v1/series", &token);
-    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) = make_json_request(app, request).await;
+    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let series = response.unwrap();
@@ -140,18 +149,13 @@ async fn test_list_series_pagination() {
 async fn test_get_series_by_id() {
     let (db, _temp_dir) = setup_test_db().await;
 
-    let library = LibraryRepository::create(
-        &db,
-        "Library",
-        "/lib",
-        ScanningStrategy::Default
-    ).await.unwrap();
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
 
-    let series = SeriesRepository::create(
-        &db,
-        library.id,
-        "Test Series"
-    ).await.unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series")
+        .await
+        .unwrap();
 
     let state = create_test_auth_state(db.clone());
     let token = create_admin_and_token(&db, &state).await;
@@ -175,7 +179,8 @@ async fn test_get_series_not_found() {
 
     let fake_id = uuid::Uuid::new_v4();
     let request = get_request_with_auth(&format!("/api/v1/series/{}", fake_id), &token);
-    let (status, response): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::NOT_FOUND);
     let error = response.unwrap();
@@ -190,16 +195,19 @@ async fn test_get_series_not_found() {
 async fn test_search_series_by_name() {
     let (db, _temp_dir) = setup_test_db().await;
 
-    let library = LibraryRepository::create(
-        &db,
-        "Library",
-        "/lib",
-        ScanningStrategy::Default
-    ).await.unwrap();
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
 
-    SeriesRepository::create(&db, library.id, "Batman Comics").await.unwrap();
-    SeriesRepository::create(&db, library.id, "Superman Comics").await.unwrap();
-    SeriesRepository::create(&db, library.id, "Batman Graphic Novels").await.unwrap();
+    SeriesRepository::create(&db, library.id, "Batman Comics")
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Superman Comics")
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Batman Graphic Novels")
+        .await
+        .unwrap();
 
     let state = create_test_auth_state(db.clone());
     let token = create_admin_and_token(&db, &state).await;
@@ -211,7 +219,8 @@ async fn test_search_series_by_name() {
     };
 
     let request = post_json_request_with_auth("/api/v1/series/search", &search_request, &token);
-    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) = make_json_request(app, request).await;
+    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let series = response.unwrap();
@@ -223,14 +232,13 @@ async fn test_search_series_by_name() {
 async fn test_search_series_no_results() {
     let (db, _temp_dir) = setup_test_db().await;
 
-    let library = LibraryRepository::create(
-        &db,
-        "Library",
-        "/lib",
-        ScanningStrategy::Default
-    ).await.unwrap();
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
 
-    SeriesRepository::create(&db, library.id, "Series").await.unwrap();
+    SeriesRepository::create(&db, library.id, "Series")
+        .await
+        .unwrap();
 
     let state = create_test_auth_state(db.clone());
     let token = create_admin_and_token(&db, &state).await;
@@ -242,7 +250,8 @@ async fn test_search_series_no_results() {
     };
 
     let request = post_json_request_with_auth("/api/v1/series/search", &search_request, &token);
-    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) = make_json_request(app, request).await;
+    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let series = response.unwrap();
@@ -261,7 +270,8 @@ async fn test_search_series_without_auth() {
     };
 
     let request = post_json_request("/api/v1/series/search", &search_request);
-    let (status, response): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     let error = response.unwrap();

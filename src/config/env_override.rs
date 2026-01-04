@@ -1,5 +1,5 @@
 use std::env;
-use super::{Config, DatabaseConfig, DatabaseType, PostgresConfig, SQLiteConfig, ApplicationConfig, LoggingConfig, LogLevel};
+use super::{Config, DatabaseConfig, DatabaseType, PostgresConfig, SQLiteConfig, ApplicationConfig, LoggingConfig, LogLevel, AuthConfig, ApiConfig};
 
 /// Trait for applying environment variable overrides to configuration structs
 pub trait EnvOverride {
@@ -12,6 +12,8 @@ impl EnvOverride for Config {
         self.application.apply_env_overrides(&format!("{}_APPLICATION", prefix));
         self.database.apply_env_overrides(&format!("{}_DATABASE", prefix));
         self.logging.apply_env_overrides(&format!("{}_LOGGING", prefix));
+        self.auth.apply_env_overrides(&format!("{}_AUTH", prefix));
+        self.api.apply_env_overrides(&format!("{}_API", prefix));
     }
 }
 
@@ -109,6 +111,71 @@ impl EnvOverride for LoggingConfig {
         }
         if let Ok(log_console) = env::var(format!("{}_CONSOLE", prefix)) {
             self.console = log_console.eq_ignore_ascii_case("true") || log_console == "1";
+        }
+    }
+}
+
+impl EnvOverride for AuthConfig {
+    fn apply_env_overrides(&mut self, prefix: &str) {
+        // Check for JWT secret override - print warning if using insecure default
+        if let Ok(jwt_secret) = env::var(format!("{}_JWT_SECRET", prefix)) {
+            self.jwt_secret = jwt_secret;
+        } else if self.jwt_secret == "INSECURE_DEFAULT_SECRET_CHANGE_IN_PRODUCTION" {
+            eprintln!("WARNING: CODEX_AUTH_JWT_SECRET not set, using insecure default for development only!");
+        }
+
+        if let Ok(jwt_expiry) = env::var(format!("{}_JWT_EXPIRY_HOURS", prefix)) {
+            if let Ok(hours) = jwt_expiry.parse() {
+                self.jwt_expiry_hours = hours;
+            }
+        }
+        if let Ok(refresh_enabled) = env::var(format!("{}_REFRESH_TOKEN_ENABLED", prefix)) {
+            self.refresh_token_enabled = refresh_enabled.eq_ignore_ascii_case("true") || refresh_enabled == "1";
+        }
+        if let Ok(refresh_expiry) = env::var(format!("{}_REFRESH_TOKEN_EXPIRY_DAYS", prefix)) {
+            if let Ok(days) = refresh_expiry.parse() {
+                self.refresh_token_expiry_days = days;
+            }
+        }
+        if let Ok(memory_cost) = env::var(format!("{}_ARGON2_MEMORY_COST", prefix)) {
+            if let Ok(cost) = memory_cost.parse() {
+                self.argon2_memory_cost = cost;
+            }
+        }
+        if let Ok(time_cost) = env::var(format!("{}_ARGON2_TIME_COST", prefix)) {
+            if let Ok(cost) = time_cost.parse() {
+                self.argon2_time_cost = cost;
+            }
+        }
+        if let Ok(parallelism) = env::var(format!("{}_ARGON2_PARALLELISM", prefix)) {
+            if let Ok(p) = parallelism.parse() {
+                self.argon2_parallelism = p;
+            }
+        }
+    }
+}
+
+impl EnvOverride for ApiConfig {
+    fn apply_env_overrides(&mut self, prefix: &str) {
+        if let Ok(base_path) = env::var(format!("{}_BASE_PATH", prefix)) {
+            self.base_path = base_path;
+        }
+        if let Ok(enable_swagger) = env::var(format!("{}_ENABLE_SWAGGER", prefix)) {
+            self.enable_swagger = enable_swagger.eq_ignore_ascii_case("true") || enable_swagger == "1";
+        }
+        if let Ok(swagger_path) = env::var(format!("{}_SWAGGER_PATH", prefix)) {
+            self.swagger_path = swagger_path;
+        }
+        if let Ok(cors_enabled) = env::var(format!("{}_CORS_ENABLED", prefix)) {
+            self.cors_enabled = cors_enabled.eq_ignore_ascii_case("true") || cors_enabled == "1";
+        }
+        if let Ok(cors_origins) = env::var(format!("{}_CORS_ORIGINS", prefix)) {
+            self.cors_origins = cors_origins.split(',').map(|s| s.trim().to_string()).collect();
+        }
+        if let Ok(max_page_size) = env::var(format!("{}_MAX_PAGE_SIZE", prefix)) {
+            if let Ok(size) = max_page_size.parse() {
+                self.max_page_size = size;
+            }
         }
     }
 }

@@ -109,22 +109,14 @@ pub struct AuthConfig {
 
 impl Default for AuthConfig {
     fn default() -> Self {
-        use std::env;
-
-        let jwt_secret = env::var("CODEX_AUTH_JWT_SECRET")
-            .unwrap_or_else(|_| {
-                eprintln!("WARNING: CODEX_AUTH_JWT_SECRET not set, using insecure default for development only!");
-                "INSECURE_DEFAULT_SECRET_CHANGE_IN_PRODUCTION".to_string()
-            });
-
         Self {
-            jwt_secret,
-            jwt_expiry_hours: env_or("CODEX_AUTH_JWT_EXPIRY_HOURS", 24),
-            refresh_token_enabled: env_bool_or("CODEX_AUTH_REFRESH_TOKEN_ENABLED", false),
-            refresh_token_expiry_days: env_or("CODEX_AUTH_REFRESH_TOKEN_EXPIRY_DAYS", 30),
-            argon2_memory_cost: env_or("CODEX_AUTH_ARGON2_MEMORY_COST", 19456),
-            argon2_time_cost: env_or("CODEX_AUTH_ARGON2_TIME_COST", 2),
-            argon2_parallelism: env_or("CODEX_AUTH_ARGON2_PARALLELISM", 1),
+            jwt_secret: "INSECURE_DEFAULT_SECRET_CHANGE_IN_PRODUCTION".to_string(),
+            jwt_expiry_hours: 24,
+            refresh_token_enabled: false,
+            refresh_token_expiry_days: 30,
+            argon2_memory_cost: 19456,
+            argon2_time_cost: 2,
+            argon2_parallelism: 1,
         }
     }
 }

@@ -149,7 +149,15 @@ fn init_tracing(config: &Config) -> anyhow::Result<Option<tracing_appender::non_
 
     // Get log level from config or environment
     let log_level = std::env::var("RUST_LOG")
-        .unwrap_or_else(|_| config.logging.level.as_str().to_string());
+        .unwrap_or_else(|_| {
+            let base_level = config.logging.level.as_str();
+            // Only show SQLx query logs when user explicitly wants debug/trace
+            // Otherwise set sqlx to warn to reduce noise from query logging
+            match base_level {
+                "debug" | "trace" => base_level.to_string(),
+                _ => format!("{},sqlx=warn", base_level),
+            }
+        });
 
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new(&log_level));

@@ -8,7 +8,7 @@ mod scanner;
 mod utils;
 
 use clap::{Parser, Subcommand};
-use commands::{scan_command, serve_command};
+use commands::{scan_command, seed_command, serve_command};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -46,6 +46,13 @@ enum Commands {
         #[arg(short, long, default_value = "codex.yaml")]
         config: PathBuf,
     },
+
+    /// Create initial admin user and API key
+    Seed {
+        /// Path to configuration file
+        #[arg(short, long, default_value = "codex.yaml")]
+        config: PathBuf,
+    },
 }
 
 #[tokio::main]
@@ -63,6 +70,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Serve { config } => {
             serve_command(config).await?;
+        }
+        Commands::Seed { config } => {
+            seed_command(config).await?;
         }
     }
 

@@ -15,7 +15,7 @@ impl MigrationTrait for Migration {
                     .col(uuid(ApiKeys::UserId).not_null())
                     .col(string(ApiKeys::Name).not_null())
                     .col(string_len(ApiKeys::KeyHash, 255).not_null().unique_key())
-                    .col(string_len(ApiKeys::KeyPrefix, 16).not_null())
+                    .col(string_len(ApiKeys::KeyPrefix, 32).not_null())
                     .col(json(ApiKeys::Permissions).not_null())
                     .col(boolean(ApiKeys::IsActive).not_null().default(true))
                     .col(timestamp_with_time_zone_null(ApiKeys::ExpiresAt))
@@ -60,6 +60,16 @@ impl MigrationTrait for Migration {
                     .name("idx_api_keys_is_active")
                     .table(ApiKeys::Table)
                     .col(ApiKeys::IsActive)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_api_keys_key_prefix")
+                    .table(ApiKeys::Table)
+                    .col(ApiKeys::KeyPrefix)
                     .to_owned(),
             )
             .await?;
