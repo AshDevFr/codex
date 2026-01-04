@@ -33,14 +33,38 @@ impl PageRepository {
             .context("Failed to create page")
     }
 
-    /// Create multiple pages in a batch
+    /// Create multiple pages in a batch using bulk insert
+    /// This is much more efficient than creating pages one by one
     pub async fn create_batch(
         db: &DatabaseConnection,
         pages_models: &[pages::Model],
     ) -> Result<()> {
-        for page_model in pages_models {
-            Self::create(db, page_model).await?;
+        if pages_models.is_empty() {
+            return Ok(());
         }
+
+        // Convert models to active models for batch insert
+        let active_models: Vec<pages::ActiveModel> = pages_models
+            .iter()
+            .map(|page_model| pages::ActiveModel {
+                id: Set(page_model.id),
+                book_id: Set(page_model.book_id),
+                page_number: Set(page_model.page_number),
+                file_name: Set(page_model.file_name.clone()),
+                format: Set(page_model.format.clone()),
+                width: Set(page_model.width),
+                height: Set(page_model.height),
+                file_size: Set(page_model.file_size),
+                created_at: Set(page_model.created_at),
+            })
+            .collect();
+
+        // Bulk insert all pages in a single query
+        Pages::insert_many(active_models)
+            .exec(db)
+            .await
+            .context("Failed to batch create pages")?;
+
         Ok(())
     }
 

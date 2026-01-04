@@ -33,6 +33,8 @@ pub enum ImageFormat {
     GIF,
     AVIF,
     BMP,
+    /// SVG images - note that dimensions cannot be easily determined without rendering
+    SVG,
 }
 
 /// Page information

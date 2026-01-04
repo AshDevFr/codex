@@ -208,6 +208,7 @@ impl FormatParser for PdfParser {
                                 ImageFormat::GIF => "gif",
                                 ImageFormat::BMP => "bmp",
                                 ImageFormat::AVIF => "avif",
+                                ImageFormat::SVG => "svg",
                             }
                         ),
                         format,

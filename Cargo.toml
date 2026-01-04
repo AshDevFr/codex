@@ -52,7 +52,6 @@ chrono = { version = "0.4", features = ["serde"] }
 tabled = "0.20"
 
 # Database
-sqlx = { version = "0.8", features = ["sqlite", "postgres"] }
 sea-orm = { version = "1.1", features = [
     "sqlx-postgres",
     "sqlx-sqlite",

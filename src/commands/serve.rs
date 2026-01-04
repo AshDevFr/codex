@@ -17,6 +17,7 @@ use tracing_subscriber::{util::SubscriberInitExt, EnvFilter};
 struct AppState {
     db: Database,
     config: Arc<Config>,
+    _log_guard: Option<Arc<tracing_appender::non_blocking::WorkerGuard>>,
 }
 
 /// Serve command handler - starts the media server
@@ -39,7 +40,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     config.apply_env_overrides("CODEX");
 
     // Initialize tracing with config
-    init_tracing(&config)?;
+    let log_guard = init_tracing(&config)?;
 
     if config_created {
         info!("Created default configuration file");
@@ -95,6 +96,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     let state = AppState {
         db,
         config: Arc::new(config.clone()),
+        _log_guard: log_guard.map(Arc::new),
     };
 
     // Build router
@@ -152,7 +154,8 @@ async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 /// Initialize tracing with both console and file output based on config
-fn init_tracing(config: &Config) -> anyhow::Result<()> {
+/// Returns an optional guard that must be kept alive for the duration of the application
+fn init_tracing(config: &Config) -> anyhow::Result<Option<tracing_appender::non_blocking::WorkerGuard>> {
     use std::fs;
     use std::io;
     use tracing_subscriber::fmt::writer::MakeWriterExt;
@@ -165,7 +168,7 @@ fn init_tracing(config: &Config) -> anyhow::Result<()> {
         .unwrap_or_else(|_| EnvFilter::new(&log_level));
 
     // Create a combined writer for console and/or file
-    match (&config.logging.console, &config.logging.file) {
+    let guard = match (&config.logging.console, &config.logging.file) {
         (true, Some(log_file_path)) => {
             // Both console and file
             let log_path = Path::new(log_file_path);
@@ -179,8 +182,7 @@ fn init_tracing(config: &Config) -> anyhow::Result<()> {
                 .unwrap_or("codex.log");
 
             let file_appender = tracing_appender::rolling::daily(directory, filename);
-            let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-            std::mem::forget(_guard);
+            let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
             let writer = io::stdout.and(non_blocking);
 
@@ -188,12 +190,16 @@ fn init_tracing(config: &Config) -> anyhow::Result<()> {
                 .with_env_filter(env_filter)
                 .with_writer(writer)
                 .init();
+
+            Some(guard)
         }
         (true, None) => {
             // Console only
             tracing_subscriber::fmt()
                 .with_env_filter(env_filter)
                 .init();
+
+            None
         }
         (false, Some(log_file_path)) => {
             // File only
@@ -208,22 +214,25 @@ fn init_tracing(config: &Config) -> anyhow::Result<()> {
                 .unwrap_or("codex.log");
 
             let file_appender = tracing_appender::rolling::daily(directory, filename);
-            let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-            std::mem::forget(_guard);
+            let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
             tracing_subscriber::fmt()
                 .with_env_filter(env_filter)
                 .with_writer(non_blocking)
                 .with_ansi(false)
                 .init();
+
+            Some(guard)
         }
         (false, None) => {
             // Neither (fallback to console)
             tracing_subscriber::fmt()
                 .with_env_filter(env_filter)
                 .init();
-        }
-    }
 
-    Ok(())
+            None
+        }
+    };
+
+    Ok(guard)
 }

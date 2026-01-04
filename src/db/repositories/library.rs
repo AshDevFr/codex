@@ -78,7 +78,6 @@ impl LibraryRepository {
         db: &DatabaseConnection,
         library: &libraries::Model,
     ) -> Result<()> {
-        // Create ActiveModel with all fields set to update
         let active = libraries::ActiveModel {
             id: Set(library.id),
             name: Set(library.name.clone()),

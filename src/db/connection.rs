@@ -1,38 +1,99 @@
 use anyhow::{Context, Result};
 use uuid::Uuid;
 use tracing::info;
+use sea_orm::{Database as SeaDatabase, DatabaseConnection, ConnectionTrait};
+use std::path::Path;
+use tokio::fs;
 
 use crate::config::{DatabaseConfig, DatabaseType};
 use crate::db::entities;
 use super::ScanningStrategy;
 
-use super::postgres::PostgresDatabase;
 use super::repositories::{
     BookMetadataRepository, BookRepository, LibraryRepository, PageRepository,
     SeriesRepository,
 };
-use super::sqlite::SqliteDatabase;
 use migration::{Migrator, MigratorTrait};
 
 /// Unified database connection wrapper
 #[derive(Clone, Debug)]
-pub enum Database {
-    Sqlite(SqliteDatabase),
-    Postgres(PostgresDatabase),
+pub struct Database {
+    conn: DatabaseConnection,
 }
 
 impl Database {
+    /// Validate pragma key to prevent SQL injection
+    /// Only allows alphanumeric characters and underscores
+    fn validate_pragma_key(key: &str) -> Result<()> {
+        // Whitelist of commonly used SQLite pragmas
+        const ALLOWED_PRAGMAS: &[&str] = &[
+            "foreign_keys",
+            "journal_mode",
+            "synchronous",
+            "cache_size",
+            "temp_store",
+            "locking_mode",
+            "auto_vacuum",
+            "busy_timeout",
+            "wal_autocheckpoint",
+            "query_only",
+        ];
+
+        if !ALLOWED_PRAGMAS.contains(&key) {
+            anyhow::bail!(
+                "Invalid pragma key '{}'. Allowed pragmas: {}",
+                key,
+                ALLOWED_PRAGMAS.join(", ")
+            );
+        }
+
+        Ok(())
+    }
+
     /// Create a new database connection from configuration
     pub async fn new(config: &DatabaseConfig) -> Result<Self> {
-        match config.db_type {
+        let conn = match config.db_type {
             DatabaseType::SQLite => {
                 let sqlite_config = config
                     .sqlite
                     .as_ref()
                     .context("SQLite configuration is required when db_type is sqlite")?;
 
-                let db = SqliteDatabase::new(sqlite_config).await?;
-                Ok(Database::Sqlite(db))
+                // Create parent directories if they don't exist
+                let path = Path::new(&sqlite_config.path);
+                if let Some(parent) = path.parent() {
+                    if !parent.exists() {
+                        fs::create_dir_all(parent)
+                            .await
+                            .context("Failed to create database directory")?;
+                    }
+                }
+
+                // Build SeaORM connection URL
+                let database_url = format!("sqlite://{}?mode=rwc", sqlite_config.path);
+
+                // Connect to database
+                let conn = SeaDatabase::connect(&database_url)
+                    .await
+                    .context("Failed to create SQLite connection")?;
+
+                // Apply custom pragmas if provided
+                if let Some(pragmas) = &sqlite_config.pragmas {
+                    for (key, value) in pragmas {
+                        // Validate pragma key to prevent SQL injection
+                        Self::validate_pragma_key(key)?;
+
+                        let pragma_sql = format!("PRAGMA {} = {}", key, value);
+                        conn.execute(sea_orm::Statement::from_string(
+                            sea_orm::DatabaseBackend::Sqlite,
+                            pragma_sql,
+                        ))
+                        .await
+                        .context(format!("Failed to set PRAGMA {} = {}", key, value))?;
+                    }
+                }
+
+                conn
             }
             DatabaseType::Postgres => {
                 let postgres_config = config
@@ -40,10 +101,23 @@ impl Database {
                     .as_ref()
                     .context("PostgreSQL configuration is required when db_type is postgres")?;
 
-                let db = PostgresDatabase::new(postgres_config).await?;
-                Ok(Database::Postgres(db))
+                // Build connection string
+                let connection_string = format!(
+                    "postgres://{}:{}@{}:{}/{}",
+                    postgres_config.username,
+                    postgres_config.password,
+                    postgres_config.host,
+                    postgres_config.port,
+                    postgres_config.database_name
+                );
+
+                SeaDatabase::connect(&connection_string)
+                    .await
+                    .context("Failed to create PostgreSQL connection")?
             }
-        }
+        };
+
+        Ok(Self { conn })
     }
 
     /// Run database migrations
@@ -52,7 +126,7 @@ impl Database {
     /// so it's safe to call multiple times - it will only run pending migrations.
     pub async fn run_migrations(&self) -> Result<()> {
         // Check migration status for logging
-        let status = Migrator::status(self.sea_orm_connection())
+        let status = Migrator::status(&self.conn)
             .await
             .context("Failed to check migration status")?;
 
@@ -61,7 +135,7 @@ impl Database {
 
         // Apply all pending migrations
         info!("Running database migrations...");
-        Migrator::up(self.sea_orm_connection(), None)
+        Migrator::up(&self.conn, None)
             .await
             .context("Failed to run database migrations")?;
         info!("Database migrations completed successfully");
@@ -71,26 +145,24 @@ impl Database {
 
     /// Close the database connection
     pub async fn close(self) {
-        match self {
-            Database::Sqlite(db) => db.close().await,
-            Database::Postgres(db) => db.close().await,
-        }
+        // DatabaseConnection will be closed automatically when dropped
     }
 
     /// Check if the database connection is healthy
     pub async fn health_check(&self) -> Result<()> {
-        match self {
-            Database::Sqlite(db) => db.health_check().await,
-            Database::Postgres(db) => db.health_check().await,
-        }
+        self.conn
+            .execute(sea_orm::Statement::from_string(
+                self.conn.get_database_backend(),
+                "SELECT 1".to_owned(),
+            ))
+            .await
+            .context("Database health check failed")?;
+        Ok(())
     }
 
     /// Get reference to SeaORM database connection
-    pub fn sea_orm_connection(&self) -> &sea_orm::DatabaseConnection {
-        match self {
-            Database::Sqlite(db) => db.sea_orm_connection(),
-            Database::Postgres(db) => db.sea_orm_connection(),
-        }
+    pub fn sea_orm_connection(&self) -> &DatabaseConnection {
+        &self.conn
     }
 
     // ============================================================================
@@ -104,37 +176,37 @@ impl Database {
         path: &str,
         strategy: ScanningStrategy,
     ) -> Result<entities::libraries::Model> {
-        LibraryRepository::create(self.sea_orm_connection(), name, path, strategy).await
+        LibraryRepository::create(&self.conn, name, path, strategy).await
     }
 
     /// Get a library by ID
     pub async fn get_library_by_id(&self, id: Uuid) -> Result<Option<entities::libraries::Model>> {
-        LibraryRepository::get_by_id(self.sea_orm_connection(), id).await
+        LibraryRepository::get_by_id(&self.conn, id).await
     }
 
     /// Get all libraries
     pub async fn list_libraries(&self) -> Result<Vec<entities::libraries::Model>> {
-        LibraryRepository::list_all(self.sea_orm_connection()).await
+        LibraryRepository::list_all(&self.conn).await
     }
 
     /// Get library by path
     pub async fn get_library_by_path(&self, path: &str) -> Result<Option<entities::libraries::Model>> {
-        LibraryRepository::get_by_path(self.sea_orm_connection(), path).await
+        LibraryRepository::get_by_path(&self.conn, path).await
     }
 
     /// Update library
     pub async fn update_library(&self, library: &entities::libraries::Model) -> Result<()> {
-        LibraryRepository::update(self.sea_orm_connection(), library).await
+        LibraryRepository::update(&self.conn, library).await
     }
 
     /// Update last scanned timestamp
     pub async fn update_library_last_scanned(&self, id: Uuid) -> Result<()> {
-        LibraryRepository::update_last_scanned(self.sea_orm_connection(), id).await
+        LibraryRepository::update_last_scanned(&self.conn, id).await
     }
 
     /// Delete a library
     pub async fn delete_library(&self, id: Uuid) -> Result<()> {
-        LibraryRepository::delete(self.sea_orm_connection(), id).await
+        LibraryRepository::delete(&self.conn, id).await
     }
 
     // ============================================================================
@@ -143,37 +215,37 @@ impl Database {
 
     /// Create a new series
     pub async fn create_series(&self, library_id: Uuid, name: &str) -> Result<entities::series::Model> {
-        SeriesRepository::create(self.sea_orm_connection(), library_id, name).await
+        SeriesRepository::create(&self.conn, library_id, name).await
     }
 
     /// Get a series by ID
     pub async fn get_series_by_id(&self, id: Uuid) -> Result<Option<entities::series::Model>> {
-        SeriesRepository::get_by_id(self.sea_orm_connection(), id).await
+        SeriesRepository::get_by_id(&self.conn, id).await
     }
 
     /// Get all series in a library
     pub async fn list_series_by_library(&self, library_id: Uuid) -> Result<Vec<entities::series::Model>> {
-        SeriesRepository::list_by_library(self.sea_orm_connection(), library_id).await
+        SeriesRepository::list_by_library(&self.conn, library_id).await
     }
 
     /// Search series by name
     pub async fn search_series(&self, query: &str) -> Result<Vec<entities::series::Model>> {
-        SeriesRepository::search_by_name(self.sea_orm_connection(), query).await
+        SeriesRepository::search_by_name(&self.conn, query).await
     }
 
     /// Update series
     pub async fn update_series(&self, series: &entities::series::Model) -> Result<()> {
-        SeriesRepository::update(self.sea_orm_connection(), series).await
+        SeriesRepository::update(&self.conn, series).await
     }
 
     /// Increment book count for a series
     pub async fn increment_series_book_count(&self, id: Uuid) -> Result<()> {
-        SeriesRepository::increment_book_count(self.sea_orm_connection(), id).await
+        SeriesRepository::increment_book_count(&self.conn, id).await
     }
 
     /// Delete a series
     pub async fn delete_series(&self, id: Uuid) -> Result<()> {
-        SeriesRepository::delete(self.sea_orm_connection(), id).await
+        SeriesRepository::delete(&self.conn, id).await
     }
 
     // ============================================================================
@@ -182,37 +254,37 @@ impl Database {
 
     /// Create a new book
     pub async fn create_book(&self, book: &entities::books::Model) -> Result<entities::books::Model> {
-        BookRepository::create(self.sea_orm_connection(), book).await
+        BookRepository::create(&self.conn, book).await
     }
 
     /// Get a book by ID
     pub async fn get_book_by_id(&self, id: Uuid) -> Result<Option<entities::books::Model>> {
-        BookRepository::get_by_id(self.sea_orm_connection(), id).await
+        BookRepository::get_by_id(&self.conn, id).await
     }
 
     /// Get a book by file hash
     pub async fn get_book_by_hash(&self, hash: &str) -> Result<Option<entities::books::Model>> {
-        BookRepository::get_by_hash(self.sea_orm_connection(), hash).await
+        BookRepository::get_by_hash(&self.conn, hash).await
     }
 
     /// Get a book by file path
     pub async fn get_book_by_path(&self, path: &str) -> Result<Option<entities::books::Model>> {
-        BookRepository::get_by_path(self.sea_orm_connection(), path).await
+        BookRepository::get_by_path(&self.conn, path).await
     }
 
     /// Get all books in a series
     pub async fn list_books_by_series(&self, series_id: Uuid) -> Result<Vec<entities::books::Model>> {
-        BookRepository::list_by_series(self.sea_orm_connection(), series_id).await
+        BookRepository::list_by_series(&self.conn, series_id).await
     }
 
     /// Update book
     pub async fn update_book(&self, book: &entities::books::Model) -> Result<()> {
-        BookRepository::update(self.sea_orm_connection(), book).await
+        BookRepository::update(&self.conn, book).await
     }
 
     /// Delete a book
     pub async fn delete_book(&self, id: Uuid) -> Result<()> {
-        BookRepository::delete(self.sea_orm_connection(), id).await
+        BookRepository::delete(&self.conn, id).await
     }
 
     // ============================================================================
@@ -221,22 +293,22 @@ impl Database {
 
     /// Create a new page
     pub async fn create_page(&self, page: &entities::pages::Model) -> Result<entities::pages::Model> {
-        PageRepository::create(self.sea_orm_connection(), page).await
+        PageRepository::create(&self.conn, page).await
     }
 
     /// Create multiple pages in a batch
     pub async fn create_pages_batch(&self, pages: &[entities::pages::Model]) -> Result<()> {
-        PageRepository::create_batch(self.sea_orm_connection(), pages).await
+        PageRepository::create_batch(&self.conn, pages).await
     }
 
     /// Get a page by ID
     pub async fn get_page_by_id(&self, id: Uuid) -> Result<Option<entities::pages::Model>> {
-        PageRepository::get_by_id(self.sea_orm_connection(), id).await
+        PageRepository::get_by_id(&self.conn, id).await
     }
 
     /// Get all pages for a book
     pub async fn list_pages_by_book(&self, book_id: Uuid) -> Result<Vec<entities::pages::Model>> {
-        PageRepository::list_by_book(self.sea_orm_connection(), book_id).await
+        PageRepository::list_by_book(&self.conn, book_id).await
     }
 
     /// Get a page by book ID and page number
@@ -245,12 +317,12 @@ impl Database {
         book_id: Uuid,
         page_number: i32,
     ) -> Result<Option<entities::pages::Model>> {
-        PageRepository::get_by_book_and_number(self.sea_orm_connection(), book_id, page_number).await
+        PageRepository::get_by_book_and_number(&self.conn, book_id, page_number).await
     }
 
     /// Delete all pages for a book
     pub async fn delete_pages_by_book(&self, book_id: Uuid) -> Result<()> {
-        PageRepository::delete_by_book(self.sea_orm_connection(), book_id).await
+        PageRepository::delete_by_book(&self.conn, book_id).await
     }
 
     // ============================================================================
@@ -262,22 +334,22 @@ impl Database {
         &self,
         metadata: &entities::book_metadata_records::Model,
     ) -> Result<entities::book_metadata_records::Model> {
-        BookMetadataRepository::upsert(self.sea_orm_connection(), metadata).await
+        BookMetadataRepository::upsert(&self.conn, metadata).await
     }
 
     /// Get metadata by book ID
     pub async fn get_book_metadata(&self, book_id: Uuid) -> Result<Option<entities::book_metadata_records::Model>> {
-        BookMetadataRepository::get_by_book_id(self.sea_orm_connection(), book_id).await
+        BookMetadataRepository::get_by_book_id(&self.conn, book_id).await
     }
 
     /// Update book metadata
     pub async fn update_book_metadata(&self, metadata: &entities::book_metadata_records::Model) -> Result<()> {
-        BookMetadataRepository::update(self.sea_orm_connection(), metadata).await
+        BookMetadataRepository::update(&self.conn, metadata).await
     }
 
     /// Delete metadata by book ID
     pub async fn delete_book_metadata(&self, book_id: Uuid) -> Result<()> {
-        BookMetadataRepository::delete_by_book_id(self.sea_orm_connection(), book_id).await
+        BookMetadataRepository::delete_by_book_id(&self.conn, book_id).await
     }
 }
 

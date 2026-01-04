@@ -1,8 +1,6 @@
 pub mod connection;
 pub mod entities;
-pub mod postgres;
 pub mod repositories;
-pub mod sqlite;
 
 pub mod test_helpers;
 
