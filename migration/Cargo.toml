@@ -1,0 +1,19 @@
+[package]
+name = "migration"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "migration"
+path = "src/lib.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[dependencies.sea-orm-migration]
+version = "1.1.0"
+features = [
+  "runtime-tokio-native-tls",  # `ASYNC_RUNTIME` feature
+  "sqlx-postgres",             # `DATABASE_DRIVER` feature
+]

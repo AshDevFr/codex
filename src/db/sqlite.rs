@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
+use sea_orm::{Database as SeaDatabase, DatabaseConnection};
 use std::path::Path;
 use std::str::FromStr;
 use tokio::fs;
-use tracing::info;
 
 use crate::config::SQLiteConfig;
 
@@ -11,6 +11,7 @@ use crate::config::SQLiteConfig;
 #[derive(Clone, Debug)]
 pub struct SqliteDatabase {
     pool: SqlitePool,
+    sea_orm_conn: DatabaseConnection,
 }
 
 impl SqliteDatabase {
@@ -51,42 +52,36 @@ impl SqliteDatabase {
             .await
             .context("Failed to connect to SQLite database")?;
 
-        let db = Self { pool };
-
-        // If database was just created, run migrations
-        if !db_exists {
-            info!("Database file not found. Creating new database and running migrations...");
-            db.run_migrations().await?;
-        }
-
-        Ok(db)
-    }
-
-    /// Run database migrations
-    pub async fn run_migrations(&self) -> Result<()> {
-        sqlx::migrate!("./migrations")
-            .run(&self.pool)
+        // Create SeaORM connection from the same database URL
+        let database_url = format!("sqlite://{}", config.path);
+        let sea_orm_conn = SeaDatabase::connect(&database_url)
             .await
-            .context("Failed to run database migrations")?;
+            .context("Failed to create SeaORM connection")?;
 
-        info!("Database migrations completed successfully");
-        Ok(())
+        Ok(Self { pool, sea_orm_conn })
     }
 
-    /// Get a reference to the underlying connection pool
-    pub fn pool(&self) -> &SqlitePool {
-        &self.pool
+
+    /// Get a reference to the SeaORM database connection
+    pub fn sea_orm_connection(&self) -> &DatabaseConnection {
+        &self.sea_orm_conn
     }
 
     /// Close the database connection
     pub async fn close(self) {
         self.pool.close().await;
+        // SeaORM connection will be closed automatically when dropped
     }
 
     /// Check if the database connection is healthy
     pub async fn health_check(&self) -> Result<()> {
-        sqlx::query("SELECT 1")
-            .execute(&self.pool)
+        use sea_orm::ConnectionTrait;
+
+        self.sea_orm_conn
+            .execute(sea_orm::Statement::from_string(
+                sea_orm::DatabaseBackend::Sqlite,
+                "SELECT 1".to_owned(),
+            ))
             .await
             .context("Database health check failed")?;
         Ok(())
@@ -134,13 +129,20 @@ mod tests {
 
         let db = SqliteDatabase::new(&config).await.unwrap();
 
-        // Verify foreign keys are enabled
-        let row: (i32,) = sqlx::query_as("PRAGMA foreign_keys")
-            .fetch_one(db.pool())
+        // Verify foreign keys are enabled using SeaORM
+        use sea_orm::{ConnectionTrait, Statement};
+
+        let result = db.sea_orm_conn
+            .query_one(Statement::from_string(
+                sea_orm::DatabaseBackend::Sqlite,
+                "PRAGMA foreign_keys".to_owned(),
+            ))
             .await
+            .unwrap()
             .unwrap();
 
-        assert_eq!(row.0, 1); // 1 means ON
+        let foreign_keys: i32 = result.try_get("", "foreign_keys").unwrap();
+        assert_eq!(foreign_keys, 1); // 1 means ON
 
         db.close().await;
     }

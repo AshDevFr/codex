@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use sqlx::postgres::{PgConnectOptions, PgPool, PgPoolOptions};
+use sea_orm::{Database as SeaDatabase, DatabaseConnection};
 use std::str::FromStr;
-use tracing::info;
 
 use crate::config::PostgresConfig;
 
@@ -9,6 +9,7 @@ use crate::config::PostgresConfig;
 #[derive(Clone, Debug)]
 pub struct PostgresDatabase {
     pool: PgPool,
+    sea_orm_conn: DatabaseConnection,
 }
 
 impl PostgresDatabase {
@@ -31,49 +32,35 @@ impl PostgresDatabase {
             .await
             .context("Failed to connect to PostgreSQL database")?;
 
-        // Check if migrations have been run by checking for the _sqlx_migrations table
-        let needs_migration = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '_sqlx_migrations'"
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap_or(0) == 0;
-
-        let db = Self { pool };
-
-        if needs_migration {
-            info!("Database schema not found. Running migrations...");
-            db.run_migrations().await?;
-        }
-
-        Ok(db)
-    }
-
-    /// Run database migrations
-    pub async fn run_migrations(&self) -> Result<()> {
-        sqlx::migrate!("./migrations")
-            .run(&self.pool)
+        // Create SeaORM connection from the same connection string
+        let sea_orm_conn = SeaDatabase::connect(&connection_string)
             .await
-            .context("Failed to run database migrations")?;
+            .context("Failed to create SeaORM connection")?;
 
-        info!("Database migrations completed successfully");
-        Ok(())
+        Ok(Self { pool, sea_orm_conn })
     }
 
-    /// Get a reference to the underlying connection pool
-    pub fn pool(&self) -> &PgPool {
-        &self.pool
+
+    /// Get a reference to the SeaORM database connection
+    pub fn sea_orm_connection(&self) -> &DatabaseConnection {
+        &self.sea_orm_conn
     }
 
     /// Close the database connection
     pub async fn close(self) {
         self.pool.close().await;
+        // SeaORM connection will be closed automatically when dropped
     }
 
     /// Check if the database connection is healthy
     pub async fn health_check(&self) -> Result<()> {
-        sqlx::query("SELECT 1")
-            .execute(&self.pool)
+        use sea_orm::ConnectionTrait;
+
+        self.sea_orm_conn
+            .execute(sea_orm::Statement::from_string(
+                sea_orm::DatabaseBackend::Postgres,
+                "SELECT 1".to_owned(),
+            ))
             .await
             .context("Database health check failed")?;
         Ok(())

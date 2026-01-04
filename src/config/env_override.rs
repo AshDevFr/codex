@@ -36,8 +36,8 @@ impl EnvOverride for ApplicationConfig {
 
 impl EnvOverride for DatabaseConfig {
     fn apply_env_overrides(&mut self, prefix: &str) {
-        // Check for database type override
-        if let Ok(db_type) = env::var(format!("{}_TYPE", prefix)) {
+        // Check for database type override (db_type in YAML)
+        if let Ok(db_type) = env::var(format!("{}_DB_TYPE", prefix)) {
             if db_type.eq_ignore_ascii_case("postgres") || db_type.eq_ignore_ascii_case("postgresql") {
                 self.db_type = DatabaseType::Postgres;
             } else if db_type.eq_ignore_ascii_case("sqlite") {

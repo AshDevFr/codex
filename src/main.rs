@@ -1,6 +1,7 @@
 mod commands;
 mod config;
 mod db;
+mod models;
 mod parsers;
 mod scanner;
 mod utils;
