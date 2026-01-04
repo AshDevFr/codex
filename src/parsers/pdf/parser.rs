@@ -242,6 +242,39 @@ impl Default for PdfParser {
     }
 }
 
+/// Extract a specific page image from a PDF file
+///
+/// # Arguments
+/// * `path` - Path to the PDF file
+/// * `page_number` - Page number (1-indexed)
+///
+/// # Returns
+/// The raw image data as bytes
+pub fn extract_page_from_pdf<P: AsRef<Path>>(path: P, page_number: i32) -> anyhow::Result<Vec<u8>> {
+    let doc = Document::load(path)
+        .map_err(|e| anyhow::anyhow!("Failed to load PDF: {}", e))?;
+
+    // Get the total number of pages
+    let page_count = doc.get_pages().len();
+
+    // Extract images from all pages and find the one we need
+    let mut current_image_index = 0;
+    let target_index = (page_number - 1) as usize;
+
+    for pdf_page_num in 0..page_count as u32 {
+        if let Ok(page_images) = PdfParser::extract_images_from_page(&doc, pdf_page_num) {
+            for (image_data, _format, _width, _height, _file_size) in page_images {
+                if current_image_index == target_index {
+                    return Ok(image_data);
+                }
+                current_image_index += 1;
+            }
+        }
+    }
+
+    anyhow::bail!("Page {} not found in PDF", page_number)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

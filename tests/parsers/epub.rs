@@ -1,7 +1,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::parsers::epub::EpubParser;
+use codex::parsers::epub::{EpubParser, extract_page_from_epub};
 use codex::parsers::traits::FormatParser;
 use codex::parsers::{FileFormat, ImageFormat};
 use tempfile::TempDir;
@@ -159,5 +159,47 @@ fn test_epub_parser_file_metadata() {
     assert!(!metadata.file_hash.is_empty());
     assert!(metadata.file_hash.len() == 64); // SHA-256
     assert!(!metadata.file_path.is_empty());
+}
+
+#[test]
+fn test_extract_page_from_epub_first_page() {
+    let temp_dir = TempDir::new().unwrap();
+    let epub_path = common::create_test_epub(&temp_dir, 2, 3);
+
+    let image_data = extract_page_from_epub(&epub_path, 1).unwrap();
+
+    // Should return valid image data
+    assert!(!image_data.is_empty());
+
+    // Check it's a valid PNG
+    assert_eq!(&image_data[0..4], b"\x89PNG");
+}
+
+#[test]
+fn test_extract_page_from_epub_last_page() {
+    let temp_dir = TempDir::new().unwrap();
+    let epub_path = common::create_test_epub(&temp_dir, 2, 3);
+
+    let image_data = extract_page_from_epub(&epub_path, 3).unwrap();
+
+    // Should return valid image data
+    assert!(!image_data.is_empty());
+    assert_eq!(&image_data[0..4], b"\x89PNG");
+}
+
+#[test]
+fn test_extract_page_from_epub_invalid_page_number() {
+    let temp_dir = TempDir::new().unwrap();
+    let epub_path = common::create_test_epub(&temp_dir, 2, 3);
+
+    // Page beyond count should fail
+    let result = extract_page_from_epub(&epub_path, 4);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_extract_page_from_epub_nonexistent_file() {
+    let result = extract_page_from_epub("/nonexistent/file.epub", 1);
+    assert!(result.is_err());
 }
 

@@ -101,119 +101,13 @@ async fn extract_page_image(
 ) -> anyhow::Result<Vec<u8>> {
     let path = std::path::Path::new(file_path);
 
+    // Call the appropriate parser extraction function
     match file_format.to_uppercase().as_str() {
-        "CBZ" => extract_from_cbz(path, page_number).await,
+        "CBZ" => crate::parsers::cbz::extract_page_from_cbz(path, page_number),
         #[cfg(feature = "rar")]
-        "CBR" => extract_from_cbr(path, page_number).await,
-        "EPUB" => extract_from_epub(path, page_number).await,
-        "PDF" => extract_from_pdf(path, page_number).await,
+        "CBR" => crate::parsers::cbr::extract_page_from_cbr(path, page_number),
+        "EPUB" => crate::parsers::epub::extract_page_from_epub(path, page_number),
+        "PDF" => crate::parsers::pdf::extract_page_from_pdf(path, page_number),
         _ => anyhow::bail!("Unsupported format: {}", file_format),
     }
-}
-
-/// Extract image from CBZ (ZIP) archive
-async fn extract_from_cbz(path: &std::path::Path, page_number: i32) -> anyhow::Result<Vec<u8>> {
-    use std::io::Read;
-
-    let file = std::fs::File::open(path)?;
-    let mut archive = zip::ZipArchive::new(file)?;
-
-    // Get list of image files in archive
-    let mut image_files: Vec<String> = Vec::new();
-    for i in 0..archive.len() {
-        let file = archive.by_index(i)?;
-        let name = file.name().to_string();
-        if crate::parsers::is_image_file(&name) {
-            image_files.push(name);
-        }
-    }
-
-    // Sort alphabetically
-    image_files.sort();
-
-    // Get the requested page (1-indexed)
-    let index = (page_number - 1) as usize;
-    if index >= image_files.len() {
-        anyhow::bail!("Page {} not found in archive", page_number);
-    }
-
-    // Extract image data
-    let mut file = archive.by_name(&image_files[index])?;
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)?;
-
-    Ok(buffer)
-}
-
-/// Extract image from CBR (RAR) archive
-#[cfg(feature = "rar")]
-async fn extract_from_cbr(path: &std::path::Path, page_number: i32) -> anyhow::Result<Vec<u8>> {
-    use std::io::Read;
-
-    let mut archive = unrar::Archive::new(path).open_for_processing()?;
-    let mut image_files: Vec<(String, Vec<u8>)> = Vec::new();
-
-    while let Some(header) = archive.read_header()? {
-        let entry_name = header.entry().filename.to_string_lossy().to_string();
-
-        if crate::parsers::is_image_file(&entry_name) {
-            let (data, next_archive) = header.read()?;
-            archive = next_archive;
-            image_files.push((entry_name, data));
-        } else {
-            archive = header.skip()?;
-        }
-    }
-
-    // Sort by filename
-    image_files.sort_by(|a, b| a.0.cmp(&b.0));
-
-    // Get the requested page (1-indexed)
-    let index = (page_number - 1) as usize;
-    if index >= image_files.len() {
-        anyhow::bail!("Page {} not found in archive", page_number);
-    }
-
-    Ok(image_files[index].1.clone())
-}
-
-/// Extract image from EPUB
-async fn extract_from_epub(path: &std::path::Path, page_number: i32) -> anyhow::Result<Vec<u8>> {
-    use std::io::Read;
-
-    let file = std::fs::File::open(path)?;
-    let mut archive = zip::ZipArchive::new(file)?;
-
-    // Get list of image files in EPUB
-    let mut image_files: Vec<String> = Vec::new();
-    for i in 0..archive.len() {
-        let file = archive.by_index(i)?;
-        let name = file.name().to_string();
-        if crate::parsers::is_image_file(&name) {
-            image_files.push(name);
-        }
-    }
-
-    // Sort alphabetically
-    image_files.sort();
-
-    // Get the requested page (1-indexed)
-    let index = (page_number - 1) as usize;
-    if index >= image_files.len() {
-        anyhow::bail!("Page {} not found in EPUB", page_number);
-    }
-
-    // Extract image data
-    let mut file = archive.by_name(&image_files[index])?;
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)?;
-
-    Ok(buffer)
-}
-
-/// Extract image from PDF
-async fn extract_from_pdf(_path: &std::path::Path, _page_number: i32) -> anyhow::Result<Vec<u8>> {
-    // PDF image extraction is complex and requires rendering
-    // This is a placeholder - full implementation would use pdf rendering libraries
-    anyhow::bail!("PDF image extraction not yet implemented")
 }

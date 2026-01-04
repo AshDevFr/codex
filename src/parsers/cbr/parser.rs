@@ -164,6 +164,48 @@ impl Default for CbrParser {
     }
 }
 
+/// Extract a specific page image from a CBR file
+///
+/// # Arguments
+/// * `path` - Path to the CBR file
+/// * `page_number` - Page number (1-indexed)
+///
+/// # Returns
+/// The raw image data as bytes
+pub fn extract_page_from_cbr<P: AsRef<Path>>(path: P, page_number: i32) -> anyhow::Result<Vec<u8>> {
+    let mut archive = unrar::Archive::new(path.as_ref()).open_for_processing()
+        .map_err(|e| anyhow::anyhow!("Failed to open RAR archive: {}", e))?;
+
+    let mut image_files: Vec<(String, Vec<u8>)> = Vec::new();
+
+    while let Some(header) = archive.read_header()
+        .map_err(|e| anyhow::anyhow!("Failed to read RAR header: {}", e))?
+    {
+        let entry_name = header.entry().filename.to_string_lossy().to_string();
+
+        if CbrParser::is_image_file(&entry_name) {
+            let (data, next_archive) = header.read()
+                .map_err(|e| anyhow::anyhow!("Failed to read RAR entry: {}", e))?;
+            archive = next_archive;
+            image_files.push((entry_name, data));
+        } else {
+            archive = header.skip()
+                .map_err(|e| anyhow::anyhow!("Failed to skip RAR entry: {}", e))?;
+        }
+    }
+
+    // Sort by filename
+    image_files.sort_by(|a, b| a.0.cmp(&b.0));
+
+    // Get the requested page (1-indexed)
+    let index = (page_number - 1) as usize;
+    if index >= image_files.len() {
+        anyhow::bail!("Page {} not found in archive", page_number);
+    }
+
+    Ok(image_files[index].1.clone())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

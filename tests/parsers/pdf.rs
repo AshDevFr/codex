@@ -1,7 +1,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::parsers::pdf::PdfParser;
+use codex::parsers::pdf::{PdfParser, extract_page_from_pdf};
 use codex::parsers::traits::FormatParser;
 use codex::parsers::FileFormat;
 use tempfile::TempDir;
@@ -128,5 +128,60 @@ fn test_pdf_parser_with_many_pages() {
 
     // Should have 20 pages
     assert_eq!(metadata.page_count, 20);
+}
+
+#[test]
+fn test_extract_page_from_pdf_first_page() {
+    let temp_dir = TempDir::new().unwrap();
+    let pdf_path = common::create_test_pdf(&temp_dir, 3, 2);
+
+    let image_data = extract_page_from_pdf(&pdf_path, 1).unwrap();
+
+    // Should return valid image data
+    assert!(!image_data.is_empty());
+
+    // Check it's a valid PNG (from our test PDF)
+    assert_eq!(&image_data[0..4], b"\x89PNG");
+}
+
+#[test]
+fn test_extract_page_from_pdf_last_page() {
+    let temp_dir = TempDir::new().unwrap();
+    let pdf_path = common::create_test_pdf(&temp_dir, 2, 2);
+
+    // PDF with 2 pages, 2 images per page = 4 total images
+    let image_data = extract_page_from_pdf(&pdf_path, 4).unwrap();
+
+    // Should return valid image data
+    assert!(!image_data.is_empty());
+}
+
+#[test]
+fn test_extract_page_from_pdf_middle_page() {
+    let temp_dir = TempDir::new().unwrap();
+    let pdf_path = common::create_test_pdf(&temp_dir, 3, 2);
+
+    // PDF with 3 pages, 2 images per page = 6 total images
+    let image_data = extract_page_from_pdf(&pdf_path, 3).unwrap();
+
+    // Should return valid image data
+    assert!(!image_data.is_empty());
+}
+
+#[test]
+fn test_extract_page_from_pdf_invalid_page_number() {
+    let temp_dir = TempDir::new().unwrap();
+    let pdf_path = common::create_test_pdf(&temp_dir, 2, 2);
+
+    // PDF with 2 pages, 2 images per page = 4 total images
+    // Page 5 should fail
+    let result = extract_page_from_pdf(&pdf_path, 5);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_extract_page_from_pdf_nonexistent_file() {
+    let result = extract_page_from_pdf("/nonexistent/file.pdf", 1);
+    assert!(result.is_err());
 }
 

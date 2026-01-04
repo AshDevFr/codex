@@ -260,6 +260,45 @@ impl Default for EpubParser {
     }
 }
 
+/// Extract a specific page image from an EPUB file
+///
+/// # Arguments
+/// * `path` - Path to the EPUB file
+/// * `page_number` - Page number (1-indexed)
+///
+/// # Returns
+/// The raw image data as bytes
+pub fn extract_page_from_epub<P: AsRef<Path>>(path: P, page_number: i32) -> anyhow::Result<Vec<u8>> {
+    let file = File::open(path)?;
+    let mut archive = ZipArchive::new(file)?;
+
+    // Get list of image files in EPUB
+    let mut image_files: Vec<String> = Vec::new();
+    for i in 0..archive.len() {
+        let file = archive.by_index(i)?;
+        let name = file.name().to_string();
+        if !file.is_dir() && is_image_file(&name) {
+            image_files.push(name);
+        }
+    }
+
+    // Sort alphabetically
+    image_files.sort();
+
+    // Get the requested page (1-indexed)
+    let index = (page_number - 1) as usize;
+    if index >= image_files.len() {
+        anyhow::bail!("Page {} not found in EPUB", page_number);
+    }
+
+    // Extract image data
+    let mut file = archive.by_name(&image_files[index])?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)?;
+
+    Ok(buffer)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,7 +1,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::parsers::cbz::CbzParser;
+use codex::parsers::cbz::{CbzParser, extract_page_from_cbz};
 use codex::parsers::traits::FormatParser;
 use codex::parsers::{FileFormat, ImageFormat};
 use tempfile::TempDir;
@@ -101,4 +101,66 @@ fn test_cbz_parser_default() {
     // Both should be able to parse CBZ files
     assert!(parser1.can_parse("test.cbz"));
     assert!(parser2.can_parse("test.cbz"));
+}
+
+#[test]
+fn test_extract_page_from_cbz_first_page() {
+    let temp_dir = TempDir::new().unwrap();
+    let cbz_path = common::create_test_cbz(&temp_dir, 3, false);
+
+    let image_data = extract_page_from_cbz(&cbz_path, 1).unwrap();
+
+    // Should return valid image data
+    assert!(!image_data.is_empty());
+
+    // Check it's a valid PNG (starts with PNG magic bytes)
+    assert_eq!(&image_data[0..4], b"\x89PNG");
+}
+
+#[test]
+fn test_extract_page_from_cbz_last_page() {
+    let temp_dir = TempDir::new().unwrap();
+    let cbz_path = common::create_test_cbz(&temp_dir, 3, false);
+
+    let image_data = extract_page_from_cbz(&cbz_path, 3).unwrap();
+
+    // Should return valid image data
+    assert!(!image_data.is_empty());
+    assert_eq!(&image_data[0..4], b"\x89PNG");
+}
+
+#[test]
+fn test_extract_page_from_cbz_middle_page() {
+    let temp_dir = TempDir::new().unwrap();
+    let cbz_path = common::create_test_cbz(&temp_dir, 5, false);
+
+    let image_data = extract_page_from_cbz(&cbz_path, 3).unwrap();
+
+    // Should return valid image data
+    assert!(!image_data.is_empty());
+    assert_eq!(&image_data[0..4], b"\x89PNG");
+}
+
+#[test]
+fn test_extract_page_from_cbz_invalid_page_number() {
+    let temp_dir = TempDir::new().unwrap();
+    let cbz_path = common::create_test_cbz(&temp_dir, 3, false);
+
+    // Page 0 should fail (1-indexed)
+    let result = extract_page_from_cbz(&cbz_path, 0);
+    assert!(result.is_err());
+
+    // Page beyond count should fail
+    let result = extract_page_from_cbz(&cbz_path, 4);
+    assert!(result.is_err());
+
+    // Negative page should fail
+    let result = extract_page_from_cbz(&cbz_path, -1);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_extract_page_from_cbz_nonexistent_file() {
+    let result = extract_page_from_cbz("/nonexistent/file.cbz", 1);
+    assert!(result.is_err());
 }
