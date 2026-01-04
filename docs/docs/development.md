@@ -252,4 +252,3 @@ cargo build --release
 - Review the [Architecture](./architecture) documentation
 - Check the [API Documentation](./api) for endpoint details
 - See [Configuration](./configuration) for available options
-
