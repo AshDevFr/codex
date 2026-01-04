@@ -1,3 +1,4 @@
+pub mod docs;
 pub mod dto;
 pub mod error;
 pub mod extractors;
@@ -6,6 +7,7 @@ pub mod middleware;
 pub mod permissions;
 pub mod routes;
 
+pub use docs::ApiDoc;
 pub use dto::*;
 pub use error::ApiError;
 pub use extractors::{AuthContext, AuthMethod, AuthState};

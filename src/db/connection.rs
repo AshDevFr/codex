@@ -77,9 +77,23 @@ impl Database {
                     .await
                     .context("Failed to create SQLite connection")?;
 
+                // CRITICAL: Always enable foreign keys for data integrity
+                // This must be set for every connection
+                conn.execute(sea_orm::Statement::from_string(
+                    sea_orm::DatabaseBackend::Sqlite,
+                    "PRAGMA foreign_keys = ON".to_string(),
+                ))
+                .await
+                .context("Failed to enable foreign keys")?;
+
                 // Apply custom pragmas if provided
                 if let Some(pragmas) = &sqlite_config.pragmas {
                     for (key, value) in pragmas {
+                        // Skip foreign_keys as it's always enabled above
+                        if key.eq_ignore_ascii_case("foreign_keys") {
+                            continue;
+                        }
+
                         // Validate pragma key to prevent SQL injection
                         Self::validate_pragma_key(key)?;
 

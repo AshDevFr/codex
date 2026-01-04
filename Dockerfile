@@ -7,7 +7,8 @@ RUN apk add --no-cache \
     pkgconf \
     openssl-dev \
     openssl-libs-static \
-    build-base
+    build-base \
+    curl
 RUN cargo install cargo-chef
 WORKDIR /app
 
@@ -26,7 +27,8 @@ RUN apk add --no-cache \
     openssl-dev \
     openssl-libs-static \
     musl-dev \
-    build-base
+    build-base \
+    curl
 
 # Build dependencies (this layer is cached)
 RUN cargo chef cook --release --recipe-path recipe.json

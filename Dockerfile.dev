@@ -9,22 +9,25 @@ RUN apk add --no-cache \
     openssl-libs-static \
     musl-dev \
     build-base \
-    postgresql-client
+    postgresql-client \
+    curl
 
 # Install cargo-watch for hot reloading
 RUN cargo install cargo-watch
 
 WORKDIR /app
 
-# Copy only Cargo files first for dependency caching
+# Copy Cargo workspace files for dependency caching
 COPY Cargo.toml Cargo.lock ./
+COPY migration/Cargo.toml ./migration/
 
-# Create a dummy main.rs to build dependencies
+# Create dummy source files to build dependencies
 ENV OPENSSL_STATIC=1
-RUN mkdir -p src && \
+RUN mkdir -p src migration/src && \
     echo "fn main() {}" > src/main.rs && \
+    echo "pub fn lib() {}" > migration/src/lib.rs && \
     cargo build && \
-    rm -rf src
+    rm -rf src migration/src
 
 # Copy the rest of the application
 COPY . .

@@ -14,3 +14,16 @@ application:
   host: 0.0.0.0
   port: 8080
   debug: true
+
+logging:
+  level: info
+  # file: ./logs/codex.log  # Uncomment to enable file logging
+
+# Auth config - uses defaults, override with CODEX_AUTH_* env vars
+# Defaults: JWT 24h expiry, Argon2 (19456, 2, 1)
+auth:
+  jwt_secret: "CHANGE_ME_IN_PRODUCTION"  # Override with CODEX_AUTH_JWT_SECRET env var
+
+# API config - uses defaults except Swagger enabled for Docker
+api:
+  enable_swagger: true  # Enabled in Docker for easier API testing

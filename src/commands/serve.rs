@@ -90,7 +90,22 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Build router using API module
     info!("========================================");
     info!("Building HTTP router...");
-    let app = crate::api::create_router(api_state);
+    let mut app = crate::api::create_router(api_state);
+
+    // Conditionally mount Swagger UI if enabled
+    if config.api.enable_swagger {
+        use utoipa::OpenApi;
+        use utoipa_swagger_ui::SwaggerUi;
+        use crate::api::ApiDoc;
+
+        info!("Swagger UI enabled at {}", config.api.swagger_path);
+
+        // SwaggerUi needs a 'static string, so we leak it
+        // This is acceptable since it's created once at server startup
+        let swagger_path: &'static str = Box::leak(config.api.swagger_path.clone().into_boxed_str());
+        app = app.merge(SwaggerUi::new(swagger_path).url("/api-docs/openapi.json", <ApiDoc as OpenApi>::openapi()));
+    }
+
     info!("Registered routes:");
     info!("  GET  /health - Health check endpoint");
     info!("  POST /api/v1/auth/login - Login endpoint");
@@ -99,6 +114,9 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("  GET  /api/v1/series - List series");
     info!("  GET  /api/v1/books - List books");
     info!("  GET  /api/v1/users - List users (admin)");
+    if config.api.enable_swagger {
+        info!("  GET  {} - Swagger UI", config.api.swagger_path);
+    }
 
     // Keep log guard alive
     let _log_guard = log_guard;

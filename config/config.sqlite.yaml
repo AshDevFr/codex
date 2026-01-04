@@ -7,10 +7,25 @@ database:
     pragmas:
       journal_mode: WAL
       synchronous: NORMAL
-      foreign_keys: "ON"
+      # Note: foreign_keys is ALWAYS ON for data integrity (cannot be disabled)
 
 application:
   name: Codex
   host: 127.0.0.1
   port: 8080
   debug: false
+
+logging:
+  level: info
+  # file: ./logs/codex.log  # Uncomment to enable file logging
+
+# Auth config - uses defaults, override with CODEX_AUTH_* env vars
+# Defaults: JWT 24h expiry, Argon2 (19456, 2, 1)
+auth:
+  jwt_secret: "CHANGE_ME_IN_PRODUCTION"  # Override with CODEX_AUTH_JWT_SECRET env var
+
+# API config - all fields use defaults
+# Defaults: enable_swagger=false, swagger_path="/docs", cors_enabled=true, max_page_size=100
+# Uncomment below to enable Swagger UI:
+# api:
+#   enable_swagger: true

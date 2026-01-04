@@ -1,0 +1,30 @@
+# Minimal Kubernetes Configuration Example
+#
+# This config demonstrates using environment variables for sensitive data.
+# In Kubernetes, set these via Secrets/ConfigMaps:
+#
+# Required Environment Variables:
+#   CODEX_DATABASE_DB_TYPE=postgres
+#   CODEX_DATABASE_POSTGRES_HOST=postgres-service
+#   CODEX_DATABASE_POSTGRES_PORT=5432
+#   CODEX_DATABASE_POSTGRES_USERNAME=<from secret>
+#   CODEX_DATABASE_POSTGRES_PASSWORD=<from secret>
+#   CODEX_DATABASE_POSTGRES_DATABASE_NAME=codex
+#   CODEX_AUTH_JWT_SECRET=<from secret>
+#
+# Optional overrides:
+#   CODEX_APPLICATION_HOST=0.0.0.0
+#   CODEX_APPLICATION_PORT=8080
+#   CODEX_API_ENABLE_SWAGGER=false
+#   CODEX_LOGGING_LEVEL=info
+
+# With all env vars set, you only need this minimal config:
+# (or even an empty file - everything will use defaults + env vars)
+
+# Uncomment to override defaults:
+# application:
+#   name: Codex Production
+
+# Uncomment to enable file logging:
+# logging:
+#   file: /var/log/codex/codex.log

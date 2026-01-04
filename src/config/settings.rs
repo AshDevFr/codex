@@ -4,7 +4,9 @@ use super::env_override::{env_or, env_bool_or, env_string_opt};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
+    #[serde(default)]
     pub database: DatabaseConfig,
+    #[serde(default)]
     pub application: ApplicationConfig,
     #[serde(default)]
     pub logging: LoggingConfig,
@@ -94,6 +96,7 @@ impl Default for Config {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct AuthConfig {
     pub jwt_secret: String,
     pub jwt_expiry_hours: u32,
@@ -127,6 +130,7 @@ impl Default for AuthConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct ApiConfig {
     pub base_path: String,
     pub enable_swagger: bool,
@@ -153,14 +157,49 @@ impl Default for ApiConfig {
 
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct DatabaseConfig {
     pub db_type: DatabaseType,
 
     // Postgres Specific
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub postgres: Option<PostgresConfig>,
 
     // SQLite Specific
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sqlite: Option<SQLiteConfig>,
+}
+
+impl Default for DatabaseConfig {
+    fn default() -> Self {
+        use std::env;
+
+        // Determine database type from environment or use SQLite as default
+        let db_type = env::var("CODEX_DATABASE_DB_TYPE")
+            .ok()
+            .and_then(|t| {
+                if t.eq_ignore_ascii_case("postgres") || t.eq_ignore_ascii_case("postgresql") {
+                    Some(DatabaseType::Postgres)
+                } else if t.eq_ignore_ascii_case("sqlite") {
+                    Some(DatabaseType::SQLite)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(DatabaseType::SQLite);
+
+        // Build database config based on type
+        let (postgres_config, sqlite_config) = match db_type {
+            DatabaseType::Postgres => (Some(PostgresConfig::default()), None),
+            DatabaseType::SQLite => (None, Some(SQLiteConfig::default())),
+        };
+
+        Self {
+            db_type,
+            postgres: postgres_config,
+            sqlite: sqlite_config,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -170,7 +209,14 @@ pub enum DatabaseType {
     SQLite,
 }
 
+impl Default for DatabaseType {
+    fn default() -> Self {
+        DatabaseType::SQLite
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct PostgresConfig {
     pub host: String,
     pub port: u16,
@@ -179,13 +225,47 @@ pub struct PostgresConfig {
     pub database_name: String,
 }
 
+impl Default for PostgresConfig {
+    fn default() -> Self {
+        Self {
+            host: env_string_opt("CODEX_DATABASE_POSTGRES_HOST")
+                .unwrap_or_else(|| "localhost".to_string()),
+            port: env_or("CODEX_DATABASE_POSTGRES_PORT", 5432),
+            username: env_string_opt("CODEX_DATABASE_POSTGRES_USERNAME")
+                .unwrap_or_else(|| "codex".to_string()),
+            password: env_string_opt("CODEX_DATABASE_POSTGRES_PASSWORD")
+                .unwrap_or_else(|| "codex".to_string()),
+            database_name: env_string_opt("CODEX_DATABASE_POSTGRES_DATABASE_NAME")
+                .unwrap_or_else(|| "codex".to_string()),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct SQLiteConfig {
     pub path: String,
     pub pragmas: Option<HashMap<String, String>>,
 }
 
+impl Default for SQLiteConfig {
+    fn default() -> Self {
+        let mut pragmas = HashMap::new();
+        // Note: foreign_keys is enforced at connection time in connection.rs
+        // We include it here for documentation, but it's always ON regardless
+        pragmas.insert("foreign_keys".to_string(), "ON".to_string());
+        pragmas.insert("journal_mode".to_string(), "WAL".to_string());
+
+        Self {
+            path: env_string_opt("CODEX_DATABASE_SQLITE_PATH")
+                .unwrap_or_else(|| "codex.db".to_string()),
+            pragmas: Some(pragmas),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct ApplicationConfig {
     pub name: String,
     pub host: String,
@@ -193,21 +273,25 @@ pub struct ApplicationConfig {
     pub debug: bool,
 }
 
+impl Default for ApplicationConfig {
+    fn default() -> Self {
+        Self {
+            name: env_string_opt("CODEX_APPLICATION_NAME")
+                .unwrap_or_else(|| "Codex".to_string()),
+            host: env_string_opt("CODEX_APPLICATION_HOST")
+                .unwrap_or_else(|| "127.0.0.1".to_string()),
+            port: env_or("CODEX_APPLICATION_PORT", 8080),
+            debug: env_bool_or("CODEX_APPLICATION_DEBUG", false),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct LoggingConfig {
-    #[serde(default = "default_log_level")]
     pub level: LogLevel,
     pub file: Option<String>,
-    #[serde(default = "default_console")]
     pub console: bool,
-}
-
-fn default_log_level() -> LogLevel {
-    LogLevel::Info
-}
-
-fn default_console() -> bool {
-    true
 }
 
 impl Default for LoggingConfig {
