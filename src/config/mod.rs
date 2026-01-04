@@ -11,6 +11,8 @@ pub use settings::{
     ApplicationConfig,
     LoggingConfig,
     LogLevel,
+    AuthConfig,
+    ApiConfig,
 };
 
 pub use env_override::{EnvOverride, env_or, env_bool_or, env_string_opt};

@@ -20,7 +20,7 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{ApplicationConfig, DatabaseConfig, DatabaseType, SQLiteConfig, LoggingConfig};
+    use crate::config::{ApplicationConfig, DatabaseConfig, DatabaseType, SQLiteConfig, LoggingConfig, AuthConfig, ApiConfig};
     use tempfile::NamedTempFile;
 
     #[test]
@@ -67,6 +67,8 @@ application:
                 debug: false,
             },
             logging: LoggingConfig::default(),
+            auth: AuthConfig::default(),
+            api: ApiConfig::default(),
         };
 
         let temp_file = NamedTempFile::new().unwrap();

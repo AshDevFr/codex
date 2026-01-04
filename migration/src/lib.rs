@@ -8,6 +8,7 @@ mod m20260103_000005_create_pages;
 mod m20260103_000006_create_book_metadata_records;
 mod m20260103_000007_create_metadata_sources;
 mod m20260103_000008_create_read_progress;
+mod m20260103_000009_create_api_keys;
 
 pub struct Migrator;
 
@@ -23,6 +24,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260103_000006_create_book_metadata_records::Migration),
             Box::new(m20260103_000007_create_metadata_sources::Migration),
             Box::new(m20260103_000008_create_read_progress::Migration),
+            Box::new(m20260103_000009_create_api_keys::Migration),
         ]
     }
 }

@@ -2,6 +2,7 @@
 
 pub mod prelude;
 
+pub mod api_keys;
 pub mod book_metadata_records;
 pub mod books;
 pub mod libraries;

@@ -8,6 +8,10 @@ pub struct Config {
     pub application: ApplicationConfig,
     #[serde(default)]
     pub logging: LoggingConfig,
+    #[serde(default)]
+    pub auth: AuthConfig,
+    #[serde(default)]
+    pub api: ApiConfig,
 }
 
 impl Default for Config {
@@ -83,6 +87,66 @@ impl Default for Config {
                 file: env_string_opt("CODEX_LOGGING_FILE"),
                 console: env_bool_or("CODEX_LOGGING_CONSOLE", true),
             },
+            auth: AuthConfig::default(),
+            api: ApiConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AuthConfig {
+    pub jwt_secret: String,
+    pub jwt_expiry_hours: u32,
+    pub refresh_token_enabled: bool,
+    pub refresh_token_expiry_days: u32,
+    pub argon2_memory_cost: u32,
+    pub argon2_time_cost: u32,
+    pub argon2_parallelism: u32,
+}
+
+impl Default for AuthConfig {
+    fn default() -> Self {
+        use std::env;
+
+        let jwt_secret = env::var("CODEX_AUTH_JWT_SECRET")
+            .unwrap_or_else(|_| {
+                eprintln!("WARNING: CODEX_AUTH_JWT_SECRET not set, using insecure default for development only!");
+                "INSECURE_DEFAULT_SECRET_CHANGE_IN_PRODUCTION".to_string()
+            });
+
+        Self {
+            jwt_secret,
+            jwt_expiry_hours: env_or("CODEX_AUTH_JWT_EXPIRY_HOURS", 24),
+            refresh_token_enabled: env_bool_or("CODEX_AUTH_REFRESH_TOKEN_ENABLED", false),
+            refresh_token_expiry_days: env_or("CODEX_AUTH_REFRESH_TOKEN_EXPIRY_DAYS", 30),
+            argon2_memory_cost: env_or("CODEX_AUTH_ARGON2_MEMORY_COST", 19456),
+            argon2_time_cost: env_or("CODEX_AUTH_ARGON2_TIME_COST", 2),
+            argon2_parallelism: env_or("CODEX_AUTH_ARGON2_PARALLELISM", 1),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ApiConfig {
+    pub base_path: String,
+    pub enable_swagger: bool,
+    pub swagger_path: String,
+    pub cors_enabled: bool,
+    pub cors_origins: Vec<String>,
+    pub max_page_size: usize,
+}
+
+impl Default for ApiConfig {
+    fn default() -> Self {
+        Self {
+            base_path: env_string_opt("CODEX_API_BASE_PATH").unwrap_or_else(|| "/api/v1".to_string()),
+            enable_swagger: env_bool_or("CODEX_API_ENABLE_SWAGGER", false),
+            swagger_path: env_string_opt("CODEX_API_SWAGGER_PATH").unwrap_or_else(|| "/docs".to_string()),
+            cors_enabled: env_bool_or("CODEX_API_CORS_ENABLED", true),
+            cors_origins: env_string_opt("CODEX_API_CORS_ORIGINS")
+                .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
+                .unwrap_or_else(|| vec!["*".to_string()]),
+            max_page_size: env_or("CODEX_API_MAX_PAGE_SIZE", 100),
         }
     }
 }
@@ -312,10 +376,85 @@ mod tests {
                 debug: false,
             },
             logging: LoggingConfig::default(),
+            auth: AuthConfig::default(),
+            api: ApiConfig::default(),
         };
 
         assert_eq!(config.application.name, "Codex");
         assert_eq!(config.application.port, 3000);
         assert!(matches!(config.database.db_type, DatabaseType::SQLite));
+    }
+
+    #[test]
+    fn test_auth_config_default() {
+        let config = AuthConfig::default();
+
+        // JWT settings
+        assert_eq!(config.jwt_expiry_hours, 24);
+        assert!(!config.refresh_token_enabled);
+        assert_eq!(config.refresh_token_expiry_days, 30);
+
+        // Argon2 settings
+        assert_eq!(config.argon2_memory_cost, 19456);
+        assert_eq!(config.argon2_time_cost, 2);
+        assert_eq!(config.argon2_parallelism, 1);
+
+        // JWT secret should exist (even if it's the default warning value)
+        assert!(!config.jwt_secret.is_empty());
+    }
+
+    #[test]
+    fn test_api_config_default() {
+        let config = ApiConfig::default();
+
+        assert_eq!(config.base_path, "/api/v1");
+        assert!(!config.enable_swagger); // Disabled by default
+        assert_eq!(config.swagger_path, "/docs");
+        assert!(config.cors_enabled);
+        assert_eq!(config.cors_origins, vec!["*".to_string()]);
+        assert_eq!(config.max_page_size, 100);
+    }
+
+    #[test]
+    fn test_auth_config_serialization() {
+        let config = AuthConfig {
+            jwt_secret: "test-secret".to_string(),
+            jwt_expiry_hours: 48,
+            refresh_token_enabled: true,
+            refresh_token_expiry_days: 60,
+            argon2_memory_cost: 20000,
+            argon2_time_cost: 3,
+            argon2_parallelism: 2,
+        };
+
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        assert!(yaml.contains("test-secret"));
+        assert!(yaml.contains("48"));
+
+        let deserialized: AuthConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(deserialized.jwt_secret, "test-secret");
+        assert_eq!(deserialized.jwt_expiry_hours, 48);
+        assert!(deserialized.refresh_token_enabled);
+    }
+
+    #[test]
+    fn test_api_config_serialization() {
+        let config = ApiConfig {
+            base_path: "/api/v2".to_string(),
+            enable_swagger: true,
+            swagger_path: "/api-docs".to_string(),
+            cors_enabled: false,
+            cors_origins: vec!["https://example.com".to_string()],
+            max_page_size: 200,
+        };
+
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        assert!(yaml.contains("/api/v2"));
+        assert!(yaml.contains("true")); // enable_swagger
+
+        let deserialized: ApiConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(deserialized.base_path, "/api/v2");
+        assert!(deserialized.enable_swagger);
+        assert_eq!(deserialized.max_page_size, 200);
     }
 }

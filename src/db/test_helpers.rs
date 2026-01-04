@@ -10,7 +10,7 @@ use tempfile::TempDir;
 /// This function creates a temporary SQLite database, runs all migrations,
 /// and returns both the database connection and the temp directory (to keep it alive).
 ///
-/// This function is only available when testing.
+/// This function is available for unit tests within the codex crate.
 #[cfg(test)]
 pub async fn create_test_db() -> (Database, TempDir) {
     use std::collections::HashMap;
@@ -34,5 +34,17 @@ pub async fn create_test_db() -> (Database, TempDir) {
     let db = Database::new(&config).await.unwrap();
     db.run_migrations().await.unwrap();
     (db, temp_dir)
+}
+
+/// Simplified helper that returns the DatabaseConnection and keeps the temp dir alive
+/// Available for unit tests within the codex crate
+#[cfg(test)]
+pub async fn setup_test_db() -> sea_orm::DatabaseConnection {
+    let (db, temp_dir) = create_test_db().await;
+    let conn = db.sea_orm_connection().clone();
+    // Leak the temp_dir so it stays alive for the duration of the test
+    // This is acceptable in test code
+    std::mem::forget(temp_dir);
+    conn
 }
 

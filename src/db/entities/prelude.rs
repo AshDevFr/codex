@@ -1,3 +1,4 @@
+pub use super::api_keys::Entity as ApiKeys;
 pub use super::book_metadata_records::Entity as BookMetadataRecords;
 pub use super::books::Entity as Books;
 pub use super::libraries::Entity as Libraries;
