@@ -1,0 +1,78 @@
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+
+/* You can override the default Infima variables here. */
+:root {
+  /* Teal/cyan primary colors - complementary to orange */
+  --ifm-color-primary: #0d9488; /* Teal 600 */
+  --ifm-color-primary-dark: #0f766e; /* Teal 700 */
+  --ifm-color-primary-darker: #115e59; /* Teal 800 */
+  --ifm-color-primary-darkest: #134e4a; /* Teal 900 */
+  --ifm-color-primary-light: #14b8a6; /* Teal 500 */
+  --ifm-color-primary-lighter: #2dd4bf; /* Teal 400 */
+  --ifm-color-primary-lightest: #5eead4; /* Teal 300 */
+
+  /* Orange accent colors */
+  --ifm-color-content-secondary: #ea580c; /* Orange 600 */
+  --ifm-link-color: #ea580c; /* Blood orange for links */
+  --ifm-link-hover-color: #c2410c; /* Darker orange on hover */
+
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(13, 148, 136, 0.1);
+
+  /* Hero banner accent */
+  --ifm-hero-background-color: linear-gradient(135deg, #0d9488 0%, #115e59 100%);
+}
+
+/* For readability concerns, you should choose a lighter palette in dark mode. */
+[data-theme='dark'] {
+  /* Lighter teal for dark mode */
+  --ifm-color-primary: #14b8a6; /* Teal 500 */
+  --ifm-color-primary-dark: #0d9488; /* Teal 600 */
+  --ifm-color-primary-darker: #0f766e; /* Teal 700 */
+  --ifm-color-primary-darkest: #115e59; /* Teal 800 */
+  --ifm-color-primary-light: #2dd4bf; /* Teal 400 */
+  --ifm-color-primary-lighter: #5eead4; /* Teal 300 */
+  --ifm-color-primary-lightest: #99f6e4; /* Teal 200 */
+
+  /* Orange accents for dark mode */
+  --ifm-color-content-secondary: #f97316; /* Orange 500 */
+  --ifm-link-color: #f97316; /* Lighter orange for dark mode */
+  --ifm-link-hover-color: #fb923c; /* Even lighter on hover */
+
+  --docusaurus-highlighted-code-line-bg: rgba(20, 184, 166, 0.2);
+}
+
+/* Custom button styles with orange accents */
+.button--primary {
+  background: linear-gradient(135deg, #0d9488 0%, #115e59 100%);
+  border: none;
+}
+
+.button--primary:hover {
+  background: linear-gradient(135deg, #0f766e 0%, #134e4a 100%);
+}
+
+.button--secondary {
+  background-color: #ea580c;
+  border-color: #ea580c;
+  color: white;
+}
+
+.button--secondary:hover {
+  background-color: #c2410c;
+  border-color: #c2410c;
+}
+
+/* Hero banner styling */
+.hero--primary {
+  background: linear-gradient(135deg, #0d9488 0%, #115e59 50%, #134e4a 100%);
+}
+
+/* Code block styling with orange accents */
+.prism-code {
+  border-left: 3px solid #ea580c;
+}

@@ -54,6 +54,9 @@ codex.yaml
 # Config files (mounted as volumes, not needed in image)
 config/
 
+# Docusaurus files
+docs/
+
 # Other
 .DS_Store
 *.orig
