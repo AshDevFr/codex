@@ -48,5 +48,18 @@ chrono = { version = "0.4", features = ["serde"] }
 # Table formatting
 tabled = "0.20"
 
+# Database
+sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "sqlite", "postgres", "migrate", "chrono", "uuid"] }
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Web framework
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+
 [dev-dependencies]
 tempfile = "3.13"

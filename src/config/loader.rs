@@ -20,7 +20,7 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{ApplicationConfig, DatabaseConfig, DatabaseType, SQLiteConfig};
+    use crate::config::{ApplicationConfig, DatabaseConfig, DatabaseType, SQLiteConfig, LoggingConfig};
     use tempfile::NamedTempFile;
 
     #[test]
@@ -66,6 +66,7 @@ application:
                 port: 8080,
                 debug: false,
             },
+            logging: LoggingConfig::default(),
         };
 
         let temp_file = NamedTempFile::new().unwrap();

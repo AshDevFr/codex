@@ -1,0 +1,16 @@
+# Codex Configuration for Docker with PostgreSQL
+
+database:
+  db_type: postgres
+  postgres:
+    host: postgres
+    port: 5432
+    username: codex
+    password: codex
+    database_name: codex
+
+application:
+  name: Codex
+  host: 0.0.0.0
+  port: 8080
+  debug: true

@@ -1,0 +1,36 @@
+# Development Dockerfile with hot reload support
+
+FROM rust:1.92-alpine
+
+# Install development dependencies
+RUN apk add --no-cache \
+    pkgconf \
+    openssl-dev \
+    openssl-libs-static \
+    musl-dev \
+    build-base \
+    postgresql-client
+
+# Install cargo-watch for hot reloading
+RUN cargo install cargo-watch
+
+WORKDIR /app
+
+# Copy only Cargo files first for dependency caching
+COPY Cargo.toml Cargo.lock ./
+
+# Create a dummy main.rs to build dependencies
+ENV OPENSSL_STATIC=1
+RUN mkdir -p src && \
+    echo "fn main() {}" > src/main.rs && \
+    cargo build && \
+    rm -rf src
+
+# Copy the rest of the application
+COPY . .
+
+# Expose the application port
+EXPOSE 8080
+
+# Use cargo-watch for hot reloading
+CMD ["cargo", "watch", "-x", "run -- serve --config /app/config/config.docker.yaml"]

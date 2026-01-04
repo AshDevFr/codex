@@ -1,5 +1,6 @@
 mod commands;
 mod config;
+mod db;
 mod parsers;
 mod scanner;
 mod utils;
@@ -45,7 +46,8 @@ enum Commands {
     },
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -58,7 +60,7 @@ fn main() -> anyhow::Result<()> {
             scan_command(path, json, pages, verbose)?;
         }
         Commands::Serve { config } => {
-            serve_command(config)?;
+            serve_command(config).await?;
         }
     }
 

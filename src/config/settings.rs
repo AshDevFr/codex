@@ -1,11 +1,92 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use super::env_override::{env_or, env_bool_or, env_string_opt};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     pub database: DatabaseConfig,
     pub application: ApplicationConfig,
+    #[serde(default)]
+    pub logging: LoggingConfig,
 }
+
+impl Default for Config {
+    fn default() -> Self {
+        use std::env;
+
+        let mut pragmas = HashMap::new();
+        pragmas.insert("foreign_keys".to_string(), "ON".to_string());
+        pragmas.insert("journal_mode".to_string(), "WAL".to_string());
+
+        // Determine database type from environment or use SQLite as default
+        let db_type = env::var("CODEX_DATABASE_DB_TYPE")
+            .ok()
+            .and_then(|t| {
+                if t.eq_ignore_ascii_case("postgres") || t.eq_ignore_ascii_case("postgresql") {
+                    Some(DatabaseType::Postgres)
+                } else if t.eq_ignore_ascii_case("sqlite") {
+                    Some(DatabaseType::SQLite)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(DatabaseType::SQLite);
+
+        // Build database config based on type
+        let (postgres_config, sqlite_config) = match db_type {
+            DatabaseType::Postgres => (
+                Some(PostgresConfig {
+                    host: env_string_opt("CODEX_DATABASE_POSTGRES_HOST").unwrap_or_else(|| "localhost".to_string()),
+                    port: env_or("CODEX_DATABASE_POSTGRES_PORT", 5432),
+                    username: env_string_opt("CODEX_DATABASE_POSTGRES_USERNAME").unwrap_or_else(|| "codex".to_string()),
+                    password: env_string_opt("CODEX_DATABASE_POSTGRES_PASSWORD").unwrap_or_else(|| "codex".to_string()),
+                    database_name: env_string_opt("CODEX_DATABASE_POSTGRES_DATABASE_NAME").unwrap_or_else(|| "codex".to_string()),
+                }),
+                None,
+            ),
+            DatabaseType::SQLite => (
+                None,
+                Some(SQLiteConfig {
+                    path: env_string_opt("CODEX_DATABASE_SQLITE_PATH").unwrap_or_else(|| "codex.db".to_string()),
+                    pragmas: Some(pragmas),
+                }),
+            ),
+        };
+
+        // Build logging level from environment
+        let log_level = env::var("CODEX_LOGGING_LEVEL")
+            .ok()
+            .and_then(|l| match l.to_lowercase().as_str() {
+                "error" => Some(LogLevel::Error),
+                "warn" => Some(LogLevel::Warn),
+                "info" => Some(LogLevel::Info),
+                "debug" => Some(LogLevel::Debug),
+                "trace" => Some(LogLevel::Trace),
+                _ => None,
+            })
+            .unwrap_or(LogLevel::Info);
+
+        Self {
+            database: DatabaseConfig {
+                db_type,
+                postgres: postgres_config,
+                sqlite: sqlite_config,
+            },
+            application: ApplicationConfig {
+                name: env_string_opt("CODEX_APPLICATION_NAME").unwrap_or_else(|| "Codex".to_string()),
+                host: env_string_opt("CODEX_APPLICATION_HOST").unwrap_or_else(|| "127.0.0.1".to_string()),
+                port: env_or("CODEX_APPLICATION_PORT", 8080),
+                debug: env_bool_or("CODEX_APPLICATION_DEBUG", false),
+            },
+            logging: LoggingConfig {
+                level: log_level,
+                file: env_string_opt("CODEX_LOGGING_FILE"),
+                console: env_bool_or("CODEX_LOGGING_CONSOLE", true),
+            },
+        }
+    }
+}
+
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DatabaseConfig {
@@ -46,6 +127,55 @@ pub struct ApplicationConfig {
     pub host: String,
     pub port: u16,
     pub debug: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LoggingConfig {
+    #[serde(default = "default_log_level")]
+    pub level: LogLevel,
+    pub file: Option<String>,
+    #[serde(default = "default_console")]
+    pub console: bool,
+}
+
+fn default_log_level() -> LogLevel {
+    LogLevel::Info
+}
+
+fn default_console() -> bool {
+    true
+}
+
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        Self {
+            level: LogLevel::Info,
+            file: None,
+            console: true,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum LogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+impl LogLevel {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            LogLevel::Error => "error",
+            LogLevel::Warn => "warn",
+            LogLevel::Info => "info",
+            LogLevel::Debug => "debug",
+            LogLevel::Trace => "trace",
+        }
+    }
 }
 
 #[cfg(test)]
@@ -181,6 +311,7 @@ mod tests {
                 port: 3000,
                 debug: false,
             },
+            logging: LoggingConfig::default(),
         };
 
         assert_eq!(config.application.name, "Codex");

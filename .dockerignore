@@ -1,0 +1,61 @@
+# Rust build artifacts
+target/
+**/*.rs.bk
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+data/
+codex.db*
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+**/*.tmp
+**/*.swp
+**/*.swo
+*~
+
+# IDE files
+.vscode/
+.idea/
+*.code-workspace
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# Test files and fixtures
+tests/
+test_*.rs
+*_test.rs
+fixtures/
+
+# Docker files themselves (avoid recursion)
+Dockerfile*
+docker-compose*.yml
+compose.*.yml
+.dockerignore
+
+# Development files
+Makefile
+codex.yaml
+
+# Config files (mounted as volumes, not needed in image)
+config/
+
+# Other
+.DS_Store
+*.orig
+*.rej
+

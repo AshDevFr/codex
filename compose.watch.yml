@@ -1,0 +1,35 @@
+# Docker Compose with watch mode for development
+# Usage: docker compose -f docker-compose.yml -f compose.watch.yml --profile dev watch codex-dev
+
+services:
+  codex-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    develop:
+      watch:
+        # Sync source code changes
+        - action: sync
+          path: ./src
+          target: /app/src
+          ignore:
+            - "**/*.swp"
+            - "**/*.tmp"
+
+        # Sync Cargo files
+        - action: sync
+          path: ./Cargo.toml
+          target: /app/Cargo.toml
+
+        - action: sync
+          path: ./Cargo.lock
+          target: /app/Cargo.lock
+
+        # Sync migrations
+        - action: sync
+          path: ./migrations
+          target: /app/migrations
+
+        # Rebuild on config changes
+        - action: rebuild
+          path: ./Dockerfile.dev
