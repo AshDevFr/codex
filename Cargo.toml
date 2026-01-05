@@ -103,6 +103,8 @@ hyper = { version = "1.0", features = ["full"] }
 
 # cargo-dist configuration for building standalone binaries
 [workspace.metadata.dist]
+# Cargo package to build and distribute
+cargo-dist-version = "0.22.1"
 # Build with rar feature (CBR support)
 features = ["rar"]
 # Target platforms to build for
@@ -113,8 +115,8 @@ targets = [
     "x86_64-pc-windows-msvc",   # Windows x86_64
 ]
 # Installers to create
-installers = ["shell", "powershell", "msi", "pkg"]
+installers = ["shell", "powershell"]
 # CI backends to support (using github format for Gitea compatibility)
 ci = ["github"]
-# Allow dirty working directory (for CI builds without tags)
-allow-dirty = true
+# Allow dirty working directory and custom tags
+allow-dirty = ["ci"]
