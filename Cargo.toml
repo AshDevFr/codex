@@ -109,10 +109,8 @@ cargo-dist-version = "0.22.1"
 features = ["rar"]
 # Target platforms to build for
 targets = [
-    "x86_64-unknown-linux-gnu", # Linux x86_64
-    "x86_64-apple-darwin",      # macOS Intel
-    "aarch64-apple-darwin",     # macOS Apple Silicon
-    "x86_64-pc-windows-msvc",   # Windows x86_64
+    "x86_64-unknown-linux-gnu",  # Linux x86_64
+    "aarch64-unknown-linux-gnu", # Linux ARM64
 ]
 # Installers to create
 installers = ["shell", "powershell"]
