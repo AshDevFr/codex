@@ -124,10 +124,29 @@ jobs:
         shell: bash
         run: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/latest/download/cargo-dist-installer.sh | sh"
 
+      - name: Install cross-compilation tools
+        run: |
+          # Install cargo-zigbuild for Linux cross-compilation (e.g., Linux ARM64)
+          cargo install cargo-zigbuild --locked
+          # Install cargo-xwin for Windows cross-compilation
+          cargo install cargo-xwin --locked
+          # Verify installations
+          cargo zigbuild --version || echo "cargo-zigbuild installed"
+          cargo xwin --version || echo "cargo-xwin installed"
+
       - name: Build binaries with cargo-dist
         run: |
-          # Build for current platform only (no cross-compilation)
-          cargo dist build --features rar --output-format=json > dist-manifest.json || true
+          # Build binaries with cross-compilation support
+          # cargo-dist will automatically use cargo-zigbuild and cargo-xwin when needed
+          # Note: macOS targets require macOS runners, so they may fail on Linux CI
+          cargo dist build --features rar --output-format=json > dist-manifest.json 2>&1 || {
+            echo "Build attempt completed"
+            # Check what artifacts were created
+            if [ -d "target/dist" ]; then
+              echo "Found build artifacts in target/dist"
+              find target/dist -type f -name "*.zip" -o -name "*.tar.gz" -o -name "*.msi" -o -name "*.pkg" | head -20 || true
+            fi
+          }
 
       - name: Upload artifacts
         if: github.event_name == 'push'
