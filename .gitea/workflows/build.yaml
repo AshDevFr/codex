@@ -86,10 +86,9 @@ jobs:
         run: |
           cargo clippy --features rar -- -D warnings
 
-  # Stage 2: Build release binaries with cargo-dist (after tests pass, push only)
+  # Stage 2: Build release binaries with cargo-dist (after tests pass)
   build:
     needs: [test, lint]
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     container:
@@ -130,7 +129,8 @@ jobs:
           cargo dist build --local --features rar --output-format=json > dist-manifest.json || true
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v3
         with:
           name: dist-artifacts
           path: |
@@ -138,10 +138,9 @@ jobs:
             dist-manifest.json
           retention-days: 3
 
-  # Stage 2: Build and push Docker image (parallel with build, push only)
+  # Stage 2: Build and push Docker image (parallel with build)
   docker:
     needs: [test, lint]
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -161,6 +160,7 @@ jobs:
           echo "registry=${registry##http*://}" >> "$GITHUB_OUTPUT"
 
       - name: Login to Docker Registry
+        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           registry: ${{ steps.registry.outputs.registry }}
@@ -185,15 +185,22 @@ jobs:
         with:
           context: .
           file: Dockerfile
-          push: true
+          push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             COMMIT_SHA=${{ github.sha }}
             VERSION=${{ github.ref_name }}
             BUILD_ENV=production
-          cache-from: type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache
-          cache-to: type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache,mode=max
+          # Multiple cache sources for better hit rate
+          # Try latest cache first, then fallback to main cache
+          cache-from: |
+            type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache-latest
+            type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache
+          # Cache to both a "latest" tag (for fast access) and versioned cache
+          cache-to: |
+            type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache-latest,mode=max
+            type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache,mode=max
 
   # Stage 3: Publish binaries (after build completes, push only)
   publish:
@@ -212,7 +219,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           name: dist-artifacts
 

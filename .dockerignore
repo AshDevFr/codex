@@ -29,6 +29,8 @@ tmp/
 .git/
 .gitignore
 .gitattributes
+.gitea/
+.github/
 
 # Documentation (not needed in container)
 docs/
