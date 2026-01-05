@@ -167,6 +167,7 @@ mod tests {
             file_hash: "test_hash".to_string(),
             format: "cbz".to_string(),
             page_count: 10,
+            deleted: false,
             modified_at: Utc::now(),
             created_at: Utc::now(),
             updated_at: Utc::now(),

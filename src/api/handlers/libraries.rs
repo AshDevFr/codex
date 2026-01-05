@@ -263,3 +263,43 @@ pub async fn delete_library(
 
     Ok(())
 }
+
+/// Purge deleted books from a library
+#[utoipa::path(
+    delete,
+    path = "/api/v1/libraries/{id}/purge-deleted",
+    params(
+        ("id" = Uuid, Path, description = "Library ID")
+    ),
+    responses(
+        (status = 200, description = "Number of books purged", body = u64),
+        (status = 404, description = "Library not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "libraries"
+)]
+pub async fn purge_deleted_books(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(library_id): Path<Uuid>,
+) -> Result<Json<u64>, ApiError> {
+    require_permission!(auth, Permission::LibrariesWrite)?;
+
+    // Verify library exists
+    LibraryRepository::get_by_id(&state.db, library_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch library: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
+
+    // Purge deleted books
+    let count =
+        crate::db::repositories::BookRepository::purge_deleted_in_library(&state.db, library_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to purge deleted books: {}", e)))?;
+
+    Ok(Json(count))
+}

@@ -18,6 +18,7 @@ pub struct Model {
     pub file_hash: String,
     pub format: String,
     pub page_count: i32,
+    pub deleted: bool,
     pub modified_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

@@ -4,4 +4,5 @@
 
 mod scanner {
     mod scanner;
+    mod soft_delete;
 }

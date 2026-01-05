@@ -115,6 +115,7 @@ async fn test_postgres_series_book_relationship() {
         file_hash: "test_hash".to_string(),
         format: "cbz".to_string(),
         page_count: 10,
+        deleted: false,
         modified_at: now,
         created_at: now,
         updated_at: now,

@@ -25,6 +25,12 @@ pub struct ScanningConfig {
     /// Whether scheduled scanning is enabled
     #[serde(default = "default_enabled")]
     pub enabled: bool,
+    /// Scan library when the application starts
+    #[serde(default)]
+    pub scan_on_start: bool,
+    /// Purge soft-deleted books after completing a scan
+    #[serde(default)]
+    pub purge_deleted_on_scan: bool,
 }
 
 fn default_scan_mode() -> String {
@@ -71,8 +77,26 @@ impl ScanScheduler {
         let libraries = LibraryRepository::list_all(&self.db).await?;
 
         for library in libraries {
+            // Add scheduled scans
             if let Err(e) = self.add_library_schedule(library.id).await {
                 warn!("Failed to add schedule for library {}: {}", library.name, e);
+            }
+
+            // Trigger scan-on-start if configured
+            if let Some(config_json) = &library.scanning_config {
+                if let Ok(config) = serde_json::from_str::<ScanningConfig>(config_json) {
+                    if config.scan_on_start {
+                        info!("Triggering scan-on-start for library {}", library.name);
+                        let scan_mode = config.get_scan_mode().unwrap_or(ScanMode::Normal);
+                        if let Err(e) = self.scan_manager.trigger_scan(library.id, scan_mode).await
+                        {
+                            warn!(
+                                "Failed to trigger scan-on-start for library {}: {}",
+                                library.name, e
+                            );
+                        }
+                    }
+                }
             }
         }
 
@@ -208,7 +232,9 @@ mod tests {
             "cron_schedule": "0 */6 * * *",
             "scan_mode": "normal",
             "auto_scan_on_create": true,
-            "enabled": true
+            "enabled": true,
+            "scan_on_start": true,
+            "purge_deleted_on_scan": true
         }"#;
 
         let config: ScanningConfig = serde_json::from_str(json).unwrap();
@@ -216,6 +242,8 @@ mod tests {
         assert_eq!(config.scan_mode, "normal");
         assert!(config.auto_scan_on_create);
         assert!(config.enabled);
+        assert!(config.scan_on_start);
+        assert!(config.purge_deleted_on_scan);
         assert_eq!(config.get_scan_mode().unwrap(), ScanMode::Normal);
     }
 
@@ -227,6 +255,8 @@ mod tests {
         assert_eq!(config.scan_mode, "normal");
         assert!(!config.auto_scan_on_create);
         assert!(config.enabled);
+        assert!(!config.scan_on_start);
+        assert!(!config.purge_deleted_on_scan);
     }
 
     #[test]

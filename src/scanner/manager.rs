@@ -199,6 +199,33 @@ impl ScanManager {
                         result.files_processed,
                         result.errors.len()
                     );
+
+                    // Check if we should purge deleted books after scan
+                    if let Ok(Some(library)) =
+                        crate::db::repositories::LibraryRepository::get_by_id(&db, library_id).await
+                    {
+                        if let Some(config_json) = &library.scanning_config {
+                            if let Ok(config) = serde_json::from_str::<
+                                crate::scanner::scheduler::ScanningConfig,
+                            >(config_json)
+                            {
+                                if config.purge_deleted_on_scan {
+                                    info!(
+                                        "Purging deleted books for library {} after scan",
+                                        library_id
+                                    );
+                                    match crate::db::repositories::BookRepository::purge_deleted_in_library(&db, library_id).await {
+                                        Ok(count) => {
+                                            info!("Purged {} deleted books from library {}", count, library_id);
+                                        }
+                                        Err(e) => {
+                                            warn!("Failed to purge deleted books from library {}: {}", library_id, e);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 Err(e) => {
                     warn!("Scan failed for library {}: {}", library_id, e);

@@ -58,6 +58,10 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/libraries/:id", get(handlers::get_library))
         .route("/libraries/:id", put(handlers::update_library))
         .route("/libraries/:id", delete(handlers::delete_library))
+        .route(
+            "/libraries/:id/purge-deleted",
+            delete(handlers::purge_deleted_books),
+        )
         // Scan routes (protected)
         .route("/libraries/:id/scan", post(handlers::trigger_scan))
         .route("/libraries/:id/scan-status", get(handlers::get_scan_status))
@@ -67,6 +71,11 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/series", get(handlers::list_series))
         .route("/series/search", post(handlers::search_series))
         .route("/series/:id", get(handlers::get_series))
+        .route("/series/:id/books", get(handlers::get_series_books))
+        .route(
+            "/series/:id/purge-deleted",
+            delete(handlers::purge_series_deleted_books),
+        )
         // Book routes (protected)
         .route("/books", get(handlers::list_books))
         .route("/books/:id", get(handlers::get_book))
@@ -81,6 +90,12 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/users/:id", get(handlers::get_user))
         .route("/users/:id", put(handlers::update_user))
         .route("/users/:id", delete(handlers::delete_user))
+        // Metrics routes (protected)
+        .route("/metrics", get(handlers::get_metrics))
+        // Task management routes (protected)
+        .route("/tasks", get(handlers::list_tasks))
+        .route("/tasks/:task_id", get(handlers::get_task))
+        .route("/tasks/:task_id/cancel", post(handlers::cancel_task))
         // Add state to all routes
         .with_state(state)
 }

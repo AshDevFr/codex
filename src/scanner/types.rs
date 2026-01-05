@@ -158,6 +158,10 @@ pub struct ScanResult {
     pub books_created: usize,
     /// Number of books updated
     pub books_updated: usize,
+    /// Number of books marked as deleted (missing from filesystem)
+    pub books_deleted: usize,
+    /// Number of books restored (deleted books that reappeared)
+    pub books_restored: usize,
     /// List of errors encountered
     pub errors: Vec<String>,
 }
@@ -170,6 +174,8 @@ impl ScanResult {
             series_created: 0,
             books_created: 0,
             books_updated: 0,
+            books_deleted: 0,
+            books_restored: 0,
             errors: Vec::new(),
         }
     }

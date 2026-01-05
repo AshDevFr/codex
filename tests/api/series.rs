@@ -1,9 +1,12 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+use codex::api::dto::book::BookDto;
 use codex::api::dto::series::{SearchSeriesRequest, SeriesDto};
 use codex::api::error::ErrorResponse;
-use codex::db::repositories::{LibraryRepository, SeriesRepository, UserRepository};
+use codex::db::repositories::{
+    BookRepository, LibraryRepository, SeriesRepository, UserRepository,
+};
 use codex::db::ScanningStrategy;
 use codex::utils::password;
 use common::*;
@@ -276,4 +279,205 @@ async fn test_search_series_without_auth() {
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     let error = response.unwrap();
     assert_eq!(error.error, "Unauthorized");
+}
+
+// ============================================================================
+// Get Series Books with Soft Delete Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_series_books_excludes_deleted_by_default() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Setup library and series
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series")
+        .await
+        .unwrap();
+
+    // Create 3 books
+    let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1 = BookRepository::create(&db, &book1).await.unwrap();
+
+    let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
+    let book2 = BookRepository::create(&db, &book2).await.unwrap();
+
+    let book3 = create_test_book(series.id, "/book3.cbz", "book3.cbz", "hash3", "cbz", 10);
+    let book3 = BookRepository::create(&db, &book3).await.unwrap();
+
+    // Mark book2 as deleted
+    BookRepository::mark_deleted(&db, book2.id, true)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone());
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state);
+
+    // Get series books without include_deleted parameter (should exclude deleted)
+    let request = get_request_with_auth(&format!("/api/v1/series/{}/books", series.id), &token);
+    let (status, response): (StatusCode, Option<Vec<BookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let books = response.unwrap();
+
+    // Should only return 2 books (book1 and book3)
+    assert_eq!(books.len(), 2);
+
+    let book_ids: Vec<uuid::Uuid> = books.iter().map(|b| b.id).collect();
+    assert!(book_ids.contains(&book1.id));
+    assert!(book_ids.contains(&book3.id));
+    assert!(!book_ids.contains(&book2.id)); // Deleted book should not be included
+}
+
+#[tokio::test]
+async fn test_get_series_books_includes_deleted_when_requested() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Setup library and series
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series")
+        .await
+        .unwrap();
+
+    // Create 3 books
+    let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1 = BookRepository::create(&db, &book1).await.unwrap();
+
+    let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
+    let book2 = BookRepository::create(&db, &book2).await.unwrap();
+
+    let book3 = create_test_book(series.id, "/book3.cbz", "book3.cbz", "hash3", "cbz", 10);
+    let book3 = BookRepository::create(&db, &book3).await.unwrap();
+
+    // Mark book2 as deleted
+    BookRepository::mark_deleted(&db, book2.id, true)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone());
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state);
+
+    // Get series books with include_deleted=true
+    let request = get_request_with_auth(
+        &format!("/api/v1/series/{}/books?include_deleted=true", series.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<Vec<BookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let books = response.unwrap();
+
+    // Should return all 3 books including the deleted one
+    assert_eq!(books.len(), 3);
+
+    let book_ids: Vec<uuid::Uuid> = books.iter().map(|b| b.id).collect();
+    assert!(book_ids.contains(&book1.id));
+    assert!(book_ids.contains(&book2.id)); // Deleted book should be included
+    assert!(book_ids.contains(&book3.id));
+}
+
+#[tokio::test]
+async fn test_get_series_books_with_all_deleted() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Setup library and series
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series")
+        .await
+        .unwrap();
+
+    // Create 2 books and mark both as deleted
+    let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1 = BookRepository::create(&db, &book1).await.unwrap();
+    BookRepository::mark_deleted(&db, book1.id, true)
+        .await
+        .unwrap();
+
+    let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
+    let book2 = BookRepository::create(&db, &book2).await.unwrap();
+    BookRepository::mark_deleted(&db, book2.id, true)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone());
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state);
+
+    // Get series books without include_deleted (should return empty)
+    let request = get_request_with_auth(&format!("/api/v1/series/{}/books", series.id), &token);
+    let (status, response): (StatusCode, Option<Vec<BookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let books = response.unwrap();
+    assert_eq!(books.len(), 0); // No active books
+
+    // Get series books with include_deleted=true (should return both)
+    let app = create_test_router(create_test_auth_state(db.clone()));
+    let request = get_request_with_auth(
+        &format!("/api/v1/series/{}/books?include_deleted=true", series.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<Vec<BookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let books = response.unwrap();
+    assert_eq!(books.len(), 2); // Both deleted books returned
+}
+
+#[tokio::test]
+async fn test_get_series_books_include_deleted_false_explicit() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Setup library and series
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series")
+        .await
+        .unwrap();
+
+    // Create 2 books, mark one as deleted
+    let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1 = BookRepository::create(&db, &book1).await.unwrap();
+
+    let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
+    let book2 = BookRepository::create(&db, &book2).await.unwrap();
+    BookRepository::mark_deleted(&db, book2.id, true)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone());
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state);
+
+    // Explicitly set include_deleted=false
+    let request = get_request_with_auth(
+        &format!("/api/v1/series/{}/books?include_deleted=false", series.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<Vec<BookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let books = response.unwrap();
+
+    // Should only return 1 active book
+    assert_eq!(books.len(), 1);
+    assert_eq!(books[0].id, book1.id);
 }

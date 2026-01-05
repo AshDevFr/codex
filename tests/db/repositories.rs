@@ -381,6 +381,390 @@ async fn test_pages_insert_and_query() {
 }
 
 // ============================================================================
+// Soft Delete Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_mark_book_deleted() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Setup
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(conn, library.id, "Series")
+        .await
+        .unwrap();
+
+    let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "test_hash", "cbz", 10);
+    let book = BookRepository::create(conn, &book_model).await.unwrap();
+
+    // Verify book is not deleted initially
+    assert_eq!(book.deleted, false);
+
+    // Mark book as deleted
+    BookRepository::mark_deleted(conn, book.id, true)
+        .await
+        .unwrap();
+
+    // Verify book is marked deleted
+    let updated_book = books::Entity::find_by_id(book.id)
+        .one(conn)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(updated_book.deleted, true);
+    assert!(updated_book.updated_at > book.updated_at);
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_restore_deleted_book() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Setup
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(conn, library.id, "Series")
+        .await
+        .unwrap();
+
+    let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "test_hash", "cbz", 10);
+    let book = BookRepository::create(conn, &book_model).await.unwrap();
+
+    // Mark book as deleted
+    BookRepository::mark_deleted(conn, book.id, true)
+        .await
+        .unwrap();
+
+    let deleted_book = books::Entity::find_by_id(book.id)
+        .one(conn)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(deleted_book.deleted, true);
+
+    // Restore the book
+    BookRepository::mark_deleted(conn, book.id, false)
+        .await
+        .unwrap();
+
+    // Verify book is restored
+    let restored_book = books::Entity::find_by_id(book.id)
+        .one(conn)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(restored_book.deleted, false);
+    assert!(restored_book.updated_at > deleted_book.updated_at);
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_list_by_series_filters_deleted_by_default() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Setup
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(conn, library.id, "Series")
+        .await
+        .unwrap();
+
+    // Create two books
+    let book1_model = create_test_book(series.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1 = BookRepository::create(conn, &book1_model).await.unwrap();
+
+    let book2_model = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
+    let book2 = BookRepository::create(conn, &book2_model).await.unwrap();
+
+    // Mark book1 as deleted
+    BookRepository::mark_deleted(conn, book1.id, true)
+        .await
+        .unwrap();
+
+    // List books without including deleted (default behavior)
+    let books = BookRepository::list_by_series(conn, series.id, false)
+        .await
+        .unwrap();
+
+    // Should only return book2
+    assert_eq!(books.len(), 1);
+    assert_eq!(books[0].id, book2.id);
+    assert_eq!(books[0].deleted, false);
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_list_by_series_includes_deleted_when_requested() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Setup
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(conn, library.id, "Series")
+        .await
+        .unwrap();
+
+    // Create two books
+    let book1_model = create_test_book(series.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1 = BookRepository::create(conn, &book1_model).await.unwrap();
+
+    let book2_model = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
+    let book2 = BookRepository::create(conn, &book2_model).await.unwrap();
+
+    // Mark book1 as deleted
+    BookRepository::mark_deleted(conn, book1.id, true)
+        .await
+        .unwrap();
+
+    // List books including deleted
+    let books = BookRepository::list_by_series(conn, series.id, true)
+        .await
+        .unwrap();
+
+    // Should return both books
+    assert_eq!(books.len(), 2);
+
+    // Verify one is deleted and one is not
+    let deleted_count = books.iter().filter(|b| b.deleted).count();
+    let active_count = books.iter().filter(|b| !b.deleted).count();
+
+    assert_eq!(deleted_count, 1);
+    assert_eq!(active_count, 1);
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_mark_deleted_nonexistent_book_fails() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    let fake_id = Uuid::new_v4();
+    let result = BookRepository::mark_deleted(conn, fake_id, true).await;
+
+    assert!(result.is_err());
+
+    db.close().await;
+}
+
+// ============================================================================
+// Series Fingerprint Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_create_series_with_fingerprint() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Setup library
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with fingerprint
+    let fingerprint = "abc123fingerprint".to_string();
+    let series = SeriesRepository::create_with_fingerprint(
+        conn,
+        library.id,
+        "Test Series",
+        Some(fingerprint.clone()),
+    )
+    .await
+    .unwrap();
+
+    // Verify series was created with fingerprint
+    assert_eq!(series.name, "Test Series");
+    assert_eq!(series.fingerprint.as_deref(), Some(fingerprint.as_str()));
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_create_series_without_fingerprint() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Setup library
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series without fingerprint
+    let series = SeriesRepository::create_with_fingerprint(conn, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Verify series was created without fingerprint
+    assert_eq!(series.name, "Test Series");
+    assert!(series.fingerprint.is_none());
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_update_series_name() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Setup library
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with fingerprint
+    let fingerprint = "test_fingerprint".to_string();
+    let series = SeriesRepository::create_with_fingerprint(
+        conn,
+        library.id,
+        "Original Name",
+        Some(fingerprint.clone()),
+    )
+    .await
+    .unwrap();
+
+    // Update series name
+    SeriesRepository::update_name(conn, series.id, "Updated Name")
+        .await
+        .unwrap();
+
+    // Verify name changed but fingerprint preserved
+    let updated_series = series::Entity::find_by_id(series.id)
+        .one(conn)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(updated_series.name, "Updated Name");
+    assert_eq!(
+        updated_series.fingerprint.as_deref(),
+        Some(fingerprint.as_str())
+    );
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_update_series_fingerprint() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Setup library
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series without fingerprint
+    let series = SeriesRepository::create(conn, library.id, "Test Series")
+        .await
+        .unwrap();
+
+    assert!(series.fingerprint.is_none());
+
+    // Add fingerprint to existing series
+    let new_fingerprint = "new_fingerprint".to_string();
+    SeriesRepository::update_fingerprint(conn, series.id, Some(new_fingerprint.clone()))
+        .await
+        .unwrap();
+
+    // Verify fingerprint was added
+    let updated_series = series::Entity::find_by_id(series.id)
+        .one(conn)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(
+        updated_series.fingerprint.as_deref(),
+        Some(new_fingerprint.as_str())
+    );
+    assert_eq!(updated_series.name, "Test Series"); // Name unchanged
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_update_series_fingerprint_to_none() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Setup library
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with fingerprint
+    let series = SeriesRepository::create_with_fingerprint(
+        conn,
+        library.id,
+        "Test Series",
+        Some("fingerprint".to_string()),
+    )
+    .await
+    .unwrap();
+
+    // Remove fingerprint
+    SeriesRepository::update_fingerprint(conn, series.id, None)
+        .await
+        .unwrap();
+
+    // Verify fingerprint was removed
+    let updated_series = series::Entity::find_by_id(series.id)
+        .one(conn)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(updated_series.fingerprint.is_none());
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_update_name_nonexistent_series_fails() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    let fake_id = Uuid::new_v4();
+    let result = SeriesRepository::update_name(conn, fake_id, "New Name").await;
+
+    assert!(result.is_err());
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_update_fingerprint_nonexistent_series_fails() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    let fake_id = Uuid::new_v4();
+    let result =
+        SeriesRepository::update_fingerprint(conn, fake_id, Some("fingerprint".to_string())).await;
+
+    assert!(result.is_err());
+
+    db.close().await;
+}
+
+// ============================================================================
 // Connection Edge Cases
 // ============================================================================
 

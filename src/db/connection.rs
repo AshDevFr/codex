@@ -303,7 +303,7 @@ impl Database {
         &self,
         series_id: Uuid,
     ) -> Result<Vec<entities::books::Model>> {
-        BookRepository::list_by_series(&self.conn, series_id).await
+        BookRepository::list_by_series(&self.conn, series_id, false).await
     }
 
     /// Update book

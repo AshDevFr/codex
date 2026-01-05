@@ -49,6 +49,14 @@ use utoipa::OpenApi;
         handlers::get_user,
         handlers::update_user,
         handlers::delete_user,
+
+        // Metrics endpoints
+        handlers::get_metrics,
+
+        // Task management endpoints
+        handlers::list_tasks,
+        handlers::get_task,
+        handlers::cancel_task,
     ),
     components(
         schemas(
@@ -72,6 +80,14 @@ use utoipa::OpenApi;
             dto::PaginatedResponse<dto::BookDto>,
             dto::PaginatedResponse<dto::UserDto>,
 
+            // Metrics DTOs
+            dto::MetricsDto,
+            dto::LibraryMetricsDto,
+
+            // Task DTOs
+            dto::TaskDto,
+            dto::TaskProgressDto,
+
             // Error responses
             ErrorResponse,
         )
@@ -84,6 +100,8 @@ use utoipa::OpenApi;
         (name = "books", description = "Book details and metadata endpoints"),
         (name = "pages", description = "Page image serving endpoints"),
         (name = "users", description = "User management endpoints (admin only)"),
+        (name = "Metrics", description = "Application metrics and statistics"),
+        (name = "Tasks", description = "Background task management and monitoring"),
     ),
     modifiers(&SecurityAddon),
 )]

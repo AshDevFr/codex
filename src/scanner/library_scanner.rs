@@ -100,7 +100,7 @@ async fn scan_normal(
 ) -> Result<ScanResult> {
     let mut result = ScanResult::new();
 
-    // Load existing books from database
+    // Load existing books from database (including deleted ones for restoration)
     let existing_books = load_existing_books(db, library.id).await?;
     debug!("Found {} existing books in database", existing_books.len());
 
@@ -114,6 +114,14 @@ async fn scan_normal(
         discovered_files.len(),
         library.name
     );
+
+    // Track which file paths were seen during scan
+    let mut seen_paths = std::collections::HashSet::new();
+    for file in &discovered_files {
+        if let Some(path_str) = file.to_str() {
+            seen_paths.insert(path_str.to_string());
+        }
+    }
 
     // Organize files by series (folder structure)
     let series_map = organize_by_series(&discovered_files, &library.path);
@@ -142,8 +150,39 @@ async fn scan_normal(
         }
     }
 
-    // TODO: Detect deleted files (in DB but not on filesystem)
-    // For now, we don't delete them, just leave them in the database
+    // Detect deleted files (in DB but not on filesystem) and restore reappeared files
+    for (path, (_hash, book)) in existing_books {
+        if !seen_paths.contains(&path) {
+            // File is missing from filesystem
+            if !book.deleted {
+                // Mark as deleted
+                info!("Marking missing book as deleted: {}", path);
+                match BookRepository::mark_deleted(db, book.id, true).await {
+                    Ok(_) => {
+                        result.books_deleted += 1;
+                    }
+                    Err(e) => {
+                        let error_msg = format!("Failed to mark book as deleted {}: {}", path, e);
+                        warn!("{}", error_msg);
+                        result.errors.push(error_msg);
+                    }
+                }
+            }
+        } else if book.deleted {
+            // File reappeared on filesystem, restore it
+            info!("Restoring deleted book: {}", path);
+            match BookRepository::mark_deleted(db, book.id, false).await {
+                Ok(_) => {
+                    result.books_restored += 1;
+                }
+                Err(e) => {
+                    let error_msg = format!("Failed to restore book {}: {}", path, e);
+                    warn!("{}", error_msg);
+                    result.errors.push(error_msg);
+                }
+            }
+        }
+    }
 
     Ok(result)
 }
@@ -213,8 +252,13 @@ async fn process_series(
     progress_tx: &Option<mpsc::Sender<ScanProgress>>,
     result: &mut ScanResult,
 ) -> Result<()> {
-    // Find or create series
-    let series_model = find_or_create_series(db, library.id, series_name).await?;
+    // Calculate series fingerprint from file paths
+    let file_refs: Vec<&PathBuf> = file_paths.iter().collect();
+    let fingerprint = calculate_series_fingerprint(&file_refs);
+
+    // Find or create series with fingerprint
+    let series_model =
+        find_or_create_series(db, library.id, series_name, Some(&fingerprint)).await?;
 
     let is_new_series = existing_books
         .values()
@@ -323,6 +367,7 @@ async fn process_file(
             file_hash: metadata.file_hash.clone(),
             format: format!("{:?}", metadata.format).to_lowercase(),
             page_count: metadata.page_count as i32,
+            deleted: false, // New books are not deleted
             modified_at: metadata.modified_at,
             created_at: now,
             updated_at: now,
@@ -337,25 +382,104 @@ async fn process_file(
     Ok(())
 }
 
-/// Find or create a series by name
+/// Calculate a fingerprint for a series based on its books
+///
+/// Creates a SHA-256 hash from the normalized titles of up to 5 books
+/// (sorted by filename for consistency). This fingerprint can be used
+/// to detect series renames across scans.
+fn calculate_series_fingerprint(file_paths: &[&PathBuf]) -> String {
+    // Sort file paths by filename for consistency
+    let mut sorted_paths: Vec<&PathBuf> = file_paths.iter().copied().collect();
+    sorted_paths.sort_by(|a, b| {
+        let a_name = a.file_name().unwrap_or_default();
+        let b_name = b.file_name().unwrap_or_default();
+        a_name.cmp(b_name)
+    });
+
+    // Take first 5 files (or all if fewer)
+    let sample: Vec<&PathBuf> = sorted_paths.iter().take(5).copied().collect();
+
+    // Create hash from normalized filenames
+    let mut hasher = Sha256::new();
+    for path in sample {
+        if let Some(filename) = path.file_name() {
+            if let Some(name_str) = filename.to_str() {
+                // Normalize: lowercase, alphanumeric only
+                let normalized: String = name_str
+                    .to_lowercase()
+                    .chars()
+                    .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+                    .collect();
+                hasher.update(normalized.as_bytes());
+            }
+        }
+    }
+
+    format!("{:x}", hasher.finalize())
+}
+
+/// Find or create a series by name, with optional fingerprint matching
 async fn find_or_create_series(
     db: &DatabaseConnection,
     library_id: Uuid,
     series_name: &str,
+    fingerprint: Option<&str>,
 ) -> Result<series::Model> {
-    // Try to find existing series by normalized name
     let series_list = SeriesRepository::list_by_library(db, library_id).await?;
 
+    // 1. Try fingerprint match first (most reliable for rename detection)
+    if let Some(fp) = fingerprint {
+        if let Some(existing) = series_list
+            .iter()
+            .find(|s| s.fingerprint.as_ref().map(|f| f == fp).unwrap_or(false))
+        {
+            info!(
+                "Matched series by fingerprint: {} -> {}",
+                series_name, existing.name
+            );
+
+            // Update name if changed (series was renamed)
+            if existing.name != series_name {
+                info!(
+                    "Detected series rename: {} -> {}",
+                    existing.name, series_name
+                );
+                SeriesRepository::update_name(db, existing.id, series_name).await?;
+
+                // Return updated series
+                return SeriesRepository::get_by_id(db, existing.id)
+                    .await?
+                    .ok_or_else(|| anyhow::anyhow!("Series not found after update"));
+            }
+
+            return Ok(existing.clone());
+        }
+    }
+
+    // 2. Fallback to normalized name match
     let normalized_search = series_name.to_lowercase();
     if let Some(existing) = series_list
         .iter()
         .find(|s| s.normalized_name.to_lowercase() == normalized_search)
     {
+        // Update fingerprint if missing
+        if existing.fingerprint.is_none() && fingerprint.is_some() {
+            info!("Adding fingerprint to existing series: {}", existing.name);
+            SeriesRepository::update_fingerprint(db, existing.id, fingerprint.map(String::from))
+                .await?;
+        }
+
         return Ok(existing.clone());
     }
 
-    // Create new series
-    SeriesRepository::create(db, library_id, series_name).await
+    // 3. Create new series with fingerprint
+    SeriesRepository::create_with_fingerprint(
+        db,
+        library_id,
+        series_name,
+        fingerprint.map(String::from),
+    )
+    .await
 }
 
 /// Load existing books from database into a map
@@ -367,7 +491,8 @@ async fn load_existing_books(
     let mut books_map = HashMap::new();
 
     for series in series_list {
-        let books = BookRepository::list_by_series(db, series.id).await?;
+        // Include deleted books so we can restore them if they reappear
+        let books = BookRepository::list_by_series(db, series.id, true).await?;
         for book in books {
             books_map.insert(book.file_path.clone(), (book.file_hash.clone(), book));
         }
@@ -499,5 +624,140 @@ mod tests {
         assert_eq!(series_map.get("Batman").unwrap().len(), 2);
         assert_eq!(series_map.get("Superman").unwrap().len(), 1);
         assert_eq!(series_map.get("Unsorted").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_calculate_series_fingerprint_consistency() {
+        // Same files in same order should produce same fingerprint
+        let files1 = vec![
+            PathBuf::from("/library/Batman/issue1.cbz"),
+            PathBuf::from("/library/Batman/issue2.cbz"),
+            PathBuf::from("/library/Batman/issue3.cbz"),
+        ];
+        let refs1: Vec<&PathBuf> = files1.iter().collect();
+
+        let files2 = vec![
+            PathBuf::from("/library/Batman/issue1.cbz"),
+            PathBuf::from("/library/Batman/issue2.cbz"),
+            PathBuf::from("/library/Batman/issue3.cbz"),
+        ];
+        let refs2: Vec<&PathBuf> = files2.iter().collect();
+
+        let fp1 = calculate_series_fingerprint(&refs1);
+        let fp2 = calculate_series_fingerprint(&refs2);
+
+        assert_eq!(fp1, fp2, "Same files should produce identical fingerprints");
+    }
+
+    #[test]
+    fn test_calculate_series_fingerprint_order_independence() {
+        // Files in different order should produce same fingerprint (alphabetically sorted)
+        let files1 = vec![
+            PathBuf::from("/library/Batman/issue3.cbz"),
+            PathBuf::from("/library/Batman/issue1.cbz"),
+            PathBuf::from("/library/Batman/issue2.cbz"),
+        ];
+        let refs1: Vec<&PathBuf> = files1.iter().collect();
+
+        let files2 = vec![
+            PathBuf::from("/library/Batman/issue1.cbz"),
+            PathBuf::from("/library/Batman/issue2.cbz"),
+            PathBuf::from("/library/Batman/issue3.cbz"),
+        ];
+        let refs2: Vec<&PathBuf> = files2.iter().collect();
+
+        let fp1 = calculate_series_fingerprint(&refs1);
+        let fp2 = calculate_series_fingerprint(&refs2);
+
+        assert_eq!(fp1, fp2, "File order should not affect fingerprint");
+    }
+
+    #[test]
+    fn test_calculate_series_fingerprint_different_content() {
+        // Different filenames should produce different fingerprints
+        let files1 = vec![
+            PathBuf::from("/library/Batman/Batman-001.cbz"),
+            PathBuf::from("/library/Batman/Batman-002.cbz"),
+        ];
+        let refs1: Vec<&PathBuf> = files1.iter().collect();
+
+        let files2 = vec![
+            PathBuf::from("/library/Superman/Superman-001.cbz"),
+            PathBuf::from("/library/Superman/Superman-002.cbz"),
+        ];
+        let refs2: Vec<&PathBuf> = files2.iter().collect();
+
+        let fp1 = calculate_series_fingerprint(&refs1);
+        let fp2 = calculate_series_fingerprint(&refs2);
+
+        assert_ne!(
+            fp1, fp2,
+            "Different filenames should produce different fingerprints"
+        );
+    }
+
+    #[test]
+    fn test_calculate_series_fingerprint_limit_5_files() {
+        // Should only use first 5 files (alphabetically)
+        let files1 = vec![
+            PathBuf::from("/library/Batman/issue1.cbz"),
+            PathBuf::from("/library/Batman/issue2.cbz"),
+            PathBuf::from("/library/Batman/issue3.cbz"),
+            PathBuf::from("/library/Batman/issue4.cbz"),
+            PathBuf::from("/library/Batman/issue5.cbz"),
+        ];
+        let refs1: Vec<&PathBuf> = files1.iter().collect();
+
+        let files2 = vec![
+            PathBuf::from("/library/Batman/issue1.cbz"),
+            PathBuf::from("/library/Batman/issue2.cbz"),
+            PathBuf::from("/library/Batman/issue3.cbz"),
+            PathBuf::from("/library/Batman/issue4.cbz"),
+            PathBuf::from("/library/Batman/issue5.cbz"),
+            PathBuf::from("/library/Batman/issue6.cbz"), // Extra file
+            PathBuf::from("/library/Batman/issue7.cbz"), // Extra file
+        ];
+        let refs2: Vec<&PathBuf> = files2.iter().collect();
+
+        let fp1 = calculate_series_fingerprint(&refs1);
+        let fp2 = calculate_series_fingerprint(&refs2);
+
+        assert_eq!(
+            fp1, fp2,
+            "Extra files beyond first 5 should not affect fingerprint"
+        );
+    }
+
+    #[test]
+    fn test_calculate_series_fingerprint_path_independence() {
+        // Same filenames in different paths should produce same fingerprint
+        let files1 = vec![
+            PathBuf::from("/library/Batman/issue1.cbz"),
+            PathBuf::from("/library/Batman/issue2.cbz"),
+        ];
+        let refs1: Vec<&PathBuf> = files1.iter().collect();
+
+        let files2 = vec![
+            PathBuf::from("/new_location/Batman-Comics/issue1.cbz"),
+            PathBuf::from("/new_location/Batman-Comics/issue2.cbz"),
+        ];
+        let refs2: Vec<&PathBuf> = files2.iter().collect();
+
+        let fp1 = calculate_series_fingerprint(&refs1);
+        let fp2 = calculate_series_fingerprint(&refs2);
+
+        assert_eq!(fp1, fp2, "Same filenames in different folders should match");
+    }
+
+    #[test]
+    fn test_calculate_series_fingerprint_single_file() {
+        // Should work with just one file
+        let files = vec![PathBuf::from("/library/Batman/standalone.cbz")];
+        let refs: Vec<&PathBuf> = files.iter().collect();
+
+        let fp = calculate_series_fingerprint(&refs);
+
+        assert!(!fp.is_empty(), "Fingerprint should not be empty");
+        assert_eq!(fp.len(), 64, "SHA-256 hex should be 64 characters");
     }
 }

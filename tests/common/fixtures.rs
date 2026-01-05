@@ -67,6 +67,7 @@ pub fn create_test_book(
         file_hash: file_hash.to_string(),
         format: format.to_string(),
         page_count,
+        deleted: false,
         modified_at: now,
         created_at: now,
         updated_at: now,

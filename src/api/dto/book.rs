@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 use super::common::PaginatedResponse;
 
 /// Book data transfer object
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BookDto {
     pub id: uuid::Uuid,

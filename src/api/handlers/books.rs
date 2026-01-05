@@ -43,7 +43,8 @@ pub async fn list_books(
 
     // Fetch books based on filter
     let (books_list, total) = if let Some(ser_id) = series_id {
-        let books = BookRepository::list_by_series(&state.db, ser_id)
+        // By default, don't include deleted books in API responses
+        let books = BookRepository::list_by_series(&state.db, ser_id, false)
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?;
         let total = books.len() as u64;

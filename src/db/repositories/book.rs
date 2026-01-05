@@ -27,6 +27,7 @@ impl BookRepository {
             file_hash: Set(book_model.file_hash.clone()),
             format: Set(book_model.format.clone()),
             page_count: Set(book_model.page_count),
+            deleted: Set(book_model.deleted),
             modified_at: Set(book_model.modified_at),
             created_at: Set(book_model.created_at),
             updated_at: Set(book_model.updated_at),
@@ -65,9 +66,15 @@ impl BookRepository {
     pub async fn list_by_series(
         db: &DatabaseConnection,
         series_id: Uuid,
+        include_deleted: bool,
     ) -> Result<Vec<books::Model>> {
-        Books::find()
-            .filter(books::Column::SeriesId.eq(series_id))
+        let mut query = Books::find().filter(books::Column::SeriesId.eq(series_id));
+
+        if !include_deleted {
+            query = query.filter(books::Column::Deleted.eq(false));
+        }
+
+        query
             .order_by_asc(books::Column::Number)
             .order_by_asc(books::Column::Title)
             .order_by_asc(books::Column::FileName)
@@ -89,12 +96,33 @@ impl BookRepository {
             file_hash: Set(book_model.file_hash.clone()),
             format: Set(book_model.format.clone()),
             page_count: Set(book_model.page_count),
+            deleted: Set(book_model.deleted),
             modified_at: Set(book_model.modified_at),
             created_at: Set(book_model.created_at),
             updated_at: Set(Utc::now()),
         };
 
         active.update(db).await.context("Failed to update book")?;
+
+        Ok(())
+    }
+
+    /// Mark a book as deleted or restore it
+    pub async fn mark_deleted(db: &DatabaseConnection, book_id: Uuid, deleted: bool) -> Result<()> {
+        let book = Books::find_by_id(book_id)
+            .one(db)
+            .await
+            .context("Failed to find book")?
+            .ok_or_else(|| anyhow::anyhow!("Book not found"))?;
+
+        let mut active: books::ActiveModel = book.into();
+        active.deleted = Set(deleted);
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to mark book as deleted")?;
 
         Ok(())
     }
@@ -106,6 +134,43 @@ impl BookRepository {
             .await
             .context("Failed to delete book")?;
         Ok(())
+    }
+
+    /// Purge all deleted books in a library (permanently delete from database)
+    pub async fn purge_deleted_in_library(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+    ) -> Result<u64> {
+        // Get all series in the library
+        let series_list =
+            crate::db::repositories::SeriesRepository::list_by_library(db, library_id).await?;
+        let series_ids: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
+
+        if series_ids.is_empty() {
+            return Ok(0);
+        }
+
+        // Delete all books that are marked as deleted in this library
+        let result = Books::delete_many()
+            .filter(books::Column::SeriesId.is_in(series_ids))
+            .filter(books::Column::Deleted.eq(true))
+            .exec(db)
+            .await
+            .context("Failed to purge deleted books")?;
+
+        Ok(result.rows_affected)
+    }
+
+    /// Purge all deleted books in a series (permanently delete from database)
+    pub async fn purge_deleted_in_series(db: &DatabaseConnection, series_id: Uuid) -> Result<u64> {
+        let result = Books::delete_many()
+            .filter(books::Column::SeriesId.eq(series_id))
+            .filter(books::Column::Deleted.eq(true))
+            .exec(db)
+            .await
+            .context("Failed to purge deleted books in series")?;
+
+        Ok(result.rows_affected)
     }
 }
 
@@ -131,6 +196,7 @@ mod tests {
             file_hash: format!("hash_{}", Uuid::new_v4()),
             format: "cbz".to_string(),
             page_count: 10,
+            deleted: false,
             modified_at: now,
             created_at: now,
             updated_at: now,
@@ -289,7 +355,7 @@ mod tests {
             .await
             .unwrap();
 
-        let books = BookRepository::list_by_series(db.sea_orm_connection(), series.id)
+        let books = BookRepository::list_by_series(db.sea_orm_connection(), series.id, false)
             .await
             .unwrap();
 

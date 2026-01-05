@@ -29,6 +29,16 @@ impl SeriesRepository {
         library_id: Uuid,
         name: &str,
     ) -> Result<series::Model> {
+        Self::create_with_fingerprint(db, library_id, name, None).await
+    }
+
+    /// Create a new series with optional fingerprint
+    pub async fn create_with_fingerprint(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        name: &str,
+        fingerprint: Option<String>,
+    ) -> Result<series::Model> {
         let now = Utc::now();
         let normalized_name = Self::normalize_name(name);
 
@@ -47,6 +57,7 @@ impl SeriesRepository {
             external_rating_count: Set(None),
             external_rating_source: Set(None),
             custom_metadata: Set(None),
+            fingerprint: Set(fingerprint),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -119,11 +130,57 @@ impl SeriesRepository {
             external_rating_count: Set(series_model.external_rating_count),
             external_rating_source: Set(series_model.external_rating_source.clone()),
             custom_metadata: Set(series_model.custom_metadata.clone()),
+            fingerprint: Set(series_model.fingerprint.clone()),
             created_at: Set(series_model.created_at),
             updated_at: Set(Utc::now()),
         };
 
         active.update(db).await.context("Failed to update series")?;
+
+        Ok(())
+    }
+
+    /// Update series name (useful when folder is renamed but fingerprint matches)
+    pub async fn update_name(db: &DatabaseConnection, id: Uuid, name: &str) -> Result<()> {
+        let series = Series::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Series not found"))?;
+
+        let normalized_name = Self::normalize_name(name);
+
+        let mut active: series::ActiveModel = series.into();
+        active.name = Set(name.to_string());
+        active.normalized_name = Set(normalized_name);
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to update series name")?;
+
+        Ok(())
+    }
+
+    /// Update series fingerprint
+    pub async fn update_fingerprint(
+        db: &DatabaseConnection,
+        id: Uuid,
+        fingerprint: Option<String>,
+    ) -> Result<()> {
+        let series = Series::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Series not found"))?;
+
+        let mut active: series::ActiveModel = series.into();
+        active.fingerprint = Set(fingerprint);
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to update series fingerprint")?;
 
         Ok(())
     }

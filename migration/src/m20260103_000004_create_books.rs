@@ -27,6 +27,12 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Books::Format).string().not_null())
                     .col(ColumnDef::new(Books::PageCount).integer().not_null())
                     .col(
+                        ColumnDef::new(Books::Deleted)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
                         ColumnDef::new(Books::ModifiedAt)
                             .timestamp_with_time_zone()
                             .not_null(),
@@ -49,6 +55,17 @@ impl MigrationTrait for Migration {
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::NoAction),
                     )
+                    .to_owned(),
+            )
+            .await?;
+
+        // Add index on deleted column for performance
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_books_deleted")
+                    .table(Books::Table)
+                    .col(Books::Deleted)
                     .to_owned(),
             )
             .await?;
@@ -76,6 +93,7 @@ enum Books {
     FileHash,
     Format,
     PageCount,
+    Deleted,
     ModifiedAt,
     CreatedAt,
     UpdatedAt,
