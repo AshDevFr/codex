@@ -101,6 +101,10 @@ tower = { version = "0.4", features = ["util"] }
 http-body-util = "0.1"
 hyper = { version = "1.0", features = ["full"] }
 
+# Build profile for cargo-dist
+[profile.dist]
+inherits = "release"
+
 # cargo-dist configuration for buildxing standalone binaries
 [workspace.metadata.dist]
 # Cargo package to build and distribute
