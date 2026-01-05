@@ -126,7 +126,8 @@ jobs:
 
       - name: Build binaries with cargo-dist
         run: |
-          cargo dist build --local --features rar --output-format=json > dist-manifest.json || true
+          # Build for current platform only (no cross-compilation)
+          cargo dist build --features rar --output-format=json > dist-manifest.json || true
 
       - name: Upload artifacts
         if: github.event_name == 'push'
