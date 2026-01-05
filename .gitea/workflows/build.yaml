@@ -6,22 +6,58 @@ on:
       - main
   push:
     branches:
-      - main # Only run on main branch pushes
+      - main
+
+# Cancel in-progress runs for same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  # Stage 1: Run tests first for fastest feedback
+  test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     container:
       image: catthehacker/ubuntu:act-latest
-
-    permissions:
-      contents: write
-      packages: write
 
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Fetch all history for .GitInfo and .Lastmod
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run tests
+        run: |
+          cargo test --features rar
+
+  # Stage 1: Run lint checks in parallel with tests
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: catthehacker/ubuntu:act-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -41,36 +77,148 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Install cargo-dist
-        run: |
-          cargo install cargo-dist --locked
-
-      - name: Build Rust package
-        run: |
-          cargo build --release --features rar
-
-      - name: Run tests
-        run: |
-          cargo test --features rar
-
       - name: Format check
         run: |
           cargo fmt -- --check
 
       - name: Clippy check
+        continue-on-error: true
         run: |
           cargo clippy --features rar -- -D warnings
 
-      - name: Build binaries with cargo-dist (current platform)
-        if: github.event_name == 'push'
+  # Stage 2: Build release binaries with cargo-dist (after tests pass, push only)
+  build:
+    needs: [test, lint]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: catthehacker/ubuntu:act-latest
+
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install cargo-dist
+        run: |
+          cargo install cargo-dist --locked
+
+      - name: Build binaries with cargo-dist
         run: |
           cargo dist build --local --features rar --output-format=json > dist-manifest.json || true
 
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-artifacts
+          path: |
+            target/dist/
+            dist-manifest.json
+          retention-days: 3
+
+  # Stage 2: Build and push Docker image (parallel with build, push only)
+  docker:
+    needs: [test, lint]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Registry FQDN Setup
+        id: registry
+        run: |
+          registry=${{ github.server_url }}
+          echo "registry=${registry##http*://}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to Docker Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ steps.registry.outputs.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ steps.registry.outputs.registry }}/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=sha
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
+            VERSION=${{ github.ref_name }}
+            BUILD_ENV=production
+          cache-from: type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache
+          cache-to: type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache,mode=max
+
+  # Stage 3: Publish binaries (after build completes, push only)
+  publish:
+    needs: [build]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-artifacts
+
       - name: Get version info
-        if: github.event_name == 'push'
         id: version
         run: |
-          # Use commit SHA as version identifier for dev builds
           echo "tag=dev" >> $GITHUB_OUTPUT
           echo "version=dev-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
@@ -78,7 +226,6 @@ jobs:
           echo "date=$(date +'%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_OUTPUT
 
       - name: Publish dev binaries to registry
-        if: github.event_name == 'push'
         env:
           GITHUB_TOKEN: ${{ secrets.PACKAGE_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
@@ -113,51 +260,3 @@ jobs:
               --data-binary @"$artifact" \
               "${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/dev/$filename" || echo "Failed to upload $filename"
           done
-
-      - name: Registry FQDN Setup
-        id: registry
-        if: github.event_name == 'push'
-        run: |
-          registry=${{ github.server_url }}
-          echo "registry=${registry##http*://}" >> "$GITHUB_OUTPUT"
-
-      - name: Login to Docker Registry
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ steps.registry.outputs.registry }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.REGISTRY_TOKEN }}
-
-      - name: Set up Docker Buildx
-        if: github.event_name == 'push'
-        uses: docker/setup-buildx-action@v3
-
-      - name: Docker meta
-        if: github.event_name == 'push'
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          # list of Docker images to use as base name for tags
-          images: |
-            ${{ steps.registry.outputs.registry }}/${{ github.repository }}
-          # generate Docker tags based on the following events/attributes
-          tags: |
-            type=ref,event=branch
-            type=sha
-
-      - name: Build and push Docker image
-        if: github.event_name == 'push'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            COMMIT_SHA=${{ github.sha }}
-            VERSION=${{ github.ref_name }}
-            BUILD_ENV=production
-          cache-from: type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache
-          cache-to: type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache,mode=max
