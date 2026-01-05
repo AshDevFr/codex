@@ -102,7 +102,7 @@ http-body-util = "0.1"
 hyper = { version = "1.0", features = ["full"] }
 
 # cargo-dist configuration for building standalone binaries
-[package.metadata.dist]
+[workspace.metadata.dist]
 # Build with rar feature (CBR support)
 features = ["rar"]
 # Target platforms to build for
@@ -116,3 +116,5 @@ targets = [
 installers = ["shell", "powershell", "msi", "pkg"]
 # CI backends to support (using github format for Gitea compatibility)
 ci = ["github"]
+# Allow dirty working directory (for CI builds without tags)
+allow-dirty = true

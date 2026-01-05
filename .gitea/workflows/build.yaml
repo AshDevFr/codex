@@ -137,10 +137,11 @@ jobs:
       - name: Build binaries with cargo-dist
         run: |
           # Build binaries with cross-compilation support
+          # Using --artifacts=local for CI builds without git tags
           # cargo-dist will automatically use cargo-zigbuild and cargo-xwin when needed
           # Note: macOS targets require macOS runners, so they may fail on Linux CI
-          # Features are configured in Cargo.toml [package.metadata.dist]
-          cargo dist build --output-format=json > dist-manifest.json 2>&1 || {
+          # Features are configured in Cargo.toml [workspace.metadata.dist]
+          cargo dist build --artifacts=local --output-format=json > dist-manifest.json 2>&1 || {
             echo "Build attempt completed"
             # Check what artifacts were created
             if [ -d "target/dist" ]; then
