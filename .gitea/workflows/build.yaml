@@ -121,17 +121,11 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install cargo-dist
-        run: |
-          cargo install cargo-dist --locked
-          # Verify installation - cargo-dist installs as 'dist' binary
-          $HOME/.cargo/bin/dist --version || (echo "Failed to install cargo-dist" && exit 1)
+        shell: bash
+        run: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/latest/download/cargo-dist-installer.sh | sh"
 
       - name: Build binaries with cargo-dist
         run: |
-          # Ensure cargo bin is in PATH
-          export PATH="$HOME/.cargo/bin:$PATH"
-          # Verify dist is available (cargo-dist installs as 'dist', can be used as 'cargo dist' or 'dist')
-          dist --version || (echo "dist not found in PATH" && exit 1)
           cargo dist build --local --features rar --output-format=json > dist-manifest.json || true
 
       - name: Upload artifacts
