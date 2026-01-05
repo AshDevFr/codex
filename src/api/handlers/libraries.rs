@@ -15,6 +15,21 @@ use chrono::Utc;
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Helper function to convert a library entity to a DTO
+fn library_to_dto(library: libraries::Model) -> LibraryDto {
+    LibraryDto {
+        id: library.id,
+        name: library.name,
+        path: library.path,
+        description: None, // No description field in libraries entity
+        is_active: true,   // No is_active field in libraries entity
+        scanning_config: library.scanning_config.and_then(|json| serde_json::from_str(&json).ok()),
+        last_scanned_at: library.last_scanned_at,
+        created_at: library.created_at,
+        updated_at: library.updated_at,
+    }
+}
+
 /// List all libraries
 #[utoipa::path(
     get,
@@ -41,16 +56,7 @@ pub async fn list_libraries(
 
     let dtos: Vec<LibraryDto> = libraries
         .into_iter()
-        .map(|lib| LibraryDto {
-            id: lib.id,
-            name: lib.name,
-            path: lib.path,
-            description: None, // No description field in libraries entity
-            is_active: true,   // No is_active field in libraries entity
-            last_scanned_at: lib.last_scanned_at,
-            created_at: lib.created_at,
-            updated_at: lib.updated_at,
-        })
+        .map(library_to_dto)
         .collect();
 
     Ok(Json(dtos))
@@ -85,18 +91,7 @@ pub async fn get_library(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch library: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
 
-    let dto = LibraryDto {
-        id: library.id,
-        name: library.name,
-        path: library.path,
-        description: None, // No description field in libraries entity
-        is_active: true,   // No is_active field in libraries entity
-        last_scanned_at: library.last_scanned_at,
-        created_at: library.created_at,
-        updated_at: library.updated_at,
-    };
-
-    Ok(Json(dto))
+    Ok(Json(library_to_dto(library)))
 }
 
 /// Create a new library
@@ -131,7 +126,7 @@ pub async fn create_library(
     }
 
     // Use the ScanningStrategy enum from the db module
-    let library = LibraryRepository::create(
+    let mut library = LibraryRepository::create(
         &state.db,
         &request.name,
         &request.path,
@@ -140,18 +135,30 @@ pub async fn create_library(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to create library: {}", e)))?;
 
-    let dto = LibraryDto {
-        id: library.id,
-        name: library.name,
-        path: library.path,
-        description: None, // No description field
-        is_active: true,   // No is_active field
-        last_scanned_at: library.last_scanned_at,
-        created_at: library.created_at,
-        updated_at: library.updated_at,
-    };
+    // Handle scanning_config if provided
+    if let Some(config_dto) = request.scanning_config {
+        // Serialize the config to JSON string for database storage
+        let config_json = serde_json::to_string(&config_dto)
+            .map_err(|e| ApiError::BadRequest(format!("Invalid scanning config: {}", e)))?;
 
-    Ok(Json(dto))
+        library.scanning_config = Some(config_json);
+        LibraryRepository::update(&state.db, &library)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to update library config: {}", e)))?;
+
+        // Trigger auto-scan if enabled
+        if config_dto.auto_scan_on_create {
+            let scan_mode = crate::scanner::ScanMode::from_str(&config_dto.scan_mode)
+                .map_err(|e| ApiError::BadRequest(e))?;
+
+            state.scan_manager
+                .trigger_scan(library.id, scan_mode)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to trigger auto-scan: {}", e)))?;
+        }
+    }
+
+    Ok(Json(library_to_dto(library)))
 }
 
 /// Update a library
@@ -201,6 +208,14 @@ pub async fn update_library(
         }
         library.path = path;
     }
+    // Handle scanning_config if provided
+    if let Some(config_dto) = request.scanning_config {
+        // Serialize the config to JSON string for database storage
+        let config_json = serde_json::to_string(&config_dto)
+            .map_err(|e| ApiError::BadRequest(format!("Invalid scanning config: {}", e)))?;
+
+        library.scanning_config = Some(config_json);
+    }
     // Note: description and is_active fields don't exist in the entity
     library.updated_at = Utc::now();
 
@@ -214,18 +229,7 @@ pub async fn update_library(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch updated library: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Library not found after update".to_string()))?;
 
-    let dto = LibraryDto {
-        id: updated.id,
-        name: updated.name,
-        path: updated.path,
-        description: None, // No description field
-        is_active: true,   // No is_active field
-        last_scanned_at: updated.last_scanned_at,
-        created_at: updated.created_at,
-        updated_at: updated.updated_at,
-    };
-
-    Ok(Json(dto))
+    Ok(Json(library_to_dto(updated)))
 }
 
 /// Delete a library

@@ -27,3 +27,10 @@ auth:
 # API config - uses defaults except Swagger enabled for Docker
 api:
   enable_swagger: true  # Enabled in Docker for easier API testing
+
+# Scanner config - uses defaults
+# Defaults: max_concurrent_scans=2, scan_timeout_minutes=120, retry_failed_files=false
+# scanner:
+#   max_concurrent_scans: 2
+#   scan_timeout_minutes: 120
+#   retry_failed_files: false

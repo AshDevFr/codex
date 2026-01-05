@@ -24,6 +24,28 @@ pub fn create_test_user(
     }
 }
 
+/// Create a test user model with specific permissions
+pub fn create_test_user_with_permissions(
+    username: &str,
+    email: &str,
+    password_hash: &str,
+    is_admin: bool,
+    permissions: Vec<String>,
+) -> users::Model {
+    users::Model {
+        id: Uuid::new_v4(),
+        username: username.to_string(),
+        email: email.to_string(),
+        password_hash: password_hash.to_string(),
+        is_admin,
+        is_active: true,
+        permissions: serde_json::json!(permissions),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        last_login_at: None,
+    }
+}
+
 /// Create a test book model with default values
 pub fn create_test_book(
     series_id: Uuid,

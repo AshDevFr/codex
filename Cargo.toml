@@ -91,6 +91,10 @@ lazy_static = "1.4"
 utoipa = { version = "5.0", features = ["axum_extras", "chrono", "uuid"] }
 utoipa-swagger-ui = { version = "8.0", features = ["axum"] }
 
+# Job Scheduling
+tokio-cron-scheduler = "0.10"
+tokio-util = "0.7"
+
 [dev-dependencies]
 tempfile = "3.13"
 tower = { version = "0.4", features = ["util"] }

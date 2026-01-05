@@ -6,5 +6,6 @@
 mod api {
     mod auth;
     mod libraries;
+    mod scan;
     mod series;
 }

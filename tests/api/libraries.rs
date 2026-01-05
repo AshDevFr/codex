@@ -199,6 +199,7 @@ async fn test_create_library_success() {
         name: "New Library".to_string(),
         path: lib_path.to_str().unwrap().to_string(),
         description: None,
+        scanning_config: None,
     };
 
     let request = post_json_request_with_auth("/api/v1/libraries", &create_request, &token);
@@ -223,6 +224,7 @@ async fn test_create_library_without_permission() {
         name: "New Library".to_string(),
         path: "/new/path".to_string(),
         description: None,
+        scanning_config: None,
     };
 
     let request = post_json_request_with_auth("/api/v1/libraries", &create_request, &token);
@@ -266,6 +268,7 @@ async fn test_update_library_success() {
         path: Some(updated_path.to_str().unwrap().to_string()),
         description: None,
         is_active: None,
+        scanning_config: None,
     };
 
     let request = put_json_request_with_auth(
@@ -299,6 +302,7 @@ async fn test_update_library_without_permission() {
         path: None,
         description: None,
         is_active: None,
+        scanning_config: None,
     };
 
     let request = put_json_request_with_auth(

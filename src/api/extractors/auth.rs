@@ -1,6 +1,7 @@
 use crate::api::error::ApiError;
 use crate::api::permissions::Permission;
 use crate::db::repositories::{ApiKeyRepository, UserRepository};
+use crate::scanner::ScanManager;
 use crate::utils::{jwt::JwtService, password};
 use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
 use sea_orm::DatabaseConnection;
@@ -59,20 +60,24 @@ impl AuthContext {
     }
 }
 
-/// Shared state for auth extractor
+/// Shared application state
 #[derive(Clone)]
-pub struct AuthState {
+pub struct AppState {
     pub db: DatabaseConnection,
     pub jwt_service: Arc<JwtService>,
+    pub scan_manager: Arc<ScanManager>,
 }
 
+// Legacy alias for backwards compatibility during transition
+pub type AuthState = AppState;
+
 #[async_trait]
-impl FromRequestParts<Arc<AuthState>> for AuthContext {
+impl FromRequestParts<Arc<AppState>> for AuthContext {
     type Rejection = ApiError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &Arc<AuthState>,
+        state: &Arc<AppState>,
     ) -> Result<Self, Self::Rejection> {
         // Try to extract from Authorization header (JWT Bearer token)
         if let Some(auth_header) = parts.headers.get("authorization") {
@@ -97,7 +102,7 @@ impl FromRequestParts<Arc<AuthState>> for AuthContext {
 }
 
 /// Extract auth context from JWT token
-async fn extract_from_jwt(token: &str, state: &AuthState) -> Result<AuthContext, ApiError> {
+async fn extract_from_jwt(token: &str, state: &AppState) -> Result<AuthContext, ApiError> {
     // Verify and decode JWT
     let claims = state
         .jwt_service
@@ -135,7 +140,7 @@ async fn extract_from_jwt(token: &str, state: &AuthState) -> Result<AuthContext,
 }
 
 /// Extract auth context from API key
-async fn extract_from_api_key(api_key: &str, state: &AuthState) -> Result<AuthContext, ApiError> {
+async fn extract_from_api_key(api_key: &str, state: &AppState) -> Result<AuthContext, ApiError> {
     // Extract the prefix from the API key (format: codex_<prefix>_<secret>)
     // We use the first underscore-delimited part as the prefix for lookup
     let key_prefix = api_key.split('_').take(2).collect::<Vec<&str>>().join("_");

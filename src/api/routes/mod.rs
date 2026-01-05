@@ -1,17 +1,16 @@
-use crate::api::{extractors::AuthState, handlers};
+use crate::api::{extractors::AppState, handlers};
 use crate::config::ApiConfig;
 use axum::{
     routing::{delete, get, post, put},
     Router,
 };
-use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 
 /// Create the main API router with all routes
 ///
 /// Includes health check and all API v1 endpoints
-pub fn create_router(state: Arc<AuthState>, api_config: &ApiConfig) -> Router {
+pub fn create_router(state: Arc<AppState>, api_config: &ApiConfig) -> Router {
     // Clone the database connection for the health check route
     let db_for_health = state.db.clone();
 
@@ -48,7 +47,7 @@ pub fn create_router(state: Arc<AuthState>, api_config: &ApiConfig) -> Router {
 }
 
 /// Create API v1 routes
-fn api_v1_routes(state: Arc<AuthState>) -> Router {
+fn api_v1_routes(state: Arc<AppState>) -> Router {
     Router::new()
         // Auth routes (public)
         .route("/auth/login", post(handlers::login))
@@ -59,6 +58,11 @@ fn api_v1_routes(state: Arc<AuthState>) -> Router {
         .route("/libraries/:id", get(handlers::get_library))
         .route("/libraries/:id", put(handlers::update_library))
         .route("/libraries/:id", delete(handlers::delete_library))
+        // Scan routes (protected)
+        .route("/libraries/:id/scan", post(handlers::trigger_scan))
+        .route("/libraries/:id/scan-status", get(handlers::get_scan_status))
+        .route("/libraries/:id/scan/cancel", post(handlers::cancel_scan))
+        .route("/scans/active", get(handlers::list_active_scans))
         // Series routes (protected)
         .route("/series", get(handlers::list_series))
         .route("/series/search", post(handlers::search_series))

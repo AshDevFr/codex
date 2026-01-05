@@ -3,6 +3,7 @@ pub mod book;
 pub mod common;
 pub mod library;
 pub mod page;
+pub mod scan;
 pub mod series;
 pub mod user;
 
@@ -11,5 +12,6 @@ pub use book::*;
 pub use common::*;
 pub use library::*;
 pub use page::*;
+pub use scan::*;
 pub use series::*;
 pub use user::*;

@@ -1,7 +1,8 @@
 use axum::Router;
-use codex::api::extractors::AuthState;
+use codex::api::extractors::{AppState, AuthState};
 use codex::api::routes::create_router;
 use codex::config::ApiConfig;
+use codex::scanner::ScanManager;
 use codex::utils::jwt::JwtService;
 use http_body_util::BodyExt;
 use hyper::{body::Bytes, Request, StatusCode};
@@ -10,14 +11,36 @@ use serde::de::DeserializeOwned;
 use std::sync::Arc;
 use tower::ServiceExt;
 
-/// Helper to create AuthState for tests
+/// Helper to create AuthState for tests (deprecated - use create_test_app_state)
 pub fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
     let jwt_service = Arc::new(JwtService::new(
         "test_secret_key_for_integration_tests".to_string(),
         24, // 24 hour expiry
     ));
 
-    Arc::new(AuthState { db, jwt_service })
+    let scan_manager = Arc::new(ScanManager::new(db.clone(), 2));
+
+    Arc::new(AppState {
+        db,
+        jwt_service,
+        scan_manager,
+    })
+}
+
+/// Helper to create AppState for tests
+pub fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
+    let jwt_service = Arc::new(JwtService::new(
+        "test_secret_key_for_integration_tests".to_string(),
+        24, // 24 hour expiry
+    ));
+
+    let scan_manager = Arc::new(ScanManager::new(db.clone(), 2));
+
+    Arc::new(AppState {
+        db,
+        jwt_service,
+        scan_manager,
+    })
 }
 
 /// Helper to create a test API config
@@ -32,8 +55,21 @@ pub fn create_test_api_config() -> ApiConfig {
     }
 }
 
-/// Helper to create the API router with test state
+/// Helper to create the API router with test state (deprecated - use create_test_router_with_app_state)
 pub fn create_test_router(state: Arc<AuthState>) -> Router {
+    // Convert AuthState to AppState for compatibility
+    let scan_manager = Arc::new(ScanManager::new(state.db.clone(), 2));
+    let app_state = Arc::new(AppState {
+        db: state.db.clone(),
+        jwt_service: state.jwt_service.clone(),
+        scan_manager,
+    });
+    let api_config = create_test_api_config();
+    create_router(app_state, &api_config)
+}
+
+/// Helper to create the API router with AppState
+pub fn create_test_router_with_app_state(state: Arc<AppState>) -> Router {
     let api_config = create_test_api_config();
     create_router(state, &api_config)
 }
@@ -109,6 +145,16 @@ pub fn post_json_request<T: serde::Serialize>(uri: &str, body: &T) -> Request<St
         .uri(uri)
         .header("Content-Type", "application/json")
         .body(json)
+        .unwrap()
+}
+
+/// Helper to create a POST request with Authorization header (no body)
+pub fn post_request_with_auth(uri: &str, token: &str) -> Request<String> {
+    Request::builder()
+        .method("POST")
+        .uri(uri)
+        .header("Authorization", format!("Bearer {}", token))
+        .body(String::new())
         .unwrap()
 }
 

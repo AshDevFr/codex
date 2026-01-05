@@ -29,3 +29,10 @@ auth:
 # Uncomment below to enable Swagger UI:
 # api:
 #   enable_swagger: true
+
+# Scanner config - uses defaults
+# Defaults: max_concurrent_scans=2, scan_timeout_minutes=120, retry_failed_files=false
+# scanner:
+#   max_concurrent_scans: 2
+#   scan_timeout_minutes: 120
+#   retry_failed_files: false

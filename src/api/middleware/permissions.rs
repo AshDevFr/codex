@@ -31,27 +31,3 @@ macro_rules! require_admin {
         $auth.require_admin()
     };
 }
-
-/// Helper function to check if user has permission
-pub fn check_permission(auth: &AuthContext, permission: &Permission) -> Result<(), ApiError> {
-    auth.require_permission(permission)
-}
-
-/// Helper function to check if user has any of the given permissions
-pub fn check_any_permission(
-    auth: &AuthContext,
-    permissions: &[Permission],
-) -> Result<(), ApiError> {
-    if auth.has_any_permission(permissions) {
-        Ok(())
-    } else {
-        Err(ApiError::Forbidden(
-            "Missing required permissions".to_string(),
-        ))
-    }
-}
-
-/// Helper function to check admin access
-pub fn check_admin(auth: &AuthContext) -> Result<(), ApiError> {
-    auth.require_admin()
-}

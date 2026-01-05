@@ -84,13 +84,32 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     db.health_check().await?;
     info!("Database health check passed");
 
+    // Create scan manager
+    info!("Initializing scan manager...");
+    let scan_manager = Arc::new(crate::scanner::ScanManager::new(
+        db.sea_orm_connection().clone(),
+        config.scanner.max_concurrent_scans,
+    ));
+    info!("  Max concurrent scans: {}", config.scanner.max_concurrent_scans);
+
+    // Create and start scheduler
+    info!("Initializing scan scheduler...");
+    let mut scheduler = crate::scanner::ScanScheduler::new(
+        db.sea_orm_connection().clone(),
+        scan_manager.clone(),
+    )
+    .await?;
+    scheduler.start().await?;
+    info!("Scan scheduler started successfully");
+
     // Create application state for API
-    let api_state = Arc::new(crate::api::AuthState {
+    let api_state = Arc::new(crate::api::AppState {
         db: db.sea_orm_connection().clone(),
         jwt_service: Arc::new(crate::utils::jwt::JwtService::new(
             config.auth.jwt_secret.clone(),
             config.auth.jwt_expiry_hours,
         )),
+        scan_manager,
     });
 
     // Build router using API module

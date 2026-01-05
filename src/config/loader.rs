@@ -1,4 +1,4 @@
-use super::settings::Config;
+use super::settings::{Config, ScannerConfig};
 use anyhow::Result;
 use std::fs;
 use std::path::Path;
@@ -72,6 +72,7 @@ application:
             logging: LoggingConfig::default(),
             auth: AuthConfig::default(),
             api: ApiConfig::default(),
+            scanner: ScannerConfig::default(),
         };
 
         let temp_file = NamedTempFile::new().unwrap();

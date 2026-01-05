@@ -10,6 +10,6 @@ pub mod routes;
 pub use docs::ApiDoc;
 pub use dto::*;
 pub use error::ApiError;
-pub use extractors::{AuthContext, AuthMethod, AuthState};
+pub use extractors::{AppState, AuthContext, AuthMethod, AuthState};
 pub use permissions::Permission;
 pub use routes::create_router;

@@ -14,6 +14,8 @@ pub struct Config {
     pub auth: AuthConfig,
     #[serde(default)]
     pub api: ApiConfig,
+    #[serde(default)]
+    pub scanner: ScannerConfig,
 }
 
 impl Default for Config {
@@ -98,6 +100,7 @@ impl Default for Config {
             },
             auth: AuthConfig::default(),
             api: ApiConfig::default(),
+            scanner: ScannerConfig::default(),
         }
     }
 }
@@ -325,6 +328,24 @@ impl LogLevel {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct ScannerConfig {
+    pub max_concurrent_scans: usize,
+    pub scan_timeout_minutes: u64,
+    pub retry_failed_files: bool,
+}
+
+impl Default for ScannerConfig {
+    fn default() -> Self {
+        Self {
+            max_concurrent_scans: env_or("CODEX_SCANNER_MAX_CONCURRENT_SCANS", 2),
+            scan_timeout_minutes: env_or("CODEX_SCANNER_SCAN_TIMEOUT_MINUTES", 120),
+            retry_failed_files: env_bool_or("CODEX_SCANNER_RETRY_FAILED_FILES", false),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -461,6 +482,7 @@ mod tests {
             logging: LoggingConfig::default(),
             auth: AuthConfig::default(),
             api: ApiConfig::default(),
+            scanner: ScannerConfig::default(),
         };
 
         assert_eq!(config.application.name, "Codex");

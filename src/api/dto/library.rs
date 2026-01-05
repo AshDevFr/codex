@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::ScanningConfigDto;
+
 /// Library data transfer object
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -11,6 +13,7 @@ pub struct LibraryDto {
     pub path: String,
     pub description: Option<String>,
     pub is_active: bool,
+    pub scanning_config: Option<ScanningConfigDto>,
     pub last_scanned_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -28,6 +31,9 @@ pub struct CreateLibraryRequest {
 
     /// Optional description
     pub description: Option<String>,
+
+    /// Scanning configuration
+    pub scanning_config: Option<ScanningConfigDto>,
 }
 
 /// Update library request
@@ -45,4 +51,7 @@ pub struct UpdateLibraryRequest {
 
     /// Active status
     pub is_active: Option<bool>,
+
+    /// Scanning configuration
+    pub scanning_config: Option<ScanningConfigDto>,
 }
