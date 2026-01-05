@@ -226,9 +226,10 @@ jobs:
             type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache-latest
             type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache
           # Cache to both a "latest" tag (for fast access) and versioned cache
+          # Using mode=min to reduce cache size and avoid registry upload timeouts
           cache-to: |
-            type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache-latest,mode=max
-            type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache,mode=max
+            type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache-latest,mode=min
+            type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache,mode=min
 
   # Stage 3: Publish binaries (after build completes, push only)
   publish:
