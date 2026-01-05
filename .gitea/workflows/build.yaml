@@ -47,9 +47,9 @@ jobs:
         run: |
           cargo install cargo-dist --locked
 
-      - name: Build Rust package (with cargo-dist for current platform)
+      - name: Build Rust package
         run: |
-          cargo dist build --local --features rar
+          cargo build --release --features rar
 
       - name: Run tests
         run: |
@@ -62,6 +62,59 @@ jobs:
       - name: Clippy check
         run: |
           cargo clippy --features rar -- -D warnings
+
+      - name: Build binaries with cargo-dist (current platform)
+        if: github.event_name == 'push'
+        run: |
+          cargo dist build --local --features rar --output-format=json > dist-manifest.json || true
+
+      - name: Get version info
+        if: github.event_name == 'push'
+        id: version
+        run: |
+          # Use commit SHA as version identifier for dev builds
+          echo "tag=dev" >> $GITHUB_OUTPUT
+          echo "version=dev-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          export TZ=UTC
+          echo "date=$(date +'%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_OUTPUT
+
+      - name: Publish dev binaries to registry
+        if: github.event_name == 'push'
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          # Find all built artifacts
+          for artifact in $(find target/dist -type f \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.msi" -o -name "*.pkg" \) 2>/dev/null); do
+            filename=$(basename "$artifact")
+            echo "Publishing $filename as dev build..."
+
+            # Determine content type
+            case "$artifact" in
+              *.zip)
+                content_type="application/zip"
+                ;;
+              *.tar.gz)
+                content_type="application/gzip"
+                ;;
+              *.msi)
+                content_type="application/x-msi"
+                ;;
+              *.pkg)
+                content_type="application/x-apple-installer-package"
+                ;;
+              *)
+                content_type="application/octet-stream"
+                ;;
+            esac
+
+            # Upload to Gitea package registry with "dev" label
+            curl -v -X PUT \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: $content_type" \
+              --data-binary @"$artifact" \
+              "${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/dev/$filename" || echo "Failed to upload $filename"
+          done
 
       - name: Registry FQDN Setup
         id: registry
