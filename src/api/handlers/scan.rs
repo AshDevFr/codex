@@ -57,8 +57,7 @@ pub async fn trigger_scan(
         .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
 
     // Parse scan mode
-    let mode = ScanMode::from_str(&params.mode)
-        .map_err(|e| ApiError::BadRequest(e))?;
+    let mode = ScanMode::from_str(&params.mode).map_err(|e| ApiError::BadRequest(e))?;
 
     // Trigger the scan
     state

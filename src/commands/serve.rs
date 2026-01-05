@@ -90,15 +90,16 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         db.sea_orm_connection().clone(),
         config.scanner.max_concurrent_scans,
     ));
-    info!("  Max concurrent scans: {}", config.scanner.max_concurrent_scans);
+    info!(
+        "  Max concurrent scans: {}",
+        config.scanner.max_concurrent_scans
+    );
 
     // Create and start scheduler
     info!("Initializing scan scheduler...");
-    let mut scheduler = crate::scanner::ScanScheduler::new(
-        db.sea_orm_connection().clone(),
-        scan_manager.clone(),
-    )
-    .await?;
+    let mut scheduler =
+        crate::scanner::ScanScheduler::new(db.sea_orm_connection().clone(), scan_manager.clone())
+            .await?;
     scheduler.start().await?;
     info!("Scan scheduler started successfully");
 

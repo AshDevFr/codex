@@ -72,10 +72,7 @@ impl ScanScheduler {
 
         for library in libraries {
             if let Err(e) = self.add_library_schedule(library.id).await {
-                warn!(
-                    "Failed to add schedule for library {}: {}",
-                    library.name, e
-                );
+                warn!("Failed to add schedule for library {}: {}", library.name, e);
             }
         }
 
@@ -85,7 +82,11 @@ impl ScanScheduler {
             .await
             .context("Failed to start scheduler")?;
 
-        let job_count = if self.scheduler.time_till_next_job().await.is_ok() { 1 } else { 0 };
+        let job_count = if self.scheduler.time_till_next_job().await.is_ok() {
+            1
+        } else {
+            0
+        };
         info!("Scan scheduler started with {} jobs", job_count);
 
         Ok(())

@@ -37,7 +37,10 @@ pub struct ScanManager {
 impl ScanManager {
     /// Create a new scan manager
     pub fn new(db: DatabaseConnection, max_concurrent: usize) -> Self {
-        info!("Initializing ScanManager with max_concurrent={}", max_concurrent);
+        info!(
+            "Initializing ScanManager with max_concurrent={}",
+            max_concurrent
+        );
         Self {
             state: Arc::new(RwLock::new(ScanState::new())),
             db,
@@ -58,11 +61,7 @@ impl ScanManager {
             ));
         }
 
-        if state
-            .queued_scans
-            .iter()
-            .any(|(id, _)| id == &library_id)
-        {
+        if state.queued_scans.iter().any(|(id, _)| id == &library_id) {
             return Err(anyhow::anyhow!("Library {} is already queued", library_id));
         }
 
@@ -79,7 +78,9 @@ impl ScanManager {
             // Initialize progress as queued
             let progress = ScanProgress::new(library_id);
             let cancellation = CancellationToken::new();
-            state.active_scans.insert(library_id, (progress, cancellation));
+            state
+                .active_scans
+                .insert(library_id, (progress, cancellation));
         }
 
         Ok(())
@@ -88,7 +89,10 @@ impl ScanManager {
     /// Get scan status for a library
     pub async fn get_status(&self, library_id: Uuid) -> Option<ScanProgress> {
         let state = self.state.read().await;
-        state.active_scans.get(&library_id).map(|(progress, _)| progress.clone())
+        state
+            .active_scans
+            .get(&library_id)
+            .map(|(progress, _)| progress.clone())
     }
 
     /// Get all active scans
@@ -110,7 +114,10 @@ impl ScanManager {
             info!("Cancelled scan for library {}", library_id);
             Ok(())
         } else {
-            Err(anyhow::anyhow!("No active scan found for library {}", library_id))
+            Err(anyhow::anyhow!(
+                "No active scan found for library {}",
+                library_id
+            ))
         }
     }
 
@@ -124,7 +131,9 @@ impl ScanManager {
         // Store initial progress
         {
             let mut state = self.state.write().await;
-            state.active_scans.insert(library_id, (progress, cancellation.clone()));
+            state
+                .active_scans
+                .insert(library_id, (progress, cancellation.clone()));
         }
 
         // Clone necessary data for the task

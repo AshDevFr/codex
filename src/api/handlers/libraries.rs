@@ -23,7 +23,9 @@ fn library_to_dto(library: libraries::Model) -> LibraryDto {
         path: library.path,
         description: None, // No description field in libraries entity
         is_active: true,   // No is_active field in libraries entity
-        scanning_config: library.scanning_config.and_then(|json| serde_json::from_str(&json).ok()),
+        scanning_config: library
+            .scanning_config
+            .and_then(|json| serde_json::from_str(&json).ok()),
         last_scanned_at: library.last_scanned_at,
         created_at: library.created_at,
         updated_at: library.updated_at,
@@ -54,10 +56,7 @@ pub async fn list_libraries(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch libraries: {}", e)))?;
 
-    let dtos: Vec<LibraryDto> = libraries
-        .into_iter()
-        .map(library_to_dto)
-        .collect();
+    let dtos: Vec<LibraryDto> = libraries.into_iter().map(library_to_dto).collect();
 
     Ok(Json(dtos))
 }
@@ -151,7 +150,8 @@ pub async fn create_library(
             let scan_mode = crate::scanner::ScanMode::from_str(&config_dto.scan_mode)
                 .map_err(|e| ApiError::BadRequest(e))?;
 
-            state.scan_manager
+            state
+                .scan_manager
                 .trigger_scan(library.id, scan_mode)
                 .await
                 .map_err(|e| ApiError::Internal(format!("Failed to trigger auto-scan: {}", e)))?;

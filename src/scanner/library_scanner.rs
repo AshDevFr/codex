@@ -13,8 +13,8 @@ use walkdir::WalkDir;
 
 use crate::db::entities::{books, series};
 use crate::db::repositories::{BookRepository, LibraryRepository, SeriesRepository};
-use crate::scanner::{analyze_file, detect_format};
 use crate::parsers::FileFormat;
+use crate::scanner::{analyze_file, detect_format};
 
 use super::types::{ScanMode, ScanProgress, ScanResult, ScanStatus};
 
@@ -227,16 +227,7 @@ async fn process_series(
 
     // Process each file in the series
     for file_path in file_paths {
-        match process_file(
-            db,
-            &series_model,
-            file_path,
-            existing_books,
-            mode,
-            result,
-        )
-        .await
-        {
+        match process_file(db, &series_model, file_path, existing_books, mode, result).await {
             Ok(_) => {
                 result.files_processed += 1;
                 progress.files_processed += 1;
@@ -282,8 +273,8 @@ async fn process_file(
     }
 
     // Analyze the file
-    let metadata = analyze_file(file_path)
-        .with_context(|| format!("Failed to analyze file: {}", path_str))?;
+    let metadata =
+        analyze_file(file_path).with_context(|| format!("Failed to analyze file: {}", path_str))?;
 
     // Check if book already exists by path
     let existing_book = BookRepository::get_by_path(db, &path_str).await?;
@@ -294,7 +285,10 @@ async fn process_file(
         // Update existing book
         existing.title = metadata.comic_info.as_ref().and_then(|ci| ci.title.clone());
         existing.number = metadata.comic_info.as_ref().and_then(|ci| {
-            ci.number.as_ref().and_then(|n| n.parse::<f64>().ok()).map(|v| Decimal::from_f64_retain(v).unwrap_or_default())
+            ci.number
+                .as_ref()
+                .and_then(|n| n.parse::<f64>().ok())
+                .map(|v| Decimal::from_f64_retain(v).unwrap_or_default())
         });
         existing.file_size = metadata.file_size as i64;
         existing.file_hash = metadata.file_hash.clone();
@@ -314,7 +308,10 @@ async fn process_file(
             series_id: series_model.id,
             title: metadata.comic_info.as_ref().and_then(|ci| ci.title.clone()),
             number: metadata.comic_info.as_ref().and_then(|ci| {
-                ci.number.as_ref().and_then(|n| n.parse::<f64>().ok()).map(|v| Decimal::from_f64_retain(v).unwrap_or_default())
+                ci.number
+                    .as_ref()
+                    .and_then(|n| n.parse::<f64>().ok())
+                    .map(|v| Decimal::from_f64_retain(v).unwrap_or_default())
             }),
             file_path: path_str.clone(),
             file_name: file_path
@@ -350,9 +347,10 @@ async fn find_or_create_series(
     let series_list = SeriesRepository::list_by_library(db, library_id).await?;
 
     let normalized_search = series_name.to_lowercase();
-    if let Some(existing) = series_list.iter().find(|s| {
-        s.normalized_name.to_lowercase() == normalized_search
-    }) {
+    if let Some(existing) = series_list
+        .iter()
+        .find(|s| s.normalized_name.to_lowercase() == normalized_search)
+    {
         return Ok(existing.clone());
     }
 
@@ -371,10 +369,7 @@ async fn load_existing_books(
     for series in series_list {
         let books = BookRepository::list_by_series(db, series.id).await?;
         for book in books {
-            books_map.insert(
-                book.file_path.clone(),
-                (book.file_hash.clone(), book),
-            );
+            books_map.insert(book.file_path.clone(), (book.file_hash.clone(), book));
         }
     }
 
@@ -432,19 +427,14 @@ fn organize_by_series(files: &[PathBuf], library_path: &str) -> HashMap<String, 
 /// Direct child folder of library = series name
 fn extract_series_name(file_path: &Path, library_path: &Path) -> String {
     // Get relative path from library root
-    let relative = file_path
-        .strip_prefix(library_path)
-        .unwrap_or(file_path);
+    let relative = file_path.strip_prefix(library_path).unwrap_or(file_path);
 
     // Get first component (direct child folder)
     let components: Vec<_> = relative.components().collect();
 
     if components.len() > 1 {
         // Use first folder as series name
-        components[0]
-            .as_os_str()
-            .to_string_lossy()
-            .to_string()
+        components[0].as_os_str().to_string_lossy().to_string()
     } else {
         // File is directly in library root
         "Unsorted".to_string()
@@ -464,10 +454,7 @@ fn calculate_file_hash(path: &Path) -> Result<String> {
 }
 
 /// Send progress update through channel
-async fn send_progress(
-    progress_tx: &Option<mpsc::Sender<ScanProgress>>,
-    progress: &ScanProgress,
-) {
+async fn send_progress(progress_tx: &Option<mpsc::Sender<ScanProgress>>, progress: &ScanProgress) {
     if let Some(tx) = progress_tx {
         if let Err(e) = tx.send(progress.clone()).await {
             warn!("Failed to send progress update: {}", e);
