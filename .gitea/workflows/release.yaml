@@ -148,15 +148,7 @@ jobs:
           done
 
           # Create release with links to all packages
-          RELEASE_BODY="Codex release ${{ steps.version.outputs.tag }}
-
-Built from commit ${{ steps.version.outputs.sha_short }} on ${{ steps.version.outputs.date }}
-
-## Downloads
-
-${DOWNLOAD_LINKS}
-
-🔗 [View All Packages](${PACKAGE_URL})"
+          RELEASE_BODY="Codex release ${{ steps.version.outputs.tag }}\n\nBuilt from commit ${{ steps.version.outputs.sha_short }} on ${{ steps.version.outputs.date }}\n\n## Downloads\n\n${DOWNLOAD_LINKS}\n\n🔗 [View All Packages](${PACKAGE_URL})"
 
           RESPONSE=$(curl -s -X POST \
             -H "Authorization: token $GITHUB_TOKEN" \
@@ -217,4 +209,3 @@ ${DOWNLOAD_LINKS}
             BUILD_ENV=production
           cache-from: type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache
           cache-to: type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache,mode=max
-
