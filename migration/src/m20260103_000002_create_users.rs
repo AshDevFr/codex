@@ -11,24 +11,14 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(Users::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(Users::Id)
-                            .uuid()
-                            .not_null()
-                            .primary_key(),
-                    )
+                    .col(ColumnDef::new(Users::Id).uuid().not_null().primary_key())
                     .col(
                         ColumnDef::new(Users::Username)
                             .text()
                             .not_null()
                             .unique_key(),
                     )
-                    .col(
-                        ColumnDef::new(Users::Email)
-                            .text()
-                            .not_null()
-                            .unique_key(),
-                    )
+                    .col(ColumnDef::new(Users::Email).text().not_null().unique_key())
                     .col(ColumnDef::new(Users::PasswordHash).text().not_null())
                     .col(ColumnDef::new(Users::IsAdmin).boolean().not_null())
                     .col(
@@ -66,4 +56,3 @@ enum Users {
     UpdatedAt,
     LastLoginAt,
 }
-

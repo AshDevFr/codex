@@ -1,8 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait,
-    QueryFilter, QueryOrder, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
 };
 use uuid::Uuid;
 
@@ -33,17 +32,11 @@ impl LibraryRepository {
             last_scanned_at: Set(None),
         };
 
-        library
-            .insert(db)
-            .await
-            .context("Failed to create library")
+        library.insert(db).await.context("Failed to create library")
     }
 
     /// Get a library by ID
-    pub async fn get_by_id(
-        db: &DatabaseConnection,
-        id: Uuid,
-    ) -> Result<Option<libraries::Model>> {
+    pub async fn get_by_id(db: &DatabaseConnection, id: Uuid) -> Result<Option<libraries::Model>> {
         Libraries::find_by_id(id)
             .one(db)
             .await
@@ -51,9 +44,7 @@ impl LibraryRepository {
     }
 
     /// Get all libraries
-    pub async fn list_all(
-        db: &DatabaseConnection,
-    ) -> Result<Vec<libraries::Model>> {
+    pub async fn list_all(db: &DatabaseConnection) -> Result<Vec<libraries::Model>> {
         Libraries::find()
             .order_by_asc(libraries::Column::Name)
             .all(db)
@@ -74,10 +65,7 @@ impl LibraryRepository {
     }
 
     /// Update library
-    pub async fn update(
-        db: &DatabaseConnection,
-        library: &libraries::Model,
-    ) -> Result<()> {
+    pub async fn update(db: &DatabaseConnection, library: &libraries::Model) -> Result<()> {
         let active = libraries::ActiveModel {
             id: Set(library.id),
             name: Set(library.name.clone()),
@@ -98,10 +86,7 @@ impl LibraryRepository {
     }
 
     /// Update last scanned timestamp
-    pub async fn update_last_scanned(
-        db: &DatabaseConnection,
-        id: Uuid,
-    ) -> Result<()> {
+    pub async fn update_last_scanned(db: &DatabaseConnection, id: Uuid) -> Result<()> {
         let library = Libraries::find_by_id(id)
             .one(db)
             .await?
@@ -132,8 +117,8 @@ impl LibraryRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::ScanningStrategy;
     use crate::db::test_helpers::create_test_db;
+    use crate::db::ScanningStrategy;
 
     #[tokio::test]
     async fn test_create_library() {
@@ -208,7 +193,9 @@ mod tests {
         .await
         .unwrap();
 
-        let libraries = LibraryRepository::list_all(db.sea_orm_connection()).await.unwrap();
+        let libraries = LibraryRepository::list_all(db.sea_orm_connection())
+            .await
+            .unwrap();
 
         assert_eq!(libraries.len(), 2);
         assert_eq!(libraries[0].name, "Library 1");
@@ -253,7 +240,9 @@ mod tests {
         library.name = "Updated Name".to_string();
         library.path = "/updated/path".to_string();
 
-        LibraryRepository::update(db.sea_orm_connection(), &library).await.unwrap();
+        LibraryRepository::update(db.sea_orm_connection(), &library)
+            .await
+            .unwrap();
 
         let retrieved = LibraryRepository::get_by_id(db.sea_orm_connection(), library.id)
             .await
@@ -304,7 +293,9 @@ mod tests {
         .await
         .unwrap();
 
-        LibraryRepository::delete(db.sea_orm_connection(), library.id).await.unwrap();
+        LibraryRepository::delete(db.sea_orm_connection(), library.id)
+            .await
+            .unwrap();
 
         let result = LibraryRepository::get_by_id(db.sea_orm_connection(), library.id)
             .await

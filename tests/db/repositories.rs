@@ -2,13 +2,16 @@
 mod common;
 
 use chrono::Utc;
-use codex::db::repositories::{LibraryRepository, SeriesRepository, BookRepository, PageRepository};
-use codex::db::entities::{libraries, series, books, users, read_progress};
+use codex::db::entities::{books, libraries, read_progress, series, users};
+use codex::db::repositories::{
+    BookRepository, LibraryRepository, PageRepository, SeriesRepository,
+};
 use codex::models::ScanningStrategy;
 use common::*;
-use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, PaginatorTrait, IntoActiveModel, Set, ActiveModelTrait};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait, QueryFilter, Set,
+};
 use uuid::Uuid;
-
 
 // ============================================================================
 // Library CRUD Tests
@@ -60,7 +63,9 @@ async fn test_library_update() {
     // Update using repository
     let mut updated_library = library.clone();
     updated_library.name = "Updated Name".to_string();
-    LibraryRepository::update(conn, &updated_library).await.unwrap();
+    LibraryRepository::update(conn, &updated_library)
+        .await
+        .unwrap();
 
     // Verify
     let retrieved = LibraryRepository::get_by_id(conn, library.id)
@@ -79,14 +84,10 @@ async fn test_library_delete() {
     let conn = db.sea_orm_connection();
 
     // Create library
-    let library = LibraryRepository::create(
-        conn,
-        "To Delete",
-        "/delete/path",
-        ScanningStrategy::Default,
-    )
-    .await
-    .unwrap();
+    let library =
+        LibraryRepository::create(conn, "To Delete", "/delete/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
 
     // Delete
     LibraryRepository::delete(conn, library.id).await.unwrap();
@@ -113,14 +114,10 @@ async fn test_series_book_relationship() {
     let conn = db.sea_orm_connection();
 
     // Create library
-    let library = LibraryRepository::create(
-        conn,
-        "Test Library",
-        "/test",
-        ScanningStrategy::Default,
-    )
-    .await
-    .unwrap();
+    let library =
+        LibraryRepository::create(conn, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
 
     // Create series
     let series = SeriesRepository::create(conn, library.id, "Test Series")
@@ -128,7 +125,14 @@ async fn test_series_book_relationship() {
         .unwrap();
 
     // Create book
-    let book_model = create_test_book(series.id, "/test/book.cbz", "book.cbz", "test_hash", "cbz", 10);
+    let book_model = create_test_book(
+        series.id,
+        "/test/book.cbz",
+        "book.cbz",
+        "test_hash",
+        "cbz",
+        10,
+    );
 
     let book = BookRepository::create(conn, &book_model).await.unwrap();
 
@@ -154,14 +158,10 @@ async fn test_cascade_delete_library_to_series() {
     let conn = db.sea_orm_connection();
 
     // Create library and series
-    let library = LibraryRepository::create(
-        conn,
-        "Test Library",
-        "/test",
-        ScanningStrategy::Default,
-    )
-    .await
-    .unwrap();
+    let library =
+        LibraryRepository::create(conn, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
 
     let series = SeriesRepository::create(conn, library.id, "Test Series")
         .await
@@ -196,14 +196,9 @@ async fn test_user_read_progress() {
     let user = user.into_active_model().insert(conn).await.unwrap();
 
     // Create library, series, and book for progress tracking
-    let library = LibraryRepository::create(
-        conn,
-        "Lib",
-        "/lib",
-        ScanningStrategy::Default,
-    )
-    .await
-    .unwrap();
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
 
     let series = SeriesRepository::create(conn, library.id, "Series")
         .await
@@ -275,25 +270,34 @@ async fn test_unique_file_path_constraint() {
     let conn = db.sea_orm_connection();
 
     // Setup library and series
-    let library = LibraryRepository::create(
-        conn,
-        "Lib",
-        "/lib",
-        ScanningStrategy::Default,
-    )
-    .await
-    .unwrap();
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
 
     let series = SeriesRepository::create(conn, library.id, "Series")
         .await
         .unwrap();
 
     // Insert first book
-    let book1_model = create_test_book(series.id, "/same/path/book.cbz", "book.cbz", "hash1", "cbz", 10);
+    let book1_model = create_test_book(
+        series.id,
+        "/same/path/book.cbz",
+        "book.cbz",
+        "hash1",
+        "cbz",
+        10,
+    );
     BookRepository::create(conn, &book1_model).await.unwrap();
 
     // Try to insert second book with same file path (should fail)
-    let book2_model = create_test_book(series.id, "/same/path/book.cbz", "book.cbz", "hash2", "cbz", 10);
+    let book2_model = create_test_book(
+        series.id,
+        "/same/path/book.cbz",
+        "book.cbz",
+        "hash2",
+        "cbz",
+        10,
+    );
 
     let result = BookRepository::create(conn, &book2_model).await;
     assert!(result.is_err());
@@ -311,14 +315,9 @@ async fn test_file_hash_index_lookup() {
     let conn = db.sea_orm_connection();
 
     // Setup
-    let library = LibraryRepository::create(
-        conn,
-        "Lib",
-        "/lib",
-        ScanningStrategy::Default,
-    )
-    .await
-    .unwrap();
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
 
     let series = SeriesRepository::create(conn, library.id, "Series")
         .await
@@ -352,14 +351,9 @@ async fn test_pages_insert_and_query() {
     let conn = db.sea_orm_connection();
 
     // Setup
-    let library = LibraryRepository::create(
-        conn,
-        "Lib",
-        "/lib",
-        ScanningStrategy::Default,
-    )
-    .await
-    .unwrap();
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
 
     let series = SeriesRepository::create(conn, library.id, "Series")
         .await
@@ -375,9 +369,7 @@ async fn test_pages_insert_and_query() {
     }
 
     // Query pages ordered by page_number
-    let pages_result = PageRepository::list_by_book(conn, book.id)
-        .await
-        .unwrap();
+    let pages_result = PageRepository::list_by_book(conn, book.id).await.unwrap();
 
     assert_eq!(pages_result.len(), 3);
     assert_eq!(pages_result[0].page_number, 1);

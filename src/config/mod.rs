@@ -1,18 +1,10 @@
-mod settings;
-mod loader;
 mod env_override;
+mod loader;
+mod settings;
 
 pub use settings::{
-    Config,
-    DatabaseConfig,
-    DatabaseType,
-    PostgresConfig,
-    SQLiteConfig,
-    ApplicationConfig,
-    LoggingConfig,
-    LogLevel,
-    AuthConfig,
-    ApiConfig,
+    ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, LogLevel,
+    LoggingConfig, PostgresConfig, SQLiteConfig,
 };
 
-pub use env_override::{EnvOverride, env_or, env_bool_or, env_string_opt};
+pub use env_override::{env_bool_or, env_or, env_string_opt, EnvOverride};

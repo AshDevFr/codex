@@ -4,7 +4,7 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
-use crate::db::repositories::{BookRepository, BookMetadataRepository};
+use crate::db::repositories::{BookMetadataRepository, BookRepository};
 use crate::require_permission;
 use axum::{
     extract::{Path, Query, State},
@@ -73,18 +73,15 @@ pub async fn list_books(
             file_size: book.file_size,
             file_hash: book.file_hash,
             page_count: book.page_count,
-            number: book.number.map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
+            number: book
+                .number
+                .map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
             created_at: book.created_at,
             updated_at: book.updated_at,
         })
         .collect();
 
-    let response = BookListResponse::new(
-        dtos,
-        pagination.page,
-        pagination.page_size,
-        total,
-    );
+    let response = BookListResponse::new(dtos, pagination.page, pagination.page_size, total);
 
     Ok(Json(response))
 }
@@ -126,7 +123,7 @@ pub async fn get_book(
         .map(|meta| BookMetadataDto {
             id: meta.id,
             book_id: meta.book_id,
-            title: None, // No title field in metadata
+            title: None,  // No title field in metadata
             series: None, // No series field in metadata
             number: None, // No number field in metadata
             summary: meta.summary,
@@ -155,7 +152,9 @@ pub async fn get_book(
         file_size: book.file_size,
         file_hash: book.file_hash,
         page_count: book.page_count,
-        number: book.number.map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
+        number: book
+            .number
+            .map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
         created_at: book.created_at,
         updated_at: book.updated_at,
     };

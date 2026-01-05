@@ -140,11 +140,17 @@ pub async fn create_user(
 
     // Determine permissions based on admin flag
     let permissions = if request.is_admin {
-        let perms: Vec<_> = crate::api::permissions::ADMIN_PERMISSIONS.iter().cloned().collect();
+        let perms: Vec<_> = crate::api::permissions::ADMIN_PERMISSIONS
+            .iter()
+            .cloned()
+            .collect();
         serde_json::to_value(perms)
             .map_err(|e| ApiError::Internal(format!("Failed to serialize permissions: {}", e)))?
     } else {
-        let perms: Vec<_> = crate::api::permissions::READONLY_PERMISSIONS.iter().cloned().collect();
+        let perms: Vec<_> = crate::api::permissions::READONLY_PERMISSIONS
+            .iter()
+            .cloned()
+            .collect();
         serde_json::to_value(perms)
             .map_err(|e| ApiError::Internal(format!("Failed to serialize permissions: {}", e)))?
     };
@@ -246,13 +252,21 @@ pub async fn update_user(
 
         // Update permissions based on admin flag
         let permissions = if is_admin {
-            let perms: Vec<_> = crate::api::permissions::ADMIN_PERMISSIONS.iter().cloned().collect();
-            serde_json::to_value(perms)
-                .map_err(|e| ApiError::Internal(format!("Failed to serialize permissions: {}", e)))?
+            let perms: Vec<_> = crate::api::permissions::ADMIN_PERMISSIONS
+                .iter()
+                .cloned()
+                .collect();
+            serde_json::to_value(perms).map_err(|e| {
+                ApiError::Internal(format!("Failed to serialize permissions: {}", e))
+            })?
         } else {
-            let perms: Vec<_> = crate::api::permissions::READONLY_PERMISSIONS.iter().cloned().collect();
-            serde_json::to_value(perms)
-                .map_err(|e| ApiError::Internal(format!("Failed to serialize permissions: {}", e)))?
+            let perms: Vec<_> = crate::api::permissions::READONLY_PERMISSIONS
+                .iter()
+                .cloned()
+                .collect();
+            serde_json::to_value(perms).map_err(|e| {
+                ApiError::Internal(format!("Failed to serialize permissions: {}", e))
+            })?
         };
         user.permissions = permissions;
     }
@@ -308,7 +322,9 @@ pub async fn delete_user(
 
     // Prevent self-deletion
     if auth.user_id == id {
-        return Err(ApiError::BadRequest("Cannot delete your own account".to_string()));
+        return Err(ApiError::BadRequest(
+            "Cannot delete your own account".to_string(),
+        ));
     }
 
     UserRepository::delete(&state.db, id)

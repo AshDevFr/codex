@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait,
-    QueryFilter, QueryOrder, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
 };
 use uuid::Uuid;
 
@@ -28,9 +27,7 @@ impl PageRepository {
             created_at: Set(page_model.created_at),
         };
 
-        page.insert(db)
-            .await
-            .context("Failed to create page")
+        page.insert(db).await.context("Failed to create page")
     }
 
     /// Create multiple pages in a batch using bulk insert
@@ -69,10 +66,7 @@ impl PageRepository {
     }
 
     /// Get a page by ID
-    pub async fn get_by_id(
-        db: &DatabaseConnection,
-        id: Uuid,
-    ) -> Result<Option<pages::Model>> {
+    pub async fn get_by_id(db: &DatabaseConnection, id: Uuid) -> Result<Option<pages::Model>> {
         Pages::find_by_id(id)
             .one(db)
             .await
@@ -94,10 +88,7 @@ impl PageRepository {
     }
 
     /// Get all pages for a book
-    pub async fn list_by_book(
-        db: &DatabaseConnection,
-        book_id: Uuid,
-    ) -> Result<Vec<pages::Model>> {
+    pub async fn list_by_book(db: &DatabaseConnection, book_id: Uuid) -> Result<Vec<pages::Model>> {
         Pages::find()
             .filter(pages::Column::BookId.eq(book_id))
             .order_by_asc(pages::Column::PageNumber)
@@ -121,8 +112,8 @@ impl PageRepository {
 mod tests {
     use super::*;
     use crate::db::repositories::{BookRepository, LibraryRepository, SeriesRepository};
-    use crate::db::ScanningStrategy;
     use crate::db::test_helpers::create_test_db;
+    use crate::db::ScanningStrategy;
     use chrono::Utc;
 
     /// Helper to create a test page model

@@ -233,7 +233,11 @@ async fn test_logout_with_valid_token() {
     // Generate token
     let token = state
         .jwt_service
-        .generate_token(created_user.id, created_user.username.clone(), created_user.is_admin)
+        .generate_token(
+            created_user.id,
+            created_user.username.clone(),
+            created_user.is_admin,
+        )
         .unwrap();
 
     let app = create_test_router(state);

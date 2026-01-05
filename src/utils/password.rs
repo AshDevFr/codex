@@ -1,8 +1,8 @@
+use anyhow::Result;
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
-use anyhow::Result;
 
 /// Hash a password using Argon2id
 ///
@@ -74,7 +74,10 @@ mod tests {
         let hash = hash_password(password).expect("Failed to hash password");
 
         let result = verify_password(wrong_password, &hash).expect("Failed to verify password");
-        assert!(!result, "Password verification should fail for wrong password");
+        assert!(
+            !result,
+            "Password verification should fail for wrong password"
+        );
     }
 
     #[test]
@@ -84,7 +87,10 @@ mod tests {
         let hash2 = hash_password(password).expect("Failed to hash password");
 
         // Hashes should be different due to random salt
-        assert_ne!(hash1, hash2, "Hashes should be different due to random salts");
+        assert_ne!(
+            hash1, hash2,
+            "Hashes should be different due to random salts"
+        );
 
         // But both should verify correctly
         assert!(

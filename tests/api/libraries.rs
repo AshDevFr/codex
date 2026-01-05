@@ -1,10 +1,10 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::library::{CreateLibraryRequest, LibraryDto, UpdateLibraryRequest};
 use codex::api::dto::common::PaginatedResponse;
+use codex::api::dto::library::{CreateLibraryRequest, LibraryDto, UpdateLibraryRequest};
 use codex::api::error::ErrorResponse;
-use codex::api::permissions::{Permission, READONLY_PERMISSIONS, serialize_permissions};
+use codex::api::permissions::{serialize_permissions, Permission, READONLY_PERMISSIONS};
 use codex::db::repositories::{ApiKeyRepository, LibraryRepository, UserRepository};
 use codex::db::ScanningStrategy;
 use codex::utils::password;
@@ -13,21 +13,33 @@ use hyper::StatusCode;
 use std::collections::HashSet;
 
 // Helper to create an admin user and get a token
-async fn create_admin_and_token(db: &sea_orm::DatabaseConnection, state: &codex::api::extractors::AuthState) -> String {
+async fn create_admin_and_token(
+    db: &sea_orm::DatabaseConnection,
+    state: &codex::api::extractors::AuthState,
+) -> String {
     let password_hash = password::hash_password("admin123").unwrap();
     let user = create_test_user("admin", "admin@example.com", &password_hash, true);
     let created = UserRepository::create(db, &user).await.unwrap();
 
-    state.jwt_service.generate_token(created.id, created.username, created.is_admin).unwrap()
+    state
+        .jwt_service
+        .generate_token(created.id, created.username, created.is_admin)
+        .unwrap()
 }
 
 // Helper to create a readonly user and get a token
-async fn create_readonly_and_token(db: &sea_orm::DatabaseConnection, state: &codex::api::extractors::AuthState) -> String {
+async fn create_readonly_and_token(
+    db: &sea_orm::DatabaseConnection,
+    state: &codex::api::extractors::AuthState,
+) -> String {
     let password_hash = password::hash_password("user123").unwrap();
     let user = create_test_user("readonly", "readonly@example.com", &password_hash, false);
     let created = UserRepository::create(db, &user).await.unwrap();
 
-    state.jwt_service.generate_token(created.id, created.username, created.is_admin).unwrap()
+    state
+        .jwt_service
+        .generate_token(created.id, created.username, created.is_admin)
+        .unwrap()
 }
 
 // ============================================================================
@@ -39,15 +51,20 @@ async fn test_list_libraries_with_auth() {
     let (db, temp_dir) = setup_test_db().await;
 
     // Create some test libraries
-    LibraryRepository::create(&db, "Library 1", "/path1", ScanningStrategy::Default).await.unwrap();
-    LibraryRepository::create(&db, "Library 2", "/path2", ScanningStrategy::Default).await.unwrap();
+    LibraryRepository::create(&db, "Library 1", "/path1", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    LibraryRepository::create(&db, "Library 2", "/path2", ScanningStrategy::Default)
+        .await
+        .unwrap();
 
     let state = create_test_auth_state(db.clone());
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state);
 
     let request = get_request_with_auth("/api/v1/libraries", &token);
-    let (status, response): (StatusCode, Option<Vec<LibraryDto>>) = make_json_request(app, request).await;
+    let (status, response): (StatusCode, Option<Vec<LibraryDto>>) =
+        make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let libraries = response.unwrap();
@@ -63,7 +80,8 @@ async fn test_list_libraries_without_auth() {
     let app = create_test_router(state);
 
     let request = get_request("/api/v1/libraries");
-    let (status, response): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     let error = response.unwrap();
@@ -96,13 +114,21 @@ async fn test_list_libraries_with_api_key() {
     // Create a library
     let lib_path = temp_dir.path().join("api_test_lib");
     std::fs::create_dir(&lib_path).unwrap();
-    LibraryRepository::create(&db, "API Test Library", lib_path.to_str().unwrap(), ScanningStrategy::Default).await.unwrap();
+    LibraryRepository::create(
+        &db,
+        "API Test Library",
+        lib_path.to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
 
     let state = create_test_auth_state(db);
     let app = create_test_router(state);
 
     let request = get_request_with_api_key("/api/v1/libraries", plain_key);
-    let (status, response): (StatusCode, Option<Vec<LibraryDto>>) = make_json_request(app, request).await;
+    let (status, response): (StatusCode, Option<Vec<LibraryDto>>) =
+        make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let libraries = response.unwrap();
@@ -117,19 +143,18 @@ async fn test_list_libraries_with_api_key() {
 async fn test_get_library_by_id() {
     let (db, temp_dir) = setup_test_db().await;
 
-    let library = LibraryRepository::create(
-        &db,
-        "Test Library",
-        "/test/path",
-        ScanningStrategy::Default
-    ).await.unwrap();
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
 
     let state = create_test_auth_state(db.clone());
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state);
 
     let request = get_request_with_auth(&format!("/api/v1/libraries/{}", library.id), &token);
-    let (status, response): (StatusCode, Option<LibraryDto>) = make_json_request(app, request).await;
+    let (status, response): (StatusCode, Option<LibraryDto>) =
+        make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let lib = response.unwrap();
@@ -147,7 +172,8 @@ async fn test_get_library_not_found() {
 
     let fake_id = uuid::Uuid::new_v4();
     let request = get_request_with_auth(&format!("/api/v1/libraries/{}", fake_id), &token);
-    let (status, response): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::NOT_FOUND);
     let error = response.unwrap();
@@ -176,7 +202,8 @@ async fn test_create_library_success() {
     };
 
     let request = post_json_request_with_auth("/api/v1/libraries", &create_request, &token);
-    let (status, response): (StatusCode, Option<LibraryDto>) = make_json_request(app, request).await;
+    let (status, response): (StatusCode, Option<LibraryDto>) =
+        make_json_request(app, request).await;
 
     // Handler currently returns 200 OK instead of 201 CREATED
     assert_eq!(status, StatusCode::OK);
@@ -199,7 +226,8 @@ async fn test_create_library_without_permission() {
     };
 
     let request = post_json_request_with_auth("/api/v1/libraries", &create_request, &token);
-    let (status, response): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::FORBIDDEN);
     let error = response.unwrap();
@@ -224,8 +252,10 @@ async fn test_update_library_success() {
         &db,
         "Original Name",
         original_path.to_str().unwrap(),
-        ScanningStrategy::Default
-    ).await.unwrap();
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
 
     let state = create_test_auth_state(db.clone());
     let token = create_admin_and_token(&db, &state).await;
@@ -241,9 +271,10 @@ async fn test_update_library_success() {
     let request = put_json_request_with_auth(
         &format!("/api/v1/libraries/{}", library.id),
         &update_request,
-        &token
+        &token,
     );
-    let (status, response): (StatusCode, Option<LibraryDto>) = make_json_request(app, request).await;
+    let (status, response): (StatusCode, Option<LibraryDto>) =
+        make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let updated = response.unwrap();
@@ -255,12 +286,9 @@ async fn test_update_library_success() {
 async fn test_update_library_without_permission() {
     let (db, temp_dir) = setup_test_db().await;
 
-    let library = LibraryRepository::create(
-        &db,
-        "Library",
-        "/path",
-        ScanningStrategy::Default
-    ).await.unwrap();
+    let library = LibraryRepository::create(&db, "Library", "/path", ScanningStrategy::Default)
+        .await
+        .unwrap();
 
     let state = create_test_auth_state(db.clone());
     let token = create_readonly_and_token(&db, &state).await;
@@ -276,9 +304,10 @@ async fn test_update_library_without_permission() {
     let request = put_json_request_with_auth(
         &format!("/api/v1/libraries/{}", library.id),
         &update_request,
-        &token
+        &token,
     );
-    let (status, response): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::FORBIDDEN);
     let error = response.unwrap();
@@ -293,12 +322,10 @@ async fn test_update_library_without_permission() {
 async fn test_delete_library_success() {
     let (db, temp_dir) = setup_test_db().await;
 
-    let library = LibraryRepository::create(
-        &db,
-        "To Delete",
-        "/delete/path",
-        ScanningStrategy::Default
-    ).await.unwrap();
+    let library =
+        LibraryRepository::create(&db, "To Delete", "/delete/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
 
     let state = create_test_auth_state(db.clone());
     let token = create_admin_and_token(&db, &state).await;
@@ -318,19 +345,17 @@ async fn test_delete_library_success() {
 async fn test_delete_library_without_permission() {
     let (db, temp_dir) = setup_test_db().await;
 
-    let library = LibraryRepository::create(
-        &db,
-        "Library",
-        "/path",
-        ScanningStrategy::Default
-    ).await.unwrap();
+    let library = LibraryRepository::create(&db, "Library", "/path", ScanningStrategy::Default)
+        .await
+        .unwrap();
 
     let state = create_test_auth_state(db.clone());
     let token = create_readonly_and_token(&db, &state).await;
     let app = create_test_router(state);
 
     let request = delete_request_with_auth(&format!("/api/v1/libraries/{}", library.id), &token);
-    let (status, response): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::FORBIDDEN);
     let error = response.unwrap();

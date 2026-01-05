@@ -14,4 +14,3 @@ pub use metadata::BookMetadataRepository;
 pub use page::PageRepository;
 pub use series::SeriesRepository;
 pub use user::UserRepository;
-

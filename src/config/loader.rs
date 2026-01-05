@@ -20,7 +20,10 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{ApplicationConfig, DatabaseConfig, DatabaseType, SQLiteConfig, LoggingConfig, AuthConfig, ApiConfig};
+    use crate::config::{
+        ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, LoggingConfig,
+        SQLiteConfig,
+    };
     use tempfile::NamedTempFile;
 
     #[test]

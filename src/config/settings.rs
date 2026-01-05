@@ -1,6 +1,6 @@
+use super::env_override::{env_bool_or, env_or, env_string_opt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use super::env_override::{env_or, env_bool_or, env_string_opt};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
@@ -42,18 +42,23 @@ impl Default for Config {
         let (postgres_config, sqlite_config) = match db_type {
             DatabaseType::Postgres => (
                 Some(PostgresConfig {
-                    host: env_string_opt("CODEX_DATABASE_POSTGRES_HOST").unwrap_or_else(|| "localhost".to_string()),
+                    host: env_string_opt("CODEX_DATABASE_POSTGRES_HOST")
+                        .unwrap_or_else(|| "localhost".to_string()),
                     port: env_or("CODEX_DATABASE_POSTGRES_PORT", 5432),
-                    username: env_string_opt("CODEX_DATABASE_POSTGRES_USERNAME").unwrap_or_else(|| "codex".to_string()),
-                    password: env_string_opt("CODEX_DATABASE_POSTGRES_PASSWORD").unwrap_or_else(|| "codex".to_string()),
-                    database_name: env_string_opt("CODEX_DATABASE_POSTGRES_DATABASE_NAME").unwrap_or_else(|| "codex".to_string()),
+                    username: env_string_opt("CODEX_DATABASE_POSTGRES_USERNAME")
+                        .unwrap_or_else(|| "codex".to_string()),
+                    password: env_string_opt("CODEX_DATABASE_POSTGRES_PASSWORD")
+                        .unwrap_or_else(|| "codex".to_string()),
+                    database_name: env_string_opt("CODEX_DATABASE_POSTGRES_DATABASE_NAME")
+                        .unwrap_or_else(|| "codex".to_string()),
                 }),
                 None,
             ),
             DatabaseType::SQLite => (
                 None,
                 Some(SQLiteConfig {
-                    path: env_string_opt("CODEX_DATABASE_SQLITE_PATH").unwrap_or_else(|| "codex.db".to_string()),
+                    path: env_string_opt("CODEX_DATABASE_SQLITE_PATH")
+                        .unwrap_or_else(|| "codex.db".to_string()),
                     pragmas: Some(pragmas),
                 }),
             ),
@@ -79,8 +84,10 @@ impl Default for Config {
                 sqlite: sqlite_config,
             },
             application: ApplicationConfig {
-                name: env_string_opt("CODEX_APPLICATION_NAME").unwrap_or_else(|| "Codex".to_string()),
-                host: env_string_opt("CODEX_APPLICATION_HOST").unwrap_or_else(|| "127.0.0.1".to_string()),
+                name: env_string_opt("CODEX_APPLICATION_NAME")
+                    .unwrap_or_else(|| "Codex".to_string()),
+                host: env_string_opt("CODEX_APPLICATION_HOST")
+                    .unwrap_or_else(|| "127.0.0.1".to_string()),
                 port: env_or("CODEX_APPLICATION_PORT", 8080),
                 debug: env_bool_or("CODEX_APPLICATION_DEBUG", false),
             },
@@ -135,9 +142,11 @@ pub struct ApiConfig {
 impl Default for ApiConfig {
     fn default() -> Self {
         Self {
-            base_path: env_string_opt("CODEX_API_BASE_PATH").unwrap_or_else(|| "/api/v1".to_string()),
+            base_path: env_string_opt("CODEX_API_BASE_PATH")
+                .unwrap_or_else(|| "/api/v1".to_string()),
             enable_swagger: env_bool_or("CODEX_API_ENABLE_SWAGGER", false),
-            swagger_path: env_string_opt("CODEX_API_SWAGGER_PATH").unwrap_or_else(|| "/docs".to_string()),
+            swagger_path: env_string_opt("CODEX_API_SWAGGER_PATH")
+                .unwrap_or_else(|| "/docs".to_string()),
             cors_enabled: env_bool_or("CODEX_API_CORS_ENABLED", true),
             cors_origins: env_string_opt("CODEX_API_CORS_ORIGINS")
                 .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
@@ -146,7 +155,6 @@ impl Default for ApiConfig {
         }
     }
 }
-
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
@@ -268,8 +276,7 @@ pub struct ApplicationConfig {
 impl Default for ApplicationConfig {
     fn default() -> Self {
         Self {
-            name: env_string_opt("CODEX_APPLICATION_NAME")
-                .unwrap_or_else(|| "Codex".to_string()),
+            name: env_string_opt("CODEX_APPLICATION_NAME").unwrap_or_else(|| "Codex".to_string()),
             host: env_string_opt("CODEX_APPLICATION_HOST")
                 .unwrap_or_else(|| "127.0.0.1".to_string()),
             port: env_or("CODEX_APPLICATION_PORT", 8080),

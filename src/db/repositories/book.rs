@@ -1,8 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait,
-    QueryFilter, QueryOrder, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
 };
 use uuid::Uuid;
 
@@ -33,16 +32,11 @@ impl BookRepository {
             updated_at: Set(book_model.updated_at),
         };
 
-        book.insert(db)
-            .await
-            .context("Failed to create book")
+        book.insert(db).await.context("Failed to create book")
     }
 
     /// Get a book by ID
-    pub async fn get_by_id(
-        db: &DatabaseConnection,
-        id: Uuid,
-    ) -> Result<Option<books::Model>> {
+    pub async fn get_by_id(db: &DatabaseConnection, id: Uuid) -> Result<Option<books::Model>> {
         Books::find_by_id(id)
             .one(db)
             .await
@@ -50,10 +44,7 @@ impl BookRepository {
     }
 
     /// Get a book by file hash (for duplicate detection)
-    pub async fn get_by_hash(
-        db: &DatabaseConnection,
-        hash: &str,
-    ) -> Result<Option<books::Model>> {
+    pub async fn get_by_hash(db: &DatabaseConnection, hash: &str) -> Result<Option<books::Model>> {
         Books::find()
             .filter(books::Column::FileHash.eq(hash))
             .one(db)
@@ -62,10 +53,7 @@ impl BookRepository {
     }
 
     /// Get a book by file path
-    pub async fn get_by_path(
-        db: &DatabaseConnection,
-        path: &str,
-    ) -> Result<Option<books::Model>> {
+    pub async fn get_by_path(db: &DatabaseConnection, path: &str) -> Result<Option<books::Model>> {
         Books::find()
             .filter(books::Column::FilePath.eq(path))
             .one(db)
@@ -89,10 +77,7 @@ impl BookRepository {
     }
 
     /// Update book
-    pub async fn update(
-        db: &DatabaseConnection,
-        book_model: &books::Model,
-    ) -> Result<()> {
+    pub async fn update(db: &DatabaseConnection, book_model: &books::Model) -> Result<()> {
         let active = books::ActiveModel {
             id: Set(book_model.id),
             series_id: Set(book_model.series_id),
@@ -109,10 +94,7 @@ impl BookRepository {
             updated_at: Set(Utc::now()),
         };
 
-        active
-            .update(db)
-            .await
-            .context("Failed to update book")?;
+        active.update(db).await.context("Failed to update book")?;
 
         Ok(())
     }
@@ -131,8 +113,8 @@ impl BookRepository {
 mod tests {
     use super::*;
     use crate::db::repositories::{LibraryRepository, SeriesRepository};
-    use crate::db::ScanningStrategy;
     use crate::db::test_helpers::create_test_db;
+    use crate::db::ScanningStrategy;
     use sea_orm::prelude::Decimal;
 
     /// Helper to create a test book model

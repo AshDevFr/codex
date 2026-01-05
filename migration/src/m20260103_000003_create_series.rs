@@ -11,17 +11,8 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(Series::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(Series::Id)
-                            .uuid()
-                            .not_null()
-                            .primary_key(),
-                    )
-                    .col(
-                        ColumnDef::new(Series::LibraryId)
-                            .uuid()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(Series::Id).uuid().not_null().primary_key())
+                    .col(ColumnDef::new(Series::LibraryId).uuid().not_null())
                     .col(ColumnDef::new(Series::Name).string().not_null())
                     .col(ColumnDef::new(Series::NormalizedName).string().not_null())
                     .col(ColumnDef::new(Series::SortName).string())
@@ -92,4 +83,3 @@ enum Libraries {
     Table,
     Id,
 }
-

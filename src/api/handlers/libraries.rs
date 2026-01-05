@@ -46,7 +46,7 @@ pub async fn list_libraries(
             name: lib.name,
             path: lib.path,
             description: None, // No description field in libraries entity
-            is_active: true, // No is_active field in libraries entity
+            is_active: true,   // No is_active field in libraries entity
             last_scanned_at: lib.last_scanned_at,
             created_at: lib.created_at,
             updated_at: lib.updated_at,
@@ -90,7 +90,7 @@ pub async fn get_library(
         name: library.name,
         path: library.path,
         description: None, // No description field in libraries entity
-        is_active: true, // No is_active field in libraries entity
+        is_active: true,   // No is_active field in libraries entity
         last_scanned_at: library.last_scanned_at,
         created_at: library.created_at,
         updated_at: library.updated_at,
@@ -145,7 +145,7 @@ pub async fn create_library(
         name: library.name,
         path: library.path,
         description: None, // No description field
-        is_active: true, // No is_active field
+        is_active: true,   // No is_active field
         last_scanned_at: library.last_scanned_at,
         created_at: library.created_at,
         updated_at: library.updated_at,
@@ -219,7 +219,7 @@ pub async fn update_library(
         name: updated.name,
         path: updated.path,
         description: None, // No description field
-        is_active: true, // No is_active field
+        is_active: true,   // No is_active field
         last_scanned_at: updated.last_scanned_at,
         created_at: updated.created_at,
         updated_at: updated.updated_at,

@@ -1,8 +1,8 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::scanner::{analyze_file, detect_format};
 use codex::parsers::FileFormat;
+use codex::scanner::{analyze_file, detect_format};
 use tempfile::TempDir;
 
 #[test]

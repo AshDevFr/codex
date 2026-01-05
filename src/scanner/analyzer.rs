@@ -1,6 +1,6 @@
-use crate::parsers::cbz::CbzParser;
 #[cfg(feature = "rar")]
 use crate::parsers::cbr::CbrParser;
+use crate::parsers::cbz::CbzParser;
 use crate::parsers::epub::EpubParser;
 use crate::parsers::pdf::PdfParser;
 use crate::parsers::traits::FormatParser;
@@ -83,4 +83,3 @@ mod tests {
         assert!(result.is_err());
     }
 }
-

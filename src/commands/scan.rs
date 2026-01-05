@@ -272,4 +272,3 @@ mod tests {
         assert_eq!(format_bytes(5368709120), "5.00 GB");
     }
 }
-

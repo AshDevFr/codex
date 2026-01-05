@@ -26,9 +26,7 @@ pub struct ErrorResponse {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, error, message) = match self {
-            ApiError::Unauthorized(msg) => {
-                (StatusCode::UNAUTHORIZED, "Unauthorized", msg)
-            }
+            ApiError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, "Unauthorized", msg),
             ApiError::Forbidden(msg) => (StatusCode::FORBIDDEN, "Forbidden", msg),
             ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, "NotFound", msg),
             ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, "BadRequest", msg),

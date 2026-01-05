@@ -57,10 +57,7 @@ impl ApiKeyRepository {
     }
 
     /// Get API key by ID
-    pub async fn get_by_id(
-        db: &DatabaseConnection,
-        id: Uuid,
-    ) -> Result<Option<api_keys::Model>> {
+    pub async fn get_by_id(db: &DatabaseConnection, id: Uuid) -> Result<Option<api_keys::Model>> {
         let key = ApiKey::find_by_id(id).one(db).await?;
         Ok(key)
     }
@@ -232,9 +229,7 @@ mod tests {
             ApiKeyRepository::create(&db, &api_key).await.unwrap();
         }
 
-        let keys = ApiKeyRepository::list_by_user(&db, user.id)
-            .await
-            .unwrap();
+        let keys = ApiKeyRepository::list_by_user(&db, user.id).await.unwrap();
         assert_eq!(keys.len(), 3);
     }
 }

@@ -67,7 +67,10 @@ fn api_v1_routes(state: Arc<AuthState>) -> Router {
         .route("/books", get(handlers::list_books))
         .route("/books/:id", get(handlers::get_book))
         // Page routes (protected)
-        .route("/books/:book_id/pages/:page_number", get(handlers::get_page_image))
+        .route(
+            "/books/:book_id/pages/:page_number",
+            get(handlers::get_page_image),
+        )
         // User routes (protected, admin only)
         .route("/users", get(handlers::list_users))
         .route("/users", post(handlers::create_user))

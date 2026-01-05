@@ -40,9 +40,7 @@ pub async fn login(
 
     // Check if user is active
     if !user.is_active {
-        return Err(ApiError::Unauthorized(
-            "Account is inactive".to_string(),
-        ));
+        return Err(ApiError::Unauthorized("Account is inactive".to_string()));
     }
 
     // Verify password

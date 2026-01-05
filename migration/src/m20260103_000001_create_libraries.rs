@@ -19,7 +19,11 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(Libraries::Name).string().not_null())
                     .col(ColumnDef::new(Libraries::Path).string().not_null())
-                    .col(ColumnDef::new(Libraries::ScanningStrategy).string().not_null())
+                    .col(
+                        ColumnDef::new(Libraries::ScanningStrategy)
+                            .string()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(Libraries::ScanningConfig).string())
                     .col(
                         ColumnDef::new(Libraries::CreatedAt)
@@ -56,4 +60,3 @@ enum Libraries {
     UpdatedAt,
     LastScannedAt,
 }
-

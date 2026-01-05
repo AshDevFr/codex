@@ -5,12 +5,14 @@ use std::sync::Arc;
 use tracing::info;
 use tracing_subscriber::{util::SubscriberInitExt, EnvFilter};
 
-
 /// Serve command handler - starts the media server
 pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Check if config file exists, if not create a default one
     let config_created = if !config_path.exists() {
-        println!("Config file not found at {:?}, creating default configuration...", config_path);
+        println!(
+            "Config file not found at {:?}, creating default configuration...",
+            config_path
+        );
         let default_config = Config::default();
         default_config.to_file(&config_path)?;
         println!("Default config file created at {:?}", config_path);
@@ -35,7 +37,11 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Configuration loaded successfully");
 
     info!("========================================");
-    info!("Starting {} v{}", config.application.name, env!("CARGO_PKG_VERSION"));
+    info!(
+        "Starting {} v{}",
+        config.application.name,
+        env!("CARGO_PKG_VERSION")
+    );
     info!("========================================");
 
     // Display application configuration
@@ -104,16 +110,20 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
 
     // Conditionally mount Swagger UI if enabled
     if config.api.enable_swagger {
+        use crate::api::ApiDoc;
         use utoipa::OpenApi;
         use utoipa_swagger_ui::SwaggerUi;
-        use crate::api::ApiDoc;
 
         info!("Swagger UI enabled at {}", config.api.swagger_path);
 
         // SwaggerUi needs a 'static string, so we leak it
         // This is acceptable since it's created once at server startup
-        let swagger_path: &'static str = Box::leak(config.api.swagger_path.clone().into_boxed_str());
-        app = app.merge(SwaggerUi::new(swagger_path).url("/api-docs/openapi.json", <ApiDoc as OpenApi>::openapi()));
+        let swagger_path: &'static str =
+            Box::leak(config.api.swagger_path.clone().into_boxed_str());
+        app = app.merge(
+            SwaggerUi::new(swagger_path)
+                .url("/api-docs/openapi.json", <ApiDoc as OpenApi>::openapi()),
+        );
     }
 
     info!("Registered routes:");
@@ -149,28 +159,28 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     Ok(())
 }
 
-
 /// Initialize tracing with both console and file output based on config
 /// Returns an optional guard that must be kept alive for the duration of the application
-fn init_tracing(config: &Config) -> anyhow::Result<Option<tracing_appender::non_blocking::WorkerGuard>> {
+fn init_tracing(
+    config: &Config,
+) -> anyhow::Result<Option<tracing_appender::non_blocking::WorkerGuard>> {
     use std::fs;
     use std::io;
     use tracing_subscriber::fmt::writer::MakeWriterExt;
 
     // Get log level from config or environment
-    let log_level = std::env::var("RUST_LOG")
-        .unwrap_or_else(|_| {
-            let base_level = config.logging.level.as_str();
-            // Only show SQLx query logs when user explicitly wants debug/trace
-            // Otherwise set sqlx to warn to reduce noise from query logging
-            match base_level {
-                "debug" | "trace" => base_level.to_string(),
-                _ => format!("{},sqlx=warn", base_level),
-            }
-        });
+    let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| {
+        let base_level = config.logging.level.as_str();
+        // Only show SQLx query logs when user explicitly wants debug/trace
+        // Otherwise set sqlx to warn to reduce noise from query logging
+        match base_level {
+            "debug" | "trace" => base_level.to_string(),
+            _ => format!("{},sqlx=warn", base_level),
+        }
+    });
 
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(&log_level));
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&log_level));
 
     // Create a combined writer for console and/or file
     let guard = match (&config.logging.console, &config.logging.file) {
@@ -182,7 +192,8 @@ fn init_tracing(config: &Config) -> anyhow::Result<Option<tracing_appender::non_
             }
 
             let directory = log_path.parent().unwrap_or_else(|| Path::new("."));
-            let filename = log_path.file_name()
+            let filename = log_path
+                .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("codex.log");
 
@@ -200,9 +211,7 @@ fn init_tracing(config: &Config) -> anyhow::Result<Option<tracing_appender::non_
         }
         (true, None) => {
             // Console only
-            tracing_subscriber::fmt()
-                .with_env_filter(env_filter)
-                .init();
+            tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
             None
         }
@@ -214,7 +223,8 @@ fn init_tracing(config: &Config) -> anyhow::Result<Option<tracing_appender::non_
             }
 
             let directory = log_path.parent().unwrap_or_else(|| Path::new("."));
-            let filename = log_path.file_name()
+            let filename = log_path
+                .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("codex.log");
 
@@ -231,9 +241,7 @@ fn init_tracing(config: &Config) -> anyhow::Result<Option<tracing_appender::non_
         }
         (false, None) => {
             // Neither (fallback to console)
-            tracing_subscriber::fmt()
-                .with_env_filter(env_filter)
-                .init();
+            tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
             None
         }

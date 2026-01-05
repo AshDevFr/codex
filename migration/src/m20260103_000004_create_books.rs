@@ -11,17 +11,8 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(Books::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(Books::Id)
-                            .uuid()
-                            .not_null()
-                            .primary_key(),
-                    )
-                    .col(
-                        ColumnDef::new(Books::SeriesId)
-                            .uuid()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(Books::Id).uuid().not_null().primary_key())
+                    .col(ColumnDef::new(Books::SeriesId).uuid().not_null())
                     .col(ColumnDef::new(Books::Title).string())
                     .col(ColumnDef::new(Books::Number).decimal())
                     .col(
@@ -95,4 +86,3 @@ enum Series {
     Table,
     Id,
 }
-

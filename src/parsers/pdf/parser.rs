@@ -1,5 +1,5 @@
-use crate::parsers::{BookMetadata, FileFormat, ImageFormat, PageInfo};
 use crate::parsers::traits::FormatParser;
+use crate::parsers::{BookMetadata, FileFormat, ImageFormat, PageInfo};
 use crate::utils::{hash_file, CodexError, Result};
 use chrono::{DateTime, Utc};
 use image::GenericImageView;
@@ -53,10 +53,15 @@ impl PdfParser {
                                             if let Ok(stream) = stream_obj.as_stream() {
                                                 // Check if it's an image
                                                 if let Ok(subtype) = stream.dict.get(b"Subtype") {
-                                                    if let Ok(subtype_name) = subtype.as_name_str() {
+                                                    if let Ok(subtype_name) = subtype.as_name_str()
+                                                    {
                                                         if subtype_name == "Image" {
                                                             // Try to extract the image
-                                                            if let Some(image_data) = Self::extract_image_stream(doc, stream) {
+                                                            if let Some(image_data) =
+                                                                Self::extract_image_stream(
+                                                                    doc, stream,
+                                                                )
+                                                            {
                                                                 images.push(image_data);
                                                             }
                                                         }
@@ -77,7 +82,9 @@ impl PdfParser {
                                         if let Ok(subtype) = stream.dict.get(b"Subtype") {
                                             if let Ok(subtype_name) = subtype.as_name_str() {
                                                 if subtype_name == "Image" {
-                                                    if let Some(image_data) = Self::extract_image_stream(doc, stream) {
+                                                    if let Some(image_data) =
+                                                        Self::extract_image_stream(doc, stream)
+                                                    {
                                                         images.push(image_data);
                                                     }
                                                 }
@@ -101,15 +108,9 @@ impl PdfParser {
         stream: &lopdf::Stream,
     ) -> Option<(Vec<u8>, ImageFormat, u32, u32, u64)> {
         // Get image dimensions
-        let width = stream.dict.get(b"Width")
-            .ok()?
-            .as_i64()
-            .ok()? as u32;
+        let width = stream.dict.get(b"Width").ok()?.as_i64().ok()? as u32;
 
-        let height = stream.dict.get(b"Height")
-            .ok()?
-            .as_i64()
-            .ok()? as u32;
+        let height = stream.dict.get(b"Height").ok()?.as_i64().ok()? as u32;
 
         // Try to decode the stream content
         let content = match stream.decompressed_content() {
@@ -190,15 +191,17 @@ impl FormatParser for PdfParser {
             if let Ok(page_images) = Self::extract_images_from_page(&doc, page_num) {
                 for (image_data, format, width, height, file_size) in page_images {
                     // Try to verify dimensions with image crate
-                    let (final_width, final_height) = if let Ok(img) = image::load_from_memory(&image_data) {
-                        img.dimensions()
-                    } else {
-                        (width, height)
-                    };
+                    let (final_width, final_height) =
+                        if let Ok(img) = image::load_from_memory(&image_data) {
+                            img.dimensions()
+                        } else {
+                            (width, height)
+                        };
 
                     pages.push(PageInfo {
                         page_number: page_image_counter,
-                        file_name: format!("page_{}_image_{}.{}",
+                        file_name: format!(
+                            "page_{}_image_{}.{}",
                             page_num + 1,
                             page_image_counter,
                             match format {
@@ -230,7 +233,7 @@ impl FormatParser for PdfParser {
             modified_at,
             page_count,
             pages,
-            comic_info: None, // PDF doesn't use ComicInfo.xml
+            comic_info: None,  // PDF doesn't use ComicInfo.xml
             isbns: Vec::new(), // TODO: Extract from PDF metadata
         })
     }
@@ -251,8 +254,7 @@ impl Default for PdfParser {
 /// # Returns
 /// The raw image data as bytes
 pub fn extract_page_from_pdf<P: AsRef<Path>>(path: P, page_number: i32) -> anyhow::Result<Vec<u8>> {
-    let doc = Document::load(path)
-        .map_err(|e| anyhow::anyhow!("Failed to load PDF: {}", e))?;
+    let doc = Document::load(path).map_err(|e| anyhow::anyhow!("Failed to load PDF: {}", e))?;
 
     // Get the total number of pages
     let page_count = doc.get_pages().len();
@@ -305,4 +307,3 @@ mod tests {
         assert!(!parser.can_parse("test.txt"));
     }
 }
-

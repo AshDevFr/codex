@@ -39,8 +39,7 @@ pub async fn seed_command(config_path: PathBuf) -> Result<()> {
 
     // Generate random password for admin user
     let admin_password = generate_random_password(16);
-    let password_hash = hash_password(&admin_password)
-        .context("Failed to hash admin password")?;
+    let password_hash = hash_password(&admin_password).context("Failed to hash admin password")?;
 
     // Create admin user
     info!("Creating admin user...");
@@ -96,7 +95,8 @@ pub async fn seed_command(config_path: PathBuf) -> Result<()> {
 
 /// Generate a random password of specified length
 fn generate_random_password(length: usize) -> String {
-    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+    const CHARSET: &[u8] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
     let mut rng = rand::thread_rng();
 
     (0..length)
@@ -130,8 +130,7 @@ fn generate_api_key(
     let api_key = format!("codex_{}_{}", prefix_random, suffix_random);
 
     // Hash the full key for storage
-    let key_hash = hash_password(&api_key)
-        .context("Failed to hash API key")?;
+    let key_hash = hash_password(&api_key).context("Failed to hash API key")?;
 
     // Store prefix for lookup (must match auth extractor logic)
     let key_prefix = format!("codex_{}", prefix_random);
@@ -173,11 +172,8 @@ mod tests {
         let mut permissions = std::collections::HashSet::new();
         permissions.insert(crate::api::permissions::Permission::LibrariesRead);
 
-        let (api_key, model) = generate_api_key(
-            user_id,
-            "Test Key".to_string(),
-            &permissions,
-        ).unwrap();
+        let (api_key, model) =
+            generate_api_key(user_id, "Test Key".to_string(), &permissions).unwrap();
 
         // Check format
         assert!(api_key.starts_with("codex_"));

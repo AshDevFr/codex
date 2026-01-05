@@ -7,8 +7,11 @@ use zip::write::FileOptions;
 use zip::ZipWriter;
 
 // Re-export for PDF creation
-pub use lopdf::{Document, Object, Stream, Dictionary, content::{Content, Operation}};
 use lopdf::dictionary;
+pub use lopdf::{
+    content::{Content, Operation},
+    Dictionary, Document, Object, Stream,
+};
 
 /// Create a simple test PNG image using the image crate
 pub fn create_test_png(width: u32, height: u32) -> Vec<u8> {
@@ -71,11 +74,7 @@ pub fn create_test_cbz(temp_dir: &TempDir, num_pages: usize, with_comic_info: bo
 }
 
 /// Create a test EPUB file with the specified number of chapters and images
-pub fn create_test_epub(
-    temp_dir: &TempDir,
-    num_chapters: usize,
-    num_images: usize,
-) -> PathBuf {
+pub fn create_test_epub(temp_dir: &TempDir, num_chapters: usize, num_images: usize) -> PathBuf {
     let epub_path = temp_dir.path().join("test_book.epub");
     let file = File::create(&epub_path).unwrap();
     let mut zip = ZipWriter::new(file);
@@ -95,8 +94,7 @@ pub fn create_test_epub(
   </rootfiles>
 </container>"#;
 
-    zip.start_file("META-INF/container.xml", options)
-        .unwrap();
+    zip.start_file("META-INF/container.xml", options).unwrap();
     zip.write_all(container_xml.as_bytes()).unwrap();
 
     // Build manifest items and spine items
@@ -203,15 +201,9 @@ pub fn create_test_pdf(
         let content_id = doc.new_object_id();
 
         // Create simple content (text)
-        let content_text = format!(
-            "BT /F1 24 Tf 100 700 Td (Page {}) Tj ET",
-            page_num + 1
-        );
+        let content_text = format!("BT /F1 24 Tf 100 700 Td (Page {}) Tj ET", page_num + 1);
 
-        let content = Stream::new(
-            dictionary! {},
-            content_text.as_bytes().to_vec(),
-        );
+        let content = Stream::new(dictionary! {}, content_text.as_bytes().to_vec());
         doc.objects.insert(content_id, Object::Stream(content));
 
         // Create XObject dictionary for images if needed

@@ -2,14 +2,17 @@
 // These tests require a running PostgreSQL instance
 // Run with: cargo test --test postgres_integration_tests -- --ignored
 
+use chrono::Utc;
 use codex::config::{DatabaseConfig, DatabaseType, PostgresConfig};
-use codex::db::{Database, repositories::{LibraryRepository, SeriesRepository, BookRepository}};
-use codex::db::entities::{libraries, series, books};
+use codex::db::entities::{books, libraries, series};
+use codex::db::{
+    repositories::{BookRepository, LibraryRepository, SeriesRepository},
+    Database,
+};
 use codex::models::ScanningStrategy;
-use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, PaginatorTrait};
+use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
 use std::sync::{Mutex, OnceLock};
 use uuid::Uuid;
-use chrono::Utc;
 
 // Static lock to ensure migrations only run once for PostgreSQL tests
 // All tests share the same database, so we need to serialize migration execution
@@ -89,14 +92,10 @@ async fn test_postgres_series_book_relationship() {
     let conn = db.sea_orm_connection();
 
     // Create library
-    let library = LibraryRepository::create(
-        conn,
-        "Test Library",
-        "/test",
-        ScanningStrategy::Default,
-    )
-    .await
-    .unwrap();
+    let library =
+        LibraryRepository::create(conn, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
 
     // Create series
     let series = SeriesRepository::create(conn, library.id, "Postgres Series")
@@ -149,14 +148,10 @@ async fn test_postgres_cascade_delete() {
     let conn = db.sea_orm_connection();
 
     // Create library and series
-    let library = LibraryRepository::create(
-        conn,
-        "Test Library",
-        "/test",
-        ScanningStrategy::Default,
-    )
-    .await
-    .unwrap();
+    let library =
+        LibraryRepository::create(conn, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
 
     let series = SeriesRepository::create(conn, library.id, "Test Series")
         .await

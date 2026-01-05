@@ -2,7 +2,9 @@
 mod common;
 
 use chrono::Utc;
-use codex::api::permissions::{parse_permissions, serialize_permissions, Permission, ADMIN_PERMISSIONS, READONLY_PERMISSIONS};
+use codex::api::permissions::{
+    parse_permissions, serialize_permissions, Permission, ADMIN_PERMISSIONS, READONLY_PERMISSIONS,
+};
 use codex::db::repositories::{ApiKeyRepository, UserRepository};
 use codex::utils::{jwt::JwtService, password};
 use common::*;
@@ -26,7 +28,8 @@ async fn test_user_authentication_flow() {
     let is_valid = password::verify_password(plain_password, &created_user.password_hash).unwrap();
     assert!(is_valid, "Password should verify correctly");
 
-    let wrong_password = password::verify_password("wrong_password", &created_user.password_hash).unwrap();
+    let wrong_password =
+        password::verify_password("wrong_password", &created_user.password_hash).unwrap();
     assert!(!wrong_password, "Wrong password should not verify");
 
     // 3. Update last login timestamp
@@ -38,7 +41,10 @@ async fn test_user_authentication_flow() {
         .await
         .unwrap()
         .unwrap();
-    assert!(updated_user.last_login_at.is_some(), "Last login should be set");
+    assert!(
+        updated_user.last_login_at.is_some(),
+        "Last login should be set"
+    );
 }
 
 /// Test the complete JWT token flow
@@ -54,7 +60,11 @@ async fn test_jwt_token_flow() {
     // Generate JWT token
     let jwt_service = JwtService::new("test_secret_key".to_string(), 24);
     let token = jwt_service
-        .generate_token(created_user.id, created_user.username.clone(), created_user.is_admin)
+        .generate_token(
+            created_user.id,
+            created_user.username.clone(),
+            created_user.is_admin,
+        )
         .unwrap();
 
     assert!(!token.is_empty());
@@ -68,7 +78,10 @@ async fn test_jwt_token_flow() {
     // Token from different service should fail
     let different_service = JwtService::new("different_secret".to_string(), 24);
     let verify_result = different_service.verify_token(&token);
-    assert!(verify_result.is_err(), "Token with wrong secret should fail");
+    assert!(
+        verify_result.is_err(),
+        "Token with wrong secret should fail"
+    );
 }
 
 /// Test the complete API key flow

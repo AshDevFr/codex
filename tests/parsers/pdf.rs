@@ -1,7 +1,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::parsers::pdf::{PdfParser, extract_page_from_pdf};
+use codex::parsers::pdf::{extract_page_from_pdf, PdfParser};
 use codex::parsers::traits::FormatParser;
 use codex::parsers::FileFormat;
 use tempfile::TempDir;
@@ -184,4 +184,3 @@ fn test_extract_page_from_pdf_nonexistent_file() {
     let result = extract_page_from_pdf("/nonexistent/file.pdf", 1);
     assert!(result.is_err());
 }
-

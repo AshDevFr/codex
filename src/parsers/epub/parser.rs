@@ -1,6 +1,6 @@
-use crate::parsers::{BookMetadata, FileFormat, ImageFormat, PageInfo};
+use crate::parsers::image_utils::{get_image_format, is_image_file};
 use crate::parsers::traits::FormatParser;
-use crate::parsers::image_utils::{is_image_file, get_image_format};
+use crate::parsers::{BookMetadata, FileFormat, ImageFormat, PageInfo};
 use crate::utils::{hash_file, CodexError, Result};
 use chrono::{DateTime, Utc};
 use image::GenericImageView;
@@ -45,9 +45,9 @@ impl EpubParser {
         archive: &mut ZipArchive<File>,
         opf_path: &str,
     ) -> Result<(HashMap<String, String>, Vec<String>)> {
-        let mut opf_file = archive.by_name(opf_path).map_err(|_| {
-            CodexError::ParseError(format!("OPF file not found: {}", opf_path))
-        })?;
+        let mut opf_file = archive
+            .by_name(opf_path)
+            .map_err(|_| CodexError::ParseError(format!("OPF file not found: {}", opf_path)))?;
 
         let mut xml_content = String::new();
         opf_file.read_to_string(&mut xml_content)?;
@@ -125,7 +125,8 @@ impl EpubParser {
                         if let Some(idref_start) = itemref_tag.find("idref=\"") {
                             let idref_value_start = idref_start + 7;
                             if let Some(idref_end) = itemref_tag[idref_value_start..].find('"') {
-                                let idref = &itemref_tag[idref_value_start..idref_value_start + idref_end];
+                                let idref =
+                                    &itemref_tag[idref_value_start..idref_value_start + idref_end];
                                 if let Some(path) = manifest.get(idref) {
                                     spine_order.push(path.clone());
                                 }
@@ -248,7 +249,7 @@ impl FormatParser for EpubParser {
             modified_at,
             page_count,
             pages,
-            comic_info: None, // EPUB doesn't use ComicInfo.xml
+            comic_info: None,  // EPUB doesn't use ComicInfo.xml
             isbns: Vec::new(), // TODO: Extract from OPF metadata
         })
     }
@@ -268,7 +269,10 @@ impl Default for EpubParser {
 ///
 /// # Returns
 /// The raw image data as bytes
-pub fn extract_page_from_epub<P: AsRef<Path>>(path: P, page_number: i32) -> anyhow::Result<Vec<u8>> {
+pub fn extract_page_from_epub<P: AsRef<Path>>(
+    path: P,
+    page_number: i32,
+) -> anyhow::Result<Vec<u8>> {
     let file = File::open(path)?;
     let mut archive = ZipArchive::new(file)?;
 
@@ -329,4 +333,3 @@ mod tests {
         assert!(!parser.can_parse("test.txt"));
     }
 }
-

@@ -1,17 +1,16 @@
 use anyhow::{Context, Result};
-use uuid::Uuid;
-use tracing::info;
-use sea_orm::{Database as SeaDatabase, DatabaseConnection, ConnectionTrait};
+use sea_orm::{ConnectionTrait, Database as SeaDatabase, DatabaseConnection};
 use std::path::Path;
 use tokio::fs;
+use tracing::info;
+use uuid::Uuid;
 
+use super::ScanningStrategy;
 use crate::config::{DatabaseConfig, DatabaseType};
 use crate::db::entities;
-use super::ScanningStrategy;
 
 use super::repositories::{
-    BookMetadataRepository, BookRepository, LibraryRepository, PageRepository,
-    SeriesRepository,
+    BookMetadataRepository, BookRepository, LibraryRepository, PageRepository, SeriesRepository,
 };
 use migration::{Migrator, MigratorTrait};
 
@@ -204,7 +203,10 @@ impl Database {
     }
 
     /// Get library by path
-    pub async fn get_library_by_path(&self, path: &str) -> Result<Option<entities::libraries::Model>> {
+    pub async fn get_library_by_path(
+        &self,
+        path: &str,
+    ) -> Result<Option<entities::libraries::Model>> {
         LibraryRepository::get_by_path(&self.conn, path).await
     }
 
@@ -228,7 +230,11 @@ impl Database {
     // ============================================================================
 
     /// Create a new series
-    pub async fn create_series(&self, library_id: Uuid, name: &str) -> Result<entities::series::Model> {
+    pub async fn create_series(
+        &self,
+        library_id: Uuid,
+        name: &str,
+    ) -> Result<entities::series::Model> {
         SeriesRepository::create(&self.conn, library_id, name).await
     }
 
@@ -238,7 +244,10 @@ impl Database {
     }
 
     /// Get all series in a library
-    pub async fn list_series_by_library(&self, library_id: Uuid) -> Result<Vec<entities::series::Model>> {
+    pub async fn list_series_by_library(
+        &self,
+        library_id: Uuid,
+    ) -> Result<Vec<entities::series::Model>> {
         SeriesRepository::list_by_library(&self.conn, library_id).await
     }
 
@@ -267,7 +276,10 @@ impl Database {
     // ============================================================================
 
     /// Create a new book
-    pub async fn create_book(&self, book: &entities::books::Model) -> Result<entities::books::Model> {
+    pub async fn create_book(
+        &self,
+        book: &entities::books::Model,
+    ) -> Result<entities::books::Model> {
         BookRepository::create(&self.conn, book).await
     }
 
@@ -287,7 +299,10 @@ impl Database {
     }
 
     /// Get all books in a series
-    pub async fn list_books_by_series(&self, series_id: Uuid) -> Result<Vec<entities::books::Model>> {
+    pub async fn list_books_by_series(
+        &self,
+        series_id: Uuid,
+    ) -> Result<Vec<entities::books::Model>> {
         BookRepository::list_by_series(&self.conn, series_id).await
     }
 
@@ -306,7 +321,10 @@ impl Database {
     // ============================================================================
 
     /// Create a new page
-    pub async fn create_page(&self, page: &entities::pages::Model) -> Result<entities::pages::Model> {
+    pub async fn create_page(
+        &self,
+        page: &entities::pages::Model,
+    ) -> Result<entities::pages::Model> {
         PageRepository::create(&self.conn, page).await
     }
 
@@ -352,12 +370,18 @@ impl Database {
     }
 
     /// Get metadata by book ID
-    pub async fn get_book_metadata(&self, book_id: Uuid) -> Result<Option<entities::book_metadata_records::Model>> {
+    pub async fn get_book_metadata(
+        &self,
+        book_id: Uuid,
+    ) -> Result<Option<entities::book_metadata_records::Model>> {
         BookMetadataRepository::get_by_book_id(&self.conn, book_id).await
     }
 
     /// Update book metadata
-    pub async fn update_book_metadata(&self, metadata: &entities::book_metadata_records::Model) -> Result<()> {
+    pub async fn update_book_metadata(
+        &self,
+        metadata: &entities::book_metadata_records::Model,
+    ) -> Result<()> {
         BookMetadataRepository::update(&self.conn, metadata).await
     }
 
@@ -408,10 +432,16 @@ mod tests {
             db_type: DatabaseType::Postgres,
             postgres: Some(crate::config::PostgresConfig {
                 host: std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".to_string()),
-                port: std::env::var("POSTGRES_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(5432),
-                username: std::env::var("POSTGRES_USER").unwrap_or_else(|_| "codex_test".to_string()),
-                password: std::env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "codex_test".to_string()),
-                database_name: std::env::var("POSTGRES_DB").unwrap_or_else(|_| "codex_test".to_string()),
+                port: std::env::var("POSTGRES_PORT")
+                    .ok()
+                    .and_then(|p| p.parse().ok())
+                    .unwrap_or(5432),
+                username: std::env::var("POSTGRES_USER")
+                    .unwrap_or_else(|_| "codex_test".to_string()),
+                password: std::env::var("POSTGRES_PASSWORD")
+                    .unwrap_or_else(|_| "codex_test".to_string()),
+                database_name: std::env::var("POSTGRES_DB")
+                    .unwrap_or_else(|_| "codex_test".to_string()),
             }),
             sqlite: None,
         };

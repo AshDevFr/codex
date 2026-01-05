@@ -1,3 +1,3 @@
 mod parser;
 
-pub use parser::{CbzParser, extract_page_from_cbz};
+pub use parser::{extract_page_from_cbz, CbzParser};

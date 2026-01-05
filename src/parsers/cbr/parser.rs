@@ -1,5 +1,5 @@
-use crate::parsers::{parse_comic_info, BookMetadata, FileFormat, ImageFormat, PageInfo};
 use crate::parsers::traits::FormatParser;
+use crate::parsers::{parse_comic_info, BookMetadata, FileFormat, ImageFormat, PageInfo};
 use crate::utils::{hash_file, CodexError, Result};
 use chrono::{DateTime, Utc};
 use image::GenericImageView;
@@ -64,9 +64,10 @@ impl FormatParser for CbrParser {
         let file_hash = hash_file(path)?;
 
         // Open RAR archive for processing - we'll do everything in one pass
-        let mut archive = Archive::new(path.to_str().ok_or_else(|| {
-            CodexError::ParseError("Invalid path encoding".to_string())
-        })?)
+        let mut archive = Archive::new(
+            path.to_str()
+                .ok_or_else(|| CodexError::ParseError("Invalid path encoding".to_string()))?,
+        )
         .open_for_processing()
         .map_err(|e| CodexError::ParseError(format!("Failed to open RAR archive: {}", e)))?;
 
@@ -78,7 +79,12 @@ impl FormatParser for CbrParser {
             let header = match archive.read_header() {
                 Ok(Some(h)) => h,
                 Ok(None) => break,
-                Err(e) => return Err(CodexError::ParseError(format!("Failed to read RAR header: {}", e))),
+                Err(e) => {
+                    return Err(CodexError::ParseError(format!(
+                        "Failed to read RAR header: {}",
+                        e
+                    )))
+                }
             };
 
             let filename = header.entry().filename.to_string_lossy().to_string();
@@ -105,17 +111,17 @@ impl FormatParser for CbrParser {
                 archive = next;
             } else if Self::is_image_file(&filename) {
                 // Read image data
-                let (data, next) = header.read().map_err(|e| {
-                    CodexError::ParseError(format!("Failed to read image: {}", e))
-                })?;
+                let (data, next) = header
+                    .read()
+                    .map_err(|e| CodexError::ParseError(format!("Failed to read image: {}", e)))?;
 
                 image_data_entries.push((filename, data, unpacked_size));
                 archive = next;
             } else {
                 // Skip non-image, non-ComicInfo files
-                archive = header.skip().map_err(|e| {
-                    CodexError::ParseError(format!("Failed to skip file: {}", e))
-                })?;
+                archive = header
+                    .skip()
+                    .map_err(|e| CodexError::ParseError(format!("Failed to skip file: {}", e)))?;
             }
         }
 
@@ -173,23 +179,27 @@ impl Default for CbrParser {
 /// # Returns
 /// The raw image data as bytes
 pub fn extract_page_from_cbr<P: AsRef<Path>>(path: P, page_number: i32) -> anyhow::Result<Vec<u8>> {
-    let mut archive = unrar::Archive::new(path.as_ref()).open_for_processing()
+    let mut archive = unrar::Archive::new(path.as_ref())
+        .open_for_processing()
         .map_err(|e| anyhow::anyhow!("Failed to open RAR archive: {}", e))?;
 
     let mut image_files: Vec<(String, Vec<u8>)> = Vec::new();
 
-    while let Some(header) = archive.read_header()
+    while let Some(header) = archive
+        .read_header()
         .map_err(|e| anyhow::anyhow!("Failed to read RAR header: {}", e))?
     {
         let entry_name = header.entry().filename.to_string_lossy().to_string();
 
         if CbrParser::is_image_file(&entry_name) {
-            let (data, next_archive) = header.read()
+            let (data, next_archive) = header
+                .read()
                 .map_err(|e| anyhow::anyhow!("Failed to read RAR entry: {}", e))?;
             archive = next_archive;
             image_files.push((entry_name, data));
         } else {
-            archive = header.skip()
+            archive = header
+                .skip()
                 .map_err(|e| anyhow::anyhow!("Failed to skip RAR entry: {}", e))?;
         }
     }

@@ -1,7 +1,7 @@
 use chrono::Utc;
 use uuid::Uuid;
 
-pub use codex::db::entities::{users, api_keys, books, pages};
+pub use codex::db::entities::{api_keys, books, pages, users};
 
 /// Create a test user model with default values
 pub fn create_test_user(
@@ -23,7 +23,6 @@ pub fn create_test_user(
         last_login_at: None,
     }
 }
-
 
 /// Create a test book model with default values
 pub fn create_test_book(

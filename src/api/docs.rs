@@ -110,8 +110,8 @@ impl utoipa::Modify for SecurityAddon {
                 "api_key",
                 utoipa::openapi::security::SecurityScheme::ApiKey(
                     utoipa::openapi::security::ApiKey::Header(
-                        utoipa::openapi::security::ApiKeyValue::new("X-API-Key")
-                    )
+                        utoipa::openapi::security::ApiKeyValue::new("X-API-Key"),
+                    ),
                 ),
             );
         }

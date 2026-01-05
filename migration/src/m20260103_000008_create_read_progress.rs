@@ -17,16 +17,8 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .primary_key(),
                     )
-                    .col(
-                        ColumnDef::new(ReadProgress::UserId)
-                            .uuid()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(ReadProgress::BookId)
-                            .uuid()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(ReadProgress::UserId).uuid().not_null())
+                    .col(ColumnDef::new(ReadProgress::BookId).uuid().not_null())
                     .col(integer(ReadProgress::CurrentPage))
                     .col(boolean(ReadProgress::Completed))
                     .col(
@@ -94,4 +86,3 @@ enum Books {
     Table,
     Id,
 }
-

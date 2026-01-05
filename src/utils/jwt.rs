@@ -47,7 +47,12 @@ impl JwtService {
     ///
     /// # Returns
     /// The encoded JWT token string
-    pub fn generate_token(&self, user_id: Uuid, username: String, is_admin: bool) -> Result<String> {
+    pub fn generate_token(
+        &self,
+        user_id: Uuid,
+        username: String,
+        is_admin: bool,
+    ) -> Result<String> {
         let now = Utc::now();
         let exp = now + Duration::hours(self.expiry_hours);
 
@@ -145,7 +150,9 @@ mod tests {
             .generate_token(user_id, username.clone(), true)
             .expect("Failed to generate token");
 
-        let claims = service.verify_token(&token).expect("Failed to verify token");
+        let claims = service
+            .verify_token(&token)
+            .expect("Failed to verify token");
 
         assert_eq!(claims.sub, user_id.to_string());
         assert_eq!(claims.username, username);
@@ -211,7 +218,9 @@ mod tests {
             .generate_token(user_id, "testuser".to_string(), false)
             .expect("Failed to generate token");
 
-        let claims = service.verify_token(&token).expect("Failed to verify token");
+        let claims = service
+            .verify_token(&token)
+            .expect("Failed to verify token");
 
         let now = Utc::now().timestamp() as usize;
         assert!(claims.exp > now, "Token should not be expired yet");

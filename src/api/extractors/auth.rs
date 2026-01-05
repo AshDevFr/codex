@@ -2,11 +2,7 @@ use crate::api::error::ApiError;
 use crate::api::permissions::Permission;
 use crate::db::repositories::{ApiKeyRepository, UserRepository};
 use crate::utils::{jwt::JwtService, password};
-use axum::{
-    async_trait,
-    extract::FromRequestParts,
-    http::request::Parts,
-};
+use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -58,9 +54,7 @@ impl AuthContext {
         if self.is_admin {
             Ok(())
         } else {
-            Err(ApiError::Forbidden(
-                "Admin access required".to_string(),
-            ))
+            Err(ApiError::Forbidden("Admin access required".to_string()))
         }
     }
 }
@@ -122,7 +116,9 @@ async fn extract_from_jwt(token: &str, state: &AuthState) -> Result<AuthContext,
 
     // Check if user is active
     if !user.is_active {
-        return Err(ApiError::Unauthorized("User account is inactive".to_string()));
+        return Err(ApiError::Unauthorized(
+            "User account is inactive".to_string(),
+        ));
     }
 
     // Parse permissions from JSON
@@ -142,11 +138,7 @@ async fn extract_from_jwt(token: &str, state: &AuthState) -> Result<AuthContext,
 async fn extract_from_api_key(api_key: &str, state: &AuthState) -> Result<AuthContext, ApiError> {
     // Extract the prefix from the API key (format: codex_<prefix>_<secret>)
     // We use the first underscore-delimited part as the prefix for lookup
-    let key_prefix = api_key
-        .split('_')
-        .take(2)
-        .collect::<Vec<&str>>()
-        .join("_");
+    let key_prefix = api_key.split('_').take(2).collect::<Vec<&str>>().join("_");
 
     // Look up all API keys with this prefix
     let candidate_keys = ApiKeyRepository::get_by_prefix(&state.db, &key_prefix)
@@ -162,8 +154,8 @@ async fn extract_from_api_key(api_key: &str, state: &AuthState) -> Result<AuthCo
         }
     }
 
-    let api_key_model = api_key_model
-        .ok_or_else(|| ApiError::Unauthorized("Invalid API key".to_string()))?;
+    let api_key_model =
+        api_key_model.ok_or_else(|| ApiError::Unauthorized("Invalid API key".to_string()))?;
 
     // Check if API key is expired
     if let Some(expires_at) = api_key_model.expires_at {
@@ -180,7 +172,9 @@ async fn extract_from_api_key(api_key: &str, state: &AuthState) -> Result<AuthCo
 
     // Check if user is active
     if !user.is_active {
-        return Err(ApiError::Unauthorized("User account is inactive".to_string()));
+        return Err(ApiError::Unauthorized(
+            "User account is inactive".to_string(),
+        ));
     }
 
     // Parse permissions from API key (stored as JSON string)

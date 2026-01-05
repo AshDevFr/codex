@@ -1,7 +1,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::parsers::epub::{EpubParser, extract_page_from_epub};
+use codex::parsers::epub::{extract_page_from_epub, EpubParser};
 use codex::parsers::traits::FormatParser;
 use codex::parsers::{FileFormat, ImageFormat};
 use tempfile::TempDir;
@@ -202,4 +202,3 @@ fn test_extract_page_from_epub_nonexistent_file() {
     let result = extract_page_from_epub("/nonexistent/file.epub", 1);
     assert!(result.is_err());
 }
-

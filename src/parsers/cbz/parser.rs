@@ -1,6 +1,6 @@
-use crate::parsers::{parse_comic_info, BookMetadata, FileFormat, PageInfo};
+use crate::parsers::image_utils::{get_image_format, is_image_file};
 use crate::parsers::traits::FormatParser;
-use crate::parsers::image_utils::{is_image_file, get_image_format};
+use crate::parsers::{parse_comic_info, BookMetadata, FileFormat, PageInfo};
 use crate::utils::{hash_file, CodexError, Result};
 use chrono::{DateTime, Utc};
 use image::GenericImageView;

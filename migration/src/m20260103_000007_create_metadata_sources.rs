@@ -17,16 +17,28 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .primary_key(),
                     )
+                    .col(ColumnDef::new(MetadataSources::SeriesId).uuid().not_null())
                     .col(
-                        ColumnDef::new(MetadataSources::SeriesId)
-                            .uuid()
+                        ColumnDef::new(MetadataSources::SourceName)
+                            .text()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(MetadataSources::SourceName).text().not_null())
-                    .col(ColumnDef::new(MetadataSources::ExternalId).text().not_null())
+                    .col(
+                        ColumnDef::new(MetadataSources::ExternalId)
+                            .text()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(MetadataSources::ExternalUrl).text())
-                    .col(ColumnDef::new(MetadataSources::Confidence).decimal().not_null())
-                    .col(ColumnDef::new(MetadataSources::MetadataJson).text().not_null())
+                    .col(
+                        ColumnDef::new(MetadataSources::Confidence)
+                            .decimal()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(MetadataSources::MetadataJson)
+                            .text()
+                            .not_null(),
+                    )
                     .col(
                         ColumnDef::new(MetadataSources::CreatedAt)
                             .timestamp_with_time_zone()
@@ -78,4 +90,3 @@ enum Series {
     Table,
     Id,
 }
-

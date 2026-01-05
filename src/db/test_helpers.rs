@@ -47,4 +47,3 @@ pub async fn setup_test_db() -> sea_orm::DatabaseConnection {
     std::mem::forget(temp_dir);
     conn
 }
-

@@ -4,6 +4,6 @@
 
 mod db {
     mod auth;
-    mod repositories;
     mod postgres;
+    mod repositories;
 }

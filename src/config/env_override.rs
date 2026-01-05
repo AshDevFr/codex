@@ -1,5 +1,8 @@
+use super::{
+    ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, LogLevel,
+    LoggingConfig, PostgresConfig, SQLiteConfig,
+};
 use std::env;
-use super::{Config, DatabaseConfig, DatabaseType, PostgresConfig, SQLiteConfig, ApplicationConfig, LoggingConfig, LogLevel, AuthConfig, ApiConfig};
 
 /// Trait for applying environment variable overrides to configuration structs
 pub trait EnvOverride {
@@ -9,9 +12,12 @@ pub trait EnvOverride {
 
 impl EnvOverride for Config {
     fn apply_env_overrides(&mut self, prefix: &str) {
-        self.application.apply_env_overrides(&format!("{}_APPLICATION", prefix));
-        self.database.apply_env_overrides(&format!("{}_DATABASE", prefix));
-        self.logging.apply_env_overrides(&format!("{}_LOGGING", prefix));
+        self.application
+            .apply_env_overrides(&format!("{}_APPLICATION", prefix));
+        self.database
+            .apply_env_overrides(&format!("{}_DATABASE", prefix));
+        self.logging
+            .apply_env_overrides(&format!("{}_LOGGING", prefix));
         self.auth.apply_env_overrides(&format!("{}_AUTH", prefix));
         self.api.apply_env_overrides(&format!("{}_API", prefix));
     }
@@ -40,7 +46,9 @@ impl EnvOverride for DatabaseConfig {
     fn apply_env_overrides(&mut self, prefix: &str) {
         // Check for database type override (db_type in YAML)
         if let Ok(db_type) = env::var(format!("{}_DB_TYPE", prefix)) {
-            if db_type.eq_ignore_ascii_case("postgres") || db_type.eq_ignore_ascii_case("postgresql") {
+            if db_type.eq_ignore_ascii_case("postgres")
+                || db_type.eq_ignore_ascii_case("postgresql")
+            {
                 self.db_type = DatabaseType::Postgres;
             } else if db_type.eq_ignore_ascii_case("sqlite") {
                 self.db_type = DatabaseType::SQLite;
@@ -130,7 +138,8 @@ impl EnvOverride for AuthConfig {
             }
         }
         if let Ok(refresh_enabled) = env::var(format!("{}_REFRESH_TOKEN_ENABLED", prefix)) {
-            self.refresh_token_enabled = refresh_enabled.eq_ignore_ascii_case("true") || refresh_enabled == "1";
+            self.refresh_token_enabled =
+                refresh_enabled.eq_ignore_ascii_case("true") || refresh_enabled == "1";
         }
         if let Ok(refresh_expiry) = env::var(format!("{}_REFRESH_TOKEN_EXPIRY_DAYS", prefix)) {
             if let Ok(days) = refresh_expiry.parse() {
@@ -161,7 +170,8 @@ impl EnvOverride for ApiConfig {
             self.base_path = base_path;
         }
         if let Ok(enable_swagger) = env::var(format!("{}_ENABLE_SWAGGER", prefix)) {
-            self.enable_swagger = enable_swagger.eq_ignore_ascii_case("true") || enable_swagger == "1";
+            self.enable_swagger =
+                enable_swagger.eq_ignore_ascii_case("true") || enable_swagger == "1";
         }
         if let Ok(swagger_path) = env::var(format!("{}_SWAGGER_PATH", prefix)) {
             self.swagger_path = swagger_path;
@@ -170,7 +180,10 @@ impl EnvOverride for ApiConfig {
             self.cors_enabled = cors_enabled.eq_ignore_ascii_case("true") || cors_enabled == "1";
         }
         if let Ok(cors_origins) = env::var(format!("{}_CORS_ORIGINS", prefix)) {
-            self.cors_origins = cors_origins.split(',').map(|s| s.trim().to_string()).collect();
+            self.cors_origins = cors_origins
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .collect();
         }
         if let Ok(max_page_size) = env::var(format!("{}_MAX_PAGE_SIZE", prefix)) {
             if let Ok(size) = max_page_size.parse() {

@@ -39,10 +39,7 @@ pub fn create_test_router(state: Arc<AuthState>) -> Router {
 }
 
 /// Helper to make an HTTP request and get the response
-pub async fn make_request(
-    app: Router,
-    request: Request<String>,
-) -> (StatusCode, Bytes) {
+pub async fn make_request(app: Router, request: Request<String>) -> (StatusCode, Bytes) {
     let response = app
         .oneshot(request)
         .await

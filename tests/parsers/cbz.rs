@@ -1,7 +1,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::parsers::cbz::{CbzParser, extract_page_from_cbz};
+use codex::parsers::cbz::{extract_page_from_cbz, CbzParser};
 use codex::parsers::traits::FormatParser;
 use codex::parsers::{FileFormat, ImageFormat};
 use tempfile::TempDir;

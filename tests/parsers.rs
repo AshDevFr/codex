@@ -3,8 +3,8 @@
 // Tests for CBZ, CBR, EPUB, and PDF parsers.
 
 mod parsers {
-    mod cbz;
     mod cbr;
+    mod cbz;
     mod epub;
     mod pdf;
 }

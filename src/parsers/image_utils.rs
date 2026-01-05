@@ -144,18 +144,12 @@ mod tests {
 
         #[test]
         fn test_webp_format() {
-            assert_eq!(
-                get_image_format("modern.webp"),
-                Some(ImageFormat::WEBP)
-            );
+            assert_eq!(get_image_format("modern.webp"), Some(ImageFormat::WEBP));
         }
 
         #[test]
         fn test_gif_format() {
-            assert_eq!(
-                get_image_format("animation.gif"),
-                Some(ImageFormat::GIF)
-            );
+            assert_eq!(get_image_format("animation.gif"), Some(ImageFormat::GIF));
         }
 
         #[test]
@@ -165,10 +159,7 @@ mod tests {
 
         #[test]
         fn test_mixed_case() {
-            assert_eq!(
-                get_image_format("Image.JpG"),
-                Some(ImageFormat::JPEG)
-            );
+            assert_eq!(get_image_format("Image.JpG"), Some(ImageFormat::JPEG));
         }
 
         #[test]

@@ -1,3 +1,3 @@
 mod parser;
 
-pub use parser::{CbrParser, extract_page_from_cbr};
+pub use parser::{extract_page_from_cbr, CbrParser};

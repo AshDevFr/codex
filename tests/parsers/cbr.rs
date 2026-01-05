@@ -88,7 +88,10 @@ fn test_cbr_parser_parse_with_comic_info() {
     let metadata = parser.parse(test_file).expect("Failed to parse CBR file");
 
     assert_eq!(metadata.format, FileFormat::CBR);
-    assert!(metadata.comic_info.is_some(), "ComicInfo.xml should be present");
+    assert!(
+        metadata.comic_info.is_some(),
+        "ComicInfo.xml should be present"
+    );
 
     let comic_info = metadata.comic_info.unwrap();
     // These assertions will depend on what's in your test file's ComicInfo.xml

@@ -1,9 +1,6 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait,
-    QueryFilter, Set,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 use uuid::Uuid;
 
 use crate::db::entities::{book_metadata_records, prelude::*};
@@ -140,14 +137,12 @@ impl BookMetadataRepository {
 mod tests {
     use super::*;
     use crate::db::repositories::{BookRepository, LibraryRepository, SeriesRepository};
-    use crate::db::ScanningStrategy;
     use crate::db::test_helpers::create_test_db;
+    use crate::db::ScanningStrategy;
     use chrono::Utc;
 
     /// Helper to create a test book
-    async fn create_test_book(
-        db: &crate::db::Database,
-    ) -> crate::db::entities::books::Model {
+    async fn create_test_book(db: &crate::db::Database) -> crate::db::entities::books::Model {
         let library = LibraryRepository::create(
             db.sea_orm_connection(),
             "Test Library",
@@ -265,9 +260,10 @@ mod tests {
         let (db, _temp_dir) = create_test_db().await;
         let _book = create_test_book(&db).await;
 
-        let result = BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), Uuid::new_v4())
-            .await
-            .unwrap();
+        let result =
+            BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), Uuid::new_v4())
+                .await
+                .unwrap();
 
         assert!(result.is_none());
     }

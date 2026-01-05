@@ -1,4 +1,3 @@
 pub mod parser;
 
-pub use parser::{EpubParser, extract_page_from_epub};
-
+pub use parser::{extract_page_from_epub, EpubParser};

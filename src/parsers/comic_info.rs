@@ -133,7 +133,10 @@ mod tests {
         assert_eq!(result.number, Some("42".to_string()));
         assert_eq!(result.count, Some(100));
         assert_eq!(result.volume, Some(2));
-        assert_eq!(result.summary, Some("An amazing comic book story".to_string()));
+        assert_eq!(
+            result.summary,
+            Some("An amazing comic book story".to_string())
+        );
         assert_eq!(result.year, Some(2024));
         assert_eq!(result.month, Some(6));
         assert_eq!(result.day, Some(15));
@@ -238,7 +241,10 @@ mod tests {
         let result = parse_comic_info(xml).unwrap();
 
         assert_eq!(result.title, Some("Comic & Story".to_string()));
-        assert_eq!(result.summary, Some("A story with \"quotes\" and <tags>".to_string()));
+        assert_eq!(
+            result.summary,
+            Some("A story with \"quotes\" and <tags>".to_string())
+        );
     }
 
     #[test]

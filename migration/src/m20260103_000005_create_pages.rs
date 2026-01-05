@@ -11,17 +11,8 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(Pages::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(Pages::Id)
-                            .uuid()
-                            .not_null()
-                            .primary_key(),
-                    )
-                    .col(
-                        ColumnDef::new(Pages::BookId)
-                            .uuid()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(Pages::Id).uuid().not_null().primary_key())
+                    .col(ColumnDef::new(Pages::BookId).uuid().not_null())
                     .col(ColumnDef::new(Pages::PageNumber).integer().not_null())
                     .col(ColumnDef::new(Pages::FileName).string().not_null())
                     .col(ColumnDef::new(Pages::Format).string().not_null())
@@ -74,4 +65,3 @@ enum Books {
     Table,
     Id,
 }
-
