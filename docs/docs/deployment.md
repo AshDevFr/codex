@@ -83,27 +83,28 @@ spec:
         app: codex
     spec:
       containers:
-      - name: codex
-        image: codex:latest
-        ports:
-        - containerPort: 8080
-        env:
-        - name: CODEX_DATABASE_DB_TYPE
-          value: "postgres"
-        - name: CODEX_DATABASE_POSTGRES_HOST
-          value: "postgres-service"
-        volumeMounts:
-        - name: config
-          mountPath: /app/config
+        - name: codex
+          image: codex:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: CODEX_DATABASE_DB_TYPE
+              value: "postgres"
+            - name: CODEX_DATABASE_POSTGRES_HOST
+              value: "postgres-service"
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
       volumes:
-      - name: config
-        configMap:
-          name: codex-config
+        - name: config
+          configMap:
+            name: codex-config
 ```
 
 ### Stateless Architecture
 
 Codex is stateless by design:
+
 - No local file storage required
 - All state in database
 - Session tokens in JWT (no server-side sessions)
@@ -120,8 +121,8 @@ spec:
   selector:
     app: codex
   ports:
-  - port: 80
-    targetPort: 8080
+    - port: 80
+      targetPort: 8080
   type: LoadBalancer
 ```
 
@@ -134,16 +135,16 @@ metadata:
   name: codex-ingress
 spec:
   rules:
-  - host: codex.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: codex-service
-            port:
-              number: 80
+    - host: codex.4sh.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: codex-service
+                port:
+                  number: 80
 ```
 
 ## Systemd Service (Linux)
@@ -187,7 +188,7 @@ sudo systemctl status codex
 ```nginx
 server {
     listen 80;
-    server_name codex.example.com;
+    server_name codex.4sh.dev;
 
     location / {
         proxy_pass http://127.0.0.1:8080;
@@ -202,7 +203,7 @@ server {
 ### Caddy Configuration
 
 ```
-codex.example.com {
+codex.4sh.dev {
     reverse_proxy localhost:8080
 }
 ```
@@ -255,7 +256,7 @@ Use a reverse proxy (Nginx, Caddy) with Let's Encrypt for SSL:
 ```bash
 # Caddy automatically handles SSL
 # Nginx with certbot:
-sudo certbot --nginx -d codex.example.com
+sudo certbot --nginx -d codex.4sh.dev
 ```
 
 ### Secrets Management
@@ -292,6 +293,7 @@ logging:
 ```
 
 Use log aggregation tools:
+
 - **Loki** for log aggregation
 - **Prometheus** for metrics
 - **Grafana** for visualization
@@ -301,6 +303,7 @@ Use log aggregation tools:
 ### Database Backups
 
 **PostgreSQL:**
+
 ```bash
 # Daily backup
 pg_dump -U codex codex > backup_$(date +%Y%m%d).sql
@@ -310,6 +313,7 @@ psql -U codex codex < backup_20240101.sql
 ```
 
 **SQLite:**
+
 ```bash
 # Simple copy
 cp codex.db codex.db.backup
@@ -353,4 +357,3 @@ docker exec codex ping postgres
 - Set up [authentication](./api#authentication)
 - Configure [libraries](./getting-started)
 - Explore the [API documentation](./api)
-

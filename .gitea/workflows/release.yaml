@@ -1,0 +1,220 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*" # Triggers on tags starting with 'v', e.g., v1.0.0, v2.1
+      - "!v*-alpha" # Excludes tags ending with '-alpha'
+
+jobs:
+  release:
+    name: Build Binaries and Docker Image
+    runs-on: ubuntu-latest
+    container:
+      image: catthehacker/ubuntu:act-latest
+
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install cargo-dist
+        run: |
+          cargo install cargo-dist --locked
+
+      - name: Plan build
+        run: |
+          cargo dist plan --output-format=json > dist-manifest.json || true
+
+      - name: Build artifacts
+        run: |
+          cargo dist build --output-format=json > dist-manifest.json
+
+      - name: Get version info
+        id: version
+        run: |
+          # Extract tag name from the ref (e.g., refs/tags/v1.0.0 -> v1.0.0)
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          # Format date for display
+          export TZ=UTC
+          echo "date=$(date +'%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_OUTPUT
+
+      - name: List built artifacts
+        run: |
+          echo "Built artifacts:"
+          find target/dist -type f -name "*.zip" -o -name "*.tar.gz" -o -name "*.msi" -o -name "*.pkg" | head -20 || true
+          ls -lh target/dist/**/* || true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-artifacts
+          path: |
+            target/dist/**/*
+            dist-manifest.json
+          retention-days: 30
+
+      - name: Publish packages to registry
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          # Find all built artifacts
+          for artifact in $(find target/dist -type f \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.msi" -o -name "*.pkg" \) 2>/dev/null); do
+            filename=$(basename "$artifact")
+            echo "Publishing $filename..."
+
+            # Determine content type
+            case "$artifact" in
+              *.zip)
+                content_type="application/zip"
+                ;;
+              *.tar.gz)
+                content_type="application/gzip"
+                ;;
+              *.msi)
+                content_type="application/x-msi"
+                ;;
+              *.pkg)
+                content_type="application/x-apple-installer-package"
+                ;;
+              *)
+                content_type="application/octet-stream"
+                ;;
+            esac
+
+            # Upload to Gitea package registry
+            curl -v -X PUT \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: $content_type" \
+              --data-binary @"$artifact" \
+              "${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/${{ steps.version.outputs.tag }}/$filename" || echo "Failed to upload $filename"
+          done
+
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          # Build package URLs
+          PACKAGE_URL="${{ github.server_url }}/${{ github.repository_owner }}/-/packages/generic/codex/${{ steps.version.outputs.tag }}"
+
+          # Build download links from artifacts
+          DOWNLOAD_LINKS=""
+          for artifact in $(find target/dist -type f \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.msi" -o -name "*.pkg" \) 2>/dev/null); do
+            filename=$(basename "$artifact")
+            DOWNLOAD_URL="${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/${{ steps.version.outputs.tag }}/$filename"
+
+            # Determine platform from filename
+            if echo "$filename" | grep -q "windows"; then
+              icon="🪟"
+              platform="Windows"
+            elif echo "$filename" | grep -q "apple-darwin\|macos"; then
+              icon="🍎"
+              platform="macOS"
+            elif echo "$filename" | grep -q "linux"; then
+              icon="🐧"
+              platform="Linux"
+            else
+              icon="📦"
+              platform="Binary"
+            fi
+
+            DOWNLOAD_LINKS="${DOWNLOAD_LINKS}${icon} [${platform} - ${filename}](${DOWNLOAD_URL})\n"
+          done
+
+          # Create release with links to all packages
+          RELEASE_BODY="Codex release ${{ steps.version.outputs.tag }}
+
+Built from commit ${{ steps.version.outputs.sha_short }} on ${{ steps.version.outputs.date }}
+
+## Downloads
+
+${DOWNLOAD_LINKS}
+
+🔗 [View All Packages](${PACKAGE_URL})"
+
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"tag_name\": \"${{ steps.version.outputs.tag }}\",
+              \"name\": \"Codex ${{ steps.version.outputs.tag }}\",
+              \"body\": $(echo "$RELEASE_BODY" | jq -Rs .),
+              \"draft\": false,
+              \"prerelease\": false
+            }" \
+            "${{ github.api_url }}/repos/${{ github.repository }}/releases")
+
+          echo "Release created"
+          echo "$RESPONSE" | jq '.' || echo "$RESPONSE"
+
+      - name: Registry FQDN Setup
+        id: registry
+        run: |
+          registry=${{ github.server_url }}
+          echo "registry=${registry##http*://}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to Docker Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ steps.registry.outputs.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # list of Docker images to use as base name for tags
+          images: |
+            ${{ steps.registry.outputs.registry }}/${{ github.repository }}
+          # generate Docker tags based on the following events/attributes
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
+            VERSION=${{ steps.version.outputs.tag }}
+            BUILD_ENV=production
+          cache-from: type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache
+          cache-to: type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache,mode=max
+

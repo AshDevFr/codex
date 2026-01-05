@@ -2,6 +2,15 @@
 name = "codex"
 version = "0.1.0"
 edition = "2021"
+description = "A next-generation digital library server for comics, manga, and ebooks"
+license = "MIT"
+repository = "https://github.com/AshDevFr/codex"
+homepage = "https://github.com/AshDevFr/codex"
+readme = "README.md"
+
+[[bin]]
+name = "codex"
+path = "src/main.rs"
 
 [features]
 default = ["rar"]
@@ -87,3 +96,19 @@ tempfile = "3.13"
 tower = { version = "0.4", features = ["util"] }
 http-body-util = "0.1"
 hyper = { version = "1.0", features = ["full"] }
+
+# cargo-dist configuration for building standalone binaries
+[package.metadata.dist]
+# Build with rar feature (CBR support)
+features = ["rar"]
+# Target platforms to build for
+targets = [
+    "x86_64-unknown-linux-gnu", # Linux x86_64
+    "x86_64-apple-darwin",      # macOS Intel
+    "aarch64-apple-darwin",     # macOS Apple Silicon
+    "x86_64-pc-windows-msvc",   # Windows x86_64
+]
+# Installers to create
+installers = ["shell", "powershell", "msi", "pkg"]
+# CI backends to support (using github format for Gitea compatibility)
+ci = ["github"]

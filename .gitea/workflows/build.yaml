@@ -1,4 +1,4 @@
-name: Build Package and Docker Image
+name: Build and Test
 
 on:
   pull_request:
@@ -6,10 +6,7 @@ on:
       - main
   push:
     branches:
-      - main # Set a branch to deploy
-    tags:
-      - "v*" # Triggers on tags starting with 'v', e.g., v1.0.0, v2.1
-      - "!v*-alpha" # Excludes tags ending with '-alpha'
+      - main # Only run on main branch pushes
 
 jobs:
   build:
@@ -46,129 +43,35 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Build Rust package
+      - name: Install cargo-dist
         run: |
-          cargo build --release --features rar
+          cargo install cargo-dist --locked
+
+      - name: Build Rust package (with cargo-dist for current platform)
+        run: |
+          cargo dist build --local --features rar
 
       - name: Run tests
         run: |
           cargo test --features rar
 
-      - name: Get version info
-        id: version
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Format check
         run: |
-          # Extract tag name from the ref (e.g., refs/tags/v1.0.0 -> v1.0.0)
-          TAG_NAME=${GITHUB_REF#refs/tags/}
-          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
-          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          # Format date for display
-          export TZ=UTC
-          echo "date=$(date +'%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_OUTPUT
+          cargo fmt -- --check
 
-      - name: Package binary
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Clippy check
         run: |
-          mkdir -p dist
-          # Create a directory structure for the package
-          PACKAGE_DIR="dist/codex-${{ steps.version.outputs.tag }}-linux-x86_64"
-          mkdir -p "$PACKAGE_DIR"
-
-          # Copy binary
-          cp target/release/codex "$PACKAGE_DIR/codex"
-          chmod +x "$PACKAGE_DIR/codex"
-
-          # Copy README if it exists
-          if [ -f README.md ]; then
-            cp README.md "$PACKAGE_DIR/"
-          fi
-
-          # Create a simple info file
-          cat > "$PACKAGE_DIR/VERSION" << EOF
-          Version: ${{ steps.version.outputs.tag }}
-          Commit: ${{ steps.version.outputs.sha_short }}
-          Build Date: ${{ steps.version.outputs.date }}
-          Platform: Linux x86_64
-          EOF
-
-          # Create tarball
-          cd dist
-          tar -czf "codex-${{ steps.version.outputs.tag }}-linux-x86_64.tar.gz" "codex-${{ steps.version.outputs.tag }}-linux-x86_64"
-          cd ..
-
-          # Also create a zip for cross-platform compatibility
-          cd dist
-          zip -r "codex-${{ steps.version.outputs.tag }}-linux-x86_64.zip" "codex-${{ steps.version.outputs.tag }}-linux-x86_64"
-          cd ..
-
-          echo "Packages created:"
-          ls -lh dist/*.tar.gz dist/*.zip
-
-      - name: Publish packages to registry
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          # Publish tarball
-          if [ -f "dist/codex-${{ steps.version.outputs.tag }}-linux-x86_64.tar.gz" ]; then
-            echo "Publishing codex-${{ steps.version.outputs.tag }}-linux-x86_64.tar.gz"
-            curl -v -X PUT \
-              -H "Authorization: token ${{ secrets.PACKAGE_TOKEN || secrets.GITHUB_TOKEN }}" \
-              -H "Content-Type: application/gzip" \
-              --data-binary @"dist/codex-${{ steps.version.outputs.tag }}-linux-x86_64.tar.gz" \
-              "${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/${{ steps.version.outputs.tag }}/codex-${{ steps.version.outputs.tag }}-linux-x86_64.tar.gz"
-          fi
-
-          # Publish zip
-          if [ -f "dist/codex-${{ steps.version.outputs.tag }}-linux-x86_64.zip" ]; then
-            echo "Publishing codex-${{ steps.version.outputs.tag }}-linux-x86_64.zip"
-            curl -v -X PUT \
-              -H "Authorization: token ${{ secrets.PACKAGE_TOKEN || secrets.GITHUB_TOKEN }}" \
-              -H "Content-Type: application/zip" \
-              --data-binary @"dist/codex-${{ steps.version.outputs.tag }}-linux-x86_64.zip" \
-              "${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/${{ steps.version.outputs.tag }}/codex-${{ steps.version.outputs.tag }}-linux-x86_64.zip"
-          fi
-
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GITHUB_TOKEN: ${{ secrets.PACKAGE_TOKEN || secrets.GITHUB_TOKEN }}
-        run: |
-          # Build package URLs
-          PACKAGE_URL="${{ github.server_url }}/${{ github.repository_owner }}/-/packages/generic/codex/${{ steps.version.outputs.tag }}"
-
-          # Build download links
-          DOWNLOAD_LINKS=""
-          if [ -f "dist/codex-${{ steps.version.outputs.tag }}-linux-x86_64.tar.gz" ]; then
-            DOWNLOAD_URL="${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/${{ steps.version.outputs.tag }}/codex-${{ steps.version.outputs.tag }}-linux-x86_64.tar.gz"
-            DOWNLOAD_LINKS="${DOWNLOAD_LINKS}📦 [Linux x86_64 (tar.gz)](${DOWNLOAD_URL})\n"
-          fi
-          if [ -f "dist/codex-${{ steps.version.outputs.tag }}-linux-x86_64.zip" ]; then
-            DOWNLOAD_URL="${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/${{ steps.version.outputs.tag }}/codex-${{ steps.version.outputs.tag }}-linux-x86_64.zip"
-            DOWNLOAD_LINKS="${DOWNLOAD_LINKS}📦 [Linux x86_64 (zip)](${DOWNLOAD_URL})\n"
-          fi
-
-          # Create release with links to all packages
-          RESPONSE=$(curl -s -X POST \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "tag_name": "${{ steps.version.outputs.tag }}",
-              "name": "Codex ${{ steps.version.outputs.tag }}",
-              "body": "Codex release ${{ steps.version.outputs.tag }}\n\nBuilt from commit ${{ steps.version.outputs.sha_short }} on ${{ steps.version.outputs.date }}\n\n## Downloads\n\n'"$DOWNLOAD_LINKS"'\n🔗 [View All Packages]('"$PACKAGE_URL"')",
-              "draft": false,
-              "prerelease": false
-            }' \
-            "${{ github.api_url }}/repos/${{ github.repository }}/releases")
-
-          echo "Release created"
-          echo "$RESPONSE"
+          cargo clippy --features rar -- -D warnings
 
       - name: Registry FQDN Setup
         id: registry
+        if: github.event_name == 'push'
         run: |
           registry=${{ github.server_url }}
           echo "registry=${registry##http*://}" >> "$GITHUB_OUTPUT"
 
       - name: Login to Docker Registry
+        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           registry: ${{ steps.registry.outputs.registry }}
@@ -176,9 +79,11 @@ jobs:
           password: ${{ secrets.REGISTRY_TOKEN }}
 
       - name: Set up Docker Buildx
+        if: github.event_name == 'push'
         uses: docker/setup-buildx-action@v3
 
       - name: Docker meta
+        if: github.event_name == 'push'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -187,15 +92,11 @@ jobs:
             ${{ steps.registry.outputs.registry }}/${{ github.repository }}
           # generate Docker tags based on the following events/attributes
           tags: |
-            type=schedule
             type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
             type=sha
 
       - name: Build and push Docker image
+        if: github.event_name == 'push'
         uses: docker/build-push-action@v6
         with:
           context: .

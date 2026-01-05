@@ -201,6 +201,30 @@ ci: ## Run CI checks
 	cargo test
 	cargo build --release
 
+## Binary Distribution (cargo-dist)
+
+dist-install: ## Install cargo-dist tool
+	@echo "$(BLUE)Installing cargo-dist...$(NC)"
+	cargo install cargo-dist --locked
+
+dist-plan: ## Plan what cargo-dist will build (dry run)
+	cargo dist plan
+
+dist-build: ## Build standalone binaries for all platforms locally
+	@echo "$(BLUE)Building standalone binaries...$(NC)"
+	cargo dist build
+
+dist-build-local: ## Build binaries for current platform only
+	@echo "$(BLUE)Building binary for current platform...$(NC)"
+	cargo dist build --local
+
+dist-release: ## Create a release (requires git tag)
+	@echo "$(YELLOW)This will create a release. Make sure you've tagged the version first!$(NC)"
+	cargo dist release
+
+dist-test: ## Test the dist build process
+	cargo dist plan --no-local
+
 ## Quick Actions
 
 quick-dev: dev-up dev-logs ## Quick start development (start and follow logs)
