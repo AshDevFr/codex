@@ -140,19 +140,28 @@ jobs:
           # Verify installation
           cargo zigbuild --version || echo "cargo-zigbuild installed"
 
+      - name: Install perl for vendored OpenSSL
+        run: |
+          # Perl is required for building vendored OpenSSL during cross-compilation
+          apt-get update && apt-get install -y perl
+
       - name: Build binaries with cargo-dist
+        env:
+          # Enable vendored OpenSSL for cross-compilation (requires perl)
+          OPENSSL_STATIC: "1"
+          OPENSSL_VENDORED: "1"
         run: |
           # Build binaries with cross-compilation support
           # Using --artifacts=local for CI builds without git tags
-          # cargo-dist will automatically use cargo-zigbuild and cargo-xwin when needed
-          # Note: macOS targets require macOS runners, so they may fail on Linux CI
+          # cargo-dist will automatically use cargo-zigbuild for ARM64
+          # OPENSSL_VENDORED=1 enables building OpenSSL from source for cross-compilation
           # Features are configured in Cargo.toml [workspace.metadata.dist]
           cargo dist build --artifacts=local --output-format=json > dist-manifest.json 2>&1 || {
             echo "Build attempt completed"
             # Check what artifacts were created
             if [ -d "target/dist" ]; then
               echo "Found build artifacts in target/dist"
-              find target/dist -type f -name "*.zip" -o -name "*.tar.gz" -o -name "*.msi" -o -name "*.pkg" | head -20 || true
+              find target/dist -type f -name "*.tar.xz" -o -name "*.tar.gz" | head -20 || true
             fi
           }
 
