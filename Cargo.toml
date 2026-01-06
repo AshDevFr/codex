@@ -86,6 +86,7 @@ jsonwebtoken = "9.2"
 argon2 = "0.5"
 rand = "0.8"
 lazy_static = "1.4"
+base64 = "0.22"
 
 # API Documentation
 utoipa = { version = "5.0", features = ["axum_extras", "chrono", "uuid"] }

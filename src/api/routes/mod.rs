@@ -9,15 +9,20 @@ use tower_http::cors::{Any, CorsLayer};
 
 /// Create the main API router with all routes
 ///
-/// Includes health check and all API v1 endpoints
+/// Includes health check, OPDS catalog, and all API v1 endpoints
 pub fn create_router(state: Arc<AppState>, api_config: &ApiConfig) -> Router {
     // Clone the database connection for the health check route
     let db_for_health = state.db.clone();
+
+    // Clone state for OPDS routes (AuthState is an alias for AppState)
+    let opds_state = state.clone();
 
     let mut router = Router::new()
         // Health check (public, no auth)
         .route("/health", get(handlers::health_check))
         .with_state(db_for_health)
+        // OPDS catalog routes (protected with auth)
+        .nest("/opds", handlers::opds::opds_routes(opds_state))
         // API v1 routes
         .nest("/api/v1", api_v1_routes(state));
 
@@ -79,10 +84,29 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         // Book routes (protected)
         .route("/books", get(handlers::list_books))
         .route("/books/:id", get(handlers::get_book))
+        .route("/books/:id/thumbnail", get(handlers::get_book_thumbnail))
         // Page routes (protected)
         .route(
             "/books/:book_id/pages/:page_number",
             get(handlers::get_page_image),
+        )
+        // Reading progress routes (protected)
+        .route(
+            "/books/:book_id/progress",
+            put(handlers::update_reading_progress),
+        )
+        .route(
+            "/books/:book_id/progress",
+            get(handlers::get_reading_progress),
+        )
+        .route(
+            "/books/:book_id/progress",
+            delete(handlers::delete_reading_progress),
+        )
+        .route("/progress", get(handlers::get_user_progress))
+        .route(
+            "/progress/currently-reading",
+            get(handlers::get_currently_reading),
         )
         // User routes (protected, admin only)
         .route("/users", get(handlers::list_users))

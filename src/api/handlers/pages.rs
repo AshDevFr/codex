@@ -11,6 +11,8 @@ use axum::{
     http::{header, StatusCode},
     response::{IntoResponse, Response},
 };
+use image::{imageops::FilterType, ImageFormat};
+use std::io::Cursor;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -91,6 +93,90 @@ pub async fn get_page_image(
         .header(header::CONTENT_LENGTH, image_data.len())
         .body(Body::from(image_data))
         .unwrap())
+}
+
+/// Get thumbnail/cover image for a book
+///
+/// Extracts the first page and resizes it to a thumbnail (max 400px width/height)
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/{id}/thumbnail",
+    params(
+        ("id" = Uuid, Path, description = "Book ID"),
+    ),
+    responses(
+        (status = 200, description = "Thumbnail image", content_type = "image/jpeg"),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn get_book_thumbnail(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+) -> Result<Response, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Fetch book from database
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Check if book has pages
+    if book.page_count == 0 {
+        return Err(ApiError::NotFound("Book has no pages".to_string()));
+    }
+
+    // Extract first page
+    let image_data = extract_page_image(&book.file_path, &book.format, 1)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to extract cover image: {}", e)))?;
+
+    // Generate thumbnail (max 400px width or height)
+    let thumbnail_data = generate_thumbnail(&image_data, 400)
+        .map_err(|e| ApiError::Internal(format!("Failed to generate thumbnail: {}", e)))?;
+
+    // Build response with caching headers
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "image/jpeg")
+        .header(header::CACHE_CONTROL, "public, max-age=31536000") // Cache for 1 year
+        .header(header::CONTENT_LENGTH, thumbnail_data.len())
+        .body(Body::from(thumbnail_data))
+        .unwrap())
+}
+
+/// Generate a thumbnail from an image
+///
+/// Resizes the image to fit within max_dimension x max_dimension while maintaining aspect ratio
+fn generate_thumbnail(image_data: &[u8], max_dimension: u32) -> anyhow::Result<Vec<u8>> {
+    // Load image from bytes
+    let img = image::load_from_memory(image_data)?;
+
+    // Calculate new dimensions while maintaining aspect ratio
+    let (width, height) = (img.width(), img.height());
+    let (new_width, new_height) = if width > height {
+        let ratio = max_dimension as f32 / width as f32;
+        (max_dimension, (height as f32 * ratio) as u32)
+    } else {
+        let ratio = max_dimension as f32 / height as f32;
+        ((width as f32 * ratio) as u32, max_dimension)
+    };
+
+    // Resize using Lanczos3 filter for high quality
+    let thumbnail = img.resize(new_width, new_height, FilterType::Lanczos3);
+
+    // Encode as JPEG with 85% quality
+    let mut output = Cursor::new(Vec::new());
+    thumbnail.write_to(&mut output, ImageFormat::Jpeg)?;
+
+    Ok(output.into_inner())
 }
 
 /// Extract page image from book file

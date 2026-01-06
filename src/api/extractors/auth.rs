@@ -22,6 +22,7 @@ pub struct AuthContext {
 pub enum AuthMethod {
     Jwt,
     ApiKey,
+    BasicAuth,
 }
 
 impl AuthContext {
@@ -79,11 +80,16 @@ impl FromRequestParts<Arc<AppState>> for AuthContext {
         parts: &mut Parts,
         state: &Arc<AppState>,
     ) -> Result<Self, Self::Rejection> {
-        // Try to extract from Authorization header (JWT Bearer token)
+        // Try to extract from Authorization header
         if let Some(auth_header) = parts.headers.get("authorization") {
             if let Ok(auth_str) = auth_header.to_str() {
+                // Try JWT Bearer token
                 if let Some(token) = auth_str.strip_prefix("Bearer ") {
                     return extract_from_jwt(token, state).await;
+                }
+                // Try HTTP Basic authentication
+                if let Some(credentials) = auth_str.strip_prefix("Basic ") {
+                    return extract_from_basic_auth(credentials, state).await;
                 }
             }
         }
@@ -199,5 +205,74 @@ async fn extract_from_api_key(api_key: &str, state: &AppState) -> Result<AuthCon
         is_admin: user.is_admin,
         permissions,
         auth_method: AuthMethod::ApiKey,
+    })
+}
+
+/// Extract auth context from HTTP Basic authentication
+async fn extract_from_basic_auth(
+    credentials: &str,
+    state: &AppState,
+) -> Result<AuthContext, ApiError> {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+    // Decode base64 credentials
+    let decoded = STANDARD
+        .decode(credentials)
+        .map_err(|_| ApiError::Unauthorized("Invalid Basic auth encoding".to_string()))?;
+
+    let credentials_str = String::from_utf8(decoded)
+        .map_err(|_| ApiError::Unauthorized("Invalid Basic auth credentials".to_string()))?;
+
+    // Split into username and password (format: "username:password")
+    let parts: Vec<&str> = credentials_str.splitn(2, ':').collect();
+    if parts.len() != 2 {
+        return Err(ApiError::Unauthorized(
+            "Invalid Basic auth format".to_string(),
+        ));
+    }
+
+    let username = parts[0];
+    let password = parts[1];
+
+    // Look up user by username
+    let user = UserRepository::get_by_username(&state.db, username)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load user: {}", e)))?
+        .ok_or_else(|| ApiError::Unauthorized("Invalid username or password".to_string()))?;
+
+    // Verify password
+    let password_valid = password::verify_password(password, &user.password_hash)
+        .map_err(|e| ApiError::Internal(format!("Failed to verify password: {}", e)))?;
+
+    if !password_valid {
+        return Err(ApiError::Unauthorized(
+            "Invalid username or password".to_string(),
+        ));
+    }
+
+    // Check if user is active
+    if !user.is_active {
+        return Err(ApiError::Unauthorized(
+            "User account is inactive".to_string(),
+        ));
+    }
+
+    // Parse permissions from user model
+    let permissions: Vec<Permission> = serde_json::from_value(user.permissions)
+        .map_err(|e| ApiError::Internal(format!("Failed to parse permissions: {}", e)))?;
+
+    // Update last login timestamp (fire and forget - don't block on this)
+    let db = state.db.clone();
+    let user_id = user.id;
+    tokio::spawn(async move {
+        let _ = UserRepository::update_last_login(&db, user_id).await;
+    });
+
+    Ok(AuthContext {
+        user_id: user.id,
+        username: user.username,
+        is_admin: user.is_admin,
+        permissions,
+        auth_method: AuthMethod::BasicAuth,
     })
 }

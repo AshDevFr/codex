@@ -1,5 +1,5 @@
 use axum::{
-    http::StatusCode,
+    http::{header, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
@@ -48,7 +48,16 @@ impl IntoResponse for ApiError {
             details: None,
         });
 
-        (status, body).into_response()
+        // Add WWW-Authenticate header for 401 responses (for HTTP Basic auth support)
+        let mut response = (status, body).into_response();
+        if status == StatusCode::UNAUTHORIZED {
+            response.headers_mut().insert(
+                header::WWW_AUTHENTICATE,
+                header::HeaderValue::from_static("Basic realm=\"Codex\""),
+            );
+        }
+
+        response
     }
 }
 

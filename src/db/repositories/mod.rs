@@ -4,6 +4,7 @@ pub mod library;
 pub mod metadata;
 pub mod metrics;
 pub mod page;
+pub mod read_progress;
 pub mod series;
 pub mod user;
 
@@ -14,5 +15,6 @@ pub use library::LibraryRepository;
 pub use metadata::BookMetadataRepository;
 pub use metrics::MetricsRepository;
 pub use page::PageRepository;
+pub use read_progress::ReadProgressRepository;
 pub use series::SeriesRepository;
 pub use user::UserRepository;

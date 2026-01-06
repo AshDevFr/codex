@@ -7,6 +7,7 @@ mod api {
     mod auth;
     mod libraries;
     mod metrics;
+    mod opds;
     mod scan;
     mod series;
     mod tasks;

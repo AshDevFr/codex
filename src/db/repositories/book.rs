@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect, Set,
 };
 use uuid::Uuid;
 
@@ -81,6 +82,20 @@ impl BookRepository {
             .all(db)
             .await
             .context("Failed to list books by series")
+    }
+
+    /// Search books by title (case-insensitive)
+    pub async fn search_by_title(db: &DatabaseConnection, query: &str) -> Result<Vec<books::Model>> {
+        let pattern = format!("%{}%", query.to_lowercase());
+
+        Books::find()
+            .filter(books::Column::Title.contains(&pattern))
+            .filter(books::Column::Deleted.eq(false))
+            .order_by_asc(books::Column::Title)
+            .limit(50)
+            .all(db)
+            .await
+            .context("Failed to search books by title")
     }
 
     /// Update book

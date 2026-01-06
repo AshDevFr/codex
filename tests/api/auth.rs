@@ -297,3 +297,208 @@ async fn test_logout_with_invalid_token() {
     let error = response.unwrap();
     assert_eq!(error.error, "Unauthorized");
 }
+
+// ============================================================================
+// HTTP Basic Authentication Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_basic_auth_success() {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create an admin user (admins have all permissions)
+    let password = "secure_password_123";
+    let password_hash = password::hash_password(password).unwrap();
+    let user = create_test_user("basicadmin", "basicadmin@example.com", &password_hash, true);
+    UserRepository::create(&db, &user).await.unwrap();
+
+    let state = create_test_auth_state(db);
+    let app = create_test_router(state);
+
+    // Encode credentials in base64 (format: "username:password")
+    let credentials = format!("{}:{}", "basicadmin", password);
+    let encoded = STANDARD.encode(credentials.as_bytes());
+
+    // Make authenticated request to logout endpoint (which requires auth but has no DB queries)
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/logout")
+        .header("Authorization", format!("Basic {}", encoded))
+        .body(String::new())
+        .unwrap();
+
+    let (status, _) = make_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_basic_auth_wrong_password() {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create a test user
+    let password = "correct_password";
+    let password_hash = password::hash_password(password).unwrap();
+    let user = create_test_user("basicuser2", "basic2@example.com", &password_hash, false);
+    UserRepository::create(&db, &user).await.unwrap();
+
+    let state = create_test_auth_state(db);
+    let app = create_test_router(state);
+
+    // Encode wrong credentials
+    let credentials = format!("{}:{}", "basicuser2", "wrong_password");
+    let encoded = STANDARD.encode(credentials.as_bytes());
+
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/logout")
+        .header("Authorization", format!("Basic {}", encoded))
+        .body(String::new())
+        .unwrap();
+
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let error = response.unwrap();
+    assert_eq!(error.error, "Unauthorized");
+}
+
+#[tokio::test]
+async fn test_basic_auth_nonexistent_user() {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db);
+    let app = create_test_router(state);
+
+    // Encode credentials for non-existent user
+    let credentials = "nonexistent:password";
+    let encoded = STANDARD.encode(credentials.as_bytes());
+
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/logout")
+        .header("Authorization", format!("Basic {}", encoded))
+        .body(String::new())
+        .unwrap();
+
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let error = response.unwrap();
+    assert_eq!(error.error, "Unauthorized");
+}
+
+#[tokio::test]
+async fn test_basic_auth_invalid_encoding() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db);
+    let app = create_test_router(state);
+
+    // Use invalid base64 encoding
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/logout")
+        .header("Authorization", "Basic not_valid_base64!!!")
+        .body(String::new())
+        .unwrap();
+
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let error = response.unwrap();
+    assert_eq!(error.error, "Unauthorized");
+}
+
+#[tokio::test]
+async fn test_basic_auth_invalid_format() {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db);
+    let app = create_test_router(state);
+
+    // Encode credentials without colon separator
+    let credentials = "usernameonly";
+    let encoded = STANDARD.encode(credentials.as_bytes());
+
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/logout")
+        .header("Authorization", format!("Basic {}", encoded))
+        .body(String::new())
+        .unwrap();
+
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let error = response.unwrap();
+    assert_eq!(error.error, "Unauthorized");
+}
+
+#[tokio::test]
+async fn test_basic_auth_inactive_user() {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create an inactive user
+    let password = "password";
+    let password_hash = password::hash_password(password).unwrap();
+    let mut user = create_test_user("inactive_basic", "inactive_basic@example.com", &password_hash, false);
+    user.is_active = false;
+    UserRepository::create(&db, &user).await.unwrap();
+
+    let state = create_test_auth_state(db);
+    let app = create_test_router(state);
+
+    // Encode credentials
+    let credentials = format!("{}:{}", "inactive_basic", password);
+    let encoded = STANDARD.encode(credentials.as_bytes());
+
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/logout")
+        .header("Authorization", format!("Basic {}", encoded))
+        .body(String::new())
+        .unwrap();
+
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let error = response.unwrap();
+    assert!(error.message.contains("inactive"));
+}
+
+#[tokio::test]
+async fn test_www_authenticate_header_on_401() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db);
+    let app = create_test_router(state);
+
+    // Make request without authentication
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/logout")
+        .body(String::new())
+        .unwrap();
+
+    let response = tower::ServiceExt::<hyper::Request<String>>::oneshot(app, request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    // Check for WWW-Authenticate header
+    let www_auth = response.headers().get("www-authenticate");
+    assert!(www_auth.is_some());
+    assert_eq!(www_auth.unwrap(), "Basic realm=\"Codex\"");
+}
