@@ -3,7 +3,9 @@ mod common;
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use codex::api::error::ErrorResponse;
-use codex::db::repositories::{BookRepository, LibraryRepository, SeriesRepository, UserRepository};
+use codex::db::repositories::{
+    BookRepository, LibraryRepository, SeriesRepository, UserRepository,
+};
 use codex::models::ScanningStrategy;
 use codex::utils::password;
 use common::*;
@@ -26,7 +28,11 @@ async fn test_opds_root_catalog_with_jwt() {
     let state = create_test_auth_state(db);
     let token = state
         .jwt_service
-        .generate_token(created_user.id, created_user.username.clone(), created_user.is_admin)
+        .generate_token(
+            created_user.id,
+            created_user.username.clone(),
+            created_user.is_admin,
+        )
         .unwrap();
 
     let app = create_test_router(state);
@@ -126,7 +132,11 @@ async fn test_opds_list_libraries() {
     let state = create_test_auth_state(db);
     let token = state
         .jwt_service
-        .generate_token(created_user.id, created_user.username.clone(), created_user.is_admin)
+        .generate_token(
+            created_user.id,
+            created_user.username.clone(),
+            created_user.is_admin,
+        )
         .unwrap();
 
     let app = create_test_router(state);
@@ -158,12 +168,17 @@ async fn test_opds_library_series() {
     let (db, _temp_dir) = setup_test_db().await;
 
     // Create library and series
-    let library = LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    SeriesRepository::create(&db, library.id, "Series 1")
         .await
         .unwrap();
-
-    SeriesRepository::create(&db, library.id, "Series 1").await.unwrap();
-    SeriesRepository::create(&db, library.id, "Series 2").await.unwrap();
+    SeriesRepository::create(&db, library.id, "Series 2")
+        .await
+        .unwrap();
 
     // Create test user
     let password_hash = password::hash_password("password").unwrap();
@@ -173,7 +188,11 @@ async fn test_opds_library_series() {
     let state = create_test_auth_state(db);
     let token = state
         .jwt_service
-        .generate_token(created_user.id, created_user.username.clone(), created_user.is_admin)
+        .generate_token(
+            created_user.id,
+            created_user.username.clone(),
+            created_user.is_admin,
+        )
         .unwrap();
 
     let app = create_test_router(state);
@@ -203,9 +222,10 @@ async fn test_opds_series_books_with_thumbnails() {
     let (db, _temp_dir) = setup_test_db().await;
 
     // Create library, series, and books
-    let library = LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
-        .await
-        .unwrap();
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
 
     let series = SeriesRepository::create(&db, library.id, "Test Series")
         .await
@@ -222,7 +242,11 @@ async fn test_opds_series_books_with_thumbnails() {
     let state = create_test_auth_state(db);
     let token = state
         .jwt_service
-        .generate_token(created_user.id, created_user.username.clone(), created_user.is_admin)
+        .generate_token(
+            created_user.id,
+            created_user.username.clone(),
+            created_user.is_admin,
+        )
         .unwrap();
 
     let app = create_test_router(state);
@@ -270,7 +294,11 @@ async fn test_opds_search_descriptor() {
     let state = create_test_auth_state(db);
     let token = state
         .jwt_service
-        .generate_token(created_user.id, created_user.username.clone(), created_user.is_admin)
+        .generate_token(
+            created_user.id,
+            created_user.username.clone(),
+            created_user.is_admin,
+        )
         .unwrap();
 
     let app = create_test_router(state);
@@ -298,16 +326,29 @@ async fn test_opds_search_books() {
     let (db, _temp_dir) = setup_test_db().await;
 
     // Create library, series, and books
-    let library = LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
-        .await
-        .unwrap();
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
 
     let series = SeriesRepository::create(&db, library.id, "Spider-Man")
         .await
         .unwrap();
 
-    let book1 = create_test_book_model(series.id, "Amazing Spider-Man #1", "/test/spiderman1.cbz", 1, 20);
-    let book2 = create_test_book_model(series.id, "Spider-Man: Blue", "/test/spiderman_blue.cbz", 2, 30);
+    let book1 = create_test_book_model(
+        series.id,
+        "Amazing Spider-Man #1",
+        "/test/spiderman1.cbz",
+        1,
+        20,
+    );
+    let book2 = create_test_book_model(
+        series.id,
+        "Spider-Man: Blue",
+        "/test/spiderman_blue.cbz",
+        2,
+        30,
+    );
     BookRepository::create(&db, &book1).await.unwrap();
     BookRepository::create(&db, &book2).await.unwrap();
 
@@ -319,7 +360,11 @@ async fn test_opds_search_books() {
     let state = create_test_auth_state(db);
     let token = state
         .jwt_service
-        .generate_token(created_user.id, created_user.username.clone(), created_user.is_admin)
+        .generate_token(
+            created_user.id,
+            created_user.username.clone(),
+            created_user.is_admin,
+        )
         .unwrap();
 
     let app = create_test_router(state);
@@ -353,7 +398,11 @@ async fn test_opds_search_empty_query() {
     let state = create_test_auth_state(db);
     let token = state
         .jwt_service
-        .generate_token(created_user.id, created_user.username.clone(), created_user.is_admin)
+        .generate_token(
+            created_user.id,
+            created_user.username.clone(),
+            created_user.is_admin,
+        )
         .unwrap();
 
     let app = create_test_router(state);
@@ -382,9 +431,10 @@ async fn test_opds_pse_page_feed() {
     let (db, _temp_dir) = setup_test_db().await;
 
     // Create library, series, and book
-    let library = LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
-        .await
-        .unwrap();
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
 
     let series = SeriesRepository::create(&db, library.id, "Test Series")
         .await
@@ -401,7 +451,11 @@ async fn test_opds_pse_page_feed() {
     let state = create_test_auth_state(db);
     let token = state
         .jwt_service
-        .generate_token(created_user.id, created_user.username.clone(), created_user.is_admin)
+        .generate_token(
+            created_user.id,
+            created_user.username.clone(),
+            created_user.is_admin,
+        )
         .unwrap();
 
     let app = create_test_router(state);

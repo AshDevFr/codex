@@ -4,7 +4,9 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
-use crate::db::repositories::{BookRepository, LibraryRepository, ReadProgressRepository, SeriesRepository};
+use crate::db::repositories::{
+    BookRepository, LibraryRepository, ReadProgressRepository, SeriesRepository,
+};
 use crate::require_permission;
 use axum::{
     extract::{Path, Query, State},
@@ -105,28 +107,20 @@ pub async fn root_catalog(
         .add_link(OpdsLink::search_link(format!("{}/search.xml", base_url)))
         // Navigation entries
         .add_entry(
-            OpdsEntry::new(
-                "urn:uuid:codex-libraries",
-                "All Libraries",
-                now,
-            )
-            .with_content("text", "Browse all available libraries")
-            .add_link(OpdsLink::subsection_link(
-                format!("{}/libraries", base_url),
-                "All Libraries",
-            )),
+            OpdsEntry::new("urn:uuid:codex-libraries", "All Libraries", now)
+                .with_content("text", "Browse all available libraries")
+                .add_link(OpdsLink::subsection_link(
+                    format!("{}/libraries", base_url),
+                    "All Libraries",
+                )),
         )
         .add_entry(
-            OpdsEntry::new(
-                "urn:uuid:codex-recent",
-                "Recent Additions",
-                now,
-            )
-            .with_content("text", "Recently added books and series")
-            .add_link(OpdsLink::subsection_link(
-                format!("{}/recent", base_url),
-                "Recent Additions",
-            )),
+            OpdsEntry::new("urn:uuid:codex-recent", "Recent Additions", now)
+                .with_content("text", "Recently added books and series")
+                .add_link(OpdsLink::subsection_link(
+                    format!("{}/recent", base_url),
+                    "Recent Additions",
+                )),
         );
 
     let xml = feed
@@ -166,15 +160,10 @@ pub async fn opds_list_libraries(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch libraries: {}", e)))?;
 
-    let mut feed = OpdsFeed::new(
-        "urn:uuid:codex-libraries",
-        "All Libraries",
-        now,
-        false,
-    )
-    .add_link(OpdsLink::self_link(format!("{}/libraries", base_url)))
-    .add_link(OpdsLink::start_link(format!("{}", base_url)))
-    .add_link(OpdsLink::up_link(format!("{}", base_url), "Home"));
+    let mut feed = OpdsFeed::new("urn:uuid:codex-libraries", "All Libraries", now, false)
+        .add_link(OpdsLink::self_link(format!("{}/libraries", base_url)))
+        .add_link(OpdsLink::start_link(format!("{}", base_url)))
+        .add_link(OpdsLink::up_link(format!("{}", base_url), "Home"));
 
     // Add library entries
     for library in libraries {
@@ -291,7 +280,7 @@ pub async fn opds_library_series(
 
     // Add series entries
     for series in series_list {
-        let entry = OpdsEntry::new(
+        let mut entry = OpdsEntry::new(
             format!("urn:uuid:series-{}", series.id),
             series.name.clone(),
             series.updated_at,
@@ -299,8 +288,20 @@ pub async fn opds_library_series(
         .with_summary("text", series.summary.unwrap_or_default())
         .add_link(OpdsLink::subsection_link(
             format!("{}/series/{}", base_url, series.id),
-            series.name,
+            series.name.clone(),
         ));
+
+        // Add series thumbnail link
+        entry = entry.add_link(OpdsLink::thumbnail_link(format!(
+            "/api/v1/series/{}/thumbnail",
+            series.id
+        )));
+
+        // Add series cover link (same as thumbnail, but full-size)
+        entry = entry.add_link(OpdsLink::cover_link(format!(
+            "/api/v1/series/{}/thumbnail",
+            series.id
+        )));
 
         feed = feed.add_entry(entry);
     }
@@ -359,7 +360,10 @@ pub async fn opds_series_books(
         now,
         true, // Include PSE namespace
     )
-    .add_link(OpdsLink::self_link(format!("{}/series/{}", base_url, series_id)))
+    .add_link(OpdsLink::self_link(format!(
+        "{}/series/{}",
+        base_url, series_id
+    )))
     .add_link(OpdsLink::start_link(format!("{}", base_url)))
     .add_link(OpdsLink::up_link(
         format!("{}/libraries/{}", base_url, series.library_id),
@@ -391,11 +395,12 @@ pub async fn opds_series_books(
         ));
 
         // Fetch reading progress for this book
-        let last_read = ReadProgressRepository::get_by_user_and_book(&state.db, auth.user_id, book.id)
-            .await
-            .ok()
-            .flatten()
-            .map(|progress| progress.current_page as u32);
+        let last_read =
+            ReadProgressRepository::get_by_user_and_book(&state.db, auth.user_id, book.id)
+                .await
+                .ok()
+                .flatten()
+                .map(|progress| progress.current_page as u32);
 
         // Add PSE streaming link with reading progress
         entry = entry.add_link(OpdsLink::pse_stream_link(
@@ -405,14 +410,16 @@ pub async fn opds_series_books(
         ));
 
         // Add thumbnail link
-        entry = entry.add_link(OpdsLink::thumbnail_link(
-            format!("/api/v1/books/{}/thumbnail", book.id),
-        ));
+        entry = entry.add_link(OpdsLink::thumbnail_link(format!(
+            "/api/v1/books/{}/thumbnail",
+            book.id
+        )));
 
         // Add cover link (same as thumbnail, but full-size)
-        entry = entry.add_link(OpdsLink::cover_link(
-            format!("/api/v1/books/{}/thumbnail", book.id),
-        ));
+        entry = entry.add_link(OpdsLink::cover_link(format!(
+            "/api/v1/books/{}/thumbnail",
+            book.id
+        )));
 
         feed = feed.add_entry(entry);
     }

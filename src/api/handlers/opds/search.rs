@@ -119,7 +119,9 @@ pub async fn opds_search(
     let query = params.q.trim();
 
     if query.is_empty() {
-        return Err(ApiError::BadRequest("Search query cannot be empty".to_string()));
+        return Err(ApiError::BadRequest(
+            "Search query cannot be empty".to_string(),
+        ));
     }
 
     let mut feed = OpdsFeed::new(
@@ -128,7 +130,10 @@ pub async fn opds_search(
         now,
         true, // Include PSE namespace
     )
-    .add_link(OpdsLink::self_link(format!("{}/search?q={}", base_url, query)))
+    .add_link(OpdsLink::self_link(format!(
+        "{}/search?q={}",
+        base_url, query
+    )))
     .add_link(OpdsLink::start_link(format!("{}", base_url)));
 
     // Search series by name
@@ -182,11 +187,12 @@ pub async fn opds_search(
         ));
 
         // Fetch reading progress for this book
-        let last_read = ReadProgressRepository::get_by_user_and_book(&state.db, auth.user_id, book.id)
-            .await
-            .ok()
-            .flatten()
-            .map(|progress| progress.current_page as u32);
+        let last_read =
+            ReadProgressRepository::get_by_user_and_book(&state.db, auth.user_id, book.id)
+                .await
+                .ok()
+                .flatten()
+                .map(|progress| progress.current_page as u32);
 
         // Add PSE streaming link with reading progress
         entry = entry.add_link(OpdsLink::pse_stream_link(
@@ -196,14 +202,16 @@ pub async fn opds_search(
         ));
 
         // Add thumbnail link
-        entry = entry.add_link(OpdsLink::thumbnail_link(
-            format!("/api/v1/books/{}/thumbnail", book.id),
-        ));
+        entry = entry.add_link(OpdsLink::thumbnail_link(format!(
+            "/api/v1/books/{}/thumbnail",
+            book.id
+        )));
 
         // Add cover link
-        entry = entry.add_link(OpdsLink::cover_link(
-            format!("/api/v1/books/{}/thumbnail", book.id),
-        ));
+        entry = entry.add_link(OpdsLink::cover_link(format!(
+            "/api/v1/books/{}/thumbnail",
+            book.id
+        )));
 
         feed = feed.add_entry(entry);
     }

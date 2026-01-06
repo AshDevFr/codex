@@ -62,7 +62,8 @@ impl OpdsLink {
 
     // Common link relation constructors
     pub fn self_link(href: impl Into<String>) -> Self {
-        Self::new("self", href).with_type("application/atom+xml;profile=opds-catalog;kind=navigation")
+        Self::new("self", href)
+            .with_type("application/atom+xml;profile=opds-catalog;kind=navigation")
     }
 
     pub fn start_link(href: impl Into<String>) -> Self {
@@ -78,11 +79,13 @@ impl OpdsLink {
     }
 
     pub fn next_link(href: impl Into<String>) -> Self {
-        Self::new("next", href).with_type("application/atom+xml;profile=opds-catalog;kind=acquisition")
+        Self::new("next", href)
+            .with_type("application/atom+xml;profile=opds-catalog;kind=acquisition")
     }
 
     pub fn prev_link(href: impl Into<String>) -> Self {
-        Self::new("previous", href).with_type("application/atom+xml;profile=opds-catalog;kind=acquisition")
+        Self::new("previous", href)
+            .with_type("application/atom+xml;profile=opds-catalog;kind=acquisition")
     }
 
     pub fn subsection_link(href: impl Into<String>, title: impl Into<String>) -> Self {
@@ -103,7 +106,11 @@ impl OpdsLink {
         Self::new("http://opds-spec.org/image", href).with_type("image/jpeg")
     }
 
-    pub fn pse_stream_link(href: impl Into<String>, page_count: u32, last_read: Option<u32>) -> Self {
+    pub fn pse_stream_link(
+        href: impl Into<String>,
+        page_count: u32,
+        last_read: Option<u32>,
+    ) -> Self {
         let mut link = Self::new("http://vaemendis.net/opds-pse/stream", href)
             .with_type("application/atom+xml;profile=opds-catalog")
             .with_pse_count(page_count);

@@ -452,7 +452,12 @@ async fn test_basic_auth_inactive_user() {
     // Create an inactive user
     let password = "password";
     let password_hash = password::hash_password(password).unwrap();
-    let mut user = create_test_user("inactive_basic", "inactive_basic@example.com", &password_hash, false);
+    let mut user = create_test_user(
+        "inactive_basic",
+        "inactive_basic@example.com",
+        &password_hash,
+        false,
+    );
     user.is_active = false;
     UserRepository::create(&db, &user).await.unwrap();
 

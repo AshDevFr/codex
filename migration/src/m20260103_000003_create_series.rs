@@ -27,6 +27,8 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Series::CustomMetadata).text())
                     .col(ColumnDef::new(Series::Fingerprint).string())
                     .col(ColumnDef::new(Series::ReadingDirection).string())
+                    .col(ColumnDef::new(Series::CustomCoverPath).string())
+                    .col(ColumnDef::new(Series::SelectedCoverSource).string())
                     .col(
                         ColumnDef::new(Series::CreatedAt)
                             .timestamp_with_time_zone()
@@ -78,6 +80,8 @@ enum Series {
     CustomMetadata,
     Fingerprint,
     ReadingDirection,
+    CustomCoverPath,
+    SelectedCoverSource,
     CreatedAt,
     UpdatedAt,
 }

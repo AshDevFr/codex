@@ -23,6 +23,8 @@ pub struct Model {
     pub custom_metadata: Option<String>,
     pub fingerprint: Option<String>,
     pub reading_direction: Option<String>,
+    pub custom_cover_path: Option<String>,
+    pub selected_cover_source: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

@@ -42,13 +42,22 @@ pub struct OpdsFeed {
     pub icon: Option<String>,
 
     // Pagination metadata (for clients)
-    #[serde(rename = "opensearch:totalResults", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "opensearch:totalResults",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub total_results: Option<u64>,
 
-    #[serde(rename = "opensearch:itemsPerPage", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "opensearch:itemsPerPage",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub items_per_page: Option<u32>,
 
-    #[serde(rename = "opensearch:startIndex", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "opensearch:startIndex",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub start_index: Option<u32>,
 }
 
@@ -174,8 +183,7 @@ mod tests {
         let entry = OpdsEntry::new("urn:uuid:book-1", "Test Book", now)
             .add_link(OpdsLink::acquisition_link("/books/1", "application/zip"));
 
-        let feed = OpdsFeed::new("urn:uuid:root", "Test Catalog", now, false)
-            .add_entry(entry);
+        let feed = OpdsFeed::new("urn:uuid:root", "Test Catalog", now, false).add_entry(entry);
 
         let xml = feed.to_xml().unwrap();
 

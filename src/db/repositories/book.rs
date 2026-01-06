@@ -85,7 +85,10 @@ impl BookRepository {
     }
 
     /// Search books by title (case-insensitive)
-    pub async fn search_by_title(db: &DatabaseConnection, query: &str) -> Result<Vec<books::Model>> {
+    pub async fn search_by_title(
+        db: &DatabaseConnection,
+        query: &str,
+    ) -> Result<Vec<books::Model>> {
         let pattern = format!("%{}%", query.to_lowercase());
 
         Books::find()

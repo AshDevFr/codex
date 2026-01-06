@@ -59,6 +59,8 @@ impl SeriesRepository {
             custom_metadata: Set(None),
             fingerprint: Set(fingerprint),
             reading_direction: Set(None),
+            custom_cover_path: Set(None),
+            selected_cover_source: Set(None),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -133,6 +135,8 @@ impl SeriesRepository {
             custom_metadata: Set(series_model.custom_metadata.clone()),
             fingerprint: Set(series_model.fingerprint.clone()),
             reading_direction: Set(series_model.reading_direction.clone()),
+            custom_cover_path: Set(series_model.custom_cover_path.clone()),
+            selected_cover_source: Set(series_model.selected_cover_source.clone()),
             created_at: Set(series_model.created_at),
             updated_at: Set(Utc::now()),
         };
@@ -202,6 +206,52 @@ impl SeriesRepository {
             .update(db)
             .await
             .context("Failed to increment book count")?;
+
+        Ok(())
+    }
+
+    /// Update series custom cover path
+    pub async fn update_custom_cover(
+        db: &DatabaseConnection,
+        id: Uuid,
+        cover_path: Option<String>,
+    ) -> Result<()> {
+        let series = Series::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Series not found"))?;
+
+        let mut active: series::ActiveModel = series.into();
+        active.custom_cover_path = Set(cover_path);
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to update custom cover path")?;
+
+        Ok(())
+    }
+
+    /// Update which cover source is selected (default, custom, etc.)
+    pub async fn update_selected_cover_source(
+        db: &DatabaseConnection,
+        id: Uuid,
+        source: Option<String>,
+    ) -> Result<()> {
+        let series = Series::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Series not found"))?;
+
+        let mut active: series::ActiveModel = series.into();
+        active.selected_cover_source = Set(source);
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to update selected cover source")?;
 
         Ok(())
     }
@@ -572,5 +622,188 @@ mod tests {
             retrieved_series2.reading_direction,
             Some("TOP_TO_BOTTOM".to_string())
         );
+    }
+
+    #[tokio::test]
+    async fn test_update_custom_cover() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
+            .await
+            .unwrap();
+
+        // Initially no custom cover
+        assert_eq!(series.custom_cover_path, None);
+
+        // Set custom cover path
+        SeriesRepository::update_custom_cover(
+            db.sea_orm_connection(),
+            series.id,
+            Some("data/covers/test.jpg".to_string()),
+        )
+        .await
+        .unwrap();
+
+        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            retrieved.custom_cover_path,
+            Some("data/covers/test.jpg".to_string())
+        );
+
+        // Clear custom cover
+        SeriesRepository::update_custom_cover(db.sea_orm_connection(), series.id, None)
+            .await
+            .unwrap();
+
+        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(retrieved.custom_cover_path, None);
+    }
+
+    #[tokio::test]
+    async fn test_update_selected_cover_source() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
+            .await
+            .unwrap();
+
+        // Initially no selected cover source (defaults to first book cover)
+        assert_eq!(series.selected_cover_source, None);
+
+        // Set to custom
+        SeriesRepository::update_selected_cover_source(
+            db.sea_orm_connection(),
+            series.id,
+            Some("custom".to_string()),
+        )
+        .await
+        .unwrap();
+
+        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(retrieved.selected_cover_source, Some("custom".to_string()));
+
+        // Set to default
+        SeriesRepository::update_selected_cover_source(
+            db.sea_orm_connection(),
+            series.id,
+            Some("default".to_string()),
+        )
+        .await
+        .unwrap();
+
+        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(retrieved.selected_cover_source, Some("default".to_string()));
+
+        // Clear to use default behavior
+        SeriesRepository::update_selected_cover_source(db.sea_orm_connection(), series.id, None)
+            .await
+            .unwrap();
+
+        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(retrieved.selected_cover_source, None);
+    }
+
+    #[tokio::test]
+    async fn test_custom_cover_workflow() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
+            .await
+            .unwrap();
+
+        // Simulate uploading a custom cover
+        let cover_path = format!("data/covers/{}.jpg", series.id);
+
+        SeriesRepository::update_custom_cover(
+            db.sea_orm_connection(),
+            series.id,
+            Some(cover_path.clone()),
+        )
+        .await
+        .unwrap();
+
+        SeriesRepository::update_selected_cover_source(
+            db.sea_orm_connection(),
+            series.id,
+            Some("custom".to_string()),
+        )
+        .await
+        .unwrap();
+
+        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(retrieved.custom_cover_path, Some(cover_path));
+        assert_eq!(retrieved.selected_cover_source, Some("custom".to_string()));
+
+        // Switch back to default (first book cover)
+        SeriesRepository::update_selected_cover_source(
+            db.sea_orm_connection(),
+            series.id,
+            Some("default".to_string()),
+        )
+        .await
+        .unwrap();
+
+        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        // Cover path is still there, just not being used
+        assert_eq!(
+            retrieved.custom_cover_path,
+            Some(format!("data/covers/{}.jpg", series.id))
+        );
+        assert_eq!(retrieved.selected_cover_source, Some("default".to_string()));
     }
 }

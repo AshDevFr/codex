@@ -16,6 +16,10 @@ pub struct SeriesDto {
     pub publisher: Option<String>,
     pub year: Option<i32>,
     pub book_count: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_cover_source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub has_custom_cover: Option<bool>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

@@ -135,7 +135,9 @@ mod tests {
     use super::*;
     use crate::api::permissions::ADMIN_PERMISSIONS;
     use crate::db::entities::{books, users};
-    use crate::db::repositories::{BookRepository, LibraryRepository, SeriesRepository, UserRepository};
+    use crate::db::repositories::{
+        BookRepository, LibraryRepository, SeriesRepository, UserRepository,
+    };
     use crate::db::test_helpers::setup_test_db;
     use crate::models::ScanningStrategy;
     use crate::utils::password;

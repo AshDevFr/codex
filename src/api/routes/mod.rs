@@ -81,6 +81,12 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/series/:id/purge-deleted",
             delete(handlers::purge_series_deleted_books),
         )
+        .route("/series/:id/thumbnail", get(handlers::get_series_thumbnail))
+        .route("/series/:id/cover", post(handlers::upload_series_cover))
+        .route(
+            "/series/:id/cover/source",
+            put(handlers::set_series_cover_source),
+        )
         // Book routes (protected)
         .route("/books", get(handlers::list_books))
         .route("/books/:id", get(handlers::get_book))
