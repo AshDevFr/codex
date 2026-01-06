@@ -1,6 +1,6 @@
 # Codex Frontend
 
-Modern React-based web interface for Codex comic book management system.
+Modern React-based web interface for Codex ebook management system.
 
 ## Tech Stack
 

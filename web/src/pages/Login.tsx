@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Container,
   Paper,
@@ -9,6 +10,7 @@ import {
   Text,
   Stack,
   Alert,
+  Anchor,
 } from '@mantine/core';
 import { IconAlertCircle } from '@tabler/icons-react';
 import { useMutation } from '@tanstack/react-query';
@@ -24,7 +26,7 @@ export function Login() {
   const loginMutation = useMutation<any, ApiError, any>({
     mutationFn: authApi.login,
     onSuccess: (data) => {
-      setAuth(data.user, data.token);
+      setAuth(data.user, data.accessToken);
       window.location.href = '/';
     },
   });
@@ -72,7 +74,10 @@ export function Login() {
         </form>
 
         <Text c="dimmed" size="sm" ta="center" mt="md">
-          Comic book management made simple
+          Don't have an account?{' '}
+          <Anchor component={Link} to="/register" size="sm">
+            Create one
+          </Anchor>
         </Text>
       </Paper>
     </Container>

@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
-use sea_orm::{prelude::Decimal, ActiveModelTrait, DatabaseConnection, Set};
+use sea_orm::{prelude::Decimal, DatabaseConnection, Set};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;

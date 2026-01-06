@@ -1,10 +1,16 @@
 import { api } from './client';
-import type { LoginRequest, LoginResponse, User } from '@/types/api';
+import type { LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, User } from '@/types/api';
 
 export const authApi = {
   // Login
   login: async (credentials: LoginRequest): Promise<LoginResponse> => {
     const response = await api.post<LoginResponse>('/auth/login', credentials);
+    return response.data;
+  },
+
+  // Register
+  register: async (data: RegisterRequest): Promise<RegisterResponse> => {
+    const response = await api.post<RegisterResponse>('/auth/register', data);
     return response.data;
   },
 

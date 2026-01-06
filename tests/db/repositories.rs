@@ -527,7 +527,7 @@ async fn test_list_by_series_includes_deleted_when_requested() {
     let book1 = BookRepository::create(conn, &book1_model).await.unwrap();
 
     let book2_model = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
-    let book2 = BookRepository::create(conn, &book2_model).await.unwrap();
+    let _book2 = BookRepository::create(conn, &book2_model).await.unwrap();
 
     // Mark book1 as deleted
     BookRepository::mark_deleted(conn, book1.id, true)

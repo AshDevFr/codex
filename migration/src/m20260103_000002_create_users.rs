@@ -22,6 +22,24 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Users::PasswordHash).text().not_null())
                     .col(ColumnDef::new(Users::IsAdmin).boolean().not_null())
                     .col(
+                        ColumnDef::new(Users::IsActive)
+                            .boolean()
+                            .not_null()
+                            .default(true),
+                    )
+                    .col(
+                        ColumnDef::new(Users::EmailVerified)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(Users::Permissions)
+                            .json()
+                            .not_null()
+                            .default("[]"),
+                    )
+                    .col(
                         ColumnDef::new(Users::CreatedAt)
                             .timestamp_with_time_zone()
                             .not_null(),
@@ -52,6 +70,9 @@ enum Users {
     Email,
     PasswordHash,
     IsAdmin,
+    IsActive,
+    EmailVerified,
+    Permissions,
     CreatedAt,
     UpdatedAt,
     LastLoginAt,

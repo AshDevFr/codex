@@ -133,6 +133,7 @@ mod tests {
             password_hash: "hash123".to_string(),
             is_admin: false,
             is_active: true,
+            email_verified: false,
             permissions: serde_json::json!([]),
             created_at: Utc::now(),
             updated_at: Utc::now(),

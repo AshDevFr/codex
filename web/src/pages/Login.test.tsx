@@ -29,14 +29,15 @@ describe('Login Component', () => {
   it('should handle successful login', async () => {
     const user = userEvent.setup();
     const mockResponse: LoginResponse = {
-      token: 'test-token',
+      accessToken: 'test-token',
+      tokenType: 'Bearer',
+      expiresIn: 3600,
       user: {
         id: '1',
         username: 'testuser',
         email: 'test@example.com',
-        role: 'USER',
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-01T00:00:00Z',
+        isAdmin: false,
+        emailVerified: true,
       },
     };
 

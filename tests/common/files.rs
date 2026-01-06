@@ -9,7 +9,6 @@ use zip::ZipWriter;
 // Re-export for PDF creation
 use lopdf::dictionary;
 pub use lopdf::{
-    content::{Content, Operation},
     Dictionary, Document, Object, Stream,
 };
 

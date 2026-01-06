@@ -60,7 +60,13 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
     Router::new()
         // Auth routes (public)
         .route("/auth/login", post(handlers::login))
+        .route("/auth/register", post(handlers::register))
         .route("/auth/logout", post(handlers::logout))
+        .route("/auth/verify-email", post(handlers::verify_email))
+        .route(
+            "/auth/resend-verification",
+            post(handlers::resend_verification),
+        )
         // Library routes (protected)
         .route("/libraries", get(handlers::list_libraries))
         .route("/libraries", post(handlers::create_library))

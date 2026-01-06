@@ -67,6 +67,8 @@ pub struct AppState {
     pub db: DatabaseConnection,
     pub jwt_service: Arc<JwtService>,
     pub scan_manager: Arc<ScanManager>,
+    pub auth_config: Arc<crate::config::AuthConfig>,
+    pub email_service: Arc<crate::services::email::EmailService>,
 }
 
 // Legacy alias for backwards compatibility during transition

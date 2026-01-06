@@ -153,6 +153,7 @@ mod tests {
             password_hash,
             is_admin: true,
             is_active: true,
+            email_verified: false,
             permissions: serde_json::to_value(&permissions_vec).unwrap(),
             created_at: Utc::now(),
             updated_at: Utc::now(),

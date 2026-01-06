@@ -1,8 +1,9 @@
 use axum::Router;
 use codex::api::extractors::{AppState, AuthState};
 use codex::api::routes::create_router;
-use codex::config::ApiConfig;
+use codex::config::{ApiConfig, AuthConfig, EmailConfig};
 use codex::scanner::ScanManager;
+use codex::services::email::EmailService;
 use codex::utils::jwt::JwtService;
 use http_body_util::BodyExt;
 use hyper::{body::Bytes, Request, StatusCode};
@@ -19,11 +20,15 @@ pub fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
     ));
 
     let scan_manager = Arc::new(ScanManager::new(db.clone(), 2));
+    let auth_config = Arc::new(AuthConfig::default());
+    let email_service = Arc::new(EmailService::new(EmailConfig::default()));
 
     Arc::new(AppState {
         db,
         jwt_service,
         scan_manager,
+        auth_config,
+        email_service,
     })
 }
 
@@ -35,11 +40,15 @@ pub fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
     ));
 
     let scan_manager = Arc::new(ScanManager::new(db.clone(), 2));
+    let auth_config = Arc::new(AuthConfig::default());
+    let email_service = Arc::new(EmailService::new(EmailConfig::default()));
 
     Arc::new(AppState {
         db,
         jwt_service,
         scan_manager,
+        auth_config,
+        email_service,
     })
 }
 
@@ -59,10 +68,14 @@ pub fn create_test_api_config() -> ApiConfig {
 pub fn create_test_router(state: Arc<AuthState>) -> Router {
     // Convert AuthState to AppState for compatibility
     let scan_manager = Arc::new(ScanManager::new(state.db.clone(), 2));
+    let auth_config = Arc::new(AuthConfig::default());
+    let email_service = Arc::new(EmailService::new(EmailConfig::default()));
     let app_state = Arc::new(AppState {
         db: state.db.clone(),
         jwt_service: state.jwt_service.clone(),
         scan_manager,
+        auth_config,
+        email_service,
     });
     let api_config = create_test_api_config();
     create_router(app_state, &api_config)

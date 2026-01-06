@@ -16,6 +16,8 @@ pub struct Config {
     pub api: ApiConfig,
     #[serde(default)]
     pub scanner: ScannerConfig,
+    #[serde(default)]
+    pub email: EmailConfig,
 }
 
 impl Default for Config {
@@ -101,6 +103,7 @@ impl Default for Config {
             auth: AuthConfig::default(),
             api: ApiConfig::default(),
             scanner: ScannerConfig::default(),
+            email: EmailConfig::default(),
         }
     }
 }
@@ -112,6 +115,7 @@ pub struct AuthConfig {
     pub jwt_expiry_hours: u32,
     pub refresh_token_enabled: bool,
     pub refresh_token_expiry_days: u32,
+    pub email_confirmation_required: bool,
     pub argon2_memory_cost: u32,
     pub argon2_time_cost: u32,
     pub argon2_parallelism: u32,
@@ -124,6 +128,7 @@ impl Default for AuthConfig {
             jwt_expiry_hours: 24,
             refresh_token_enabled: false,
             refresh_token_expiry_days: 30,
+            email_confirmation_required: env_bool_or("CODEX_AUTH_EMAIL_CONFIRMATION_REQUIRED", false),
             argon2_memory_cost: 19456,
             argon2_time_cost: 2,
             argon2_parallelism: 1,
@@ -346,6 +351,40 @@ impl Default for ScannerConfig {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct EmailConfig {
+    pub smtp_host: String,
+    pub smtp_port: u16,
+    pub smtp_username: String,
+    pub smtp_password: String,
+    pub smtp_from_email: String,
+    pub smtp_from_name: String,
+    pub verification_token_expiry_hours: u32,
+    pub verification_url_base: String,
+}
+
+impl Default for EmailConfig {
+    fn default() -> Self {
+        Self {
+            smtp_host: env_string_opt("CODEX_EMAIL_SMTP_HOST")
+                .unwrap_or_else(|| "localhost".to_string()),
+            smtp_port: env_or("CODEX_EMAIL_SMTP_PORT", 587),
+            smtp_username: env_string_opt("CODEX_EMAIL_SMTP_USERNAME")
+                .unwrap_or_else(|| "".to_string()),
+            smtp_password: env_string_opt("CODEX_EMAIL_SMTP_PASSWORD")
+                .unwrap_or_else(|| "".to_string()),
+            smtp_from_email: env_string_opt("CODEX_EMAIL_SMTP_FROM_EMAIL")
+                .unwrap_or_else(|| "noreply@example.com".to_string()),
+            smtp_from_name: env_string_opt("CODEX_EMAIL_SMTP_FROM_NAME")
+                .unwrap_or_else(|| "Codex".to_string()),
+            verification_token_expiry_hours: env_or("CODEX_EMAIL_VERIFICATION_TOKEN_EXPIRY_HOURS", 24),
+            verification_url_base: env_string_opt("CODEX_EMAIL_VERIFICATION_URL_BASE")
+                .unwrap_or_else(|| "http://localhost:8080".to_string()),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -483,6 +522,7 @@ mod tests {
             auth: AuthConfig::default(),
             api: ApiConfig::default(),
             scanner: ScannerConfig::default(),
+            email: EmailConfig::default(),
         };
 
         assert_eq!(config.application.name, "Codex");
@@ -527,6 +567,7 @@ mod tests {
             jwt_expiry_hours: 48,
             refresh_token_enabled: true,
             refresh_token_expiry_days: 60,
+            email_confirmation_required: false,
             argon2_memory_cost: 20000,
             argon2_time_cost: 3,
             argon2_parallelism: 2,

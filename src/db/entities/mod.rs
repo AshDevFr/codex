@@ -5,6 +5,7 @@ pub mod prelude;
 pub mod api_keys;
 pub mod book_metadata_records;
 pub mod books;
+pub mod email_verification_tokens;
 pub mod libraries;
 pub mod metadata_sources;
 pub mod pages;

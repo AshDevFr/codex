@@ -5,6 +5,7 @@ mod db;
 mod models;
 mod parsers;
 mod scanner;
+mod services;
 mod utils;
 mod web;
 

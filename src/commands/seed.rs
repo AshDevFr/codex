@@ -51,6 +51,7 @@ pub async fn seed_command(config_path: PathBuf) -> Result<()> {
         password_hash,
         is_admin: true,
         is_active: true,
+        email_verified: true,
         permissions: serde_json::from_str(&permissions_json)
             .unwrap_or_else(|_| serde_json::json!([])),
         created_at: Utc::now(),

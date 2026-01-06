@@ -139,7 +139,7 @@ impl ScanManager {
         // Clone necessary data for the task
         let db = self.db.clone();
         let state = self.state.clone();
-        let max_concurrent = self.max_concurrent;
+        let _max_concurrent = self.max_concurrent;
 
         // Spawn scan task
         tokio::spawn(async move {
@@ -249,7 +249,6 @@ impl ScanManager {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     // Note: Full integration tests are in tests/api/scan.rs
     // These are just unit tests for the manager logic

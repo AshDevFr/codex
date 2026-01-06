@@ -163,6 +163,7 @@ pub async fn create_user(
         password_hash,
         is_admin: request.is_admin,
         is_active: true,
+        email_verified: true, // Admin-created users are verified by default
         permissions,
         last_login_at: None,
         created_at: now,

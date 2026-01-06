@@ -107,6 +107,14 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     scheduler.start().await?;
     info!("Scan scheduler started successfully");
 
+    // Initialize email service
+    info!("Initializing email service...");
+    let email_service =
+        Arc::new(crate::services::email::EmailService::new(config.email.clone()));
+    info!("  SMTP host: {}", config.email.smtp_host);
+    info!("  SMTP port: {}", config.email.smtp_port);
+    info!("  From: {}", config.email.smtp_from_email);
+
     // Create application state for API
     let api_state = Arc::new(crate::api::AppState {
         db: db.sea_orm_connection().clone(),
@@ -115,6 +123,8 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             config.auth.jwt_expiry_hours,
         )),
         scan_manager,
+        auth_config: Arc::new(config.auth.clone()),
+        email_service,
     });
 
     // Build router using API module

@@ -4,9 +4,8 @@ export interface User {
   id: string;
   username: string;
   email: string;
-  role: 'ADMIN' | 'USER';
-  created_at: string;
-  updated_at: string;
+  isAdmin: boolean;
+  emailVerified: boolean;
 }
 
 export interface Library {
@@ -82,8 +81,24 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  token: string;
+  accessToken: string;
+  tokenType: string;
+  expiresIn: number;
   user: User;
+}
+
+export interface RegisterRequest {
+  username: string;
+  email: string;
+  password: string;
+}
+
+export interface RegisterResponse {
+  accessToken?: string;
+  tokenType?: string;
+  expiresIn?: number;
+  user: User;
+  message?: string;
 }
 
 export interface ApiError {
