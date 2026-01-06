@@ -12,7 +12,7 @@ pub struct Model {
     pub name: String,
     pub key_hash: String,
     pub key_prefix: String,
-    pub permissions: String, // JSON string
+    pub permissions: serde_json::Value,
     pub is_active: bool,
     pub expires_at: Option<DateTime<Utc>>,
     pub last_used_at: Option<DateTime<Utc>>,

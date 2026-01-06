@@ -189,7 +189,7 @@ async fn extract_from_api_key(api_key: &str, state: &AppState) -> Result<AuthCon
     }
 
     // Parse permissions from API key (stored as JSON string)
-    let permissions: Vec<Permission> = serde_json::from_str(&api_key_model.permissions)
+    let permissions: Vec<Permission> = serde_json::from_value(api_key_model.permissions)
         .map_err(|e| ApiError::Internal(format!("Failed to parse permissions: {}", e)))?;
 
     // Update last used timestamp (fire and forget - don't block on this)

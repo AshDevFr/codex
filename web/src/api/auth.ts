@@ -1,0 +1,22 @@
+import { api } from './client';
+import type { LoginRequest, LoginResponse, User } from '@/types/api';
+
+export const authApi = {
+  // Login
+  login: async (credentials: LoginRequest): Promise<LoginResponse> => {
+    const response = await api.post<LoginResponse>('/auth/login', credentials);
+    return response.data;
+  },
+
+  // Get current user
+  getCurrentUser: async (): Promise<User> => {
+    const response = await api.get<User>('/auth/me');
+    return response.data;
+  },
+
+  // Logout (just clear local storage, no API call needed)
+  logout: () => {
+    localStorage.removeItem('jwt_token');
+    localStorage.removeItem('user');
+  },
+};

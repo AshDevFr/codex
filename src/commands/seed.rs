@@ -135,13 +135,15 @@ fn generate_api_key(
     // Store prefix for lookup (must match auth extractor logic)
     let key_prefix = format!("codex_{}", prefix_random);
 
+    let permissions_json = serialize_permissions(permissions);
     let api_key_model = api_keys::Model {
         id: Uuid::new_v4(),
         user_id,
         name,
         key_hash,
         key_prefix,
-        permissions: serialize_permissions(permissions),
+        permissions: serde_json::from_str(&permissions_json)
+            .unwrap_or_else(|_| serde_json::json!([])),
         is_active: true,
         expires_at: None,
         last_used_at: None,

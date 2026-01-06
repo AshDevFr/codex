@@ -100,7 +100,7 @@ pub fn create_test_api_key(
     name: &str,
     key_hash: &str,
     key_prefix: &str,
-    permissions: String,
+    permissions: serde_json::Value,
 ) -> api_keys::Model {
     let now = Utc::now();
     api_keys::Model {

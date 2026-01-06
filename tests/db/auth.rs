@@ -103,12 +103,13 @@ async fn test_api_key_flow() {
     permissions.insert(Permission::BooksRead);
     permissions.insert(Permission::PagesRead);
 
+    let permissions_json = serialize_permissions(&permissions);
     let api_key = create_test_api_key(
         created_user.id,
         "Test API Key",
         &key_hash,
         "codex_abc",
-        serialize_permissions(&permissions),
+        serde_json::from_str(&permissions_json).unwrap(),
     );
 
     let created_key = ApiKeyRepository::create(&db, &api_key).await.unwrap();
@@ -124,7 +125,7 @@ async fn test_api_key_flow() {
     assert!(found_key.is_active);
 
     // 4. Parse permissions
-    let parsed_perms = parse_permissions(&found_key.permissions).unwrap();
+    let parsed_perms: HashSet<Permission> = serde_json::from_value(found_key.permissions).unwrap();
     assert_eq!(parsed_perms.len(), 3);
     assert!(parsed_perms.contains(&Permission::LibrariesRead));
     assert!(parsed_perms.contains(&Permission::BooksRead));
@@ -194,12 +195,13 @@ async fn test_user_with_multiple_api_keys() {
     ];
 
     for (name, permissions) in keys {
+        let permissions_json = serialize_permissions(&permissions);
         let api_key = create_test_api_key(
             created_user.id,
             name,
             &format!("hash_{}", name),
             &format!("codex_{}", name),
-            serialize_permissions(&permissions),
+            serde_json::from_str(&permissions_json).unwrap(),
         );
 
         ApiKeyRepository::create(&db, &api_key).await.unwrap();
@@ -213,7 +215,7 @@ async fn test_user_with_multiple_api_keys() {
 
     // Verify each key has correct permissions
     for key in &user_keys {
-        let perms = parse_permissions(&key.permissions).unwrap();
+        let perms: HashSet<Permission> = serde_json::from_value(key.permissions.clone()).unwrap();
         if key.name == "Mobile App" {
             assert_eq!(perms.len(), 5); // READONLY
         } else if key.name == "Admin Tool" {
@@ -258,12 +260,13 @@ async fn test_api_key_expiration() {
     let created_user = UserRepository::create(&db, &user).await.unwrap();
 
     // Create API key with expiration in the past
+    let permissions_json = serialize_permissions(&READONLY_PERMISSIONS);
     let mut expired_key = create_test_api_key(
         created_user.id,
         "Expired Key",
         "expired_hash",
         "codex_exp",
-        serialize_permissions(&READONLY_PERMISSIONS),
+        serde_json::from_str(&permissions_json).unwrap(),
     );
     expired_key.expires_at = Some(Utc::now() - chrono::Duration::days(1));
 

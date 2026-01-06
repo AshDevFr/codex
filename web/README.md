@@ -1,73 +1,130 @@
-# React + TypeScript + Vite
+# Codex Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Modern React-based web interface for Codex comic book management system.
 
-Currently, two official plugins are available:
+## Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Framework**: React 19 + TypeScript + Vite
+- **UI Library**: Mantine 7.14 (dark theme optimized)
+- **State Management**:
+  - Zustand (client state)
+  - TanStack Query (server state)
+- **Routing**: React Router v7
+- **HTTP Client**: Axios
+- **Icons**: Tabler Icons
 
-## React Compiler
+## Quick Start
 
-The React Compiler is currently not compatible with SWC. See [this issue](https://github.com/vitejs/vite-plugin-react/issues/428) for tracking the progress.
+### Development
 
-## Expanding the ESLint configuration
+```bash
+# Install dependencies
+npm install
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Start dev server
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Visit `http://localhost:5173`
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Docker Development (with backend)
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+# From project root
+docker-compose --profile dev up
 ```
+
+This starts:
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:8080`
+- Database: `localhost:5432`
+
+## Project Structure
+
+```
+web/
+├── src/
+│   ├── api/              # API clients
+│   ├── components/       # React components
+│   │   ├── layout/       # AppShell, Sidebar, Header
+│   │   ├── ui/           # Reusable UI components
+│   │   ├── covers/       # Cover grid components
+│   │   └── reader/       # Book reader components
+│   ├── pages/            # Page components
+│   ├── store/            # Zustand stores
+│   ├── types/            # TypeScript types
+│   ├── theme.ts          # Mantine theme
+│   └── main.tsx          # Entry point
+└── vite.config.ts
+```
+
+## Features
+
+### Implemented ✅
+
+- Authentication (login, JWT storage)
+- Library list view with cards
+- Scan library functionality
+- Dark theme (Komga-inspired)
+- Responsive layout
+- Protected routes
+
+### Coming Soon
+
+- Series grid view
+- Book detail view
+- Reading interface
+- Search & filters
+- User management (admin)
+
+## Commands
+
+```bash
+npm run dev              # Start dev server
+npm run build            # Production build
+npm run preview          # Preview production build
+npm run lint             # Run linter
+npm test                 # Run tests in watch mode
+npm run test:run         # Run tests once (CI)
+npm run test:ui          # Run tests with UI
+npm run test:coverage    # Generate coverage report
+```
+
+## API Integration
+
+The frontend communicates with the Rust backend at `/api/v1`:
+
+- **Dev**: Proxied through Vite to `http://localhost:8080`
+- **Production**: Served by Rust binary (embedded static files)
+
+## Configuration
+
+### Environment Variables
+
+Create `.env` file:
+
+```env
+VITE_API_URL=http://localhost:8080/api/v1
+```
+
+### Theme Customization
+
+Edit [src/theme.ts](src/theme.ts) to customize colors, spacing, and component defaults.
+
+## Testing
+
+The frontend has comprehensive test coverage using Vitest and React Testing Library.
+
+**Current Test Coverage:**
+- 25 tests passing (100%)
+- Auth store tests
+- API client tests
+- Component tests (Login, Home, Sidebar)
+
+See [TESTING.md](TESTING.md) for detailed testing guide.
+
+## Documentation
+
+- See [TESTING.md](TESTING.md) for testing guide
+- See [../tmp/impl/FRONTEND_PLAN.md](../tmp/impl/FRONTEND_PLAN.md) for complete roadmap
+- See [../tmp/impl/FRONTEND_PHASE1_COMPLETE.md](../tmp/impl/FRONTEND_PHASE1_COMPLETE.md) for Phase 1 summary

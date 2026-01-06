@@ -71,9 +71,11 @@ services:
           path: ./web/biome.json
           target: /app/biome.json
 
-        # Rebuild when dependencies change (npm install)
-        - action: rebuild
+        # Restart when dependencies change (npm install will run on restart)
+        - action: sync+restart
           path: ./web/package.json
+          target: /app/package.json
 
-        - action: rebuild
+        - action: sync+restart
           path: ./web/package-lock.json
+          target: /app/package-lock.json

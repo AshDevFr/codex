@@ -27,10 +27,16 @@ build-release-no-rar: ## Build with release optimizations without rar support
 build-release-docker: ## Build with release optimizations and rar support for Docker
 	docker build -f Dockerfile -t codex:latest .
 
-test: ## Run all tests (SQLite only)
+test: ## Run backend tests only (SQLite)
 	cargo test
 
-test-all: ## Run all tests including PostgreSQL
+test-frontend: ## Run frontend tests
+	cd web && npm run test:run
+
+test-all: ## Run all tests (backend SQLite + PostgreSQL + frontend)
+	@echo "$(YELLOW)Running frontend tests...$(NC)"
+	cd web && npm run test:run
+	@echo "$(GREEN)Frontend tests complete!$(NC)"
 	@echo "$(YELLOW)Starting PostgreSQL test container...$(NC)"
 	docker compose --profile test up -d postgres-test
 	@echo "$(YELLOW)Waiting for PostgreSQL to be ready...$(NC)"
@@ -38,7 +44,7 @@ test-all: ## Run all tests including PostgreSQL
 		sleep 1; \
 	done
 	@echo "$(GREEN)PostgreSQL is ready!$(NC)"
-	@echo "$(GREEN)Running all tests with PostgreSQL support...$(NC)"
+	@echo "$(GREEN)Running backend tests with PostgreSQL support...$(NC)"
 	@POSTGRES_HOST=localhost POSTGRES_PORT=5433 POSTGRES_USER=codex_test POSTGRES_PASSWORD=codex_test POSTGRES_DB=codex_test \
 		cargo test --features rar -- --include-ignored; \
 		TEST_EXIT_CODE=$$?; \
@@ -159,6 +165,9 @@ dev-restart-backend: ## Restart backend only
 dev-restart-frontend: ## Restart frontend only
 	docker compose restart frontend-dev
 
+dev-seed: ## Create initial admin user in dev environment
+	docker compose --profile dev exec codex-dev cargo run -- seed --config config/config.docker.yaml
+
 ## Docker Compose - Testing
 
 test-up: ## Start test database
@@ -224,7 +233,7 @@ fmt: ## Format code
 lint: ## Run clippy
 	cargo clippy -- -D warnings
 
-check: fmt lint test ## Run all checks (format, lint, test)
+check: fmt lint test test-frontend ## Run all checks (format, lint, backend test, frontend test)
 
 ## CI/CD
 
@@ -232,6 +241,7 @@ ci: ## Run CI checks
 	cargo fmt -- --check
 	cargo clippy -- -D warnings
 	cargo test
+	cd web && npm run test:run
 	cargo build --release
 
 ## Binary Distribution (cargo-dist)

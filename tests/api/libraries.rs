@@ -102,12 +102,13 @@ async fn test_list_libraries_with_api_key() {
     let mut permissions = HashSet::new();
     permissions.insert(Permission::LibrariesRead);
 
+    let permissions_json = serialize_permissions(&permissions);
     let api_key = create_test_api_key(
         created_user.id,
         "Test Key",
         &key_hash,
         "codex_test123",
-        serialize_permissions(&permissions),
+        serde_json::from_str(&permissions_json).unwrap(),
     );
     ApiKeyRepository::create(&db, &api_key).await.unwrap();
 
