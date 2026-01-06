@@ -86,7 +86,7 @@ jobs:
         run: |
           cargo clippy --features rar -- -D warnings
 
-  # Stage 2: Build release binaries with cargo-dist (after tests pass)
+  # Stage 2: Build release binary (after tests pass)
   build:
     needs: [test, lint]
     runs-on: ubuntu-latest
@@ -120,60 +120,21 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Install cargo-dist
-        shell: bash
-        run: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/latest/download/cargo-dist-installer.sh | sh"
-
-      - name: Install zig
+      - name: Build release binary
         run: |
-          # Install zig for cross-compilation
-          wget -q https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz
-          tar -xf zig-x86_64-linux-0.15.2.tar.xz
-          sudo mv zig-x86_64-linux-0.15.2 /usr/local/zig
-          sudo ln -s /usr/local/zig/zig /usr/local/bin/zig
-          zig version
+          # Build optimized release binary
+          cargo build --release --features rar
+          # Show binary info
+          ls -lh target/release/codex
+          file target/release/codex
 
-      - name: Install cross-compilation tools
-        run: |
-          # Install cargo-zigbuild for Linux cross-compilation (e.g., Linux ARM64)
-          cargo install cargo-zigbuild --locked
-          # Verify installation
-          cargo zigbuild --version || echo "cargo-zigbuild installed"
-
-      - name: Install perl for vendored OpenSSL
-        run: |
-          # Perl is required for building vendored OpenSSL during cross-compilation
-          apt-get update && apt-get install -y perl
-
-      - name: Build binaries with cargo-dist
-        env:
-          # Enable vendored OpenSSL for cross-compilation (requires perl)
-          OPENSSL_STATIC: "1"
-          OPENSSL_VENDORED: "1"
-        run: |
-          # Build binaries with cross-compilation support
-          # Using --artifacts=local for CI builds without git tags
-          # cargo-dist will automatically use cargo-zigbuild for ARM64
-          # OPENSSL_VENDORED=1 enables building OpenSSL from source for cross-compilation
-          # Features are configured in Cargo.toml [workspace.metadata.dist]
-          cargo dist build --artifacts=local --output-format=json > dist-manifest.json 2>&1 || {
-            echo "Build attempt completed"
-            # Check what artifacts were created
-            if [ -d "target/dist" ]; then
-              echo "Found build artifacts in target/dist"
-              find target/dist -type f -name "*.tar.xz" -o -name "*.tar.gz" | head -20 || true
-            fi
-          }
-
-      - name: Upload artifacts
+      - name: Upload binary artifact
         if: github.event_name == 'push'
         uses: actions/upload-artifact@v3
         with:
-          name: dist-artifacts
-          path: |
-            target/dist/
-            dist-manifest.json
-          retention-days: 3
+          name: codex-binary
+          path: target/release/codex
+          retention-days: 7
 
   # Stage 2: Build and push Docker image (parallel with build)
   docker:
@@ -240,7 +201,7 @@ jobs:
             type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache-latest,mode=min
             type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache,mode=min
 
-  # Stage 3: Publish binaries (after build completes, push only)
+  # Stage 3: Publish binary (after build completes, push only)
   publish:
     needs: [build]
     if: github.event_name == 'push'
@@ -256,52 +217,45 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download artifacts
+      - name: Download binary
         uses: actions/download-artifact@v3
         with:
-          name: dist-artifacts
+          name: codex-binary
+          path: ./artifacts
 
       - name: Get version info
         id: version
         run: |
-          echo "tag=dev" >> $GITHUB_OUTPUT
           echo "version=dev-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          export TZ=UTC
-          echo "date=$(date +'%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_OUTPUT
 
-      - name: Publish dev binaries to registry
+      - name: Create tarball
+        run: |
+          cd artifacts
+          chmod +x codex
+          tar -czf codex-x86_64-linux-gnu.tar.gz codex
+          sha256sum codex-x86_64-linux-gnu.tar.gz > codex-x86_64-linux-gnu.tar.gz.sha256
+          ls -lh
+
+      - name: Publish binary to registry
         env:
           GITHUB_TOKEN: ${{ secrets.PACKAGE_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
-          # Find all built artifacts
-          for artifact in $(find target/dist -type f \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.msi" -o -name "*.pkg" \) 2>/dev/null); do
-            filename=$(basename "$artifact")
-            echo "Publishing $filename as dev build..."
+          cd artifacts
+          version="${{ steps.version.outputs.version }}"
 
-            # Determine content type
-            case "$artifact" in
-              *.zip)
-                content_type="application/zip"
-                ;;
-              *.tar.gz)
-                content_type="application/gzip"
-                ;;
-              *.msi)
-                content_type="application/x-msi"
-                ;;
-              *.pkg)
-                content_type="application/x-apple-installer-package"
-                ;;
-              *)
-                content_type="application/octet-stream"
-                ;;
-            esac
+          # Upload tarball
+          echo "Publishing codex-x86_64-linux-gnu.tar.gz..."
+          curl -v -X PUT \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/gzip" \
+            --data-binary @"codex-x86_64-linux-gnu.tar.gz" \
+            "${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/$version/codex-x86_64-linux-gnu.tar.gz" || echo "Failed to upload tarball"
 
-            # Upload to Gitea package registry with "dev" label
-            curl -v -X PUT \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Content-Type: $content_type" \
-              --data-binary @"$artifact" \
-              "${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/dev/$filename" || echo "Failed to upload $filename"
-          done
+          # Upload checksum
+          echo "Publishing checksum..."
+          curl -v -X PUT \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: text/plain" \
+            --data-binary @"codex-x86_64-linux-gnu.tar.gz.sha256" \
+            "${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/$version/codex-x86_64-linux-gnu.tar.gz.sha256" || echo "Failed to upload checksum"

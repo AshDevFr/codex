@@ -100,25 +100,3 @@ tempfile = "3.13"
 tower = { version = "0.4", features = ["util"] }
 http-body-util = "0.1"
 hyper = { version = "1.0", features = ["full"] }
-
-# Build profile for cargo-dist
-[profile.dist]
-inherits = "release"
-
-# cargo-dist configuration for buildxing standalone binaries
-[workspace.metadata.dist]
-# Cargo package to build and distribute
-cargo-dist-version = "0.30.3"
-# Build with rar feature (CBR support)
-features = ["rar"]
-# Target platforms to build for
-targets = [
-    "x86_64-unknown-linux-gnu",  # Linux x86_64
-    "aarch64-unknown-linux-gnu", # Linux ARM64
-]
-# Installers to create
-installers = ["shell"]
-# CI backends to support (using github format for Gitea compatibility)
-ci = ["github"]
-# Allow dirty working directory and custom tags
-allow-dirty = ["ci"]
