@@ -3,7 +3,7 @@ import type { ApiError } from '@/types/api';
 
 // Create axios instance with base configuration
 export const api: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api/v1',
+  baseURL: '/api/v1',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',

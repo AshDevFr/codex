@@ -100,7 +100,9 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - VITE_API_URL=http://codex-dev:8080
+      # Set proxy target for Vite dev server to connect to backend service
+      # This is used by vite.config.ts proxy configuration
+      VITE_API_URL: http://codex-dev:8080
     volumes:
       - ./web:/app
       - node_modules:/app/node_modules

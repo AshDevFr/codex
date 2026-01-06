@@ -109,8 +109,9 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
 
     // Initialize email service
     info!("Initializing email service...");
-    let email_service =
-        Arc::new(crate::services::email::EmailService::new(config.email.clone()));
+    let email_service = Arc::new(crate::services::email::EmailService::new(
+        config.email.clone(),
+    ));
     info!("  SMTP host: {}", config.email.smtp_host);
     info!("  SMTP port: {}", config.email.smtp_port);
     info!("  From: {}", config.email.smtp_from_email);

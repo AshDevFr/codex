@@ -128,7 +128,10 @@ impl Default for AuthConfig {
             jwt_expiry_hours: 24,
             refresh_token_enabled: false,
             refresh_token_expiry_days: 30,
-            email_confirmation_required: env_bool_or("CODEX_AUTH_EMAIL_CONFIRMATION_REQUIRED", false),
+            email_confirmation_required: env_bool_or(
+                "CODEX_AUTH_EMAIL_CONFIRMATION_REQUIRED",
+                false,
+            ),
             argon2_memory_cost: 19456,
             argon2_time_cost: 2,
             argon2_parallelism: 1,
@@ -378,7 +381,10 @@ impl Default for EmailConfig {
                 .unwrap_or_else(|| "noreply@example.com".to_string()),
             smtp_from_name: env_string_opt("CODEX_EMAIL_SMTP_FROM_NAME")
                 .unwrap_or_else(|| "Codex".to_string()),
-            verification_token_expiry_hours: env_or("CODEX_EMAIL_VERIFICATION_TOKEN_EXPIRY_HOURS", 24),
+            verification_token_expiry_hours: env_or(
+                "CODEX_EMAIL_VERIFICATION_TOKEN_EXPIRY_HOURS",
+                24,
+            ),
             verification_url_base: env_string_opt("CODEX_EMAIL_VERIFICATION_URL_BASE")
                 .unwrap_or_else(|| "http://localhost:8080".to_string()),
         }

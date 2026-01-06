@@ -196,9 +196,12 @@ pub async fn register(
     let response = if email_confirmation_required {
         // Create verification token
         let expiry_hours = state.email_service.config.verification_token_expiry_hours as i64;
-        let token = EmailVerificationTokenRepository::create(&state.db, created_user.id, expiry_hours)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to create verification token: {}", e)))?;
+        let token =
+            EmailVerificationTokenRepository::create(&state.db, created_user.id, expiry_hours)
+                .await
+                .map_err(|e| {
+                    ApiError::Internal(format!("Failed to create verification token: {}", e))
+                })?;
 
         // Send verification email
         state
@@ -291,9 +294,7 @@ pub async fn verify_email(
 
     // Check if email is already verified
     if user.email_verified {
-        return Err(ApiError::BadRequest(
-            "Email already verified".to_string(),
-        ));
+        return Err(ApiError::BadRequest("Email already verified".to_string()));
     }
 
     // Update user: mark email as verified and activate account
@@ -314,7 +315,11 @@ pub async fn verify_email(
     // Generate JWT token for the user
     let access_token = state
         .jwt_service
-        .generate_token(updated_user.id, updated_user.username.clone(), updated_user.is_admin)
+        .generate_token(
+            updated_user.id,
+            updated_user.username.clone(),
+            updated_user.is_admin,
+        )
         .map_err(|e| ApiError::Internal(format!("Failed to generate token: {}", e)))?;
 
     // Build response

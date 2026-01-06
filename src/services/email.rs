@@ -114,7 +114,10 @@ impl EmailService {
     </div>
 </body>
 </html>"#,
-            to_name, verification_url, verification_url, self.config.verification_token_expiry_hours
+            to_name,
+            verification_url,
+            verification_url,
+            self.config.verification_token_expiry_hours
         )
     }
 

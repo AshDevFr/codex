@@ -8,9 +8,7 @@ use zip::ZipWriter;
 
 // Re-export for PDF creation
 use lopdf::dictionary;
-pub use lopdf::{
-    Dictionary, Document, Object, Stream,
-};
+pub use lopdf::{Dictionary, Document, Object, Stream};
 
 /// Create a simple test PNG image using the image crate
 pub fn create_test_png(width: u32, height: u32) -> Vec<u8> {
