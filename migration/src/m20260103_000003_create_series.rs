@@ -51,6 +51,17 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        // Add index on normalized_name for search performance
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_series_normalized_name")
+                    .table(Series::Table)
+                    .col(Series::NormalizedName)
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 

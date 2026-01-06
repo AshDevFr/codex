@@ -70,6 +70,17 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        // Add index on title for search performance
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_books_title")
+                    .table(Books::Table)
+                    .col(Books::Title)
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 
