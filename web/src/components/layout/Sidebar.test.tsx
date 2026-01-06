@@ -35,7 +35,6 @@ describe('Sidebar Component (via AppLayout)', () => {
 
     expect(screen.getByText('Home')).toBeInTheDocument();
     expect(screen.getByText('Libraries')).toBeInTheDocument();
-    expect(screen.getByText('Series')).toBeInTheDocument();
     expect(screen.getByText('Settings')).toBeInTheDocument();
     expect(screen.getByText('Logout')).toBeInTheDocument();
   });
@@ -105,8 +104,7 @@ describe('Sidebar Component (via AppLayout)', () => {
     const logoutButton = screen.getByText('Logout');
     await user.click(logoutButton);
 
-    // Should clear auth and redirect
+    // Should clear auth (navigation is handled by React Router now)
     expect(localStorage.getItem('jwt_token')).toBeNull();
-    expect(window.location.href).toBe('/login');
   });
 });

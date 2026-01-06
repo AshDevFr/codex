@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Container,
   Paper,
@@ -16,18 +16,19 @@ import { IconAlertCircle } from '@tabler/icons-react';
 import { useMutation } from '@tanstack/react-query';
 import { authApi } from '@/api/auth';
 import { useAuthStore } from '@/store/authStore';
-import type { ApiError } from '@/types/api';
+import type { ApiError, LoginRequest, LoginResponse } from '@/types/api';
 
 export function Login() {
+  const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const { setAuth } = useAuthStore();
 
-  const loginMutation = useMutation<any, ApiError, any>({
+  const loginMutation = useMutation<LoginResponse, ApiError, LoginRequest>({
     mutationFn: authApi.login,
     onSuccess: (data) => {
       setAuth(data.user, data.accessToken);
-      window.location.href = '/';
+      navigate('/');
     },
   });
 

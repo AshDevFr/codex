@@ -2,11 +2,11 @@ import { AppShell, Stack, NavLink } from '@mantine/core';
 import {
   IconHome,
   IconBooks,
-  IconBookmark,
   IconSettings,
   IconUsers,
   IconLogout,
 } from '@tabler/icons-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 
 interface SidebarProps {
@@ -14,12 +14,13 @@ interface SidebarProps {
 }
 
 export function Sidebar({ currentPath = '/' }: SidebarProps) {
+  const navigate = useNavigate();
   const { user, clearAuth } = useAuthStore();
   const isAdmin = user?.role === 'ADMIN';
 
   const handleLogout = () => {
     clearAuth();
-    window.location.href = '/login';
+    navigate('/login');
   };
 
   return (
@@ -27,28 +28,22 @@ export function Sidebar({ currentPath = '/' }: SidebarProps) {
       <AppShell.Section grow>
         <Stack gap="xs">
           <NavLink
-            href="/"
+            onClick={() => navigate('/')}
             label="Home"
             leftSection={<IconHome size={20} />}
             active={currentPath === '/'}
           />
           <NavLink
-            href="/libraries"
+            onClick={() => navigate('/libraries')}
             label="Libraries"
             leftSection={<IconBooks size={20} />}
             active={currentPath === '/libraries'}
-          />
-          <NavLink
-            href="/series"
-            label="Series"
-            leftSection={<IconBookmark size={20} />}
-            active={currentPath === '/series'}
           />
 
           {isAdmin && (
             <>
               <NavLink
-                href="/users"
+                onClick={() => navigate('/users')}
                 label="Users"
                 leftSection={<IconUsers size={20} />}
                 active={currentPath === '/users'}
@@ -57,7 +52,7 @@ export function Sidebar({ currentPath = '/' }: SidebarProps) {
           )}
 
           <NavLink
-            href="/settings"
+            onClick={() => navigate('/settings')}
             label="Settings"
             leftSection={<IconSettings size={20} />}
             active={currentPath === '/settings'}

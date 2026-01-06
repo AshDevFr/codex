@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Container,
   Paper,
@@ -19,6 +19,7 @@ import { useAuthStore } from '@/store/authStore';
 import type { ApiError, RegisterRequest } from '@/types/api';
 
 export function Register() {
+  const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,7 +33,7 @@ export function Register() {
       // If access token is provided, user is logged in automatically
       if (data.accessToken) {
         setAuth(data.user, data.accessToken);
-        window.location.href = '/';
+        navigate('/');
       }
       // Otherwise, email confirmation is required (message will show in UI)
     },

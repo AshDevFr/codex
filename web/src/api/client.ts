@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance } from 'axios';
 import type { ApiError } from '@/types/api';
+import { navigationService } from '@/services/navigation';
 
 // Create axios instance with base configuration
 export const api: AxiosInstance = axios.create({
@@ -38,7 +39,7 @@ api.interceptors.response.use(
       if (error.response.status === 401) {
         localStorage.removeItem('jwt_token');
         localStorage.removeItem('user');
-        window.location.href = '/login';
+        navigationService.navigateTo('/login');
       }
 
       return Promise.reject(apiError);
