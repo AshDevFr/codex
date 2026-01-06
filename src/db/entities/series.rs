@@ -22,6 +22,7 @@ pub struct Model {
     pub external_rating_source: Option<String>,
     pub custom_metadata: Option<String>,
     pub fingerprint: Option<String>,
+    pub reading_direction: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

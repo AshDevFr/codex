@@ -808,3 +808,167 @@ async fn test_health_check() {
 
     db.close().await;
 }
+
+// ============================================================================
+// Library & Series New Fields Integration Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_library_reading_direction_fields() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Create library
+    let mut library =
+        LibraryRepository::create(conn, "Manga Library", "/manga", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    // Verify default reading direction
+    assert_eq!(library.default_reading_direction, "LEFT_TO_RIGHT");
+
+    // Update to manga reading direction
+    library.default_reading_direction = "RIGHT_TO_LEFT".to_string();
+    LibraryRepository::update(conn, &library).await.unwrap();
+
+    // Verify update persisted
+    let retrieved = LibraryRepository::get_by_id(conn, library.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(retrieved.default_reading_direction, "RIGHT_TO_LEFT");
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_library_format_filtering() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Create library with format restrictions
+    let mut library =
+        LibraryRepository::create(conn, "Comics Only", "/comics", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    // Initially no format restrictions
+    assert_eq!(library.allowed_formats, None);
+
+    // Set to only allow CBZ and CBR
+    library.allowed_formats = Some(r#"["CBZ","CBR"]"#.to_string());
+    LibraryRepository::update(conn, &library).await.unwrap();
+
+    // Verify it persisted
+    let retrieved = LibraryRepository::get_by_id(conn, library.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        retrieved.allowed_formats,
+        Some(r#"["CBZ","CBR"]"#.to_string())
+    );
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_library_excluded_patterns() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    let mut library =
+        LibraryRepository::create(conn, "Clean Library", "/clean", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    // Set exclusion patterns
+    let patterns = ".DS_Store\nThumbs.db\n@eaDir/*\n*.tmp";
+    library.excluded_patterns = Some(patterns.to_string());
+    LibraryRepository::update(conn, &library).await.unwrap();
+
+    // Verify persistence
+    let retrieved = LibraryRepository::get_by_id(conn, library.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(retrieved.excluded_patterns, Some(patterns.to_string()));
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_series_reading_direction_override() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Create manga library (RTL by default)
+    let mut library =
+        LibraryRepository::create(conn, "Manga Library", "/manga", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    library.default_reading_direction = "RIGHT_TO_LEFT".to_string();
+    LibraryRepository::update(conn, &library).await.unwrap();
+
+    // Create series that inherits library default (reading_direction = None)
+    let series1 = SeriesRepository::create(conn, library.id, "Regular Manga")
+        .await
+        .unwrap();
+    assert_eq!(series1.reading_direction, None);
+
+    // Create series with explicit override for webtoon
+    let mut series2 = SeriesRepository::create(conn, library.id, "Webtoon")
+        .await
+        .unwrap();
+    series2.reading_direction = Some("TOP_TO_BOTTOM".to_string());
+    SeriesRepository::update(conn, &series2).await.unwrap();
+
+    // Verify both series persisted correctly
+    let retrieved1 = SeriesRepository::get_by_id(conn, series1.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let retrieved2 = SeriesRepository::get_by_id(conn, series2.id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(retrieved1.reading_direction, None); // Inherits library's RTL
+    assert_eq!(
+        retrieved2.reading_direction,
+        Some("TOP_TO_BOTTOM".to_string())
+    );
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_series_reading_direction_clear() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    let library =
+        LibraryRepository::create(conn, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    // Create series with explicit direction
+    let mut series = SeriesRepository::create(conn, library.id, "Test Series")
+        .await
+        .unwrap();
+    series.reading_direction = Some("TOP_TO_BOTTOM".to_string());
+    SeriesRepository::update(conn, &series).await.unwrap();
+
+    // Clear it to revert to library default
+    series.reading_direction = None;
+    SeriesRepository::update(conn, &series).await.unwrap();
+
+    // Verify it's cleared
+    let retrieved = SeriesRepository::get_by_id(conn, series.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(retrieved.reading_direction, None);
+
+    db.close().await;
+}

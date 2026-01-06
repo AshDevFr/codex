@@ -26,6 +26,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Series::ExternalRatingSource).string())
                     .col(ColumnDef::new(Series::CustomMetadata).text())
                     .col(ColumnDef::new(Series::Fingerprint).string())
+                    .col(ColumnDef::new(Series::ReadingDirection).string())
                     .col(
                         ColumnDef::new(Series::CreatedAt)
                             .timestamp_with_time_zone()
@@ -76,6 +77,7 @@ enum Series {
     ExternalRatingSource,
     CustomMetadata,
     Fingerprint,
+    ReadingDirection,
     CreatedAt,
     UpdatedAt,
 }

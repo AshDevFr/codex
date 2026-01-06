@@ -27,6 +27,9 @@ impl LibraryRepository {
             path: Set(path.to_string()),
             scanning_strategy: Set(strategy.as_str().to_string()),
             scanning_config: Set(None),
+            default_reading_direction: Set("LEFT_TO_RIGHT".to_string()),
+            allowed_formats: Set(None),
+            excluded_patterns: Set(None),
             created_at: Set(now),
             updated_at: Set(now),
             last_scanned_at: Set(None),
@@ -72,6 +75,9 @@ impl LibraryRepository {
             path: Set(library.path.clone()),
             scanning_strategy: Set(library.scanning_strategy.clone()),
             scanning_config: Set(library.scanning_config.clone()),
+            default_reading_direction: Set(library.default_reading_direction.clone()),
+            allowed_formats: Set(library.allowed_formats.clone()),
+            excluded_patterns: Set(library.excluded_patterns.clone()),
             created_at: Set(library.created_at),
             updated_at: Set(Utc::now()),
             last_scanned_at: Set(library.last_scanned_at),
@@ -302,5 +308,145 @@ mod tests {
             .unwrap();
 
         assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_library_default_reading_direction() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Should default to LEFT_TO_RIGHT
+        assert_eq!(library.default_reading_direction, "LEFT_TO_RIGHT");
+    }
+
+    #[tokio::test]
+    async fn test_library_update_reading_direction() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let mut library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Manga Library",
+            "/manga/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Update reading direction to right-to-left for manga
+        library.default_reading_direction = "RIGHT_TO_LEFT".to_string();
+        LibraryRepository::update(db.sea_orm_connection(), &library)
+            .await
+            .unwrap();
+
+        let retrieved = LibraryRepository::get_by_id(db.sea_orm_connection(), library.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(retrieved.default_reading_direction, "RIGHT_TO_LEFT");
+    }
+
+    #[tokio::test]
+    async fn test_library_allowed_formats() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let mut library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Comic Library",
+            "/comics/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Set allowed formats to only CBZ and CBR
+        library.allowed_formats = Some(r#"["CBZ","CBR"]"#.to_string());
+        LibraryRepository::update(db.sea_orm_connection(), &library)
+            .await
+            .unwrap();
+
+        let retrieved = LibraryRepository::get_by_id(db.sea_orm_connection(), library.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            retrieved.allowed_formats,
+            Some(r#"["CBZ","CBR"]"#.to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn test_library_excluded_patterns() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let mut library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Set excluded patterns
+        let patterns = ".DS_Store\nThumbs.db\n@eaDir/*";
+        library.excluded_patterns = Some(patterns.to_string());
+        LibraryRepository::update(db.sea_orm_connection(), &library)
+            .await
+            .unwrap();
+
+        let retrieved = LibraryRepository::get_by_id(db.sea_orm_connection(), library.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(retrieved.excluded_patterns, Some(patterns.to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_library_all_new_fields() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let mut library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Complete Library",
+            "/complete/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Update all new fields
+        library.default_reading_direction = "TOP_TO_BOTTOM".to_string();
+        library.allowed_formats = Some(r#"["EPUB","PDF"]"#.to_string());
+        library.excluded_patterns = Some("*.tmp\n*.bak".to_string());
+
+        LibraryRepository::update(db.sea_orm_connection(), &library)
+            .await
+            .unwrap();
+
+        let retrieved = LibraryRepository::get_by_id(db.sea_orm_connection(), library.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(retrieved.default_reading_direction, "TOP_TO_BOTTOM");
+        assert_eq!(
+            retrieved.allowed_formats,
+            Some(r#"["EPUB","PDF"]"#.to_string())
+        );
+        assert_eq!(
+            retrieved.excluded_patterns,
+            Some("*.tmp\n*.bak".to_string())
+        );
     }
 }

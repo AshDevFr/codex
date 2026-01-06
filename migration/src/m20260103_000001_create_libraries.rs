@@ -26,6 +26,14 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(Libraries::ScanningConfig).string())
                     .col(
+                        ColumnDef::new(Libraries::DefaultReadingDirection)
+                            .string()
+                            .not_null()
+                            .default("LEFT_TO_RIGHT"),
+                    )
+                    .col(ColumnDef::new(Libraries::AllowedFormats).string())
+                    .col(ColumnDef::new(Libraries::ExcludedPatterns).text())
+                    .col(
                         ColumnDef::new(Libraries::CreatedAt)
                             .timestamp_with_time_zone()
                             .not_null(),
@@ -56,6 +64,9 @@ enum Libraries {
     Path,
     ScanningStrategy,
     ScanningConfig,
+    DefaultReadingDirection,
+    AllowedFormats,
+    ExcludedPatterns,
     CreatedAt,
     UpdatedAt,
     LastScannedAt,

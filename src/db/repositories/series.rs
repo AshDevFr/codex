@@ -58,6 +58,7 @@ impl SeriesRepository {
             external_rating_source: Set(None),
             custom_metadata: Set(None),
             fingerprint: Set(fingerprint),
+            reading_direction: Set(None),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -131,6 +132,7 @@ impl SeriesRepository {
             external_rating_source: Set(series_model.external_rating_source.clone()),
             custom_metadata: Set(series_model.custom_metadata.clone()),
             fingerprint: Set(series_model.fingerprint.clone()),
+            reading_direction: Set(series_model.reading_direction.clone()),
             created_at: Set(series_model.created_at),
             updated_at: Set(Utc::now()),
         };
@@ -417,5 +419,158 @@ mod tests {
             .unwrap();
 
         assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_series_reading_direction_defaults_to_none() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
+            .await
+            .unwrap();
+
+        // reading_direction should default to None (inherits from library)
+        assert_eq!(series.reading_direction, None);
+    }
+
+    #[tokio::test]
+    async fn test_series_update_reading_direction() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let mut series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Manga Series")
+                .await
+                .unwrap();
+
+        // Override reading direction for this specific series
+        series.reading_direction = Some("RIGHT_TO_LEFT".to_string());
+        SeriesRepository::update(db.sea_orm_connection(), &series)
+            .await
+            .unwrap();
+
+        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            retrieved.reading_direction,
+            Some("RIGHT_TO_LEFT".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn test_series_clear_reading_direction() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let mut series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
+                .await
+                .unwrap();
+
+        // Set a reading direction
+        series.reading_direction = Some("TOP_TO_BOTTOM".to_string());
+        SeriesRepository::update(db.sea_orm_connection(), &series)
+            .await
+            .unwrap();
+
+        // Clear it to revert to library default
+        series.reading_direction = None;
+        SeriesRepository::update(db.sea_orm_connection(), &series)
+            .await
+            .unwrap();
+
+        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(retrieved.reading_direction, None);
+    }
+
+    #[tokio::test]
+    async fn test_series_reading_direction_inheritance_concept() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        // Create library with RIGHT_TO_LEFT default (manga library)
+        let mut library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Manga Library",
+            "/manga/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+        library.default_reading_direction = "RIGHT_TO_LEFT".to_string();
+        LibraryRepository::update(db.sea_orm_connection(), &library)
+            .await
+            .unwrap();
+
+        // Create series without reading direction (should inherit library default)
+        let series1 = SeriesRepository::create(db.sea_orm_connection(), library.id, "Manga 1")
+            .await
+            .unwrap();
+
+        // Create series with explicit override
+        let mut series2 = SeriesRepository::create(db.sea_orm_connection(), library.id, "Webtoon")
+            .await
+            .unwrap();
+        series2.reading_direction = Some("TOP_TO_BOTTOM".to_string());
+        SeriesRepository::update(db.sea_orm_connection(), &series2)
+            .await
+            .unwrap();
+
+        // Verify inheritance concept
+        let retrieved_library = LibraryRepository::get_by_id(db.sea_orm_connection(), library.id)
+            .await
+            .unwrap()
+            .unwrap();
+        let retrieved_series1 = SeriesRepository::get_by_id(db.sea_orm_connection(), series1.id)
+            .await
+            .unwrap()
+            .unwrap();
+        let retrieved_series2 = SeriesRepository::get_by_id(db.sea_orm_connection(), series2.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        // Library has RIGHT_TO_LEFT
+        assert_eq!(retrieved_library.default_reading_direction, "RIGHT_TO_LEFT");
+
+        // Series1 has None, meaning it inherits library's RIGHT_TO_LEFT
+        assert_eq!(retrieved_series1.reading_direction, None);
+
+        // Series2 has explicit override to TOP_TO_BOTTOM
+        assert_eq!(
+            retrieved_series2.reading_direction,
+            Some("TOP_TO_BOTTOM".to_string())
+        );
     }
 }

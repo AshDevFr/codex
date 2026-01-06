@@ -23,6 +23,43 @@ impl FileFormat {
     }
 }
 
+/// Reading direction for books and series
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ReadingDirection {
+    /// Left to right (Western comics, most books)
+    LeftToRight,
+    /// Right to left (Manga, some Asian comics)
+    RightToLeft,
+    /// Top to bottom (Webtoons, vertical scrolling)
+    TopToBottom,
+}
+
+impl Default for ReadingDirection {
+    fn default() -> Self {
+        ReadingDirection::LeftToRight
+    }
+}
+
+impl ReadingDirection {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_uppercase().as_str() {
+            "LEFT_TO_RIGHT" | "LTR" => Some(ReadingDirection::LeftToRight),
+            "RIGHT_TO_LEFT" | "RTL" => Some(ReadingDirection::RightToLeft),
+            "TOP_TO_BOTTOM" | "TTB" | "VERTICAL" => Some(ReadingDirection::TopToBottom),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ReadingDirection::LeftToRight => "LEFT_TO_RIGHT",
+            ReadingDirection::RightToLeft => "RIGHT_TO_LEFT",
+            ReadingDirection::TopToBottom => "TOP_TO_BOTTOM",
+        }
+    }
+}
+
 /// Image format type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -202,5 +239,103 @@ mod tests {
         assert_eq!(page.width, 1920);
         assert_eq!(page.height, 1080);
         assert_eq!(page.file_size, 512000);
+    }
+
+    #[test]
+    fn test_reading_direction_default() {
+        let direction = ReadingDirection::default();
+        assert_eq!(direction, ReadingDirection::LeftToRight);
+    }
+
+    #[test]
+    fn test_reading_direction_from_str() {
+        // Test standard formats
+        assert_eq!(
+            ReadingDirection::from_str("LEFT_TO_RIGHT"),
+            Some(ReadingDirection::LeftToRight)
+        );
+        assert_eq!(
+            ReadingDirection::from_str("RIGHT_TO_LEFT"),
+            Some(ReadingDirection::RightToLeft)
+        );
+        assert_eq!(
+            ReadingDirection::from_str("TOP_TO_BOTTOM"),
+            Some(ReadingDirection::TopToBottom)
+        );
+
+        // Test short forms
+        assert_eq!(
+            ReadingDirection::from_str("LTR"),
+            Some(ReadingDirection::LeftToRight)
+        );
+        assert_eq!(
+            ReadingDirection::from_str("RTL"),
+            Some(ReadingDirection::RightToLeft)
+        );
+        assert_eq!(
+            ReadingDirection::from_str("TTB"),
+            Some(ReadingDirection::TopToBottom)
+        );
+
+        // Test aliases
+        assert_eq!(
+            ReadingDirection::from_str("VERTICAL"),
+            Some(ReadingDirection::TopToBottom)
+        );
+
+        // Test case insensitivity
+        assert_eq!(
+            ReadingDirection::from_str("left_to_right"),
+            Some(ReadingDirection::LeftToRight)
+        );
+        assert_eq!(
+            ReadingDirection::from_str("ltr"),
+            Some(ReadingDirection::LeftToRight)
+        );
+
+        // Test invalid input
+        assert_eq!(ReadingDirection::from_str("invalid"), None);
+        assert_eq!(ReadingDirection::from_str(""), None);
+    }
+
+    #[test]
+    fn test_reading_direction_as_str() {
+        assert_eq!(ReadingDirection::LeftToRight.as_str(), "LEFT_TO_RIGHT");
+        assert_eq!(ReadingDirection::RightToLeft.as_str(), "RIGHT_TO_LEFT");
+        assert_eq!(ReadingDirection::TopToBottom.as_str(), "TOP_TO_BOTTOM");
+    }
+
+    #[test]
+    fn test_reading_direction_serialization() {
+        let direction = ReadingDirection::LeftToRight;
+        let json = serde_json::to_string(&direction).unwrap();
+        assert_eq!(json, r#""LEFT_TO_RIGHT""#);
+
+        let direction = ReadingDirection::RightToLeft;
+        let json = serde_json::to_string(&direction).unwrap();
+        assert_eq!(json, r#""RIGHT_TO_LEFT""#);
+
+        let direction = ReadingDirection::TopToBottom;
+        let json = serde_json::to_string(&direction).unwrap();
+        assert_eq!(json, r#""TOP_TO_BOTTOM""#);
+    }
+
+    #[test]
+    fn test_reading_direction_deserialization() {
+        let direction: ReadingDirection = serde_json::from_str(r#""LEFT_TO_RIGHT""#).unwrap();
+        assert_eq!(direction, ReadingDirection::LeftToRight);
+
+        let direction: ReadingDirection = serde_json::from_str(r#""RIGHT_TO_LEFT""#).unwrap();
+        assert_eq!(direction, ReadingDirection::RightToLeft);
+
+        let direction: ReadingDirection = serde_json::from_str(r#""TOP_TO_BOTTOM""#).unwrap();
+        assert_eq!(direction, ReadingDirection::TopToBottom);
+    }
+
+    #[test]
+    fn test_reading_direction_equality() {
+        assert_eq!(ReadingDirection::LeftToRight, ReadingDirection::LeftToRight);
+        assert_ne!(ReadingDirection::LeftToRight, ReadingDirection::RightToLeft);
+        assert_ne!(ReadingDirection::RightToLeft, ReadingDirection::TopToBottom);
     }
 }
