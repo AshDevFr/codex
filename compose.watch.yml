@@ -1,5 +1,5 @@
 # Docker Compose with watch mode for development
-# Usage: docker compose -f docker-compose.yml -f compose.watch.yml --profile dev watch codex-dev
+# Usage: docker compose -f docker-compose.yml -f compose.watch.yml --profile dev watch
 
 services:
   codex-dev:
@@ -33,3 +33,47 @@ services:
         # Rebuild on config changes
         - action: rebuild
           path: ./Dockerfile.dev
+
+  frontend-dev:
+    develop:
+      watch:
+        # Sync source code changes (Vite handles HMR)
+        - action: sync
+          path: ./web/src
+          target: /app/src
+          ignore:
+            - "**/*.swp"
+            - "**/*.tmp"
+
+        # Sync public assets
+        - action: sync
+          path: ./web/public
+          target: /app/public
+
+        # Sync config files
+        - action: sync
+          path: ./web/vite.config.ts
+          target: /app/vite.config.ts
+
+        - action: sync
+          path: ./web/tsconfig.json
+          target: /app/tsconfig.json
+
+        - action: sync
+          path: ./web/tsconfig.app.json
+          target: /app/tsconfig.app.json
+
+        - action: sync
+          path: ./web/tsconfig.node.json
+          target: /app/tsconfig.node.json
+
+        - action: sync
+          path: ./web/biome.json
+          target: /app/biome.json
+
+        # Rebuild when dependencies change (npm install)
+        - action: rebuild
+          path: ./web/package.json
+
+        - action: rebuild
+          path: ./web/package-lock.json

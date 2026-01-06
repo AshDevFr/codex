@@ -25,9 +25,9 @@ COPY migration/Cargo.toml ./migration/
 ENV OPENSSL_STATIC=1
 RUN mkdir -p src migration/src && \
     echo "fn main() {}" > src/main.rs && \
-    echo "pub fn lib() {}" > migration/src/lib.rs && \
+    echo "pub use sea_orm_migration::prelude::*; pub struct Migrator; impl MigratorTrait for Migrator { fn migrations() -> Vec<Box<dyn MigrationTrait>> { vec![] } }" > migration/src/lib.rs && \
     cargo build && \
-    rm -rf src migration/src
+    rm -rf src migration/src target/debug/.fingerprint/codex-* target/debug/.fingerprint/migration-*
 
 # Copy the rest of the application
 COPY . .

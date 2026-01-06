@@ -15,6 +15,7 @@ path = "src/main.rs"
 [features]
 default = ["rar"]
 rar = ["dep:unrar"]
+embed-frontend = []
 
 [workspace]
 members = [".", "migration"]
@@ -95,6 +96,10 @@ utoipa-swagger-ui = { version = "8.0", features = ["axum"] }
 # Job Scheduling
 tokio-cron-scheduler = "0.10"
 tokio-util = "0.7"
+
+# Static file embedding for frontend
+rust-embed = "8.5"
+mime_guess = "2.0"
 
 [dev-dependencies]
 tempfile = "3.13"

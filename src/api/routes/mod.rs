@@ -1,5 +1,6 @@
 use crate::api::{extractors::AppState, handlers};
 use crate::config::ApiConfig;
+use crate::web;
 use axum::{
     routing::{delete, get, post, put},
     Router,
@@ -24,7 +25,10 @@ pub fn create_router(state: Arc<AppState>, api_config: &ApiConfig) -> Router {
         // OPDS catalog routes (protected with auth)
         .nest("/opds", handlers::opds::opds_routes(opds_state))
         // API v1 routes
-        .nest("/api/v1", api_v1_routes(state));
+        .nest("/api/v1", api_v1_routes(state.clone()))
+        // Frontend static files (fallback route - must be last)
+        // Serves the React app at the root path
+        .fallback(get(web::serve_static));
 
     // Add CORS middleware if enabled
     if api_config.cors_enabled {

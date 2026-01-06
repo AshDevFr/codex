@@ -129,6 +129,36 @@ Use Docker Compose with watch mode for automatic rebuilds:
 docker compose -f docker-compose.yml -f compose.watch.yml --profile dev up --watch
 ```
 
+### Frontend Development
+
+For full-stack development with the React frontend:
+
+```bash
+# Start backend and frontend (recommended)
+docker compose --profile dev up
+
+# Access the app at http://localhost:5173
+# The Vite dev server proxies /api and /opds requests to the backend
+```
+
+**Or run them separately:**
+
+```bash
+# Terminal 1 - Backend
+cargo run -- serve --config config/config.sqlite.yaml
+
+# Terminal 2 - Frontend
+cd web
+npm install
+npm run dev
+
+# Access at http://localhost:5173
+```
+
+**Important**: Always use `http://localhost:5173` (frontend) in development. The Vite dev server automatically proxies API requests to the backend at `http://localhost:8080`.
+
+See [FRONTEND.md](../../FRONTEND.md) for detailed frontend setup and architecture.
+
 ### Code Formatting
 
 ```bash

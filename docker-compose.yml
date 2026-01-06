@@ -51,6 +51,8 @@ services:
     networks:
       - codex-network
     restart: unless-stopped
+    profiles:
+      - prod
 
   # Codex development (with hot reload)
   codex-dev:
@@ -87,6 +89,28 @@ services:
     profiles:
       - dev
 
+  # Frontend development server (Vite)
+  # The Vite dev server proxies /api and /opds requests to codex-dev backend
+  # Access the app at http://localhost:5173
+  frontend-dev:
+    image: node:22-alpine
+    container_name: codex-frontend-dev
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://codex-dev:8080
+    volumes:
+      - ./web:/app
+      - node_modules:/app/node_modules
+    depends_on:
+      - codex-dev
+    networks:
+      - codex-network
+    profiles:
+      - dev
+
   # PostgreSQL for testing (separate from main DB)
   postgres-test:
     image: postgres:16-alpine
@@ -117,6 +141,8 @@ volumes:
   cargo_cache:
     driver: local
   target_cache:
+    driver: local
+  node_modules:
     driver: local
 
 networks:

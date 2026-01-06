@@ -2,6 +2,11 @@
 target/
 **/*.rs.bk
 
+# Frontend build artifacts and dependencies
+web/node_modules/
+web/dist/
+web/.vite/
+
 # Database files
 *.db
 *.db-shm

@@ -6,6 +6,7 @@ mod models;
 mod parsers;
 mod scanner;
 mod utils;
+mod web;
 
 use clap::{Parser, Subcommand};
 use commands::{scan_command, seed_command, serve_command};

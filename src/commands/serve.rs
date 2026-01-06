@@ -80,6 +80,10 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     let db = Database::new(&config.database).await?;
     info!("Database connected successfully");
 
+    // Run migrations to ensure database schema is up to date
+    db.run_migrations().await?;
+    info!("Database migrations applied successfully");
+
     // Verify database health
     db.health_check().await?;
     info!("Database health check passed");

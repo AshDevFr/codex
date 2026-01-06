@@ -92,10 +92,16 @@ docker-push: ## Push to registry (set REGISTRY env var)
 ## Docker Compose
 
 compose-up: ## Start all services (production mode)
-	docker compose up -d
+	docker compose --profile prod up
+
+compose-up-d: ## Start all services (production mode)
+	docker compose --profile prod up -d
 
 compose-down: ## Stop all services
-	docker compose down
+	docker compose --profile prod --profile dev --profile test down
+
+compose-down-v: ## Stop all services and remove volumes
+	docker compose --profile prod --profile dev --profile test down -v
 
 compose-logs: ## View logs
 	docker compose logs -f
@@ -109,22 +115,49 @@ compose-restart: ## Restart services
 ## Docker Compose - Development
 
 dev-up: ## Start development environment with hot reload
+	docker compose --profile dev up
+
+dev-up-d: ## Start development environment with hot reload
 	docker compose --profile dev up -d
 
 dev-down: ## Stop development environment
 	docker compose --profile dev down
 
-dev-logs: ## View development logs
+dev-down-v: ## Stop development environment and remove volumes
+	docker compose --profile dev down -v
+
+dev-logs: ## View development logs (backend + frontend)
+	docker compose logs -f codex-dev frontend-dev
+
+dev-logs-backend: ## View backend logs only
 	docker compose logs -f codex-dev
 
-dev-watch: ## Start with watch mode (auto-sync code changes)
+dev-logs-frontend: ## View frontend logs only
+	docker compose logs -f frontend-dev
+
+dev-watch: ## Start with watch mode (auto-sync code changes for backend + frontend)
+	docker compose -f docker-compose.yml -f compose.watch.yml --profile dev watch
+
+dev-watch-backend: ## Watch backend only
 	docker compose -f docker-compose.yml -f compose.watch.yml --profile dev watch codex-dev
 
-dev-shell: ## Open shell in development container
-	docker exec -it codex-dev bash
+dev-watch-frontend: ## Watch frontend only
+	docker compose -f docker-compose.yml -f compose.watch.yml --profile dev watch frontend-dev
 
-dev-restart: ## Restart development container
+dev-shell: ## Open shell in backend development container
+	docker exec -it codex-dev sh
+
+dev-shell-frontend: ## Open shell in frontend development container
+	docker exec -it codex-frontend-dev sh
+
+dev-restart: ## Restart development containers (backend + frontend)
+	docker compose restart codex-dev frontend-dev
+
+dev-restart-backend: ## Restart backend only
 	docker compose restart codex-dev
+
+dev-restart-frontend: ## Restart frontend only
+	docker compose restart frontend-dev
 
 ## Docker Compose - Testing
 

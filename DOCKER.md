@@ -20,15 +20,22 @@ docker compose down
 ### Development Mode (with hot reload)
 
 ```bash
-# Start development environment
+# Start development environment (backend + frontend + database)
 docker compose --profile dev up -d
 
 # View logs
-docker compose logs -f codex-dev
+docker compose logs -f codex-dev frontend-dev
 
 # Stop
 docker compose --profile dev down
 ```
+
+**Access the application:**
+
+- **Frontend**: http://localhost:5173 (use this URL - includes hot reload)
+- **Backend API**: http://localhost:8080 (direct API access)
+
+The frontend automatically proxies `/api` and `/opds` requests to the backend.
 
 ### Development with Watch Mode
 
@@ -47,6 +54,7 @@ docker compose -f docker-compose.yml -f compose.watch.yml --profile dev up --wat
 ### Production Services (default profile)
 
 - **postgres** - PostgreSQL 16 database
+
   - Port: 5432
   - User: codex
   - Password: codex
@@ -60,10 +68,17 @@ docker compose -f docker-compose.yml -f compose.watch.yml --profile dev up --wat
 ### Development Services (dev profile)
 
 - **codex-dev** - Development application
+
   - Port: 8080
   - Hot reload with cargo-watch
   - Debug logging enabled
   - Source code mounted as volume
+
+- **frontend-dev** - Frontend development server (Vite)
+  - Port: 5173
+  - Hot module replacement (HMR)
+  - Proxies `/api` and `/opds` to backend
+  - Access the app at http://localhost:5173
 
 ### Test Services (test profile)
 
@@ -178,6 +193,7 @@ cat backup.sql | docker exec -i codex-postgres psql -U codex codex
 All services use the `codex-network` bridge network.
 
 Access between containers:
+
 - Application → Database: `postgres:5432`
 - External → Application: `localhost:8080`
 - External → Database: `localhost:5432`

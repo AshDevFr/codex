@@ -1,6 +1,22 @@
 # Multi-stage Dockerfile for Codex
 
-# Stage 1: Build dependencies
+# Stage 1: Build frontend
+FROM node:22-alpine AS frontend-builder
+WORKDIR /web
+
+# Copy package files
+COPY web/package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy frontend source
+COPY web/ ./
+
+# Build frontend
+RUN npm run build
+
+# Stage 2: Rust build dependencies
 FROM rust:1.92-alpine AS chef
 RUN apk add --no-cache \
     musl-dev \
@@ -12,12 +28,12 @@ RUN apk add --no-cache \
 RUN cargo install cargo-chef
 WORKDIR /app
 
-# Stage 2: Prepare recipe
+# Stage 3: Prepare recipe
 FROM chef AS planner
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
-# Stage 3: Build dependencies (cached layer)
+# Stage 4: Build dependencies (cached layer)
 FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
 
@@ -31,14 +47,19 @@ RUN apk add --no-cache \
     curl
 
 # Build dependencies (this layer is cached)
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --release --features embed-frontend --recipe-path recipe.json
 
-# Stage 4: Build application
+# Stage 5: Build application
 COPY . .
-ENV OPENSSL_STATIC=1
-RUN cargo build --release
 
-# Stage 5: Runtime
+# Copy frontend dist from frontend-builder
+COPY --from=frontend-builder /web/dist ./web/dist
+
+# Build with embedded frontend
+ENV OPENSSL_STATIC=1
+RUN cargo build --release --features embed-frontend
+
+# Stage 6: Runtime
 FROM alpine:latest AS runtime
 
 # Install runtime dependencies
