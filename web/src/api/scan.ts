@@ -28,6 +28,8 @@ class SSEReconnectionManager {
 		this.onConnectionStateChange = onConnectionStateChange;
 	}
 
+	private currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+
 	async connect(): Promise<() => void> {
 		this.onConnectionStateChange?.('connecting');
 
@@ -60,6 +62,7 @@ class SSEReconnectionManager {
 				this.onConnectionStateChange?.('connected');
 
 				const reader = response.body.getReader();
+				this.currentReader = reader;
 				const decoder = new TextDecoder();
 				let buffer = "";
 
@@ -86,12 +89,19 @@ class SSEReconnectionManager {
 				}
 
 				// Stream ended normally
-				reader.cancel();
+				await reader.cancel();
+				this.currentReader = null;
 			} catch (error) {
+				this.currentReader = null;
 				if (!this.active) return;
 
 				console.error("SSE connection error:", error);
 				this.onConnectionStateChange?.('disconnected');
+
+				// Call onError callback with the error
+				if (error instanceof Error) {
+					this.onError?.(error);
+				}
 
 				// Attempt reconnection with exponential backoff
 				if (this.reconnectAttempts < this.maxAttempts) {
@@ -101,14 +111,13 @@ class SSEReconnectionManager {
 					);
 					this.reconnectAttempts++;
 
-					console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxAttempts})`);
+					console.debug(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxAttempts})`);
 
 					this.reconnectTimer = setTimeout(() => {
 						attemptConnection();
 					}, delay);
 				} else {
 					this.onConnectionStateChange?.('failed');
-					this.onError?.(new Error("Max reconnection attempts reached"));
 				}
 			}
 		};
@@ -120,6 +129,10 @@ class SSEReconnectionManager {
 			this.active = false;
 			if (this.reconnectTimer) {
 				clearTimeout(this.reconnectTimer);
+			}
+			if (this.currentReader) {
+				this.currentReader.cancel();
+				this.currentReader = null;
 			}
 		};
 	}
@@ -144,12 +157,18 @@ export const scanApi = {
 		);
 
 		let cleanup: (() => void) | null = null;
+		let isCleanedUp = false;
 
 		manager.connect().then((cleanupFn) => {
 			cleanup = cleanupFn;
+			// If unsubscribe was called before cleanup was ready, call it now
+			if (isCleanedUp) {
+				cleanupFn();
+			}
 		});
 
 		return () => {
+			isCleanedUp = true;
 			cleanup?.();
 		};
 	},

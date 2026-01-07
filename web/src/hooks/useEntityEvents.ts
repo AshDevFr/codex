@@ -1,7 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { eventsApi } from "@/api/events";
 import type { EntityChangeEvent } from "@/types/events";
+
+type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
 
 /**
  * React hook that subscribes to entity change events and automatically
@@ -20,6 +22,7 @@ import type { EntityChangeEvent } from "@/types/events";
  */
 export function useEntityEvents() {
 	const queryClient = useQueryClient();
+	const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
 
 	useEffect(() => {
 		const token = localStorage.getItem("jwt_token");
@@ -37,10 +40,11 @@ export function useEntityEvents() {
 						handleEntityEvent(event, queryClient);
 					},
 					(error: Error) => {
-						console.error("Entity events error:", error);
+						console.error("[EntityEvents] Connection error:", error);
 					},
 					(state) => {
 						console.debug(`Entity events connection state: ${state}`);
+						setConnectionState(state as ConnectionState);
 					}
 				);
 			} catch (error) {
@@ -54,6 +58,10 @@ export function useEntityEvents() {
 			unsubscribe?.();
 		};
 	}, [queryClient]);
+
+	return {
+		connectionState,
+	};
 }
 
 /**
@@ -102,10 +110,11 @@ function handleEntityEvent(
 	}
 
 	// Handle series events
-	if ("SeriesCreated" in eventType || "SeriesUpdated" in eventType || "SeriesDeleted" in eventType) {
+	if ("SeriesCreated" in eventType || "SeriesUpdated" in eventType || "SeriesDeleted" in eventType || "SeriesBulkPurged" in eventType) {
 		const data = "SeriesCreated" in eventType ? eventType.SeriesCreated
 			: "SeriesUpdated" in eventType ? eventType.SeriesUpdated
-			: eventType.SeriesDeleted;
+			: "SeriesDeleted" in eventType ? eventType.SeriesDeleted
+			: eventType.SeriesBulkPurged;
 
 		// Invalidate series queries
 		queryClient.invalidateQueries({

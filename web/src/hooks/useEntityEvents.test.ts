@@ -1,0 +1,230 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { renderHook, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEntityEvents } from "./useEntityEvents";
+import * as eventsApi from "@/api/events";
+import type { EntityChangeEvent } from "@/types/events";
+import React, { ReactNode } from "react";
+
+// Mock the events API
+vi.mock("@/api/events", () => ({
+  eventsApi: {
+    subscribeToEntityEvents: vi.fn(),
+  },
+}));
+
+describe("useEntityEvents", () => {
+  let queryClient: QueryClient;
+  let mockUnsubscribe: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    });
+
+    mockUnsubscribe = vi.fn();
+
+    Storage.prototype.getItem = vi.fn((key) => {
+      if (key === "jwt_token") return "test-token";
+      return null;
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    queryClient.clear();
+  });
+
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    React.createElement(QueryClientProvider, { client: queryClient }, children);
+
+  it("should subscribe to entity events on mount", async () => {
+    const mockSubscribe = vi
+      .spyOn(eventsApi.eventsApi, "subscribeToEntityEvents")
+      .mockReturnValue(mockUnsubscribe);
+
+    renderHook(() => useEntityEvents(), { wrapper });
+
+    await waitFor(() => {
+      expect(mockSubscribe).toHaveBeenCalled();
+    });
+  });
+
+  it("should not subscribe if no token is present", () => {
+    Storage.prototype.getItem = vi.fn(() => null);
+
+    const mockSubscribe = vi
+      .spyOn(eventsApi.eventsApi, "subscribeToEntityEvents")
+      .mockReturnValue(mockUnsubscribe);
+
+    renderHook(() => useEntityEvents(), { wrapper });
+
+    expect(mockSubscribe).not.toHaveBeenCalled();
+  });
+
+  it("should unsubscribe on unmount", async () => {
+    const mockSubscribe = vi
+      .spyOn(eventsApi.eventsApi, "subscribeToEntityEvents")
+      .mockReturnValue(mockUnsubscribe);
+
+    const { unmount } = renderHook(() => useEntityEvents(), { wrapper });
+
+    await waitFor(() => {
+      expect(mockSubscribe).toHaveBeenCalled();
+    });
+
+    unmount();
+
+    await waitFor(() => {
+      expect(mockUnsubscribe).toHaveBeenCalled();
+    });
+  });
+
+  it("should invalidate book queries on CoverUpdated event", async () => {
+    let capturedCallback: ((event: EntityChangeEvent) => void) | undefined;
+
+    vi.spyOn(eventsApi.eventsApi, "subscribeToEntityEvents").mockImplementation(
+      (onEvent) => {
+        capturedCallback = onEvent;
+        return mockUnsubscribe;
+      }
+    );
+
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    renderHook(() => useEntityEvents(), { wrapper });
+
+    await waitFor(() => {
+      expect(capturedCallback).toBeDefined();
+    });
+
+    // Simulate receiving a CoverUpdated event
+    const event: EntityChangeEvent = {
+      event: {
+        CoverUpdated: {
+          entity_type: "series",
+          entity_id: "series-123",
+        },
+      },
+      timestamp: "2026-01-07T12:00:00Z",
+      user_id: undefined,
+    };
+
+    capturedCallback!(event);
+
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["series", "series-123"],
+      });
+    });
+  });
+
+  it("should invalidate series queries on SeriesBulkPurged event", async () => {
+    let capturedCallback: ((event: EntityChangeEvent) => void) | undefined;
+
+    vi.spyOn(eventsApi.eventsApi, "subscribeToEntityEvents").mockImplementation(
+      (onEvent) => {
+        capturedCallback = onEvent;
+        return mockUnsubscribe;
+      }
+    );
+
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    renderHook(() => useEntityEvents(), { wrapper });
+
+    await waitFor(() => {
+      expect(capturedCallback).toBeDefined();
+    });
+
+    // Simulate receiving a SeriesBulkPurged event
+    const event: EntityChangeEvent = {
+      event: {
+        SeriesBulkPurged: {
+          series_id: "series-456",
+          library_id: "lib-2",
+          count: 5,
+        },
+      },
+      timestamp: "2026-01-07T12:00:00Z",
+      user_id: "user-1",
+    };
+
+    capturedCallback!(event);
+
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["series"],
+      });
+    });
+  });
+
+  it("should track connection state", async () => {
+    let capturedConnectionChange:
+      | ((state: string) => void)
+      | undefined;
+
+    vi.spyOn(eventsApi.eventsApi, "subscribeToEntityEvents").mockImplementation(
+      (_onEvent, _onError, onConnectionChange) => {
+        capturedConnectionChange = onConnectionChange;
+        return mockUnsubscribe;
+      }
+    );
+
+    const { result } = renderHook(() => useEntityEvents(), { wrapper });
+
+    await waitFor(() => {
+      expect(capturedConnectionChange).toBeDefined();
+    });
+
+    // Initially connecting
+    expect(result.current.connectionState).toBe("connecting");
+
+    // Simulate connection established
+    capturedConnectionChange!("connected");
+
+    await waitFor(() => {
+      expect(result.current.connectionState).toBe("connected");
+    });
+
+    // Simulate disconnection
+    capturedConnectionChange!("disconnected");
+
+    await waitFor(() => {
+      expect(result.current.connectionState).toBe("disconnected");
+    });
+  });
+
+  it("should handle errors gracefully", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    let capturedErrorHandler: ((error: Error) => void) | undefined;
+
+    vi.spyOn(eventsApi.eventsApi, "subscribeToEntityEvents").mockImplementation(
+      (_onEvent, onError) => {
+        capturedErrorHandler = onError;
+        return mockUnsubscribe;
+      }
+    );
+
+    renderHook(() => useEntityEvents(), { wrapper });
+
+    await waitFor(() => {
+      expect(capturedErrorHandler).toBeDefined();
+    });
+
+    // Simulate an error
+    const testError = new Error("Connection failed");
+    capturedErrorHandler!(testError);
+
+    await waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith(
+        "[EntityEvents] Connection error:",
+        testError
+      );
+    });
+
+    consoleError.mockRestore();
+  });
+});

@@ -12,5 +12,6 @@ mod api {
     mod opds;
     mod scan;
     mod series;
+    mod sse;
     mod tasks;
 }

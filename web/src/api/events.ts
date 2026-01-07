@@ -29,6 +29,8 @@ class EntityEventsReconnectionManager {
 		this.onConnectionStateChange = onConnectionStateChange;
 	}
 
+	private currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+
 	async connect(): Promise<() => void> {
 		this.onConnectionStateChange?.('connecting');
 
@@ -61,6 +63,7 @@ class EntityEventsReconnectionManager {
 				this.onConnectionStateChange?.('connected');
 
 				const reader = response.body.getReader();
+				this.currentReader = reader;
 				const decoder = new TextDecoder();
 				let buffer = "";
 
@@ -87,12 +90,19 @@ class EntityEventsReconnectionManager {
 				}
 
 				// Stream ended normally
-				reader.cancel();
+				await reader.cancel();
+				this.currentReader = null;
 			} catch (error) {
+				this.currentReader = null;
 				if (!this.active) return;
 
 				console.error("Entity events SSE connection error:", error);
 				this.onConnectionStateChange?.('disconnected');
+
+				// Call onError callback with the error
+				if (error instanceof Error) {
+					this.onError?.(error);
+				}
 
 				// Attempt reconnection with exponential backoff
 				if (this.reconnectAttempts < this.maxAttempts) {
@@ -102,14 +112,13 @@ class EntityEventsReconnectionManager {
 					);
 					this.reconnectAttempts++;
 
-					console.log(`Reconnecting entity events in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxAttempts})`);
+					console.debug(`Reconnecting entity events in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxAttempts})`);
 
 					this.reconnectTimer = setTimeout(() => {
 						attemptConnection();
 					}, delay);
 				} else {
 					this.onConnectionStateChange?.('failed');
-					this.onError?.(new Error("Max reconnection attempts reached"));
 				}
 			}
 		};
@@ -122,6 +131,10 @@ class EntityEventsReconnectionManager {
 			if (this.reconnectTimer) {
 				clearTimeout(this.reconnectTimer);
 			}
+			if (this.currentReader) {
+				this.currentReader.cancel();
+				this.currentReader = null;
+			}
 		};
 	}
 }
@@ -130,11 +143,11 @@ export const eventsApi = {
 	/**
 	 * Subscribe to entity change events via SSE with automatic reconnection
 	 */
-	subscribeToEntityEvents: async (
+	subscribeToEntityEvents: (
 		onEvent: (event: EntityChangeEvent) => void,
 		onError?: (error: Error) => void,
 		onConnectionStateChange?: (state: 'connecting' | 'connected' | 'disconnected' | 'failed') => void,
-	): Promise<() => void> => {
+	): (() => void) => {
 		const url = `${API_BASE_URL}/api/v1/events/stream`;
 		const manager = new EntityEventsReconnectionManager(
 			url,
@@ -142,6 +155,24 @@ export const eventsApi = {
 			onError,
 			onConnectionStateChange
 		);
-		return manager.connect();
+
+		// Start connection asynchronously and store the cleanup function
+		let unsubscribe: (() => void) | null = null;
+		let isUnsubscribed = false;
+		manager.connect().then((cleanup) => {
+			unsubscribe = cleanup;
+			// If unsubscribe was called before cleanup was ready, call it now
+			if (isUnsubscribed) {
+				cleanup();
+			}
+		});
+
+		// Return cleanup function synchronously
+		return () => {
+			isUnsubscribed = true;
+			if (unsubscribe) {
+				unsubscribe();
+			}
+		};
 	},
 };

@@ -25,12 +25,12 @@ export function useTaskProgress() {
   useEffect(() => {
     const token = localStorage.getItem("jwt_token");
     if (!token) {
-      console.log("No auth token, skipping task progress subscription");
+      console.debug("No auth token, skipping task progress subscription");
       return;
     }
 
     const handleEvent = (event: TaskProgressEvent) => {
-      console.log("Task progress event received:", event);
+      console.debug("Task progress event received:", event);
 
       setActiveTasks((prev) => {
         const next = new Map(prev);
@@ -57,11 +57,11 @@ export function useTaskProgress() {
     };
 
     const handleConnectionStateChange = (state: ConnectionState) => {
-      console.log("Task progress connection state:", state);
+      console.debug("Task progress connection state:", state);
       setConnectionState(state);
     };
 
-    console.log("Subscribing to task progress events...");
+    console.debug("Subscribing to task progress events...");
     const unsubscribe = subscribeToTaskProgress(
       handleEvent,
       handleError,
@@ -69,16 +69,16 @@ export function useTaskProgress() {
     );
 
     return () => {
-      console.log("Unsubscribing from task progress events");
+      console.debug("Unsubscribing from task progress events");
       unsubscribe();
     };
   }, []);
 
   return {
     /**
-     * Map of active tasks by task_id
+     * Array of active tasks
      */
-    activeTasks,
+    activeTasks: Array.from(activeTasks.values()),
     /**
      * Current SSE connection state
      */

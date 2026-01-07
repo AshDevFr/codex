@@ -1,6 +1,6 @@
 import type { TaskProgressEvent } from "@/types/events";
 
-const API_BASE = import.meta.env.VITE_API_URL || "";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 interface TaskProgressReconnectionManager {
   connect: () => Promise<() => void>;
@@ -35,7 +35,10 @@ function createTaskProgressReconnectionManager(
       currentAbortController = null;
     }
     if (currentReader) {
-      currentReader.cancel().catch(() => {});
+      const cancelPromise = currentReader.cancel();
+      if (cancelPromise && typeof cancelPromise.catch === 'function') {
+        cancelPromise.catch(() => {});
+      }
       currentReader = null;
     }
     if (reconnectTimeout) {
@@ -139,7 +142,7 @@ function createTaskProgressReconnectionManager(
 
     reconnectAttempts++;
     const delay = calculateDelay();
-    console.log(
+    console.debug(
       `Reconnecting to task progress stream in ${delay}ms (attempt ${reconnectAttempts}/${maxAttempts})...`
     );
 

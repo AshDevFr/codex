@@ -2,6 +2,30 @@ import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
+// Mock console.debug to reduce test output noise
+global.console.debug = vi.fn();
+
+// Spy on console.error to filter out expected errors
+const originalConsoleError = console.error;
+global.console.error = vi.fn((...args: unknown[]) => {
+	const message = args[0];
+
+	// Suppress expected connection errors and React act() warnings during tests
+	if (
+		typeof message === 'string' && (
+			message.includes('Task progress stream error') ||
+			message.includes('ECONNREFUSED') ||
+			message.includes('fetch failed') ||
+			message.includes('not wrapped in act(')
+		)
+	) {
+		return;
+	}
+
+	// For all other errors, call the original console.error
+	originalConsoleError.apply(console, args);
+});
+
 // Cleanup after each test
 afterEach(() => {
 	cleanup();
