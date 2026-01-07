@@ -1,7 +1,5 @@
 import type { EntityChangeEvent } from "@/types/events";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
-
 /**
  * SSE Reconnection Manager for entity events with exponential backoff
  */
@@ -148,7 +146,7 @@ export const eventsApi = {
 		onError?: (error: Error) => void,
 		onConnectionStateChange?: (state: 'connecting' | 'connected' | 'disconnected' | 'failed') => void,
 	): (() => void) => {
-		const url = `${API_BASE_URL}/api/v1/events/stream`;
+		const url = "/api/v1/events/stream";
 		const manager = new EntityEventsReconnectionManager(
 			url,
 			onEvent,

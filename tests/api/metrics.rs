@@ -213,3 +213,136 @@ async fn test_get_metrics_empty_database() {
     assert_eq!(metrics.page_count, 0);
     assert_eq!(metrics.libraries.len(), 0);
 }
+
+#[tokio::test]
+async fn test_get_metrics_with_file_sizes() {
+    // This test specifically verifies the fix for the bug where
+    // the SQL query failed with "ambiguous column name: id" when
+    // calculating total book sizes across joined tables
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create test data
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series")
+        .await
+        .unwrap();
+
+    // Create multiple books with different file sizes
+    let book1 = create_test_book(
+        series.id,
+        "/path/series/book1.cbz",
+        "book1.cbz",
+        "hash1",
+        "cbz",
+        10,
+    );
+    let mut book1 = book1;
+    book1.file_size = 5000000; // 5MB
+    BookRepository::create(&db, &book1).await.unwrap();
+
+    let book2 = create_test_book(
+        series.id,
+        "/path/series/book2.cbz",
+        "book2.cbz",
+        "hash2",
+        "cbz",
+        15,
+    );
+    let mut book2 = book2;
+    book2.file_size = 10000000; // 10MB
+    BookRepository::create(&db, &book2).await.unwrap();
+
+    let state = create_test_auth_state(db.clone());
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state);
+
+    let request = get_request_with_auth("/api/v1/metrics", &token);
+    let (status, response): (StatusCode, Option<MetricsDto>) =
+        make_json_request(app, request).await;
+
+    // The main assertion: this should return 200 OK, not 500 Internal Server Error
+    assert_eq!(status, StatusCode::OK);
+    let metrics = response.unwrap();
+
+    // Verify the totals are calculated correctly
+    assert_eq!(metrics.book_count, 2);
+    assert_eq!(metrics.total_book_size, 15000000); // 5MB + 10MB
+
+    // Verify the library-specific metrics work correctly with the JOIN
+    assert_eq!(metrics.libraries.len(), 1);
+    let library_metrics = &metrics.libraries[0];
+    assert_eq!(library_metrics.book_count, 2);
+    assert_eq!(library_metrics.total_size, 15000000);
+}
+
+#[tokio::test]
+async fn test_get_metrics_postgres() {
+    // This test runs against PostgreSQL to verify database-specific behavior
+    // PostgreSQL is stricter about ambiguous column names than SQLite
+    let Some(db) = setup_test_db_postgres().await else {
+        // Skip test if PostgreSQL is not available
+        return;
+    };
+
+    // Create test data
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series")
+        .await
+        .unwrap();
+
+    // Create books with file sizes
+    let book1 = create_test_book(
+        series.id,
+        "/path/series/book1.cbz",
+        "book1.cbz",
+        "hash1",
+        "cbz",
+        10,
+    );
+    let mut book1 = book1;
+    book1.file_size = 5000000; // 5MB
+    BookRepository::create(&db, &book1).await.unwrap();
+
+    let book2 = create_test_book(
+        series.id,
+        "/path/series/book2.cbz",
+        "book2.cbz",
+        "hash2",
+        "cbz",
+        15,
+    );
+    let mut book2 = book2;
+    book2.file_size = 10000000; // 10MB
+    BookRepository::create(&db, &book2).await.unwrap();
+
+    let state = create_test_auth_state(db.clone());
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state);
+
+    let request = get_request_with_auth("/api/v1/metrics", &token);
+    let (status, response): (StatusCode, Option<MetricsDto>) =
+        make_json_request(app, request).await;
+
+    // The critical assertion: PostgreSQL would fail with "ambiguous column name: id"
+    // if we were using raw SQL instead of properly qualified column references
+    assert_eq!(status, StatusCode::OK);
+    let metrics = response.unwrap();
+
+    // Verify the aggregations work correctly on PostgreSQL
+    assert_eq!(metrics.book_count, 2);
+    assert_eq!(metrics.total_book_size, 15000000);
+
+    // Verify the JOIN-based library metrics work on PostgreSQL
+    assert_eq!(metrics.libraries.len(), 1);
+    let library_metrics = &metrics.libraries[0];
+    assert_eq!(library_metrics.book_count, 2);
+    assert_eq!(library_metrics.total_size, 15000000);
+}

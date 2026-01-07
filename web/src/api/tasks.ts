@@ -1,7 +1,5 @@
 import type { TaskProgressEvent } from "@/types/events";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
-
 interface TaskProgressReconnectionManager {
   connect: () => Promise<() => void>;
   disconnect: () => void;
@@ -63,7 +61,7 @@ function createTaskProgressReconnectionManager(
       onConnectionStateChange?.("connecting");
       currentAbortController = new AbortController();
 
-      const response = await fetch(`${API_BASE}/api/v1/tasks/stream`, {
+      const response = await fetch("/api/v1/tasks/stream", {
         headers: {
           Accept: "text/event-stream",
           Authorization: `Bearer ${token}`,

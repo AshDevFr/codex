@@ -67,17 +67,24 @@ impl MetricsRepository {
 
     /// Get total size of all books in bytes
     pub async fn total_book_size(db: &DatabaseConnection) -> Result<i64> {
-        use sea_orm::sea_query::Expr;
+        use crate::db::entities::books;
+        use sea_orm::sea_query::{Expr, Func};
+        use sea_orm::FromQueryResult;
+
+        #[derive(FromQueryResult)]
+        struct TotalSize {
+            total_size: Option<i64>,
+        }
 
         let result = Books::find()
             .select_only()
-            .column_as(Expr::cust("COALESCE(SUM(file_size), 0)"), "total_size")
-            .into_tuple::<i64>()
+            .expr_as(Func::sum(Expr::col(books::Column::FileSize)), "total_size")
+            .into_model::<TotalSize>()
             .one(db)
             .await
             .context("Failed to calculate total book size")?;
 
-        Ok(result.unwrap_or(0))
+        Ok(result.and_then(|r| r.total_size).unwrap_or(0))
     }
 
     /// Get database size (approximate, platform-dependent)
@@ -163,20 +170,37 @@ impl MetricsRepository {
 
             // Count books and total size for this library
             // We need to join books with series to filter by library
-            use sea_orm::sea_query::Expr;
+            use crate::db::entities::books;
+            use sea_orm::sea_query::{Alias, Expr, Func};
+            use sea_orm::FromQueryResult;
+
+            #[derive(FromQueryResult)]
+            struct BookStats {
+                book_count: i64,
+                total_size: Option<i64>,
+            }
 
             let book_stats = Books::find()
                 .inner_join(Series)
                 .filter(series::Column::LibraryId.eq(library.id))
                 .select_only()
-                .column_as(Expr::cust("COUNT(*)"), "book_count")
-                .column_as(Expr::cust("COALESCE(SUM(file_size), 0)"), "total_size")
-                .into_tuple::<(i64, i64)>()
+                .expr_as(
+                    Func::count(Expr::col((Alias::new("books"), books::Column::Id))),
+                    "book_count",
+                )
+                .expr_as(
+                    Func::sum(Expr::col((Alias::new("books"), books::Column::FileSize))),
+                    "total_size",
+                )
+                .into_model::<BookStats>()
                 .one(db)
                 .await
                 .context("Failed to get book stats for library")?;
 
-            let (book_count, total_size) = book_stats.unwrap_or((0, 0));
+            let (book_count, total_size) = match book_stats {
+                Some(stats) => (stats.book_count, stats.total_size.unwrap_or(0)),
+                None => (0, 0),
+            };
 
             metrics.push(LibraryMetrics {
                 id: library.id,

@@ -123,6 +123,9 @@ compose-restart: ## Restart services
 dev-up: ## Start development environment with hot reload
 	docker compose --profile dev up
 
+dev-up-build: ## Start development environment with hot reload
+	docker compose --profile dev up --build
+
 dev-up-d: ## Start development environment with hot reload
 	docker compose --profile dev up -d
 
