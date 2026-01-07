@@ -69,9 +69,7 @@ async fn test_analyze_library_success() {
     let token = create_admin_and_token(&db, &state).await;
 
     // First, scan to detect files (without analysis)
-    state
-        .scan_manager
-        .trigger_scan(library.id, ScanMode::Normal)
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
         .await
         .unwrap();
 
@@ -124,9 +122,7 @@ async fn test_analyze_library_with_concurrency() {
     let token = create_admin_and_token(&db, &state).await;
 
     // Scan to detect files
-    state
-        .scan_manager
-        .trigger_scan(library.id, ScanMode::Normal)
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
         .await
         .unwrap();
 
@@ -243,9 +239,7 @@ async fn test_analyze_library_marks_books_as_analyzed() {
     let token = create_admin_and_token(&db, &state).await;
 
     // Scan to detect files
-    state
-        .scan_manager
-        .trigger_scan(library.id, ScanMode::Normal)
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
         .await
         .unwrap();
 
@@ -310,9 +304,7 @@ async fn test_analyze_series_success() {
     let token = create_admin_and_token(&db, &state).await;
 
     // Scan to detect files and create series
-    state
-        .scan_manager
-        .trigger_scan(library.id, ScanMode::Normal)
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
         .await
         .unwrap();
 
@@ -363,9 +355,7 @@ async fn test_analyze_series_with_concurrency() {
     let token = create_admin_and_token(&db, &state).await;
 
     // Scan
-    state
-        .scan_manager
-        .trigger_scan(library.id, ScanMode::Normal)
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
         .await
         .unwrap();
 
@@ -450,9 +440,7 @@ async fn test_analyze_book_success() {
     let token = create_admin_and_token(&db, &state).await;
 
     // Scan to detect files
-    state
-        .scan_manager
-        .trigger_scan(library.id, ScanMode::Normal)
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
         .await
         .unwrap();
 
@@ -510,9 +498,7 @@ async fn test_analyze_book_force_reanalysis() {
     let token = create_admin_and_token(&db, &state).await;
 
     // Scan and analyze
-    state
-        .scan_manager
-        .trigger_scan(library.id, ScanMode::Normal)
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
         .await
         .unwrap();
 
@@ -707,14 +693,10 @@ async fn test_concurrent_analysis_multiple_libraries() {
     let token = create_admin_and_token(&db, &state).await;
 
     // Scan both libraries
-    state
-        .scan_manager
-        .trigger_scan(library1.id, ScanMode::Normal)
+    trigger_scan_task(&state.db, library1.id, ScanMode::Normal)
         .await
         .unwrap();
-    state
-        .scan_manager
-        .trigger_scan(library2.id, ScanMode::Normal)
+    trigger_scan_task(&state.db, library2.id, ScanMode::Normal)
         .await
         .unwrap();
 
@@ -805,31 +787,28 @@ async fn test_auto_analysis_after_normal_scan() {
     .await
     .unwrap();
 
-    // Create a scan manager with auto-analysis enabled (concurrency=4)
-    let scan_manager = codex::scanner::ScanManager::new_with_config(db.clone(), 2, 4);
-
-    // Trigger a normal scan
-    scan_manager
-        .trigger_scan(library.id, ScanMode::Normal)
+    // Trigger a normal scan (auto-analysis is now handled by the scan handler)
+    trigger_scan_task(&db, library.id, ScanMode::Normal)
         .await
         .unwrap();
 
-    // Wait for scan to complete
-    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-
-    // Wait additional time for auto-analysis tasks to be queued
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-
-    // Create a worker and process the queued analysis tasks
+    // Create a worker to process tasks
     let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
 
-    // Process all queued analysis tasks
+    // First, process the scan task (this will queue analysis tasks)
+    worker.process_once().await.ok();
+
+    // Wait a moment for task queue updates
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    // Now process all queued analysis tasks
     loop {
         let stats = TaskRepository::get_stats(&db).await.unwrap();
         if stats.pending == 0 {
             break;
         }
         worker.process_once().await.ok();
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
     }
 
     // Verify that books were both detected AND analyzed automatically
@@ -846,7 +825,7 @@ async fn test_auto_analysis_after_normal_scan() {
 }
 
 #[tokio::test]
-async fn test_auto_analysis_disabled_when_zero() {
+async fn test_auto_analysis_queues_tasks() {
     let (db, temp_dir) = setup_test_db().await;
 
     // Create test files
@@ -861,35 +840,42 @@ async fn test_auto_analysis_disabled_when_zero() {
     .await
     .unwrap();
 
-    // Create a scan manager with auto-analysis DISABLED (concurrency=0)
-    let scan_manager = codex::scanner::ScanManager::new_with_config(db.clone(), 2, 0);
-
-    // Trigger a normal scan
-    scan_manager
-        .trigger_scan(library.id, ScanMode::Normal)
+    // Trigger a normal scan (auto-analysis queues tasks after scan)
+    trigger_scan_task(&db, library.id, ScanMode::Normal)
         .await
         .unwrap();
 
-    // Wait for scan to complete
-    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+    // Create a worker to process the scan task
+    let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
 
-    // Wait a bit more to ensure no auto-analysis happens
-    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+    // Process the scan task (this will queue analysis tasks)
+    worker.process_once().await.ok();
 
-    // Verify that books were detected but NOT analyzed
+    // Wait for task queue updates
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    // Verify analysis tasks were queued (books still unanalyzed)
     let unanalyzed_books = BookRepository::get_unanalyzed_in_library(&db, library.id)
         .await
         .unwrap();
 
-    // Books should still be unanalyzed when auto-analysis is disabled
+    // Books should still be unanalyzed (tasks queued but not processed)
     assert!(
         unanalyzed_books.len() > 0,
-        "Books should remain unanalyzed when auto-analysis is disabled"
+        "Books should be unanalyzed with analysis tasks queued"
+    );
+
+    // Verify analysis tasks were actually queued
+    let stats = TaskRepository::get_stats(&db).await.unwrap();
+    assert_eq!(
+        stats.pending,
+        unanalyzed_books.len() as u64,
+        "Should have analysis tasks queued for each unanalyzed book"
     );
 }
 
 #[tokio::test]
-async fn test_auto_analysis_only_for_normal_scan() {
+async fn test_deep_scan_analyzes_all_books() {
     let (db, temp_dir) = setup_test_db().await;
 
     // Create test files
@@ -904,30 +890,39 @@ async fn test_auto_analysis_only_for_normal_scan() {
     .await
     .unwrap();
 
-    // Create a scan manager with auto-analysis enabled
-    let scan_manager = codex::scanner::ScanManager::new_with_config(db.clone(), 2, 4);
-
-    // Trigger a DEEP scan (auto-analysis should NOT trigger for deep scans)
-    // Deep scans pass ScanMode::Deep which should skip auto-analysis
-    scan_manager
-        .trigger_scan(library.id, ScanMode::Deep)
+    // Trigger a DEEP scan (auto-analysis will analyze ALL books, not just unanalyzed)
+    trigger_scan_task(&db, library.id, ScanMode::Deep)
         .await
         .unwrap();
 
-    // Wait for scan to complete
-    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+    // Create a worker to process tasks
+    let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
 
-    // Both normal and deep scans only do file detection (fast phase)
-    // Auto-analysis only triggers for Normal mode, not Deep mode
-    // So after a deep scan, books should remain unanalyzed
+    // First, process the scan task (this will queue analysis tasks for ALL books)
+    worker.process_once().await.ok();
+
+    // Wait a moment for task queue updates
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    // Now process all queued analysis tasks
+    loop {
+        let stats = TaskRepository::get_stats(&db).await.unwrap();
+        if stats.pending == 0 {
+            break;
+        }
+        worker.process_once().await.ok();
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    }
+
+    // All books should be analyzed
     let unanalyzed_books = BookRepository::get_unanalyzed_in_library(&db, library.id)
         .await
         .unwrap();
 
-    // Deep scan should NOT trigger auto-analysis (books remain unanalyzed)
-    assert!(
-        unanalyzed_books.len() > 0,
-        "Deep scan should not trigger auto-analysis, books should remain unanalyzed"
+    assert_eq!(
+        unanalyzed_books.len(),
+        0,
+        "Deep scan should analyze all books"
     );
 }
 
@@ -947,30 +942,28 @@ async fn test_auto_analysis_with_different_concurrency() {
     .await
     .unwrap();
 
-    // Test with high concurrency (8)
-    let scan_manager = codex::scanner::ScanManager::new_with_config(db.clone(), 2, 8);
-
-    scan_manager
-        .trigger_scan(library.id, ScanMode::Normal)
+    // Trigger a normal scan (auto-analysis is handled by the scan handler)
+    trigger_scan_task(&db, library.id, ScanMode::Normal)
         .await
         .unwrap();
 
-    // Wait for scan to complete
-    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-
-    // Wait additional time for auto-analysis tasks to be queued
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-
-    // Create a worker and process the queued analysis tasks
+    // Create a worker to process tasks
     let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
 
-    // Process all queued analysis tasks
+    // First, process the scan task (this will queue analysis tasks)
+    worker.process_once().await.ok();
+
+    // Wait a moment for task queue updates
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    // Now process all queued analysis tasks
     loop {
         let stats = TaskRepository::get_stats(&db).await.unwrap();
         if stats.pending == 0 {
             break;
         }
         worker.process_once().await.ok();
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
     }
 
     let unanalyzed_books = BookRepository::get_unanalyzed_in_library(&db, library.id)

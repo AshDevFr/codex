@@ -408,9 +408,7 @@ async fn test_library_includes_book_and_series_counts() {
 
     // Scan the library to populate data
     let state = create_test_app_state(db.clone());
-    state
-        .scan_manager
-        .trigger_scan(library.id, ScanMode::Normal)
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
         .await
         .unwrap();
 
@@ -495,9 +493,7 @@ async fn test_list_libraries_includes_counts() {
 
     // Scan the library
     let state = create_test_app_state(db.clone());
-    state
-        .scan_manager
-        .trigger_scan(library.id, ScanMode::Normal)
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
         .await
         .unwrap();
 
@@ -554,9 +550,7 @@ async fn test_book_count_excludes_deleted_books() {
 
     // Scan the library
     let state = create_test_app_state(db.clone());
-    state
-        .scan_manager
-        .trigger_scan(library.id, ScanMode::Normal)
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
         .await
         .unwrap();
 
@@ -619,9 +613,7 @@ async fn test_series_count_accuracy() {
 
     // Scan the library
     let state = create_test_app_state(db.clone());
-    state
-        .scan_manager
-        .trigger_scan(library.id, ScanMode::Normal)
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
         .await
         .unwrap();
 

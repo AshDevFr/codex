@@ -17,10 +17,13 @@ use crate::api::{
     extractors::AuthContext,
     permissions::Permission,
 };
-use crate::db::repositories::{BookRepository, LibraryRepository, SeriesRepository};
+use crate::db::repositories::{
+    BookRepository, LibraryRepository, SeriesRepository, TaskRepository,
+};
 use crate::scanner::{
     analyze_book, analyze_library_books, analyze_series_books, AnalyzerConfig, ScanMode,
 };
+use crate::tasks::types::TaskType;
 
 use super::AppState;
 
@@ -66,27 +69,51 @@ pub async fn trigger_scan(
     // Parse scan mode
     let mode = ScanMode::from_str(&params.mode).map_err(|e| ApiError::BadRequest(e))?;
 
-    // Trigger the scan
-    state
-        .scan_manager
-        .trigger_scan(library_id, mode)
-        .await
-        .map_err(|e| {
-            if e.to_string().contains("already") {
-                ApiError::Conflict(e.to_string())
-            } else {
-                ApiError::Internal(e.to_string())
-            }
-        })?;
+    // Check if there's already a pending/processing scan for this library
+    use crate::db::entities::{prelude::*, tasks};
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
-    // Get and return the status
-    let status = state
-        .scan_manager
-        .get_status(library_id)
+    let existing_scan = Tasks::find()
+        .filter(tasks::Column::TaskType.eq("scan_library"))
+        .filter(tasks::Column::LibraryId.eq(library_id))
+        .filter(tasks::Column::Status.is_in(vec!["pending", "processing"]))
+        .one(&state.db)
         .await
-        .ok_or_else(|| ApiError::NotFound("Scan status not found".to_string()))?;
+        .map_err(|e| ApiError::Internal(format!("Failed to check existing scans: {}", e)))?;
 
-    Ok(Json(status.into()))
+    if existing_scan.is_some() {
+        return Err(ApiError::Conflict(format!(
+            "Library {} is already being scanned or scan is queued",
+            library_id
+        )));
+    }
+
+    // Enqueue the scan task
+    let task_type = TaskType::ScanLibrary {
+        library_id,
+        mode: mode.to_string(),
+    };
+
+    let _task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to enqueue scan: {}", e)))?;
+
+    // Return a pending status since the scan was just queued
+    use chrono::Utc;
+
+    let status = ScanStatusDto {
+        library_id,
+        status: "pending".to_string(),
+        files_total: 0,
+        files_processed: 0,
+        series_found: 0,
+        books_found: 0,
+        errors: vec![],
+        started_at: Utc::now(),
+        completed_at: None,
+    };
+
+    Ok(Json(status))
 }
 
 /// Get scan status for a library
@@ -118,14 +145,35 @@ pub async fn get_scan_status(
     // Check permission
     auth.require_permission(&Permission::LibrariesRead)?;
 
-    // Get scan status
-    let status = state
-        .scan_manager
-        .get_status(library_id)
+    // Find the most recent scan task for this library
+    use crate::db::entities::{prelude::*, tasks};
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
+
+    let task = Tasks::find()
+        .filter(tasks::Column::TaskType.eq("scan_library"))
+        .filter(tasks::Column::LibraryId.eq(library_id))
+        .order_by_desc(tasks::Column::CreatedAt)
+        .one(&state.db)
         .await
+        .map_err(|e| ApiError::Internal(format!("Failed to query scan tasks: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("No scan found for this library".to_string()))?;
 
-    Ok(Json(status.into()))
+    // Convert task to ScanStatusDto
+    use chrono::Utc;
+
+    let status = ScanStatusDto {
+        library_id,
+        status: task.status,
+        files_total: 0,
+        files_processed: 0,
+        series_found: 0,
+        books_found: 0,
+        errors: vec![],
+        started_at: task.started_at.unwrap_or_else(|| Utc::now()),
+        completed_at: task.completed_at,
+    };
+
+    Ok(Json(status))
 }
 
 /// Cancel a running scan
@@ -157,12 +205,23 @@ pub async fn cancel_scan(
     // Check permission
     auth.require_permission(&Permission::LibrariesWrite)?;
 
-    // Cancel the scan
-    state
-        .scan_manager
-        .cancel_scan(library_id)
+    // Find the active scan task for this library
+    use crate::db::entities::{prelude::*, tasks};
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+
+    let task = Tasks::find()
+        .filter(tasks::Column::TaskType.eq("scan_library"))
+        .filter(tasks::Column::LibraryId.eq(library_id))
+        .filter(tasks::Column::Status.is_in(vec!["pending", "processing"]))
+        .one(&state.db)
         .await
-        .map_err(|e| ApiError::NotFound(e.to_string()))?;
+        .map_err(|e| ApiError::Internal(format!("Failed to query scan tasks: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("No active scan found for this library".to_string()))?;
+
+    // Cancel the task
+    TaskRepository::cancel(&state.db, task.id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to cancel scan: {}", e)))?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -191,10 +250,36 @@ pub async fn list_active_scans(
     // Check permission
     auth.require_permission(&Permission::LibrariesRead)?;
 
-    // Get all active scans
-    let scans = state.scan_manager.list_active().await;
+    // Get all active scan tasks
+    use crate::db::entities::{prelude::*, tasks};
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
-    let dtos: Vec<ScanStatusDto> = scans.into_iter().map(|s| s.into()).collect();
+    let tasks = Tasks::find()
+        .filter(tasks::Column::TaskType.eq("scan_library"))
+        .filter(tasks::Column::Status.is_in(vec!["pending", "processing"]))
+        .all(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to query scan tasks: {}", e)))?;
+
+    // Convert tasks to ScanStatusDto
+    use chrono::Utc;
+
+    let dtos: Vec<ScanStatusDto> = tasks
+        .into_iter()
+        .filter_map(|task| {
+            task.library_id.map(|library_id| ScanStatusDto {
+                library_id,
+                status: task.status.clone(),
+                files_total: 0,
+                files_processed: 0,
+                series_found: 0,
+                books_found: 0,
+                errors: vec![],
+                started_at: task.started_at.unwrap_or_else(|| Utc::now()),
+                completed_at: task.completed_at,
+            })
+        })
+        .collect();
 
     Ok(Json(dtos))
 }
@@ -204,8 +289,9 @@ pub async fn list_active_scans(
 /// # Permission Required
 /// - `libraries:read`
 ///
-/// This endpoint streams real-time scan progress updates for all libraries.
-/// Clients should listen to this stream to receive live updates during scanning.
+/// **DEPRECATED**: This endpoint is replaced by `/api/v1/tasks/stream` which provides
+/// real-time updates for all task types including scans. This endpoint now filters
+/// the task stream to only show scan_library tasks for backwards compatibility.
 #[utoipa::path(
     get,
     path = "/api/v1/scans/stream",
@@ -226,17 +312,45 @@ pub async fn scan_progress_stream(
     // Check permission
     auth.require_permission(&Permission::LibrariesRead)?;
 
-    // Subscribe to scan progress updates
-    let mut receiver = state.scan_manager.subscribe();
+    // Subscribe to task progress events from the event broadcaster
+    let mut receiver = state.event_broadcaster.subscribe_tasks();
 
-    // Create SSE stream
+    // Create SSE stream that filters for scan_library tasks only
     let stream = async_stream::stream! {
         loop {
             match receiver.recv().await {
-                Ok(progress) => {
-                    let dto: ScanStatusDto = progress.into();
-                    if let Ok(json) = serde_json::to_string(&dto) {
-                        yield Ok(Event::default().data(json));
+                Ok(event) => {
+                    // Only emit scan_library task events
+                    if event.task_type == "scan_library" {
+                        if let Some(library_id) = event.library_id {
+                            let (files_processed, files_total) = if let Some(ref prog) = event.progress {
+                                (prog.current, prog.total)
+                            } else {
+                                (0, 0)
+                            };
+
+                            let status_str = match event.status {
+                                crate::events::TaskStatus::Queued => "queued",
+                                crate::events::TaskStatus::Running => "running",
+                                crate::events::TaskStatus::Completed => "completed",
+                                crate::events::TaskStatus::Failed => "failed",
+                            };
+
+                            let dto = ScanStatusDto {
+                                library_id,
+                                status: status_str.to_string(),
+                                files_total,
+                                files_processed,
+                                series_found: 0,
+                                books_found: 0,
+                                errors: vec![],
+                                started_at: event.started_at,
+                                completed_at: event.completed_at,
+                            };
+                            if let Ok(json) = serde_json::to_string(&dto) {
+                                yield Ok(Event::default().data(json));
+                            }
+                        }
                     }
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {

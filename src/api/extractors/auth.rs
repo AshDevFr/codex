@@ -1,7 +1,6 @@
 use crate::api::error::ApiError;
 use crate::api::permissions::Permission;
 use crate::db::repositories::{ApiKeyRepository, UserRepository};
-use crate::scanner::ScanManager;
 use crate::utils::{jwt::JwtService, password};
 use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
 use sea_orm::DatabaseConnection;
@@ -66,7 +65,6 @@ impl AuthContext {
 pub struct AppState {
     pub db: DatabaseConnection,
     pub jwt_service: Arc<JwtService>,
-    pub scan_manager: Arc<ScanManager>,
     pub auth_config: Arc<crate::config::AuthConfig>,
     pub email_service: Arc<crate::services::email::EmailService>,
     pub event_broadcaster: Arc<crate::events::EventBroadcaster>,

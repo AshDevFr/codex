@@ -1,14 +1,13 @@
 use anyhow::{Context, Result};
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::db::repositories::LibraryRepository;
+use crate::db::repositories::{LibraryRepository, TaskRepository};
+use crate::tasks::types::TaskType;
 
-use super::manager::ScanManager;
 use super::types::ScanMode;
 
 /// Scanning configuration stored in library's scanning_config JSON field
@@ -52,21 +51,16 @@ impl ScanningConfig {
 pub struct ScanScheduler {
     scheduler: JobScheduler,
     db: DatabaseConnection,
-    scan_manager: Arc<ScanManager>,
 }
 
 impl ScanScheduler {
     /// Create a new scan scheduler
-    pub async fn new(db: DatabaseConnection, scan_manager: Arc<ScanManager>) -> Result<Self> {
+    pub async fn new(db: DatabaseConnection) -> Result<Self> {
         let scheduler = JobScheduler::new()
             .await
             .context("Failed to create job scheduler")?;
 
-        Ok(Self {
-            scheduler,
-            db,
-            scan_manager,
-        })
+        Ok(Self { scheduler, db })
     }
 
     /// Start the scheduler and load all library schedules
@@ -88,7 +82,13 @@ impl ScanScheduler {
                     if config.scan_on_start {
                         info!("Triggering scan-on-start for library {}", library.name);
                         let scan_mode = config.get_scan_mode().unwrap_or(ScanMode::Normal);
-                        if let Err(e) = self.scan_manager.trigger_scan(library.id, scan_mode).await
+
+                        let task_type = TaskType::ScanLibrary {
+                            library_id: library.id,
+                            mode: scan_mode.to_string(),
+                        };
+
+                        if let Err(e) = TaskRepository::enqueue(&self.db, task_type, 0, None).await
                         {
                             warn!(
                                 "Failed to trigger scan-on-start for library {}: {}",
@@ -163,20 +163,26 @@ impl ScanScheduler {
         let scan_mode = config.get_scan_mode()?;
 
         // Create cron job
-        let scan_manager = self.scan_manager.clone();
+        let db = self.db.clone();
         let library_name = library.name.clone();
 
         let job = Job::new_async(cron_schedule.as_str(), move |_uuid, _lock| {
-            let scan_manager = scan_manager.clone();
+            let db = db.clone();
             let library_name = library_name.clone();
+            let mode_str = scan_mode.to_string();
 
             Box::pin(async move {
                 info!(
                     "Triggering scheduled {} scan for library {}",
-                    scan_mode, library_name
+                    mode_str, library_name
                 );
 
-                match scan_manager.trigger_scan(library_id, scan_mode).await {
+                let task_type = TaskType::ScanLibrary {
+                    library_id,
+                    mode: mode_str.clone(),
+                };
+
+                match TaskRepository::enqueue(&db, task_type, 0, None).await {
                     Ok(_) => {
                         debug!("Successfully triggered scan for library {}", library_name);
                     }

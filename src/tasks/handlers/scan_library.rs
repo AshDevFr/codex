@@ -4,9 +4,10 @@ use serde_json::json;
 use tracing::{error, info};
 
 use crate::db::entities::tasks;
+use crate::db::repositories::{BookRepository, TaskRepository};
 use crate::scanner::{scan_library, ScanMode};
 use crate::tasks::handlers::TaskHandler;
-use crate::tasks::types::TaskResult;
+use crate::tasks::types::{TaskResult, TaskType};
 
 pub struct ScanLibraryHandler;
 
@@ -56,10 +57,61 @@ impl TaskHandler for ScanLibraryHandler {
                         result.books_created
                     );
 
+                    // Auto-queue analysis tasks after successful scan
+                    let books_to_analyze = match scan_mode {
+                        ScanMode::Normal => {
+                            // Normal scan: only analyze unanalyzed books
+                            BookRepository::get_unanalyzed_in_library(db, library_id).await?
+                        }
+                        ScanMode::Deep => {
+                            // Deep scan: analyze ALL books (get via series)
+                            use crate::db::entities::{books, prelude::*, series};
+                            use sea_orm::{
+                                ColumnTrait, EntityTrait, JoinType, QueryFilter, QuerySelect,
+                                RelationTrait,
+                            };
+
+                            Books::find()
+                                .join(JoinType::InnerJoin, books::Relation::Series.def())
+                                .filter(series::Column::LibraryId.eq(library_id))
+                                .filter(books::Column::Deleted.eq(false))
+                                .all(db)
+                                .await?
+                        }
+                    };
+
+                    let mut tasks_queued = 0;
+                    for book in books_to_analyze {
+                        match TaskRepository::enqueue(
+                            db,
+                            TaskType::AnalyzeBook { book_id: book.id },
+                            0, // Priority 0 for auto-queued tasks
+                            None,
+                        )
+                        .await
+                        {
+                            Ok(_) => tasks_queued += 1,
+                            Err(e) => {
+                                error!(
+                                    "Task {}: Failed to queue analysis for book {}: {}",
+                                    task.id, book.id, e
+                                );
+                            }
+                        }
+                    }
+
+                    info!(
+                        "Task {}: Queued {} analysis tasks for library {}",
+                        task.id, tasks_queued, library_id
+                    );
+
                     Ok(TaskResult::success_with_data(
                         format!(
-                            "Scanned {} files ({} series, {} books)",
-                            result.files_processed, result.series_created, result.books_created
+                            "Scanned {} files ({} series, {} books), queued {} analysis tasks",
+                            result.files_processed,
+                            result.series_created,
+                            result.books_created,
+                            tasks_queued
                         ),
                         json!({
                             "files_processed": result.files_processed,
@@ -68,6 +120,7 @@ impl TaskHandler for ScanLibraryHandler {
                             "books_updated": result.books_updated,
                             "books_deleted": result.books_deleted,
                             "books_restored": result.books_restored,
+                            "tasks_queued": tasks_queued,
                             "errors": result.errors.len(),
                         }),
                     ))

@@ -3,7 +3,6 @@ use codex::api::extractors::{AppState, AuthState};
 use codex::api::routes::create_router;
 use codex::config::{ApiConfig, AuthConfig, EmailConfig};
 use codex::events::EventBroadcaster;
-use codex::scanner::ScanManager;
 use codex::services::email::EmailService;
 use codex::utils::jwt::JwtService;
 use http_body_util::BodyExt;
@@ -20,7 +19,6 @@ pub fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
         24, // 24 hour expiry
     ));
 
-    let scan_manager = Arc::new(ScanManager::new(db.clone(), 2));
     let auth_config = Arc::new(AuthConfig::default());
     let email_service = Arc::new(EmailService::new(EmailConfig::default()));
     let event_broadcaster = Arc::new(EventBroadcaster::new(1000));
@@ -28,7 +26,6 @@ pub fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
     Arc::new(AppState {
         db,
         jwt_service,
-        scan_manager,
         auth_config,
         email_service,
         event_broadcaster,
@@ -42,7 +39,6 @@ pub fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
         24, // 24 hour expiry
     ));
 
-    let scan_manager = Arc::new(ScanManager::new(db.clone(), 2));
     let auth_config = Arc::new(AuthConfig::default());
     let email_service = Arc::new(EmailService::new(EmailConfig::default()));
     let event_broadcaster = Arc::new(EventBroadcaster::new(1000));
@@ -50,7 +46,6 @@ pub fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
     Arc::new(AppState {
         db,
         jwt_service,
-        scan_manager,
         auth_config,
         email_service,
         event_broadcaster,
@@ -72,14 +67,12 @@ pub fn create_test_api_config() -> ApiConfig {
 /// Helper to create the API router with test state (deprecated - use create_test_router_with_app_state)
 pub fn create_test_router(state: Arc<AuthState>) -> Router {
     // Convert AuthState to AppState for compatibility
-    let scan_manager = Arc::new(ScanManager::new(state.db.clone(), 2));
     let auth_config = Arc::new(AuthConfig::default());
     let email_service = Arc::new(EmailService::new(EmailConfig::default()));
     let event_broadcaster = Arc::new(EventBroadcaster::new(1000));
     let app_state = Arc::new(AppState {
         db: state.db.clone(),
         jwt_service: state.jwt_service.clone(),
-        scan_manager,
         auth_config,
         email_service,
         event_broadcaster,

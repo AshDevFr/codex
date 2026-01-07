@@ -164,9 +164,12 @@ pub async fn create_library(
             let scan_mode = crate::scanner::ScanMode::from_str(&config_dto.scan_mode)
                 .map_err(|e| ApiError::BadRequest(e))?;
 
-            state
-                .scan_manager
-                .trigger_scan(library.id, scan_mode)
+            let task_type = crate::tasks::types::TaskType::ScanLibrary {
+                library_id: library.id,
+                mode: scan_mode.to_string(),
+            };
+
+            crate::db::repositories::TaskRepository::enqueue(&state.db, task_type, 0, None)
                 .await
                 .map_err(|e| ApiError::Internal(format!("Failed to trigger auto-scan: {}", e)))?;
         }

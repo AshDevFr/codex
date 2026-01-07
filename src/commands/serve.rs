@@ -89,27 +89,9 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     db.health_check().await?;
     info!("Database health check passed");
 
-    // Create scan manager
-    info!("Initializing scan manager...");
-    let scan_manager = Arc::new(crate::scanner::ScanManager::new_with_config(
-        db.sea_orm_connection().clone(),
-        config.scanner.max_concurrent_scans,
-        config.scanner.auto_analyze_concurrency,
-    ));
-    info!(
-        "  Max concurrent scans: {}",
-        config.scanner.max_concurrent_scans
-    );
-    info!(
-        "  Auto-analyze concurrency: {}",
-        config.scanner.auto_analyze_concurrency
-    );
-
     // Create and start scheduler
     info!("Initializing scan scheduler...");
-    let mut scheduler =
-        crate::scanner::ScanScheduler::new(db.sea_orm_connection().clone(), scan_manager.clone())
-            .await?;
+    let mut scheduler = crate::scanner::ScanScheduler::new(db.sea_orm_connection().clone()).await?;
     scheduler.start().await?;
     info!("Scan scheduler started successfully");
 
@@ -145,7 +127,6 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             config.auth.jwt_secret.clone(),
             config.auth.jwt_expiry_hours,
         )),
-        scan_manager,
         auth_config: Arc::new(config.auth.clone()),
         email_service,
         event_broadcaster,
