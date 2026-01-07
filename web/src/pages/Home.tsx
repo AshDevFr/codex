@@ -53,7 +53,7 @@ export function Home() {
 	// Subscribe to scan progress updates via SSE
 	useEffect(() => {
 		// Only subscribe if user is authenticated
-		const token = localStorage.getItem("token");
+		const token = localStorage.getItem("jwt_token");
 		if (!token) {
 			return;
 		}
@@ -234,7 +234,7 @@ export function Home() {
 							const progress = scanProgress[library.id];
 							const isScanning =
 								progress &&
-								(progress.status === "pending" ||
+								(progress.status === "queued" ||
 									progress.status === "running");
 							const progressPercent = progress?.files_total
 								? Math.round(
@@ -339,7 +339,7 @@ export function Home() {
 											<Stack gap="xs">
 												<Group justify="space-between">
 													<Text size="sm" fw={500}>
-														{progress.status === "pending"
+														{progress.status === "queued"
 															? "Starting scan..."
 															: "Scanning..."}
 													</Text>

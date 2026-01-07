@@ -1,65 +1,69 @@
 import type { ScanProgress } from "@/types/api";
 import { api } from "./client";
 
-export const scanApi = {
-	// Subscribe to scan progress updates via SSE
-	subscribeToProgress: (
-		onProgress: (progress: ScanProgress) => void,
+/**
+ * SSE Reconnection Manager with exponential backoff
+ */
+class SSEReconnectionManager {
+	private reconnectAttempts = 0;
+	private maxAttempts = 10;
+	private baseDelay = 1000;
+	private maxDelay = 30000;
+	private reconnectTimer: NodeJS.Timeout | null = null;
+	private active = true;
+	private url: string;
+	private onMessage: (data: ScanProgress) => void;
+	private onError?: (error: Error) => void;
+	private onConnectionStateChange?: (state: 'connecting' | 'connected' | 'disconnected' | 'failed') => void;
+
+	constructor(
+		url: string,
+		onMessage: (data: ScanProgress) => void,
 		onError?: (error: Error) => void,
-	): (() => void) => {
-		const token = localStorage.getItem("token");
-		if (!token) {
-			throw new Error("Not authenticated");
-		}
+		onConnectionStateChange?: (state: 'connecting' | 'connected' | 'disconnected' | 'failed') => void,
+	) {
+		this.url = url;
+		this.onMessage = onMessage;
+		this.onError = onError;
+		this.onConnectionStateChange = onConnectionStateChange;
+	}
 
-		const baseURL = api.defaults.baseURL || "/api/v1";
-		const eventSource = new EventSource(`${baseURL}/scans/stream`, {
-			withCredentials: true,
-		});
+	async connect(): Promise<() => void> {
+		this.onConnectionStateChange?.('connecting');
 
-		// Add auth header (EventSource doesn't support custom headers,
-		// so we need to pass it via URL or use a different approach)
-		// For now, we'll rely on cookie-based auth or we need to use fetch with ReadableStream
+		const attemptConnection = async (): Promise<void> => {
+			if (!this.active) return;
 
-		eventSource.onmessage = (event) => {
 			try {
-				const progress: ScanProgress = JSON.parse(event.data);
-				onProgress(progress);
-			} catch (error) {
-				console.error("Failed to parse scan progress:", error);
-			}
-		};
+				const token = localStorage.getItem("jwt_token");
+				if (!token) {
+					throw new Error("Not authenticated");
+				}
 
-		eventSource.onerror = (error) => {
-			console.error("SSE error:", error);
-			onError?.(new Error("Connection to scan progress stream failed"));
-		};
+				const response = await fetch(this.url, {
+					headers: {
+						Authorization: `Bearer ${token}`,
+						Accept: "text/event-stream",
+					},
+				});
 
-		// Return cleanup function
-		return () => {
-			eventSource.close();
-		};
-	},
+				if (!response.ok) {
+					throw new Error(`SSE connection failed: ${response.status} ${response.statusText}`);
+				}
 
-	// Alternative: Use fetch with ReadableStream for better auth support
-	subscribeToProgressWithAuth: async (
-		onProgress: (progress: ScanProgress) => void,
-		onError?: (error: Error) => void,
-	): Promise<() => void> => {
-		const response = await api.get("/scans/stream", {
-			responseType: "stream",
-			headers: {
-				Accept: "text/event-stream",
-			},
-		});
+				if (!response.body) {
+					throw new Error("Response body is null");
+				}
 
-		const reader = response.data.getReader();
-		const decoder = new TextDecoder();
-		let buffer = "";
+				// Reset reconnection counter on successful connection
+				this.reconnectAttempts = 0;
+				this.onConnectionStateChange?.('connected');
 
-		const processStream = async () => {
-			try {
-				while (true) {
+				const reader = response.body.getReader();
+				const decoder = new TextDecoder();
+				let buffer = "";
+
+				while (this.active) {
 					const { done, value } = await reader.read();
 					if (done) break;
 
@@ -73,24 +77,80 @@ export const scanApi = {
 								const data = line.substring(6);
 								if (data === "keep-alive") continue;
 								const progress: ScanProgress = JSON.parse(data);
-								onProgress(progress);
+								this.onMessage(progress);
 							} catch (error) {
 								console.error("Failed to parse SSE data:", error);
 							}
 						}
 					}
 				}
+
+				// Stream ended normally
+				reader.cancel();
 			} catch (error) {
-				console.error("Stream processing error:", error);
-				onError?.(error as Error);
+				if (!this.active) return;
+
+				console.error("SSE connection error:", error);
+				this.onConnectionStateChange?.('disconnected');
+
+				// Attempt reconnection with exponential backoff
+				if (this.reconnectAttempts < this.maxAttempts) {
+					const delay = Math.min(
+						this.baseDelay * (2 ** this.reconnectAttempts),
+						this.maxDelay
+					);
+					this.reconnectAttempts++;
+
+					console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxAttempts})`);
+
+					this.reconnectTimer = setTimeout(() => {
+						attemptConnection();
+					}, delay);
+				} else {
+					this.onConnectionStateChange?.('failed');
+					this.onError?.(new Error("Max reconnection attempts reached"));
+				}
 			}
 		};
 
-		processStream();
+		attemptConnection();
 
 		// Return cleanup function
 		return () => {
-			reader.cancel();
+			this.active = false;
+			if (this.reconnectTimer) {
+				clearTimeout(this.reconnectTimer);
+			}
+		};
+	}
+}
+
+export const scanApi = {
+	/**
+	 * Subscribe to scan progress updates via SSE with automatic reconnection
+	 * Uses fetch with ReadableStream for proper authentication header support
+	 */
+	subscribeToProgress: (
+		onProgress: (progress: ScanProgress) => void,
+		onError?: (error: Error) => void,
+		onConnectionStateChange?: (state: 'connecting' | 'connected' | 'disconnected' | 'failed') => void,
+	): (() => void) => {
+		const baseURL = api.defaults.baseURL || "/api/v1";
+		const manager = new SSEReconnectionManager(
+			`${baseURL}/scans/stream`,
+			onProgress,
+			onError,
+			onConnectionStateChange,
+		);
+
+		let cleanup: (() => void) | null = null;
+
+		manager.connect().then((cleanupFn) => {
+			cleanup = cleanupFn;
+		});
+
+		return () => {
+			cleanup?.();
 		};
 	},
 };
