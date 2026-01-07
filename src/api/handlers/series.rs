@@ -5,6 +5,7 @@ use crate::api::{
     permissions::Permission,
 };
 use crate::db::repositories::{BookRepository, SeriesRepository};
+use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
 use crate::require_permission;
 use axum::{
     body::Body,
@@ -13,6 +14,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use chrono::Utc;
 use image::{imageops::FilterType, ImageFormat};
 use serde::Deserialize;
 use std::io::Cursor;
@@ -324,8 +326,8 @@ pub async fn upload_series_cover(
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
 
-    // Verify series exists
-    SeriesRepository::get_by_id(&state.db, series_id)
+    // Verify series exists and get its library_id
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
@@ -392,6 +394,18 @@ pub async fn upload_series_cover(
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to update selected cover source: {}", e)))?;
+
+    // Emit cover updated event
+    let event = EntityChangeEvent {
+        event: EntityEvent::CoverUpdated {
+            entity_type: EntityType::Series,
+            entity_id: series_id,
+            library_id: Some(series.library_id),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
 
     Ok(StatusCode::OK)
 }

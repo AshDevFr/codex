@@ -20,7 +20,7 @@ use super::AppState;
 /// - `libraries:read` or admin status
 #[utoipa::path(
     get,
-    path = "/tasks",
+    path = "/api/v1/tasks",
     responses(
         (status = 200, description = "List of active tasks", body = Vec<TaskDto>),
         (status = 403, description = "Permission denied"),
@@ -76,7 +76,7 @@ pub async fn list_tasks(
 /// - `libraries:read` or admin status
 #[utoipa::path(
     get,
-    path = "/tasks/{task_id}",
+    path = "/api/v1/tasks/{task_id}",
     params(
         ("task_id" = String, Path, description = "Task ID")
     ),
@@ -139,7 +139,7 @@ pub async fn get_task(
 /// - `libraries:write` or admin status
 #[utoipa::path(
     post,
-    path = "/tasks/{task_id}/cancel",
+    path = "/api/v1/tasks/{task_id}/cancel",
     params(
         ("task_id" = String, Path, description = "Task ID to cancel")
     ),

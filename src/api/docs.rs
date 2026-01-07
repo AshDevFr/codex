@@ -23,6 +23,9 @@ use utoipa::OpenApi;
         // Auth endpoints
         handlers::login,
         handlers::logout,
+        handlers::register,
+        handlers::verify_email,
+        handlers::resend_verification,
 
         // Library endpoints
         handlers::list_libraries,
@@ -30,18 +33,34 @@ use utoipa::OpenApi;
         handlers::get_library,
         handlers::update_library,
         handlers::delete_library,
+        handlers::purge_deleted_books,
 
         // Series endpoints
         handlers::list_series,
         handlers::search_series,
         handlers::get_series,
+        handlers::get_series_books,
+        handlers::purge_series_deleted_books,
+        handlers::get_series_thumbnail,
+        handlers::upload_series_cover,
+        handlers::set_series_cover_source,
+        handlers::trigger_series_analysis,
 
         // Book endpoints
         handlers::list_books,
         handlers::get_book,
+        handlers::get_book_thumbnail,
+        handlers::trigger_book_analysis,
 
         // Page endpoints
         handlers::get_page_image,
+
+        // Reading progress endpoints
+        handlers::update_reading_progress,
+        handlers::get_reading_progress,
+        handlers::delete_reading_progress,
+        handlers::get_user_progress,
+        handlers::get_currently_reading,
 
         // User endpoints
         handlers::list_users,
@@ -58,6 +77,25 @@ use utoipa::OpenApi;
         handlers::get_task,
         handlers::cancel_task,
 
+        // Scan endpoints
+        handlers::trigger_scan,
+        handlers::get_scan_status,
+        handlers::cancel_scan,
+        handlers::trigger_analysis,
+        handlers::list_active_scans,
+        handlers::scan_progress_stream,
+
+        // Task Queue endpoints
+        handlers::task_queue::list_tasks,
+        handlers::task_queue::create_task,
+        handlers::task_queue::get_task,
+        handlers::task_queue::cancel_task,
+        handlers::task_queue::unlock_task,
+        handlers::task_queue::retry_task,
+        handlers::task_queue::get_task_stats,
+        handlers::task_queue::purge_old_tasks,
+        handlers::task_queue::nuke_all_tasks,
+
         // Filesystem endpoints
         handlers::browse_filesystem,
         handlers::list_drives,
@@ -67,6 +105,12 @@ use utoipa::OpenApi;
             // DTOs
             dto::LoginRequest,
             dto::LoginResponse,
+            dto::RegisterRequest,
+            dto::RegisterResponse,
+            dto::VerifyEmailRequest,
+            dto::VerifyEmailResponse,
+            dto::ResendVerificationRequest,
+            dto::ResendVerificationResponse,
             dto::TokenResponse,
             dto::LibraryDto,
             dto::CreateLibraryRequest,
@@ -76,6 +120,8 @@ use utoipa::OpenApi;
             dto::SearchSeriesRequest,
             dto::BookDto,
             dto::BookListResponse,
+            dto::BookDetailResponse,
+            dto::BookMetadataDto,
             dto::PageDto,
             dto::UserDto,
             dto::CreateUserRequest,
@@ -92,9 +138,29 @@ use utoipa::OpenApi;
             dto::TaskDto,
             dto::TaskProgressDto,
 
+            // Scan DTOs
+            dto::ScanStatusDto,
+            dto::TriggerScanQuery,
+            dto::ScanningConfigDto,
+            dto::AnalysisResult,
+
+            // Reading progress DTOs
+            dto::UpdateProgressRequest,
+            dto::ReadProgressResponse,
+            dto::ReadProgressListResponse,
+
             // Filesystem DTOs
             handlers::filesystem::FileSystemEntry,
             handlers::filesystem::BrowseResponse,
+
+            // Task Queue DTOs
+            handlers::task_queue::CreateTaskRequest,
+            handlers::task_queue::CreateTaskResponse,
+            handlers::task_queue::TaskResponse,
+            handlers::task_queue::PurgeTasksResponse,
+            handlers::task_queue::MessageResponse,
+            crate::tasks::types::TaskStats,
+            crate::tasks::types::TaskType,
 
             // Error responses
             ErrorResponse,
@@ -107,9 +173,12 @@ use utoipa::OpenApi;
         (name = "series", description = "Series browsing and search endpoints"),
         (name = "books", description = "Book details and metadata endpoints"),
         (name = "pages", description = "Page image serving endpoints"),
+        (name = "Reading Progress", description = "Reading progress tracking endpoints"),
         (name = "users", description = "User management endpoints (admin only)"),
         (name = "Metrics", description = "Application metrics and statistics"),
         (name = "Tasks", description = "Background task management and monitoring"),
+        (name = "Scans", description = "Library scanning and analysis endpoints"),
+        (name = "Task Queue", description = "Distributed task queue management"),
         (name = "filesystem", description = "Filesystem browsing for library path selection"),
     ),
     modifiers(&SecurityAddon),

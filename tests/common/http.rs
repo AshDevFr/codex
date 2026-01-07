@@ -2,6 +2,7 @@ use axum::Router;
 use codex::api::extractors::{AppState, AuthState};
 use codex::api::routes::create_router;
 use codex::config::{ApiConfig, AuthConfig, EmailConfig};
+use codex::events::EventBroadcaster;
 use codex::scanner::ScanManager;
 use codex::services::email::EmailService;
 use codex::utils::jwt::JwtService;
@@ -22,6 +23,7 @@ pub fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
     let scan_manager = Arc::new(ScanManager::new(db.clone(), 2));
     let auth_config = Arc::new(AuthConfig::default());
     let email_service = Arc::new(EmailService::new(EmailConfig::default()));
+    let event_broadcaster = Arc::new(EventBroadcaster::new(1000));
 
     Arc::new(AppState {
         db,
@@ -29,6 +31,7 @@ pub fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
         scan_manager,
         auth_config,
         email_service,
+        event_broadcaster,
     })
 }
 
@@ -42,6 +45,7 @@ pub fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
     let scan_manager = Arc::new(ScanManager::new(db.clone(), 2));
     let auth_config = Arc::new(AuthConfig::default());
     let email_service = Arc::new(EmailService::new(EmailConfig::default()));
+    let event_broadcaster = Arc::new(EventBroadcaster::new(1000));
 
     Arc::new(AppState {
         db,
@@ -49,6 +53,7 @@ pub fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
         scan_manager,
         auth_config,
         email_service,
+        event_broadcaster,
     })
 }
 
@@ -70,12 +75,14 @@ pub fn create_test_router(state: Arc<AuthState>) -> Router {
     let scan_manager = Arc::new(ScanManager::new(state.db.clone(), 2));
     let auth_config = Arc::new(AuthConfig::default());
     let email_service = Arc::new(EmailService::new(EmailConfig::default()));
+    let event_broadcaster = Arc::new(EventBroadcaster::new(1000));
     let app_state = Arc::new(AppState {
         db: state.db.clone(),
         jwt_service: state.jwt_service.clone(),
         scan_manager,
         auth_config,
         email_service,
+        event_broadcaster,
     });
     let api_config = create_test_api_config();
     create_router(app_state, &api_config)

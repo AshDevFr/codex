@@ -69,6 +69,7 @@ pub struct AppState {
     pub scan_manager: Arc<ScanManager>,
     pub auth_config: Arc<crate::config::AuthConfig>,
     pub email_service: Arc<crate::services::email::EmailService>,
+    pub event_broadcaster: Arc<crate::events::EventBroadcaster>,
 }
 
 // Legacy alias for backwards compatibility during transition

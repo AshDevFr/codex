@@ -115,7 +115,7 @@ pub struct MessageResponse {
 /// - `tasks:read`
 #[utoipa::path(
     get,
-    path = "/queue/tasks",
+    path = "/api/v1/queue/tasks",
     params(
         ("status" = Option<String>, Query, description = "Filter by status (pending, processing, completed, failed)"),
         ("task_type" = Option<String>, Query, description = "Filter by task type"),
@@ -157,7 +157,7 @@ pub async fn list_tasks(
 /// - `tasks:read`
 #[utoipa::path(
     get,
-    path = "/queue/tasks/{id}",
+    path = "/api/v1/queue/tasks/{id}",
     params(
         ("id" = Uuid, Path, description = "Task ID")
     ),
@@ -194,7 +194,7 @@ pub async fn get_task(
 /// - `tasks:write`
 #[utoipa::path(
     post,
-    path = "/queue/tasks",
+    path = "/api/v1/queue/tasks",
     request_body = CreateTaskRequest,
     responses(
         (status = 200, description = "Task created successfully", body = CreateTaskResponse),
@@ -233,7 +233,7 @@ pub async fn create_task(
 /// - `tasks:write`
 #[utoipa::path(
     post,
-    path = "/queue/tasks/{id}/cancel",
+    path = "/api/v1/queue/tasks/{id}/cancel",
     params(
         ("id" = Uuid, Path, description = "Task ID")
     ),
@@ -280,7 +280,7 @@ pub async fn cancel_task(
 /// - `tasks:write`
 #[utoipa::path(
     post,
-    path = "/queue/tasks/{id}/unlock",
+    path = "/api/v1/queue/tasks/{id}/unlock",
     params(
         ("id" = Uuid, Path, description = "Task ID")
     ),
@@ -324,7 +324,7 @@ pub async fn unlock_task(
 /// - `tasks:write`
 #[utoipa::path(
     post,
-    path = "/queue/tasks/{id}/retry",
+    path = "/api/v1/queue/tasks/{id}/retry",
     params(
         ("id" = Uuid, Path, description = "Task ID")
     ),
@@ -376,7 +376,7 @@ pub async fn retry_task(
 /// - `tasks:read`
 #[utoipa::path(
     get,
-    path = "/queue/stats",
+    path = "/api/v1/queue/stats",
     responses(
         (status = 200, description = "Statistics retrieved successfully", body = TaskStats),
         (status = 403, description = "Permission denied"),
@@ -407,7 +407,7 @@ pub async fn get_task_stats(
 /// - `tasks:write`
 #[utoipa::path(
     delete,
-    path = "/queue/purge",
+    path = "/api/v1/queue/purge",
     params(
         ("days" = Option<i64>, Query, description = "Delete tasks older than N days (default: 30)")
     ),
@@ -442,7 +442,7 @@ pub async fn purge_old_tasks(
 /// - `admin`
 #[utoipa::path(
     delete,
-    path = "/queue/nuke",
+    path = "/api/v1/queue/nuke",
     responses(
         (status = 200, description = "All tasks deleted", body = PurgeTasksResponse),
         (status = 403, description = "Permission denied (admin only)"),

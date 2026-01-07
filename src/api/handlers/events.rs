@@ -1,0 +1,126 @@
+use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission, AppState};
+use crate::events::EntityChangeEvent;
+use axum::{
+    extract::State,
+    response::sse::{Event, KeepAlive, Sse},
+};
+use futures::stream::Stream;
+use std::{convert::Infallible, sync::Arc, time::Duration};
+use tracing::{debug, warn};
+
+/// Subscribe to real-time entity change events via SSE
+///
+/// Clients can subscribe to this endpoint to receive real-time notifications
+/// about entity changes (books, series, libraries) happening in the system.
+///
+/// ## Authentication
+/// Requires valid authentication with `LibrariesRead` permission.
+///
+/// ## Event Format
+/// Events are sent as JSON-encoded `EntityChangeEvent` objects with the following structure:
+/// ```json
+/// {
+///   "type": "book_created",
+///   "book_id": "uuid",
+///   "series_id": "uuid",
+///   "library_id": "uuid",
+///   "timestamp": "2024-01-06T12:00:00Z",
+///   "user_id": "uuid"
+/// }
+/// ```
+///
+/// ## Keep-Alive
+/// A keep-alive message is sent every 15 seconds to prevent connection timeout.
+pub async fn entity_events_stream(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
+    // Require read access to libraries
+    auth.require_permission(&Permission::LibrariesRead)?;
+
+    debug!(
+        "Client subscribed to entity events (user_id: {}, username: {})",
+        auth.user_id, auth.username
+    );
+
+    // Subscribe to the event broadcaster
+    let mut receiver = state.event_broadcaster.subscribe();
+
+    // Create SSE stream
+    let stream = async_stream::stream! {
+        loop {
+            match receiver.recv().await {
+                Ok(event) => {
+                    // Serialize event to JSON
+                    match serde_json::to_string(&event) {
+                        Ok(json) => {
+                            debug!("Sending entity event to client: {:?}", event.event);
+                            yield Ok(Event::default().data(json));
+                        }
+                        Err(e) => {
+                            warn!("Failed to serialize entity event: {}", e);
+                            continue;
+                        }
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                    warn!("Client lagged behind, skipped {} events", skipped);
+                    // Continue receiving - client will catch up
+                    continue;
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    debug!("Event broadcaster closed, ending stream");
+                    break;
+                }
+            }
+        }
+    };
+
+    Ok(Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(Duration::from_secs(15))
+            .text("keep-alive"),
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::events::{EntityEvent, EventBroadcaster};
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn test_event_serialization() {
+        let event = EntityChangeEvent::new(
+            EntityEvent::BookCreated {
+                book_id: Uuid::new_v4(),
+                series_id: Uuid::new_v4(),
+                library_id: Uuid::new_v4(),
+            },
+            Some(Uuid::new_v4()),
+        );
+
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("book_created"));
+        assert!(json.contains("timestamp"));
+    }
+
+    #[tokio::test]
+    async fn test_broadcaster_integration() {
+        let broadcaster = EventBroadcaster::new(100);
+        let mut receiver = broadcaster.subscribe();
+
+        let event = EntityChangeEvent::new(
+            EntityEvent::SeriesCreated {
+                series_id: Uuid::new_v4(),
+                library_id: Uuid::new_v4(),
+            },
+            None,
+        );
+
+        broadcaster.emit(event.clone()).unwrap();
+
+        let received = receiver.recv().await.unwrap();
+        assert_eq!(received.library_id(), event.library_id());
+    }
+}

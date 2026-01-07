@@ -17,7 +17,7 @@ use super::AppState;
 /// - `libraries:read` or admin status
 #[utoipa::path(
     get,
-    path = "/metrics",
+    path = "/api/v1/metrics",
     responses(
         (status = 200, description = "Application metrics retrieved successfully", body = MetricsDto),
         (status = 403, description = "Permission denied"),

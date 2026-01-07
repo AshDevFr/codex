@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod books;
+pub mod events;
 pub mod filesystem;
 pub mod health;
 pub mod libraries;
@@ -15,6 +16,7 @@ pub mod users;
 
 pub use auth::*;
 pub use books::*;
+pub use events::*;
 pub use filesystem::*;
 pub use health::*;
 pub use libraries::*;

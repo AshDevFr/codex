@@ -84,6 +84,8 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/libraries/:id/analyze", post(handlers::trigger_analysis))
         .route("/scans/active", get(handlers::list_active_scans))
         .route("/scans/stream", get(handlers::scan_progress_stream))
+        // Real-time event routes (protected)
+        .route("/events/stream", get(handlers::entity_events_stream))
         // Series routes (protected)
         .route("/series", get(handlers::list_series))
         .route("/series/search", post(handlers::search_series))

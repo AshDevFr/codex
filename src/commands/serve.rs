@@ -133,6 +133,10 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("  SMTP port: {}", config.email.smtp_port);
     info!("  From: {}", config.email.smtp_from_email);
 
+    // Create event broadcaster for real-time updates
+    let event_broadcaster = Arc::new(crate::events::EventBroadcaster::new(1000));
+    info!("Event broadcaster initialized");
+
     // Create application state for API
     let api_state = Arc::new(crate::api::AppState {
         db: db.sea_orm_connection().clone(),
@@ -143,6 +147,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         scan_manager,
         auth_config: Arc::new(config.auth.clone()),
         email_service,
+        event_broadcaster,
     });
 
     // Build router using API module

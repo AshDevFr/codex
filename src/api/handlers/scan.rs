@@ -30,7 +30,7 @@ use super::AppState;
 /// - `libraries:write`
 #[utoipa::path(
     post,
-    path = "/libraries/{id}/scan",
+    path = "/api/v1/libraries/{id}/scan",
     params(
         ("id" = Uuid, Path, description = "Library ID"),
         ("mode" = Option<String>, Query, description = "Scan mode: 'normal' or 'deep' (default: 'normal')")
@@ -95,7 +95,7 @@ pub async fn trigger_scan(
 /// - `libraries:read`
 #[utoipa::path(
     get,
-    path = "/libraries/{id}/scan-status",
+    path = "/api/v1/libraries/{id}/scan-status",
     params(
         ("id" = Uuid, Path, description = "Library ID")
     ),
@@ -134,7 +134,7 @@ pub async fn get_scan_status(
 /// - `libraries:write`
 #[utoipa::path(
     post,
-    path = "/libraries/{id}/scan/cancel",
+    path = "/api/v1/libraries/{id}/scan/cancel",
     params(
         ("id" = Uuid, Path, description = "Library ID")
     ),
@@ -173,7 +173,7 @@ pub async fn cancel_scan(
 /// - `libraries:read`
 #[utoipa::path(
     get,
-    path = "/scans/active",
+    path = "/api/v1/scans/active",
     responses(
         (status = 200, description = "List of active scans", body = Vec<ScanStatusDto>),
         (status = 403, description = "Permission denied"),
@@ -208,7 +208,7 @@ pub async fn list_active_scans(
 /// Clients should listen to this stream to receive live updates during scanning.
 #[utoipa::path(
     get,
-    path = "/scans/stream",
+    path = "/api/v1/scans/stream",
     responses(
         (status = 200, description = "SSE stream of scan progress updates"),
         (status = 403, description = "Permission denied"),
@@ -267,7 +267,7 @@ pub async fn scan_progress_stream(
 /// Books are analyzed in parallel based on the configured concurrency setting.
 #[utoipa::path(
     post,
-    path = "/libraries/{id}/analyze",
+    path = "/api/v1/libraries/{id}/analyze",
     params(
         ("id" = Uuid, Path, description = "Library ID"),
         ("concurrency" = Option<usize>, Query, description = "Number of concurrent analysis tasks (default: 4)")
@@ -329,7 +329,7 @@ pub async fn trigger_analysis(
 /// - `series:write`
 #[utoipa::path(
     post,
-    path = "/series/{id}/analyze",
+    path = "/api/v1/series/{id}/analyze",
     params(
         ("id" = Uuid, Path, description = "Series ID"),
         ("concurrency" = Option<usize>, Query, description = "Number of concurrent analysis tasks (default: 4)")
@@ -391,7 +391,7 @@ pub async fn trigger_series_analysis(
 /// - `books:write`
 #[utoipa::path(
     post,
-    path = "/books/{id}/analyze",
+    path = "/api/v1/books/{id}/analyze",
     params(
         ("id" = Uuid, Path, description = "Book ID")
     ),
