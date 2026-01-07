@@ -29,7 +29,7 @@ impl SeriesRepository {
         library_id: Uuid,
         name: &str,
     ) -> Result<series::Model> {
-        Self::create_with_fingerprint(db, library_id, name, None).await
+        Self::create_with_fingerprint(db, library_id, name, None, None).await
     }
 
     /// Create a new series with optional fingerprint
@@ -38,6 +38,7 @@ impl SeriesRepository {
         library_id: Uuid,
         name: &str,
         fingerprint: Option<String>,
+        path: Option<String>,
     ) -> Result<series::Model> {
         let now = Utc::now();
         let normalized_name = Self::normalize_name(name);
@@ -58,6 +59,7 @@ impl SeriesRepository {
             external_rating_source: Set(None),
             custom_metadata: Set(None),
             fingerprint: Set(fingerprint),
+            path: Set(path),
             reading_direction: Set(None),
             custom_cover_path: Set(None),
             selected_cover_source: Set(None),
@@ -148,6 +150,7 @@ impl SeriesRepository {
             external_rating_source: Set(series_model.external_rating_source.clone()),
             custom_metadata: Set(series_model.custom_metadata.clone()),
             fingerprint: Set(series_model.fingerprint.clone()),
+            path: Set(series_model.path.clone()),
             reading_direction: Set(series_model.reading_direction.clone()),
             custom_cover_path: Set(series_model.custom_cover_path.clone()),
             selected_cover_source: Set(series_model.selected_cover_source.clone()),

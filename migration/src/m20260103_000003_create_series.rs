@@ -26,6 +26,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Series::ExternalRatingSource).string())
                     .col(ColumnDef::new(Series::CustomMetadata).text())
                     .col(ColumnDef::new(Series::Fingerprint).string())
+                    .col(ColumnDef::new(Series::Path).string())
                     .col(ColumnDef::new(Series::ReadingDirection).string())
                     .col(ColumnDef::new(Series::CustomCoverPath).string())
                     .col(ColumnDef::new(Series::SelectedCoverSource).string())
@@ -90,6 +91,7 @@ enum Series {
     ExternalRatingSource,
     CustomMetadata,
     Fingerprint,
+    Path,
     ReadingDirection,
     CustomCoverPath,
     SelectedCoverSource,

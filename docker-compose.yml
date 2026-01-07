@@ -37,6 +37,9 @@ services:
     command: ["codex", "serve", "--config", "/app/config/config.docker.yaml"]
     environment:
       RUST_LOG: info
+      # Email configuration for Mailhog
+      EMAIL_SMTP_HOST: mailhog
+      EMAIL_SMTP_PORT: 1025
       # Configuration overrides (optional - uses CODEX_ prefix)
       # These override values in the config file
       # CODEX_APPLICATION_HOST: 0.0.0.0
@@ -75,6 +78,9 @@ services:
     environment:
       RUST_LOG: info
       RUST_BACKTRACE: 1
+      # Email configuration for Mailhog
+      EMAIL_SMTP_HOST: mailhog
+      EMAIL_SMTP_PORT: 1025
       # Configuration overrides (optional - uses CODEX_ prefix)
       # Uncomment and modify as needed to override config.docker.yaml values
       # CODEX_APPLICATION_HOST: 0.0.0.0
@@ -136,6 +142,20 @@ services:
       - codex-network
     profiles:
       - test
+
+  # Mailhog for email testing
+  mailhog:
+    image: mailhog/mailhog
+    container_name: codex-mailhog
+    restart: always
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    networks:
+      - codex-network
+    profiles:
+      - dev
+      - prod
 
 volumes:
   postgres_data:

@@ -381,9 +381,25 @@ async fn process_series(
     let file_refs: Vec<&PathBuf> = file_paths.iter().collect();
     let fingerprint = calculate_series_fingerprint(&file_refs);
 
+    // Extract series path (relative to library root)
+    let series_path = if !file_paths.is_empty() {
+        let library_path = Path::new(&library.path);
+        let first_file = &file_paths[0];
+        if let Ok(relative) = first_file.strip_prefix(library_path) {
+            // Get the parent directory (series folder)
+            relative.parent()
+                .and_then(|p| p.components().next())
+                .map(|c| c.as_os_str().to_string_lossy().to_string())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     // Find or create series with fingerprint
     let series_model =
-        find_or_create_series(db, library.id, series_name, Some(&fingerprint)).await?;
+        find_or_create_series(db, library.id, series_name, Some(&fingerprint), series_path.as_deref()).await?;
 
     let is_new_series = existing_books
         .values()
@@ -657,6 +673,7 @@ async fn find_or_create_series(
     library_id: Uuid,
     series_name: &str,
     fingerprint: Option<&str>,
+    path: Option<&str>,
 ) -> Result<series::Model> {
     let series_list = SeriesRepository::list_by_library(db, library_id).await?;
 
@@ -711,6 +728,7 @@ async fn find_or_create_series(
         library_id,
         series_name,
         fingerprint.map(String::from),
+        path.map(String::from),
     )
     .await
 }

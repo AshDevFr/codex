@@ -22,6 +22,7 @@ pub struct Model {
     pub external_rating_source: Option<String>,
     pub custom_metadata: Option<String>,
     pub fingerprint: Option<String>,
+    pub path: Option<String>,
     pub reading_direction: Option<String>,
     pub custom_cover_path: Option<String>,
     pub selected_cover_source: Option<String>,

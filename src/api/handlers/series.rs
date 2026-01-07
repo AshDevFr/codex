@@ -75,6 +75,7 @@ pub async fn list_series(
             publisher: series.publisher,
             year: series.year,
             book_count: series.book_count as i64, // Convert i32 to i64
+            path: series.path,
             selected_cover_source: series.selected_cover_source.clone(),
             has_custom_cover: Some(series.custom_cover_path.is_some()),
             created_at: series.created_at,
@@ -123,6 +124,7 @@ pub async fn get_series(
         publisher: series.publisher,
         year: series.year,
         book_count: series.book_count as i64, // Convert i32 to i64
+        path: series.path,
         selected_cover_source: series.selected_cover_source.clone(),
         has_custom_cover: Some(series.custom_cover_path.is_some()),
         created_at: series.created_at,
@@ -179,6 +181,7 @@ pub async fn search_series(
             publisher: series.publisher,
             year: series.year,
             book_count: series.book_count as i64, // Convert i32 to i64
+            path: series.path,
             selected_cover_source: series.selected_cover_source.clone(),
             has_custom_cover: Some(series.custom_cover_path.is_some()),
             created_at: series.created_at,
