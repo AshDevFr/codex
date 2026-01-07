@@ -7,6 +7,10 @@ web/node_modules/
 web/dist/
 web/.vite/
 
+# Docs build artifacts and dependencies
+docs/node_modules/
+docs/build/
+
 # Database files
 *.db
 *.db-shm

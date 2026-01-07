@@ -1,10 +1,10 @@
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
 import { MantineProvider } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { theme } from "./theme";
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
+import { theme } from "./theme";
 
 // Import Mantine styles
 import "@mantine/core/styles.css";

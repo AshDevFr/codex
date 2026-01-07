@@ -86,9 +86,51 @@ jobs:
         run: |
           cargo clippy --features rar -- -D warnings
 
+  # Stage 1: Run frontend checks in parallel with tests and lint
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: catthehacker/ubuntu:act-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        run: |
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          apt-get install -y nodejs
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: web/node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('web/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Lint check
+        working-directory: web
+        continue-on-error: true
+        run: npm run lint
+
+      - name: Run tests
+        working-directory: web
+        run: npm run test:run
+
+      - name: Build check
+        working-directory: web
+        run: npm run build
+
   # Stage 2: Build release binary (after tests pass)
   build:
-    needs: [test, lint]
+    needs: [test, lint, frontend]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     container:
@@ -138,7 +180,7 @@ jobs:
 
   # Stage 2: Build and push Docker image (parallel with build)
   docker:
-    needs: [test, lint]
+    needs: [test, lint, frontend]
     runs-on: ubuntu-latest
     timeout-minutes: 25
 

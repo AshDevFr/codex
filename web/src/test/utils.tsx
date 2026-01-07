@@ -1,35 +1,35 @@
-import { render, type RenderOptions } from '@testing-library/react';
-import { MantineProvider } from '@mantine/core';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter } from 'react-router-dom';
-import { theme } from '@/theme';
+import { MantineProvider } from "@mantine/core";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { type RenderOptions, render } from "@testing-library/react";
+import { BrowserRouter } from "react-router-dom";
+import { theme } from "@/theme";
 
 // Create a custom render function that includes all providers
 export function renderWithProviders(
-  ui: React.ReactElement,
-  {
-    queryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    }),
-    ...renderOptions
-  }: RenderOptions & { queryClient?: QueryClient } = {}
+	ui: React.ReactElement,
+	{
+		queryClient = new QueryClient({
+			defaultOptions: {
+				queries: { retry: false },
+				mutations: { retry: false },
+			},
+		}),
+		...renderOptions
+	}: RenderOptions & { queryClient?: QueryClient } = {},
 ) {
-  function Wrapper({ children }: { children: React.ReactNode }) {
-    return (
-      <MantineProvider theme={theme} defaultColorScheme="dark">
-        <QueryClientProvider client={queryClient}>
-          <BrowserRouter>{children}</BrowserRouter>
-        </QueryClientProvider>
-      </MantineProvider>
-    );
-  }
+	function Wrapper({ children }: { children: React.ReactNode }) {
+		return (
+			<MantineProvider theme={theme} defaultColorScheme="dark">
+				<QueryClientProvider client={queryClient}>
+					<BrowserRouter>{children}</BrowserRouter>
+				</QueryClientProvider>
+			</MantineProvider>
+		);
+	}
 
-  return { ...render(ui, { wrapper: Wrapper, ...renderOptions }), queryClient };
+	return { ...render(ui, { wrapper: Wrapper, ...renderOptions }), queryClient };
 }
 
 // Re-export everything from testing library
-export * from '@testing-library/react';
-export { default as userEvent } from '@testing-library/user-event';
+export * from "@testing-library/react";
+export { default as userEvent } from "@testing-library/user-event";
