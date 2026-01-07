@@ -3,7 +3,7 @@ use crate::db::Database;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing::info;
-use tracing_subscriber::{util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::EnvFilter;
 
 /// Serve command handler - starts the media server
 pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
@@ -28,7 +28,8 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     config.apply_env_overrides("CODEX");
 
     // Initialize tracing with config
-    let log_guard = init_tracing(&config)?;
+    let (log_guard, log_level) = init_tracing(&config)?;
+    info!("Logging level: {}", log_level);
 
     if config_created {
         info!("Created default configuration file");
@@ -196,15 +197,36 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
 
 /// Initialize tracing with both console and file output based on config
 /// Returns an optional guard that must be kept alive for the duration of the application
+/// and the log level string that was used
 fn init_tracing(
     config: &Config,
-) -> anyhow::Result<Option<tracing_appender::non_blocking::WorkerGuard>> {
+) -> anyhow::Result<(Option<tracing_appender::non_blocking::WorkerGuard>, String)> {
     use std::fs;
     use std::io;
     use tracing_subscriber::fmt::writer::MakeWriterExt;
 
     // Get log level from config or environment
-    let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| {
+    // If RUST_LOG is set, use it but still apply sqlx filtering if needed
+    // Otherwise, construct from config with sqlx filtering
+    let log_level = if let Ok(env_log) = std::env::var("RUST_LOG") {
+        // RUST_LOG is set - check if it already has sqlx filter
+        if env_log.contains("sqlx=") {
+            env_log
+        } else {
+            // Apply sqlx filter based on the level
+            let base_level = if env_log.contains(',') {
+                // Extract the first level if multiple are specified
+                env_log.split(',').next().unwrap_or(&env_log).trim()
+            } else {
+                &env_log
+            };
+            match base_level {
+                "debug" | "trace" => env_log,
+                _ => format!("{},sqlx=warn", env_log),
+            }
+        }
+    } else {
+        // No RUST_LOG set, use config with sqlx filtering
         let base_level = config.logging.level.as_str();
         // Only show SQLx query logs when user explicitly wants debug/trace
         // Otherwise set sqlx to warn to reduce noise from query logging
@@ -212,10 +234,11 @@ fn init_tracing(
             "debug" | "trace" => base_level.to_string(),
             _ => format!("{},sqlx=warn", base_level),
         }
-    });
+    };
 
-    let env_filter =
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&log_level));
+    // Create EnvFilter directly from our constructed log_level
+    // This ensures our custom filtering (like sqlx=warn) is always applied
+    let env_filter = EnvFilter::new(&log_level);
 
     // Create a combined writer for console and/or file
     let guard = match (&config.logging.console, &config.logging.file) {
@@ -282,5 +305,5 @@ fn init_tracing(
         }
     };
 
-    Ok(guard)
+    Ok((guard, log_level))
 }

@@ -168,6 +168,7 @@ mod tests {
             format: "cbz".to_string(),
             page_count: 10,
             deleted: false,
+            analyzed: false,
             modified_at: Utc::now(),
             created_at: Utc::now(),
             updated_at: Utc::now(),

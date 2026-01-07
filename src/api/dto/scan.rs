@@ -90,3 +90,22 @@ impl Default for ScanningConfigDto {
         }
     }
 }
+
+/// Analysis result response
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalysisResult {
+    /// Number of books successfully analyzed
+    pub books_analyzed: usize,
+    /// List of errors encountered during analysis
+    pub errors: Vec<String>,
+}
+
+impl From<crate::scanner::AnalysisResult> for AnalysisResult {
+    fn from(result: crate::scanner::AnalysisResult) -> Self {
+        Self {
+            books_analyzed: result.books_analyzed,
+            errors: result.errors,
+        }
+    }
+}

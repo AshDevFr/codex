@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
-    QuerySelect, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect, Set,
 };
 use uuid::Uuid;
 
@@ -29,6 +29,7 @@ impl BookRepository {
             format: Set(book_model.format.clone()),
             page_count: Set(book_model.page_count),
             deleted: Set(book_model.deleted),
+            analyzed: Set(book_model.analyzed),
             modified_at: Set(book_model.modified_at),
             created_at: Set(book_model.created_at),
             updated_at: Set(book_model.updated_at),
@@ -115,6 +116,7 @@ impl BookRepository {
             format: Set(book_model.format.clone()),
             page_count: Set(book_model.page_count),
             deleted: Set(book_model.deleted),
+            analyzed: Set(book_model.analyzed),
             modified_at: Set(book_model.modified_at),
             created_at: Set(book_model.created_at),
             updated_at: Set(Utc::now()),
@@ -154,6 +156,30 @@ impl BookRepository {
         Ok(())
     }
 
+    /// Count books in a library (excluding deleted books)
+    pub async fn count_by_library(db: &DatabaseConnection, library_id: Uuid) -> Result<i64> {
+        // Get all series in the library
+        let series_list =
+            crate::db::repositories::SeriesRepository::list_by_library(db, library_id).await?;
+        let series_ids: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
+
+        if series_ids.is_empty() {
+            return Ok(0);
+        }
+
+        use sea_orm::PaginatorTrait;
+
+        let count = Books::find()
+            .filter(books::Column::SeriesId.is_in(series_ids))
+            .filter(books::Column::Deleted.eq(false))
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count books")?;
+
+        Ok(count as i64)
+    }
+
     /// Purge all deleted books in a library (permanently delete from database)
     pub async fn purge_deleted_in_library(
         db: &DatabaseConnection,
@@ -190,6 +216,53 @@ impl BookRepository {
 
         Ok(result.rows_affected)
     }
+
+    /// Get all unanalyzed books in a library
+    pub async fn get_unanalyzed_in_library(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+    ) -> Result<Vec<books::Model>> {
+        // Get all series in the library
+        let series_list =
+            crate::db::repositories::SeriesRepository::list_by_library(db, library_id).await?;
+        let series_ids: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
+
+        if series_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        Books::find()
+            .filter(books::Column::SeriesId.is_in(series_ids))
+            .filter(books::Column::Analyzed.eq(false))
+            .filter(books::Column::Deleted.eq(false))
+            .all(db)
+            .await
+            .context("Failed to get unanalyzed books")
+    }
+
+    /// Mark a book as analyzed
+    pub async fn mark_analyzed(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        analyzed: bool,
+    ) -> Result<()> {
+        let book = Books::find_by_id(book_id)
+            .one(db)
+            .await
+            .context("Failed to find book")?
+            .ok_or_else(|| anyhow::anyhow!("Book not found"))?;
+
+        let mut active: books::ActiveModel = book.into();
+        active.analyzed = Set(analyzed);
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to mark book as analyzed")?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -215,6 +288,7 @@ mod tests {
             format: "cbz".to_string(),
             page_count: 10,
             deleted: false,
+            analyzed: false,
             modified_at: now,
             created_at: now,
             updated_at: now,

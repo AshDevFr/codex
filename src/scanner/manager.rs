@@ -2,7 +2,8 @@ use anyhow::Result;
 use sea_orm::DatabaseConnection;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use std::time::Instant;
+use tokio::sync::{broadcast, mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -16,13 +17,16 @@ struct ScanState {
     active_scans: HashMap<Uuid, (ScanProgress, CancellationToken)>,
     /// Queued scans waiting to be processed
     queued_scans: VecDeque<(Uuid, ScanMode)>,
+    /// Broadcast channel for progress updates
+    progress_broadcast: broadcast::Sender<ScanProgress>,
 }
 
 impl ScanState {
-    fn new() -> Self {
+    fn new(progress_broadcast: broadcast::Sender<ScanProgress>) -> Self {
         Self {
             active_scans: HashMap::new(),
             queued_scans: VecDeque::new(),
+            progress_broadcast,
         }
     }
 }
@@ -32,6 +36,7 @@ pub struct ScanManager {
     state: Arc<RwLock<ScanState>>,
     db: DatabaseConnection,
     max_concurrent: usize,
+    progress_broadcast: broadcast::Sender<ScanProgress>,
 }
 
 impl ScanManager {
@@ -41,11 +46,18 @@ impl ScanManager {
             "Initializing ScanManager with max_concurrent={}",
             max_concurrent
         );
+        let (progress_broadcast, _) = broadcast::channel(1000);
         Self {
-            state: Arc::new(RwLock::new(ScanState::new())),
+            state: Arc::new(RwLock::new(ScanState::new(progress_broadcast.clone()))),
             db,
             max_concurrent,
+            progress_broadcast,
         }
+    }
+
+    /// Subscribe to progress updates for all scans
+    pub fn subscribe(&self) -> broadcast::Receiver<ScanProgress> {
+        self.progress_broadcast.subscribe()
     }
 
     /// Trigger a library scan
@@ -123,6 +135,7 @@ impl ScanManager {
 
     /// Start a scan task
     async fn start_scan(&self, library_id: Uuid, mode: ScanMode) -> Result<()> {
+        let scan_start_time = Instant::now();
         info!("Starting {} scan for library {}", mode, library_id);
 
         let cancellation = CancellationToken::new();
@@ -143,7 +156,7 @@ impl ScanManager {
 
         // Spawn scan task
         tokio::spawn(async move {
-            let (progress_tx, mut progress_rx) = mpsc::channel(100);
+            let (progress_tx, mut progress_rx) = mpsc::channel::<ScanProgress>(100);
 
             // Start progress listener
             let state_clone = state.clone();
@@ -151,9 +164,28 @@ impl ScanManager {
                 while let Some(progress) = progress_rx.recv().await {
                     let mut state = state_clone.write().await;
                     if let Some((stored_progress, _)) = state.active_scans.get_mut(&library_id) {
-                        *stored_progress = progress;
+                        *stored_progress = progress.clone();
+                        // Broadcast progress update (ignore if no listeners)
+                        match state.progress_broadcast.send(progress.clone()) {
+                            Ok(count) => {
+                                if count > 0 {
+                                    debug!("Broadcast progress update for library {} to {} subscribers", library_id, count);
+                                }
+                                // If count is 0, there are no subscribers - this is fine, just continue
+                            }
+                            Err(e) => {
+                                // Only warn if it's a real error (channel closed), not just no subscribers
+                                // In tokio broadcast, send() returns Ok(0) when no receivers, not an error
+                                // So if we get an error, the channel is actually closed
+                                debug!(
+                                    "No subscribers for progress update for library {}: {}",
+                                    library_id, e
+                                );
+                            }
+                        }
                     }
                 }
+                debug!("Progress listener task finished for library {}", library_id);
             });
 
             // Run the scan
@@ -168,7 +200,7 @@ impl ScanManager {
             // Wait for progress updates to finish
             let _ = progress_task.await;
 
-            // Update final status
+            // Update final status and broadcast it
             {
                 let mut state = state.write().await;
                 if let Some((progress, _)) = state.active_scans.get_mut(&library_id) {
@@ -187,15 +219,34 @@ impl ScanManager {
                             progress.fail(e.to_string());
                         }
                     }
+                    // Broadcast the final status update
+                    let progress_clone = progress.clone();
+                    match state.progress_broadcast.send(progress_clone) {
+                        Ok(count) => {
+                            if count > 0 {
+                                debug!("Broadcast final progress update for library {} to {} subscribers", library_id, count);
+                            }
+                            // If count is 0, there are no subscribers - this is fine
+                        }
+                        Err(e) => {
+                            // Only debug log if no subscribers (channel might be closed if all senders dropped)
+                            debug!(
+                                "No subscribers for final progress update for library {}: {}",
+                                library_id, e
+                            );
+                        }
+                    }
                 }
             }
 
             // Log result
+            let total_duration = scan_start_time.elapsed();
             match &scan_result {
                 Ok(result) => {
                     info!(
-                        "Scan completed for library {} - {} files processed, {} errors",
+                        "Scan task completed for library {} in {:?} - {} files processed, {} errors",
                         library_id,
+                        total_duration,
                         result.files_processed,
                         result.errors.len()
                     );
@@ -228,7 +279,10 @@ impl ScanManager {
                     }
                 }
                 Err(e) => {
-                    warn!("Scan failed for library {}: {}", library_id, e);
+                    warn!(
+                        "Scan failed for library {} after {:?}: {}",
+                        library_id, total_duration, e
+                    );
                 }
             }
 

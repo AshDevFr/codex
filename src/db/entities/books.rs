@@ -19,6 +19,7 @@ pub struct Model {
     pub format: String,
     pub page_count: i32,
     pub deleted: bool,
+    pub analyzed: bool,
     pub modified_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

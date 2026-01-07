@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
-    QuerySelect, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect, Set,
 };
 use uuid::Uuid;
 
@@ -88,6 +88,20 @@ impl SeriesRepository {
             .all(db)
             .await
             .context("Failed to list series by library")
+    }
+
+    /// Count series in a library
+    pub async fn count_by_library(db: &DatabaseConnection, library_id: Uuid) -> Result<i64> {
+        use sea_orm::PaginatorTrait;
+
+        let count = Series::find()
+            .filter(series::Column::LibraryId.eq(library_id))
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count series")?;
+
+        Ok(count as i64)
     }
 
     /// Get all series across all libraries

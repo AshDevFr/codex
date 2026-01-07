@@ -483,27 +483,5 @@ async fn test_basic_auth_inactive_user() {
     assert!(error.message.contains("inactive"));
 }
 
-#[tokio::test]
-async fn test_www_authenticate_header_on_401() {
-    let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
-
-    // Make request without authentication
-    let request = hyper::Request::builder()
-        .method("POST")
-        .uri("/api/v1/auth/logout")
-        .body(String::new())
-        .unwrap();
-
-    let response = tower::ServiceExt::<hyper::Request<String>>::oneshot(app, request)
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-
-    // Check for WWW-Authenticate header
-    let www_auth = response.headers().get("www-authenticate");
-    assert!(www_auth.is_some());
-    assert_eq!(www_auth.unwrap(), "Basic realm=\"Codex\"");
-}
+// Removed test_www_authenticate_header_on_401 test
+// We no longer send WWW-Authenticate header to prevent browser basic auth popup

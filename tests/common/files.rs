@@ -280,3 +280,22 @@ pub fn create_test_pdf(
 
     pdf_path
 }
+
+/// Create test CBZ files in a directory for scanning
+pub fn create_test_cbz_files_in_dir(dir: &std::path::Path) {
+    use std::fs;
+
+    // Create a series directory
+    let series_dir = dir.join("Test Series");
+    fs::create_dir_all(&series_dir).unwrap();
+
+    // Create temp dir for creating CBZ files
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create a few test CBZ files in the series directory
+    for i in 1..=3 {
+        let cbz_path = create_test_cbz(&temp_dir, 5, true);
+        let target_path = series_dir.join(format!("Issue {:03}.cbz", i));
+        fs::copy(cbz_path, target_path).unwrap();
+    }
+}

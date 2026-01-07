@@ -12,11 +12,20 @@ use axum::{
     Json,
 };
 use chrono::Utc;
+use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use uuid::Uuid;
 
 /// Helper function to convert a library entity to a DTO
-fn library_to_dto(library: libraries::Model) -> LibraryDto {
+async fn library_to_dto(db: &DatabaseConnection, library: libraries::Model) -> LibraryDto {
+    // Get counts
+    let book_count = crate::db::repositories::BookRepository::count_by_library(db, library.id)
+        .await
+        .ok();
+    let series_count = crate::db::repositories::SeriesRepository::count_by_library(db, library.id)
+        .await
+        .ok();
+
     LibraryDto {
         id: library.id,
         name: library.name,
@@ -29,6 +38,8 @@ fn library_to_dto(library: libraries::Model) -> LibraryDto {
         last_scanned_at: library.last_scanned_at,
         created_at: library.created_at,
         updated_at: library.updated_at,
+        book_count,
+        series_count,
     }
 }
 
@@ -56,7 +67,10 @@ pub async fn list_libraries(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch libraries: {}", e)))?;
 
-    let dtos: Vec<LibraryDto> = libraries.into_iter().map(library_to_dto).collect();
+    let mut dtos = Vec::new();
+    for library in libraries {
+        dtos.push(library_to_dto(&state.db, library).await);
+    }
 
     Ok(Json(dtos))
 }
@@ -90,7 +104,7 @@ pub async fn get_library(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch library: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
 
-    Ok(Json(library_to_dto(library)))
+    Ok(Json(library_to_dto(&state.db, library).await))
 }
 
 /// Create a new library
@@ -158,7 +172,7 @@ pub async fn create_library(
         }
     }
 
-    Ok(Json(library_to_dto(library)))
+    Ok(Json(library_to_dto(&state.db, library).await))
 }
 
 /// Update a library
@@ -229,7 +243,7 @@ pub async fn update_library(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch updated library: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Library not found after update".to_string()))?;
 
-    Ok(Json(library_to_dto(updated)))
+    Ok(Json(library_to_dto(&state.db, updated).await))
 }
 
 /// Delete a library

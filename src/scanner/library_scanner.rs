@@ -1,11 +1,12 @@
 use anyhow::{Context, Result};
-use chrono::Utc;
-use sea_orm::{prelude::Decimal, DatabaseConnection, Set};
+use chrono::{DateTime, Utc};
+use sea_orm::{prelude::Decimal, DatabaseConnection};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -13,8 +14,7 @@ use walkdir::WalkDir;
 
 use crate::db::entities::{books, series};
 use crate::db::repositories::{BookRepository, LibraryRepository, SeriesRepository};
-use crate::parsers::FileFormat;
-use crate::scanner::{analyze_file, detect_format};
+use crate::scanner::analyze_file;
 
 use super::types::{ScanMode, ScanProgress, ScanResult, ScanStatus};
 
@@ -28,12 +28,19 @@ pub async fn scan_library(
     mode: ScanMode,
     progress_tx: Option<mpsc::Sender<ScanProgress>>,
 ) -> Result<ScanResult> {
+    let scan_start = Instant::now();
     info!("Starting {} scan for library {}", mode, library_id);
 
     // Load library from database
+    let load_start = Instant::now();
     let library = LibraryRepository::get_by_id(db, library_id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("Library not found: {}", library_id))?;
+    info!(
+        "Loaded library '{}' from database in {:?}",
+        library.name,
+        load_start.elapsed()
+    );
 
     // Verify library path exists
     if !Path::new(&library.path).exists() {
@@ -80,12 +87,35 @@ pub async fn scan_library(
         }
     }
 
+    let scan_duration = scan_start.elapsed();
+    let result_ref = result.as_ref();
+    let files_processed = result_ref.map(|r| r.files_processed).unwrap_or(0);
+    let series_created = result_ref.map(|r| r.series_created).unwrap_or(0);
+    let books_created = result_ref.map(|r| r.books_created).unwrap_or(0);
+    let books_updated = result_ref.map(|r| r.books_updated).unwrap_or(0);
+    let books_deleted = result_ref.map(|r| r.books_deleted).unwrap_or(0);
+    let books_restored = result_ref.map(|r| r.books_restored).unwrap_or(0);
+    let error_count = result_ref.map(|r| r.errors.len()).unwrap_or(0);
+
+    let files_per_sec = if scan_duration.as_secs_f64() > 0.0 {
+        files_processed as f64 / scan_duration.as_secs_f64()
+    } else {
+        0.0
+    };
+
     info!(
-        "Scan completed for library {} - processed {} files, created {} series, {} books",
+        "Scan completed for library {} in {:?} ({:.2} files/sec) - processed {} files, created {} series, {} books ({} created, {} updated, {} deleted, {} restored), {} errors",
         library_id,
-        result.as_ref().map(|r| r.files_processed).unwrap_or(0),
-        result.as_ref().map(|r| r.series_created).unwrap_or(0),
-        result.as_ref().map(|r| r.books_created).unwrap_or(0),
+        scan_duration,
+        files_per_sec,
+        files_processed,
+        series_created,
+        books_created + books_updated,
+        books_created,
+        books_updated,
+        books_deleted,
+        books_restored,
+        error_count
     );
 
     result
@@ -101,18 +131,35 @@ async fn scan_normal(
     let mut result = ScanResult::new();
 
     // Load existing books from database (including deleted ones for restoration)
+    let load_start = Instant::now();
     let existing_books = load_existing_books(db, library.id).await?;
-    debug!("Found {} existing books in database", existing_books.len());
+    info!(
+        "Loaded {} existing books from database in {:?}",
+        existing_books.len(),
+        load_start.elapsed()
+    );
 
-    // Discover all files in library
-    let discovered_files = discover_files(&library.path)?;
+    // Discover all files in library (blocking I/O operation)
+    let discover_start = Instant::now();
+    let library_path = library.path.clone();
+    info!("Starting file discovery in library path: {}", library_path);
+    let discovered_files = tokio::task::spawn_blocking(move || discover_files(&library_path))
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to spawn file discovery task: {}", e))??;
+    let discover_duration = discover_start.elapsed();
     progress.files_total = discovered_files.len();
     send_progress(progress_tx, progress).await;
 
     info!(
-        "Discovered {} files in library {}",
+        "Discovered {} files in library '{}' in {:?} ({:.2} files/sec)",
         discovered_files.len(),
-        library.name
+        library.name,
+        discover_duration,
+        if discover_duration.as_secs_f64() > 0.0 {
+            discovered_files.len() as f64 / discover_duration.as_secs_f64()
+        } else {
+            0.0
+        }
     );
 
     // Track which file paths were seen during scan
@@ -124,10 +171,28 @@ async fn scan_normal(
     }
 
     // Organize files by series (folder structure)
+    let organize_start = Instant::now();
     let series_map = organize_by_series(&discovered_files, &library.path);
+    info!(
+        "Organized files into {} series in {:?}",
+        series_map.len(),
+        organize_start.elapsed()
+    );
 
     // Process each series
+    let series_count = series_map.len();
+    let mut series_processed = 0;
     for (series_name, file_paths) in series_map {
+        series_processed += 1;
+        let series_start = Instant::now();
+        info!(
+            "Processing series {}/{}: '{}' ({} files)",
+            series_processed,
+            series_count,
+            series_name,
+            file_paths.len()
+        );
+
         match process_series(
             db,
             library,
@@ -141,24 +206,35 @@ async fn scan_normal(
         )
         .await
         {
-            Ok(_) => {}
+            Ok(_) => {
+                info!(
+                    "Completed series '{}' in {:?}",
+                    series_name,
+                    series_start.elapsed()
+                );
+            }
             Err(e) => {
                 let error_msg = format!("Error processing series '{}': {}", series_name, e);
-                error!("{}", error_msg);
+                error!("{} (took {:?})", error_msg, series_start.elapsed());
                 result.errors.push(error_msg);
             }
         }
     }
 
     // Detect deleted files (in DB but not on filesystem) and restore reappeared files
+    let cleanup_start = Instant::now();
+    let mut deleted_count = 0;
+    let mut restored_count = 0;
+
     for (path, (_hash, book)) in existing_books {
         if !seen_paths.contains(&path) {
             // File is missing from filesystem
             if !book.deleted {
                 // Mark as deleted
-                info!("Marking missing book as deleted: {}", path);
+                debug!("Marking missing book as deleted: {}", path);
                 match BookRepository::mark_deleted(db, book.id, true).await {
                     Ok(_) => {
+                        deleted_count += 1;
                         result.books_deleted += 1;
                     }
                     Err(e) => {
@@ -170,9 +246,10 @@ async fn scan_normal(
             }
         } else if book.deleted {
             // File reappeared on filesystem, restore it
-            info!("Restoring deleted book: {}", path);
+            debug!("Restoring deleted book: {}", path);
             match BookRepository::mark_deleted(db, book.id, false).await {
                 Ok(_) => {
+                    restored_count += 1;
                     result.books_restored += 1;
                 }
                 Err(e) => {
@@ -182,6 +259,15 @@ async fn scan_normal(
                 }
             }
         }
+    }
+
+    if deleted_count > 0 || restored_count > 0 {
+        info!(
+            "Cleanup completed in {:?}: {} books marked as deleted, {} books restored",
+            cleanup_start.elapsed(),
+            deleted_count,
+            restored_count
+        );
     }
 
     Ok(result)
@@ -196,25 +282,58 @@ async fn scan_deep(
 ) -> Result<ScanResult> {
     let mut result = ScanResult::new();
 
-    // Discover all files in library
-    let discovered_files = discover_files(&library.path)?;
+    // Discover all files in library (blocking I/O operation)
+    let discover_start = Instant::now();
+    let library_path = library.path.clone();
+    info!(
+        "Starting file discovery for deep scan in library path: {}",
+        library_path
+    );
+    let discovered_files = tokio::task::spawn_blocking(move || discover_files(&library_path))
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to spawn file discovery task: {}", e))??;
+    let discover_duration = discover_start.elapsed();
     progress.files_total = discovered_files.len();
     send_progress(progress_tx, progress).await;
 
     info!(
-        "Discovered {} files for deep scan in library {}",
+        "Discovered {} files for deep scan in library '{}' in {:?} ({:.2} files/sec)",
         discovered_files.len(),
-        library.name
+        library.name,
+        discover_duration,
+        if discover_duration.as_secs_f64() > 0.0 {
+            discovered_files.len() as f64 / discover_duration.as_secs_f64()
+        } else {
+            0.0
+        }
     );
 
     // Organize files by series (folder structure)
+    let organize_start = Instant::now();
     let series_map = organize_by_series(&discovered_files, &library.path);
+    info!(
+        "Organized files into {} series in {:?}",
+        series_map.len(),
+        organize_start.elapsed()
+    );
 
     // For deep scan, we don't use existing books cache (process everything)
     let existing_books = HashMap::new();
 
     // Process each series
+    let series_count = series_map.len();
+    let mut series_processed = 0;
     for (series_name, file_paths) in series_map {
+        series_processed += 1;
+        let series_start = Instant::now();
+        info!(
+            "Processing series {}/{}: '{}' ({} files)",
+            series_processed,
+            series_count,
+            series_name,
+            file_paths.len()
+        );
+
         match process_series(
             db,
             library,
@@ -228,10 +347,16 @@ async fn scan_deep(
         )
         .await
         {
-            Ok(_) => {}
+            Ok(_) => {
+                info!(
+                    "Completed series '{}' in {:?}",
+                    series_name,
+                    series_start.elapsed()
+                );
+            }
             Err(e) => {
                 let error_msg = format!("Error processing series '{}': {}", series_name, e);
-                error!("{}", error_msg);
+                error!("{} (took {:?})", error_msg, series_start.elapsed());
                 result.errors.push(error_msg);
             }
         }
@@ -270,113 +395,221 @@ async fn process_series(
     }
 
     // Process each file in the series
+    let file_count = file_paths.len();
+    let mut file_processed = 0;
+    let mut last_progress_log = Instant::now();
+    const PROGRESS_LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+
     for file_path in file_paths {
-        match process_file(db, &series_model, file_path, existing_books, mode, result).await {
+        file_processed += 1;
+        let file_start = Instant::now();
+
+        match process_file(
+            db,
+            &series_model,
+            file_path,
+            existing_books,
+            mode,
+            progress,
+            result,
+        )
+        .await
+        {
             Ok(_) => {
                 result.files_processed += 1;
                 progress.files_processed += 1;
 
-                // Send progress update every 10 files
-                if progress.files_processed % 10 == 0 {
-                    send_progress(progress_tx, progress).await;
+                let file_duration = file_start.elapsed();
+                if file_duration.as_millis() > 1000 {
+                    // Log slow files (>1s)
+                    debug!(
+                        "Processed file {}/{} in {:?}: {}",
+                        file_processed,
+                        file_count,
+                        file_duration,
+                        file_path.file_name().unwrap_or_default().to_string_lossy()
+                    );
+                }
+
+                // Send progress update every file (for real-time updates)
+                send_progress(progress_tx, progress).await;
+
+                // Log progress periodically
+                if last_progress_log.elapsed() >= PROGRESS_LOG_INTERVAL {
+                    let elapsed_duration = Utc::now()
+                        .signed_duration_since(progress.started_at)
+                        .to_std()
+                        .unwrap_or(std::time::Duration::ZERO);
+                    let elapsed_secs = elapsed_duration.as_secs_f64();
+                    let files_per_sec = if elapsed_secs > 0.0 {
+                        progress.files_processed as f64 / elapsed_secs
+                    } else {
+                        0.0
+                    };
+                    let remaining = if files_per_sec > 0.0
+                        && progress.files_total > progress.files_processed
+                    {
+                        let remaining_files = progress.files_total - progress.files_processed;
+                        std::time::Duration::from_secs_f64(remaining_files as f64 / files_per_sec)
+                    } else {
+                        std::time::Duration::ZERO
+                    };
+
+                    info!(
+                        "Scan progress: {}/{} files ({:.1}%), {:.2} files/sec, ~{:?} remaining",
+                        progress.files_processed,
+                        progress.files_total,
+                        if progress.files_total > 0 {
+                            (progress.files_processed as f64 / progress.files_total as f64) * 100.0
+                        } else {
+                            0.0
+                        },
+                        files_per_sec,
+                        remaining
+                    );
+                    last_progress_log = Instant::now();
                 }
             }
             Err(e) => {
                 let error_msg = format!("Error processing file '{}': {}", file_path.display(), e);
-                error!("{}", error_msg);
+                error!("{} (took {:?})", error_msg, file_start.elapsed());
                 result.errors.push(error_msg);
             }
         }
+
+        // Yield to the runtime after each file to allow other tasks to run
+        tokio::task::yield_now().await;
     }
 
     Ok(())
 }
 
-/// Process a single file
+/// Process a single file - FAST DETECTION PHASE (no analysis)
+/// Only calculates hash and creates/updates database record without analyzing content
 async fn process_file(
     db: &DatabaseConnection,
     series_model: &series::Model,
     file_path: &Path,
     existing_books: &HashMap<String, (String, books::Model)>,
     mode: ScanMode,
+    progress: &mut ScanProgress,
     result: &mut ScanResult,
 ) -> Result<()> {
     let path_str = file_path.to_string_lossy().to_string();
 
+    // Calculate current hash (blocking I/O operation)
+    let hash_start = Instant::now();
+    let file_path_clone = file_path.to_path_buf();
+    let current_hash = tokio::task::spawn_blocking(move || calculate_file_hash(&file_path_clone))
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to spawn hash calculation task: {}", e))??;
+
     // Check if we should skip this file (normal mode only)
     if mode == ScanMode::Normal {
-        if let Some((existing_hash, _)) = existing_books.get(&path_str) {
-            // Calculate current hash
-            let current_hash = calculate_file_hash(file_path)?;
-
+        if let Some((existing_hash, existing_book)) = existing_books.get(&path_str) {
             if &current_hash == existing_hash {
-                debug!("Skipping unchanged file: {}", path_str);
-                return Ok(());
+                debug!(
+                    "Skipping unchanged file: {} (hash check took {:?})",
+                    path_str,
+                    hash_start.elapsed()
+                );
+
+                // If the book was previously analyzed and hash hasn't changed, no need to reanalyze
+                if existing_book.analyzed {
+                    return Ok(());
+                }
             }
         }
     }
 
-    // Analyze the file
-    let metadata =
-        analyze_file(file_path).with_context(|| format!("Failed to analyze file: {}", path_str))?;
+    // Get file metadata (size and modified time) without full analysis
+    let file_path_clone = file_path.to_path_buf();
+    let (file_size, modified_at) =
+        tokio::task::spawn_blocking(move || -> Result<(u64, DateTime<Utc>)> {
+            let metadata = fs::metadata(&file_path_clone)?;
+            let modified = metadata.modified()?;
+            let modified_dt = DateTime::<Utc>::from(modified);
+            Ok((metadata.len(), modified_dt))
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get file metadata: {}", e))??;
+
+    // Detect format from extension
+    let format = file_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("unknown")
+        .to_lowercase();
 
     // Check if book already exists by path
     let existing_book = BookRepository::get_by_path(db, &path_str).await?;
-
     let now = Utc::now();
 
     if let Some(mut existing) = existing_book {
-        // Update existing book
-        existing.title = metadata.comic_info.as_ref().and_then(|ci| ci.title.clone());
-        existing.number = metadata.comic_info.as_ref().and_then(|ci| {
-            ci.number
-                .as_ref()
-                .and_then(|n| n.parse::<f64>().ok())
-                .map(|v| Decimal::from_f64_retain(v).unwrap_or_default())
-        });
-        existing.file_size = metadata.file_size as i64;
-        existing.file_hash = metadata.file_hash.clone();
-        existing.format = format!("{:?}", metadata.format).to_lowercase();
-        existing.page_count = metadata.page_count as i32;
-        existing.modified_at = metadata.modified_at;
+        // Update existing book - only update hash, size, and modified time
+        // Mark as not analyzed if hash changed
+        let hash_changed = existing.file_hash != current_hash;
+
+        // Check if any meaningful fields have changed (excluding updated_at which always changes)
+        let size_changed = existing.file_size != file_size as i64;
+        let format_changed = existing.format != format;
+        let modified_changed = existing.modified_at != modified_at;
+        let anything_changed = hash_changed || size_changed || format_changed || modified_changed;
+
+        existing.file_size = file_size as i64;
+        existing.file_hash = current_hash;
+        existing.format = format;
+        existing.modified_at = modified_at;
         existing.updated_at = now;
+        existing.analyzed = if hash_changed {
+            false
+        } else {
+            existing.analyzed
+        };
 
         BookRepository::update(db, &existing).await?;
-        result.books_updated += 1;
 
-        debug!("Updated book: {}", path_str);
+        // Only count as updated if something actually changed
+        if anything_changed {
+            result.books_updated += 1;
+        }
+        progress.increment_books();
+
+        debug!(
+            "Updated book (detection only): {} - analyzed: {}",
+            path_str, existing.analyzed
+        );
     } else {
-        // Create new book
+        // Create new book WITHOUT analysis
         let book_model = books::Model {
             id: Uuid::new_v4(),
             series_id: series_model.id,
-            title: metadata.comic_info.as_ref().and_then(|ci| ci.title.clone()),
-            number: metadata.comic_info.as_ref().and_then(|ci| {
-                ci.number
-                    .as_ref()
-                    .and_then(|n| n.parse::<f64>().ok())
-                    .map(|v| Decimal::from_f64_retain(v).unwrap_or_default())
-            }),
+            title: None,  // Will be filled during analysis phase
+            number: None, // Will be filled during analysis phase
             file_path: path_str.clone(),
             file_name: file_path
                 .file_name()
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string(),
-            file_size: metadata.file_size as i64,
-            file_hash: metadata.file_hash.clone(),
-            format: format!("{:?}", metadata.format).to_lowercase(),
-            page_count: metadata.page_count as i32,
-            deleted: false, // New books are not deleted
-            modified_at: metadata.modified_at,
+            file_size: file_size as i64,
+            file_hash: current_hash,
+            format,
+            page_count: 0, // Will be filled during analysis phase
+            deleted: false,
+            analyzed: false, // Mark as not analyzed
+            modified_at,
             created_at: now,
             updated_at: now,
         };
 
         BookRepository::create(db, &book_model).await?;
-        result.books_created += 1;
+        SeriesRepository::increment_book_count(db, series_model.id).await?;
 
-        debug!("Created book: {}", path_str);
+        result.books_created += 1;
+        progress.increment_books();
+
+        debug!("Created book (detection only): {}", path_str);
     }
 
     Ok(())
@@ -487,12 +720,21 @@ async fn load_existing_books(
     db: &DatabaseConnection,
     library_id: Uuid,
 ) -> Result<HashMap<String, (String, books::Model)>> {
+    let series_load_start = Instant::now();
     let series_list = SeriesRepository::list_by_library(db, library_id).await?;
+    info!(
+        "Loaded {} series from database in {:?}",
+        series_list.len(),
+        series_load_start.elapsed()
+    );
+
     let mut books_map = HashMap::new();
+    let mut total_books = 0;
 
     for series in series_list {
         // Include deleted books so we can restore them if they reappear
         let books = BookRepository::list_by_series(db, series.id, true).await?;
+        total_books += books.len();
         for book in books {
             books_map.insert(book.file_path.clone(), (book.file_hash.clone(), book));
         }
@@ -503,7 +745,10 @@ async fn load_existing_books(
 
 /// Discover all supported files in library path
 fn discover_files(library_path: &str) -> Result<Vec<PathBuf>> {
+    let start = Instant::now();
     let mut files = Vec::new();
+    let mut dirs_visited = 0;
+    let mut files_checked = 0;
 
     for entry in WalkDir::new(library_path)
         .follow_links(false)
@@ -514,8 +759,11 @@ fn discover_files(library_path: &str) -> Result<Vec<PathBuf>> {
 
         // Skip if not a file
         if !path.is_file() {
+            dirs_visited += 1;
             continue;
         }
+
+        files_checked += 1;
 
         // Check extension
         if let Some(ext) = path.extension() {
@@ -525,6 +773,15 @@ fn discover_files(library_path: &str) -> Result<Vec<PathBuf>> {
             }
         }
     }
+
+    let duration = start.elapsed();
+    debug!(
+        "File discovery: found {} supported files from {} files checked in {} directories, took {:?}",
+        files.len(),
+        files_checked,
+        dirs_visited,
+        duration
+    );
 
     Ok(files)
 }
@@ -567,6 +824,7 @@ fn extract_series_name(file_path: &Path, library_path: &Path) -> String {
 }
 
 /// Calculate SHA-256 hash of file (partial - first 1MB for performance)
+/// NOTE: This is a synchronous function - wrap in spawn_blocking when calling from async context
 fn calculate_file_hash(path: &Path) -> Result<String> {
     let mut file = fs::File::open(path)?;
     let mut hasher = Sha256::new();

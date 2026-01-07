@@ -4,7 +4,9 @@
 // request/response handling, and error responses.
 
 mod api {
+    mod analyze;
     mod auth;
+    mod filesystem;
     mod libraries;
     mod metrics;
     mod opds;

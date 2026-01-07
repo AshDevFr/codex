@@ -1,20 +1,30 @@
 import { AppShell, Group, Text, Burger, TextInput, ActionIcon } from '@mantine/core';
-import { IconSearch, IconMoon, IconSun } from '@tabler/icons-react';
+import { IconSearch, IconMoon, IconSun, IconMenu2 } from '@tabler/icons-react';
 import { useMantineColorScheme } from '@mantine/core';
 
 interface HeaderProps {
-  opened: boolean;
-  toggle: () => void;
+  mobileOpened: boolean;
+  toggleMobile: () => void;
+  toggleDesktop: () => void;
 }
 
-export function Header({ opened, toggle }: HeaderProps) {
+export function Header({ mobileOpened, toggleMobile, toggleDesktop }: HeaderProps) {
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
 
   return (
     <AppShell.Header>
       <Group h="100%" px="md" justify="space-between">
         <Group>
-          <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
+          <Burger opened={mobileOpened} onClick={toggleMobile} hiddenFrom="sm" size="sm" />
+          <ActionIcon
+            variant="subtle"
+            onClick={toggleDesktop}
+            visibleFrom="sm"
+            size="lg"
+            title="Toggle sidebar"
+          >
+            <IconMenu2 size={20} />
+          </ActionIcon>
           <Text size="xl" fw={700}>
             Codex
           </Text>

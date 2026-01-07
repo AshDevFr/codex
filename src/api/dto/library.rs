@@ -17,6 +17,10 @@ pub struct LibraryDto {
     pub last_scanned_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub book_count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub series_count: Option<i64>,
 }
 
 /// Create library request

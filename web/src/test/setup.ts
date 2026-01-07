@@ -42,3 +42,28 @@ global.ResizeObserver = class ResizeObserver {
   observe() {}
   unobserve() {}
 } as any;
+
+// Mock EventSource for SSE tests
+global.EventSource = class EventSource {
+  url: string;
+  withCredentials: boolean;
+  readyState: number = 0;
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: ((event: Event) => void) | null = null;
+  onopen: ((event: Event) => void) | null = null;
+
+  constructor(url: string, options?: { withCredentials?: boolean }) {
+    this.url = url;
+    this.withCredentials = options?.withCredentials ?? false;
+  }
+
+  close() {
+    this.readyState = 2; // CLOSED
+  }
+
+  addEventListener() {}
+  removeEventListener() {}
+  dispatchEvent() {
+    return false;
+  }
+} as any;

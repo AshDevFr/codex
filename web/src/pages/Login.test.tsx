@@ -7,6 +7,15 @@ import type { LoginResponse } from '@/types/api';
 
 vi.mock('@/api/auth');
 
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
+
 describe('Login Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -61,7 +70,7 @@ describe('Login Component', () => {
 
     await waitFor(() => {
       expect(localStorage.getItem('jwt_token')).toBe('test-token');
-      expect(window.location.href).toBe('/');
+      expect(mockNavigate).toHaveBeenCalledWith('/');
     });
   });
 

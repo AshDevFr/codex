@@ -70,6 +70,7 @@ pub fn create_test_book(
         format: format.to_string(),
         page_count,
         deleted: false,
+        analyzed: false, // Default to not analyzed
         modified_at: now,
         created_at: now,
         updated_at: now,

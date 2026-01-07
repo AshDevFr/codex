@@ -33,6 +33,12 @@ impl MigrationTrait for Migration {
                             .default(false),
                     )
                     .col(
+                        ColumnDef::new(Books::Analyzed)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
                         ColumnDef::new(Books::ModifiedAt)
                             .timestamp_with_time_zone()
                             .not_null(),
@@ -66,6 +72,17 @@ impl MigrationTrait for Migration {
                     .name("idx_books_deleted")
                     .table(Books::Table)
                     .col(Books::Deleted)
+                    .to_owned(),
+            )
+            .await?;
+
+        // Add index on analyzed column for queued analysis queries
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_books_analyzed")
+                    .table(Books::Table)
+                    .col(Books::Analyzed)
                     .to_owned(),
             )
             .await?;
@@ -105,6 +122,7 @@ enum Books {
     Format,
     PageCount,
     Deleted,
+    Analyzed,
     ModifiedAt,
     CreatedAt,
     UpdatedAt,

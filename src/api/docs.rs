@@ -57,6 +57,10 @@ use utoipa::OpenApi;
         handlers::list_tasks,
         handlers::get_task,
         handlers::cancel_task,
+
+        // Filesystem endpoints
+        handlers::browse_filesystem,
+        handlers::list_drives,
     ),
     components(
         schemas(
@@ -88,6 +92,10 @@ use utoipa::OpenApi;
             dto::TaskDto,
             dto::TaskProgressDto,
 
+            // Filesystem DTOs
+            handlers::filesystem::FileSystemEntry,
+            handlers::filesystem::BrowseResponse,
+
             // Error responses
             ErrorResponse,
         )
@@ -102,6 +110,7 @@ use utoipa::OpenApi;
         (name = "users", description = "User management endpoints (admin only)"),
         (name = "Metrics", description = "Application metrics and statistics"),
         (name = "Tasks", description = "Background task management and monitoring"),
+        (name = "filesystem", description = "Filesystem browsing for library path selection"),
     ),
     modifiers(&SecurityAddon),
 )]

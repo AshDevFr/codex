@@ -3,37 +3,67 @@ import { screen, waitFor } from '@testing-library/react';
 import { renderWithProviders, userEvent } from '@/test/utils';
 import { Home } from './Home';
 import { librariesApi } from '@/api/libraries';
+import { scanApi } from '@/api/scan';
+import { filesystemApi } from '@/api/filesystem';
 import type { Library } from '@/types/api';
 
 vi.mock('@/api/libraries');
+vi.mock('@/api/scan', () => ({
+  scanApi: {
+    subscribeToProgress: vi.fn(() => () => {}), // Return cleanup function
+  },
+}));
+vi.mock('@/api/filesystem');
 
 const mockLibraries: Library[] = [
   {
     id: '1',
     name: 'Comics',
     path: '/data/comics',
-    scan_mode: 'AUTO',
-    created_at: '2024-01-01T00:00:00Z',
-    updated_at: '2024-01-01T00:00:00Z',
-    book_count: 150,
-    series_count: 25,
-    last_scan_at: '2024-01-06T00:00:00Z',
+    isActive: true,
+    scanningConfig: {
+      enabled: true,
+      scanMode: 'normal',
+      autoScanOnCreate: false,
+      scanOnStart: false,
+      purgeDeletedOnScan: false,
+      cronSchedule: '0 0 * * *',
+    },
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z',
+    bookCount: 150,
+    seriesCount: 25,
+    lastScannedAt: '2024-01-06T00:00:00Z',
   },
   {
     id: '2',
     name: 'Manga',
     path: '/data/manga',
-    scan_mode: 'MANUAL',
-    created_at: '2024-01-01T00:00:00Z',
-    updated_at: '2024-01-01T00:00:00Z',
-    book_count: 200,
-    series_count: 30,
+    isActive: true,
+    scanningConfig: {
+      enabled: false,
+      scanMode: 'normal',
+      autoScanOnCreate: false,
+      scanOnStart: false,
+      purgeDeletedOnScan: false,
+    },
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z',
+    bookCount: 200,
+    seriesCount: 30,
   },
 ];
 
 describe('Home Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+    // Mock localStorage for SSE authentication (scan API checks for 'token')
+    localStorage.setItem('token', 'test-token');
+
+    // Mock filesystem API (used by AddLibraryModal)
+    vi.mocked(filesystemApi.getDrives).mockResolvedValue([]);
+    vi.mocked(filesystemApi.browse).mockResolvedValue({ entries: [], currentPath: '/' });
   });
 
   it('should show loading state', async () => {
@@ -90,12 +120,29 @@ describe('Home Component', () => {
       expect(screen.getByText('Comics')).toBeInTheDocument();
     });
 
-    const scanButtons = screen.getAllByText('Scan Library');
-    await user.click(scanButtons[0]);
-
-    await waitFor(() => {
-      expect(librariesApi.scan).toHaveBeenCalledWith('1');
+    // Find all buttons and look for the menu trigger within the Comics card
+    // The menu trigger is an ActionIcon with a dots icon
+    const allButtons = screen.getAllByRole('button');
+    const menuTrigger = allButtons.find(btn => {
+      const svg = btn.querySelector('svg');
+      const card = btn.closest('[class*="Card-root"]');
+      return svg && card && card.textContent?.includes('Comics');
     });
+
+    if (menuTrigger) {
+      await user.click(menuTrigger);
+
+      // Wait for menu to open and find "Scan Library" menu item
+      const scanMenuItem = await screen.findByText('Scan Library');
+      await user.click(scanMenuItem);
+
+      await waitFor(() => {
+        expect(librariesApi.scan).toHaveBeenCalledWith('1', 'normal');
+      });
+    } else {
+      // Fallback: try finding by role if structure is different
+      throw new Error('Could not find menu trigger button');
+    }
   });
 
   it('should display scan mode badges', async () => {
@@ -104,8 +151,8 @@ describe('Home Component', () => {
     renderWithProviders(<Home />);
 
     await waitFor(() => {
-      expect(screen.getByText('AUTO')).toBeInTheDocument();
-      expect(screen.getByText('MANUAL')).toBeInTheDocument();
+      expect(screen.getByText('Auto')).toBeInTheDocument();
+      expect(screen.getByText('Manual')).toBeInTheDocument();
     });
   });
 
@@ -125,8 +172,49 @@ describe('Home Component', () => {
     renderWithProviders(<Home />);
 
     await waitFor(() => {
-      const addButtons = screen.getAllByText('Add Library');
-      expect(addButtons.length).toBeGreaterThan(0);
+      // The Add Library button is an ActionIcon with title="Add Library"
+      // It doesn't have visible text, so we query by title or role
+      const addButton = screen.getByTitle('Add Library');
+      expect(addButton).toBeInTheDocument();
+    });
+  });
+
+  it('should open Add Library modal when button is clicked', async () => {
+    const user = userEvent.setup();
+    vi.mocked(librariesApi.getAll).mockResolvedValueOnce(mockLibraries);
+
+    renderWithProviders(<Home />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Comics')).toBeInTheDocument();
+    });
+
+    // The Add Library button is an ActionIcon with title="Add Library"
+    const addButton = screen.getByTitle('Add Library');
+    await user.click(addButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Add New Library')).toBeInTheDocument();
+    });
+  });
+
+  it('should show Add Library button in empty state', async () => {
+    const user = userEvent.setup();
+    vi.mocked(librariesApi.getAll).mockResolvedValueOnce([]);
+
+    renderWithProviders(<Home />);
+
+    await waitFor(() => {
+      expect(screen.getByText('No libraries found')).toBeInTheDocument();
+    });
+
+    const addButtons = screen.getAllByText('Add Library');
+    expect(addButtons.length).toBeGreaterThan(0);
+
+    await user.click(addButtons[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Add New Library')).toBeInTheDocument();
     });
   });
 });

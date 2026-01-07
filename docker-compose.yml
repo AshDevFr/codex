@@ -33,6 +33,7 @@ services:
     volumes:
       - ./config:/app/config:ro
       - codex_data:/app/data
+      - ./docker/data/library:/library:ro
     command: ["codex", "serve", "--config", "/app/config/config.docker.yaml"]
     environment:
       RUST_LOG: info
@@ -70,8 +71,9 @@ services:
       - cargo_cache:/usr/local/cargo/registry
       - target_cache:/app/target
       - ./config:/app/config:ro
+      - ./docker/data/library:/library:ro
     environment:
-      RUST_LOG: debug
+      RUST_LOG: info
       RUST_BACKTRACE: 1
       # Configuration overrides (optional - uses CODEX_ prefix)
       # Uncomment and modify as needed to override config.docker.yaml values

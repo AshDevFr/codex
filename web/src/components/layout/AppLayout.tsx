@@ -9,19 +9,24 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children, currentPath }: AppLayoutProps) {
-  const [opened, { toggle }] = useDisclosure();
+  const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
+  const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true);
 
   return (
     <AppShell
       header={{ height: 64 }}
       navbar={{
-        width: 240,
+        width: 280,
         breakpoint: 'sm',
-        collapsed: { mobile: !opened },
+        collapsed: { mobile: !mobileOpened, desktop: !desktopOpened },
       }}
       padding="md"
     >
-      <Header opened={opened} toggle={toggle} />
+      <Header
+        mobileOpened={mobileOpened}
+        toggleMobile={toggleMobile}
+        toggleDesktop={toggleDesktop}
+      />
       <Sidebar currentPath={currentPath} />
 
       <AppShell.Main>{children}</AppShell.Main>

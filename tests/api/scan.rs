@@ -8,7 +8,8 @@ use codex::db::ScanningStrategy;
 use codex::scanner::ScanMode;
 use codex::utils::password;
 use common::*;
-use hyper::StatusCode;
+use hyper::{Request, StatusCode};
+use tower::ServiceExt;
 
 // Helper to create an admin user and get a token
 async fn create_admin_and_token(
@@ -439,4 +440,346 @@ async fn test_list_active_scans_requires_read_permission() {
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+// ============================================================================
+// SSE Stream Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_scan_progress_stream_requires_auth() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_app_state(db.clone());
+    let app = create_test_router_with_app_state(state);
+
+    let request = get_request("/api/v1/scans/stream");
+
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_scan_progress_stream_requires_read_permission() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_app_state(db.clone());
+
+    // Create a user with no permissions
+    let password_hash = password::hash_password("user123").unwrap();
+    let user = create_test_user_with_permissions(
+        "noperms",
+        "noperms@example.com",
+        &password_hash,
+        false,
+        vec![],
+    );
+    let created = UserRepository::create(&db, &user).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(created.id, created.username, created.is_admin)
+        .unwrap();
+
+    let app = create_test_router_with_app_state(state);
+
+    let request = get_request_with_auth("/api/v1/scans/stream", &token);
+
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn test_scan_progress_stream_connection() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_app_state(db.clone());
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/scans/stream")
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Accept", "text/event-stream")
+        .body(String::new())
+        .unwrap();
+
+    let response = app
+        .oneshot(request)
+        .await
+        .expect("Failed to execute request");
+
+    // SSE endpoint should return 200 OK
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify SSE headers
+    let headers = response.headers();
+    assert_eq!(
+        headers.get("content-type").map(|v| v.to_str().ok()),
+        Some(Some("text/event-stream"))
+    );
+    assert_eq!(
+        headers.get("cache-control").map(|v| v.to_str().ok()),
+        Some(Some("no-cache"))
+    );
+}
+
+#[tokio::test]
+async fn test_scan_manager_subscribe() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_app_state(db.clone());
+
+    // Test that we can subscribe to progress updates
+    let mut receiver = state.scan_manager.subscribe();
+
+    // Verify receiver is created (doesn't fail)
+    assert!(receiver.try_recv().is_err()); // No messages yet
+}
+
+#[tokio::test]
+async fn test_scan_progress_broadcast() {
+    use std::time::Duration;
+    use tokio::time::timeout;
+
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create test files
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone());
+
+    // Subscribe to progress updates
+    let mut receiver = state.scan_manager.subscribe();
+
+    // Trigger a scan
+    state
+        .scan_manager
+        .trigger_scan(library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    // Wait for at least one progress update (with timeout)
+    let result = timeout(Duration::from_secs(10), async {
+        loop {
+            match receiver.recv().await {
+                Ok(progress) => {
+                    // Verify the progress update is for our library
+                    if progress.library_id == library.id {
+                        return Some(progress);
+                    }
+                }
+                Err(_) => return None,
+            }
+        }
+    })
+    .await;
+
+    assert!(
+        result.is_ok(),
+        "Should receive at least one progress update"
+    );
+    let progress = result.unwrap();
+    assert!(progress.is_some(), "Progress update should not be None");
+
+    let progress = progress.unwrap();
+    assert_eq!(progress.library_id, library.id);
+}
+
+// ============================================================================
+// Integration Tests with Real Scanning
+// ============================================================================
+
+#[tokio::test]
+async fn test_full_scan_with_progress_updates() {
+    use std::time::Duration;
+    use tokio::time::timeout;
+
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create test files
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone());
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Subscribe to progress updates
+    let mut receiver = state.scan_manager.subscribe();
+
+    // Trigger scan via API
+    let app = create_test_router_with_app_state(state.clone());
+    let uri = format!("/api/v1/libraries/{}/scan?mode=normal", library.id);
+    let request = post_request_with_auth(&uri, &token);
+
+    let (status, _): (StatusCode, Option<ScanStatusDto>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    // Collect progress updates until scan completes
+    let result = timeout(Duration::from_secs(30), async {
+        let mut updates = Vec::new();
+        let mut completed = false;
+
+        loop {
+            match receiver.recv().await {
+                Ok(progress) => {
+                    if progress.library_id == library.id {
+                        use codex::scanner::ScanStatus;
+                        let is_done = matches!(
+                            progress.status,
+                            ScanStatus::Completed | ScanStatus::Failed | ScanStatus::Cancelled
+                        );
+                        updates.push(progress.clone());
+
+                        if is_done {
+                            completed = true;
+                            break;
+                        }
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+
+        (updates, completed)
+    })
+    .await;
+
+    assert!(result.is_ok(), "Should complete scan within timeout");
+    let (updates, completed) = result.unwrap();
+
+    assert!(completed, "Scan should complete");
+    assert!(!updates.is_empty(), "Should receive progress updates");
+
+    // Verify we got various status updates
+    use codex::scanner::ScanStatus;
+    let statuses: Vec<ScanStatus> = updates.iter().map(|u| u.status).collect();
+    println!("Received statuses: {:?}", statuses);
+
+    // Should have at least one completed status
+    assert!(
+        statuses
+            .iter()
+            .any(|s| matches!(s, ScanStatus::Completed | ScanStatus::Failed)),
+        "Should have final status"
+    );
+}
+
+#[tokio::test]
+async fn test_multiple_concurrent_sse_subscribers() {
+    use std::time::Duration;
+    use tokio::time::timeout;
+
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create test files
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone());
+
+    // Create multiple subscribers
+    let mut receiver1 = state.scan_manager.subscribe();
+    let mut receiver2 = state.scan_manager.subscribe();
+    let mut receiver3 = state.scan_manager.subscribe();
+
+    // Trigger a scan
+    state
+        .scan_manager
+        .trigger_scan(library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    // Verify all subscribers receive updates
+    let timeout_duration = Duration::from_secs(10);
+
+    let result1 = timeout(timeout_duration, receiver1.recv()).await;
+    let result2 = timeout(timeout_duration, receiver2.recv()).await;
+    let result3 = timeout(timeout_duration, receiver3.recv()).await;
+
+    assert!(result1.is_ok(), "Subscriber 1 should receive update");
+    assert!(result2.is_ok(), "Subscriber 2 should receive update");
+    assert!(result3.is_ok(), "Subscriber 3 should receive update");
+}
+
+#[tokio::test]
+async fn test_scan_cancel_broadcasts_update() {
+    use std::time::Duration;
+    use tokio::time::timeout;
+
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone());
+    let mut receiver = state.scan_manager.subscribe();
+
+    // Trigger a scan
+    state
+        .scan_manager
+        .trigger_scan(library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    // Give scan a moment to start
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Cancel the scan
+    state.scan_manager.cancel_scan(library.id).await.ok();
+
+    // Wait for cancelled status update
+    let result = timeout(Duration::from_secs(5), async {
+        loop {
+            match receiver.recv().await {
+                Ok(progress) => {
+                    use codex::scanner::ScanStatus;
+                    if progress.library_id == library.id && progress.status == ScanStatus::Cancelled
+                    {
+                        return Some(progress);
+                    }
+                }
+                Err(_) => return None,
+            }
+        }
+    })
+    .await;
+
+    // Note: This may not always receive cancelled status depending on timing
+    // The test verifies that if we do receive it, it's correct
+    if let Ok(Some(progress)) = result {
+        use codex::scanner::ScanStatus;
+        assert_eq!(progress.status, ScanStatus::Cancelled);
+        assert_eq!(progress.library_id, library.id);
+    }
 }

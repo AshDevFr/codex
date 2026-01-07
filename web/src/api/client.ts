@@ -1,6 +1,7 @@
 import axios, { type AxiosInstance } from 'axios';
 import type { ApiError } from '@/types/api';
 import { navigationService } from '@/services/navigation';
+import { useAuthStore } from '@/store/authStore';
 
 // Create axios instance with base configuration
 export const api: AxiosInstance = axios.create({
@@ -35,10 +36,10 @@ api.interceptors.response.use(
         message: error.response.data?.message || error.message,
       };
 
-      // Handle 401 Unauthorized - clear token and redirect to login
+      // Handle 401 Unauthorized - clear auth state and redirect to login
       if (error.response.status === 401) {
-        localStorage.removeItem('jwt_token');
-        localStorage.removeItem('user');
+        const { clearAuth } = useAuthStore.getState();
+        clearAuth();
         navigationService.navigateTo('/login');
       }
 

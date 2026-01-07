@@ -48,16 +48,9 @@ impl IntoResponse for ApiError {
             details: None,
         });
 
-        // Add WWW-Authenticate header for 401 responses (for HTTP Basic auth support)
-        let mut response = (status, body).into_response();
-        if status == StatusCode::UNAUTHORIZED {
-            response.headers_mut().insert(
-                header::WWW_AUTHENTICATE,
-                header::HeaderValue::from_static("Basic realm=\"Codex\""),
-            );
-        }
-
-        response
+        // Don't add WWW-Authenticate header for 401 responses
+        // This would trigger browser's basic auth dialog, which we don't want for JWT-based API
+        (status, body).into_response()
     }
 }
 

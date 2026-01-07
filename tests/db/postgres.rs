@@ -116,6 +116,7 @@ async fn test_postgres_series_book_relationship() {
         format: "cbz".to_string(),
         page_count: 10,
         deleted: false,
+        analyzed: false,
         modified_at: now,
         created_at: now,
         updated_at: now,

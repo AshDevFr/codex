@@ -382,3 +382,272 @@ async fn test_delete_library_not_found() {
     // This is a design choice - idempotent deletes
     assert_eq!(status, StatusCode::OK);
 }
+
+// ============================================================================
+// Library Counts Tests (Book/Series Statistics)
+// ============================================================================
+
+#[tokio::test]
+async fn test_library_includes_book_and_series_counts() {
+    use codex::db::repositories::{BookRepository, SeriesRepository};
+    use codex::scanner::ScanMode;
+
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create test files in the library
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    // Scan the library to populate data
+    let state = create_test_app_state(db.clone());
+    state
+        .scan_manager
+        .trigger_scan(library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    // Wait for scan to complete
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    // Get library details
+    let request = get_request_with_auth(&format!("/api/v1/libraries/{}", library.id), &token);
+    let (status, response): (StatusCode, Option<LibraryDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let library_dto = response.unwrap();
+
+    // Verify counts are present
+    assert!(
+        library_dto.book_count.is_some(),
+        "Library should include book_count"
+    );
+    assert!(
+        library_dto.series_count.is_some(),
+        "Library should include series_count"
+    );
+
+    println!(
+        "Library stats - Books: {}, Series: {}",
+        library_dto.book_count.unwrap(),
+        library_dto.series_count.unwrap()
+    );
+}
+
+#[tokio::test]
+async fn test_empty_library_has_zero_counts() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create empty library (no files)
+    let library = LibraryRepository::create(
+        &db,
+        "Empty Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone());
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let request = get_request_with_auth(&format!("/api/v1/libraries/{}", library.id), &token);
+    let (status, response): (StatusCode, Option<LibraryDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let library_dto = response.unwrap();
+
+    // Empty library should have zero counts
+    assert_eq!(library_dto.book_count, Some(0));
+    assert_eq!(library_dto.series_count, Some(0));
+}
+
+#[tokio::test]
+async fn test_list_libraries_includes_counts() {
+    use codex::scanner::ScanMode;
+
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create test files
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    // Scan the library
+    let state = create_test_app_state(db.clone());
+    state
+        .scan_manager
+        .trigger_scan(library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    // Wait for scan to complete
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    // List libraries
+    let request = get_request_with_auth("/api/v1/libraries", &token);
+    let (status, response): (StatusCode, Option<Vec<LibraryDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let libraries = response.unwrap();
+
+    assert!(!libraries.is_empty());
+
+    // Find our library and verify counts
+    let library_dto = libraries
+        .iter()
+        .find(|lib| lib.id == library.id)
+        .expect("Library should be in list");
+
+    assert!(
+        library_dto.book_count.is_some(),
+        "Listed library should include book_count"
+    );
+    assert!(
+        library_dto.series_count.is_some(),
+        "Listed library should include series_count"
+    );
+}
+
+#[tokio::test]
+async fn test_book_count_excludes_deleted_books() {
+    use codex::db::repositories::{BookRepository, SeriesRepository};
+    use codex::scanner::ScanMode;
+
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create test files
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    // Scan the library
+    let state = create_test_app_state(db.clone());
+    state
+        .scan_manager
+        .trigger_scan(library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    // Wait for scan to complete
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+
+    // Get initial counts
+    let initial_book_count = BookRepository::count_by_library(&db, library.id)
+        .await
+        .unwrap();
+
+    if initial_book_count > 0 {
+        // Soft delete one book
+        let series_list = SeriesRepository::list_by_library(&db, library.id)
+            .await
+            .unwrap();
+        if !series_list.is_empty() {
+            let books = BookRepository::list_by_series(&db, series_list[0].id, false)
+                .await
+                .unwrap();
+            if !books.is_empty() {
+                BookRepository::mark_deleted(&db, books[0].id, true)
+                    .await
+                    .unwrap();
+
+                // Get counts after soft delete
+                let count_after_delete = BookRepository::count_by_library(&db, library.id)
+                    .await
+                    .unwrap();
+
+                // Count should be reduced by 1
+                assert_eq!(
+                    count_after_delete,
+                    initial_book_count - 1,
+                    "Deleted books should not be counted"
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_series_count_accuracy() {
+    use codex::db::repositories::SeriesRepository;
+    use codex::scanner::ScanMode;
+
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create test files
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    // Scan the library
+    let state = create_test_app_state(db.clone());
+    state
+        .scan_manager
+        .trigger_scan(library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    // Wait for scan to complete
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+
+    // Get series count from repository
+    let series_count = SeriesRepository::count_by_library(&db, library.id)
+        .await
+        .unwrap();
+
+    // Get library via API
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let request = get_request_with_auth(&format!("/api/v1/libraries/{}", library.id), &token);
+    let (status, response): (StatusCode, Option<LibraryDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let library_dto = response.unwrap();
+
+    // Verify API count matches repository count
+    assert_eq!(
+        library_dto.series_count,
+        Some(series_count),
+        "API series count should match repository count"
+    );
+}

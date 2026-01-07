@@ -3,7 +3,10 @@ import { screen } from '@testing-library/react';
 import { renderWithProviders, userEvent } from '@/test/utils';
 import { AppLayout } from './AppLayout';
 import { useAuthStore } from '@/store/authStore';
+import { librariesApi } from '@/api/libraries';
 import type { User } from '@/types/api';
+
+vi.mock('@/api/libraries');
 
 describe('Sidebar Component (via AppLayout)', () => {
   beforeEach(() => {
@@ -11,8 +14,13 @@ describe('Sidebar Component (via AppLayout)', () => {
     localStorage.clear();
 
     // Mock window.location
-    delete (window as any).location;
-    window.location = { href: '' } as any;
+    Object.defineProperty(window, 'location', {
+      value: { href: '' },
+      writable: true,
+    });
+
+    // Mock libraries API - set default return value for getAll
+    vi.mocked(librariesApi.getAll).mockResolvedValue([]);
   });
 
   it('should render navigation links', () => {
@@ -20,9 +28,8 @@ describe('Sidebar Component (via AppLayout)', () => {
       id: '1',
       username: 'testuser',
       email: 'test@example.com',
-      role: 'USER',
-      created_at: '2024-01-01T00:00:00Z',
-      updated_at: '2024-01-01T00:00:00Z',
+      isAdmin: false,
+      emailVerified: true,
     };
 
     useAuthStore.setState({ user: mockUser, token: 'token', isAuthenticated: true });
@@ -44,9 +51,8 @@ describe('Sidebar Component (via AppLayout)', () => {
       id: '1',
       username: 'admin',
       email: 'admin@example.com',
-      role: 'ADMIN',
-      created_at: '2024-01-01T00:00:00Z',
-      updated_at: '2024-01-01T00:00:00Z',
+      isAdmin: true,
+      emailVerified: true,
     };
 
     useAuthStore.setState({ user: mockAdmin, token: 'token', isAuthenticated: true });
@@ -65,9 +71,8 @@ describe('Sidebar Component (via AppLayout)', () => {
       id: '1',
       username: 'testuser',
       email: 'test@example.com',
-      role: 'USER',
-      created_at: '2024-01-01T00:00:00Z',
-      updated_at: '2024-01-01T00:00:00Z',
+      isAdmin: false,
+      emailVerified: true,
     };
 
     useAuthStore.setState({ user: mockUser, token: 'token', isAuthenticated: true });
@@ -87,9 +92,8 @@ describe('Sidebar Component (via AppLayout)', () => {
       id: '1',
       username: 'testuser',
       email: 'test@example.com',
-      role: 'USER',
-      created_at: '2024-01-01T00:00:00Z',
-      updated_at: '2024-01-01T00:00:00Z',
+      isAdmin: false,
+      emailVerified: true,
     };
 
     useAuthStore.setState({ user: mockUser, token: 'token', isAuthenticated: true });

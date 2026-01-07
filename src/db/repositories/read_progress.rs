@@ -191,6 +191,7 @@ mod tests {
             number: Some(Decimal::from(1)),
             page_count: 50,
             deleted: false,
+            analyzed: false,
             modified_at: Utc::now(),
             created_at: Utc::now(),
             updated_at: Utc::now(),

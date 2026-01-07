@@ -54,6 +54,7 @@ quick-xml = { version = "0.36", features = ["serialize"] }
 
 # File system utilities
 walkdir = "2.5"
+dirs = "5.0"
 
 # Date/time
 chrono = { version = "0.4", features = ["serde"] }
@@ -81,6 +82,9 @@ tower-http = { version = "0.5", features = ["trace", "cors"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
+async-stream = "0.3"
+futures = "0.3"
+tokio-stream = "0.1"
 
 # Authentication & Security
 jsonwebtoken = "9.2"

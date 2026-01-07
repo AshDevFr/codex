@@ -8,17 +8,27 @@ export interface User {
   emailVerified: boolean;
 }
 
+export interface ScanningConfig {
+  cronSchedule?: string;
+  scanMode: 'normal' | 'deep';
+  autoScanOnCreate: boolean;
+  enabled: boolean;
+  scanOnStart: boolean;
+  purgeDeletedOnScan: boolean;
+}
+
 export interface Library {
   id: string;
   name: string;
   path: string;
-  scan_mode: 'DISABLED' | 'MANUAL' | 'AUTO';
-  scan_interval_hours?: number;
-  last_scan_at?: string;
-  created_at: string;
-  updated_at: string;
-  book_count?: number;
-  series_count?: number;
+  description?: string;
+  isActive: boolean;
+  scanningConfig?: ScanningConfig;
+  lastScannedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  bookCount?: number;
+  seriesCount?: number;
 }
 
 export interface Series {
@@ -111,4 +121,39 @@ export interface PaginatedResponse<T> {
   total: number;
   page: number;
   page_size: number;
+}
+
+export interface FileSystemEntry {
+  name: string;
+  path: string;
+  is_directory: boolean;
+  is_readable: boolean;
+}
+
+export interface BrowseResponse {
+  current_path: string;
+  parent_path: string | null;
+  entries: FileSystemEntry[];
+}
+
+export interface CreateLibraryRequest {
+  name: string;
+  path: string;
+  description?: string;
+  scanningConfig?: ScanningConfig;
+}
+
+export type ScanStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface ScanProgress {
+  library_id: string;
+  status: ScanStatus;
+  files_total: number;
+  files_processed: number;
+  series_found: number;
+  books_found: number;
+  errors: string[];
+  started_at?: string;
+  completed_at?: string;
+  error_message?: string;
 }

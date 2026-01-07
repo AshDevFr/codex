@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { Library } from '@/types/api';
+import type { Library, CreateLibraryRequest } from '@/types/api';
 
 export const librariesApi = {
   // Get all libraries
@@ -15,13 +15,13 @@ export const librariesApi = {
   },
 
   // Create a new library
-  create: async (library: Omit<Library, 'id' | 'created_at' | 'updated_at'>): Promise<Library> => {
+  create: async (library: CreateLibraryRequest): Promise<Library> => {
     const response = await api.post<Library>('/libraries', library);
     return response.data;
   },
 
   // Update a library
-  update: async (id: string, library: Partial<Library>): Promise<Library> => {
+  update: async (id: string, library: Partial<Library> | { name?: string; scanningConfig?: import('@/types/api').ScanningConfig }): Promise<Library> => {
     const response = await api.put<Library>(`/libraries/${id}`, library);
     return response.data;
   },
@@ -32,7 +32,7 @@ export const librariesApi = {
   },
 
   // Trigger a scan
-  scan: async (id: string): Promise<void> => {
-    await api.post(`/libraries/${id}/scan`);
+  scan: async (id: string, mode: 'normal' | 'deep' = 'normal'): Promise<void> => {
+    await api.post(`/libraries/${id}/scan?mode=${mode}`);
   },
 };

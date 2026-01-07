@@ -51,7 +51,7 @@ impl PaginationParams {
 }
 
 /// Generic paginated response wrapper
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PaginatedResponse<T> {
     /// The data items for this page

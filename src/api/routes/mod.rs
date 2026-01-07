@@ -81,7 +81,9 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/libraries/:id/scan", post(handlers::trigger_scan))
         .route("/libraries/:id/scan-status", get(handlers::get_scan_status))
         .route("/libraries/:id/scan/cancel", post(handlers::cancel_scan))
+        .route("/libraries/:id/analyze", post(handlers::trigger_analysis))
         .route("/scans/active", get(handlers::list_active_scans))
+        .route("/scans/stream", get(handlers::scan_progress_stream))
         // Series routes (protected)
         .route("/series", get(handlers::list_series))
         .route("/series/search", post(handlers::search_series))
@@ -97,10 +99,15 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/series/:id/cover/source",
             put(handlers::set_series_cover_source),
         )
+        .route(
+            "/series/:id/analyze",
+            post(handlers::trigger_series_analysis),
+        )
         // Book routes (protected)
         .route("/books", get(handlers::list_books))
         .route("/books/:id", get(handlers::get_book))
         .route("/books/:id/thumbnail", get(handlers::get_book_thumbnail))
+        .route("/books/:id/analyze", post(handlers::trigger_book_analysis))
         // Page routes (protected)
         .route(
             "/books/:book_id/pages/:page_number",
@@ -136,6 +143,9 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/tasks", get(handlers::list_tasks))
         .route("/tasks/:task_id", get(handlers::get_task))
         .route("/tasks/:task_id/cancel", post(handlers::cancel_task))
+        // Filesystem routes (protected, admin only)
+        .route("/filesystem/browse", get(handlers::browse_filesystem))
+        .route("/filesystem/drives", get(handlers::list_drives))
         // Add state to all routes
         .with_state(state)
 }
