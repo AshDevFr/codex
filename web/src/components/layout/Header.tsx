@@ -8,6 +8,7 @@ import {
 	useMantineColorScheme,
 } from "@mantine/core";
 import { IconMenu2, IconMoon, IconSearch, IconSun } from "@tabler/icons-react";
+import { TaskNotificationBadge } from "../TaskNotificationBadge";
 
 interface HeaderProps {
 	mobileOpened: boolean;
@@ -44,6 +45,7 @@ export function Header({
 					<Text size="xl" fw={700}>
 						Codex
 					</Text>
+					<TaskNotificationBadge />
 				</Group>
 
 				<Group>

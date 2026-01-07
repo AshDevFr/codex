@@ -13,6 +13,7 @@ export type EntityEvent =
   | { SeriesCreated: { series_id: string; library_id: string } }
   | { SeriesUpdated: { series_id: string; library_id: string; fields: string[] } }
   | { SeriesDeleted: { series_id: string; library_id: string } }
+  | { SeriesBulkPurged: { series_id: string; library_id: string; count: number } }
   | { CoverUpdated: { entity_type: EntityType; entity_id: string } }
   | { LibraryUpdated: { library_id: string } };
 
@@ -38,8 +39,9 @@ export function isBookEvent(event: EntityEvent): event is
 export function isSeriesEvent(event: EntityEvent): event is
   | { SeriesCreated: { series_id: string; library_id: string } }
   | { SeriesUpdated: { series_id: string; library_id: string; fields: string[] } }
-  | { SeriesDeleted: { series_id: string; library_id: string } } {
-  return "SeriesCreated" in event || "SeriesUpdated" in event || "SeriesDeleted" in event;
+  | { SeriesDeleted: { series_id: string; library_id: string } }
+  | { SeriesBulkPurged: { series_id: string; library_id: string; count: number } } {
+  return "SeriesCreated" in event || "SeriesUpdated" in event || "SeriesDeleted" in event || "SeriesBulkPurged" in event;
 }
 
 export function isCoverEvent(event: EntityEvent): event is

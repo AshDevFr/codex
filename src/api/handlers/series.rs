@@ -284,8 +284,8 @@ pub async fn purge_series_deleted_books(
 ) -> Result<Json<u64>, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
 
-    // Verify series exists
-    SeriesRepository::get_by_id(&state.db, series_id)
+    // Verify series exists and get library_id
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
@@ -294,6 +294,20 @@ pub async fn purge_series_deleted_books(
     let count = BookRepository::purge_deleted_in_series(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to purge deleted books: {}", e)))?;
+
+    // Emit bulk purge event if any books were deleted
+    if count > 0 {
+        let event = EntityChangeEvent {
+            event: EntityEvent::SeriesBulkPurged {
+                series_id,
+                library_id: series.library_id,
+                count,
+            },
+            timestamp: Utc::now(),
+            user_id: Some(auth.user_id),
+        };
+        let _ = state.event_broadcaster.emit(event);
+    }
 
     Ok(Json(count))
 }
@@ -437,8 +451,8 @@ pub async fn set_series_cover_source(
 ) -> Result<StatusCode, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
 
-    // Verify series exists
-    SeriesRepository::get_by_id(&state.db, series_id)
+    // Verify series exists and get library_id
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
@@ -449,6 +463,18 @@ pub async fn set_series_cover_source(
         .map_err(|e| {
             ApiError::Internal(format!("Failed to update selected cover source: {}", e))
         })?;
+
+    // Emit cover updated event
+    let event = EntityChangeEvent {
+        event: EntityEvent::CoverUpdated {
+            entity_type: EntityType::Series,
+            entity_id: series_id,
+            library_id: Some(series.library_id),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
 
     Ok(StatusCode::OK)
 }

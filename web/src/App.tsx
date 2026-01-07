@@ -13,6 +13,7 @@ import { Register } from "@/pages/Register";
 import { navigationService } from "@/services/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { useEntityEvents } from "@/hooks/useEntityEvents";
+import { TaskProgressIndicator } from "@/components/TaskProgressIndicator";
 
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -80,6 +81,9 @@ function App() {
 
 				<Route path="*" element={<Navigate to="/" replace />} />
 			</Routes>
+
+			{/* Task progress indicator (bottom-right corner) */}
+			{isAuthenticated && <TaskProgressIndicator />}
 		</BrowserRouter>
 	);
 }

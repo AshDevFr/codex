@@ -72,6 +72,12 @@ pub enum EntityEvent {
     },
     /// A series was deleted
     SeriesDeleted { series_id: Uuid, library_id: Uuid },
+    /// Deleted books were purged from a series
+    SeriesBulkPurged {
+        series_id: Uuid,
+        library_id: Uuid,
+        count: u64,
+    },
     /// A cover image was updated
     CoverUpdated {
         entity_type: EntityType,
@@ -117,6 +123,7 @@ impl EntityChangeEvent {
             | EntityEvent::SeriesCreated { library_id, .. }
             | EntityEvent::SeriesUpdated { library_id, .. }
             | EntityEvent::SeriesDeleted { library_id, .. }
+            | EntityEvent::SeriesBulkPurged { library_id, .. }
             | EntityEvent::LibraryUpdated { library_id }
             | EntityEvent::LibraryDeleted { library_id } => Some(*library_id),
             EntityEvent::CoverUpdated { library_id, .. } => *library_id,
