@@ -31,8 +31,9 @@ auth:
 #   enable_swagger: true
 
 # Scanner config - uses defaults
-# Defaults: max_concurrent_scans=2, scan_timeout_minutes=120, retry_failed_files=false
+# Defaults: max_concurrent_scans=2, scan_timeout_minutes=120, retry_failed_files=false, auto_analyze_concurrency=4
 # scanner:
 #   max_concurrent_scans: 2
 #   scan_timeout_minutes: 120
 #   retry_failed_files: false
+#   auto_analyze_concurrency: 4  # Number of concurrent analysis tasks after scan (0 = disabled)

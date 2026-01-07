@@ -387,7 +387,8 @@ async fn process_series(
         let first_file = &file_paths[0];
         if let Ok(relative) = first_file.strip_prefix(library_path) {
             // Get the parent directory (series folder)
-            relative.parent()
+            relative
+                .parent()
                 .and_then(|p| p.components().next())
                 .map(|c| c.as_os_str().to_string_lossy().to_string())
         } else {
@@ -398,8 +399,14 @@ async fn process_series(
     };
 
     // Find or create series with fingerprint
-    let series_model =
-        find_or_create_series(db, library.id, series_name, Some(&fingerprint), series_path.as_deref()).await?;
+    let series_model = find_or_create_series(
+        db,
+        library.id,
+        series_name,
+        Some(&fingerprint),
+        series_path.as_deref(),
+    )
+    .await?;
 
     let is_new_series = existing_books
         .values()

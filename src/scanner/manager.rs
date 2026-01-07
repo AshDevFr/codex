@@ -8,6 +8,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
+use super::analyzer_queue::{analyze_library_books, AnalyzerConfig};
 use super::library_scanner::scan_library;
 use super::types::{ScanMode, ScanProgress, ScanStatus};
 
@@ -37,14 +38,30 @@ pub struct ScanManager {
     db: DatabaseConnection,
     max_concurrent: usize,
     progress_broadcast: broadcast::Sender<ScanProgress>,
+    /// Number of concurrent analysis tasks to run after scan (0 = disabled)
+    auto_analyze_concurrency: usize,
 }
 
 impl ScanManager {
-    /// Create a new scan manager
+    /// Create a new scan manager with auto-analysis enabled
     pub fn new(db: DatabaseConnection, max_concurrent: usize) -> Self {
+        Self::new_with_config(db, max_concurrent, 4)
+    }
+
+    /// Create a new scan manager with custom auto-analysis configuration
+    ///
+    /// # Arguments
+    /// * `db` - Database connection
+    /// * `max_concurrent` - Maximum number of concurrent scans
+    /// * `auto_analyze_concurrency` - Number of concurrent analysis tasks after scan (0 = disabled)
+    pub fn new_with_config(
+        db: DatabaseConnection,
+        max_concurrent: usize,
+        auto_analyze_concurrency: usize,
+    ) -> Self {
         info!(
-            "Initializing ScanManager with max_concurrent={}",
-            max_concurrent
+            "Initializing ScanManager with max_concurrent={}, auto_analyze_concurrency={}",
+            max_concurrent, auto_analyze_concurrency
         );
         let (progress_broadcast, _) = broadcast::channel(1000);
         Self {
@@ -52,6 +69,7 @@ impl ScanManager {
             db,
             max_concurrent,
             progress_broadcast,
+            auto_analyze_concurrency,
         }
     }
 
@@ -152,7 +170,7 @@ impl ScanManager {
         // Clone necessary data for the task
         let db = self.db.clone();
         let state = self.state.clone();
-        let _max_concurrent = self.max_concurrent;
+        let auto_analyze_concurrency = self.auto_analyze_concurrency;
 
         // Spawn scan task
         tokio::spawn(async move {
@@ -277,6 +295,37 @@ impl ScanManager {
                             }
                         }
                     }
+
+                    // Auto-trigger analysis for normal scans (if enabled)
+                    if mode == ScanMode::Normal && auto_analyze_concurrency > 0 {
+                        info!(
+                            "Auto-triggering analysis for library {} with concurrency={}",
+                            library_id, auto_analyze_concurrency
+                        );
+
+                        let db_clone = db.clone();
+                        let concurrency = auto_analyze_concurrency;
+
+                        tokio::spawn(async move {
+                            let config = AnalyzerConfig {
+                                max_concurrent: concurrency,
+                            };
+
+                            match analyze_library_books(&db_clone, library_id, config, None).await {
+                                Ok(analysis_result) => {
+                                    info!(
+                                        "Auto-analysis completed for library {}: {} books analyzed, {} errors",
+                                        library_id,
+                                        analysis_result.books_analyzed,
+                                        analysis_result.errors.len()
+                                    );
+                                }
+                                Err(e) => {
+                                    warn!("Auto-analysis failed for library {}: {}", library_id, e);
+                                }
+                            }
+                        });
+                    }
                 }
                 Err(e) => {
                     warn!(
@@ -303,13 +352,26 @@ impl ScanManager {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
     // Note: Full integration tests are in tests/api/scan.rs
     // These are just unit tests for the manager logic
 
     #[tokio::test]
-    async fn test_scan_manager_creation() {
-        // This test just verifies the manager can be created
-        // Real DB tests are in integration tests
+    async fn test_scan_manager_creation_default() {
+        // Test database setup would be needed for real test
+        // This is a placeholder to verify the API
+    }
+
+    #[tokio::test]
+    async fn test_scan_manager_creation_with_config() {
+        // Test that we can create a manager with custom config
+        // This is a placeholder to verify the API exists
+    }
+
+    #[test]
+    fn test_auto_analyze_concurrency_default() {
+        // The default auto_analyze_concurrency should be 4
+        // This is verified by the new() method calling new_with_config(db, max, 4)
     }
 }

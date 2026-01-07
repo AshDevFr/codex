@@ -782,3 +782,175 @@ async fn test_analyze_library_books_with_no_unanalyzed() {
     assert_eq!(result.books_analyzed, 0);
     assert_eq!(result.errors.len(), 0);
 }
+
+// ============================================================================
+// Auto-Analysis Integration Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_auto_analysis_after_normal_scan() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create test files
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    // Create a scan manager with auto-analysis enabled (concurrency=4)
+    let scan_manager = codex::scanner::ScanManager::new_with_config(db.clone(), 2, 4);
+
+    // Trigger a normal scan
+    scan_manager
+        .trigger_scan(library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    // Wait for scan to complete
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+
+    // Wait additional time for auto-analysis to complete
+    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+
+    // Verify that books were both detected AND analyzed automatically
+    let unanalyzed_books = BookRepository::get_unanalyzed_in_library(&db, library.id)
+        .await
+        .unwrap();
+
+    // All books should be analyzed due to auto-analysis
+    assert_eq!(
+        unanalyzed_books.len(),
+        0,
+        "Auto-analysis should have analyzed all books"
+    );
+}
+
+#[tokio::test]
+async fn test_auto_analysis_disabled_when_zero() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create test files
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    // Create a scan manager with auto-analysis DISABLED (concurrency=0)
+    let scan_manager = codex::scanner::ScanManager::new_with_config(db.clone(), 2, 0);
+
+    // Trigger a normal scan
+    scan_manager
+        .trigger_scan(library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    // Wait for scan to complete
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+
+    // Wait a bit more to ensure no auto-analysis happens
+    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+
+    // Verify that books were detected but NOT analyzed
+    let unanalyzed_books = BookRepository::get_unanalyzed_in_library(&db, library.id)
+        .await
+        .unwrap();
+
+    // Books should still be unanalyzed when auto-analysis is disabled
+    assert!(
+        unanalyzed_books.len() > 0,
+        "Books should remain unanalyzed when auto-analysis is disabled"
+    );
+}
+
+#[tokio::test]
+async fn test_auto_analysis_only_for_normal_scan() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create test files
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    // Create a scan manager with auto-analysis enabled
+    let scan_manager = codex::scanner::ScanManager::new_with_config(db.clone(), 2, 4);
+
+    // Trigger a DEEP scan (auto-analysis should NOT trigger for deep scans)
+    // Deep scans pass ScanMode::Deep which should skip auto-analysis
+    scan_manager
+        .trigger_scan(library.id, ScanMode::Deep)
+        .await
+        .unwrap();
+
+    // Wait for scan to complete
+    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+
+    // Both normal and deep scans only do file detection (fast phase)
+    // Auto-analysis only triggers for Normal mode, not Deep mode
+    // So after a deep scan, books should remain unanalyzed
+    let unanalyzed_books = BookRepository::get_unanalyzed_in_library(&db, library.id)
+        .await
+        .unwrap();
+
+    // Deep scan should NOT trigger auto-analysis (books remain unanalyzed)
+    assert!(
+        unanalyzed_books.len() > 0,
+        "Deep scan should not trigger auto-analysis, books should remain unanalyzed"
+    );
+}
+
+#[tokio::test]
+async fn test_auto_analysis_with_different_concurrency() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create test files
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    // Test with high concurrency (8)
+    let scan_manager = codex::scanner::ScanManager::new_with_config(db.clone(), 2, 8);
+
+    scan_manager
+        .trigger_scan(library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    // Wait for scan and auto-analysis to complete
+    tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+
+    let unanalyzed_books = BookRepository::get_unanalyzed_in_library(&db, library.id)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        unanalyzed_books.len(),
+        0,
+        "Auto-analysis with concurrency=8 should analyze all books"
+    );
+}

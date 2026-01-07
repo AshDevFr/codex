@@ -342,6 +342,8 @@ pub struct ScannerConfig {
     pub max_concurrent_scans: usize,
     pub scan_timeout_minutes: u64,
     pub retry_failed_files: bool,
+    /// Number of concurrent analysis tasks to run after scan (0 = disabled)
+    pub auto_analyze_concurrency: usize,
 }
 
 impl Default for ScannerConfig {
@@ -350,6 +352,7 @@ impl Default for ScannerConfig {
             max_concurrent_scans: env_or("CODEX_SCANNER_MAX_CONCURRENT_SCANS", 2),
             scan_timeout_minutes: env_or("CODEX_SCANNER_SCAN_TIMEOUT_MINUTES", 120),
             retry_failed_files: env_bool_or("CODEX_SCANNER_RETRY_FAILED_FILES", false),
+            auto_analyze_concurrency: env_or("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY", 4),
         }
     }
 }

@@ -91,13 +91,18 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
 
     // Create scan manager
     info!("Initializing scan manager...");
-    let scan_manager = Arc::new(crate::scanner::ScanManager::new(
+    let scan_manager = Arc::new(crate::scanner::ScanManager::new_with_config(
         db.sea_orm_connection().clone(),
         config.scanner.max_concurrent_scans,
+        config.scanner.auto_analyze_concurrency,
     ));
     info!(
         "  Max concurrent scans: {}",
         config.scanner.max_concurrent_scans
+    );
+    info!(
+        "  Auto-analyze concurrency: {}",
+        config.scanner.auto_analyze_concurrency
     );
 
     // Create and start scheduler
