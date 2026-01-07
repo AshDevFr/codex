@@ -7,14 +7,18 @@ import { useTaskProgress } from "@/hooks/useTaskProgress";
  * Shows count of active tasks with a tooltip containing task details
  */
 export function TaskNotificationBadge() {
-	const { activeTasks } = useTaskProgress();
+	const { activeTasks, pendingCounts } = useTaskProgress();
 
-	const tasksArray = Array.from(activeTasks.values());
-	const activeTasksFiltered = tasksArray.filter(
+	// Filter to only running/queued tasks
+	const runningTasks = activeTasks.filter(
 		(task) => task.status === "running" || task.status === "queued",
 	);
 
-	if (activeTasksFiltered.length === 0) {
+	// Calculate total pending count
+	const totalPendingCount = Object.values(pendingCounts).reduce((sum, count) => sum + count, 0);
+
+	// If no running tasks and no pending tasks, don't show the badge
+	if (runningTasks.length === 0 && totalPendingCount === 0) {
 		return null;
 	}
 
@@ -28,7 +32,7 @@ export function TaskNotificationBadge() {
 			.join(" ");
 	};
 
-	const getTaskSummary = (task: typeof activeTasksFiltered[0]) => {
+	const getTaskSummary = (task: typeof runningTasks[0]) => {
 		const taskName = formatTaskType(task.task_type);
 		const progress = task.progress
 			? ` (${task.progress.current}/${task.progress.total})`
@@ -37,20 +41,40 @@ export function TaskNotificationBadge() {
 	};
 
 	const tooltipContent = (
-		<Stack gap={4}>
-			<Text size="xs" fw={600}>
-				Active Tasks
-			</Text>
-			{activeTasksFiltered.map((task) => (
-				<Group key={task.task_id} gap="xs">
-					<IconLoader2
-						size={12}
-						style={{ color: "var(--mantine-color-blue-4)" }}
-						className="rotating-icon-small"
-					/>
-					<Text size="xs">{getTaskSummary(task)}</Text>
-				</Group>
-			))}
+		<Stack gap={8}>
+			{runningTasks.length > 0 && (
+				<Stack gap={4}>
+					<Text size="xs" fw={600}>
+						Running Tasks
+					</Text>
+					{runningTasks.map((task) => (
+						<Group key={task.task_id} gap="xs">
+							<IconLoader2
+								size={12}
+								style={{ color: "var(--mantine-color-blue-4)" }}
+								className="rotating-icon-small"
+							/>
+							<Text size="xs">{getTaskSummary(task)}</Text>
+						</Group>
+					))}
+				</Stack>
+			)}
+
+			{totalPendingCount > 0 && (
+				<Stack gap={4}>
+					<Text size="xs" fw={600}>
+						Pending Tasks ({totalPendingCount})
+					</Text>
+					{Object.entries(pendingCounts).map(([taskType, count]) => (
+						<Group key={taskType} gap="xs">
+							<Text size="xs" c="dimmed">
+								{formatTaskType(taskType)}: {count}
+							</Text>
+						</Group>
+					))}
+				</Stack>
+			)}
+
 			<style>
 				{`
 					@keyframes rotate-small {
@@ -65,6 +89,8 @@ export function TaskNotificationBadge() {
 		</Stack>
 	);
 
+	const totalTasks = runningTasks.length + totalPendingCount;
+
 	return (
 		<Tooltip label={tooltipContent} withArrow position="bottom-start">
 			<Badge
@@ -76,8 +102,8 @@ export function TaskNotificationBadge() {
 					animation: "pulse 2s ease-in-out infinite",
 				}}
 			>
-				{activeTasksFiltered.length} pending task
-				{activeTasksFiltered.length !== 1 ? "s" : ""}
+				{totalTasks} pending task
+				{totalTasks !== 1 ? "s" : ""}
 			</Badge>
 		</Tooltip>
 	);

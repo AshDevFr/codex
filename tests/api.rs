@@ -13,5 +13,4 @@ mod api {
     mod scan;
     mod series;
     mod sse;
-    mod tasks;
 }

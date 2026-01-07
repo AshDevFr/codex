@@ -5,6 +5,74 @@ interface TaskProgressReconnectionManager {
   disconnect: () => void;
 }
 
+export interface TaskTypeStats {
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  stale: number;
+  total: number;
+}
+
+export interface TaskStats {
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  stale: number;
+  total: number;
+  by_type: { [taskType: string]: TaskTypeStats };
+}
+
+export interface PendingTaskCounts {
+  [taskType: string]: number;
+}
+
+/**
+ * Fetch comprehensive task queue statistics
+ *
+ * Includes both aggregate counts and per-task-type breakdowns
+ *
+ * @returns Complete task statistics
+ */
+export const fetchTaskStats = async (): Promise<TaskStats> => {
+  const token = localStorage.getItem("jwt_token");
+  if (!token) {
+    throw new Error("No authentication token found");
+  }
+
+  const response = await fetch("/api/v1/tasks/stats", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  return await response.json();
+};
+
+/**
+ * Fetch pending task counts grouped by task type
+ *
+ * This is a convenience wrapper around fetchTaskStats that extracts
+ * only the pending counts by type.
+ *
+ * @returns Object mapping task type to pending count
+ */
+export const fetchPendingTaskCounts = async (): Promise<PendingTaskCounts> => {
+  const stats = await fetchTaskStats();
+  const counts: PendingTaskCounts = {};
+
+  for (const [taskType, typeStats] of Object.entries(stats.by_type)) {
+    counts[taskType] = typeStats.pending;
+  }
+
+  return counts;
+};
+
 /**
  * Create a reconnection manager for task progress SSE stream
  */

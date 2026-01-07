@@ -100,8 +100,7 @@ function TaskProgressItem({ task }: TaskProgressItemProps) {
 export function TaskProgressIndicator() {
 	const { activeTasks, connectionState } = useTaskProgress();
 
-	const tasksArray = Array.from(activeTasks.values());
-	const visibleTasks = tasksArray.filter(
+	const visibleTasks = activeTasks.filter(
 		(task) => task.status === "running" || task.status === "queued",
 	);
 
@@ -112,13 +111,8 @@ export function TaskProgressIndicator() {
 	return (
 		<Box
 			style={{
-				position: "fixed",
-				bottom: "1rem",
-				right: "1rem",
-				width: "320px",
-				maxHeight: "400px",
+				maxHeight: "300px",
 				overflowY: "auto",
-				zIndex: 1000,
 			}}
 		>
 			{visibleTasks.map((task) => (

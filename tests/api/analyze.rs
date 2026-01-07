@@ -4,13 +4,15 @@ mod common;
 use codex::api::dto::scan::AnalysisResult;
 use codex::api::error::ErrorResponse;
 use codex::db::repositories::{
-    BookRepository, LibraryRepository, SeriesRepository, UserRepository,
+    BookRepository, LibraryRepository, SeriesRepository, TaskRepository, UserRepository,
 };
 use codex::db::ScanningStrategy;
 use codex::scanner::ScanMode;
+use codex::tasks::TaskWorker;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;
+use std::time::Duration;
 
 // Helper to create an admin user and get a token
 async fn create_admin_and_token(
@@ -815,8 +817,20 @@ async fn test_auto_analysis_after_normal_scan() {
     // Wait for scan to complete
     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
-    // Wait additional time for auto-analysis to complete
-    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+    // Wait additional time for auto-analysis tasks to be queued
+    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+    // Create a worker and process the queued analysis tasks
+    let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
+
+    // Process all queued analysis tasks
+    loop {
+        let stats = TaskRepository::get_stats(&db).await.unwrap();
+        if stats.pending == 0 {
+            break;
+        }
+        worker.process_once().await.ok();
+    }
 
     // Verify that books were both detected AND analyzed automatically
     let unanalyzed_books = BookRepository::get_unanalyzed_in_library(&db, library.id)
@@ -941,8 +955,23 @@ async fn test_auto_analysis_with_different_concurrency() {
         .await
         .unwrap();
 
-    // Wait for scan and auto-analysis to complete
-    tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+    // Wait for scan to complete
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+
+    // Wait additional time for auto-analysis tasks to be queued
+    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+    // Create a worker and process the queued analysis tasks
+    let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
+
+    // Process all queued analysis tasks
+    loop {
+        let stats = TaskRepository::get_stats(&db).await.unwrap();
+        if stats.pending == 0 {
+            break;
+        }
+        worker.process_once().await.ok();
+    }
 
     let unanalyzed_books = BookRepository::get_unanalyzed_in_library(&db, library.id)
         .await

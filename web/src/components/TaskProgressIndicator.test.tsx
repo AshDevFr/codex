@@ -21,6 +21,7 @@ describe("TaskProgressIndicator", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: [],
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => []),
       getTasksByLibrary: vi.fn(() => []),
       getTask: vi.fn(() => undefined),
@@ -47,6 +48,7 @@ describe("TaskProgressIndicator", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: mockTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
       getTask: vi.fn(() => mockTasks[0]),
@@ -73,6 +75,7 @@ describe("TaskProgressIndicator", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: mockTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
       getTask: vi.fn(() => mockTasks[0]),
@@ -99,6 +102,7 @@ describe("TaskProgressIndicator", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: mockTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
       getTask: vi.fn(() => mockTasks[0]),
@@ -125,6 +129,7 @@ describe("TaskProgressIndicator", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: mockTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
       getTask: vi.fn(() => mockTasks[0]),
@@ -151,6 +156,7 @@ describe("TaskProgressIndicator", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: mockTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
       getTask: vi.fn(() => mockTasks[0]),
@@ -185,6 +191,7 @@ describe("TaskProgressIndicator", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: mockTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
       getTask: vi.fn((id) => mockTasks.find((t) => t.task_id === id)),
@@ -245,6 +252,7 @@ describe("TaskProgressIndicator", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: mockTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
       getTask: vi.fn(() => mockTasks[0]),
@@ -270,6 +278,7 @@ describe("TaskProgressIndicator", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: mockTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
       getTask: vi.fn(() => mockTasks[0]),

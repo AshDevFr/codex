@@ -21,6 +21,7 @@ describe("TaskNotificationBadge", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: [],
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => []),
       getTasksByLibrary: vi.fn(() => []),
       getTask: vi.fn(() => undefined),
@@ -47,6 +48,7 @@ describe("TaskNotificationBadge", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: mockTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
       getTask: vi.fn(() => mockTasks[0]),
@@ -80,6 +82,7 @@ describe("TaskNotificationBadge", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: mockTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
       getTask: vi.fn((id) => mockTasks.find((t) => t.task_id === id)),
@@ -105,6 +108,7 @@ describe("TaskNotificationBadge", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: mockTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
       getTask: vi.fn(() => mockTasks[0]),
@@ -131,6 +135,7 @@ describe("TaskNotificationBadge", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: mockTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
       getTask: vi.fn(() => mockTasks[0]),
@@ -157,6 +162,7 @@ describe("TaskNotificationBadge", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: mockTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
       getTask: vi.fn(() => mockTasks[0]),
@@ -183,6 +189,7 @@ describe("TaskNotificationBadge", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: mockTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
       getTask: vi.fn(() => mockTasks[0]),
@@ -225,6 +232,7 @@ describe("TaskNotificationBadge", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: mockTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
       getTask: vi.fn((id) => mockTasks.find((t) => t.task_id === id)),
@@ -251,6 +259,7 @@ describe("TaskNotificationBadge", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: mockTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
       getTask: vi.fn(() => mockTasks[0]),
@@ -279,6 +288,7 @@ describe("TaskNotificationBadge", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: mockTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
       getTask: vi.fn(() => mockTasks[0]),
@@ -320,6 +330,7 @@ describe("TaskNotificationBadge", () => {
     vi.mocked(useTaskProgress).mockReturnValue({
       activeTasks: activeTasks,
       connectionState: "connected",
+      pendingCounts: {},
       getTasksByStatus: vi.fn(() => activeTasks),
       getTasksByLibrary: vi.fn(() => activeTasks),
       getTask: vi.fn((id) => activeTasks.find((t) => t.task_id === id)),

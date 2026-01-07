@@ -7,6 +7,10 @@ import type { User } from "@/types/api";
 import { AppLayout } from "./AppLayout";
 
 vi.mock("@/api/libraries");
+vi.mock("@/api/tasks", () => ({
+	subscribeToTaskProgress: vi.fn(() => vi.fn()),
+	fetchPendingTaskCounts: vi.fn(() => Promise.resolve({})),
+}));
 
 describe("Sidebar Component (via AppLayout)", () => {
 	beforeEach(() => {

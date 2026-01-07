@@ -7,6 +7,7 @@ import type { TaskProgressEvent } from "@/types/events";
 // Mock the tasks API
 vi.mock("@/api/tasks", () => ({
   subscribeToTaskProgress: vi.fn(),
+  fetchPendingTaskCounts: vi.fn(() => Promise.resolve({})),
 }));
 
 describe("useTaskProgress", () => {

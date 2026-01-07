@@ -207,3 +207,88 @@ async fn test_postgres_reconnect() {
 
     db2.close().await;
 }
+
+/// Test metrics repository with PostgreSQL
+/// This test specifically verifies that SUM() aggregate functions work correctly with PostgreSQL,
+/// which returns NUMERIC type instead of INTEGER like SQLite.
+#[tokio::test]
+#[ignore]
+async fn test_postgres_metrics_repository() {
+    use codex::db::repositories::MetricsRepository;
+
+    let db = create_test_postgres_db().await;
+    let conn = db.sea_orm_connection();
+
+    // Create library and series
+    let library = LibraryRepository::create(
+        conn,
+        "Metrics Test Library",
+        "/test/metrics",
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let series = SeriesRepository::create(conn, library.id, "Metrics Test Series")
+        .await
+        .unwrap();
+
+    // Create multiple books with different file sizes to test SUM aggregation
+    let now = Utc::now();
+    let book_sizes = vec![1_000_000_i64, 2_500_000, 500_000, 3_000_000]; // Total: 7,000,000
+
+    for (idx, size) in book_sizes.iter().enumerate() {
+        let book_model = books::Model {
+            id: Uuid::new_v4(),
+            series_id: series.id,
+            title: Some(format!("Metrics Book {}", idx + 1)),
+            number: None,
+            file_path: format!("/test/metrics/book{}.cbz", idx + 1),
+            file_name: format!("book{}.cbz", idx + 1),
+            file_size: *size,
+            file_hash: format!("metrics_hash_{}", idx + 1),
+            format: "cbz".to_string(),
+            page_count: 10,
+            deleted: false,
+            analyzed: false,
+            modified_at: now,
+            created_at: now,
+            updated_at: now,
+        };
+
+        BookRepository::create(conn, &book_model).await.unwrap();
+    }
+
+    // Test total_book_size - this is where the PostgreSQL NUMERIC type issue would occur
+    let total_size = MetricsRepository::total_book_size(conn).await.unwrap();
+    assert_eq!(
+        total_size, 7_000_000,
+        "total_book_size should correctly sum all book sizes"
+    );
+
+    // Test book count
+    let book_count = MetricsRepository::count_books(conn).await.unwrap();
+    assert!(
+        book_count >= 4,
+        "should have at least 4 books from this test"
+    );
+
+    // Test library_metrics - this also uses SUM aggregation
+    let metrics = MetricsRepository::library_metrics(conn).await.unwrap();
+
+    let our_library = metrics
+        .iter()
+        .find(|m| m.id == library.id)
+        .expect("Should find our test library");
+    assert_eq!(our_library.book_count, 4, "library should have 4 books");
+    assert_eq!(
+        our_library.total_size, 7_000_000,
+        "library total_size should match sum of book sizes"
+    );
+    assert_eq!(our_library.series_count, 1, "library should have 1 series");
+
+    // Cleanup
+    LibraryRepository::delete(conn, library.id).await.unwrap();
+
+    db.close().await;
+}

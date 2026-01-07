@@ -56,7 +56,7 @@ async fn test_api_list_tasks() {
     .await
     .expect("Failed to create task");
 
-    let request = get_request_with_auth("/api/v1/queue/tasks", &token);
+    let request = get_request_with_auth("/api/v1/tasks", &token);
     let (status, _body) = make_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -102,7 +102,7 @@ async fn test_api_get_task() {
     .await
     .expect("Failed to create task");
 
-    let request = get_request_with_auth(&format!("/api/v1/queue/tasks/{}", task_id), &token);
+    let request = get_request_with_auth(&format!("/api/v1/tasks/{}", task_id), &token);
     let (status, _body) = make_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -145,7 +145,7 @@ async fn test_api_create_task() {
         "priority": 5
     });
 
-    let request = post_json_request_with_auth("/api/v1/queue/tasks", &create_request, &token);
+    let request = post_json_request_with_auth("/api/v1/tasks", &create_request, &token);
     let (status, response): (StatusCode, Option<serde_json::Value>) =
         make_json_request(app, request).await;
 
@@ -183,7 +183,7 @@ async fn test_api_task_stats() {
         .unwrap()
         .to_string();
 
-    let request = get_request_with_auth("/api/v1/queue/tasks/stats", &token);
+    let request = get_request_with_auth("/api/v1/tasks/stats", &token);
     let (status, response): (StatusCode, Option<serde_json::Value>) =
         make_json_request(app, request).await;
 
@@ -191,6 +191,11 @@ async fn test_api_task_stats() {
     let stats = response.unwrap();
     assert!(stats["pending"].is_number());
     assert!(stats["processing"].is_number());
+    assert!(stats["completed"].is_number());
+    assert!(stats["failed"].is_number());
+    assert!(stats["stale"].is_number());
+    assert!(stats["total"].is_number());
+    assert!(stats["by_type"].is_object());
 }
 
 /// Test cancelling task via API
@@ -232,8 +237,7 @@ async fn test_api_cancel_task() {
     .await
     .expect("Failed to create task");
 
-    let request =
-        post_request_with_auth(&format!("/api/v1/queue/tasks/{}/cancel", task_id), &token);
+    let request = post_request_with_auth(&format!("/api/v1/tasks/{}/cancel", task_id), &token);
     let (status, _body) = make_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -282,8 +286,7 @@ async fn test_api_unlock_task() {
         .await
         .unwrap();
 
-    let request =
-        post_request_with_auth(&format!("/api/v1/queue/tasks/{}/unlock", task_id), &token);
+    let request = post_request_with_auth(&format!("/api/v1/tasks/{}/unlock", task_id), &token);
     let (status, _body) = make_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -318,7 +321,7 @@ async fn test_api_purge_tasks() {
         .unwrap()
         .to_string();
 
-    let request = delete_request_with_auth("/api/v1/queue/tasks/purge?days=30", &token);
+    let request = delete_request_with_auth("/api/v1/tasks/purge?days=30", &token);
     let (status, _body) = make_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -353,7 +356,7 @@ async fn test_api_nuke_tasks_admin_only() {
         .unwrap()
         .to_string();
 
-    let request = delete_request_with_auth("/api/v1/queue/tasks/nuke", &token);
+    let request = delete_request_with_auth("/api/v1/tasks/nuke", &token);
     let (status, _body) = make_request(app, request).await;
 
     // Should succeed for admin

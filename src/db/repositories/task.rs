@@ -327,6 +327,28 @@ impl TaskRepository {
         Ok(result.rows_affected)
     }
 
+    /// Purge recently completed tasks (older than N seconds)
+    /// This is meant for automatic cleanup of finished tasks
+    pub async fn purge_completed_tasks(db: &DatabaseConnection, seconds: i64) -> Result<u64> {
+        let cutoff = Utc::now() - Duration::seconds(seconds);
+
+        let result = Tasks::delete_many()
+            .filter(tasks::Column::Status.is_in(["completed", "failed", "cancelled"]))
+            .filter(tasks::Column::CompletedAt.lt(cutoff))
+            .exec(db)
+            .await
+            .context("Failed to purge completed tasks")?;
+
+        if result.rows_affected > 0 {
+            info!(
+                "Purged {} completed tasks older than {} seconds",
+                result.rows_affected, seconds
+            );
+        }
+
+        Ok(result.rows_affected)
+    }
+
     /// Nuclear option: Empty the entire tasks table
     pub async fn nuke_all_tasks(db: &DatabaseConnection) -> Result<u64> {
         warn!("Nuking all tasks from the queue!");
@@ -342,38 +364,74 @@ impl TaskRepository {
 
     /// Get queue statistics
     pub async fn get_stats(db: &DatabaseConnection) -> Result<TaskStats> {
-        let pending = Tasks::find()
-            .filter(tasks::Column::Status.eq("pending"))
-            .count(db)
-            .await
-            .context("Failed to count pending tasks")?;
+        use crate::tasks::types::TaskTypeStats;
+        use std::collections::HashMap;
 
-        let processing = Tasks::find()
-            .filter(tasks::Column::Status.eq("processing"))
-            .count(db)
+        // Get all tasks to calculate both aggregate and per-type stats
+        let all_tasks = Tasks::find()
+            .all(db)
             .await
-            .context("Failed to count processing tasks")?;
+            .context("Failed to fetch tasks")?;
 
-        let completed = Tasks::find()
-            .filter(tasks::Column::Status.eq("completed"))
-            .count(db)
-            .await
-            .context("Failed to count completed tasks")?;
+        // Initialize aggregates
+        let mut pending = 0u64;
+        let mut processing = 0u64;
+        let mut completed = 0u64;
+        let mut failed = 0u64;
+        let mut stale = 0u64;
 
-        let failed = Tasks::find()
-            .filter(tasks::Column::Status.eq("failed"))
-            .count(db)
-            .await
-            .context("Failed to count failed tasks")?;
+        // Initialize per-type breakdown
+        let mut by_type: HashMap<String, TaskTypeStats> = HashMap::new();
 
         // Find stale locks (tasks locked for > 10 minutes)
         let stale_cutoff = Utc::now() - Duration::minutes(10);
-        let stale = Tasks::find()
-            .filter(tasks::Column::Status.eq("processing"))
-            .filter(tasks::Column::LockedUntil.lt(stale_cutoff))
-            .count(db)
-            .await
-            .context("Failed to count stale tasks")?;
+
+        for task in all_tasks {
+            let is_stale = task.status == "processing"
+                && task
+                    .locked_until
+                    .map_or(false, |until| until < stale_cutoff);
+
+            // Update aggregates
+            match task.status.as_str() {
+                "pending" => pending += 1,
+                "processing" => {
+                    processing += 1;
+                    if is_stale {
+                        stale += 1;
+                    }
+                }
+                "completed" => completed += 1,
+                "failed" => failed += 1,
+                _ => {}
+            }
+
+            // Update per-type stats
+            let type_stats = by_type
+                .entry(task.task_type.clone())
+                .or_insert(TaskTypeStats {
+                    pending: 0,
+                    processing: 0,
+                    completed: 0,
+                    failed: 0,
+                    stale: 0,
+                    total: 0,
+                });
+
+            match task.status.as_str() {
+                "pending" => type_stats.pending += 1,
+                "processing" => {
+                    type_stats.processing += 1;
+                    if is_stale {
+                        type_stats.stale += 1;
+                    }
+                }
+                "completed" => type_stats.completed += 1,
+                "failed" => type_stats.failed += 1,
+                _ => {}
+            }
+            type_stats.total += 1;
+        }
 
         Ok(TaskStats {
             pending,
@@ -382,7 +440,33 @@ impl TaskRepository {
             failed,
             stale,
             total: pending + processing + completed + failed,
+            by_type,
         })
+    }
+
+    /// Get pending task counts grouped by task type
+    pub async fn get_pending_counts_by_type(
+        db: &DatabaseConnection,
+    ) -> Result<std::collections::HashMap<String, u64>> {
+        // Get all pending/queued tasks grouped by task_type
+        // Since SeaORM doesn't have great support for GROUP BY with aggregates,
+        // we'll fetch all pending tasks and count them in memory
+        let tasks = Tasks::find()
+            .filter(tasks::Column::Status.is_in(["pending", "queued"]))
+            .select_only()
+            .column(tasks::Column::TaskType)
+            .into_tuple::<(String,)>()
+            .all(db)
+            .await
+            .context("Failed to get pending tasks by type")?;
+
+        // Count tasks by type
+        let mut counts = std::collections::HashMap::new();
+        for (task_type,) in tasks {
+            *counts.entry(task_type).or_insert(0) += 1;
+        }
+
+        Ok(counts)
     }
 
     /// Check if a task already exists for the given entity and type

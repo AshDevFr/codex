@@ -142,38 +142,19 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/users/:id", delete(handlers::delete_user))
         // Metrics routes (protected)
         .route("/metrics", get(handlers::get_metrics))
-        // Task management routes (protected) - legacy scan tasks
-        .route("/tasks", get(handlers::list_tasks))
-        .route("/tasks/:task_id", get(handlers::get_task))
-        .route("/tasks/:task_id/cancel", post(handlers::cancel_task))
         // Task Queue routes (protected) - distributed task queue
-        .route("/queue/tasks", get(handlers::task_queue::list_tasks))
-        .route("/queue/tasks", post(handlers::task_queue::create_task))
-        .route("/queue/tasks/:id", get(handlers::task_queue::get_task))
+        .route("/tasks", get(handlers::task_queue::list_tasks))
+        .route("/tasks", post(handlers::task_queue::create_task))
+        .route("/tasks/:id", get(handlers::task_queue::get_task))
+        .route("/tasks/:id/cancel", post(handlers::task_queue::cancel_task))
+        .route("/tasks/:id/unlock", post(handlers::task_queue::unlock_task))
+        .route("/tasks/:id/retry", post(handlers::task_queue::retry_task))
+        .route("/tasks/stats", get(handlers::task_queue::get_task_stats))
         .route(
-            "/queue/tasks/:id/cancel",
-            post(handlers::task_queue::cancel_task),
-        )
-        .route(
-            "/queue/tasks/:id/unlock",
-            post(handlers::task_queue::unlock_task),
-        )
-        .route(
-            "/queue/tasks/:id/retry",
-            post(handlers::task_queue::retry_task),
-        )
-        .route(
-            "/queue/tasks/stats",
-            get(handlers::task_queue::get_task_stats),
-        )
-        .route(
-            "/queue/tasks/purge",
+            "/tasks/purge",
             delete(handlers::task_queue::purge_old_tasks),
         )
-        .route(
-            "/queue/tasks/nuke",
-            delete(handlers::task_queue::nuke_all_tasks),
-        )
+        .route("/tasks/nuke", delete(handlers::task_queue::nuke_all_tasks))
         // Filesystem routes (protected, admin only)
         .route("/filesystem/browse", get(handlers::browse_filesystem))
         .route("/filesystem/drives", get(handlers::list_drives))

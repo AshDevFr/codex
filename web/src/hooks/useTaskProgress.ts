@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { subscribeToTaskProgress } from "@/api/tasks";
+import { subscribeToTaskProgress, fetchPendingTaskCounts, type PendingTaskCounts } from "@/api/tasks";
 import type { TaskProgressEvent, TaskStatus } from "@/types/events";
 
 type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
@@ -21,6 +21,7 @@ type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
 export function useTaskProgress() {
   const [activeTasks, setActiveTasks] = useState<Map<string, TaskProgressEvent>>(new Map());
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
+  const [pendingCounts, setPendingCounts] = useState<PendingTaskCounts>({});
 
   useEffect(() => {
     const token = localStorage.getItem("jwt_token");
@@ -28,6 +29,27 @@ export function useTaskProgress() {
       console.debug("No auth token, skipping task progress subscription");
       return;
     }
+
+    // Fetch initial pending task counts
+    fetchPendingTaskCounts()
+      .then((counts) => {
+        console.debug("Initial pending task counts:", counts);
+        setPendingCounts(counts);
+      })
+      .catch((error) => {
+        console.error("Failed to fetch pending task counts:", error);
+      });
+
+    // Poll for pending counts every 10 seconds
+    const pollInterval = setInterval(() => {
+      fetchPendingTaskCounts()
+        .then((counts) => {
+          setPendingCounts(counts);
+        })
+        .catch((error) => {
+          console.error("Failed to fetch pending task counts:", error);
+        });
+    }, 10000);
 
     const handleEvent = (event: TaskProgressEvent) => {
       console.debug("Task progress event received:", event);
@@ -70,6 +92,7 @@ export function useTaskProgress() {
 
     return () => {
       console.debug("Unsubscribing from task progress events");
+      clearInterval(pollInterval);
       unsubscribe();
     };
   }, []);
@@ -83,6 +106,10 @@ export function useTaskProgress() {
      * Current SSE connection state
      */
     connectionState,
+    /**
+     * Pending task counts by type
+     */
+    pendingCounts,
     /**
      * Get all tasks with a specific status
      */

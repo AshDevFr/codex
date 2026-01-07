@@ -72,11 +72,6 @@ use utoipa::OpenApi;
         // Metrics endpoints
         handlers::get_metrics,
 
-        // Task management endpoints
-        handlers::list_tasks,
-        handlers::get_task,
-        handlers::cancel_task,
-
         // Scan endpoints
         handlers::trigger_scan,
         handlers::get_scan_status,
@@ -134,10 +129,6 @@ use utoipa::OpenApi;
             dto::MetricsDto,
             dto::LibraryMetricsDto,
 
-            // Task DTOs
-            dto::TaskDto,
-            dto::TaskProgressDto,
-
             // Scan DTOs
             dto::ScanStatusDto,
             dto::TriggerScanQuery,
@@ -160,6 +151,7 @@ use utoipa::OpenApi;
             handlers::task_queue::PurgeTasksResponse,
             handlers::task_queue::MessageResponse,
             crate::tasks::types::TaskStats,
+            crate::tasks::types::TaskTypeStats,
             crate::tasks::types::TaskType,
 
             // Error responses
@@ -176,9 +168,8 @@ use utoipa::OpenApi;
         (name = "Reading Progress", description = "Reading progress tracking endpoints"),
         (name = "users", description = "User management endpoints (admin only)"),
         (name = "Metrics", description = "Application metrics and statistics"),
-        (name = "Tasks", description = "Background task management and monitoring"),
         (name = "Scans", description = "Library scanning and analysis endpoints"),
-        (name = "Task Queue", description = "Distributed task queue management"),
+        (name = "Task Queue", description = "Distributed task queue for background jobs (analysis, thumbnails, scans)"),
         (name = "filesystem", description = "Filesystem browsing for library path selection"),
     ),
     modifiers(&SecurityAddon),

@@ -92,6 +92,26 @@ impl TaskWorker {
     pub async fn run(&self) -> Result<()> {
         info!("Task worker {} started", self.worker_id);
 
+        // Spawn background cleanup task
+        let db_clone = self.db.clone();
+        tokio::spawn(async move {
+            loop {
+                // Sleep for 30 seconds between cleanup runs
+                sleep(Duration::from_secs(30)).await;
+
+                // Clean up completed tasks older than 10 seconds
+                match TaskRepository::purge_completed_tasks(&db_clone, 10).await {
+                    Ok(count) if count > 0 => {
+                        debug!("Cleaned up {} completed tasks", count);
+                    }
+                    Ok(_) => {} // No tasks to clean up
+                    Err(e) => {
+                        error!("Failed to clean up completed tasks: {}", e);
+                    }
+                }
+            }
+        });
+
         loop {
             match self.process_next_task().await {
                 Ok(true) => {

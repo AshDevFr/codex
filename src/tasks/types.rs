@@ -167,6 +167,20 @@ impl TaskResult {
 /// Task queue statistics
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TaskStats {
+    /// Total counts across all task types
+    pub pending: u64,
+    pub processing: u64,
+    pub completed: u64,
+    pub failed: u64,
+    pub stale: u64,
+    pub total: u64,
+    /// Breakdown by task type and status
+    pub by_type: std::collections::HashMap<String, TaskTypeStats>,
+}
+
+/// Statistics for a specific task type
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct TaskTypeStats {
     pub pending: u64,
     pub processing: u64,
     pub completed: u64,
@@ -236,6 +250,8 @@ mod tests {
 
     #[test]
     fn test_task_stats_total() {
+        use std::collections::HashMap;
+
         let stats = TaskStats {
             pending: 5,
             processing: 3,
@@ -243,6 +259,7 @@ mod tests {
             failed: 2,
             stale: 1,
             total: 21,
+            by_type: HashMap::new(),
         };
         assert_eq!(stats.total, 21);
         assert_eq!(

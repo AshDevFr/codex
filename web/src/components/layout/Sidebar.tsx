@@ -28,6 +28,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { librariesApi } from "@/api/libraries";
 import { EditLibraryModal } from "@/components/forms/EditLibraryModal";
+import { TaskProgressIndicator } from "@/components/TaskProgressIndicator";
 import { useAuthStore } from "@/store/authStore";
 import type { Library } from "@/types/api";
 
@@ -291,12 +292,15 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 				</AppShell.Section>
 
 				<AppShell.Section>
-					<NavLink
-						label="Logout"
-						leftSection={<IconLogout size={20} />}
-						onClick={handleLogout}
-						color="red"
-					/>
+					<Stack gap="xs">
+						<TaskProgressIndicator />
+						<NavLink
+							label="Logout"
+							leftSection={<IconLogout size={20} />}
+							onClick={handleLogout}
+							color="red"
+						/>
+					</Stack>
 				</AppShell.Section>
 			</AppShell.Navbar>
 

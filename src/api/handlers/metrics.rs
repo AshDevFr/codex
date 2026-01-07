@@ -46,14 +46,46 @@ pub async fn get_metrics(
         page_count,
         library_metrics,
     ) = tokio::try_join!(
-        MetricsRepository::count_libraries(&state.db),
-        MetricsRepository::count_series(&state.db),
-        MetricsRepository::count_books(&state.db),
-        MetricsRepository::total_book_size(&state.db),
-        MetricsRepository::count_users(&state.db),
-        MetricsRepository::database_size(&state.db),
-        MetricsRepository::count_pages(&state.db),
-        MetricsRepository::library_metrics(&state.db),
+        async {
+            MetricsRepository::count_libraries(&state.db)
+                .await
+                .map_err(|e| anyhow::anyhow!("count_libraries: {}", e))
+        },
+        async {
+            MetricsRepository::count_series(&state.db)
+                .await
+                .map_err(|e| anyhow::anyhow!("count_series: {}", e))
+        },
+        async {
+            MetricsRepository::count_books(&state.db)
+                .await
+                .map_err(|e| anyhow::anyhow!("count_books: {}", e))
+        },
+        async {
+            MetricsRepository::total_book_size(&state.db)
+                .await
+                .map_err(|e| anyhow::anyhow!("total_book_size: {}", e))
+        },
+        async {
+            MetricsRepository::count_users(&state.db)
+                .await
+                .map_err(|e| anyhow::anyhow!("count_users: {}", e))
+        },
+        async {
+            MetricsRepository::database_size(&state.db)
+                .await
+                .map_err(|e| anyhow::anyhow!("database_size: {}", e))
+        },
+        async {
+            MetricsRepository::count_pages(&state.db)
+                .await
+                .map_err(|e| anyhow::anyhow!("count_pages: {}", e))
+        },
+        async {
+            MetricsRepository::library_metrics(&state.db)
+                .await
+                .map_err(|e| anyhow::anyhow!("library_metrics: {}", e))
+        },
     )
     .map_err(|e| ApiError::Internal(format!("Failed to gather metrics: {}", e)))?;
 
