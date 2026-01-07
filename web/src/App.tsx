@@ -12,6 +12,7 @@ import { Login } from "@/pages/Login";
 import { Register } from "@/pages/Register";
 import { navigationService } from "@/services/navigation";
 import { useAuthStore } from "@/store/authStore";
+import { useEntityEvents } from "@/hooks/useEntityEvents";
 
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -37,6 +38,9 @@ function NavigationServiceInitializer() {
 
 function App() {
 	const { isAuthenticated } = useAuthStore();
+
+	// Enable real-time updates for entity changes (books, series, covers, etc.)
+	useEntityEvents();
 
 	return (
 		<BrowserRouter>

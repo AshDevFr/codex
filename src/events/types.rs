@@ -11,6 +11,32 @@ pub enum EntityType {
     Library,
 }
 
+/// Task status for progress tracking
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TaskStatus {
+    /// Task is queued and waiting to be processed
+    Queued,
+    /// Task is currently being processed
+    Running,
+    /// Task completed successfully
+    Completed,
+    /// Task failed with an error
+    Failed,
+}
+
+/// Progress information for a running task
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskProgress {
+    /// Current progress value
+    pub current: usize,
+    /// Total work to be done
+    pub total: usize,
+    /// Optional progress message
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
 /// Specific event types for entity changes
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -94,6 +120,137 @@ impl EntityChangeEvent {
             | EntityEvent::LibraryUpdated { library_id }
             | EntityEvent::LibraryDeleted { library_id } => Some(*library_id),
             EntityEvent::CoverUpdated { library_id, .. } => *library_id,
+        }
+    }
+}
+
+/// Task progress event for background operations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskProgressEvent {
+    /// Unique identifier for this task instance
+    pub task_id: Uuid,
+    /// Type of task being executed
+    pub task_type: String,
+    /// Current status of the task
+    pub status: TaskStatus,
+    /// Progress information (for running tasks)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress: Option<TaskProgress>,
+    /// Error message (for failed tasks)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// When the task started
+    pub started_at: DateTime<Utc>,
+    /// When the task completed (success or failure)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<DateTime<Utc>>,
+    /// Library ID if this task is related to a library
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub library_id: Option<Uuid>,
+    /// Series ID if this task is related to a series
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub series_id: Option<Uuid>,
+    /// Book ID if this task is related to a book
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub book_id: Option<Uuid>,
+}
+
+impl TaskProgressEvent {
+    /// Create a new task started event
+    pub fn started(
+        task_id: Uuid,
+        task_type: impl Into<String>,
+        library_id: Option<Uuid>,
+        series_id: Option<Uuid>,
+        book_id: Option<Uuid>,
+    ) -> Self {
+        Self {
+            task_id,
+            task_type: task_type.into(),
+            status: TaskStatus::Running,
+            progress: None,
+            error: None,
+            started_at: Utc::now(),
+            completed_at: None,
+            library_id,
+            series_id,
+            book_id,
+        }
+    }
+
+    /// Create a task progress update event
+    pub fn progress(
+        task_id: Uuid,
+        task_type: impl Into<String>,
+        current: usize,
+        total: usize,
+        message: Option<String>,
+        library_id: Option<Uuid>,
+        series_id: Option<Uuid>,
+        book_id: Option<Uuid>,
+    ) -> Self {
+        Self {
+            task_id,
+            task_type: task_type.into(),
+            status: TaskStatus::Running,
+            progress: Some(TaskProgress {
+                current,
+                total,
+                message,
+            }),
+            error: None,
+            started_at: Utc::now(),
+            completed_at: None,
+            library_id,
+            series_id,
+            book_id,
+        }
+    }
+
+    /// Create a task completed event
+    pub fn completed(
+        task_id: Uuid,
+        task_type: impl Into<String>,
+        started_at: DateTime<Utc>,
+        library_id: Option<Uuid>,
+        series_id: Option<Uuid>,
+        book_id: Option<Uuid>,
+    ) -> Self {
+        Self {
+            task_id,
+            task_type: task_type.into(),
+            status: TaskStatus::Completed,
+            progress: None,
+            error: None,
+            started_at,
+            completed_at: Some(Utc::now()),
+            library_id,
+            series_id,
+            book_id,
+        }
+    }
+
+    /// Create a task failed event
+    pub fn failed(
+        task_id: Uuid,
+        task_type: impl Into<String>,
+        error: impl Into<String>,
+        started_at: DateTime<Utc>,
+        library_id: Option<Uuid>,
+        series_id: Option<Uuid>,
+        book_id: Option<Uuid>,
+    ) -> Self {
+        Self {
+            task_id,
+            task_type: task_type.into(),
+            status: TaskStatus::Failed,
+            progress: None,
+            error: Some(error.into()),
+            started_at,
+            completed_at: Some(Utc::now()),
+            library_id,
+            series_id,
+            book_id,
         }
     }
 }

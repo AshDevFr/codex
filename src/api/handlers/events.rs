@@ -1,5 +1,5 @@
 use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission, AppState};
-use crate::events::EntityChangeEvent;
+use crate::events::{EntityChangeEvent, TaskProgressEvent};
 use axum::{
     extract::State,
     response::sse::{Event, KeepAlive, Sse},
@@ -70,6 +70,88 @@ pub async fn entity_events_stream(
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => {
                     debug!("Event broadcaster closed, ending stream");
+                    break;
+                }
+            }
+        }
+    };
+
+    Ok(Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(Duration::from_secs(15))
+            .text("keep-alive"),
+    ))
+}
+
+/// Subscribe to real-time task progress events via SSE
+///
+/// Clients can subscribe to this endpoint to receive real-time notifications
+/// about background task progress (analyze_book, generate_thumbnails, etc.).
+///
+/// ## Authentication
+/// Requires valid authentication with `LibrariesRead` permission.
+///
+/// ## Event Format
+/// Events are sent as JSON-encoded `TaskProgressEvent` objects with the following structure:
+/// ```json
+/// {
+///   "task_id": "uuid",
+///   "task_type": "analyze_book",
+///   "status": "running",
+///   "progress": {
+///     "current": 5,
+///     "total": 10,
+///     "message": "Processing book 5 of 10"
+///   },
+///   "started_at": "2024-01-06T12:00:00Z",
+///   "library_id": "uuid"
+/// }
+/// ```
+///
+/// ## Keep-Alive
+/// A keep-alive message is sent every 15 seconds to prevent connection timeout.
+pub async fn task_progress_stream(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
+    // Require read access to libraries
+    auth.require_permission(&Permission::LibrariesRead)?;
+
+    debug!(
+        "Client subscribed to task progress events (user_id: {}, username: {})",
+        auth.user_id, auth.username
+    );
+
+    // Subscribe to the task progress broadcaster
+    let mut receiver = state.event_broadcaster.subscribe_tasks();
+
+    // Create SSE stream
+    let stream = async_stream::stream! {
+        loop {
+            match receiver.recv().await {
+                Ok(event) => {
+                    // Serialize event to JSON
+                    match serde_json::to_string(&event) {
+                        Ok(json) => {
+                            debug!(
+                                "Sending task progress event to client: task_id={}, type={}, status={:?}",
+                                event.task_id, event.task_type, event.status
+                            );
+                            yield Ok(Event::default().data(json));
+                        }
+                        Err(e) => {
+                            warn!("Failed to serialize task progress event: {}", e);
+                            continue;
+                        }
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                    warn!("Client lagged behind, skipped {} task events", skipped);
+                    // Continue receiving - client will catch up
+                    continue;
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    debug!("Task progress broadcaster closed, ending stream");
                     break;
                 }
             }

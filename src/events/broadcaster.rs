@@ -1,24 +1,37 @@
-use super::types::EntityChangeEvent;
+use super::types::{EntityChangeEvent, TaskProgressEvent};
 use tokio::sync::broadcast;
 use tracing::{debug, warn};
 
 /// Event broadcaster for entity change notifications
 #[derive(Debug, Clone)]
 pub struct EventBroadcaster {
-    sender: broadcast::Sender<EntityChangeEvent>,
+    entity_sender: broadcast::Sender<EntityChangeEvent>,
+    task_sender: broadcast::Sender<TaskProgressEvent>,
 }
 
 impl EventBroadcaster {
     /// Create a new event broadcaster with the specified channel capacity
     pub fn new(capacity: usize) -> Self {
-        let (sender, _) = broadcast::channel(capacity);
-        debug!("Created event broadcaster with capacity {}", capacity);
-        Self { sender }
+        let (entity_sender, _) = broadcast::channel(capacity);
+        let (task_sender, _) = broadcast::channel(capacity);
+        debug!(
+            "Created event broadcaster with capacity {} for both entity and task events",
+            capacity
+        );
+        Self {
+            entity_sender,
+            task_sender,
+        }
     }
 
     /// Subscribe to entity change events
     pub fn subscribe(&self) -> broadcast::Receiver<EntityChangeEvent> {
-        self.sender.subscribe()
+        self.entity_sender.subscribe()
+    }
+
+    /// Subscribe to task progress events
+    pub fn subscribe_tasks(&self) -> broadcast::Receiver<TaskProgressEvent> {
+        self.task_sender.subscribe()
     }
 
     /// Emit an entity change event to all subscribers
@@ -27,7 +40,7 @@ impl EventBroadcaster {
         &self,
         event: EntityChangeEvent,
     ) -> Result<usize, broadcast::error::SendError<EntityChangeEvent>> {
-        match self.sender.send(event.clone()) {
+        match self.entity_sender.send(event.clone()) {
             Ok(count) => {
                 debug!(
                     "Broadcast entity event to {} subscribers: {:?}",
@@ -42,9 +55,35 @@ impl EventBroadcaster {
         }
     }
 
-    /// Get the number of active subscribers
+    /// Emit a task progress event to all subscribers
+    /// Returns the number of receivers that received the event
+    pub fn emit_task(
+        &self,
+        event: TaskProgressEvent,
+    ) -> Result<usize, broadcast::error::SendError<TaskProgressEvent>> {
+        match self.task_sender.send(event.clone()) {
+            Ok(count) => {
+                debug!(
+                    "Broadcast task event to {} subscribers: task_id={}, type={}, status={:?}",
+                    count, event.task_id, event.task_type, event.status
+                );
+                Ok(count)
+            }
+            Err(e) => {
+                warn!("Failed to broadcast task event: {:?}", e);
+                Err(e)
+            }
+        }
+    }
+
+    /// Get the number of active entity event subscribers
     pub fn subscriber_count(&self) -> usize {
-        self.sender.receiver_count()
+        self.entity_sender.receiver_count()
+    }
+
+    /// Get the number of active task event subscribers
+    pub fn task_subscriber_count(&self) -> usize {
+        self.task_sender.receiver_count()
     }
 }
 

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use chrono::Utc;
 use sea_orm::DatabaseConnection;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -8,6 +9,7 @@ use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use crate::db::repositories::TaskRepository;
+use crate::events::{EventBroadcaster, TaskProgressEvent, TaskStatus};
 use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, GenerateThumbnailsHandler, PurgeDeletedHandler,
     ScanLibraryHandler, TaskHandler,
@@ -19,6 +21,7 @@ pub struct TaskWorker {
     handlers: HashMap<String, Arc<dyn TaskHandler>>,
     worker_id: String,
     poll_interval: Duration,
+    event_broadcaster: Option<EventBroadcaster>,
 }
 
 impl TaskWorker {
@@ -58,6 +61,7 @@ impl TaskWorker {
             handlers,
             worker_id,
             poll_interval: Duration::from_secs(5),
+            event_broadcaster: None,
         }
     }
 
@@ -70,6 +74,12 @@ impl TaskWorker {
     /// Set a custom worker ID (useful for testing)
     pub fn with_worker_id(mut self, worker_id: impl Into<String>) -> Self {
         self.worker_id = worker_id.into();
+        self
+    }
+
+    /// Set the event broadcaster for task progress events
+    pub fn with_event_broadcaster(mut self, broadcaster: EventBroadcaster) -> Self {
+        self.event_broadcaster = Some(broadcaster);
         self
     }
 
@@ -111,10 +121,23 @@ impl TaskWorker {
             None => return Ok(false), // No tasks available
         };
 
+        let started_at = Utc::now();
+
         info!(
             "Worker {} processing task {} ({})",
             self.worker_id, task.id, task.task_type
         );
+
+        // Emit task started event
+        if let Some(ref broadcaster) = self.event_broadcaster {
+            let _ = broadcaster.emit_task(TaskProgressEvent::started(
+                task.id,
+                &task.task_type,
+                task.library_id,
+                task.series_id,
+                task.book_id,
+            ));
+        }
 
         // Get handler for this task type
         let handler = self.handlers.get(&task.task_type).ok_or_else(|| {
@@ -133,10 +156,35 @@ impl TaskWorker {
                     task.id,
                     task_result.message.unwrap_or_default()
                 );
+
+                // Emit task completed event
+                if let Some(ref broadcaster) = self.event_broadcaster {
+                    let _ = broadcaster.emit_task(TaskProgressEvent::completed(
+                        task.id,
+                        &task.task_type,
+                        started_at,
+                        task.library_id,
+                        task.series_id,
+                        task.book_id,
+                    ));
+                }
             }
             Err(e) => {
                 error!("Task {} failed: {}", task.id, e);
                 TaskRepository::mark_failed(&self.db, task.id, e.to_string()).await?;
+
+                // Emit task failed event
+                if let Some(ref broadcaster) = self.event_broadcaster {
+                    let _ = broadcaster.emit_task(TaskProgressEvent::failed(
+                        task.id,
+                        &task.task_type,
+                        e.to_string(),
+                        started_at,
+                        task.library_id,
+                        task.series_id,
+                        task.book_id,
+                    ));
+                }
             }
         }
 

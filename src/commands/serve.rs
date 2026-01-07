@@ -113,9 +113,14 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     scheduler.start().await?;
     info!("Scan scheduler started successfully");
 
+    // Create event broadcaster for real-time updates
+    let event_broadcaster = Arc::new(crate::events::EventBroadcaster::new(1000));
+    info!("Event broadcaster initialized");
+
     // Start task worker in background
     info!("Starting task queue worker...");
-    let task_worker = crate::tasks::TaskWorker::new(db.sea_orm_connection().clone());
+    let task_worker = crate::tasks::TaskWorker::new(db.sea_orm_connection().clone())
+        .with_event_broadcaster((*event_broadcaster).clone());
     let worker_id = task_worker.worker_id().to_string();
     tokio::spawn(async move {
         if let Err(e) = task_worker.run().await {
@@ -132,10 +137,6 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("  SMTP host: {}", config.email.smtp_host);
     info!("  SMTP port: {}", config.email.smtp_port);
     info!("  From: {}", config.email.smtp_from_email);
-
-    // Create event broadcaster for real-time updates
-    let event_broadcaster = Arc::new(crate::events::EventBroadcaster::new(1000));
-    info!("Event broadcaster initialized");
 
     // Create application state for API
     let api_state = Arc::new(crate::api::AppState {

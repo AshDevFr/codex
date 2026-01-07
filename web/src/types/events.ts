@@ -51,3 +51,33 @@ export function isLibraryEvent(event: EntityEvent): event is
   | { LibraryUpdated: { library_id: string } } {
   return "LibraryUpdated" in event;
 }
+
+/**
+ * Task status for progress tracking
+ */
+export type TaskStatus = "queued" | "running" | "completed" | "failed";
+
+/**
+ * Progress information for a running task
+ */
+export interface TaskProgress {
+  current: number;
+  total: number;
+  message?: string;
+}
+
+/**
+ * Task progress event for background operations
+ */
+export interface TaskProgressEvent {
+  task_id: string;
+  task_type: string;
+  status: TaskStatus;
+  progress?: TaskProgress;
+  error?: string;
+  started_at: string;
+  completed_at?: string;
+  library_id?: string;
+  series_id?: string;
+  book_id?: string;
+}
