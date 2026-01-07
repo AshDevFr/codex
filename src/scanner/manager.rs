@@ -8,9 +8,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use super::analyzer_queue::{analyze_library_books, AnalyzerConfig};
 use super::library_scanner::scan_library;
 use super::types::{ScanMode, ScanProgress, ScanStatus};
+use crate::db::repositories::{BookRepository, TaskRepository};
+use crate::tasks::types::TaskType;
 
 /// Internal state for the scan manager
 struct ScanState {
@@ -170,7 +171,6 @@ impl ScanManager {
         // Clone necessary data for the task
         let db = self.db.clone();
         let state = self.state.clone();
-        let auto_analyze_concurrency = self.auto_analyze_concurrency;
 
         // Spawn scan task
         tokio::spawn(async move {
@@ -296,36 +296,91 @@ impl ScanManager {
                         }
                     }
 
-                    // Auto-trigger analysis for normal scans (if enabled)
-                    if mode == ScanMode::Normal && auto_analyze_concurrency > 0 {
-                        info!(
-                            "Auto-triggering analysis for library {} with concurrency={}",
-                            library_id, auto_analyze_concurrency
-                        );
+                    // Queue analysis tasks after scan
+                    // - Normal scan: Queue tasks for unanalyzed books only
+                    // - Deep scan: Queue tasks for ALL books (force re-analysis)
+                    let db_clone = db.clone();
+                    let scan_mode = mode.clone();
 
-                        let db_clone = db.clone();
-                        let concurrency = auto_analyze_concurrency;
+                    tokio::spawn(async move {
+                        let books_result = if scan_mode == ScanMode::Normal {
+                            info!(
+                                "Queuing analysis tasks for unanalyzed books in library {}",
+                                library_id
+                            );
+                            BookRepository::get_unanalyzed_in_library(&db_clone, library_id).await
+                        } else {
+                            info!(
+                                "Queuing analysis tasks for ALL books in library {} (deep scan)",
+                                library_id
+                            );
+                            // Get all books in library for deep scan
+                            use crate::db::entities::books;
+                            use crate::db::entities::prelude::*;
+                            use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
-                        tokio::spawn(async move {
-                            let config = AnalyzerConfig {
-                                max_concurrent: concurrency,
-                            };
-
-                            match analyze_library_books(&db_clone, library_id, config, None).await {
-                                Ok(analysis_result) => {
-                                    info!(
-                                        "Auto-analysis completed for library {}: {} books analyzed, {} errors",
-                                        library_id,
-                                        analysis_result.books_analyzed,
-                                        analysis_result.errors.len()
-                                    );
+                            match crate::db::repositories::SeriesRepository::list_by_library(
+                                &db_clone, library_id,
+                            )
+                            .await
+                            {
+                                Ok(series_list) => {
+                                    let series_ids: Vec<Uuid> =
+                                        series_list.iter().map(|s| s.id).collect();
+                                    if series_ids.is_empty() {
+                                        Ok(vec![])
+                                    } else {
+                                        Books::find()
+                                            .filter(books::Column::SeriesId.is_in(series_ids))
+                                            .filter(books::Column::Deleted.eq(false))
+                                            .all(&db_clone)
+                                            .await
+                                            .map_err(|e| {
+                                                anyhow::anyhow!("Failed to get books: {}", e)
+                                            })
+                                    }
                                 }
-                                Err(e) => {
-                                    warn!("Auto-analysis failed for library {}: {}", library_id, e);
-                                }
+                                Err(e) => Err(e),
                             }
-                        });
-                    }
+                        };
+
+                        match books_result {
+                            Ok(books) => {
+                                info!(
+                                    "Found {} books in library {}, queuing analysis tasks",
+                                    books.len(),
+                                    library_id
+                                );
+
+                                let mut queued = 0;
+                                let mut errors = 0;
+
+                                for book in books {
+                                    let task_type = TaskType::AnalyzeBook { book_id: book.id };
+                                    match TaskRepository::enqueue(&db_clone, task_type, 0, None)
+                                        .await
+                                    {
+                                        Ok(_) => queued += 1,
+                                        Err(e) => {
+                                            warn!(
+                                                "Failed to queue analysis task for book {}: {}",
+                                                book.id, e
+                                            );
+                                            errors += 1;
+                                        }
+                                    }
+                                }
+
+                                info!(
+                                    "Queued {} analysis tasks for library {} ({} errors)",
+                                    queued, library_id, errors
+                                );
+                            }
+                            Err(e) => {
+                                warn!("Failed to get books for library {}: {}", library_id, e);
+                            }
+                        }
+                    });
                 }
                 Err(e) => {
                     warn!(
@@ -335,11 +390,12 @@ impl ScanManager {
                 }
             }
 
-            // Clean up completed scan after a delay (keep results for a bit)
-            tokio::time::sleep(tokio::time::Duration::from_secs(300)).await; // 5 minutes
+            // Clean up completed scan after a short delay (keep results for clients to fetch)
+            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
             {
                 let mut state = state.write().await;
                 state.active_scans.remove(&library_id);
+                info!("Cleaned up scan state for library {}", library_id);
             }
 
             // Note: We don't automatically start next queued scan here to avoid recursion issues

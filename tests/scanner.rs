@@ -5,4 +5,5 @@
 mod scanner {
     mod scanner;
     mod soft_delete;
+    mod task_queue_integration;
 }
