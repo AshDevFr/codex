@@ -11,4 +11,5 @@ pub mod metadata_sources;
 pub mod pages;
 pub mod read_progress;
 pub mod series;
+pub mod tasks;
 pub mod users;

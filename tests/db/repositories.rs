@@ -586,6 +586,7 @@ async fn test_create_series_with_fingerprint() {
         library.id,
         "Test Series",
         Some(fingerprint.clone()),
+        None,
     )
     .await
     .unwrap();
@@ -608,9 +609,10 @@ async fn test_create_series_without_fingerprint() {
         .unwrap();
 
     // Create series without fingerprint
-    let series = SeriesRepository::create_with_fingerprint(conn, library.id, "Test Series", None)
-        .await
-        .unwrap();
+    let series =
+        SeriesRepository::create_with_fingerprint(conn, library.id, "Test Series", None, None)
+            .await
+            .unwrap();
 
     // Verify series was created without fingerprint
     assert_eq!(series.name, "Test Series");
@@ -636,6 +638,7 @@ async fn test_update_series_name() {
         library.id,
         "Original Name",
         Some(fingerprint.clone()),
+        None,
     )
     .await
     .unwrap();
@@ -716,6 +719,7 @@ async fn test_update_series_fingerprint_to_none() {
         library.id,
         "Test Series",
         Some("fingerprint".to_string()),
+        None,
     )
     .await
     .unwrap();

@@ -113,6 +113,17 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     scheduler.start().await?;
     info!("Scan scheduler started successfully");
 
+    // Start task worker in background
+    info!("Starting task queue worker...");
+    let task_worker = crate::tasks::TaskWorker::new(db.sea_orm_connection().clone());
+    let worker_id = task_worker.worker_id().to_string();
+    tokio::spawn(async move {
+        if let Err(e) = task_worker.run().await {
+            tracing::error!("Task worker error: {}", e);
+        }
+    });
+    info!("Task worker {} started", worker_id);
+
     // Initialize email service
     info!("Initializing email service...");
     let email_service = Arc::new(crate::services::email::EmailService::new(

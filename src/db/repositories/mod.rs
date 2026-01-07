@@ -7,6 +7,7 @@ pub mod metrics;
 pub mod page;
 pub mod read_progress;
 pub mod series;
+pub mod task;
 pub mod user;
 
 // Re-export repositories
@@ -19,4 +20,5 @@ pub use metrics::MetricsRepository;
 pub use page::PageRepository;
 pub use read_progress::ReadProgressRepository;
 pub use series::SeriesRepository;
+pub use task::TaskRepository;
 pub use user::UserRepository;

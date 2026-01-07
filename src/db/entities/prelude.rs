@@ -6,4 +6,5 @@ pub use super::metadata_sources::Entity as MetadataSources;
 pub use super::pages::Entity as Pages;
 pub use super::read_progress::Entity as ReadProgress;
 pub use super::series::Entity as Series;
+pub use super::tasks::Entity as Tasks;
 pub use super::users::Entity as Users;

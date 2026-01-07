@@ -87,6 +87,13 @@ pub fn create_test_router_with_app_state(state: Arc<AppState>) -> Router {
     create_router(state, &api_config)
 }
 
+/// Helper to set up a test app with database and router (convenience function)
+pub fn setup_test_app(db: DatabaseConnection) -> (Arc<AppState>, Router) {
+    let state = create_test_app_state(db);
+    let router = create_test_router_with_app_state(state.clone());
+    (state, router)
+}
+
 /// Helper to make an HTTP request and get the response
 pub async fn make_request(app: Router, request: Request<String>) -> (StatusCode, Bytes) {
     let response = app

@@ -33,6 +33,10 @@ pub enum Permission {
     ApiKeysWrite,
     ApiKeysDelete,
 
+    // Tasks
+    TasksRead,
+    TasksWrite,
+
     // System
     SystemHealth,
     SystemAdmin,
@@ -58,6 +62,8 @@ impl Permission {
             Permission::ApiKeysRead => "api-keys:read",
             Permission::ApiKeysWrite => "api-keys:write",
             Permission::ApiKeysDelete => "api-keys:delete",
+            Permission::TasksRead => "tasks:read",
+            Permission::TasksWrite => "tasks:write",
             Permission::SystemHealth => "system:health",
             Permission::SystemAdmin => "system:admin",
         }
@@ -85,6 +91,8 @@ impl FromStr for Permission {
             "api-keys:read" => Ok(Permission::ApiKeysRead),
             "api-keys:write" => Ok(Permission::ApiKeysWrite),
             "api-keys:delete" => Ok(Permission::ApiKeysDelete),
+            "tasks:read" => Ok(Permission::TasksRead),
+            "tasks:write" => Ok(Permission::TasksWrite),
             "system:health" => Ok(Permission::SystemHealth),
             "system:admin" => Ok(Permission::SystemAdmin),
             _ => Err(format!("Unknown permission: {}", s)),
@@ -142,6 +150,9 @@ lazy_static::lazy_static! {
         set.insert(Permission::ApiKeysRead);
         set.insert(Permission::ApiKeysWrite);
         set.insert(Permission::ApiKeysDelete);
+        // Tasks
+        set.insert(Permission::TasksRead);
+        set.insert(Permission::TasksWrite);
         // System
         set.insert(Permission::SystemHealth);
         set.insert(Permission::SystemAdmin);
@@ -220,7 +231,7 @@ mod tests {
     fn test_admin_permissions() {
         assert!(ADMIN_PERMISSIONS.contains(&Permission::SystemAdmin));
         assert!(ADMIN_PERMISSIONS.contains(&Permission::UsersWrite));
-        assert_eq!(ADMIN_PERMISSIONS.len(), 18); // All permissions
+        assert_eq!(ADMIN_PERMISSIONS.len(), 20); // All permissions
     }
 
     #[test]

@@ -5,5 +5,6 @@ pub mod models;
 pub mod parsers;
 pub mod scanner;
 pub mod services;
+pub mod tasks;
 pub mod utils;
 pub mod web;

@@ -10,6 +10,7 @@ mod m20260103_000007_create_metadata_sources;
 mod m20260103_000008_create_read_progress;
 mod m20260103_000009_create_api_keys;
 mod m20260103_000011_create_email_verification_tokens;
+mod m20260106_000012_create_tasks;
 
 pub struct Migrator;
 
@@ -27,6 +28,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260103_000008_create_read_progress::Migration),
             Box::new(m20260103_000009_create_api_keys::Migration),
             Box::new(m20260103_000011_create_email_verification_tokens::Migration),
+            Box::new(m20260106_000012_create_tasks::Migration),
         ]
     }
 }
