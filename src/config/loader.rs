@@ -1,4 +1,4 @@
-use super::settings::{Config, ScannerConfig};
+use super::config::{Config, ScannerConfig};
 use anyhow::Result;
 use std::fs;
 use std::path::Path;

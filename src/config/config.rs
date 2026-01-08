@@ -543,12 +543,12 @@ mod tests {
     fn test_auth_config_default() {
         let config = AuthConfig::default();
 
-        // JWT settings
+        // JWT config
         assert_eq!(config.jwt_expiry_hours, 24);
         assert!(!config.refresh_token_enabled);
         assert_eq!(config.refresh_token_expiry_days, 30);
 
-        // Argon2 settings
+        // Argon2 config
         assert_eq!(config.argon2_memory_cost, 19456);
         assert_eq!(config.argon2_time_cost, 2);
         assert_eq!(config.argon2_parallelism, 1);

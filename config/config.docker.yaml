@@ -10,28 +10,44 @@ database:
     database_name: codex
 
 application:
+  # NOTE: application.name moved to database settings (runtime configurable)
   name: Codex
   host: 0.0.0.0
   port: 8080
-  debug: true
 
 logging:
+  # NOTE: logging.level moved to database settings (runtime configurable)
   level: info
   # file: ./logs/codex.log  # Uncomment to enable file logging
 
 # Auth config - uses defaults, override with CODEX_AUTH_* env vars
-# Defaults: JWT 24h expiry, Argon2 (19456, 2, 1)
+# Security settings - kept in config (not moved to database)
 auth:
   jwt_secret: "CHANGE_ME_IN_PRODUCTION"  # Override with CODEX_AUTH_JWT_SECRET env var
 
-# API config - uses defaults except Swagger enabled for Docker
+# API config - security boundaries, kept in config (not moved to database)
 api:
   enable_swagger: true  # Enabled in Docker for easier API testing
 
-# Scanner config - uses defaults
-# Defaults: max_concurrent_scans=2, scan_timeout_minutes=120, retry_failed_files=false, auto_analyze_concurrency=4
+# Scanner Settings - MOVED TO DATABASE (Runtime Configurable)
+# =============================================================
+# Scanner settings are now stored in the database and can be changed
+# at runtime via the admin API without restarting the container.
+#
+# Default values (automatically seeded on first run):
+#   - scanner.max_concurrent_scans: 2 (range: 1-10)
+#   - scanner.scan_timeout_minutes: 120 (range: 10-1440)
+#   - scanner.retry_failed_files: false
+#   - scanner.auto_analyze_concurrency: 4 (range: 1-16)
+#
+# To modify scanner settings at runtime:
+#   docker exec -it codex curl -X PUT http://localhost:8080/api/v1/admin/settings/scanner.max_concurrent_scans \
+#     -H "Authorization: Bearer <admin-token>" \
+#     -H "Content-Type: application/json" \
+#     -d '{"value": "4"}'
+#
+# Uncomment below to override database defaults (not recommended):
 # scanner:
 #   max_concurrent_scans: 2
 #   scan_timeout_minutes: 120
 #   retry_failed_files: false
-#   auto_analyze_concurrency: 4  # Number of concurrent analysis tasks after scan (0 = disabled)

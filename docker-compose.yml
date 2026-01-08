@@ -43,14 +43,41 @@ services:
       # These override values in the config file
       # CODEX_APPLICATION_HOST: 0.0.0.0
       # CODEX_APPLICATION_PORT: 8080
-      # CODEX_APPLICATION_DEBUG: "false"
       # CODEX_DATABASE_DB_TYPE: postgres
       # CODEX_DATABASE_POSTGRES_HOST: postgres
       # CODEX_DATABASE_POSTGRES_PORT: 5432
       # CODEX_DATABASE_POSTGRES_USERNAME: codex
       # CODEX_DATABASE_POSTGRES_PASSWORD: codex
       # CODEX_DATABASE_POSTGRES_DATABASE_NAME: codex
+      #
+      # Database Settings (Runtime Configurable via Admin API)
+      # ========================================================
+      # Most settings have been moved to the database for runtime configurability.
+      # To change these settings without restarting the container, use the admin API:
+      #   docker exec -it codex-app curl -X PUT http://localhost:8080/api/v1/admin/settings/{key} \
+      #     -H "Authorization: Bearer <token>" -d '{"value": "..."}'
+      #
+      # Scanner settings (in database):
+      #   - scanner.max_concurrent_scans (default: 2)
+      #   - scanner.scan_timeout_minutes (default: 120)
+      #   - scanner.retry_failed_files (default: false)
+      #   - scanner.auto_analyze_concurrency (default: 4)
+      #
+      # Application settings (in database):
+      #   - application.name (default: "Codex")
+      #
+      # Logging settings (in database):
+      #   - logging.level (default: "info")
+      #   - logging.console (default: true)
+      #
+      # Task worker settings (in database):
+      #   - task.poll_interval_seconds (default: 5)
+      #   - task.cleanup_interval_seconds (default: 30)
+      #
+      # NOTE: Environment variables override database settings!
+      # Uncomment below to force specific values (prevents runtime configurability):
       # CODEX_LOGGING_LEVEL: info
+      # CODEX_SCANNER_MAX_CONCURRENT_SCANS: 2
     networks:
       - codex-network
     restart: unless-stopped
@@ -83,13 +110,15 @@ services:
       # Uncomment and modify as needed to override config.docker.yaml values
       # CODEX_APPLICATION_HOST: 0.0.0.0
       # CODEX_APPLICATION_PORT: 8080
-      # CODEX_APPLICATION_DEBUG: "true"
       # CODEX_DATABASE_POSTGRES_HOST: postgres
       # CODEX_DATABASE_POSTGRES_PORT: 5432
       # CODEX_DATABASE_POSTGRES_USERNAME: codex
       # CODEX_DATABASE_POSTGRES_PASSWORD: codex
       # CODEX_DATABASE_POSTGRES_DATABASE_NAME: codex
       CODEX_LOGGING_LEVEL: debug
+      #
+      # Database Settings - see production service above for details
+      # Most settings now runtime configurable via admin API
     networks:
       - codex-network
     profiles:

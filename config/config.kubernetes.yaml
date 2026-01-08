@@ -12,14 +12,45 @@
 #   CODEX_DATABASE_POSTGRES_DATABASE_NAME=codex
 #   CODEX_AUTH_JWT_SECRET=<from secret>
 #
-# Optional overrides:
+# Optional overrides (most settings now in database):
 #   CODEX_APPLICATION_HOST=0.0.0.0
 #   CODEX_APPLICATION_PORT=8080
 #   CODEX_API_ENABLE_SWAGGER=false
-#   CODEX_LOGGING_LEVEL=info
-#   CODEX_SCANNER_MAX_CONCURRENT_SCANS=2
-#   CODEX_SCANNER_SCAN_TIMEOUT_MINUTES=120
-#   CODEX_SCANNER_RETRY_FAILED_FILES=false
+#
+# Database Settings (Runtime Configurable - No Restart Required)
+# ===============================================================
+# The following settings are stored in the database and managed via admin API:
+#
+# Scanner Settings:
+#   CODEX_SCANNER_MAX_CONCURRENT_SCANS (DB: scanner.max_concurrent_scans, default: 2)
+#   CODEX_SCANNER_SCAN_TIMEOUT_MINUTES (DB: scanner.scan_timeout_minutes, default: 120)
+#   CODEX_SCANNER_RETRY_FAILED_FILES (DB: scanner.retry_failed_files, default: false)
+#
+# Application Settings:
+#   CODEX_APPLICATION_NAME (DB: application.name, default: "Codex")
+#
+# Logging Settings:
+#   CODEX_LOGGING_LEVEL (DB: logging.level, default: "info")
+#   CODEX_LOGGING_CONSOLE (DB: logging.console, default: true)
+#
+# Task Worker Settings:
+#   (DB: task.poll_interval_seconds, default: 5)
+#   (DB: task.cleanup_interval_seconds, default: 30)
+#
+# IMPORTANT: Environment variables override database settings!
+# For runtime configurability, do NOT set these env vars - manage via admin API instead.
+#
+# To modify settings at runtime (without pod restart):
+#   kubectl exec -it <pod-name> -- curl -X PUT http://localhost:8080/api/v1/admin/settings/scanner.max_concurrent_scans \
+#     -H "Authorization: Bearer <admin-token>" \
+#     -H "Content-Type: application/json" \
+#     -d '{"value": "4", "change_reason": "Scale up for higher load"}'
+#
+# Configuration Priority:
+#   1. Environment Variables (highest - overrides everything)
+#   2. Database Settings (runtime configurable via API)
+#   3. YAML Config Files (fallback)
+#   4. Hardcoded Defaults (lowest)
 
 # With all env vars set, you only need this minimal config:
 # (or even an empty file - everything will use defaults + env vars)

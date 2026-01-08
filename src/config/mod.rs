@@ -1,8 +1,8 @@
+mod config;
 mod env_override;
 mod loader;
-mod settings;
 
-pub use settings::{
+pub use config::{
     ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, EmailConfig,
     LogLevel, LoggingConfig, PostgresConfig, SQLiteConfig, ScannerConfig,
 };

@@ -7,6 +7,7 @@ pub mod metrics;
 pub mod page;
 pub mod read_progress;
 pub mod series;
+pub mod settings;
 pub mod task;
 pub mod user;
 
@@ -20,5 +21,6 @@ pub use metrics::MetricsRepository;
 pub use page::PageRepository;
 pub use read_progress::ReadProgressRepository;
 pub use series::SeriesRepository;
+pub use settings::SettingsRepository;
 pub use task::TaskRepository;
 pub use user::UserRepository;
