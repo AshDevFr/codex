@@ -13,5 +13,6 @@ mod api {
     mod scan;
     mod series;
     mod settings;
+    mod setup;
     mod sse;
 }

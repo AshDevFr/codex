@@ -130,6 +130,20 @@ pub async fn register(
     State(state): State<Arc<AuthState>>,
     Json(request): Json<RegisterRequest>,
 ) -> Result<Json<RegisterResponse>, ApiError> {
+    // Check if registration is enabled (from database settings)
+    use crate::db::repositories::SettingsRepository;
+    let registration_enabled =
+        SettingsRepository::get_value::<bool>(&state.db, "auth.registration_enabled")
+            .await
+            .unwrap_or(None)
+            .unwrap_or(false); // default to false for security
+
+    if !registration_enabled {
+        return Err(ApiError::Forbidden(
+            "User registration is currently disabled. Please contact an administrator.".to_string(),
+        ));
+    }
+
     // Validate input
     if request.username.trim().is_empty() {
         return Err(ApiError::BadRequest("Username cannot be empty".to_string()));

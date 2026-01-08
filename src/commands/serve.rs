@@ -226,8 +226,7 @@ fn init_tracing(
     use tracing_subscriber::fmt::writer::MakeWriterExt;
 
     // Get log level from config or environment
-    // If RUST_LOG is set, use it but still apply sqlx filtering if needed
-    // Otherwise, construct from config with sqlx filtering
+    // Priority: RUST_LOG env var > config.logging.level (which includes CODEX_LOGGING_LEVEL env var)
     let log_level = if let Ok(env_log) = std::env::var("RUST_LOG") {
         // RUST_LOG is set - check if it already has sqlx filter
         if env_log.contains("sqlx=") {
@@ -246,9 +245,12 @@ fn init_tracing(
             }
         }
     } else {
-        // No RUST_LOG set, use default "info" level with sqlx filtering
-        // Logging level is now configurable via database settings
-        "info,sqlx=warn".to_string()
+        // No RUST_LOG set, use config.logging.level (from YAML or CODEX_LOGGING_LEVEL env var)
+        let config_level = config.logging.level.as_str();
+        match config_level {
+            "debug" | "trace" => config_level.to_string(),
+            _ => format!("{},sqlx=warn", config_level),
+        }
     };
 
     // Create EnvFilter directly from our constructed log_level
@@ -256,11 +258,8 @@ fn init_tracing(
     let env_filter = EnvFilter::new(&log_level);
 
     // Create a combined writer for console and/or file
-    // Console logging is now controlled by CODEX_LOGGING_CONSOLE env var or defaults to true
-    let console_enabled = std::env::var("CODEX_LOGGING_CONSOLE")
-        .ok()
-        .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
-        .unwrap_or(true);
+    // Use config.logging.console (from YAML or CODEX_LOGGING_CONSOLE env var)
+    let console_enabled = config.logging.console;
 
     let guard = match (console_enabled, &config.logging.file) {
         (true, Some(log_file_path)) => {

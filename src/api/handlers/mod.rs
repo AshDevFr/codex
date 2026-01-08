@@ -11,6 +11,7 @@ pub mod read_progress;
 pub mod scan;
 pub mod series;
 pub mod settings;
+pub mod setup;
 pub mod task_queue;
 pub mod users;
 
@@ -26,6 +27,7 @@ pub use pages::*;
 pub use read_progress::*;
 pub use scan::*;
 pub use series::*;
+pub use setup::*;
 pub use users::*;
 
 // Re-export AppState for convenience

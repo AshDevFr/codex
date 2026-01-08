@@ -20,6 +20,11 @@ use utoipa::OpenApi;
         // Health check
         handlers::health_check,
 
+        // Setup endpoints
+        handlers::setup::setup_status,
+        handlers::setup::initialize_setup,
+        handlers::setup::configure_initial_settings,
+
         // Auth endpoints
         handlers::login,
         handlers::logout,
@@ -115,6 +120,13 @@ use utoipa::OpenApi;
             dto::ResendVerificationRequest,
             dto::ResendVerificationResponse,
             dto::TokenResponse,
+
+            // Setup DTOs
+            dto::SetupStatusResponse,
+            dto::InitializeSetupRequest,
+            dto::InitializeSetupResponse,
+            dto::ConfigureSettingsRequest,
+            dto::ConfigureSettingsResponse,
             dto::LibraryDto,
             dto::CreateLibraryRequest,
             dto::UpdateLibraryRequest,

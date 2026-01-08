@@ -485,3 +485,112 @@ async fn test_basic_auth_inactive_user() {
 
 // Removed test_www_authenticate_header_on_401 test
 // We no longer send WWW-Authenticate header to prevent browser basic auth popup
+
+// ============================================================================
+// Registration Disabled Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_register_disabled_by_default() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    // Seed the auth.registration_enabled setting with false (default)
+    use codex::db::repositories::SettingsRepository;
+    use uuid::Uuid;
+
+    // The setting should already be seeded as false by the migration
+    // But let's verify it exists and is false
+    let setting = SettingsRepository::get(&db, "auth.registration_enabled")
+        .await
+        .unwrap();
+
+    if let Some(s) = setting {
+        assert_eq!(
+            s.value, "false",
+            "Registration should be disabled by default"
+        );
+    }
+
+    // Attempt to register
+    let register_request = serde_json::json!({
+        "username": "newuser",
+        "email": "newuser@example.com",
+        "password": "securepassword123"
+    });
+
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/register")
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_string(&register_request).unwrap())
+        .unwrap();
+
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "Registration should be forbidden when disabled"
+    );
+    let error = response.unwrap();
+    assert!(
+        error.message.contains("disabled") || error.error.contains("disabled"),
+        "Error should indicate registration is disabled"
+    );
+}
+
+#[tokio::test]
+async fn test_register_succeeds_when_enabled() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    // Enable registration
+    use codex::db::repositories::SettingsRepository;
+    use uuid::Uuid;
+
+    let admin_id = Uuid::new_v4();
+    SettingsRepository::set(
+        &db,
+        "auth.registration_enabled",
+        "true".to_string(),
+        admin_id,
+        Some("Enable registration for testing".to_string()),
+        None,
+    )
+    .await
+    .unwrap();
+
+    // Now attempt to register
+    let register_request = serde_json::json!({
+        "username": "newuser",
+        "email": "newuser@example.com",
+        "password": "securepassword123"
+    });
+
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/register")
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_string(&register_request).unwrap())
+        .unwrap();
+
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    // Registration should succeed (though may require email verification)
+    assert!(
+        status == StatusCode::OK || status == StatusCode::CREATED,
+        "Registration should succeed when enabled, got status: {}",
+        status
+    );
+
+    // Verify user was created
+    let user = UserRepository::get_by_username(&db, "newuser")
+        .await
+        .unwrap();
+    assert!(user.is_some(), "User should be created in database");
+}

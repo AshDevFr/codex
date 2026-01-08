@@ -91,6 +91,12 @@ impl UserRepository {
         let users = User::find().all(db).await?;
         Ok(users)
     }
+
+    /// Check if any users exist in the database
+    pub async fn has_any_users(db: &DatabaseConnection) -> Result<bool> {
+        let count = User::find().count(db).await?;
+        Ok(count > 0)
+    }
 }
 
 #[cfg(test)]
@@ -183,5 +189,40 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(updated.last_login_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_has_any_users_empty_db() {
+        let db = setup_test_db().await;
+
+        // Fresh database should have no users
+        let has_users = UserRepository::has_any_users(&db).await.unwrap();
+        assert!(!has_users, "Fresh database should have no users");
+    }
+
+    #[tokio::test]
+    async fn test_has_any_users_with_users() {
+        let db = setup_test_db().await;
+
+        // Create a user
+        let user = users::Model {
+            id: Uuid::new_v4(),
+            username: "testuser".to_string(),
+            email: "test@example.com".to_string(),
+            password_hash: "hash123".to_string(),
+            is_admin: false,
+            is_active: true,
+            email_verified: false,
+            permissions: serde_json::json!([]),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_login_at: None,
+        };
+
+        UserRepository::create(&db, &user).await.unwrap();
+
+        // Now database should have users
+        let has_users = UserRepository::has_any_users(&db).await.unwrap();
+        assert!(has_users, "Database should have users after creating one");
     }
 }

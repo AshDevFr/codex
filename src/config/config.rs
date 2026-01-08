@@ -66,8 +66,6 @@ impl Default for Config {
             ),
         };
 
-        // Logging level moved to database settings
-
         Self {
             database: DatabaseConfig {
                 db_type,
@@ -79,9 +77,7 @@ impl Default for Config {
                     .unwrap_or_else(|| "127.0.0.1".to_string()),
                 port: env_or("CODEX_APPLICATION_PORT", 8080),
             },
-            logging: LoggingConfig {
-                file: env_string_opt("CODEX_LOGGING_FILE"),
-            },
+            logging: LoggingConfig::default(),
             auth: AuthConfig::default(),
             api: ApiConfig::default(),
             email: EmailConfig::default(),
@@ -276,12 +272,27 @@ impl Default for ApplicationConfig {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct LoggingConfig {
+    pub level: LogLevel,
+    pub console: bool,
     pub file: Option<String>,
 }
 
 impl Default for LoggingConfig {
     fn default() -> Self {
-        Self { file: None }
+        Self {
+            level: env_string_opt("CODEX_LOGGING_LEVEL")
+                .and_then(|s| match s.to_lowercase().as_str() {
+                    "error" => Some(LogLevel::Error),
+                    "warn" => Some(LogLevel::Warn),
+                    "info" => Some(LogLevel::Info),
+                    "debug" => Some(LogLevel::Debug),
+                    "trace" => Some(LogLevel::Trace),
+                    _ => None,
+                })
+                .unwrap_or(LogLevel::Info),
+            console: env_bool_or("CODEX_LOGGING_CONSOLE", true),
+            file: env_string_opt("CODEX_LOGGING_FILE"),
+        }
     }
 }
 

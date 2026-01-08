@@ -58,6 +58,13 @@ pub fn create_router(state: Arc<AppState>, api_config: &ApiConfig) -> Router {
 /// Create API v1 routes
 fn api_v1_routes(state: Arc<AppState>) -> Router {
     Router::new()
+        // Setup routes (public - only work when no users exist)
+        .route("/setup/status", get(handlers::setup::setup_status))
+        .route("/setup/initialize", post(handlers::setup::initialize_setup))
+        .route(
+            "/setup/settings",
+            axum::routing::patch(handlers::setup::configure_initial_settings),
+        )
         // Auth routes (public)
         .route("/auth/login", post(handlers::login))
         .route("/auth/register", post(handlers::register))

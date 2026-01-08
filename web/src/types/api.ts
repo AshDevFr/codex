@@ -162,3 +162,33 @@ export interface ScanProgress {
 	completed_at?: string;
 	error_message?: string;
 }
+
+// Setup wizard types
+export interface SetupStatusResponse {
+	setupRequired: boolean;
+	hasUsers: boolean;
+}
+
+export interface InitializeSetupRequest {
+	username: string;
+	email: string;
+	password: string;
+}
+
+export interface InitializeSetupResponse {
+	user: User;
+	accessToken: string;
+	tokenType: string;
+	expiresIn: number;
+	message: string;
+}
+
+export interface ConfigureSettingsRequest {
+	settings: Record<string, string>;
+	skipConfiguration: boolean;
+}
+
+export interface ConfigureSettingsResponse {
+	message: string;
+	settingsConfigured: number;
+}

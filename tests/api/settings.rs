@@ -61,7 +61,7 @@ async fn test_list_all_settings() {
         settings.iter().map(|s| s.category.clone()).collect();
     assert!(categories.contains("Scanner"));
     assert!(categories.contains("Application"));
-    assert!(categories.contains("Logging"));
+    assert!(categories.contains("Authentication"));
     assert!(categories.contains("Task"));
 }
 
@@ -376,7 +376,10 @@ async fn test_get_history_empty_for_unchanged_setting() {
     let token = create_admin_and_token(&db, &state).await;
 
     // Get history for a setting that hasn't been changed
-    let request = get_request_with_auth("/api/v1/admin/settings/logging.console/history", &token);
+    let request = get_request_with_auth(
+        "/api/v1/admin/settings/scanner.max_concurrent_scans/history",
+        &token,
+    );
     let (status, response): (StatusCode, Option<Vec<SettingHistoryDto>>) =
         make_json_request(app, request).await;
 

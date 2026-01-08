@@ -1,6 +1,6 @@
 use super::{
-    ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, LoggingConfig,
-    PostgresConfig, SQLiteConfig,
+    ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, LogLevel,
+    LoggingConfig, PostgresConfig, SQLiteConfig,
 };
 use std::env;
 
@@ -95,7 +95,25 @@ impl EnvOverride for SQLiteConfig {
 
 impl EnvOverride for LoggingConfig {
     fn apply_env_overrides(&mut self, prefix: &str) {
-        // Note: logging.level and logging.console moved to database settings
+        if let Ok(level_str) = env::var(format!("{}_LEVEL", prefix)) {
+            if let Some(level) = match level_str.to_lowercase().as_str() {
+                "error" => Some(LogLevel::Error),
+                "warn" => Some(LogLevel::Warn),
+                "info" => Some(LogLevel::Info),
+                "debug" => Some(LogLevel::Debug),
+                "trace" => Some(LogLevel::Trace),
+                _ => None,
+            } {
+                self.level = level;
+            }
+        }
+
+        if let Ok(console_str) = env::var(format!("{}_CONSOLE", prefix)) {
+            if let Ok(console_bool) = console_str.parse() {
+                self.console = console_bool;
+            }
+        }
+
         if let Ok(log_file) = env::var(format!("{}_FILE", prefix)) {
             self.file = if log_file.is_empty() {
                 None
