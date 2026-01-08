@@ -8,6 +8,7 @@ pub mod page;
 pub mod read_progress;
 pub mod scan;
 pub mod series;
+pub mod settings;
 pub mod user;
 
 pub use auth::*;
@@ -20,4 +21,5 @@ pub use page::*;
 pub use read_progress::*;
 pub use scan::*;
 pub use series::*;
+pub use settings::*;
 pub use user::*;

@@ -10,10 +10,11 @@ database:
       # Note: foreign_keys is ALWAYS ON for data integrity (cannot be disabled)
 
 application:
+  # NOTE: application.name moved to database settings (runtime configurable)
+  # This value serves as fallback if database setting not found
   name: Codex
   host: 127.0.0.1
   port: 8080
-  debug: false
 
 logging:
   level: info
@@ -30,10 +31,26 @@ auth:
 # api:
 #   enable_swagger: true
 
-# Scanner config - uses defaults
-# Defaults: max_concurrent_scans=2, scan_timeout_minutes=120, retry_failed_files=false, auto_analyze_concurrency=4
+# Scanner Settings - MOVED TO DATABASE (Runtime Configurable)
+# =============================================================
+# Scanner settings are now stored in the database and can be changed
+# at runtime via the admin API without restarting the application.
+#
+# Default values (automatically seeded on first run):
+#   - scanner.max_concurrent_scans: 2 (range: 1-10)
+#   - scanner.scan_timeout_minutes: 120 (range: 10-1440)
+#   - scanner.retry_failed_files: false
+#   - scanner.auto_analyze_concurrency: 4 (range: 1-16)
+#
+# To modify scanner settings at runtime:
+#   curl -X PUT http://localhost:8080/api/v1/admin/settings/scanner.max_concurrent_scans \
+#     -H "Authorization: Bearer <admin-token>" \
+#     -H "Content-Type: application/json" \
+#     -d '{"value": "4", "change_reason": "Increase concurrency"}'
+#
+# Uncomment below to override database defaults (not recommended):
 # scanner:
 #   max_concurrent_scans: 2
 #   scan_timeout_minutes: 120
 #   retry_failed_files: false
-#   auto_analyze_concurrency: 4  # Number of concurrent analysis tasks after scan (0 = disabled)
+#   auto_analyze_concurrency: 4

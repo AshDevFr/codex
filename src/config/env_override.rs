@@ -36,9 +36,7 @@ impl EnvOverride for ApplicationConfig {
                 self.port = port_num;
             }
         }
-        if let Ok(debug) = env::var(format!("{}_DEBUG", prefix)) {
-            self.debug = debug.eq_ignore_ascii_case("true") || debug == "1";
-        }
+        // Note: application.debug has been removed - debug mode controlled via RUST_LOG env var
     }
 }
 
@@ -260,23 +258,19 @@ mod tests {
     fn test_application_config_override() {
         env::set_var("CODEX_APPLICATION_HOST", "0.0.0.0");
         env::set_var("CODEX_APPLICATION_PORT", "9090");
-        env::set_var("CODEX_APPLICATION_DEBUG", "true");
 
         let mut config = ApplicationConfig {
             name: "Codex".to_string(),
             host: "127.0.0.1".to_string(),
             port: 8080,
-            debug: false,
         };
 
         config.apply_env_overrides("CODEX_APPLICATION");
 
         assert_eq!(config.host, "0.0.0.0");
         assert_eq!(config.port, 9090);
-        assert!(config.debug);
 
         env::remove_var("CODEX_APPLICATION_HOST");
         env::remove_var("CODEX_APPLICATION_PORT");
-        env::remove_var("CODEX_APPLICATION_DEBUG");
     }
 }

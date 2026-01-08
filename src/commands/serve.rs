@@ -49,7 +49,6 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Application Configuration:");
     info!("  Host: {}", config.application.host);
     info!("  Port: {}", config.application.port);
-    info!("  Debug mode: {}", config.application.debug);
 
     // Display database configuration
     info!("Database Configuration:");

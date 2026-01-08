@@ -93,7 +93,6 @@ impl Default for Config {
                 host: env_string_opt("CODEX_APPLICATION_HOST")
                     .unwrap_or_else(|| "127.0.0.1".to_string()),
                 port: env_or("CODEX_APPLICATION_PORT", 8080),
-                debug: env_bool_or("CODEX_APPLICATION_DEBUG", false),
             },
             logging: LoggingConfig {
                 level: log_level,
@@ -281,7 +280,6 @@ pub struct ApplicationConfig {
     pub name: String,
     pub host: String,
     pub port: u16,
-    pub debug: bool,
 }
 
 impl Default for ApplicationConfig {
@@ -291,7 +289,6 @@ impl Default for ApplicationConfig {
             host: env_string_opt("CODEX_APPLICATION_HOST")
                 .unwrap_or_else(|| "127.0.0.1".to_string()),
             port: env_or("CODEX_APPLICATION_PORT", 8080),
-            debug: env_bool_or("CODEX_APPLICATION_DEBUG", false),
         }
     }
 }
@@ -466,13 +463,11 @@ mod tests {
             name: "Codex".to_string(),
             host: "0.0.0.0".to_string(),
             port: 8080,
-            debug: true,
         };
 
         assert_eq!(config.name, "Codex");
         assert_eq!(config.host, "0.0.0.0");
         assert_eq!(config.port, 8080);
-        assert!(config.debug);
     }
 
     #[test]
@@ -525,7 +520,6 @@ mod tests {
                 name: "Codex".to_string(),
                 host: "127.0.0.1".to_string(),
                 port: 3000,
-                debug: false,
             },
             logging: LoggingConfig::default(),
             auth: AuthConfig::default(),

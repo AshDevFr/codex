@@ -94,6 +94,14 @@ use utoipa::OpenApi;
         // Filesystem endpoints
         handlers::browse_filesystem,
         handlers::list_drives,
+
+        // Settings endpoints
+        handlers::settings::list_settings,
+        handlers::settings::get_setting,
+        handlers::settings::update_setting,
+        handlers::settings::bulk_update_settings,
+        handlers::settings::reset_setting,
+        handlers::settings::get_setting_history,
     ),
     components(
         schemas(
@@ -144,6 +152,14 @@ use utoipa::OpenApi;
             handlers::filesystem::FileSystemEntry,
             handlers::filesystem::BrowseResponse,
 
+            // Settings DTOs
+            dto::SettingDto,
+            dto::UpdateSettingRequest,
+            dto::BulkUpdateSettingsRequest,
+            dto::BulkSettingUpdate,
+            dto::SettingHistoryDto,
+            dto::ListSettingsQuery,
+
             // Task Queue DTOs
             handlers::task_queue::CreateTaskRequest,
             handlers::task_queue::CreateTaskResponse,
@@ -171,6 +187,7 @@ use utoipa::OpenApi;
         (name = "Scans", description = "Library scanning and analysis endpoints"),
         (name = "Task Queue", description = "Distributed task queue for background jobs (analysis, thumbnails, scans)"),
         (name = "filesystem", description = "Filesystem browsing for library path selection"),
+        (name = "settings", description = "Runtime configuration settings management (admin only)"),
     ),
     modifiers(&SecurityAddon),
 )]

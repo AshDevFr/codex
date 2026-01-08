@@ -158,6 +158,25 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         // Filesystem routes (protected, admin only)
         .route("/filesystem/browse", get(handlers::browse_filesystem))
         .route("/filesystem/drives", get(handlers::list_drives))
+        // Settings routes (protected, admin only)
+        .route("/admin/settings", get(handlers::settings::list_settings))
+        .route("/admin/settings/:key", get(handlers::settings::get_setting))
+        .route(
+            "/admin/settings/:key",
+            put(handlers::settings::update_setting),
+        )
+        .route(
+            "/admin/settings/bulk",
+            post(handlers::settings::bulk_update_settings),
+        )
+        .route(
+            "/admin/settings/:key/reset",
+            post(handlers::settings::reset_setting),
+        )
+        .route(
+            "/admin/settings/:key/history",
+            get(handlers::settings::get_setting_history),
+        )
         // Add state to all routes
         .with_state(state)
 }

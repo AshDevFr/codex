@@ -10,6 +10,7 @@ pub mod pages;
 pub mod read_progress;
 pub mod scan;
 pub mod series;
+pub mod settings;
 pub mod task_queue;
 pub mod users;
 

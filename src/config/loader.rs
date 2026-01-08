@@ -37,7 +37,6 @@ application:
   name: Test Codex
   host: 127.0.0.1
   port: 3000
-  debug: true
 "#;
 
         let temp_file = NamedTempFile::new().unwrap();
@@ -48,7 +47,6 @@ application:
         assert_eq!(config.application.name, "Test Codex");
         assert_eq!(config.application.host, "127.0.0.1");
         assert_eq!(config.application.port, 3000);
-        assert!(config.application.debug);
         assert!(matches!(config.database.db_type, DatabaseType::SQLite));
     }
 
@@ -67,7 +65,6 @@ application:
                 name: "Codex".to_string(),
                 host: "0.0.0.0".to_string(),
                 port: 8080,
-                debug: false,
             },
             logging: LoggingConfig::default(),
             auth: AuthConfig::default(),
