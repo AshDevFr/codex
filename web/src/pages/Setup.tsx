@@ -7,7 +7,6 @@ import {
 	NumberInput,
 	Paper,
 	PasswordInput,
-	Select,
 	Stack,
 	Stepper,
 	Switch,
@@ -16,8 +15,8 @@ import {
 	Title,
 } from "@mantine/core";
 import { IconAlertCircle, IconCheck } from "@tabler/icons-react";
-import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { setupApi } from "@/api/setup";
 import { useAuthStore } from "@/store/authStore";
@@ -25,6 +24,7 @@ import type {
 	ApiError,
 	ConfigureSettingsRequest,
 	InitializeSetupRequest,
+	SetupStatusResponse,
 } from "@/types/api";
 
 // Password validation utilities
@@ -57,8 +57,23 @@ const validateEmail = (email: string) => {
 
 export function Setup() {
 	const navigate = useNavigate();
+	const queryClient = useQueryClient();
 	const { setAuth } = useAuthStore();
 	const [active, setActive] = useState(0);
+
+	// Check setup status - redirect if already complete
+	const { data: setupStatus, isLoading: isStatusLoading } = useQuery({
+		queryKey: ["setup-status"],
+		queryFn: setupApi.checkStatus,
+		retry: 1,
+	});
+
+	useEffect(() => {
+		// Redirect away if setup is already complete
+		if (!isStatusLoading && setupStatus && !setupStatus.setupRequired) {
+			navigate("/", { replace: true });
+		}
+	}, [setupStatus, isStatusLoading, navigate]);
 
 	// Step 1: Create admin user
 	const [username, setUsername] = useState("");
@@ -70,7 +85,6 @@ export function Setup() {
 	const [skipSettings, setSkipSettings] = useState(false);
 	const [scannerExpanded, setScannerExpanded] = useState(true);
 	const [appExpanded, setAppExpanded] = useState(false);
-	const [loggingExpanded, setLoggingExpanded] = useState(false);
 	const [taskExpanded, setTaskExpanded] = useState(false);
 
 	// Scanner settings
@@ -81,10 +95,6 @@ export function Setup() {
 
 	// Application settings
 	const [appName, setAppName] = useState("Codex");
-
-	// Logging settings
-	const [loggingLevel, setLoggingLevel] = useState("Info");
-	const [loggingConsole, setLoggingConsole] = useState(true);
 
 	// Task worker settings
 	const [pollIntervalSeconds, setPollIntervalSeconds] = useState(5);
@@ -113,8 +123,16 @@ export function Setup() {
 	>({
 		mutationFn: setupApi.configureSettings,
 		onSuccess: () => {
+			// Immediately update the query cache to mark setup as complete
+			// This prevents SetupRedirect from redirecting back to /setup
+			queryClient.setQueryData<SetupStatusResponse>(["setup-status"], {
+				setupRequired: false,
+				hasUsers: true,
+			});
+			// Also invalidate to trigger a refetch in the background
+			queryClient.invalidateQueries({ queryKey: ["setup-status"] });
 			// Setup complete, redirect to home
-			navigate("/");
+			navigate("/", { replace: true });
 		},
 	});
 
@@ -145,8 +163,6 @@ export function Setup() {
 					"scanner.auto_analyze_concurrency":
 						autoAnalyzeConcurrency.toString(),
 					"application.name": appName,
-					"logging.level": loggingLevel,
-					"logging.console": loggingConsole.toString(),
 					"task.poll_interval_seconds": pollIntervalSeconds.toString(),
 					"task.cleanup_interval_seconds": cleanupIntervalSeconds.toString(),
 				},
@@ -164,6 +180,11 @@ export function Setup() {
 		isEmailValid &&
 		isPasswordValid &&
 		passwordsMatch;
+
+	// Don't render if setup is already complete or still loading status
+	if (isStatusLoading || (setupStatus && !setupStatus.setupRequired)) {
+		return null;
+	}
 
 	return (
 		<Container size={700} my={40}>
@@ -357,52 +378,6 @@ export function Setup() {
 														description="Display name for branding and UI"
 														value={appName}
 														onChange={(e) => setAppName(e.currentTarget.value)}
-													/>
-												</Stack>
-											</Collapse>
-										</Paper>
-
-										{/* Logging Settings */}
-										<Paper withBorder p="md">
-											<Group justify="space-between" mb="xs">
-												<div>
-													<Text fw={500}>Logging Settings</Text>
-													<Text size="xs" c="dimmed">
-														Configure logging behavior
-													</Text>
-												</div>
-												<Button
-													variant="subtle"
-													size="xs"
-													onClick={() => setLoggingExpanded(!loggingExpanded)}
-												>
-													{loggingExpanded ? "Collapse" : "Expand"}
-												</Button>
-											</Group>
-
-											<Collapse in={loggingExpanded}>
-												<Stack gap="sm" mt="sm">
-													<Select
-														label="Logging Level"
-														description="Verbosity of log messages"
-														value={loggingLevel}
-														onChange={(val) => setLoggingLevel(val || "Info")}
-														data={[
-															{ value: "Error", label: "Error" },
-															{ value: "Warn", label: "Warn" },
-															{ value: "Info", label: "Info" },
-															{ value: "Debug", label: "Debug" },
-															{ value: "Trace", label: "Trace" },
-														]}
-													/>
-
-													<Switch
-														label="Console Logging"
-														description="Output logs to console/stdout"
-														checked={loggingConsole}
-														onChange={(e) =>
-															setLoggingConsole(e.currentTarget.checked)
-														}
 													/>
 												</Stack>
 											</Collapse>

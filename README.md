@@ -63,6 +63,26 @@ cargo test --features rar cbr_parser
 
 For more details, see the [UnRAR license](https://www.rarlab.com/license.htm).
 
+## Recent Updates
+
+### Graceful Shutdown Fix (January 2026)
+
+Fixed critical performance issue where page reloads and container restarts would hang for 40-70 seconds:
+- ✅ Backend worker tasks now shutdown gracefully (2-5s instead of 10+s)
+- ✅ SSE connections properly detect disconnects (< 1s instead of 30-60s)
+- ✅ Page reloads are now instant (1-2s instead of 40-70s)
+
+See [Troubleshooting Guide](docs/docs/troubleshooting.md) for details.
+
+## Documentation
+
+- [Getting Started](docs/docs/getting-started.md)
+- [Configuration](docs/docs/configuration.md)
+- [API Documentation](docs/docs/api.md)
+- [Troubleshooting](docs/docs/troubleshooting.md)
+- [Technical Details](GRACEFUL_SHUTDOWN.md)
+- [Changelog](CHANGELOG.md)
+
 ## Project Status
 
 Currently in Phase 1 (MVP Core). See [implementation docs](tmp/impl/overview.md) for the roadmap.

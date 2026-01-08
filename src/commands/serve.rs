@@ -2,6 +2,7 @@ use crate::config::{Config, DatabaseType, EnvOverride};
 use crate::db::Database;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio::signal;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -87,8 +88,10 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
 
     // Create and start scheduler
     info!("Initializing scan scheduler...");
-    let mut scheduler = crate::scanner::ScanScheduler::new(db.sea_orm_connection().clone()).await?;
-    scheduler.start().await?;
+    let scheduler = Arc::new(tokio::sync::Mutex::new(
+        crate::scanner::ScanScheduler::new(db.sea_orm_connection().clone()).await?,
+    ));
+    scheduler.lock().await.start().await?;
     info!("Scan scheduler started successfully");
 
     // Initialize settings service
@@ -114,17 +117,21 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     let event_broadcaster = Arc::new(crate::events::EventBroadcaster::new(1000));
     info!("Event broadcaster initialized");
 
-    // Start task worker in background
+    // Start task worker in background with shutdown support
     info!("Starting task queue worker...");
     let task_worker = crate::tasks::TaskWorker::new(db.sea_orm_connection().clone())
         .with_event_broadcaster((*event_broadcaster).clone())
         .with_settings_service(settings_service.clone());
+
+    let (mut task_worker, worker_shutdown_tx) = task_worker.with_shutdown();
     let worker_id = task_worker.worker_id().to_string();
-    tokio::spawn(async move {
+
+    let worker_handle = tokio::spawn(async move {
         if let Err(e) = task_worker.run().await {
             tracing::error!("Task worker error: {}", e);
         }
     });
+
     info!("Task worker {} started", worker_id);
 
     // Initialize email service
@@ -210,9 +217,64 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("  Health check: http://{}/health", addr);
     info!("========================================");
 
-    axum::serve(listener, app).await?;
+    // Set up graceful shutdown
+    let graceful = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal());
 
+    // Run server with graceful shutdown
+    let server_result = graceful.await;
+
+    // Signal worker to shutdown
+    info!("Shutting down task worker...");
+    let _ = worker_shutdown_tx.send(());
+
+    // Shutdown scheduler
+    info!("Shutting down scan scheduler...");
+    if let Err(e) = scheduler.lock().await.shutdown().await {
+        tracing::warn!("Failed to shutdown scheduler gracefully: {}", e);
+    }
+
+    // Wait for worker to finish (with timeout)
+    match tokio::time::timeout(std::time::Duration::from_secs(30), worker_handle).await {
+        Ok(_) => info!("Task worker shut down successfully"),
+        Err(_) => {
+            tracing::warn!("Task worker did not shut down within 30 seconds");
+        }
+    }
+
+    info!("Shutdown complete");
+    server_result?;
     Ok(())
+}
+
+/// Wait for shutdown signal (SIGTERM or SIGINT/Ctrl+C)
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            info!("Received Ctrl+C signal");
+        },
+        _ = terminate => {
+            info!("Received SIGTERM signal");
+        },
+    }
+
+    info!("Starting graceful shutdown...");
 }
 
 /// Initialize tracing with both console and file output based on config

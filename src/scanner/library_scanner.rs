@@ -531,17 +531,31 @@ async fn process_file(
     if mode == ScanMode::Normal {
         if let Some((existing_hash, existing_book)) = existing_books.get(&path_str) {
             if &current_hash == existing_hash {
-                debug!(
-                    "Skipping unchanged file: {} (hash check took {:?})",
-                    path_str,
-                    hash_start.elapsed()
-                );
-
-                // If the book was previously analyzed and hash hasn't changed, no need to reanalyze
+                // Hash hasn't changed
                 if existing_book.analyzed {
+                    debug!(
+                        "Skipping unchanged analyzed file: {} (hash check took {:?})",
+                        path_str,
+                        hash_start.elapsed()
+                    );
                     return Ok(());
+                } else {
+                    info!(
+                        "File unchanged but not analyzed (will update/skip): {} - hash: {}",
+                        path_str, current_hash
+                    );
                 }
+            } else {
+                info!(
+                    "File hash changed: {} - old: {}, new: {}",
+                    path_str, existing_hash, current_hash
+                );
             }
+        } else {
+            info!(
+                "New file detected (not in existing_books map): {}",
+                path_str
+            );
         }
     }
 
@@ -580,10 +594,12 @@ async fn process_file(
         let anything_changed = hash_changed || size_changed || format_changed || modified_changed;
 
         existing.file_size = file_size as i64;
-        existing.file_hash = current_hash;
+        existing.file_hash = current_hash.clone();
         existing.format = format;
         existing.modified_at = modified_at;
         existing.updated_at = now;
+
+        let was_analyzed = existing.analyzed;
         existing.analyzed = if hash_changed {
             false
         } else {
@@ -598,9 +614,16 @@ async fn process_file(
         }
         progress.increment_books();
 
+        if hash_changed && was_analyzed {
+            info!(
+                "Book marked as unanalyzed due to hash change: {} - old hash: (in DB), new hash: {}",
+                path_str, current_hash
+            );
+        }
+
         debug!(
-            "Updated book (detection only): {} - analyzed: {}",
-            path_str, existing.analyzed
+            "Updated book (detection only): {} - analyzed: {}, hash_changed: {}",
+            path_str, existing.analyzed, hash_changed
         );
     } else {
         // Create new book WITHOUT analysis
@@ -851,11 +874,32 @@ fn extract_series_name(file_path: &Path, library_path: &Path) -> String {
 /// Calculate SHA-256 hash of file (partial - first 1MB for performance)
 /// NOTE: This is a synchronous function - wrap in spawn_blocking when calling from async context
 fn calculate_file_hash(path: &Path) -> Result<String> {
+    use std::io::Read;
+
     let mut file = fs::File::open(path)?;
     let mut hasher = Sha256::new();
     let mut buffer = vec![0u8; HASH_READ_SIZE];
 
-    let bytes_read = file.read(&mut buffer)?;
+    // Use read_exact or handle partial reads properly
+    // read_exact fails if file is smaller than buffer, so we need to handle that
+    let bytes_read = match file.read(&mut buffer) {
+        Ok(n) if n == 0 => 0, // Empty file
+        Ok(n) => {
+            // First read got n bytes, but we want to read up to HASH_READ_SIZE total
+            let mut total_read = n;
+            while total_read < HASH_READ_SIZE {
+                match file.read(&mut buffer[total_read..]) {
+                    Ok(0) => break, // EOF
+                    Ok(n) => total_read += n,
+                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(e) => return Err(e.into()),
+                }
+            }
+            total_read
+        }
+        Err(e) => return Err(e.into()),
+    };
+
     hasher.update(&buffer[..bytes_read]);
 
     Ok(format!("{:x}", hasher.finalize()))

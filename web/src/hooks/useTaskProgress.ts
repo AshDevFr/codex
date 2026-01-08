@@ -4,6 +4,7 @@ import {
 	type PendingTaskCounts,
 	subscribeToTaskProgress,
 } from "@/api/tasks";
+import { useAuthStore } from "@/store/authStore";
 import type { TaskProgressEvent, TaskStatus } from "@/types/events";
 
 type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
@@ -23,6 +24,7 @@ type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
  * @returns Object with active tasks and connection state
  */
 export function useTaskProgress() {
+	const { isAuthenticated } = useAuthStore();
 	const [activeTasks, setActiveTasks] = useState<
 		Map<string, TaskProgressEvent>
 	>(new Map());
@@ -31,9 +33,8 @@ export function useTaskProgress() {
 	const [pendingCounts, setPendingCounts] = useState<PendingTaskCounts>({});
 
 	useEffect(() => {
-		const token = localStorage.getItem("jwt_token");
-		if (!token) {
-			console.debug("No auth token, skipping task progress subscription");
+		if (!isAuthenticated) {
+			console.debug("Not authenticated, skipping task progress subscription");
 			return;
 		}
 
@@ -44,7 +45,10 @@ export function useTaskProgress() {
 				setPendingCounts(counts);
 			})
 			.catch((error) => {
-				console.error("Failed to fetch pending task counts:", error);
+				// Only log non-401 errors
+				if (!(error instanceof Error && error.message.includes("401"))) {
+					console.error("Failed to fetch pending task counts:", error);
+				}
 			});
 
 		// Poll for pending counts every 10 seconds
@@ -54,7 +58,10 @@ export function useTaskProgress() {
 					setPendingCounts(counts);
 				})
 				.catch((error) => {
-					console.error("Failed to fetch pending task counts:", error);
+					// Only log non-401 errors
+					if (!(error instanceof Error && error.message.includes("401"))) {
+						console.error("Failed to fetch pending task counts:", error);
+					}
 				});
 		}, 10000);
 
@@ -102,7 +109,7 @@ export function useTaskProgress() {
 			clearInterval(pollInterval);
 			unsubscribe();
 		};
-	}, []);
+	}, [isAuthenticated]);
 
 	return {
 		/**

@@ -26,6 +26,7 @@ pub struct Model {
     pub reading_direction: Option<String>,
     pub custom_cover_path: Option<String>,
     pub selected_cover_source: Option<String>,
+    pub metadata_populated_from_book: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

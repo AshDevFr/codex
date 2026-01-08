@@ -37,13 +37,14 @@ class SSEReconnectionManager {
 	async connect(): Promise<() => void> {
 		this.onConnectionStateChange?.("connecting");
 
-		const attemptConnection = async (): Promise<void> => {
+			const attemptConnection = async (): Promise<void> => {
 			if (!this.active) return;
 
 			try {
 				const token = localStorage.getItem("jwt_token");
 				if (!token) {
-					throw new Error("Not authenticated");
+					// Not authenticated - silently skip connection
+					return;
 				}
 
 				const response = await fetch(this.url, {
@@ -54,6 +55,10 @@ class SSEReconnectionManager {
 				});
 
 				if (!response.ok) {
+					// Suppress 401 errors as they're expected when not authenticated
+					if (response.status === 401) {
+						return;
+					}
 					throw new Error(
 						`SSE connection failed: ${response.status} ${response.statusText}`,
 					);
@@ -100,6 +105,11 @@ class SSEReconnectionManager {
 			} catch (error) {
 				this.currentReader = null;
 				if (!this.active) return;
+
+				// Suppress "Not authenticated" errors as they're expected
+				if (error instanceof Error && error.message === "Not authenticated") {
+					return;
+				}
 
 				console.error("SSE connection error:", error);
 				this.onConnectionStateChange?.("disconnected");

@@ -28,7 +28,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { librariesApi } from "@/api/libraries";
 import { EditLibraryModal } from "@/components/forms/EditLibraryModal";
-import { TaskProgressIndicator } from "@/components/TaskProgressIndicator";
+import { TaskNotificationBadge } from "@/components/TaskNotificationBadge";
 import { useAuthStore } from "@/store/authStore";
 import type { Library } from "@/types/api";
 
@@ -293,7 +293,7 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 
 				<AppShell.Section>
 					<Stack gap="xs">
-						<TaskProgressIndicator />
+						<TaskNotificationBadge />
 						<NavLink
 							label="Logout"
 							leftSection={<IconLogout size={20} />}

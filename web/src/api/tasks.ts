@@ -38,7 +38,16 @@ export interface PendingTaskCounts {
 export const fetchTaskStats = async (): Promise<TaskStats> => {
 	const token = localStorage.getItem("jwt_token");
 	if (!token) {
-		throw new Error("No authentication token found");
+		// Return empty stats when not authenticated instead of throwing
+		return {
+			pending: 0,
+			processing: 0,
+			completed: 0,
+			failed: 0,
+			stale: 0,
+			total: 0,
+			by_type: {},
+		};
 	}
 
 	const response = await fetch("/api/v1/tasks/stats", {
@@ -48,6 +57,18 @@ export const fetchTaskStats = async (): Promise<TaskStats> => {
 	});
 
 	if (!response.ok) {
+		// Suppress 401 errors as they're expected when not authenticated
+		if (response.status === 401) {
+			return {
+				pending: 0,
+				processing: 0,
+				completed: 0,
+				failed: 0,
+				stale: 0,
+				total: 0,
+				by_type: {},
+			};
+		}
 		throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 	}
 
@@ -115,15 +136,14 @@ function createTaskProgressReconnectionManager(
 		}
 	};
 
-	const connect = async (): Promise<void> => {
+		const connect = async (): Promise<void> => {
 		if (!isActive) return;
 
 		cleanup();
 
 		const token = localStorage.getItem("jwt_token");
 		if (!token) {
-			onConnectionStateChange?.("failed");
-			onError?.(new Error("No authentication token found"));
+			// Not authenticated - silently skip connection
 			return;
 		}
 
@@ -140,6 +160,10 @@ function createTaskProgressReconnectionManager(
 			});
 
 			if (!response.ok) {
+				// Suppress 401 errors as they're expected when not authenticated
+				if (response.status === 401) {
+					return;
+				}
 				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 			}
 
@@ -189,6 +213,14 @@ function createTaskProgressReconnectionManager(
 
 			// Ignore abort errors
 			if (error instanceof Error && error.name === "AbortError") {
+				return;
+			}
+
+			// Suppress "No authentication token found" errors as they're expected
+			if (
+				error instanceof Error &&
+				error.message === "No authentication token found"
+			) {
 				return;
 			}
 

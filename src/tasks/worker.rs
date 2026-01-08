@@ -4,6 +4,7 @@ use sea_orm::DatabaseConnection;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::broadcast;
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -24,6 +25,7 @@ pub struct TaskWorker {
     poll_interval: Duration,
     event_broadcaster: Option<EventBroadcaster>,
     settings_service: Option<Arc<SettingsService>>,
+    shutdown_tx: Option<broadcast::Sender<()>>,
 }
 
 impl TaskWorker {
@@ -65,6 +67,7 @@ impl TaskWorker {
             poll_interval: Duration::from_secs(5),
             event_broadcaster: None,
             settings_service: None,
+            shutdown_tx: None,
         }
     }
 
@@ -97,8 +100,27 @@ impl TaskWorker {
         &self.worker_id
     }
 
-    /// Run the worker (blocks indefinitely)
-    pub async fn run(&self) -> Result<()> {
+    /// Get a shutdown sender to stop the worker
+    pub fn shutdown_sender(&self) -> Option<broadcast::Sender<()>> {
+        self.shutdown_tx.clone()
+    }
+
+    /// Create shutdown channel and prepare worker for running
+    /// Call this before spawning the worker
+    pub fn with_shutdown(mut self) -> (Self, broadcast::Sender<()>) {
+        let (shutdown_tx, _) = broadcast::channel::<()>(1);
+        self.shutdown_tx = Some(shutdown_tx.clone());
+        (self, shutdown_tx)
+    }
+
+    /// Run the worker with graceful shutdown support
+    pub async fn run(&mut self) -> Result<()> {
+        let shutdown_tx = self
+            .shutdown_tx
+            .clone()
+            .expect("Worker must be initialized with with_shutdown() before running");
+        let mut shutdown_rx = shutdown_tx.subscribe();
+
         info!("Task worker {} started", self.worker_id);
 
         // Get cleanup interval from settings
@@ -119,7 +141,8 @@ impl TaskWorker {
         // Spawn background cleanup task for completed tasks
         let db_clone = self.db.clone();
         let settings_clone = self.settings_service.clone();
-        tokio::spawn(async move {
+        let mut shutdown_rx_cleanup = shutdown_rx.resubscribe();
+        let cleanup_handle = tokio::spawn(async move {
             loop {
                 // Get cleanup interval from settings (hot-reload support)
                 let interval = if let Some(ref settings) = settings_clone {
@@ -131,16 +154,22 @@ impl TaskWorker {
                     30
                 };
 
-                sleep(Duration::from_secs(interval)).await;
-
-                // Clean up completed tasks older than 10 seconds
-                match TaskRepository::purge_completed_tasks(&db_clone, 10).await {
-                    Ok(count) if count > 0 => {
-                        debug!("Cleaned up {} completed tasks", count);
+                tokio::select! {
+                    _ = sleep(Duration::from_secs(interval)) => {
+                        // Clean up completed tasks older than 10 seconds
+                        match TaskRepository::purge_completed_tasks(&db_clone, 10).await {
+                            Ok(count) if count > 0 => {
+                                debug!("Cleaned up {} completed tasks", count);
+                            }
+                            Ok(_) => {} // No tasks to clean up
+                            Err(e) => {
+                                error!("Failed to clean up completed tasks: {}", e);
+                            }
+                        }
                     }
-                    Ok(_) => {} // No tasks to clean up
-                    Err(e) => {
-                        error!("Failed to clean up completed tasks: {}", e);
+                    _ = shutdown_rx_cleanup.recv() => {
+                        info!("Cleanup task shutting down...");
+                        break;
                     }
                 }
             }
@@ -148,20 +177,26 @@ impl TaskWorker {
 
         // Spawn background cleanup task for stale tasks
         let db_clone_stale = self.db.clone();
-        tokio::spawn(async move {
+        let mut shutdown_rx_stale = shutdown_tx.subscribe();
+        let stale_handle = tokio::spawn(async move {
             loop {
-                // Sleep for 60 seconds between stale task recovery runs
-                sleep(Duration::from_secs(60)).await;
-
-                // Recover tasks locked for more than 10 minutes (600 seconds)
-                // This is 2x the normal lock duration to avoid false positives
-                match TaskRepository::recover_stale_tasks(&db_clone_stale, 600).await {
-                    Ok(count) if count > 0 => {
-                        warn!("Recovered {} stale tasks from dead workers", count);
+                tokio::select! {
+                    _ = sleep(Duration::from_secs(60)) => {
+                        // Recover tasks locked for more than 10 minutes (600 seconds)
+                        // This is 2x the normal lock duration to avoid false positives
+                        match TaskRepository::recover_stale_tasks(&db_clone_stale, 600).await {
+                            Ok(count) if count > 0 => {
+                                warn!("Recovered {} stale tasks from dead workers", count);
+                            }
+                            Ok(_) => {} // No stale tasks
+                            Err(e) => {
+                                error!("Failed to recover stale tasks: {}", e);
+                            }
+                        }
                     }
-                    Ok(_) => {} // No stale tasks
-                    Err(e) => {
-                        error!("Failed to recover stale tasks: {}", e);
+                    _ = shutdown_rx_stale.recv() => {
+                        info!("Stale task recovery shutting down...");
+                        break;
                     }
                 }
             }
@@ -180,32 +215,47 @@ impl TaskWorker {
         };
 
         loop {
-            match self.process_next_task().await {
-                Ok(true) => {
-                    // Processed a task, immediately check for more
-                    continue;
+            tokio::select! {
+                _ = shutdown_rx.recv() => {
+                    info!("Task worker {} received shutdown signal", self.worker_id);
+                    break;
                 }
-                Ok(false) => {
-                    // No tasks available, sleep
-                    // Reload poll interval from settings (hot-reload support)
-                    if let Some(ref settings) = self.settings_service {
-                        let interval = settings
-                            .get_uint("task.poll_interval_seconds", 5)
-                            .await
-                            .unwrap_or(5);
-                        poll_interval = Duration::from_secs(interval);
-                    }
+                result = self.process_next_task() => {
+                    match result {
+                        Ok(true) => {
+                            // Processed a task, immediately check for more
+                            continue;
+                        }
+                        Ok(false) => {
+                            // No tasks available, sleep
+                            // Reload poll interval from settings (hot-reload support)
+                            if let Some(ref settings) = self.settings_service {
+                                let interval = settings
+                                    .get_uint("task.poll_interval_seconds", 5)
+                                    .await
+                                    .unwrap_or(5);
+                                poll_interval = Duration::from_secs(interval);
+                            }
 
-                    debug!("No tasks available, sleeping for {:?}", poll_interval);
-                    sleep(poll_interval).await;
-                }
-                Err(e) => {
-                    error!("Worker error: {}", e);
-                    // Sleep longer on error to avoid rapid retry loops
-                    sleep(Duration::from_secs(10)).await;
+                            debug!("No tasks available, sleeping for {:?}", poll_interval);
+                            sleep(poll_interval).await;
+                        }
+                        Err(e) => {
+                            error!("Worker error: {}", e);
+                            // Sleep longer on error to avoid rapid retry loops
+                            sleep(Duration::from_secs(10)).await;
+                        }
+                    }
                 }
             }
         }
+
+        // Wait for background tasks to finish
+        info!("Waiting for background tasks to complete...");
+        let _ = tokio::join!(cleanup_handle, stale_handle);
+        info!("Task worker {} stopped", self.worker_id);
+
+        Ok(())
     }
 
     /// Process the next available task

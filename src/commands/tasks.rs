@@ -14,18 +14,24 @@ pub async fn worker_command(db: DatabaseConnection, poll_interval: u64) -> Resul
     println!("Starting task worker (press Ctrl+C to stop)...");
 
     let worker = TaskWorker::new(db).with_poll_interval(Duration::from_secs(poll_interval));
+    let (mut worker, shutdown_tx) = worker.with_shutdown();
 
-    // Handle shutdown gracefully
-    tokio::select! {
-        result = worker.run() => {
-            if let Err(e) = result {
-                eprintln!("Worker error: {}", e);
-            }
-            println!("Worker stopped");
-        }
-        _ = tokio::signal::ctrl_c() => {
-            println!("\nShutting down worker...");
-        }
+    // Spawn worker in background
+    let worker_handle = tokio::spawn(async move { worker.run().await });
+
+    // Wait for Ctrl+C
+    tokio::signal::ctrl_c().await?;
+    println!("\nShutting down worker...");
+
+    // Signal shutdown
+    let _ = shutdown_tx.send(());
+
+    // Wait for worker to finish (with timeout)
+    match tokio::time::timeout(Duration::from_secs(30), worker_handle).await {
+        Ok(Ok(Ok(()))) => println!("Worker stopped gracefully"),
+        Ok(Ok(Err(e))) => eprintln!("Worker error: {}", e),
+        Ok(Err(e)) => eprintln!("Worker task error: {}", e),
+        Err(_) => eprintln!("Worker shutdown timeout"),
     }
 
     Ok(())

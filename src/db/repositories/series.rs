@@ -63,6 +63,7 @@ impl SeriesRepository {
             reading_direction: Set(None),
             custom_cover_path: Set(None),
             selected_cover_source: Set(None),
+            metadata_populated_from_book: Set(false),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -154,6 +155,7 @@ impl SeriesRepository {
             reading_direction: Set(series_model.reading_direction.clone()),
             custom_cover_path: Set(series_model.custom_cover_path.clone()),
             selected_cover_source: Set(series_model.selected_cover_source.clone()),
+            metadata_populated_from_book: Set(series_model.metadata_populated_from_book),
             created_at: Set(series_model.created_at),
             updated_at: Set(Utc::now()),
         };

@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { eventsApi } from "@/api/events";
+import { useAuthStore } from "@/store/authStore";
 import type { EntityChangeEvent } from "@/types/events";
 
 type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
@@ -22,43 +23,33 @@ type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
  */
 export function useEntityEvents() {
 	const queryClient = useQueryClient();
+	const { isAuthenticated } = useAuthStore();
 	const [connectionState, setConnectionState] =
-		useState<ConnectionState>("connecting");
+		useState<ConnectionState>("disconnected");
 
 	useEffect(() => {
-		const token = localStorage.getItem("jwt_token");
-		if (!token) {
+		if (!isAuthenticated) {
 			console.debug("Not authenticated, skipping entity events subscription");
 			return;
 		}
 
-		let unsubscribe: (() => void) | null = null;
-
-		const subscribe = async () => {
-			try {
-				unsubscribe = await eventsApi.subscribeToEntityEvents(
-					(event: EntityChangeEvent) => {
-						handleEntityEvent(event, queryClient);
-					},
-					(error: Error) => {
-						console.error("[EntityEvents] Connection error:", error);
-					},
-					(state) => {
-						console.debug(`Entity events connection state: ${state}`);
-						setConnectionState(state as ConnectionState);
-					},
-				);
-			} catch (error) {
-				console.error("Failed to subscribe to entity events:", error);
-			}
-		};
-
-		subscribe();
+		const unsubscribe = eventsApi.subscribeToEntityEvents(
+			(event: EntityChangeEvent) => {
+				handleEntityEvent(event, queryClient);
+			},
+			(error: Error) => {
+				console.error("[EntityEvents] Connection error:", error);
+			},
+			(state) => {
+				console.debug(`Entity events connection state: ${state}`);
+				setConnectionState(state as ConnectionState);
+			},
+		);
 
 		return () => {
-			unsubscribe?.();
+			unsubscribe();
 		};
-	}, [queryClient]);
+	}, [queryClient, isAuthenticated]);
 
 	return {
 		connectionState,

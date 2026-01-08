@@ -1,13 +1,18 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as tasksApi from "@/api/tasks";
+import { useAuthStore } from "@/store/authStore";
 import type { TaskProgressEvent } from "@/types/events";
 import { useTaskProgress } from "./useTaskProgress";
 
 // Mock the tasks API
-vi.mock("@/api/tasks", () => ({
-	subscribeToTaskProgress: vi.fn(),
-	fetchPendingTaskCounts: vi.fn(() => Promise.resolve({})),
+vi.mock("@/api/tasks");
+
+// Mock the auth store
+vi.mock("@/store/authStore", () => ({
+	useAuthStore: vi.fn(() => ({
+		isAuthenticated: true,
+	})),
 }));
 
 describe("useTaskProgress", () => {
@@ -20,6 +25,9 @@ describe("useTaskProgress", () => {
 			if (key === "jwt_token") return "test-token";
 			return null;
 		});
+
+		// Mock fetchPendingTaskCounts to return empty object
+		vi.mocked(tasksApi.fetchPendingTaskCounts).mockResolvedValue({});
 
 		vi.useFakeTimers();
 	});
@@ -40,7 +48,10 @@ describe("useTaskProgress", () => {
 	});
 
 	it("should not subscribe if no token is present", () => {
-		Storage.prototype.getItem = vi.fn(() => null);
+		// Mock auth store to return not authenticated
+		vi.mocked(useAuthStore).mockReturnValue({
+			isAuthenticated: false,
+		} as ReturnType<typeof useAuthStore>);
 
 		const mockSubscribe = vi
 			.spyOn(tasksApi, "subscribeToTaskProgress")

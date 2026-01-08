@@ -31,6 +31,12 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Series::CustomCoverPath).string())
                     .col(ColumnDef::new(Series::SelectedCoverSource).string())
                     .col(
+                        ColumnDef::new(Series::MetadataPopulatedFromBook)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
                         ColumnDef::new(Series::CreatedAt)
                             .timestamp_with_time_zone()
                             .not_null(),
@@ -95,6 +101,7 @@ enum Series {
     ReadingDirection,
     CustomCoverPath,
     SelectedCoverSource,
+    MetadataPopulatedFromBook,
     CreatedAt,
     UpdatedAt,
 }

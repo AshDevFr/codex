@@ -6,6 +6,7 @@ use axum::{
 };
 use futures::stream::Stream;
 use std::{convert::Infallible, sync::Arc, time::Duration};
+use tokio::time::timeout;
 use tracing::{debug, warn};
 
 /// Subscribe to real-time entity change events via SSE
@@ -46,11 +47,13 @@ pub async fn entity_events_stream(
     // Subscribe to the event broadcaster
     let mut receiver = state.event_broadcaster.subscribe();
 
-    // Create SSE stream
+    // Create SSE stream with timeout to detect client disconnects
     let stream = async_stream::stream! {
         loop {
-            match receiver.recv().await {
-                Ok(event) => {
+            // Use timeout to detect if client has disconnected
+            // If no event for 30 seconds (2x keep-alive), assume disconnect
+            match timeout(Duration::from_secs(30), receiver.recv()).await {
+                Ok(Ok(event)) => {
                     // Serialize event to JSON
                     match serde_json::to_string(&event) {
                         Ok(json) => {
@@ -63,17 +66,24 @@ pub async fn entity_events_stream(
                         }
                     }
                 }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped))) => {
                     warn!("Client lagged behind, skipped {} events", skipped);
                     // Continue receiving - client will catch up
                     continue;
                 }
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => {
                     debug!("Event broadcaster closed, ending stream");
                     break;
                 }
+                Err(_) => {
+                    // Timeout - keep-alive should have triggered within 30s
+                    // Continue to next iteration (keep-alive will be sent)
+                    continue;
+                }
             }
         }
+
+        debug!("Entity events stream ended for user {}", auth.user_id);
     };
 
     Ok(Sse::new(stream).keep_alive(
@@ -125,11 +135,13 @@ pub async fn task_progress_stream(
     // Subscribe to the task progress broadcaster
     let mut receiver = state.event_broadcaster.subscribe_tasks();
 
-    // Create SSE stream
+    // Create SSE stream with timeout to detect client disconnects
     let stream = async_stream::stream! {
         loop {
-            match receiver.recv().await {
-                Ok(event) => {
+            // Use timeout to detect if client has disconnected
+            // If no event for 30 seconds (2x keep-alive), assume disconnect
+            match timeout(Duration::from_secs(30), receiver.recv()).await {
+                Ok(Ok(event)) => {
                     // Serialize event to JSON
                     match serde_json::to_string(&event) {
                         Ok(json) => {
@@ -145,17 +157,24 @@ pub async fn task_progress_stream(
                         }
                     }
                 }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped))) => {
                     warn!("Client lagged behind, skipped {} task events", skipped);
                     // Continue receiving - client will catch up
                     continue;
                 }
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => {
                     debug!("Task progress broadcaster closed, ending stream");
                     break;
                 }
+                Err(_) => {
+                    // Timeout - keep-alive should have triggered within 30s
+                    // Continue to next iteration (keep-alive will be sent)
+                    continue;
+                }
             }
         }
+
+        debug!("Task progress stream ended for user {}", auth.user_id);
     };
 
     Ok(Sse::new(stream).keep_alive(

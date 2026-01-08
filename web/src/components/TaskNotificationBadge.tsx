@@ -3,7 +3,7 @@ import { IconLoader2 } from "@tabler/icons-react";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 
 /**
- * Discreet task notification badge that appears near the app logo
+ * Task notification badge that appears at the bottom of the navigation sidebar
  * Shows count of active tasks with a tooltip containing task details
  */
 export function TaskNotificationBadge() {
@@ -95,7 +95,7 @@ export function TaskNotificationBadge() {
 	const totalTasks = runningTasks.length + totalPendingCount;
 
 	return (
-		<Tooltip label={tooltipContent} withArrow position="bottom-start">
+		<Tooltip label={tooltipContent} withArrow position="top-start">
 			<Badge
 				color="blue"
 				variant="filled"
@@ -104,6 +104,7 @@ export function TaskNotificationBadge() {
 					cursor: "pointer",
 					animation: "pulse 2s ease-in-out infinite",
 				}}
+				fullWidth
 			>
 				{totalTasks} pending task
 				{totalTasks !== 1 ? "s" : ""}

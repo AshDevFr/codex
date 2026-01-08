@@ -32,10 +32,12 @@ import { librariesApi } from "@/api/libraries";
 import { scanApi } from "@/api/scan";
 import { AddLibraryModal } from "@/components/forms/AddLibraryModal";
 import { EditLibraryModal } from "@/components/forms/EditLibraryModal";
+import { useAuthStore } from "@/store/authStore";
 import type { Library, ScanProgress } from "@/types/api";
 
 export function Home() {
 	const queryClient = useQueryClient();
+	const { isAuthenticated } = useAuthStore();
 	const [addLibraryOpened, setAddLibraryOpened] = useState(false);
 	const [editLibraryOpened, setEditLibraryOpened] = useState(false);
 	const [selectedLibrary, setSelectedLibrary] = useState<Library | null>(null);
@@ -53,8 +55,7 @@ export function Home() {
 	// Subscribe to scan progress updates via SSE
 	useEffect(() => {
 		// Only subscribe if user is authenticated
-		const token = localStorage.getItem("jwt_token");
-		if (!token) {
+		if (!isAuthenticated) {
 			return;
 		}
 
@@ -103,7 +104,7 @@ export function Home() {
 		return () => {
 			unsubscribe();
 		};
-	}, [queryClient]);
+	}, [queryClient, isAuthenticated]);
 
 	const scanMutation = useMutation({
 		mutationFn: ({

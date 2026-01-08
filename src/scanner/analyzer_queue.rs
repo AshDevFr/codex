@@ -9,8 +9,10 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::db::entities::books;
-use crate::db::repositories::BookRepository;
+use crate::db::entities::{book_metadata_records, books, pages};
+use crate::db::repositories::{
+    BookMetadataRepository, BookRepository, PageRepository, SeriesRepository,
+};
 use crate::scanner::analyze_file;
 
 use super::types::ScanProgress;
@@ -243,6 +245,133 @@ async fn analyze_single_book(
 
     BookRepository::update(db, &book).await?;
 
+    // Save ComicInfo metadata to book_metadata_records table if available
+    if let Some(comic_info) = &metadata.comic_info {
+        // Convert ISBNs Vec<String> to JSON string for storage
+        let isbns_json = if !metadata.isbns.is_empty() {
+            Some(serde_json::to_string(&metadata.isbns).unwrap_or_default())
+        } else {
+            None
+        };
+
+        // Parse black_and_white and manga fields
+        let black_and_white =
+            comic_info
+                .black_and_white
+                .as_ref()
+                .and_then(|s| match s.to_lowercase().as_str() {
+                    "yes" | "true" | "1" => Some(true),
+                    "no" | "false" | "0" => Some(false),
+                    _ => None,
+                });
+
+        let manga = comic_info
+            .manga
+            .as_ref()
+            .and_then(|s| match s.to_lowercase().as_str() {
+                "yes" | "true" | "1" | "yesandrighttoleft" => Some(true),
+                "no" | "false" | "0" => Some(false),
+                _ => None,
+            });
+
+        // Check if metadata already exists to preserve the ID
+        let existing_metadata = BookMetadataRepository::get_by_book_id(db, book.id).await?;
+        let metadata_id = existing_metadata
+            .as_ref()
+            .map(|m| m.id)
+            .unwrap_or_else(Uuid::new_v4);
+
+        let metadata_record = book_metadata_records::Model {
+            id: metadata_id,
+            book_id: book.id,
+            summary: comic_info.summary.clone(),
+            writer: comic_info.writer.clone(),
+            penciller: comic_info.penciller.clone(),
+            inker: comic_info.inker.clone(),
+            colorist: comic_info.colorist.clone(),
+            letterer: comic_info.letterer.clone(),
+            cover_artist: comic_info.cover_artist.clone(),
+            editor: comic_info.editor.clone(),
+            publisher: comic_info.publisher.clone(),
+            imprint: comic_info.imprint.clone(),
+            genre: comic_info.genre.clone(),
+            web: comic_info.web.clone(),
+            language_iso: comic_info.language_iso.clone(),
+            format_detail: comic_info.format.clone(),
+            black_and_white,
+            manga,
+            year: comic_info.year,
+            month: comic_info.month,
+            day: comic_info.day,
+            volume: comic_info.volume,
+            count: comic_info.count,
+            isbns: isbns_json,
+            created_at: now,
+            updated_at: now,
+        };
+
+        BookMetadataRepository::upsert(db, &metadata_record).await?;
+        debug!(
+            "Saved metadata for book: {} ({} fields)",
+            book.file_path,
+            count_non_null_fields(&metadata_record)
+        );
+
+        // Populate series metadata from the first book if not already populated
+        if let Ok(Some(mut series)) = SeriesRepository::get_by_id(db, book.series_id).await {
+            if !series.metadata_populated_from_book {
+                // Only populate if series doesn't have metadata yet
+                let should_populate =
+                    series.summary.is_none() && series.publisher.is_none() && series.year.is_none();
+
+                if should_populate {
+                    // Populate series metadata from book's ComicInfo
+                    series.summary = comic_info.summary.clone();
+                    series.publisher = comic_info.publisher.clone();
+                    series.year = comic_info.year;
+                    series.metadata_populated_from_book = true;
+
+                    SeriesRepository::update(db, &series).await?;
+                    info!(
+                        "Populated series '{}' metadata from book: {}",
+                        series.name, book.file_path
+                    );
+                }
+            }
+        }
+    }
+
+    // Save page information to pages table
+    if !metadata.pages.is_empty() {
+        // Delete existing pages first to handle re-analysis
+        PageRepository::delete_by_book(db, book.id).await?;
+
+        // Convert PageInfo to pages::Model
+        let page_models: Vec<pages::Model> = metadata
+            .pages
+            .iter()
+            .map(|page_info| pages::Model {
+                id: Uuid::new_v4(),
+                book_id: book.id,
+                page_number: page_info.page_number as i32,
+                file_name: page_info.file_name.clone(),
+                format: format!("{:?}", page_info.format).to_lowercase(),
+                width: page_info.width as i32,
+                height: page_info.height as i32,
+                file_size: page_info.file_size as i64,
+                created_at: now,
+            })
+            .collect();
+
+        // Batch insert all pages for efficiency
+        PageRepository::create_batch(db, &page_models).await?;
+        debug!(
+            "Saved {} pages for book: {}",
+            page_models.len(),
+            book.file_path
+        );
+    }
+
     debug!(
         "Analyzed and updated book: {} (took {:?})",
         book.file_path, analyze_duration
@@ -258,6 +387,78 @@ async fn analyze_single_book(
     Ok(())
 }
 
+/// Helper function to count non-null fields in metadata for logging
+fn count_non_null_fields(metadata: &book_metadata_records::Model) -> usize {
+    let mut count = 0;
+    if metadata.summary.is_some() {
+        count += 1;
+    }
+    if metadata.writer.is_some() {
+        count += 1;
+    }
+    if metadata.penciller.is_some() {
+        count += 1;
+    }
+    if metadata.inker.is_some() {
+        count += 1;
+    }
+    if metadata.colorist.is_some() {
+        count += 1;
+    }
+    if metadata.letterer.is_some() {
+        count += 1;
+    }
+    if metadata.cover_artist.is_some() {
+        count += 1;
+    }
+    if metadata.editor.is_some() {
+        count += 1;
+    }
+    if metadata.publisher.is_some() {
+        count += 1;
+    }
+    if metadata.imprint.is_some() {
+        count += 1;
+    }
+    if metadata.genre.is_some() {
+        count += 1;
+    }
+    if metadata.web.is_some() {
+        count += 1;
+    }
+    if metadata.language_iso.is_some() {
+        count += 1;
+    }
+    if metadata.format_detail.is_some() {
+        count += 1;
+    }
+    if metadata.black_and_white.is_some() {
+        count += 1;
+    }
+    if metadata.manga.is_some() {
+        count += 1;
+    }
+    if metadata.year.is_some() {
+        count += 1;
+    }
+    if metadata.month.is_some() {
+        count += 1;
+    }
+    if metadata.day.is_some() {
+        count += 1;
+    }
+    if metadata.volume.is_some() {
+        count += 1;
+    }
+    if metadata.count.is_some() {
+        count += 1;
+    }
+    if metadata.isbns.is_some() {
+        count += 1;
+    }
+    count
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -266,5 +467,39 @@ mod tests {
     fn test_analyzer_config_default() {
         let config = AnalyzerConfig::default();
         assert_eq!(config.max_concurrent, 4);
+    }
+
+    #[test]
+    fn test_count_non_null_fields() {
+        let metadata = book_metadata_records::Model {
+            id: Uuid::new_v4(),
+            book_id: Uuid::new_v4(),
+            summary: Some("Test summary".to_string()),
+            writer: Some("Test Writer".to_string()),
+            penciller: None,
+            inker: None,
+            colorist: None,
+            letterer: None,
+            cover_artist: None,
+            editor: None,
+            publisher: Some("Test Publisher".to_string()),
+            imprint: None,
+            genre: Some("Action".to_string()),
+            web: None,
+            language_iso: Some("en".to_string()),
+            format_detail: None,
+            black_and_white: None,
+            manga: Some(false),
+            year: Some(2024),
+            month: None,
+            day: None,
+            volume: None,
+            count: None,
+            isbns: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+
+        assert_eq!(count_non_null_fields(&metadata), 7);
     }
 }

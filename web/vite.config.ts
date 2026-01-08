@@ -17,6 +17,27 @@ export default defineConfig({
 			"/api": {
 				target: process.env.VITE_API_URL || "http://localhost:8080",
 				changeOrigin: true,
+				// Better handling of SSE connections and server restarts
+				timeout: 60000, // 60s timeout for long-running SSE
+				proxyTimeout: 60000,
+				ws: true, // Enable WebSocket proxying (for future use)
+				configure: (proxy, _options) => {
+					proxy.on("error", (err, _req, _res) => {
+						console.log("Proxy error:", err.message);
+					});
+					proxy.on("proxyReq", (proxyReq, req, _res) => {
+						// Don't cache SSE connections
+						if (req.url?.includes("/stream") || req.headers.accept?.includes("text/event-stream")) {
+							proxyReq.setHeader("Cache-Control", "no-cache");
+							proxyReq.setHeader("Connection", "keep-alive");
+						}
+					});
+					proxy.on("proxyRes", (proxyRes, req, _res) => {
+						if (req.url?.includes("/stream")) {
+							console.log(`SSE stream: ${req.url} - ${proxyRes.statusCode}`);
+						}
+					});
+				},
 			},
 			"/docs": {
 				target: process.env.VITE_API_URL || "http://localhost:8080",

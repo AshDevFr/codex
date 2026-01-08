@@ -4,14 +4,18 @@ import type { ReactNode } from "react";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as eventsApi from "@/api/events";
+import { useAuthStore } from "@/store/authStore";
 import type { EntityChangeEvent } from "@/types/events";
 import { useEntityEvents } from "./useEntityEvents";
 
 // Mock the events API
-vi.mock("@/api/events", () => ({
-	eventsApi: {
-		subscribeToEntityEvents: vi.fn(),
-	},
+vi.mock("@/api/events");
+
+// Mock the auth store
+vi.mock("@/store/authStore", () => ({
+	useAuthStore: vi.fn(() => ({
+		isAuthenticated: true,
+	})),
 }));
 
 describe("useEntityEvents", () => {
@@ -54,7 +58,10 @@ describe("useEntityEvents", () => {
 	});
 
 	it("should not subscribe if no token is present", () => {
-		Storage.prototype.getItem = vi.fn(() => null);
+		// Mock auth store to return not authenticated
+		vi.mocked(useAuthStore).mockReturnValue({
+			isAuthenticated: false,
+		} as ReturnType<typeof useAuthStore>);
 
 		const mockSubscribe = vi
 			.spyOn(eventsApi.eventsApi, "subscribeToEntityEvents")
@@ -172,6 +179,8 @@ describe("useEntityEvents", () => {
 		vi.spyOn(eventsApi.eventsApi, "subscribeToEntityEvents").mockImplementation(
 			(_onEvent, _onError, onConnectionChange) => {
 				capturedConnectionChange = onConnectionChange;
+				// Simulate the real behavior: call "connecting" immediately
+				onConnectionChange?.("connecting");
 				return mockUnsubscribe;
 			},
 		);

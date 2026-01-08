@@ -53,13 +53,18 @@ function SetupRedirect() {
 	});
 
 	useEffect(() => {
-		// Only redirect if setup is required and we're not already on setup page
-		if (
-			!isLoading &&
-			setupStatus?.setupRequired &&
-			location.pathname !== "/setup"
-		) {
+		if (isLoading) return;
+
+		// Redirect to setup if required and not already on setup page
+		if (setupStatus?.setupRequired && location.pathname !== "/setup") {
 			navigate("/setup", { replace: true });
+		}
+		// Redirect away from setup if already complete
+		else if (
+			!setupStatus?.setupRequired &&
+			location.pathname === "/setup"
+		) {
+			navigate("/", { replace: true });
 		}
 	}, [setupStatus, isLoading, location.pathname, navigate]);
 
@@ -70,6 +75,7 @@ function App() {
 	const { isAuthenticated } = useAuthStore();
 
 	// Enable real-time updates for entity changes (books, series, covers, etc.)
+	// Hook handles authentication check internally
 	useEntityEvents();
 
 	return (
