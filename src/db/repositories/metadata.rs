@@ -165,6 +165,7 @@ mod tests {
             file_name: "book.cbz".to_string(),
             file_size: 1024,
             file_hash: "test_hash".to_string(),
+            partial_hash: String::new(),
             format: "cbz".to_string(),
             page_count: 10,
             deleted: false,

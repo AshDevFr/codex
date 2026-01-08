@@ -67,6 +67,7 @@ pub fn create_test_book(
         file_name: file_name.to_string(),
         file_size: 1024,
         file_hash: file_hash.to_string(),
+        partial_hash: String::new(),
         format: format.to_string(),
         page_count,
         deleted: false,

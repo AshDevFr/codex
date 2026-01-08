@@ -24,6 +24,12 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Books::FileName).string().not_null())
                     .col(ColumnDef::new(Books::FileSize).big_integer().not_null())
                     .col(ColumnDef::new(Books::FileHash).string().not_null())
+                    .col(
+                        ColumnDef::new(Books::PartialHash)
+                            .string()
+                            .not_null()
+                            .default(""),
+                    )
                     .col(ColumnDef::new(Books::Format).string().not_null())
                     .col(ColumnDef::new(Books::PageCount).integer().not_null())
                     .col(
@@ -119,6 +125,7 @@ enum Books {
     FileName,
     FileSize,
     FileHash,
+    PartialHash,
     Format,
     PageCount,
     Deleted,

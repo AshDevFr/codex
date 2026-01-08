@@ -16,6 +16,7 @@ pub struct Model {
     pub file_name: String,
     pub file_size: i64,
     pub file_hash: String,
+    pub partial_hash: String,
     pub format: String,
     pub page_count: i32,
     pub deleted: bool,

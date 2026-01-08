@@ -187,6 +187,7 @@ mod tests {
             file_name: "book.cbz".to_string(),
             file_size: 1024,
             file_hash: format!("hash_{}", Uuid::new_v4()),
+            partial_hash: String::new(),
             format: "cbz".to_string(),
             number: Some(Decimal::from(1)),
             page_count: 50,

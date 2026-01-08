@@ -209,6 +209,49 @@ async fn analyze_single_book(
 
     debug!("Analyzing book: {}", book.file_path);
 
+    // FULL HASH VERIFICATION PHASE:
+    // Before expensive analysis, verify the file actually changed using full hash
+    // This catches false positives from partial hash changes (e.g., Docker mount issues)
+    if !book.file_hash.is_empty() {
+        // Book was previously analyzed and has a full hash
+        // Compute full hash to verify the file actually changed
+        let file_path_clone = file_path.clone();
+        let current_full_hash = tokio::task::spawn_blocking(move || {
+            use crate::utils::hasher::hash_file;
+            hash_file(&file_path_clone)
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to spawn full hash calculation: {}", e))??;
+
+        if current_full_hash == book.file_hash {
+            // Full hash unchanged - false positive from partial hash
+            // Update partial_hash to match current state and skip analysis
+            let file_path_clone2 = file_path.clone();
+            let current_partial_hash = tokio::task::spawn_blocking(move || {
+                use crate::utils::hasher::hash_file_partial;
+                hash_file_partial(&file_path_clone2)
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to spawn partial hash calculation: {}", e))??;
+
+            book.partial_hash = current_partial_hash;
+            book.analyzed = true; // Mark as analyzed since nothing changed
+            book.updated_at = chrono::Utc::now();
+            BookRepository::update(db, &book).await?;
+
+            debug!(
+                "Skipping analysis - full hash unchanged (false positive from partial hash): {}",
+                book.file_path
+            );
+            return Ok(());
+        } else {
+            debug!(
+                "Full hash verification confirmed change: {} - proceeding with analysis",
+                book.file_path
+            );
+        }
+    }
+
     // Analyze the file (blocking I/O operation)
     let file_path_clone = file_path.clone();
     let metadata = tokio::task::spawn_blocking(move || analyze_file(&file_path_clone))
@@ -226,6 +269,15 @@ async fn analyze_single_book(
         );
     }
 
+    // Compute partial hash to keep both hashes in sync
+    let file_path_clone2 = file_path.clone();
+    let partial_hash = tokio::task::spawn_blocking(move || {
+        use crate::utils::hasher::hash_file_partial;
+        hash_file_partial(&file_path_clone2)
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to spawn partial hash calculation: {}", e))??;
+
     // Update book with analyzed metadata
     let now = Utc::now();
     book.title = metadata.comic_info.as_ref().and_then(|ci| ci.title.clone());
@@ -237,6 +289,7 @@ async fn analyze_single_book(
     });
     book.file_size = metadata.file_size as i64;
     book.file_hash = metadata.file_hash.clone();
+    book.partial_hash = partial_hash;
     book.format = format!("{:?}", metadata.format).to_lowercase();
     book.page_count = metadata.page_count as i32;
     book.modified_at = metadata.modified_at;

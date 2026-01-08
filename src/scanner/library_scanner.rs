@@ -18,7 +18,6 @@ use crate::scanner::analyze_file;
 
 use super::types::{ScanMode, ScanProgress, ScanResult, ScanStatus};
 
-const HASH_READ_SIZE: usize = 1024 * 1024; // 1MB for partial hash
 const SUPPORTED_EXTENSIONS: &[&str] = &["cbz", "cbr", "epub", "pdf"];
 
 /// Main library scanner that orchestrates the scanning process
@@ -520,35 +519,38 @@ async fn process_file(
 ) -> Result<()> {
     let path_str = file_path.to_string_lossy().to_string();
 
-    // Calculate current hash (blocking I/O operation)
+    // Calculate current partial hash (blocking I/O operation - fast, only first 1MB)
     let hash_start = Instant::now();
     let file_path_clone = file_path.to_path_buf();
-    let current_hash = tokio::task::spawn_blocking(move || calculate_file_hash(&file_path_clone))
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to spawn hash calculation task: {}", e))??;
+    let current_partial_hash = tokio::task::spawn_blocking(move || {
+        use crate::utils::hasher::hash_file_partial;
+        hash_file_partial(&file_path_clone)
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to spawn hash calculation task: {}", e))??;
 
     // Check if we should skip this file (normal mode only)
     if mode == ScanMode::Normal {
-        if let Some((existing_hash, existing_book)) = existing_books.get(&path_str) {
-            if &current_hash == existing_hash {
-                // Hash hasn't changed
+        if let Some((existing_partial_hash, existing_book)) = existing_books.get(&path_str) {
+            if &current_partial_hash == existing_partial_hash {
+                // Partial hash hasn't changed - file is likely unchanged
                 if existing_book.analyzed {
                     debug!(
-                        "Skipping unchanged analyzed file: {} (hash check took {:?})",
+                        "Skipping unchanged analyzed file: {} (partial hash check took {:?})",
                         path_str,
                         hash_start.elapsed()
                     );
                     return Ok(());
                 } else {
                     info!(
-                        "File unchanged but not analyzed (will update/skip): {} - hash: {}",
-                        path_str, current_hash
+                        "File unchanged but not analyzed (will update/skip): {} - partial hash: {}",
+                        path_str, current_partial_hash
                     );
                 }
             } else {
                 info!(
-                    "File hash changed: {} - old: {}, new: {}",
-                    path_str, existing_hash, current_hash
+                    "File partial hash changed: {} - old: {}, new: {}",
+                    path_str, existing_partial_hash, current_partial_hash
                 );
             }
         } else {
@@ -583,24 +585,27 @@ async fn process_file(
     let now = Utc::now();
 
     if let Some(mut existing) = existing_book {
-        // Update existing book - only update hash, size, and modified time
-        // Mark as not analyzed if hash changed
-        let hash_changed = existing.file_hash != current_hash;
+        // Update existing book - only update hashes, size, and modified time
+        // Mark as not analyzed if partial hash changed (will be verified before analysis)
+        let partial_hash_changed = existing.partial_hash != current_partial_hash;
 
         // Check if any meaningful fields have changed (excluding updated_at which always changes)
         let size_changed = existing.file_size != file_size as i64;
         let format_changed = existing.format != format;
         let modified_changed = existing.modified_at != modified_at;
-        let anything_changed = hash_changed || size_changed || format_changed || modified_changed;
+        let anything_changed =
+            partial_hash_changed || size_changed || format_changed || modified_changed;
 
         existing.file_size = file_size as i64;
-        existing.file_hash = current_hash.clone();
+        existing.partial_hash = current_partial_hash.clone();
+        // Note: file_hash (full hash) is NOT updated during scanning - only during analysis
+        // This prevents the constant rehashing issue
         existing.format = format;
         existing.modified_at = modified_at;
         existing.updated_at = now;
 
         let was_analyzed = existing.analyzed;
-        existing.analyzed = if hash_changed {
+        existing.analyzed = if partial_hash_changed {
             false
         } else {
             existing.analyzed
@@ -614,16 +619,16 @@ async fn process_file(
         }
         progress.increment_books();
 
-        if hash_changed && was_analyzed {
+        if partial_hash_changed && was_analyzed {
             info!(
-                "Book marked as unanalyzed due to hash change: {} - old hash: (in DB), new hash: {}",
-                path_str, current_hash
+                "Book marked as unanalyzed due to partial hash change: {} - old: (in DB), new: {}",
+                path_str, current_partial_hash
             );
         }
 
         debug!(
-            "Updated book (detection only): {} - analyzed: {}, hash_changed: {}",
-            path_str, existing.analyzed, hash_changed
+            "Updated book (detection only): {} - analyzed: {}, partial_hash_changed: {}",
+            path_str, existing.analyzed, partial_hash_changed
         );
     } else {
         // Create new book WITHOUT analysis
@@ -639,7 +644,8 @@ async fn process_file(
                 .to_string_lossy()
                 .to_string(),
             file_size: file_size as i64,
-            file_hash: current_hash,
+            file_hash: String::new(), // Will be filled during analysis phase with full hash
+            partial_hash: current_partial_hash,
             format,
             page_count: 0, // Will be filled during analysis phase
             deleted: false,
@@ -784,7 +790,8 @@ async fn load_existing_books(
         let books = BookRepository::list_by_series(db, series.id, true).await?;
         total_books += books.len();
         for book in books {
-            books_map.insert(book.file_path.clone(), (book.file_hash.clone(), book));
+            // Store partial_hash for fast scanning comparison
+            books_map.insert(book.file_path.clone(), (book.partial_hash.clone(), book));
         }
     }
 
@@ -869,40 +876,6 @@ fn extract_series_name(file_path: &Path, library_path: &Path) -> String {
         // File is directly in library root
         "Unsorted".to_string()
     }
-}
-
-/// Calculate SHA-256 hash of file (partial - first 1MB for performance)
-/// NOTE: This is a synchronous function - wrap in spawn_blocking when calling from async context
-fn calculate_file_hash(path: &Path) -> Result<String> {
-    use std::io::Read;
-
-    let mut file = fs::File::open(path)?;
-    let mut hasher = Sha256::new();
-    let mut buffer = vec![0u8; HASH_READ_SIZE];
-
-    // Use read_exact or handle partial reads properly
-    // read_exact fails if file is smaller than buffer, so we need to handle that
-    let bytes_read = match file.read(&mut buffer) {
-        Ok(n) if n == 0 => 0, // Empty file
-        Ok(n) => {
-            // First read got n bytes, but we want to read up to HASH_READ_SIZE total
-            let mut total_read = n;
-            while total_read < HASH_READ_SIZE {
-                match file.read(&mut buffer[total_read..]) {
-                    Ok(0) => break, // EOF
-                    Ok(n) => total_read += n,
-                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
-                    Err(e) => return Err(e.into()),
-                }
-            }
-            total_read
-        }
-        Err(e) => return Err(e.into()),
-    };
-
-    hasher.update(&buffer[..bytes_read]);
-
-    Ok(format!("{:x}", hasher.finalize()))
 }
 
 /// Send progress update through channel

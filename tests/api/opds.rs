@@ -503,6 +503,7 @@ fn create_test_book_model(
         file_name: file_path.split('/').last().unwrap().to_string(),
         file_size: 1024000,
         file_hash: format!("hash_{}", Uuid::new_v4()),
+        partial_hash: String::new(),
         format: "cbz".to_string(),
         number: Some(Decimal::from(number)),
         page_count,
