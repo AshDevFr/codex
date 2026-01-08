@@ -282,7 +282,7 @@ async fn test_api_unlock_task() {
     .await
     .expect("Failed to create task");
 
-    TaskRepository::claim_next(&db, "worker-1", 300)
+    TaskRepository::claim_next(&db, "worker-1", 300, false)
         .await
         .unwrap();
 

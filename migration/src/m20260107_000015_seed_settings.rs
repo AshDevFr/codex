@@ -135,6 +135,17 @@ impl MigrationTrait for Migration {
                 Some(10),
                 Some(300),
             ),
+            (
+                "task.prioritize_scans_over_analysis",
+                "true",
+                "Boolean",
+                "Task",
+                "Prioritize scan tasks over analysis tasks when picking from the queue",
+                false,
+                "true",
+                None,
+                None,
+            ),
             // Authentication settings (1 setting)
             (
                 "auth.registration_enabled",

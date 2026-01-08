@@ -261,11 +261,24 @@ impl TaskWorker {
     /// Process the next available task
     /// Returns Ok(true) if a task was processed, Ok(false) if no tasks were available
     async fn process_next_task(&self) -> Result<bool> {
-        // Claim next available task
-        let task = match TaskRepository::claim_next(&self.db, &self.worker_id, 300).await? {
-            Some(t) => t,
-            None => return Ok(false), // No tasks available
+        // Get prioritize_scans setting (hot-reload support)
+        let prioritize_scans = if let Some(ref settings) = self.settings_service {
+            settings
+                .get_bool("task.prioritize_scans_over_analysis", true)
+                .await
+                .unwrap_or(true)
+        } else {
+            true // Default to prioritizing scans if settings service not available
         };
+
+        // Claim next available task
+        let task =
+            match TaskRepository::claim_next(&self.db, &self.worker_id, 300, prioritize_scans)
+                .await?
+            {
+                Some(t) => t,
+                None => return Ok(false), // No tasks available
+            };
 
         let started_at = Utc::now();
 

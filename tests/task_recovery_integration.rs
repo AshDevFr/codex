@@ -45,7 +45,7 @@ async fn test_worker_crash_recovery_scenario() {
         .expect("Failed to enqueue task");
 
     // Step 2: Worker claims the task
-    let claimed_task = TaskRepository::claim_next(&db, "worker-crashed", 300)
+    let claimed_task = TaskRepository::claim_next(&db, "worker-crashed", 300, false)
         .await
         .expect("Failed to claim task")
         .expect("No task available");
@@ -94,7 +94,7 @@ async fn test_worker_crash_recovery_scenario() {
     assert_eq!(recovered_task.attempts, 1); // Still has 1 attempt from crash
 
     // Step 7: New worker can claim and complete the task
-    let reclaimed_task = TaskRepository::claim_next(&db, "worker-healthy", 300)
+    let reclaimed_task = TaskRepository::claim_next(&db, "worker-healthy", 300, false)
         .await
         .expect("Failed to reclaim task")
         .expect("No task available");
@@ -151,7 +151,7 @@ async fn test_multiple_worker_crashes() {
     // 5 different workers claim them
     for i in 0..5 {
         let worker_name = format!("worker-{}", i);
-        TaskRepository::claim_next(&db, &worker_name, 300)
+        TaskRepository::claim_next(&db, &worker_name, 300, false)
             .await
             .expect("Failed to claim task");
     }
@@ -205,7 +205,7 @@ async fn test_crashed_task_at_max_attempts() {
     .expect("Failed to enqueue task");
 
     // Claim task
-    TaskRepository::claim_next(&db, "worker-1", 300)
+    TaskRepository::claim_next(&db, "worker-1", 300, false)
         .await
         .expect("Failed to claim");
 
@@ -243,7 +243,7 @@ async fn test_crashed_task_at_max_attempts() {
     assert_eq!(task.locked_by, None);
 
     // Should not be claimable again
-    let claim_attempt = TaskRepository::claim_next(&db, "worker-2", 300)
+    let claim_attempt = TaskRepository::claim_next(&db, "worker-2", 300, false)
         .await
         .expect("Failed to query tasks");
 
@@ -270,7 +270,7 @@ async fn test_periodic_stale_recovery() {
     .expect("Failed to enqueue task");
 
     // Claim it
-    TaskRepository::claim_next(&db, "worker-crashed", 300)
+    TaskRepository::claim_next(&db, "worker-crashed", 300, false)
         .await
         .expect("Failed to claim");
 
@@ -331,7 +331,7 @@ async fn test_active_tasks_not_recovered() {
     .await
     .expect("Failed to enqueue task");
 
-    let claimed_task = TaskRepository::claim_next(&db, "worker-active", 300)
+    let claimed_task = TaskRepository::claim_next(&db, "worker-active", 300, false)
         .await
         .expect("Failed to claim")
         .expect("No task");
@@ -420,20 +420,20 @@ async fn test_recovery_with_mixed_states() {
     .expect("Failed to enqueue");
 
     // Stale task: claimed but lock expired long ago
-    let claimed_stale = TaskRepository::claim_next(&db, "worker-crashed", 300)
+    let claimed_stale = TaskRepository::claim_next(&db, "worker-crashed", 300, false)
         .await
         .expect("Failed to claim")
         .expect("No task");
     let stale_task_id = claimed_stale.id;
 
     // Active task: claimed with valid lock
-    let _claimed_active = TaskRepository::claim_next(&db, "worker-healthy", 300)
+    let _claimed_active = TaskRepository::claim_next(&db, "worker-healthy", 300, false)
         .await
         .expect("Failed to claim")
         .expect("No task");
 
     // Completed task: finished successfully
-    let claimed_completed = TaskRepository::claim_next(&db, "worker-done", 300)
+    let claimed_completed = TaskRepository::claim_next(&db, "worker-done", 300, false)
         .await
         .expect("Failed to claim")
         .expect("No task");
@@ -608,7 +608,7 @@ async fn test_completed_task_allows_new_task() {
         .expect("Failed to enqueue first task");
 
     // Claim and complete the task
-    let claimed = TaskRepository::claim_next(&db, "worker-1", 300)
+    let claimed = TaskRepository::claim_next(&db, "worker-1", 300, false)
         .await
         .expect("Failed to claim task")
         .expect("No task to claim");

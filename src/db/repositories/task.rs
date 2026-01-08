@@ -1,9 +1,8 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
 use sea_orm::{
-    entity::prelude::*, sea_query::Expr, ActiveModelTrait, ColumnTrait, Condition,
-    DatabaseConnection, DbBackend, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, Set,
-    Statement, TransactionTrait,
+    entity::prelude::*, ActiveModelTrait, ColumnTrait, DatabaseConnection, DbBackend, EntityTrait,
+    QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait,
 };
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -122,10 +121,17 @@ impl TaskRepository {
     }
 
     /// Claim next available task (atomic operation using SKIP LOCKED for Postgres, transaction for SQLite)
+    ///
+    /// # Arguments
+    /// * `db` - Database connection
+    /// * `worker_id` - ID of the worker claiming the task
+    /// * `lock_duration_secs` - Duration in seconds to lock the task
+    /// * `prioritize_scans` - If true, scan_library tasks are prioritized over analysis tasks
     pub async fn claim_next(
         db: &DatabaseConnection,
         worker_id: &str,
         lock_duration_secs: i64,
+        prioritize_scans: bool,
     ) -> Result<Option<tasks::Model>> {
         let worker_id = worker_id.to_string(); // Clone for move into closure
         let is_postgres = db.get_database_backend() == DbBackend::Postgres;
@@ -139,7 +145,16 @@ impl TaskRepository {
 
                     let task_option = if is_postgres {
                         // PostgreSQL: Use FOR UPDATE SKIP LOCKED for multi-worker safety
-                        let sql = r#"
+                        let order_by = if prioritize_scans {
+                            // Prioritize scan_library tasks over analysis tasks
+                            "ORDER BY (CASE WHEN task_type = 'scan_library' THEN 0 ELSE 1 END), priority DESC, scheduled_for ASC"
+                        } else {
+                            // Standard priority-based ordering
+                            "ORDER BY priority DESC, scheduled_for ASC"
+                        };
+
+                        let sql = format!(
+                            r#"
                             SELECT * FROM tasks
                             WHERE (
                                 status = 'pending'
@@ -147,10 +162,12 @@ impl TaskRepository {
                             )
                             AND scheduled_for <= $1
                             AND attempts < max_attempts
-                            ORDER BY priority DESC, scheduled_for ASC
+                            {}
                             LIMIT 1
                             FOR UPDATE SKIP LOCKED
-                        "#;
+                            "#,
+                            order_by
+                        );
 
                         let stmt = Statement::from_sql_and_values(
                             DbBackend::Postgres,
@@ -182,27 +199,60 @@ impl TaskRepository {
                             })
                         })
                     } else {
-                        // SQLite: Use regular transaction (serial execution is sufficient for tests)
-                        // Note: attempts < max_attempts comparison isn't supported in SeaORM filter
-                        // so we'll filter it manually after fetching
-                        let task = Tasks::find()
-                            .filter(
-                                Condition::any()
-                                    .add(tasks::Column::Status.eq("pending"))
-                                    .add(
-                                        Condition::all()
-                                            .add(tasks::Column::Status.eq("processing"))
-                                            .add(tasks::Column::LockedUntil.lt(now)),
-                                    ),
-                            )
-                            .filter(tasks::Column::ScheduledFor.lte(now))
-                            .order_by_desc(tasks::Column::Priority)
-                            .order_by_asc(tasks::Column::ScheduledFor)
-                            .one(txn)
-                            .await?;
+                        // SQLite: Use raw SQL query (similar to PostgreSQL but without SKIP LOCKED)
+                        // SQLite serializes transactions, so we don't need SKIP LOCKED
+                        let order_by = if prioritize_scans {
+                            // Prioritize scan_library tasks over analysis tasks
+                            "ORDER BY (CASE WHEN task_type = 'scan_library' THEN 0 ELSE 1 END), priority DESC, scheduled_for ASC"
+                        } else {
+                            // Standard priority-based ordering
+                            "ORDER BY priority DESC, scheduled_for ASC"
+                        };
 
-                        // Filter out tasks that have reached max attempts
-                        task.filter(|t| t.attempts < t.max_attempts)
+                        let sql = format!(
+                            r#"
+                            SELECT * FROM tasks
+                            WHERE (
+                                status = 'pending'
+                                OR (status = 'processing' AND locked_until < ?)
+                            )
+                            AND scheduled_for <= ?
+                            AND attempts < max_attempts
+                            {}
+                            LIMIT 1
+                            "#,
+                            order_by
+                        );
+
+                        let stmt = Statement::from_sql_and_values(
+                            DbBackend::Sqlite,
+                            &sql,
+                            vec![now.into(), now.into()],
+                        );
+                        let query_result = txn.query_one(stmt).await?;
+
+                        query_result.and_then(|row| {
+                            Some(tasks::Model {
+                                id: row.try_get("", "id").ok()?,
+                                task_type: row.try_get("", "task_type").ok()?,
+                                library_id: row.try_get("", "library_id").ok()?,
+                                series_id: row.try_get("", "series_id").ok()?,
+                                book_id: row.try_get("", "book_id").ok()?,
+                                params: row.try_get("", "params").ok()?,
+                                status: row.try_get("", "status").ok()?,
+                                priority: row.try_get("", "priority").ok()?,
+                                locked_by: row.try_get("", "locked_by").ok()?,
+                                locked_until: row.try_get("", "locked_until").ok()?,
+                                attempts: row.try_get("", "attempts").ok()?,
+                                max_attempts: row.try_get("", "max_attempts").ok()?,
+                                last_error: row.try_get("", "last_error").ok()?,
+                                result: row.try_get("", "result").ok()?,
+                                scheduled_for: row.try_get("", "scheduled_for").ok()?,
+                                created_at: row.try_get("", "created_at").ok()?,
+                                started_at: row.try_get("", "started_at").ok()?,
+                                completed_at: row.try_get("", "completed_at").ok()?,
+                            })
+                        })
                     };
 
                     if let Some(task) = task_option {

@@ -99,6 +99,7 @@ export function Setup() {
 	// Task worker settings
 	const [pollIntervalSeconds, setPollIntervalSeconds] = useState(5);
 	const [cleanupIntervalSeconds, setCleanupIntervalSeconds] = useState(30);
+	const [prioritizeScansOverAnalysis, setPrioritizeScansOverAnalysis] = useState(true);
 
 	// Initialize setup mutation
 	const initializeMutation = useMutation<
@@ -165,6 +166,7 @@ export function Setup() {
 					"application.name": appName,
 					"task.poll_interval_seconds": pollIntervalSeconds.toString(),
 					"task.cleanup_interval_seconds": cleanupIntervalSeconds.toString(),
+					"task.prioritize_scans_over_analysis": prioritizeScansOverAnalysis.toString(),
 				},
 				skipConfiguration: false,
 			});
@@ -423,6 +425,15 @@ export function Setup() {
 														}
 														min={10}
 														max={300}
+													/>
+
+													<Switch
+														label="Prioritize Scans Over Analysis"
+														description="When enabled, scan tasks will be processed before analysis tasks in the queue"
+														checked={prioritizeScansOverAnalysis}
+														onChange={(e) =>
+															setPrioritizeScansOverAnalysis(e.currentTarget.checked)
+														}
 													/>
 												</Stack>
 											</Collapse>
