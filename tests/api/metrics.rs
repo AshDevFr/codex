@@ -108,9 +108,9 @@ async fn test_get_metrics_with_auth() {
     book2.file_size = 2000000;
     BookRepository::create(&db, &book2).await.unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/metrics", &token);
     let (status, response): (StatusCode, Option<MetricsDto>) =
@@ -155,8 +155,8 @@ async fn test_get_metrics_with_auth() {
 #[tokio::test]
 async fn test_get_metrics_without_auth() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     let request = get_request("/api/v1/metrics");
     let (status, response): (StatusCode, Option<ErrorResponse>) =
@@ -176,9 +176,9 @@ async fn test_get_metrics_with_readonly_user() {
         .await
         .unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_readonly_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/metrics", &token);
     let (status, response): (StatusCode, Option<MetricsDto>) =
@@ -193,9 +193,9 @@ async fn test_get_metrics_with_readonly_user() {
 async fn test_get_metrics_empty_database() {
     let (db, _temp_dir) = setup_test_db().await;
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/metrics", &token);
     let (status, response): (StatusCode, Option<MetricsDto>) =
@@ -256,9 +256,9 @@ async fn test_get_metrics_with_file_sizes() {
     book2.file_size = 10000000; // 10MB
     BookRepository::create(&db, &book2).await.unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/metrics", &token);
     let (status, response): (StatusCode, Option<MetricsDto>) =
@@ -323,9 +323,9 @@ async fn test_get_metrics_postgres() {
     book2.file_size = 10000000; // 10MB
     BookRepository::create(&db, &book2).await.unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/metrics", &token);
     let (status, response): (StatusCode, Option<MetricsDto>) =

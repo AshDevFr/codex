@@ -25,7 +25,7 @@ async fn test_opds_root_catalog_with_jwt() {
     let user = create_test_user("opdsuser", "opds@example.com", &password_hash, true);
     let created_user = UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
+    let state = create_test_auth_state(db).await;
     let token = state
         .jwt_service
         .generate_token(
@@ -35,7 +35,7 @@ async fn test_opds_root_catalog_with_jwt() {
         )
         .unwrap();
 
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = hyper::Request::builder()
         .method("GET")
@@ -67,8 +67,8 @@ async fn test_opds_root_catalog_with_basic_auth() {
     let user = create_test_user("basicuser", "basic@example.com", &password_hash, true);
     UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     // Encode credentials
     let credentials = format!("{}:{}", "basicuser", password);
@@ -91,8 +91,8 @@ async fn test_opds_root_catalog_with_basic_auth() {
 #[tokio::test]
 async fn test_opds_root_catalog_without_auth() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     let request = hyper::Request::builder()
         .method("GET")
@@ -129,7 +129,7 @@ async fn test_opds_list_libraries() {
     let user = create_test_user("libuser", "lib@example.com", &password_hash, true);
     let created_user = UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
+    let state = create_test_auth_state(db).await;
     let token = state
         .jwt_service
         .generate_token(
@@ -139,7 +139,7 @@ async fn test_opds_list_libraries() {
         )
         .unwrap();
 
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = hyper::Request::builder()
         .method("GET")
@@ -185,7 +185,7 @@ async fn test_opds_library_series() {
     let user = create_test_user("seriesuser", "series@example.com", &password_hash, true);
     let created_user = UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
+    let state = create_test_auth_state(db).await;
     let token = state
         .jwt_service
         .generate_token(
@@ -195,7 +195,7 @@ async fn test_opds_library_series() {
         )
         .unwrap();
 
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = hyper::Request::builder()
         .method("GET")
@@ -239,7 +239,7 @@ async fn test_opds_series_books_with_thumbnails() {
     let user = create_test_user("bookuser", "book@example.com", &password_hash, true);
     let created_user = UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
+    let state = create_test_auth_state(db).await;
     let token = state
         .jwt_service
         .generate_token(
@@ -249,7 +249,7 @@ async fn test_opds_series_books_with_thumbnails() {
         )
         .unwrap();
 
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = hyper::Request::builder()
         .method("GET")
@@ -291,7 +291,7 @@ async fn test_opds_search_descriptor() {
     let user = create_test_user("searchuser", "search@example.com", &password_hash, true);
     let created_user = UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
+    let state = create_test_auth_state(db).await;
     let token = state
         .jwt_service
         .generate_token(
@@ -301,7 +301,7 @@ async fn test_opds_search_descriptor() {
         )
         .unwrap();
 
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = hyper::Request::builder()
         .method("GET")
@@ -357,7 +357,7 @@ async fn test_opds_search_books() {
     let user = create_test_user("searchuser2", "search2@example.com", &password_hash, true);
     let created_user = UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
+    let state = create_test_auth_state(db).await;
     let token = state
         .jwt_service
         .generate_token(
@@ -367,7 +367,7 @@ async fn test_opds_search_books() {
         )
         .unwrap();
 
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = hyper::Request::builder()
         .method("GET")
@@ -395,7 +395,7 @@ async fn test_opds_search_empty_query() {
     let user = create_test_user("searchuser3", "search3@example.com", &password_hash, true);
     let created_user = UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
+    let state = create_test_auth_state(db).await;
     let token = state
         .jwt_service
         .generate_token(
@@ -405,7 +405,7 @@ async fn test_opds_search_empty_query() {
         )
         .unwrap();
 
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = hyper::Request::builder()
         .method("GET")
@@ -448,7 +448,7 @@ async fn test_opds_pse_page_feed() {
     let user = create_test_user("pseuser", "pse@example.com", &password_hash, true);
     let created_user = UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
+    let state = create_test_auth_state(db).await;
     let token = state
         .jwt_service
         .generate_token(
@@ -458,7 +458,7 @@ async fn test_opds_pse_page_feed() {
         )
         .unwrap();
 
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = hyper::Request::builder()
         .method("GET")

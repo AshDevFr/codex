@@ -4,7 +4,7 @@ mod loader;
 
 pub use config::{
     ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, EmailConfig,
-    LogLevel, LoggingConfig, PostgresConfig, SQLiteConfig, ScannerConfig,
+    LoggingConfig, PostgresConfig, SQLiteConfig,
 };
 
 pub use env_override::{env_bool_or, env_or, env_string_opt, EnvOverride};

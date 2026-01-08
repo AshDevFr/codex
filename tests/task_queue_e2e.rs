@@ -187,7 +187,7 @@ async fn test_worker_respects_priority() {
     worker.process_once().await.expect("Failed to process");
 
     // Check which task was processed
-    let low_task = TaskRepository::get_by_id(&db, low_id)
+    let _low_task = TaskRepository::get_by_id(&db, low_id)
         .await
         .expect("Failed to get task")
         .expect("Task not found");

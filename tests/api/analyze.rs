@@ -65,7 +65,7 @@ async fn test_analyze_library_success() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
 
     // First, scan to detect files (without analysis)
@@ -118,7 +118,7 @@ async fn test_analyze_library_with_concurrency() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
 
     // Scan to detect files
@@ -155,7 +155,7 @@ async fn test_analyze_library_invalid_concurrency() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
@@ -191,7 +191,7 @@ async fn test_analyze_library_requires_write_permission() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_readonly_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
@@ -207,7 +207,7 @@ async fn test_analyze_library_requires_write_permission() {
 async fn test_analyze_library_not_found() {
     let (db, _temp_dir) = setup_test_db().await;
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
@@ -235,7 +235,7 @@ async fn test_analyze_library_marks_books_as_analyzed() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
 
     // Scan to detect files
@@ -300,7 +300,7 @@ async fn test_analyze_series_success() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
 
     // Scan to detect files and create series
@@ -351,7 +351,7 @@ async fn test_analyze_series_with_concurrency() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
 
     // Scan
@@ -387,7 +387,7 @@ async fn test_analyze_series_with_concurrency() {
 async fn test_analyze_series_requires_write_permission() {
     let (db, temp_dir) = setup_test_db().await;
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_readonly_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
@@ -404,7 +404,7 @@ async fn test_analyze_series_requires_write_permission() {
 async fn test_analyze_series_not_found() {
     let (db, _temp_dir) = setup_test_db().await;
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
@@ -436,7 +436,7 @@ async fn test_analyze_book_success() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
 
     // Scan to detect files
@@ -494,7 +494,7 @@ async fn test_analyze_book_force_reanalysis() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
 
     // Scan and analyze
@@ -550,7 +550,7 @@ async fn test_analyze_book_force_reanalysis() {
 async fn test_analyze_book_requires_write_permission() {
     let (db, _temp_dir) = setup_test_db().await;
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_readonly_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
@@ -567,7 +567,7 @@ async fn test_analyze_book_requires_write_permission() {
 async fn test_analyze_book_not_found() {
     let (db, _temp_dir) = setup_test_db().await;
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
@@ -599,7 +599,7 @@ async fn test_two_step_scan_and_analyze_workflow() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state.clone());
 
@@ -689,7 +689,7 @@ async fn test_concurrent_analysis_multiple_libraries() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
 
     // Scan both libraries

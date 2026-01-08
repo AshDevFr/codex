@@ -58,9 +58,9 @@ async fn test_list_libraries_with_auth() {
         .await
         .unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/libraries", &token);
     let (status, response): (StatusCode, Option<Vec<LibraryDto>>) =
@@ -76,8 +76,8 @@ async fn test_list_libraries_with_auth() {
 #[tokio::test]
 async fn test_list_libraries_without_auth() {
     let (db, temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     let request = get_request("/api/v1/libraries");
     let (status, response): (StatusCode, Option<ErrorResponse>) =
@@ -124,8 +124,8 @@ async fn test_list_libraries_with_api_key() {
     .await
     .unwrap();
 
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     let request = get_request_with_api_key("/api/v1/libraries", plain_key);
     let (status, response): (StatusCode, Option<Vec<LibraryDto>>) =
@@ -149,9 +149,9 @@ async fn test_get_library_by_id() {
             .await
             .unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = get_request_with_auth(&format!("/api/v1/libraries/{}", library.id), &token);
     let (status, response): (StatusCode, Option<LibraryDto>) =
@@ -167,9 +167,9 @@ async fn test_get_library_by_id() {
 #[tokio::test]
 async fn test_get_library_not_found() {
     let (db, temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let fake_id = uuid::Uuid::new_v4();
     let request = get_request_with_auth(&format!("/api/v1/libraries/{}", fake_id), &token);
@@ -188,9 +188,9 @@ async fn test_get_library_not_found() {
 #[tokio::test]
 async fn test_create_library_success() {
     let (db, temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     // Create a temp directory for the library path
     let lib_path = temp_dir.path().join("new_library");
@@ -217,9 +217,9 @@ async fn test_create_library_success() {
 #[tokio::test]
 async fn test_create_library_without_permission() {
     let (db, temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_readonly_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let create_request = CreateLibraryRequest {
         name: "New Library".to_string(),
@@ -260,9 +260,9 @@ async fn test_update_library_success() {
     .await
     .unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let update_request = UpdateLibraryRequest {
         name: Some("Updated Name".to_string()),
@@ -294,9 +294,9 @@ async fn test_update_library_without_permission() {
         .await
         .unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_readonly_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let update_request = UpdateLibraryRequest {
         name: Some("Updated".to_string()),
@@ -332,9 +332,9 @@ async fn test_delete_library_success() {
             .await
             .unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = delete_request_with_auth(&format!("/api/v1/libraries/{}", library.id), &token);
     let (status, _) = make_request(app, request).await;
@@ -354,9 +354,9 @@ async fn test_delete_library_without_permission() {
         .await
         .unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_readonly_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = delete_request_with_auth(&format!("/api/v1/libraries/{}", library.id), &token);
     let (status, response): (StatusCode, Option<ErrorResponse>) =
@@ -370,9 +370,9 @@ async fn test_delete_library_without_permission() {
 #[tokio::test]
 async fn test_delete_library_not_found() {
     let (db, temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let fake_id = uuid::Uuid::new_v4();
     let request = delete_request_with_auth(&format!("/api/v1/libraries/{}", fake_id), &token);
@@ -407,7 +407,7 @@ async fn test_library_includes_book_and_series_counts() {
     .unwrap();
 
     // Scan the library to populate data
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     trigger_scan_task(&state.db, library.id, ScanMode::Normal)
         .await
         .unwrap();
@@ -457,7 +457,7 @@ async fn test_empty_library_has_zero_counts() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
@@ -492,7 +492,7 @@ async fn test_list_libraries_includes_counts() {
     .unwrap();
 
     // Scan the library
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     trigger_scan_task(&state.db, library.id, ScanMode::Normal)
         .await
         .unwrap();
@@ -549,7 +549,7 @@ async fn test_book_count_excludes_deleted_books() {
     .unwrap();
 
     // Scan the library
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     trigger_scan_task(&state.db, library.id, ScanMode::Normal)
         .await
         .unwrap();
@@ -612,7 +612,7 @@ async fn test_series_count_accuracy() {
     .unwrap();
 
     // Scan the library
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     trigger_scan_task(&state.db, library.id, ScanMode::Normal)
         .await
         .unwrap();

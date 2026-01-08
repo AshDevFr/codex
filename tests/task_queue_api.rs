@@ -29,7 +29,7 @@ async fn test_api_list_tasks() {
     );
     UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let app = create_test_router_with_app_state(state.clone());
 
     // Login to get token
@@ -79,7 +79,7 @@ async fn test_api_get_task() {
     );
     UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let app = create_test_router_with_app_state(state.clone());
 
     // Login
@@ -124,7 +124,7 @@ async fn test_api_create_task() {
     );
     UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let app = create_test_router_with_app_state(state.clone());
 
     // Login
@@ -170,7 +170,7 @@ async fn test_api_task_stats() {
     );
     UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let app = create_test_router_with_app_state(state.clone());
 
     // Login
@@ -214,7 +214,7 @@ async fn test_api_cancel_task() {
     );
     UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let app = create_test_router_with_app_state(state.clone());
 
     // Login
@@ -259,7 +259,7 @@ async fn test_api_unlock_task() {
     );
     UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let app = create_test_router_with_app_state(state.clone());
 
     // Login
@@ -308,7 +308,7 @@ async fn test_api_purge_tasks() {
     );
     UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let app = create_test_router_with_app_state(state.clone());
 
     // Login
@@ -343,7 +343,7 @@ async fn test_api_nuke_tasks_admin_only() {
     );
     UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let app = create_test_router_with_app_state(state.clone());
 
     // Login

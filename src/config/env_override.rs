@@ -1,6 +1,6 @@
 use super::{
-    ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, LogLevel,
-    LoggingConfig, PostgresConfig, SQLiteConfig,
+    ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, LoggingConfig,
+    PostgresConfig, SQLiteConfig,
 };
 use std::env;
 
@@ -25,9 +25,7 @@ impl EnvOverride for Config {
 
 impl EnvOverride for ApplicationConfig {
     fn apply_env_overrides(&mut self, prefix: &str) {
-        if let Ok(name) = env::var(format!("{}_NAME", prefix)) {
-            self.name = name;
-        }
+        // Note: application.name moved to database settings
         if let Ok(host) = env::var(format!("{}_HOST", prefix)) {
             self.host = host;
         }
@@ -36,7 +34,6 @@ impl EnvOverride for ApplicationConfig {
                 self.port = port_num;
             }
         }
-        // Note: application.debug has been removed - debug mode controlled via RUST_LOG env var
     }
 }
 
@@ -98,25 +95,13 @@ impl EnvOverride for SQLiteConfig {
 
 impl EnvOverride for LoggingConfig {
     fn apply_env_overrides(&mut self, prefix: &str) {
-        if let Ok(log_level) = env::var(format!("{}_LEVEL", prefix)) {
-            self.level = match log_level.to_lowercase().as_str() {
-                "error" => LogLevel::Error,
-                "warn" => LogLevel::Warn,
-                "info" => LogLevel::Info,
-                "debug" => LogLevel::Debug,
-                "trace" => LogLevel::Trace,
-                _ => self.level.clone(),
-            };
-        }
+        // Note: logging.level and logging.console moved to database settings
         if let Ok(log_file) = env::var(format!("{}_FILE", prefix)) {
             self.file = if log_file.is_empty() {
                 None
             } else {
                 Some(log_file)
             };
-        }
-        if let Ok(log_console) = env::var(format!("{}_CONSOLE", prefix)) {
-            self.console = log_console.eq_ignore_ascii_case("true") || log_console == "1";
         }
     }
 }
@@ -260,7 +245,6 @@ mod tests {
         env::set_var("CODEX_APPLICATION_PORT", "9090");
 
         let mut config = ApplicationConfig {
-            name: "Codex".to_string(),
             host: "127.0.0.1".to_string(),
             port: 8080,
         };

@@ -38,11 +38,8 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Configuration loaded successfully");
 
     info!("========================================");
-    info!(
-        "Starting {} v{}",
-        config.application.name,
-        env!("CARGO_PKG_VERSION")
-    );
+    info!("Starting Codex v{}", env!("CARGO_PKG_VERSION"));
+    info!("  Application name is configurable via database settings");
     info!("========================================");
 
     // Display application configuration
@@ -94,6 +91,25 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     scheduler.start().await?;
     info!("Scan scheduler started successfully");
 
+    // Initialize settings service
+    info!("Initializing settings service...");
+    let settings_service = Arc::new(
+        crate::services::SettingsService::new(db.sea_orm_connection().clone())
+            .await
+            .expect("Failed to initialize settings service"),
+    );
+    info!(
+        "Settings service initialized with {} cached settings",
+        settings_service.cache_size().await
+    );
+
+    // Start auto-reload task for settings service (reload every 10 seconds)
+    let settings_clone = settings_service.clone();
+    tokio::spawn(async move {
+        settings_clone.start_auto_reload(10).await;
+    });
+    info!("Settings service auto-reload task started (10 second interval)");
+
     // Create event broadcaster for real-time updates
     let event_broadcaster = Arc::new(crate::events::EventBroadcaster::new(1000));
     info!("Event broadcaster initialized");
@@ -101,7 +117,8 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Start task worker in background
     info!("Starting task queue worker...");
     let task_worker = crate::tasks::TaskWorker::new(db.sea_orm_connection().clone())
-        .with_event_broadcaster((*event_broadcaster).clone());
+        .with_event_broadcaster((*event_broadcaster).clone())
+        .with_settings_service(settings_service.clone());
     let worker_id = task_worker.worker_id().to_string();
     tokio::spawn(async move {
         if let Err(e) = task_worker.run().await {
@@ -129,6 +146,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         auth_config: Arc::new(config.auth.clone()),
         email_service,
         event_broadcaster,
+        settings_service,
     });
 
     // Build router using API module
@@ -228,14 +246,9 @@ fn init_tracing(
             }
         }
     } else {
-        // No RUST_LOG set, use config with sqlx filtering
-        let base_level = config.logging.level.as_str();
-        // Only show SQLx query logs when user explicitly wants debug/trace
-        // Otherwise set sqlx to warn to reduce noise from query logging
-        match base_level {
-            "debug" | "trace" => base_level.to_string(),
-            _ => format!("{},sqlx=warn", base_level),
-        }
+        // No RUST_LOG set, use default "info" level with sqlx filtering
+        // Logging level is now configurable via database settings
+        "info,sqlx=warn".to_string()
     };
 
     // Create EnvFilter directly from our constructed log_level
@@ -243,7 +256,13 @@ fn init_tracing(
     let env_filter = EnvFilter::new(&log_level);
 
     // Create a combined writer for console and/or file
-    let guard = match (&config.logging.console, &config.logging.file) {
+    // Console logging is now controlled by CODEX_LOGGING_CONSOLE env var or defaults to true
+    let console_enabled = std::env::var("CODEX_LOGGING_CONSOLE")
+        .ok()
+        .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+        .unwrap_or(true);
+
+    let guard = match (console_enabled, &config.logging.file) {
         (true, Some(log_file_path)) => {
             // Both console and file
             let log_path = Path::new(log_file_path);

@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use crate::db::repositories::TaskRepository;
 use crate::events::{EventBroadcaster, TaskProgressEvent};
+use crate::services::SettingsService;
 use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, GenerateThumbnailsHandler, PurgeDeletedHandler,
     ScanLibraryHandler, TaskHandler,
@@ -22,6 +23,7 @@ pub struct TaskWorker {
     worker_id: String,
     poll_interval: Duration,
     event_broadcaster: Option<EventBroadcaster>,
+    settings_service: Option<Arc<SettingsService>>,
 }
 
 impl TaskWorker {
@@ -62,6 +64,7 @@ impl TaskWorker {
             worker_id,
             poll_interval: Duration::from_secs(5),
             event_broadcaster: None,
+            settings_service: None,
         }
     }
 
@@ -83,6 +86,12 @@ impl TaskWorker {
         self
     }
 
+    /// Set the settings service for runtime configuration
+    pub fn with_settings_service(mut self, settings_service: Arc<SettingsService>) -> Self {
+        self.settings_service = Some(settings_service);
+        self
+    }
+
     /// Get the worker ID
     pub fn worker_id(&self) -> &str {
         &self.worker_id
@@ -92,12 +101,37 @@ impl TaskWorker {
     pub async fn run(&self) -> Result<()> {
         info!("Task worker {} started", self.worker_id);
 
+        // Get cleanup interval from settings
+        let cleanup_interval_secs = if let Some(ref settings) = self.settings_service {
+            settings
+                .get_uint("task.cleanup_interval_seconds", 30)
+                .await
+                .unwrap_or(30)
+        } else {
+            30
+        };
+
+        info!(
+            "Task worker using cleanup interval: {} seconds",
+            cleanup_interval_secs
+        );
+
         // Spawn background cleanup task for completed tasks
         let db_clone = self.db.clone();
+        let settings_clone = self.settings_service.clone();
         tokio::spawn(async move {
             loop {
-                // Sleep for 30 seconds between cleanup runs
-                sleep(Duration::from_secs(30)).await;
+                // Get cleanup interval from settings (hot-reload support)
+                let interval = if let Some(ref settings) = settings_clone {
+                    settings
+                        .get_uint("task.cleanup_interval_seconds", 30)
+                        .await
+                        .unwrap_or(30)
+                } else {
+                    30
+                };
+
+                sleep(Duration::from_secs(interval)).await;
 
                 // Clean up completed tasks older than 10 seconds
                 match TaskRepository::purge_completed_tasks(&db_clone, 10).await {
@@ -133,6 +167,18 @@ impl TaskWorker {
             }
         });
 
+        // Get initial poll interval from settings
+        let mut poll_interval = if let Some(ref settings) = self.settings_service {
+            let interval = settings
+                .get_uint("task.poll_interval_seconds", 5)
+                .await
+                .unwrap_or(5);
+            info!("Task worker using poll interval: {} seconds", interval);
+            Duration::from_secs(interval)
+        } else {
+            self.poll_interval
+        };
+
         loop {
             match self.process_next_task().await {
                 Ok(true) => {
@@ -141,8 +187,17 @@ impl TaskWorker {
                 }
                 Ok(false) => {
                     // No tasks available, sleep
-                    debug!("No tasks available, sleeping for {:?}", self.poll_interval);
-                    sleep(self.poll_interval).await;
+                    // Reload poll interval from settings (hot-reload support)
+                    if let Some(ref settings) = self.settings_service {
+                        let interval = settings
+                            .get_uint("task.poll_interval_seconds", 5)
+                            .await
+                            .unwrap_or(5);
+                        poll_interval = Duration::from_secs(interval);
+                    }
+
+                    debug!("No tasks available, sleeping for {:?}", poll_interval);
+                    sleep(poll_interval).await;
                 }
                 Err(e) => {
                     error!("Worker error: {}", e);

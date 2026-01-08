@@ -45,9 +45,9 @@ async fn create_user_and_token(
 #[tokio::test]
 async fn test_browse_filesystem_with_admin() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     // Get user's home directory or a known path
     let test_path = std::env::temp_dir();
@@ -69,9 +69,9 @@ async fn test_browse_filesystem_with_admin() {
 #[tokio::test]
 async fn test_browse_filesystem_without_path_uses_default() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/filesystem/browse", &token);
 
@@ -87,8 +87,8 @@ async fn test_browse_filesystem_without_path_uses_default() {
 #[tokio::test]
 async fn test_browse_filesystem_without_auth() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     let request = get_request("/api/v1/filesystem/browse");
     let (status, response): (StatusCode, Option<ErrorResponse>) =
@@ -102,9 +102,9 @@ async fn test_browse_filesystem_without_auth() {
 #[tokio::test]
 async fn test_browse_filesystem_with_non_admin() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_user_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/filesystem/browse", &token);
 
@@ -120,9 +120,9 @@ async fn test_browse_filesystem_with_non_admin() {
 #[tokio::test]
 async fn test_browse_filesystem_with_invalid_path() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let invalid_path = "/this/path/does/not/exist/surely/not";
     let request = get_request_with_auth(
@@ -141,9 +141,9 @@ async fn test_browse_filesystem_with_invalid_path() {
 #[tokio::test]
 async fn test_browse_filesystem_with_file_path() {
     let (db, temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     // Create a test file
     let file_path = temp_dir.path().join("test_file.txt");
@@ -165,9 +165,9 @@ async fn test_browse_filesystem_with_file_path() {
 #[tokio::test]
 async fn test_browse_filesystem_only_returns_directories() {
     let (db, temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     // Create test structure with files and directories
     let test_dir = temp_dir.path();
@@ -206,9 +206,9 @@ async fn test_browse_filesystem_only_returns_directories() {
 #[tokio::test]
 async fn test_browse_filesystem_excludes_hidden_files() {
     let (db, temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     // Create test structure with hidden files
     let test_dir = temp_dir.path();
@@ -248,9 +248,9 @@ async fn test_browse_filesystem_excludes_hidden_files() {
 #[tokio::test]
 async fn test_list_drives_with_admin() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/filesystem/drives", &token);
 
@@ -275,8 +275,8 @@ async fn test_list_drives_with_admin() {
 #[tokio::test]
 async fn test_list_drives_without_auth() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     let request = get_request("/api/v1/filesystem/drives");
     let (status, response): (StatusCode, Option<ErrorResponse>) =
@@ -290,9 +290,9 @@ async fn test_list_drives_without_auth() {
 #[tokio::test]
 async fn test_list_drives_with_non_admin() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_user_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/filesystem/drives", &token);
 
@@ -308,9 +308,9 @@ async fn test_list_drives_with_non_admin() {
 #[tokio::test]
 async fn test_browse_returns_parent_path() {
     let (db, temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     // Create a subdirectory
     let subdir = temp_dir.path().join("subdir");
@@ -340,9 +340,9 @@ async fn test_browse_returns_parent_path() {
 #[tokio::test]
 async fn test_browse_entries_sorted_directories_first() {
     let (db, temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     // Create test structure
     let test_dir = temp_dir.path();

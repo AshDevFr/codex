@@ -60,7 +60,7 @@ async fn test_trigger_normal_scan() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
@@ -90,7 +90,7 @@ async fn test_trigger_deep_scan() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
@@ -120,7 +120,7 @@ async fn test_trigger_scan_invalid_mode() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
@@ -154,7 +154,7 @@ async fn test_trigger_scan_requires_write_permission() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_readonly_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
@@ -171,7 +171,7 @@ async fn test_trigger_scan_requires_write_permission() {
 async fn test_trigger_scan_library_not_found() {
     let (db, temp_dir) = setup_test_db().await;
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
@@ -203,7 +203,7 @@ async fn test_get_scan_status() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
 
     // Trigger a scan first
@@ -238,7 +238,7 @@ async fn test_get_scan_status_requires_read_permission() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
 
     // Create a user with no permissions
     let password_hash = password::hash_password("user123").unwrap();
@@ -279,7 +279,7 @@ async fn test_get_scan_status_not_found() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
@@ -312,7 +312,7 @@ async fn test_cancel_scan() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
 
     // Trigger a scan first
@@ -344,7 +344,7 @@ async fn test_cancel_scan_requires_write_permission() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_readonly_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
@@ -382,7 +382,7 @@ async fn test_list_active_scans() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
 
     // Trigger scans for both libraries
@@ -409,7 +409,7 @@ async fn test_list_active_scans() {
 async fn test_list_active_scans_requires_read_permission() {
     let (db, temp_dir) = setup_test_db().await;
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
 
     // Create a user with no permissions
     let password_hash = password::hash_password("user123").unwrap();
@@ -442,7 +442,7 @@ async fn test_list_active_scans_requires_read_permission() {
 #[tokio::test]
 async fn test_scan_progress_stream_requires_auth() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let app = create_test_router_with_app_state(state);
 
     let request = get_request("/api/v1/scans/stream");
@@ -455,7 +455,7 @@ async fn test_scan_progress_stream_requires_auth() {
 #[tokio::test]
 async fn test_scan_progress_stream_requires_read_permission() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
 
     // Create a user with no permissions
     let password_hash = password::hash_password("user123").unwrap();
@@ -484,7 +484,7 @@ async fn test_scan_progress_stream_requires_read_permission() {
 #[tokio::test]
 async fn test_scan_progress_stream_connection() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
@@ -519,7 +519,7 @@ async fn test_scan_progress_stream_connection() {
 #[tokio::test]
 async fn test_scan_manager_subscribe() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
 
     // Test that we can subscribe to task progress updates
     let mut receiver = state.event_broadcaster.subscribe_tasks();
@@ -547,7 +547,7 @@ async fn test_scan_progress_broadcast() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
 
     // Subscribe to progress updates
     let mut receiver = state.event_broadcaster.subscribe_tasks();
@@ -620,7 +620,7 @@ async fn test_full_scan_with_progress_updates() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
 
     // Subscribe to progress updates
@@ -715,7 +715,7 @@ async fn test_multiple_concurrent_sse_subscribers() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
 
     // Create multiple subscribers
     let mut receiver1 = state.event_broadcaster.subscribe_tasks();
@@ -768,7 +768,7 @@ async fn test_scan_cancel_broadcasts_update() {
     .await
     .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let mut receiver = state.event_broadcaster.subscribe_tasks();
 
     // Trigger a scan

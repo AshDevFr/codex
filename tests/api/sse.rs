@@ -50,7 +50,7 @@ fn parse_sse_event(data: &str) -> Option<String> {
 #[tokio::test]
 async fn test_entity_events_stream_requires_auth() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_app_state(db);
+    let state = create_test_app_state(db).await;
     let app = create_test_router_with_app_state(state);
 
     // Request without authentication
@@ -63,7 +63,7 @@ async fn test_entity_events_stream_requires_auth() {
 #[tokio::test]
 async fn test_entity_events_stream_connects_with_auth() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state.clone());
 
@@ -104,7 +104,7 @@ async fn test_entity_events_stream_receives_cover_updated() {
         .await
         .unwrap();
 
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
 
     // Emit a CoverUpdated event manually
@@ -137,7 +137,7 @@ async fn test_entity_events_stream_receives_cover_updated() {
 #[tokio::test]
 async fn test_task_progress_stream_requires_auth() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_app_state(db);
+    let state = create_test_app_state(db).await;
     let app = create_test_router_with_app_state(state);
 
     // Request without authentication
@@ -150,7 +150,7 @@ async fn test_task_progress_stream_requires_auth() {
 #[tokio::test]
 async fn test_task_progress_stream_connects_with_auth() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state.clone());
 
@@ -333,7 +333,7 @@ async fn test_event_broadcaster_multiple_subscribers() {
 #[tokio::test]
 async fn test_sse_stream_content_type() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_app_state(db.clone());
+    let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state.clone());
 

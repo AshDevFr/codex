@@ -46,9 +46,9 @@ async fn test_list_series_all() {
         .await
         .unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/series", &token);
     let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
@@ -82,9 +82,9 @@ async fn test_list_series_by_library() {
         .await
         .unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     // Query series for library 1
     let request = get_request_with_auth(
@@ -103,8 +103,8 @@ async fn test_list_series_by_library() {
 #[tokio::test]
 async fn test_list_series_without_auth() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     let request = get_request("/api/v1/series");
     let (status, response): (StatusCode, Option<ErrorResponse>) =
@@ -130,9 +130,9 @@ async fn test_list_series_pagination() {
             .unwrap();
     }
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     // List all series (pagination parameters are ignored now)
     let request = get_request_with_auth("/api/v1/series", &token);
@@ -160,9 +160,9 @@ async fn test_get_series_by_id() {
         .await
         .unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let request = get_request_with_auth(&format!("/api/v1/series/{}", series.id), &token);
     let (status, response): (StatusCode, Option<SeriesDto>) = make_json_request(app, request).await;
@@ -176,9 +176,9 @@ async fn test_get_series_by_id() {
 #[tokio::test]
 async fn test_get_series_not_found() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let fake_id = uuid::Uuid::new_v4();
     let request = get_request_with_auth(&format!("/api/v1/series/{}", fake_id), &token);
@@ -212,9 +212,9 @@ async fn test_search_series_by_name() {
         .await
         .unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let search_request = SearchSeriesRequest {
         query: "Batman".to_string(),
@@ -243,9 +243,9 @@ async fn test_search_series_no_results() {
         .await
         .unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     let search_request = SearchSeriesRequest {
         query: "NonExistent".to_string(),
@@ -264,8 +264,8 @@ async fn test_search_series_no_results() {
 #[tokio::test]
 async fn test_search_series_without_auth() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     let search_request = SearchSeriesRequest {
         query: "Test".to_string(),
@@ -313,9 +313,9 @@ async fn test_get_series_books_excludes_deleted_by_default() {
         .await
         .unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     // Get series books without include_deleted parameter (should exclude deleted)
     let request = get_request_with_auth(&format!("/api/v1/series/{}/books", series.id), &token);
@@ -362,9 +362,9 @@ async fn test_get_series_books_includes_deleted_when_requested() {
         .await
         .unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     // Get series books with include_deleted=true
     let request = get_request_with_auth(
@@ -412,9 +412,9 @@ async fn test_get_series_books_with_all_deleted() {
         .await
         .unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     // Get series books without include_deleted (should return empty)
     let request = get_request_with_auth(&format!("/api/v1/series/{}/books", series.id), &token);
@@ -426,7 +426,8 @@ async fn test_get_series_books_with_all_deleted() {
     assert_eq!(books.len(), 0); // No active books
 
     // Get series books with include_deleted=true (should return both)
-    let app = create_test_router(create_test_auth_state(db.clone()));
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
     let request = get_request_with_auth(
         &format!("/api/v1/series/{}/books?include_deleted=true", series.id),
         &token,
@@ -462,9 +463,9 @@ async fn test_get_series_books_include_deleted_false_explicit() {
         .await
         .unwrap();
 
-    let state = create_test_auth_state(db.clone());
+    let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     // Explicitly set include_deleted=false
     let request = get_request_with_auth(

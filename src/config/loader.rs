@@ -1,4 +1,4 @@
-use super::config::{Config, ScannerConfig};
+use super::config::Config;
 use anyhow::Result;
 use std::fs;
 use std::path::Path;
@@ -34,7 +34,6 @@ database:
   sqlite:
     path: ./test.db
 application:
-  name: Test Codex
   host: 127.0.0.1
   port: 3000
 "#;
@@ -44,7 +43,7 @@ application:
 
         let config = Config::from_file(temp_file.path()).unwrap();
 
-        assert_eq!(config.application.name, "Test Codex");
+        // Application name moved to database settings
         assert_eq!(config.application.host, "127.0.0.1");
         assert_eq!(config.application.port, 3000);
         assert!(matches!(config.database.db_type, DatabaseType::SQLite));
@@ -62,14 +61,12 @@ application:
                 }),
             },
             application: ApplicationConfig {
-                name: "Codex".to_string(),
                 host: "0.0.0.0".to_string(),
                 port: 8080,
             },
             logging: LoggingConfig::default(),
             auth: AuthConfig::default(),
             api: ApiConfig::default(),
-            scanner: ScannerConfig::default(),
             email: EmailConfig::default(),
         };
 
@@ -78,7 +75,7 @@ application:
 
         let loaded_config = Config::from_file(temp_file.path()).unwrap();
 
-        assert_eq!(loaded_config.application.name, "Codex");
+        // Application name moved to database settings
         assert_eq!(loaded_config.application.port, 8080);
         assert!(matches!(
             loaded_config.database.db_type,

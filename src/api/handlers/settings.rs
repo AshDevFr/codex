@@ -1,6 +1,6 @@
 use crate::api::{
     dto::{
-        BulkUpdateSettingsRequest, ListSettingsQuery, SettingDto, SettingHistoryDto,
+        BulkUpdateSettingsRequest, HistoryQuery, ListSettingsQuery, SettingDto, SettingHistoryDto,
         UpdateSettingRequest,
     },
     error::ApiError,
@@ -160,7 +160,18 @@ pub async fn update_setting(
         ip_address,
     )
     .await
-    .map_err(|e| ApiError::Internal(format!("Failed to update setting: {}", e)))?;
+    .map_err(|e| {
+        let err_msg = e.to_string();
+        // Check if it's a validation error (contains keywords like "Invalid", "above maximum", "below minimum")
+        if err_msg.contains("Invalid")
+            || err_msg.contains("above maximum")
+            || err_msg.contains("below minimum")
+        {
+            ApiError::BadRequest(err_msg)
+        } else {
+            ApiError::Internal(format!("Failed to update setting: {}", e))
+        }
+    })?;
 
     let dto = SettingDto {
         id: setting.id,
@@ -221,7 +232,18 @@ pub async fn bulk_update_settings(
         ip_address,
     )
     .await
-    .map_err(|e| ApiError::Internal(format!("Failed to bulk update settings: {}", e)))?;
+    .map_err(|e| {
+        let err_msg = e.to_string();
+        // Check if it's a validation error
+        if err_msg.contains("Invalid")
+            || err_msg.contains("above maximum")
+            || err_msg.contains("below minimum")
+        {
+            ApiError::BadRequest(err_msg)
+        } else {
+            ApiError::Internal(format!("Failed to bulk update settings: {}", e))
+        }
+    })?;
 
     let dtos: Vec<SettingDto> = settings
         .into_iter()
@@ -325,11 +347,11 @@ pub async fn get_setting_history(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Path(key): Path<String>,
-    Query(limit): Query<Option<u64>>,
+    Query(query): Query<HistoryQuery>,
 ) -> Result<Json<Vec<SettingHistoryDto>>, ApiError> {
     require_admin!(auth)?;
 
-    let history = SettingsRepository::get_history(&state.db, &key, limit)
+    let history = SettingsRepository::get_history(&state.db, &key, query.limit)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch setting history: {}", e)))?;
 

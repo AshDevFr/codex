@@ -68,6 +68,7 @@ pub struct AppState {
     pub auth_config: Arc<crate::config::AuthConfig>,
     pub email_service: Arc<crate::services::email::EmailService>,
     pub event_broadcaster: Arc<crate::events::EventBroadcaster>,
+    pub settings_service: Arc<crate::services::SettingsService>,
 }
 
 // Legacy alias for backwards compatibility during transition

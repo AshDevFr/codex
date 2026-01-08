@@ -15,8 +15,6 @@ pub struct Config {
     #[serde(default)]
     pub api: ApiConfig,
     #[serde(default)]
-    pub scanner: ScannerConfig,
-    #[serde(default)]
     pub email: EmailConfig,
 }
 
@@ -68,18 +66,7 @@ impl Default for Config {
             ),
         };
 
-        // Build logging level from environment
-        let log_level = env::var("CODEX_LOGGING_LEVEL")
-            .ok()
-            .and_then(|l| match l.to_lowercase().as_str() {
-                "error" => Some(LogLevel::Error),
-                "warn" => Some(LogLevel::Warn),
-                "info" => Some(LogLevel::Info),
-                "debug" => Some(LogLevel::Debug),
-                "trace" => Some(LogLevel::Trace),
-                _ => None,
-            })
-            .unwrap_or(LogLevel::Info);
+        // Logging level moved to database settings
 
         Self {
             database: DatabaseConfig {
@@ -88,20 +75,15 @@ impl Default for Config {
                 sqlite: sqlite_config,
             },
             application: ApplicationConfig {
-                name: env_string_opt("CODEX_APPLICATION_NAME")
-                    .unwrap_or_else(|| "Codex".to_string()),
                 host: env_string_opt("CODEX_APPLICATION_HOST")
                     .unwrap_or_else(|| "127.0.0.1".to_string()),
                 port: env_or("CODEX_APPLICATION_PORT", 8080),
             },
             logging: LoggingConfig {
-                level: log_level,
                 file: env_string_opt("CODEX_LOGGING_FILE"),
-                console: env_bool_or("CODEX_LOGGING_CONSOLE", true),
             },
             auth: AuthConfig::default(),
             api: ApiConfig::default(),
-            scanner: ScannerConfig::default(),
             email: EmailConfig::default(),
         }
     }
@@ -277,7 +259,6 @@ impl Default for SQLiteConfig {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct ApplicationConfig {
-    pub name: String,
     pub host: String,
     pub port: u16,
 }
@@ -285,7 +266,6 @@ pub struct ApplicationConfig {
 impl Default for ApplicationConfig {
     fn default() -> Self {
         Self {
-            name: env_string_opt("CODEX_APPLICATION_NAME").unwrap_or_else(|| "Codex".to_string()),
             host: env_string_opt("CODEX_APPLICATION_HOST")
                 .unwrap_or_else(|| "127.0.0.1".to_string()),
             port: env_or("CODEX_APPLICATION_PORT", 8080),
@@ -296,18 +276,12 @@ impl Default for ApplicationConfig {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct LoggingConfig {
-    pub level: LogLevel,
     pub file: Option<String>,
-    pub console: bool,
 }
 
 impl Default for LoggingConfig {
     fn default() -> Self {
-        Self {
-            level: LogLevel::Info,
-            file: None,
-            console: true,
-        }
+        Self { file: None }
     }
 }
 
@@ -460,12 +434,10 @@ mod tests {
     #[test]
     fn test_application_config() {
         let config = ApplicationConfig {
-            name: "Codex".to_string(),
             host: "0.0.0.0".to_string(),
             port: 8080,
         };
 
-        assert_eq!(config.name, "Codex");
         assert_eq!(config.host, "0.0.0.0");
         assert_eq!(config.port, 8080);
     }
@@ -517,18 +489,16 @@ mod tests {
                 }),
             },
             application: ApplicationConfig {
-                name: "Codex".to_string(),
                 host: "127.0.0.1".to_string(),
                 port: 3000,
             },
             logging: LoggingConfig::default(),
             auth: AuthConfig::default(),
             api: ApiConfig::default(),
-            scanner: ScannerConfig::default(),
             email: EmailConfig::default(),
         };
 
-        assert_eq!(config.application.name, "Codex");
+        // Application name moved to database settings
         assert_eq!(config.application.port, 3000);
         assert!(matches!(config.database.db_type, DatabaseType::SQLite));
     }

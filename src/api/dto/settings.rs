@@ -23,7 +23,7 @@ pub struct SettingDto {
 }
 
 /// Update setting request
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct UpdateSettingRequest {
     pub value: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -31,21 +31,21 @@ pub struct UpdateSettingRequest {
 }
 
 /// Bulk update settings request
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct BulkUpdateSettingsRequest {
     pub updates: Vec<BulkSettingUpdate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub change_reason: Option<String>,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct BulkSettingUpdate {
     pub key: String,
     pub value: String,
 }
 
 /// Setting history entry DTO
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SettingHistoryDto {
     pub id: Uuid,
     pub setting_id: Uuid,
@@ -65,4 +65,11 @@ pub struct SettingHistoryDto {
 pub struct ListSettingsQuery {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub category: Option<String>,
+}
+
+/// Query parameters for setting history
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct HistoryQuery {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
 }

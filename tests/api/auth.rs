@@ -15,8 +15,8 @@ use hyper::StatusCode;
 #[tokio::test]
 async fn test_health_check_endpoint() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     let request = get_request("/health");
     let (status, body) = make_request(app, request).await;
@@ -40,8 +40,8 @@ async fn test_login_success_with_username() {
     let user = create_test_user("testuser", "test@example.com", &password_hash, false);
     UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     // Attempt login with username
     let login_request = LoginRequest {
@@ -73,8 +73,8 @@ async fn test_login_success_with_email() {
     let user = create_test_user("emailuser", "email@example.com", &password_hash, false);
     UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     // Attempt login with email
     let login_request = LoginRequest {
@@ -102,8 +102,8 @@ async fn test_login_admin_user() {
     let user = create_test_user("admin", "admin@example.com", &password_hash, true);
     UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     let login_request = LoginRequest {
         username: "admin".to_string(),
@@ -129,8 +129,8 @@ async fn test_login_wrong_password() {
     let user = create_test_user("user", "user@example.com", &password_hash, false);
     UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     // Attempt login with wrong password
     let login_request = LoginRequest {
@@ -151,8 +151,8 @@ async fn test_login_wrong_password() {
 #[tokio::test]
 async fn test_login_nonexistent_user() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     let login_request = LoginRequest {
         username: "nonexistent".to_string(),
@@ -179,8 +179,8 @@ async fn test_login_inactive_user() {
     user.is_active = false;
     UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     let login_request = LoginRequest {
         username: "inactive".to_string(),
@@ -199,8 +199,8 @@ async fn test_login_inactive_user() {
 #[tokio::test]
 async fn test_login_missing_fields() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     // Send malformed JSON
     let request = hyper::Request::builder()
@@ -228,7 +228,7 @@ async fn test_logout_with_valid_token() {
     let user = create_test_user("logoutuser", "logout@example.com", &password_hash, false);
     let created_user = UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
+    let state = create_test_auth_state(db).await;
 
     // Generate token
     let token = state
@@ -240,7 +240,7 @@ async fn test_logout_with_valid_token() {
         )
         .unwrap();
 
-    let app = create_test_router(state);
+    let app = create_test_router(state).await;
 
     // Logout
     let request = hyper::Request::builder()
@@ -260,8 +260,8 @@ async fn test_logout_with_valid_token() {
 #[tokio::test]
 async fn test_logout_without_auth() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     let request = hyper::Request::builder()
         .method("POST")
@@ -280,8 +280,8 @@ async fn test_logout_without_auth() {
 #[tokio::test]
 async fn test_logout_with_invalid_token() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     let request = hyper::Request::builder()
         .method("POST")
@@ -314,8 +314,8 @@ async fn test_basic_auth_success() {
     let user = create_test_user("basicadmin", "basicadmin@example.com", &password_hash, true);
     UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     // Encode credentials in base64 (format: "username:password")
     let credentials = format!("{}:{}", "basicadmin", password);
@@ -345,8 +345,8 @@ async fn test_basic_auth_wrong_password() {
     let user = create_test_user("basicuser2", "basic2@example.com", &password_hash, false);
     UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     // Encode wrong credentials
     let credentials = format!("{}:{}", "basicuser2", "wrong_password");
@@ -372,8 +372,8 @@ async fn test_basic_auth_nonexistent_user() {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
 
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     // Encode credentials for non-existent user
     let credentials = "nonexistent:password";
@@ -397,8 +397,8 @@ async fn test_basic_auth_nonexistent_user() {
 #[tokio::test]
 async fn test_basic_auth_invalid_encoding() {
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     // Use invalid base64 encoding
     let request = hyper::Request::builder()
@@ -421,8 +421,8 @@ async fn test_basic_auth_invalid_format() {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
 
     let (db, _temp_dir) = setup_test_db().await;
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     // Encode credentials without colon separator
     let credentials = "usernameonly";
@@ -461,8 +461,8 @@ async fn test_basic_auth_inactive_user() {
     user.is_active = false;
     UserRepository::create(&db, &user).await.unwrap();
 
-    let state = create_test_auth_state(db);
-    let app = create_test_router(state);
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
 
     // Encode credentials
     let credentials = format!("{}:{}", "inactive_basic", password);

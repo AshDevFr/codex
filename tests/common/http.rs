@@ -4,6 +4,7 @@ use codex::api::routes::create_router;
 use codex::config::{ApiConfig, AuthConfig, EmailConfig};
 use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
+use codex::services::SettingsService;
 use codex::utils::jwt::JwtService;
 use http_body_util::BodyExt;
 use hyper::{body::Bytes, Request, StatusCode};
@@ -13,7 +14,7 @@ use std::sync::Arc;
 use tower::ServiceExt;
 
 /// Helper to create AuthState for tests (deprecated - use create_test_app_state)
-pub fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
+pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
     let jwt_service = Arc::new(JwtService::new(
         "test_secret_key_for_integration_tests".to_string(),
         24, // 24 hour expiry
@@ -22,6 +23,11 @@ pub fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
     let auth_config = Arc::new(AuthConfig::default());
     let email_service = Arc::new(EmailService::new(EmailConfig::default()));
     let event_broadcaster = Arc::new(EventBroadcaster::new(1000));
+    let settings_service = Arc::new(
+        SettingsService::new(db.clone())
+            .await
+            .expect("Failed to initialize settings service for tests"),
+    );
 
     Arc::new(AppState {
         db,
@@ -29,11 +35,12 @@ pub fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
         auth_config,
         email_service,
         event_broadcaster,
+        settings_service,
     })
 }
 
 /// Helper to create AppState for tests
-pub fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
+pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
     let jwt_service = Arc::new(JwtService::new(
         "test_secret_key_for_integration_tests".to_string(),
         24, // 24 hour expiry
@@ -42,6 +49,11 @@ pub fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
     let auth_config = Arc::new(AuthConfig::default());
     let email_service = Arc::new(EmailService::new(EmailConfig::default()));
     let event_broadcaster = Arc::new(EventBroadcaster::new(1000));
+    let settings_service = Arc::new(
+        SettingsService::new(db.clone())
+            .await
+            .expect("Failed to initialize settings service for tests"),
+    );
 
     Arc::new(AppState {
         db,
@@ -49,6 +61,7 @@ pub fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
         auth_config,
         email_service,
         event_broadcaster,
+        settings_service,
     })
 }
 
@@ -65,17 +78,23 @@ pub fn create_test_api_config() -> ApiConfig {
 }
 
 /// Helper to create the API router with test state (deprecated - use create_test_router_with_app_state)
-pub fn create_test_router(state: Arc<AuthState>) -> Router {
+pub async fn create_test_router(state: Arc<AuthState>) -> Router {
     // Convert AuthState to AppState for compatibility
     let auth_config = Arc::new(AuthConfig::default());
     let email_service = Arc::new(EmailService::new(EmailConfig::default()));
     let event_broadcaster = Arc::new(EventBroadcaster::new(1000));
+    let settings_service = Arc::new(
+        SettingsService::new(state.db.clone())
+            .await
+            .expect("Failed to initialize settings service for tests"),
+    );
     let app_state = Arc::new(AppState {
         db: state.db.clone(),
         jwt_service: state.jwt_service.clone(),
         auth_config,
         email_service,
         event_broadcaster,
+        settings_service,
     });
     let api_config = create_test_api_config();
     create_router(app_state, &api_config)
@@ -88,8 +107,8 @@ pub fn create_test_router_with_app_state(state: Arc<AppState>) -> Router {
 }
 
 /// Helper to set up a test app with database and router (convenience function)
-pub fn setup_test_app(db: DatabaseConnection) -> (Arc<AppState>, Router) {
-    let state = create_test_app_state(db);
+pub async fn setup_test_app(db: DatabaseConnection) -> (Arc<AppState>, Router) {
+    let state = create_test_app_state(db).await;
     let router = create_test_router_with_app_state(state.clone());
     (state, router)
 }

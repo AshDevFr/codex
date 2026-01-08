@@ -127,7 +127,7 @@ async fn test_worker_crash_recovery_scenario() {
 #[tokio::test]
 async fn test_multiple_worker_crashes() {
     let (db, _temp_dir) = setup_test_db().await;
-    let library_id = create_test_library(&db).await;
+    let _library_id = create_test_library(&db).await;
 
     // Create 5 tasks
     let mut task_ids = Vec::new();
