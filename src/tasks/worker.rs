@@ -5,11 +5,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::db::repositories::TaskRepository;
-use crate::events::{EventBroadcaster, TaskProgressEvent, TaskStatus};
+use crate::events::{EventBroadcaster, TaskProgressEvent};
 use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, GenerateThumbnailsHandler, PurgeDeletedHandler,
     ScanLibraryHandler, TaskHandler,
@@ -92,7 +92,7 @@ impl TaskWorker {
     pub async fn run(&self) -> Result<()> {
         info!("Task worker {} started", self.worker_id);
 
-        // Spawn background cleanup task
+        // Spawn background cleanup task for completed tasks
         let db_clone = self.db.clone();
         tokio::spawn(async move {
             loop {
@@ -107,6 +107,27 @@ impl TaskWorker {
                     Ok(_) => {} // No tasks to clean up
                     Err(e) => {
                         error!("Failed to clean up completed tasks: {}", e);
+                    }
+                }
+            }
+        });
+
+        // Spawn background cleanup task for stale tasks
+        let db_clone_stale = self.db.clone();
+        tokio::spawn(async move {
+            loop {
+                // Sleep for 60 seconds between stale task recovery runs
+                sleep(Duration::from_secs(60)).await;
+
+                // Recover tasks locked for more than 10 minutes (600 seconds)
+                // This is 2x the normal lock duration to avoid false positives
+                match TaskRepository::recover_stale_tasks(&db_clone_stale, 600).await {
+                    Ok(count) if count > 0 => {
+                        warn!("Recovered {} stale tasks from dead workers", count);
+                    }
+                    Ok(_) => {} // No stale tasks
+                    Err(e) => {
+                        error!("Failed to recover stale tasks: {}", e);
                     }
                 }
             }

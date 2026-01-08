@@ -64,7 +64,7 @@ function TaskProgressItem({ task }: TaskProgressItemProps) {
 						<Text size="sm" fw={500} c={getStatusColor()}>
 							{formatTaskType(task.task_type)}
 						</Text>
-						{task.status !== "queued" && (
+						{task.status !== "pending" && (
 							<Text size="xs" c="dimmed" tt="capitalize">
 								{task.status}
 							</Text>
@@ -101,7 +101,7 @@ export function TaskProgressIndicator() {
 	const { activeTasks, connectionState } = useTaskProgress();
 
 	const visibleTasks = activeTasks.filter(
-		(task) => task.status === "running" || task.status === "queued",
+		(task) => task.status === "running" || task.status === "pending",
 	);
 
 	if (visibleTasks.length === 0) {

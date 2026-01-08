@@ -362,16 +362,19 @@ async fn test_unlock_task() {
 #[tokio::test]
 async fn test_priority_ordering() {
     let (db, _temp_dir) = setup_test_db().await;
-    let library_id = create_test_library(&db).await;
 
-    // Enqueue tasks with different priorities
+    // Create two different libraries to avoid uniqueness constraint
+    let library_id_1 = create_test_library(&db).await;
+    let library_id_2 = create_test_library(&db).await;
+
+    // Enqueue tasks with different priorities for different libraries
     let low_priority = TaskType::ScanLibrary {
-        library_id,
+        library_id: library_id_1,
         mode: "normal".to_string(),
     };
     let high_priority = TaskType::ScanLibrary {
-        library_id,
-        mode: "deep".to_string(),
+        library_id: library_id_2,
+        mode: "normal".to_string(),
     };
 
     TaskRepository::enqueue(&db, low_priority, 0, None)
@@ -405,16 +408,23 @@ async fn test_duplicate_task_prevention() {
         mode: "normal".to_string(),
     };
 
-    TaskRepository::enqueue(&db, task1.clone(), 0, None)
+    let first_task_id = TaskRepository::enqueue(&db, task1.clone(), 0, None)
         .await
         .expect("Failed to enqueue first task");
 
-    // Try to enqueue duplicate - should fail or return same task
-    let result = TaskRepository::enqueue(&db, task1, 0, None).await;
+    // Try to enqueue duplicate - should return the same task ID
+    let second_task_id = TaskRepository::enqueue(&db, task1, 0, None)
+        .await
+        .expect("Failed to handle duplicate task");
 
-    // Depending on implementation, this might fail with constraint violation
-    // or silently ignore. Either is acceptable.
-    assert!(result.is_err() || result.is_ok());
+    // Should return the same task ID for duplicate
+    assert_eq!(first_task_id, second_task_id);
+
+    // Verify only one task exists
+    let stats = TaskRepository::get_stats(&db)
+        .await
+        .expect("Failed to get stats");
+    assert_eq!(stats.total, 1);
 }
 
 /// Test queue statistics
@@ -504,10 +514,10 @@ async fn test_purge_old_tasks() {
 #[tokio::test]
 async fn test_nuke_all_tasks() {
     let (db, _temp_dir) = setup_test_db().await;
-    let library_id = create_test_library(&db).await;
 
-    // Create several tasks
-    for _ in 0..5 {
+    // Create tasks for 5 different libraries to avoid uniqueness constraint
+    for i in 0..5 {
+        let library_id = create_test_library(&db).await;
         TaskRepository::enqueue(
             &db,
             TaskType::ScanLibrary {
@@ -518,7 +528,7 @@ async fn test_nuke_all_tasks() {
             None,
         )
         .await
-        .expect("Failed to enqueue");
+        .expect(&format!("Failed to enqueue task {}", i));
     }
 
     // Nuke all
@@ -533,4 +543,337 @@ async fn test_nuke_all_tasks() {
         .expect("Failed to get stats");
 
     assert_eq!(stats.total, 0);
+}
+
+/// Test recovering stale tasks with locks that expired
+#[tokio::test]
+async fn test_recover_stale_tasks_basic() {
+    use chrono::Duration;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library_id = create_test_library(&db).await;
+
+    // Create and claim a task
+    let task_type = TaskType::ScanLibrary {
+        library_id,
+        mode: "normal".to_string(),
+    };
+
+    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    TaskRepository::claim_next(&db, "worker-1", 300)
+        .await
+        .expect("Failed to claim task");
+
+    // Simulate worker crash by manually setting locked_until to past
+    // (more than 600 seconds ago to exceed stale threshold)
+    {
+        let task = TaskRepository::get_by_id(&db, task_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let mut active: tasks::ActiveModel = task.into();
+        active.locked_until = Set(Some(Utc::now() - Duration::seconds(700)));
+        active.update(&db).await.unwrap();
+    }
+
+    // Recover stale tasks (threshold: 600 seconds)
+    let recovered = TaskRepository::recover_stale_tasks(&db, 600)
+        .await
+        .expect("Failed to recover stale tasks");
+
+    assert_eq!(recovered, 1);
+
+    // Verify task is back to pending
+    let task = TaskRepository::get_by_id(&db, task_id)
+        .await
+        .expect("Failed to get task")
+        .expect("Task not found");
+
+    assert_eq!(task.status, "pending");
+    assert_eq!(task.locked_by, None);
+    assert_eq!(task.locked_until, None);
+    assert_eq!(task.attempts, 1); // Attempts not reset (worker crash wasn't task's fault)
+}
+
+/// Test that stale tasks at max attempts are marked as failed
+#[tokio::test]
+async fn test_recover_stale_tasks_max_attempts() {
+    use chrono::Duration;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library_id = create_test_library(&db).await;
+
+    // Create and claim a task
+    let task_type = TaskType::ScanLibrary {
+        library_id,
+        mode: "normal".to_string(),
+    };
+
+    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    TaskRepository::claim_next(&db, "worker-1", 300)
+        .await
+        .expect("Failed to claim task");
+
+    // Simulate task at max attempts with stale lock
+    {
+        let task = TaskRepository::get_by_id(&db, task_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let mut active: tasks::ActiveModel = task.into();
+        active.locked_until = Set(Some(Utc::now() - Duration::seconds(700)));
+        active.attempts = Set(3); // At max_attempts
+        active.update(&db).await.unwrap();
+    }
+
+    // Recover stale tasks
+    let recovered = TaskRepository::recover_stale_tasks(&db, 600)
+        .await
+        .expect("Failed to recover stale tasks");
+
+    assert_eq!(recovered, 1);
+
+    // Verify task is marked as failed
+    let task = TaskRepository::get_by_id(&db, task_id)
+        .await
+        .expect("Failed to get task")
+        .expect("Task not found");
+
+    assert_eq!(task.status, "failed");
+    assert_eq!(task.locked_by, None);
+    assert_eq!(task.locked_until, None);
+    assert_eq!(
+        task.last_error,
+        Some("Task stale after max attempts".to_string())
+    );
+    assert!(task.completed_at.is_some());
+}
+
+/// Test that non-stale tasks are not affected
+#[tokio::test]
+async fn test_recover_stale_tasks_ignores_active() {
+    use chrono::Duration;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library_id = create_test_library(&db).await;
+
+    // Create and claim a task
+    let task_type = TaskType::ScanLibrary {
+        library_id,
+        mode: "normal".to_string(),
+    };
+
+    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    TaskRepository::claim_next(&db, "worker-1", 300)
+        .await
+        .expect("Failed to claim task");
+
+    // Set locked_until to recent past (500 seconds ago - less than threshold)
+    {
+        let task = TaskRepository::get_by_id(&db, task_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let mut active: tasks::ActiveModel = task.into();
+        active.locked_until = Set(Some(Utc::now() - Duration::seconds(500)));
+        active.update(&db).await.unwrap();
+    }
+
+    // Try to recover stale tasks (threshold: 600 seconds)
+    let recovered = TaskRepository::recover_stale_tasks(&db, 600)
+        .await
+        .expect("Failed to recover stale tasks");
+
+    // Should not recover anything - task is not stale enough
+    assert_eq!(recovered, 0);
+
+    // Verify task still processing
+    let task = TaskRepository::get_by_id(&db, task_id)
+        .await
+        .expect("Failed to get task")
+        .expect("Task not found");
+
+    assert_eq!(task.status, "processing");
+    assert_eq!(task.locked_by, Some("worker-1".to_string()));
+}
+
+/// Test recovering multiple stale tasks at once
+#[tokio::test]
+async fn test_recover_multiple_stale_tasks() {
+    use chrono::Duration;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library_id = create_test_library(&db).await;
+    let series_id = create_test_series(&db, library_id).await;
+    let book_id = create_test_book(&db, series_id).await;
+
+    // Create and claim multiple tasks
+    let task1_id = TaskRepository::enqueue(
+        &db,
+        TaskType::ScanLibrary {
+            library_id,
+            mode: "normal".to_string(),
+        },
+        0,
+        None,
+    )
+    .await
+    .expect("Failed to enqueue task 1");
+
+    let task2_id = TaskRepository::enqueue(&db, TaskType::AnalyzeBook { book_id }, 0, None)
+        .await
+        .expect("Failed to enqueue task 2");
+
+    let task3_id = TaskRepository::enqueue(
+        &db,
+        TaskType::AnalyzeSeries {
+            series_id,
+            concurrency: 4,
+        },
+        0,
+        None,
+    )
+    .await
+    .expect("Failed to enqueue task 3");
+
+    // Claim all tasks
+    TaskRepository::claim_next(&db, "worker-1", 300)
+        .await
+        .expect("Failed to claim");
+    TaskRepository::claim_next(&db, "worker-2", 300)
+        .await
+        .expect("Failed to claim");
+    TaskRepository::claim_next(&db, "worker-3", 300)
+        .await
+        .expect("Failed to claim");
+
+    // Make all tasks stale
+    for task_id in [task1_id, task2_id, task3_id] {
+        let task = TaskRepository::get_by_id(&db, task_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let mut active: tasks::ActiveModel = task.into();
+        active.locked_until = Set(Some(Utc::now() - Duration::seconds(700)));
+        active.update(&db).await.unwrap();
+    }
+
+    // Recover all stale tasks
+    let recovered = TaskRepository::recover_stale_tasks(&db, 600)
+        .await
+        .expect("Failed to recover stale tasks");
+
+    assert_eq!(recovered, 3);
+
+    // Verify all tasks are back to pending
+    for task_id in [task1_id, task2_id, task3_id] {
+        let task = TaskRepository::get_by_id(&db, task_id)
+            .await
+            .expect("Failed to get task")
+            .expect("Task not found");
+
+        assert_eq!(task.status, "pending");
+        assert_eq!(task.locked_by, None);
+        assert_eq!(task.locked_until, None);
+    }
+}
+
+/// Test that completed/failed tasks are not touched by stale recovery
+#[tokio::test]
+async fn test_recover_stale_tasks_ignores_completed() {
+    use chrono::Duration;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library_id = create_test_library(&db).await;
+
+    // Create, claim, and complete a task
+    let task_type = TaskType::ScanLibrary {
+        library_id,
+        mode: "normal".to_string(),
+    };
+
+    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    TaskRepository::claim_next(&db, "worker-1", 300)
+        .await
+        .expect("Failed to claim task");
+
+    TaskRepository::mark_completed(&db, task_id, None)
+        .await
+        .expect("Failed to mark completed");
+
+    // Artificially set locked_until to stale timestamp (shouldn't matter)
+    {
+        let task = TaskRepository::get_by_id(&db, task_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let mut active: tasks::ActiveModel = task.into();
+        active.locked_until = Set(Some(Utc::now() - Duration::seconds(700)));
+        active.update(&db).await.unwrap();
+    }
+
+    // Try to recover stale tasks
+    let recovered = TaskRepository::recover_stale_tasks(&db, 600)
+        .await
+        .expect("Failed to recover stale tasks");
+
+    // Should not recover completed task
+    assert_eq!(recovered, 0);
+
+    // Verify task still completed
+    let task = TaskRepository::get_by_id(&db, task_id)
+        .await
+        .expect("Failed to get task")
+        .expect("Task not found");
+
+    assert_eq!(task.status, "completed");
+}
+
+/// Test stats correctly identify stale tasks
+#[tokio::test]
+async fn test_stats_shows_stale_tasks() {
+    use chrono::Duration;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library_id = create_test_library(&db).await;
+
+    // Create and claim a task
+    let task_type = TaskType::ScanLibrary {
+        library_id,
+        mode: "normal".to_string(),
+    };
+
+    TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    let task = TaskRepository::claim_next(&db, "worker-1", 300)
+        .await
+        .expect("Failed to claim task")
+        .expect("No task");
+
+    // Make it stale (locked > 10 minutes)
+    let mut active: tasks::ActiveModel = task.into();
+    active.locked_until = Set(Some(Utc::now() - Duration::minutes(11)));
+    active.update(&db).await.unwrap();
+
+    // Get stats
+    let stats = TaskRepository::get_stats(&db)
+        .await
+        .expect("Failed to get stats");
+
+    assert_eq!(stats.processing, 1);
+    assert_eq!(stats.stale, 1); // Should detect the stale task
 }

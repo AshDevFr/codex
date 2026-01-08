@@ -195,7 +195,7 @@ describe("useTaskProgress", () => {
       capturedCallback!({
         task_id: "task-1",
         task_type: "analyze_book",
-        status: "queued",
+        status: "pending",
         progress: undefined,
         error: undefined,
         library_id: "lib-1",
@@ -222,9 +222,9 @@ describe("useTaskProgress", () => {
     expect(runningTasks).toHaveLength(1);
     expect(runningTasks[0].task_id).toBe("task-2");
 
-    const queuedTasks = result.current.getTasksByStatus("queued");
-    expect(queuedTasks).toHaveLength(1);
-    expect(queuedTasks[0].task_id).toBe("task-1");
+    const pendingTasks = result.current.getTasksByStatus("pending");
+    expect(pendingTasks).toHaveLength(1);
+    expect(pendingTasks[0].task_id).toBe("task-1");
   });
 
   it("should filter tasks by library", () => {

@@ -37,8 +37,8 @@ impl ScanMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ScanStatus {
-    /// Scan is queued but not yet started
-    Queued,
+    /// Scan is pending but not yet started
+    Pending,
     /// Scan is currently running
     Running,
     /// Scan completed successfully
@@ -52,7 +52,7 @@ pub enum ScanStatus {
 impl fmt::Display for ScanStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ScanStatus::Queued => write!(f, "queued"),
+            ScanStatus::Pending => write!(f, "pending"),
             ScanStatus::Running => write!(f, "running"),
             ScanStatus::Completed => write!(f, "completed"),
             ScanStatus::Failed => write!(f, "failed"),
@@ -85,11 +85,11 @@ pub struct ScanProgress {
 }
 
 impl ScanProgress {
-    /// Create new scan progress in queued state
+    /// Create new scan progress in pending state
     pub fn new(library_id: Uuid) -> Self {
         Self {
             library_id,
-            status: ScanStatus::Queued,
+            status: ScanStatus::Pending,
             files_total: 0,
             files_processed: 0,
             series_found: 0,
@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn test_scan_status_display() {
-        assert_eq!(ScanStatus::Queued.to_string(), "queued");
+        assert_eq!(ScanStatus::Pending.to_string(), "pending");
         assert_eq!(ScanStatus::Running.to_string(), "running");
         assert_eq!(ScanStatus::Completed.to_string(), "completed");
         assert_eq!(ScanStatus::Failed.to_string(), "failed");
@@ -225,7 +225,7 @@ mod tests {
         let library_id = Uuid::new_v4();
         let mut progress = ScanProgress::new(library_id);
 
-        assert_eq!(progress.status, ScanStatus::Queued);
+        assert_eq!(progress.status, ScanStatus::Pending);
         assert_eq!(progress.library_id, library_id);
 
         progress.start();
@@ -251,7 +251,7 @@ mod tests {
 
         progress.add_error("Test error".to_string());
         assert_eq!(progress.errors.len(), 1);
-        assert_eq!(progress.status, ScanStatus::Queued); // Still queued
+        assert_eq!(progress.status, ScanStatus::Pending); // Still pending
 
         progress.fail("Fatal error".to_string());
         assert_eq!(progress.status, ScanStatus::Failed);

@@ -72,7 +72,7 @@ describe("TaskNotificationBadge", () => {
       {
         task_id: "task-2",
         task_type: "generate_thumbnails",
-        status: "queued",
+        status: "pending",
         progress: null,
         error: null,
         library_id: "lib-2",
@@ -214,7 +214,7 @@ describe("TaskNotificationBadge", () => {
       {
         task_id: "task-2",
         task_type: "generate_thumbnails",
-        status: "queued",
+        status: "pending",
         progress: null,
         error: null,
         library_id: "lib-2",
@@ -322,9 +322,9 @@ describe("TaskNotificationBadge", () => {
       },
     ];
 
-    // Note: Badge should only count running/queued, not completed
+    // Note: Badge should only count running/pending, not completed
     const activeTasks = mockTasks.filter(
-      (t) => t.status === "running" || t.status === "queued"
+      (t) => t.status === "running" || t.status === "pending"
     );
 
     vi.mocked(useTaskProgress).mockReturnValue({

@@ -236,39 +236,37 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        // Unique constraints to prevent duplicate pending tasks for same entity
-        // PostgreSQL-specific partial unique constraints
-        if manager.get_database_backend() == sea_orm::DatabaseBackend::Postgres {
-            manager
-                .get_connection()
-                .execute_unprepared(
-                    r#"
-                    CREATE UNIQUE INDEX unique_pending_library ON tasks(library_id, task_type)
-                    WHERE status IN ('pending', 'processing') AND library_id IS NOT NULL
-                    "#,
-                )
-                .await?;
+        // Unique constraints to prevent duplicate pending/processing tasks for same entity
+        // Both PostgreSQL and SQLite support partial indexes with WHERE clause
+        manager
+            .get_connection()
+            .execute_unprepared(
+                r#"
+                CREATE UNIQUE INDEX unique_pending_library ON tasks(library_id, task_type)
+                WHERE status IN ('pending', 'processing') AND library_id IS NOT NULL
+                "#,
+            )
+            .await?;
 
-            manager
-                .get_connection()
-                .execute_unprepared(
-                    r#"
-                    CREATE UNIQUE INDEX unique_pending_series ON tasks(series_id, task_type)
-                    WHERE status IN ('pending', 'processing') AND series_id IS NOT NULL
-                    "#,
-                )
-                .await?;
+        manager
+            .get_connection()
+            .execute_unprepared(
+                r#"
+                CREATE UNIQUE INDEX unique_pending_series ON tasks(series_id, task_type)
+                WHERE status IN ('pending', 'processing') AND series_id IS NOT NULL
+                "#,
+            )
+            .await?;
 
-            manager
-                .get_connection()
-                .execute_unprepared(
-                    r#"
-                    CREATE UNIQUE INDEX unique_pending_book ON tasks(book_id, task_type)
-                    WHERE status IN ('pending', 'processing') AND book_id IS NOT NULL
-                    "#,
-                )
-                .await?;
-        }
+        manager
+            .get_connection()
+            .execute_unprepared(
+                r#"
+                CREATE UNIQUE INDEX unique_pending_book ON tasks(book_id, task_type)
+                WHERE status IN ('pending', 'processing') AND book_id IS NOT NULL
+                "#,
+            )
+            .await?;
 
         Ok(())
     }

@@ -15,8 +15,8 @@ pub enum EntityType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TaskStatus {
-    /// Task is queued and waiting to be processed
-    Queued,
+    /// Task is pending and waiting to be processed
+    Pending,
     /// Task is currently being processed
     Running,
     /// Task completed successfully

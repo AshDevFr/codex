@@ -298,7 +298,7 @@ describe("subscribeToTaskProgress", () => {
 
   it("should handle task lifecycle sequence", async () => {
     const lifecycle =
-      'data: {"task_id":"task-1","task_type":"analyze_book","status":"queued","progress":null,"error":null,"library_id":"lib-1"}\n\n' +
+      'data: {"task_id":"task-1","task_type":"analyze_book","status":"pending","progress":null,"error":null,"library_id":"lib-1"}\n\n' +
       'data: {"task_id":"task-1","task_type":"analyze_book","status":"running","progress":{"current":5,"total":10,"message":"Processing..."},"error":null,"library_id":"lib-1"}\n\n' +
       'data: {"task_id":"task-1","task_type":"analyze_book","status":"completed","progress":{"current":10,"total":10,"message":"Done"},"error":null,"library_id":"lib-1"}\n\n';
     const encoder = new TextEncoder();
@@ -329,7 +329,7 @@ describe("subscribeToTaskProgress", () => {
     expect(onProgress).toHaveBeenCalledTimes(3);
     expect(onProgress).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ status: "queued" })
+      expect.objectContaining({ status: "pending" })
     );
     expect(onProgress).toHaveBeenNthCalledWith(
       2,

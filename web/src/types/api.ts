@@ -144,7 +144,7 @@ export interface CreateLibraryRequest {
 }
 
 export type ScanStatus =
-	| "queued"
+	| "pending"
 	| "running"
 	| "completed"
 	| "failed"

@@ -57,7 +57,7 @@ export function isLibraryEvent(event: EntityEvent): event is
 /**
  * Task status for progress tracking
  */
-export type TaskStatus = "queued" | "running" | "completed" | "failed";
+export type TaskStatus = "pending" | "running" | "completed" | "failed";
 
 /**
  * Progress information for a running task

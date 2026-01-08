@@ -83,7 +83,7 @@ pub async fn trigger_scan(
 
     if existing_scan.is_some() {
         return Err(ApiError::Conflict(format!(
-            "Library {} is already being scanned or scan is queued",
+            "Library {} is already being scanned or scan is pending",
             library_id
         )));
     }
@@ -330,7 +330,7 @@ pub async fn scan_progress_stream(
                             };
 
                             let status_str = match event.status {
-                                crate::events::TaskStatus::Queued => "queued",
+                                crate::events::TaskStatus::Pending => "pending",
                                 crate::events::TaskStatus::Running => "running",
                                 crate::events::TaskStatus::Completed => "completed",
                                 crate::events::TaskStatus::Failed => "failed",

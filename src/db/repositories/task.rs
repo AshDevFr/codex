@@ -16,6 +16,7 @@ pub struct TaskRepository;
 
 impl TaskRepository {
     /// Enqueue a new task
+    /// If a task with the same entity and type is already pending/processing, returns the existing task's ID
     pub async fn enqueue(
         db: &DatabaseConnection,
         task_type: TaskType,
@@ -27,6 +28,17 @@ impl TaskRepository {
         let series_id = task_type.series_id();
         let book_id = task_type.book_id();
         let params = task_type.params();
+
+        // Check if a task already exists for this entity
+        if let Some(existing_task) =
+            Self::find_existing_task(db, &type_str, library_id, series_id, book_id).await?
+        {
+            info!(
+                "Task already exists: {} ({}) - skipping duplicate",
+                existing_task.id, type_str
+            );
+            return Ok(existing_task.id);
+        }
 
         let task_id = Uuid::new_v4();
         let now = Utc::now();
@@ -52,11 +64,61 @@ impl TaskRepository {
             completed_at: Set(None),
         };
 
-        task.insert(db).await.context("Failed to enqueue task")?;
+        // Try to insert, but handle unique constraint violations gracefully
+        match task.insert(db).await {
+            Ok(_) => {
+                info!("Enqueued task {} ({})", task_id, type_str);
+                Ok(task_id)
+            }
+            Err(e) => {
+                // Check if this is a unique constraint violation
+                let err_str = e.to_string().to_lowercase();
+                if err_str.contains("unique") || err_str.contains("duplicate") {
+                    // Race condition: another task was inserted between our check and insert
+                    // Find and return the existing task
+                    if let Some(existing_task) =
+                        Self::find_existing_task(db, &type_str, library_id, series_id, book_id)
+                            .await?
+                    {
+                        info!(
+                            "Task was created concurrently: {} ({}) - using existing task",
+                            existing_task.id, type_str
+                        );
+                        Ok(existing_task.id)
+                    } else {
+                        anyhow::bail!(
+                            "Unique constraint violation but could not find existing task"
+                        )
+                    }
+                } else {
+                    Err(e).context("Failed to enqueue task")
+                }
+            }
+        }
+    }
 
-        info!("Enqueued task {} ({})", task_id, type_str);
+    /// Find an existing pending/processing task for the given entity
+    async fn find_existing_task(
+        db: &DatabaseConnection,
+        task_type: &str,
+        library_id: Option<Uuid>,
+        series_id: Option<Uuid>,
+        book_id: Option<Uuid>,
+    ) -> Result<Option<tasks::Model>> {
+        let mut query = Tasks::find()
+            .filter(tasks::Column::TaskType.eq(task_type))
+            .filter(tasks::Column::Status.is_in(["pending", "processing"]));
 
-        Ok(task_id)
+        // Match on the most specific entity identifier
+        if let Some(bk_id) = book_id {
+            query = query.filter(tasks::Column::BookId.eq(bk_id));
+        } else if let Some(ser_id) = series_id {
+            query = query.filter(tasks::Column::SeriesId.eq(ser_id));
+        } else if let Some(lib_id) = library_id {
+            query = query.filter(tasks::Column::LibraryId.eq(lib_id));
+        }
+
+        query.one(db).await.context("Failed to find existing task")
     }
 
     /// Claim next available task (atomic operation using SKIP LOCKED for Postgres, transaction for SQLite)
@@ -444,60 +506,76 @@ impl TaskRepository {
         })
     }
 
-    /// Get pending task counts grouped by task type
-    pub async fn get_pending_counts_by_type(
+    /// Recover stale tasks that have been locked longer than the threshold
+    /// This handles crashed workers that never released their locks
+    ///
+    /// # Arguments
+    /// * `db` - Database connection
+    /// * `stale_threshold_secs` - Time in seconds after which a locked task is considered stale
+    ///
+    /// # Returns
+    /// Number of tasks recovered
+    pub async fn recover_stale_tasks(
         db: &DatabaseConnection,
-    ) -> Result<std::collections::HashMap<String, u64>> {
-        // Get all pending/queued tasks grouped by task_type
-        // Since SeaORM doesn't have great support for GROUP BY with aggregates,
-        // we'll fetch all pending tasks and count them in memory
-        let tasks = Tasks::find()
-            .filter(tasks::Column::Status.is_in(["pending", "queued"]))
-            .select_only()
-            .column(tasks::Column::TaskType)
-            .into_tuple::<(String,)>()
+        stale_threshold_secs: i64,
+    ) -> Result<u64> {
+        let stale_cutoff = Utc::now() - Duration::seconds(stale_threshold_secs);
+
+        // Find tasks that are "processing" but locked too long ago
+        let stale_tasks = Tasks::find()
+            .filter(tasks::Column::Status.eq("processing"))
+            .filter(tasks::Column::LockedUntil.lt(stale_cutoff))
             .all(db)
             .await
-            .context("Failed to get pending tasks by type")?;
+            .context("Failed to find stale tasks")?;
 
-        // Count tasks by type
-        let mut counts = std::collections::HashMap::new();
-        for (task_type,) in tasks {
-            *counts.entry(task_type).or_insert(0) += 1;
+        let mut recovered = 0u64;
+
+        for task in stale_tasks {
+            // Only recover if not at max attempts
+            if task.attempts < task.max_attempts {
+                let mut active: tasks::ActiveModel = task.clone().into();
+                active.status = Set("pending".to_string());
+                active.locked_by = Set(None);
+                active.locked_until = Set(None);
+                // Don't increment attempts - worker crash wasn't task's fault
+
+                active
+                    .update(db)
+                    .await
+                    .context("Failed to recover stale task")?;
+                recovered += 1;
+
+                info!(
+                    "Recovered stale task {} (type: {}, was locked by {:?})",
+                    task.id, task.task_type, task.locked_by
+                );
+            } else {
+                // Mark as failed if max attempts reached
+                let mut active: tasks::ActiveModel = task.clone().into();
+                active.status = Set("failed".to_string());
+                active.last_error = Set(Some("Task stale after max attempts".to_string()));
+                active.completed_at = Set(Some(Utc::now()));
+                active.locked_by = Set(None);
+                active.locked_until = Set(None);
+
+                active
+                    .update(db)
+                    .await
+                    .context("Failed to mark stale task as failed")?;
+                recovered += 1;
+
+                warn!(
+                    "Marked stale task {} as failed after {} attempts",
+                    task.id, task.attempts
+                );
+            }
         }
 
-        Ok(counts)
-    }
-
-    /// Check if a task already exists for the given entity and type
-    pub async fn task_exists(
-        db: &DatabaseConnection,
-        task_type: &str,
-        library_id: Option<Uuid>,
-        series_id: Option<Uuid>,
-        book_id: Option<Uuid>,
-    ) -> Result<bool> {
-        let mut query = Tasks::find()
-            .filter(tasks::Column::TaskType.eq(task_type))
-            .filter(tasks::Column::Status.is_in(["pending", "processing"]));
-
-        if let Some(lib_id) = library_id {
-            query = query.filter(tasks::Column::LibraryId.eq(lib_id));
+        if recovered > 0 {
+            info!("Recovered {} stale tasks", recovered);
         }
 
-        if let Some(ser_id) = series_id {
-            query = query.filter(tasks::Column::SeriesId.eq(ser_id));
-        }
-
-        if let Some(bk_id) = book_id {
-            query = query.filter(tasks::Column::BookId.eq(bk_id));
-        }
-
-        let count = query
-            .count(db)
-            .await
-            .context("Failed to check task existence")?;
-
-        Ok(count > 0)
+        Ok(recovered)
     }
 }

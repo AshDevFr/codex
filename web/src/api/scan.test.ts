@@ -243,7 +243,7 @@ describe("scanApi.subscribeToProgress", () => {
 
   it("should handle multiple events in single chunk", async () => {
     const multipleEvents =
-      'data: {"library_id":"1","status":"queued","files_total":0,"files_processed":0}\n\n' +
+      'data: {"library_id":"1","status":"pending","files_total":0,"files_processed":0}\n\n' +
       'data: {"library_id":"1","status":"running","files_total":100,"files_processed":10}\n\n';
     const encoder = new TextEncoder();
 
@@ -274,7 +274,7 @@ describe("scanApi.subscribeToProgress", () => {
     expect(onProgress).toHaveBeenCalledTimes(2);
     expect(onProgress).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ status: "queued" })
+      expect.objectContaining({ status: "pending" })
     );
     expect(onProgress).toHaveBeenNthCalledWith(
       2,

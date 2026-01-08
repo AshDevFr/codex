@@ -234,7 +234,7 @@ export function Home() {
 							const progress = scanProgress[library.id];
 							const isScanning =
 								progress &&
-								(progress.status === "queued" ||
+								(progress.status === "pending" ||
 									progress.status === "running");
 							const progressPercent = progress?.files_total
 								? Math.round(
@@ -339,7 +339,7 @@ export function Home() {
 											<Stack gap="xs">
 												<Group justify="space-between">
 													<Text size="sm" fw={500}>
-														{progress.status === "queued"
+														{progress.status === "pending"
 															? "Starting scan..."
 															: "Scanning..."}
 													</Text>
