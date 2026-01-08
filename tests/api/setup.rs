@@ -82,7 +82,7 @@ async fn test_initialize_setup_creates_admin_user() {
     let init_request = InitializeSetupRequest {
         username: "admin".to_string(),
         email: "admin@example.com".to_string(),
-        password: "securepassword123".to_string(),
+        password: "SecurePassword123!".to_string(),
     };
 
     let request = hyper::Request::builder()
@@ -273,4 +273,256 @@ async fn test_configure_settings_requires_admin() {
         StatusCode::FORBIDDEN,
         "Should require admin privileges"
     );
+}
+
+// ============================================================================
+// Password and Email Validation Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_password_too_short() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    let request_body = json!({
+        "username": "admin",
+        "email": "admin@example.com",
+        "password": "Short1!"
+    });
+
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/setup/initialize")
+        .header("Content-Type", "application/json")
+        .body(request_body.to_string())
+        .unwrap();
+
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let error = response.unwrap();
+    assert!(
+        error.error.contains("at least 8 characters")
+            || error.message.contains("at least 8 characters"),
+        "Error should mention password length requirement"
+    );
+}
+
+#[tokio::test]
+async fn test_password_missing_uppercase() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    let request_body = json!({
+        "username": "admin",
+        "email": "admin@example.com",
+        "password": "lowercase123!"
+    });
+
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/setup/initialize")
+        .header("Content-Type", "application/json")
+        .body(request_body.to_string())
+        .unwrap();
+
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let error = response.unwrap();
+    assert!(
+        error.error.contains("uppercase") || error.message.contains("uppercase"),
+        "Error should mention uppercase letter requirement"
+    );
+}
+
+#[tokio::test]
+async fn test_password_missing_lowercase() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    let request_body = json!({
+        "username": "admin",
+        "email": "admin@example.com",
+        "password": "UPPERCASE123!"
+    });
+
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/setup/initialize")
+        .header("Content-Type", "application/json")
+        .body(request_body.to_string())
+        .unwrap();
+
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let error = response.unwrap();
+    assert!(
+        error.error.contains("lowercase") || error.message.contains("lowercase"),
+        "Error should mention lowercase letter requirement"
+    );
+}
+
+#[tokio::test]
+async fn test_password_missing_number() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    let request_body = json!({
+        "username": "admin",
+        "email": "admin@example.com",
+        "password": "Password!@#"
+    });
+
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/setup/initialize")
+        .header("Content-Type", "application/json")
+        .body(request_body.to_string())
+        .unwrap();
+
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let error = response.unwrap();
+    assert!(
+        error.error.contains("number") || error.message.contains("number"),
+        "Error should mention number requirement"
+    );
+}
+
+#[tokio::test]
+async fn test_password_missing_special_character() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    let request_body = json!({
+        "username": "admin",
+        "email": "admin@example.com",
+        "password": "Password123"
+    });
+
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/setup/initialize")
+        .header("Content-Type", "application/json")
+        .body(request_body.to_string())
+        .unwrap();
+
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let error = response.unwrap();
+    assert!(
+        error.error.contains("special character") || error.message.contains("special character"),
+        "Error should mention special character requirement"
+    );
+}
+
+#[tokio::test]
+async fn test_valid_password_accepted() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    let request_body = json!({
+        "username": "admin",
+        "email": "admin@example.com",
+        "password": "SecurePass123!"
+    });
+
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/setup/initialize")
+        .header("Content-Type", "application/json")
+        .body(request_body.to_string())
+        .unwrap();
+
+    let (status, _): (StatusCode, Option<InitializeSetupResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK, "Valid password should be accepted");
+}
+
+#[tokio::test]
+async fn test_invalid_email_format() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    // Test various invalid email formats
+    let invalid_emails = vec![
+        "notanemail",
+        "missing@domain",
+        "@nodomain.com",
+        "no-at-sign.com",
+        "double@@example.com",
+    ];
+
+    for invalid_email in invalid_emails {
+        let request_body = json!({
+            "username": "admin",
+            "email": invalid_email,
+            "password": "SecurePass123!"
+        });
+
+        let request = hyper::Request::builder()
+            .method("POST")
+            .uri("/api/v1/setup/initialize")
+            .header("Content-Type", "application/json")
+            .body(request_body.to_string())
+            .unwrap();
+
+        let (status, response): (StatusCode, Option<ErrorResponse>) =
+            make_json_request(app.clone(), request).await;
+
+        assert_eq!(
+            status,
+            StatusCode::BAD_REQUEST,
+            "Email '{}' should be rejected",
+            invalid_email
+        );
+        let error = response.unwrap();
+        assert!(
+            error.error.contains("email") || error.message.contains("email"),
+            "Error should mention email validation for '{}'",
+            invalid_email
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_valid_email_accepted() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    let request_body = json!({
+        "username": "admin",
+        "email": "valid.email@example.com",
+        "password": "SecurePass123!"
+    });
+
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/setup/initialize")
+        .header("Content-Type", "application/json")
+        .body(request_body.to_string())
+        .unwrap();
+
+    let (status, _): (StatusCode, Option<InitializeSetupResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK, "Valid email should be accepted");
 }

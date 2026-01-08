@@ -74,9 +74,53 @@ pub async fn initialize_setup(
     if request.email.trim().is_empty() {
         return Err(ApiError::BadRequest("Email cannot be empty".to_string()));
     }
+
+    // Validate email format (basic validation)
+    if !request.email.contains('@') || !request.email.contains('.') {
+        return Err(ApiError::BadRequest(
+            "Invalid email address format".to_string(),
+        ));
+    }
+    let parts: Vec<&str> = request.email.split('@').collect();
+    if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
+        return Err(ApiError::BadRequest(
+            "Invalid email address format".to_string(),
+        ));
+    }
+    if !parts[1].contains('.') {
+        return Err(ApiError::BadRequest(
+            "Invalid email address format".to_string(),
+        ));
+    }
+
+    // Validate password complexity
     if request.password.len() < 8 {
         return Err(ApiError::BadRequest(
             "Password must be at least 8 characters".to_string(),
+        ));
+    }
+    if !request.password.chars().any(|c| c.is_uppercase()) {
+        return Err(ApiError::BadRequest(
+            "Password must contain at least one uppercase letter".to_string(),
+        ));
+    }
+    if !request.password.chars().any(|c| c.is_lowercase()) {
+        return Err(ApiError::BadRequest(
+            "Password must contain at least one lowercase letter".to_string(),
+        ));
+    }
+    if !request.password.chars().any(|c| c.is_numeric()) {
+        return Err(ApiError::BadRequest(
+            "Password must contain at least one number".to_string(),
+        ));
+    }
+    if !request
+        .password
+        .chars()
+        .any(|c| "!@#$%^&*(),.?\":{}|<>".contains(c))
+    {
+        return Err(ApiError::BadRequest(
+            "Password must contain at least one special character".to_string(),
         ));
     }
 

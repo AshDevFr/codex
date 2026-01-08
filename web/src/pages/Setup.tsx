@@ -27,6 +27,34 @@ import type {
 	InitializeSetupRequest,
 } from "@/types/api";
 
+// Password validation utilities
+const validatePassword = (password: string) => {
+	const errors: string[] = [];
+
+	if (password.length < 8) {
+		errors.push("at least 8 characters");
+	}
+	if (!/[A-Z]/.test(password)) {
+		errors.push("one uppercase letter");
+	}
+	if (!/[a-z]/.test(password)) {
+		errors.push("one lowercase letter");
+	}
+	if (!/[0-9]/.test(password)) {
+		errors.push("one number");
+	}
+	if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+		errors.push("one special character");
+	}
+
+	return errors;
+};
+
+const validateEmail = (email: string) => {
+	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+	return emailRegex.test(email);
+};
+
 export function Setup() {
 	const navigate = useNavigate();
 	const { setAuth } = useAuthStore();
@@ -128,10 +156,13 @@ export function Setup() {
 	};
 
 	const passwordsMatch = password === confirmPassword;
+	const passwordErrors = validatePassword(password);
+	const isPasswordValid = passwordErrors.length === 0;
+	const isEmailValid = email.trim() !== "" && validateEmail(email);
 	const canSubmitAdmin =
 		username.trim() !== "" &&
-		email.trim() !== "" &&
-		password.length >= 8 &&
+		isEmailValid &&
+		isPasswordValid &&
 		passwordsMatch;
 
 	return (
@@ -168,6 +199,9 @@ export function Setup() {
 									value={email}
 									onChange={(e) => setEmail(e.currentTarget.value)}
 									disabled={initializeMutation.isPending}
+									error={
+										email && !isEmailValid ? "Invalid email address" : undefined
+									}
 								/>
 
 								<PasswordInput
@@ -177,7 +211,12 @@ export function Setup() {
 									value={password}
 									onChange={(e) => setPassword(e.currentTarget.value)}
 									disabled={initializeMutation.isPending}
-									description="Minimum 8 characters"
+									description="Must contain: uppercase, lowercase, number, special character"
+									error={
+										password && !isPasswordValid
+											? `Missing: ${passwordErrors.join(", ")}`
+											: undefined
+									}
 								/>
 
 								<PasswordInput
