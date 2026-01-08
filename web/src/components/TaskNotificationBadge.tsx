@@ -1,4 +1,4 @@
-import { Badge, Tooltip, Stack, Text, Group } from "@mantine/core";
+import { Badge, Group, Stack, Text, Tooltip } from "@mantine/core";
 import { IconLoader2 } from "@tabler/icons-react";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 
@@ -15,7 +15,10 @@ export function TaskNotificationBadge() {
 	);
 
 	// Calculate total pending count
-	const totalPendingCount = Object.values(pendingCounts).reduce((sum, count) => sum + count, 0);
+	const totalPendingCount = Object.values(pendingCounts).reduce(
+		(sum, count) => sum + count,
+		0,
+	);
 
 	// If no running tasks and no pending tasks, don't show the badge
 	if (runningTasks.length === 0 && totalPendingCount === 0) {
@@ -32,7 +35,7 @@ export function TaskNotificationBadge() {
 			.join(" ");
 	};
 
-	const getTaskSummary = (task: typeof runningTasks[0]) => {
+	const getTaskSummary = (task: (typeof runningTasks)[0]) => {
 		const taskName = formatTaskType(task.task_type);
 		const progress = task.progress
 			? ` (${task.progress.current}/${task.progress.total})`

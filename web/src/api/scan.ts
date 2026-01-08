@@ -14,13 +14,17 @@ class SSEReconnectionManager {
 	private url: string;
 	private onMessage: (data: ScanProgress) => void;
 	private onError?: (error: Error) => void;
-	private onConnectionStateChange?: (state: 'connecting' | 'connected' | 'disconnected' | 'failed') => void;
+	private onConnectionStateChange?: (
+		state: "connecting" | "connected" | "disconnected" | "failed",
+	) => void;
 
 	constructor(
 		url: string,
 		onMessage: (data: ScanProgress) => void,
 		onError?: (error: Error) => void,
-		onConnectionStateChange?: (state: 'connecting' | 'connected' | 'disconnected' | 'failed') => void,
+		onConnectionStateChange?: (
+			state: "connecting" | "connected" | "disconnected" | "failed",
+		) => void,
 	) {
 		this.url = url;
 		this.onMessage = onMessage;
@@ -31,7 +35,7 @@ class SSEReconnectionManager {
 	private currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
 	async connect(): Promise<() => void> {
-		this.onConnectionStateChange?.('connecting');
+		this.onConnectionStateChange?.("connecting");
 
 		const attemptConnection = async (): Promise<void> => {
 			if (!this.active) return;
@@ -50,7 +54,9 @@ class SSEReconnectionManager {
 				});
 
 				if (!response.ok) {
-					throw new Error(`SSE connection failed: ${response.status} ${response.statusText}`);
+					throw new Error(
+						`SSE connection failed: ${response.status} ${response.statusText}`,
+					);
 				}
 
 				if (!response.body) {
@@ -59,7 +65,7 @@ class SSEReconnectionManager {
 
 				// Reset reconnection counter on successful connection
 				this.reconnectAttempts = 0;
-				this.onConnectionStateChange?.('connected');
+				this.onConnectionStateChange?.("connected");
 
 				const reader = response.body.getReader();
 				this.currentReader = reader;
@@ -96,7 +102,7 @@ class SSEReconnectionManager {
 				if (!this.active) return;
 
 				console.error("SSE connection error:", error);
-				this.onConnectionStateChange?.('disconnected');
+				this.onConnectionStateChange?.("disconnected");
 
 				// Call onError callback with the error
 				if (error instanceof Error) {
@@ -106,18 +112,20 @@ class SSEReconnectionManager {
 				// Attempt reconnection with exponential backoff
 				if (this.reconnectAttempts < this.maxAttempts) {
 					const delay = Math.min(
-						this.baseDelay * (2 ** this.reconnectAttempts),
-						this.maxDelay
+						this.baseDelay * 2 ** this.reconnectAttempts,
+						this.maxDelay,
 					);
 					this.reconnectAttempts++;
 
-					console.debug(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxAttempts})`);
+					console.debug(
+						`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxAttempts})`,
+					);
 
 					this.reconnectTimer = setTimeout(() => {
 						attemptConnection();
 					}, delay);
 				} else {
-					this.onConnectionStateChange?.('failed');
+					this.onConnectionStateChange?.("failed");
 				}
 			}
 		};
@@ -146,7 +154,9 @@ export const scanApi = {
 	subscribeToProgress: (
 		onProgress: (progress: ScanProgress) => void,
 		onError?: (error: Error) => void,
-		onConnectionStateChange?: (state: 'connecting' | 'connected' | 'disconnected' | 'failed') => void,
+		onConnectionStateChange?: (
+			state: "connecting" | "connected" | "disconnected" | "failed",
+		) => void,
 	): (() => void) => {
 		const baseURL = api.defaults.baseURL || "/api/v1";
 		const manager = new SSEReconnectionManager(

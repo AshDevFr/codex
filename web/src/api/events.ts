@@ -13,13 +13,17 @@ class EntityEventsReconnectionManager {
 	private url: string;
 	private onEvent: (event: EntityChangeEvent) => void;
 	private onError?: (error: Error) => void;
-	private onConnectionStateChange?: (state: 'connecting' | 'connected' | 'disconnected' | 'failed') => void;
+	private onConnectionStateChange?: (
+		state: "connecting" | "connected" | "disconnected" | "failed",
+	) => void;
 
 	constructor(
 		url: string,
 		onEvent: (event: EntityChangeEvent) => void,
 		onError?: (error: Error) => void,
-		onConnectionStateChange?: (state: 'connecting' | 'connected' | 'disconnected' | 'failed') => void,
+		onConnectionStateChange?: (
+			state: "connecting" | "connected" | "disconnected" | "failed",
+		) => void,
 	) {
 		this.url = url;
 		this.onEvent = onEvent;
@@ -30,7 +34,7 @@ class EntityEventsReconnectionManager {
 	private currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
 	async connect(): Promise<() => void> {
-		this.onConnectionStateChange?.('connecting');
+		this.onConnectionStateChange?.("connecting");
 
 		const attemptConnection = async (): Promise<void> => {
 			if (!this.active) return;
@@ -49,7 +53,9 @@ class EntityEventsReconnectionManager {
 				});
 
 				if (!response.ok) {
-					throw new Error(`SSE connection failed: ${response.status} ${response.statusText}`);
+					throw new Error(
+						`SSE connection failed: ${response.status} ${response.statusText}`,
+					);
 				}
 
 				if (!response.body) {
@@ -58,7 +64,7 @@ class EntityEventsReconnectionManager {
 
 				// Reset reconnection counter on successful connection
 				this.reconnectAttempts = 0;
-				this.onConnectionStateChange?.('connected');
+				this.onConnectionStateChange?.("connected");
 
 				const reader = response.body.getReader();
 				this.currentReader = reader;
@@ -95,7 +101,7 @@ class EntityEventsReconnectionManager {
 				if (!this.active) return;
 
 				console.error("Entity events SSE connection error:", error);
-				this.onConnectionStateChange?.('disconnected');
+				this.onConnectionStateChange?.("disconnected");
 
 				// Call onError callback with the error
 				if (error instanceof Error) {
@@ -105,18 +111,20 @@ class EntityEventsReconnectionManager {
 				// Attempt reconnection with exponential backoff
 				if (this.reconnectAttempts < this.maxAttempts) {
 					const delay = Math.min(
-						this.baseDelay * (2 ** this.reconnectAttempts),
-						this.maxDelay
+						this.baseDelay * 2 ** this.reconnectAttempts,
+						this.maxDelay,
 					);
 					this.reconnectAttempts++;
 
-					console.debug(`Reconnecting entity events in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxAttempts})`);
+					console.debug(
+						`Reconnecting entity events in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxAttempts})`,
+					);
 
 					this.reconnectTimer = setTimeout(() => {
 						attemptConnection();
 					}, delay);
 				} else {
-					this.onConnectionStateChange?.('failed');
+					this.onConnectionStateChange?.("failed");
 				}
 			}
 		};
@@ -144,14 +152,16 @@ export const eventsApi = {
 	subscribeToEntityEvents: (
 		onEvent: (event: EntityChangeEvent) => void,
 		onError?: (error: Error) => void,
-		onConnectionStateChange?: (state: 'connecting' | 'connected' | 'disconnected' | 'failed') => void,
+		onConnectionStateChange?: (
+			state: "connecting" | "connected" | "disconnected" | "failed",
+		) => void,
 	): (() => void) => {
 		const url = "/api/v1/events/stream";
 		const manager = new EntityEventsReconnectionManager(
 			url,
 			onEvent,
 			onError,
-			onConnectionStateChange
+			onConnectionStateChange,
 		);
 
 		// Start connection asynchronously and store the cleanup function

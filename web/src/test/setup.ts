@@ -12,12 +12,11 @@ global.console.error = vi.fn((...args: unknown[]) => {
 
 	// Suppress expected connection errors and React act() warnings during tests
 	if (
-		typeof message === 'string' && (
-			message.includes('Task progress stream error') ||
-			message.includes('ECONNREFUSED') ||
-			message.includes('fetch failed') ||
-			message.includes('not wrapped in act(')
-		)
+		typeof message === "string" &&
+		(message.includes("Task progress stream error") ||
+			message.includes("ECONNREFUSED") ||
+			message.includes("fetch failed") ||
+			message.includes("not wrapped in act("))
 	) {
 		return;
 	}

@@ -1,9 +1,5 @@
-import { Paper, Text, Progress, Group, Stack, Box } from "@mantine/core";
-import {
-	IconCircleCheck,
-	IconLoader2,
-	IconCircleX,
-} from "@tabler/icons-react";
+import { Box, Group, Paper, Progress, Stack, Text } from "@mantine/core";
+import { IconCircleCheck, IconCircleX, IconLoader2 } from "@tabler/icons-react";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import type { TaskProgressEvent } from "@/types/events";
 
@@ -24,10 +20,26 @@ function TaskProgressItem({ task }: TaskProgressItemProps) {
 
 	const getStatusIcon = () => {
 		if (isCompleted)
-			return <IconCircleCheck size={16} style={{ color: "var(--mantine-color-green-6)" }} />;
+			return (
+				<IconCircleCheck
+					size={16}
+					style={{ color: "var(--mantine-color-green-6)" }}
+				/>
+			);
 		if (isFailed)
-			return <IconCircleX size={16} style={{ color: "var(--mantine-color-red-6)" }} />;
-		return <IconLoader2 size={16} style={{ color: "var(--mantine-color-blue-6)" }} className="rotating-icon" />;
+			return (
+				<IconCircleX
+					size={16}
+					style={{ color: "var(--mantine-color-red-6)" }}
+				/>
+			);
+		return (
+			<IconLoader2
+				size={16}
+				style={{ color: "var(--mantine-color-blue-6)" }}
+				className="rotating-icon"
+			/>
+		);
 	};
 
 	const getStatusColor = () => {

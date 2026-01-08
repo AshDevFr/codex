@@ -7,12 +7,12 @@ import {
 	useNavigate,
 } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { useEntityEvents } from "@/hooks/useEntityEvents";
 import { Home } from "@/pages/Home";
 import { Login } from "@/pages/Login";
 import { Register } from "@/pages/Register";
 import { navigationService } from "@/services/navigation";
 import { useAuthStore } from "@/store/authStore";
-import { useEntityEvents } from "@/hooks/useEntityEvents";
 
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {

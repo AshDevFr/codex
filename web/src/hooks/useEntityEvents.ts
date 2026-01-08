@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { eventsApi } from "@/api/events";
 import type { EntityChangeEvent } from "@/types/events";
 
@@ -22,7 +22,8 @@ type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
  */
 export function useEntityEvents() {
 	const queryClient = useQueryClient();
-	const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
+	const [connectionState, setConnectionState] =
+		useState<ConnectionState>("connecting");
 
 	useEffect(() => {
 		const token = localStorage.getItem("jwt_token");
@@ -45,7 +46,7 @@ export function useEntityEvents() {
 					(state) => {
 						console.debug(`Entity events connection state: ${state}`);
 						setConnectionState(state as ConnectionState);
-					}
+					},
 				);
 			} catch (error) {
 				console.error("Failed to subscribe to entity events:", error);
@@ -69,7 +70,7 @@ export function useEntityEvents() {
  */
 function handleEntityEvent(
 	event: EntityChangeEvent,
-	queryClient: ReturnType<typeof useQueryClient>
+	queryClient: ReturnType<typeof useQueryClient>,
 ) {
 	console.debug("Received entity event:", event);
 
@@ -77,10 +78,17 @@ function handleEntityEvent(
 	const eventType = event.event;
 
 	// Handle book events
-	if ("BookCreated" in eventType || "BookUpdated" in eventType || "BookDeleted" in eventType) {
-		const data = "BookCreated" in eventType ? eventType.BookCreated
-			: "BookUpdated" in eventType ? eventType.BookUpdated
-			: eventType.BookDeleted;
+	if (
+		"BookCreated" in eventType ||
+		"BookUpdated" in eventType ||
+		"BookDeleted" in eventType
+	) {
+		const data =
+			"BookCreated" in eventType
+				? eventType.BookCreated
+				: "BookUpdated" in eventType
+					? eventType.BookUpdated
+					: eventType.BookDeleted;
 
 		// Invalidate book queries
 		queryClient.invalidateQueries({
@@ -110,11 +118,20 @@ function handleEntityEvent(
 	}
 
 	// Handle series events
-	if ("SeriesCreated" in eventType || "SeriesUpdated" in eventType || "SeriesDeleted" in eventType || "SeriesBulkPurged" in eventType) {
-		const data = "SeriesCreated" in eventType ? eventType.SeriesCreated
-			: "SeriesUpdated" in eventType ? eventType.SeriesUpdated
-			: "SeriesDeleted" in eventType ? eventType.SeriesDeleted
-			: eventType.SeriesBulkPurged;
+	if (
+		"SeriesCreated" in eventType ||
+		"SeriesUpdated" in eventType ||
+		"SeriesDeleted" in eventType ||
+		"SeriesBulkPurged" in eventType
+	) {
+		const data =
+			"SeriesCreated" in eventType
+				? eventType.SeriesCreated
+				: "SeriesUpdated" in eventType
+					? eventType.SeriesUpdated
+					: "SeriesDeleted" in eventType
+						? eventType.SeriesDeleted
+						: eventType.SeriesBulkPurged;
 
 		// Invalidate series queries
 		queryClient.invalidateQueries({
