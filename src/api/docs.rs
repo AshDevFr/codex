@@ -74,6 +74,13 @@ use utoipa::OpenApi;
         handlers::update_user,
         handlers::delete_user,
 
+        // API key endpoints
+        handlers::api_keys::list_api_keys,
+        handlers::api_keys::create_api_key,
+        handlers::api_keys::get_api_key,
+        handlers::api_keys::update_api_key,
+        handlers::api_keys::delete_api_key,
+
         // Metrics endpoints
         handlers::get_metrics,
 
@@ -141,6 +148,10 @@ use utoipa::OpenApi;
             dto::UserDto,
             dto::CreateUserRequest,
             dto::UpdateUserRequest,
+            dto::ApiKeyDto,
+            dto::CreateApiKeyRequest,
+            dto::CreateApiKeyResponse,
+            dto::UpdateApiKeyRequest,
             dto::PaginatedResponse<dto::SeriesDto>,
             dto::PaginatedResponse<dto::BookDto>,
             dto::PaginatedResponse<dto::UserDto>,
@@ -195,6 +206,7 @@ use utoipa::OpenApi;
         (name = "pages", description = "Page image serving endpoints"),
         (name = "Reading Progress", description = "Reading progress tracking endpoints"),
         (name = "users", description = "User management endpoints (admin only)"),
+        (name = "api-keys", description = "API key management endpoints"),
         (name = "Metrics", description = "Application metrics and statistics"),
         (name = "Scans", description = "Library scanning and analysis endpoints"),
         (name = "Task Queue", description = "Distributed task queue for background jobs (analysis, thumbnails, scans)"),

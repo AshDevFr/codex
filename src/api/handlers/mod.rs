@@ -1,3 +1,4 @@
+pub mod api_keys;
 pub mod auth;
 pub mod books;
 pub mod events;
@@ -15,6 +16,7 @@ pub mod setup;
 pub mod task_queue;
 pub mod users;
 
+pub use api_keys::*;
 pub use auth::*;
 pub use books::*;
 pub use events::*;

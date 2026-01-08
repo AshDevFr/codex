@@ -5,6 +5,7 @@
 
 mod api {
     mod analyze;
+    mod api_keys;
     mod auth;
     mod filesystem;
     mod libraries;

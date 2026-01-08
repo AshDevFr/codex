@@ -1,3 +1,4 @@
+pub mod api_key;
 pub mod auth;
 pub mod book;
 pub mod common;
@@ -12,6 +13,7 @@ pub mod settings;
 pub mod setup;
 pub mod user;
 
+pub use api_key::*;
 pub use auth::*;
 pub use book::*;
 pub use common::*;

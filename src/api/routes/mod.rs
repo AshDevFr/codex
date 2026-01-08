@@ -147,6 +147,12 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/users/:id", get(handlers::get_user))
         .route("/users/:id", put(handlers::update_user))
         .route("/users/:id", delete(handlers::delete_user))
+        // API key routes (protected)
+        .route("/api-keys", get(handlers::api_keys::list_api_keys))
+        .route("/api-keys", post(handlers::api_keys::create_api_key))
+        .route("/api-keys/:id", get(handlers::api_keys::get_api_key))
+        .route("/api-keys/:id", put(handlers::api_keys::update_api_key))
+        .route("/api-keys/:id", delete(handlers::api_keys::delete_api_key))
         // Metrics routes (protected)
         .route("/metrics", get(handlers::get_metrics))
         // Task Queue routes (protected) - distributed task queue
