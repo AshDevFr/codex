@@ -4,11 +4,10 @@ use axum::{
     response::sse::{Event, Sse},
     Json,
 };
-use futures::stream::{self, Stream};
+use futures::stream::Stream;
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio_stream::StreamExt as _;
 use uuid::Uuid;
 
 use crate::api::{
@@ -316,6 +315,7 @@ pub async fn scan_progress_stream(
     let mut receiver = state.event_broadcaster.subscribe_tasks();
 
     // Create SSE stream that filters for scan_library tasks only
+    let db = state.db.clone();
     let stream = async_stream::stream! {
         loop {
             match receiver.recv().await {
@@ -336,13 +336,36 @@ pub async fn scan_progress_stream(
                                 crate::events::TaskStatus::Failed => "failed",
                             };
 
+                            // For completed tasks, try to extract scan counts from task result
+                            let (series_found, books_found) = if event.status == crate::events::TaskStatus::Completed {
+                                // Query task result to get actual scan counts
+                                match TaskRepository::get_by_id(&db, event.task_id).await {
+                                    Ok(Some(task)) if task.result.is_some() => {
+                                        if let Some(result) = task.result {
+                                            let series = result.get("series_created")
+                                                .and_then(|v| v.as_u64())
+                                                .unwrap_or(0) as usize;
+                                            let books = result.get("books_created")
+                                                .and_then(|v| v.as_u64())
+                                                .unwrap_or(0) as usize;
+                                            (series, books)
+                                        } else {
+                                            (0, 0)
+                                        }
+                                    }
+                                    _ => (0, 0),
+                                }
+                            } else {
+                                (0, 0)
+                            };
+
                             let dto = ScanStatusDto {
                                 library_id,
                                 status: status_str.to_string(),
                                 files_total,
                                 files_processed,
-                                series_found: 0,
-                                books_found: 0,
+                                series_found,
+                                books_found,
                                 errors: vec![],
                                 started_at: event.started_at,
                                 completed_at: event.completed_at,
