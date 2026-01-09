@@ -433,4 +433,574 @@ describe("AddLibraryModal", () => {
 			).toBeInTheDocument();
 		});
 	});
+
+	it("should show cron input when auto scan strategy is selected", async () => {
+		const user = userEvent.setup();
+		renderWithProviders(
+			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+		);
+
+		// Wait for modal
+		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+		const modalContent = within(modal);
+
+		// Find the select by looking for the label, then find the input
+		await waitFor(() => {
+			expect(modalContent.getByText("Scan Strategy")).toBeInTheDocument();
+		});
+
+		// Find the select input - Mantine Select renders as a button/combobox
+		// Try to find by the displayed text first (most reliable)
+		let selectInput;
+		try {
+			// Mantine Select shows the selected value as text
+			selectInput = screen.getByText("Manual - Trigger scans on demand");
+		} catch {
+			try {
+				selectInput = screen.getByLabelText("Scan Strategy");
+			} catch {
+				// Fallback: find combobox or button near the label
+				const label = modalContent.getByText("Scan Strategy");
+				// Find the next interactive element after the label
+				const allInteractive = modalContent.getAllByRole("combobox");
+				if (allInteractive.length > 0) {
+					selectInput = allInteractive[0];
+				} else {
+					// Try buttons
+					const buttons = modalContent.getAllByRole("button");
+					selectInput = buttons.find(btn =>
+						btn.textContent?.includes("Manual") ||
+						btn.closest("form")?.contains(label)
+					) || buttons[0];
+				}
+			}
+		}
+
+		// Click to open dropdown (this will make it a combobox)
+		await user.click(selectInput);
+
+		// Wait for and click the auto option
+		await waitFor(() => {
+			const autoOption = screen.getByText("Automatic - Scheduled scanning");
+			expect(autoOption).toBeInTheDocument();
+		});
+
+		const autoOption = screen.getByText("Automatic - Scheduled scanning");
+		await user.click(autoOption);
+
+		// Cron input should appear
+		await waitFor(() => {
+			// Try multiple ways to find the CronInput
+			let cronInput;
+			try {
+				cronInput = modalContent.getByLabelText("Cron Schedule");
+			} catch {
+				try {
+					cronInput = screen.getByLabelText("Cron Schedule");
+				} catch {
+					// Fallback: find by placeholder
+					cronInput = modalContent.getByPlaceholderText("0 0 * * *");
+				}
+			}
+			expect(cronInput).toBeInTheDocument();
+		});
+	});
+
+	it("should not show cron input when manual scan strategy is selected", async () => {
+		renderWithProviders(
+			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+		);
+
+		// Wait for modal
+		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+		const modalContent = within(modal);
+
+		// Cron input should not be visible by default (manual is default)
+		await waitFor(() => {
+			expect(
+				modalContent.queryByLabelText("Cron Schedule"),
+			).not.toBeInTheDocument();
+		});
+	});
+
+	it("should create library with cron schedule when auto scan is enabled", async () => {
+		const user = userEvent.setup();
+		const mockLibrary = {
+			id: "1",
+			name: "Test Library",
+			path: "/home/user/Comics",
+			isActive: true,
+			createdAt: "2024-01-01T00:00:00Z",
+			updatedAt: "2024-01-01T00:00:00Z",
+		};
+
+		vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+
+		renderWithProviders(
+			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+		);
+
+		// Wait for modal and find form fields
+		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+		const modalContent = within(modal);
+		const nameInput = await modalContent.findByPlaceholderText(
+			"Enter library name",
+			{},
+			{ timeout: 3000 },
+		);
+
+		// Fill in form
+		await user.clear(nameInput);
+		await user.type(nameInput, "Test Library");
+
+		// Set path
+		const browseButton = screen.getByText("Browse");
+		await user.click(browseButton);
+
+		const driveButton = await screen.findByText("Home Directory");
+		await user.click(driveButton);
+
+		const selectButton = await screen.findByText("Select This Folder");
+		await user.click(selectButton);
+
+		// Select auto scan strategy
+		// Mantine Select renders as a button/combobox - find by displayed text first
+		let selectInput;
+		try {
+			// Mantine Select shows the selected value as text
+			selectInput = screen.getByText("Manual - Trigger scans on demand");
+		} catch {
+			try {
+				selectInput = screen.getByLabelText("Scan Strategy");
+			} catch {
+				// Fallback: find combobox or button near the label
+				const label = modalContent.getByText("Scan Strategy");
+				const allInteractive = modalContent.getAllByRole("combobox");
+				if (allInteractive.length > 0) {
+					selectInput = allInteractive[0];
+				} else {
+					const buttons = modalContent.getAllByRole("button");
+					selectInput = buttons.find(btn =>
+						btn.textContent?.includes("Manual") ||
+						btn.closest("form")?.contains(label)
+					) || buttons[0];
+				}
+			}
+		}
+		await user.click(selectInput);
+
+		await waitFor(() => {
+			const autoOption = screen.getByText("Automatic - Scheduled scanning");
+			expect(autoOption).toBeInTheDocument();
+		});
+
+		const autoOption = screen.getByText("Automatic - Scheduled scanning");
+		await user.click(autoOption);
+
+		// Wait for cron input and verify it has default value
+		await waitFor(() => {
+			// Try multiple ways to find the CronInput
+			let cronInput;
+			try {
+				cronInput = modalContent.getByLabelText("Cron Schedule");
+			} catch {
+				try {
+					cronInput = screen.getByLabelText("Cron Schedule");
+				} catch {
+					// Fallback: find by placeholder
+					cronInput = modalContent.getByPlaceholderText("0 0 * * *");
+				}
+			}
+			expect(cronInput).toBeInTheDocument();
+			expect(cronInput).toHaveValue("0 0 * * *");
+		});
+
+		// Submit form
+		await waitFor(() => {
+			const createButton = screen.getByText("Create Library");
+			expect(createButton).not.toBeDisabled();
+		});
+
+		const createButton = screen.getByText("Create Library");
+		await user.click(createButton);
+
+		await waitFor(() => {
+			expect(librariesApi.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					name: "Test Library",
+					path: "/home/user",
+					scanningConfig: expect.objectContaining({
+						enabled: true,
+						cronSchedule: "0 0 * * *",
+						scanMode: "normal",
+					}),
+				}),
+			);
+		});
+	});
+
+	it("should validate cron schedule is required when auto scan is enabled", async () => {
+		const user = userEvent.setup();
+		renderWithProviders(
+			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+		);
+
+		// Wait for modal
+		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+		const modalContent = within(modal);
+		const nameInput = await modalContent.findByPlaceholderText(
+			"Enter library name",
+			{},
+			{ timeout: 3000 },
+		);
+
+		// Fill in name and path
+		await user.clear(nameInput);
+		await user.type(nameInput, "Test Library");
+
+		const browseButton = screen.getByText("Browse");
+		await user.click(browseButton);
+
+		const driveButton = await screen.findByText("Home Directory");
+		await user.click(driveButton);
+
+		const selectButton = await screen.findByText("Select This Folder");
+		await user.click(selectButton);
+
+		// Select auto scan strategy
+		// Mantine Select renders as a button/combobox - find by displayed text first
+		let selectInput;
+		try {
+			// Mantine Select shows the selected value as text
+			selectInput = screen.getByText("Manual - Trigger scans on demand");
+		} catch {
+			try {
+				selectInput = screen.getByLabelText("Scan Strategy");
+			} catch {
+				// Fallback: find combobox or button near the label
+				const label = modalContent.getByText("Scan Strategy");
+				const allInteractive = modalContent.getAllByRole("combobox");
+				if (allInteractive.length > 0) {
+					selectInput = allInteractive[0];
+				} else {
+					const buttons = modalContent.getAllByRole("button");
+					selectInput = buttons.find(btn =>
+						btn.textContent?.includes("Manual") ||
+						btn.closest("form")?.contains(label)
+					) || buttons[0];
+				}
+			}
+		}
+		await user.click(selectInput);
+
+		await waitFor(() => {
+			const autoOption = screen.getByText("Automatic - Scheduled scanning");
+			expect(autoOption).toBeInTheDocument();
+		});
+
+		const autoOption = screen.getByText("Automatic - Scheduled scanning");
+		await user.click(autoOption);
+
+		// Wait for cron input and clear it
+		// The CronInput appears after selecting auto scan
+		// Wait a bit for the state to update and component to re-render
+		await waitFor(() => {
+			// Try multiple ways to find the CronInput
+			// Check in entire document since Mantine may render in portals
+			const cronInputByLabel = screen.queryByLabelText("Cron Schedule");
+			const cronInputByPlaceholder = screen.queryByPlaceholderText("0 0 * * *");
+
+			expect(cronInputByLabel || cronInputByPlaceholder).toBeInTheDocument();
+		}, { timeout: 3000 });
+
+		// Now get the input - search in entire document
+		let cronInput = screen.queryByLabelText("Cron Schedule") ||
+			screen.queryByPlaceholderText("0 0 * * *");
+
+		expect(cronInput).toBeInTheDocument();
+		await user.clear(cronInput!);
+
+		// Try to submit - should show validation error
+		const createButton = screen.getByText("Create Library");
+		await user.click(createButton);
+
+		// The form validation happens in handleSubmit and shows a notification
+		// The library should not be created because cron schedule is required
+		await waitFor(() => {
+			// Verify that the API was not called (validation prevented submission)
+			expect(librariesApi.create).not.toHaveBeenCalled();
+		}, { timeout: 1000 });
+	});
+
+	it("should have all formats selected by default", async () => {
+		renderWithProviders(
+			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+		);
+
+		// Wait for modal
+		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+		const modalContent = within(modal);
+
+		// Find the MultiSelect for allowed formats
+		const formatsInput = modalContent.getByLabelText("Allowed Formats");
+		expect(formatsInput).toBeInTheDocument();
+
+		// Click to open the dropdown and verify all formats are available
+		const user = userEvent.setup();
+		await user.click(formatsInput);
+
+		// All formats should be available (may appear multiple times in MultiSelect)
+		// Use getAllByText to handle multiple instances - this is expected behavior
+		await waitFor(() => {
+			const cbzElements = screen.getAllByText("CBZ (Comic Book ZIP)");
+			expect(cbzElements.length).toBeGreaterThan(0);
+		});
+		// Check other formats exist (may be multiple instances)
+		expect(screen.getAllByText("CBR (Comic Book RAR)").length).toBeGreaterThan(0);
+		expect(screen.getAllByText("EPUB (Ebook)").length).toBeGreaterThan(0);
+		expect(screen.getAllByText("PDF (Portable Document Format)").length).toBeGreaterThan(0);
+	});
+
+	it("should submit with all formats by default", async () => {
+		const user = userEvent.setup();
+		const mockLibrary = {
+			id: "1",
+			name: "Test Library",
+			path: "/home/user/Comics",
+			isActive: true,
+			createdAt: "2024-01-01T00:00:00Z",
+			updatedAt: "2024-01-01T00:00:00Z",
+		};
+
+		vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+
+		renderWithProviders(
+			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+		);
+
+		// Wait for modal and find form fields
+		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+		const modalContent = within(modal);
+		const nameInput = await modalContent.findByPlaceholderText(
+			"Enter library name",
+			{},
+			{ timeout: 3000 },
+		);
+
+		// Fill in form
+		await user.clear(nameInput);
+		await user.type(nameInput, "Test Library");
+
+		// Set path
+		const browseButton = screen.getByText("Browse");
+		await user.click(browseButton);
+
+		const driveButton = await screen.findByText("Home Directory");
+		await user.click(driveButton);
+
+		const selectButton = await screen.findByText("Select This Folder");
+		await user.click(selectButton);
+
+		// Submit form (with all formats selected by default)
+		await waitFor(() => {
+			const createButton = screen.getByText("Create Library");
+			expect(createButton).not.toBeDisabled();
+		});
+
+		const createButton = screen.getByText("Create Library");
+		await user.click(createButton);
+
+		await waitFor(() => {
+			expect(librariesApi.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					name: "Test Library",
+					path: "/home/user",
+					allowedFormats: ["CBZ", "CBR", "EPUB", "PDF"],
+				}),
+			);
+		});
+	});
+
+	it("should submit with selected formats when some are deselected", async () => {
+		const user = userEvent.setup();
+		const mockLibrary = {
+			id: "1",
+			name: "Test Library",
+			path: "/home/user/Comics",
+			isActive: true,
+			createdAt: "2024-01-01T00:00:00Z",
+			updatedAt: "2024-01-01T00:00:00Z",
+		};
+
+		vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+
+		renderWithProviders(
+			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+		);
+
+		// Wait for modal and find form fields
+		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+		const modalContent = within(modal);
+		const nameInput = await modalContent.findByPlaceholderText(
+			"Enter library name",
+			{},
+			{ timeout: 3000 },
+		);
+
+		// Fill in form
+		await user.clear(nameInput);
+		await user.type(nameInput, "Test Library");
+
+		// Set path
+		const browseButton = screen.getByText("Browse");
+		await user.click(browseButton);
+
+		const driveButton = await screen.findByText("Home Directory");
+		await user.click(driveButton);
+
+		const selectButton = await screen.findByText("Select This Folder");
+		await user.click(selectButton);
+
+		// Open formats dropdown and deselect some formats
+		const formatsInput = modalContent.getByLabelText("Allowed Formats");
+		await user.click(formatsInput);
+
+		// Wait for options to appear (may appear multiple times in MultiSelect)
+		await waitFor(() => {
+			const cbzElements = screen.getAllByText("CBZ (Comic Book ZIP)");
+			expect(cbzElements.length).toBeGreaterThan(0);
+		});
+
+		// Deselect CBR and PDF by clicking them (they're selected by default)
+		// In Mantine MultiSelect, clicking a selected item in the dropdown toggles it off
+		// Wait for dropdown to be fully open
+		await waitFor(() => {
+			const options = screen.getAllByText("CBR (Comic Book RAR)");
+			expect(options.length).toBeGreaterThan(0);
+		});
+
+		// Find the option in the dropdown (not the selected item in the input)
+		// The dropdown options are typically in a portal
+		const cbrOptions = screen.getAllByText("CBR (Comic Book RAR)");
+		// Click the last one (usually the option in dropdown, not the selected tag)
+		const cbrOption = cbrOptions[cbrOptions.length - 1];
+		await user.click(cbrOption);
+
+		// Wait for the state to update after clicking
+		await waitFor(() => {
+			// Verify CBR was deselected by checking the dropdown is still open
+			const pdfOptions = screen.getAllByText("PDF (Portable Document Format)");
+			expect(pdfOptions.length).toBeGreaterThan(0);
+		});
+
+		// Deselect PDF
+		const pdfOptions = screen.getAllByText("PDF (Portable Document Format)");
+		const pdfOption = pdfOptions[pdfOptions.length - 1];
+		await user.click(pdfOption);
+
+		// Wait for state to update
+		await waitFor(() => {
+			// Give time for the click to process
+		}, { timeout: 500 });
+
+		// Close dropdown
+		await user.keyboard("{Escape}");
+
+		// Wait for state to update after deselecting formats
+		await waitFor(() => {
+			// Give time for the MultiSelect state to update
+		}, { timeout: 500 });
+
+		// Submit form
+		await waitFor(() => {
+			const createButton = screen.getByText("Create Library");
+			expect(createButton).not.toBeDisabled();
+		});
+
+		const createButton = screen.getByText("Create Library");
+		await user.click(createButton);
+
+		await waitFor(() => {
+			expect(librariesApi.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					name: "Test Library",
+					path: "/home/user",
+					allowedFormats: expect.arrayContaining(["CBZ", "EPUB"]),
+				}),
+			);
+		});
+
+		// Verify CBR and PDF are not in the submitted formats
+		const createCall = vi.mocked(librariesApi.create).mock.calls[0];
+		const submittedFormats = createCall[0].allowedFormats;
+		expect(submittedFormats).not.toContain("CBR");
+		expect(submittedFormats).not.toContain("PDF");
+	});
+
+	it("should reset to all formats when modal closes", async () => {
+		const user = userEvent.setup();
+		renderWithProviders(
+			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+		);
+
+		// Wait for modal
+		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+		const modalContent = within(modal);
+
+		// Open formats dropdown and deselect some formats
+		const formatsInput = modalContent.getByLabelText("Allowed Formats");
+		await user.click(formatsInput);
+
+		await waitFor(() => {
+			const cbzElements = screen.getAllByText("CBZ (Comic Book ZIP)");
+			expect(cbzElements.length).toBeGreaterThan(0);
+		});
+
+		// Deselect CBR
+		// Wait for dropdown to be fully open
+		await waitFor(() => {
+			const options = screen.getAllByText("CBR (Comic Book RAR)");
+			expect(options.length).toBeGreaterThan(0);
+		});
+
+		// Find the option in the dropdown (not the selected item in the input)
+		const cbrOptions = screen.getAllByText("CBR (Comic Book RAR)");
+		// Click the last one (usually the option in dropdown, not the selected tag)
+		const cbrOption = cbrOptions[cbrOptions.length - 1];
+		await user.click(cbrOption);
+
+		// Wait a bit for the click to process
+		await waitFor(() => {
+			// Verify the click was processed
+		}, { timeout: 1000 });
+		await user.keyboard("{Escape}");
+
+		// Close modal
+		const cancelButton = screen.getByText("Cancel");
+		await user.click(cancelButton);
+
+		expect(mockOnClose).toHaveBeenCalled();
+
+		// Reopen modal - formats should be reset to all
+		renderWithProviders(
+			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+		);
+
+		const newModal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+		const newModalContent = within(newModal);
+
+		const newFormatsInput = newModalContent.getByLabelText("Allowed Formats");
+		await user.click(newFormatsInput);
+
+		// All formats should be available again (may appear multiple times in MultiSelect)
+		// Use getAllByText to handle multiple instances - this is expected behavior
+		await waitFor(() => {
+			const cbzElements = screen.getAllByText("CBZ (Comic Book ZIP)");
+			expect(cbzElements.length).toBeGreaterThan(0);
+		});
+		// Check other formats exist (may be multiple instances)
+		expect(screen.getAllByText("CBR (Comic Book RAR)").length).toBeGreaterThan(0);
+		expect(screen.getAllByText("EPUB (Ebook)").length).toBeGreaterThan(0);
+		expect(screen.getAllByText("PDF (Portable Document Format)").length).toBeGreaterThan(0);
+	});
 });

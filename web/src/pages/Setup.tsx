@@ -19,6 +19,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { setupApi } from "@/api/setup";
+import { CronInput } from "@/components/forms/CronInput";
 import { useAuthStore } from "@/store/authStore";
 import type {
 	ApiError,
@@ -99,26 +100,26 @@ export function Setup() {
 	// Task worker settings
 	const [pollIntervalSeconds, setPollIntervalSeconds] = useState(5);
 	const [cleanupIntervalSeconds, setCleanupIntervalSeconds] = useState(30);
-	const [prioritizeScansOverAnalysis, setPrioritizeScansOverAnalysis] = useState(true);
+	const [prioritizeScansOverAnalysis, setPrioritizeScansOverAnalysis] =
+		useState(true);
 
 	// Deduplication settings
 	const [deduplicationEnabled, setDeduplicationEnabled] = useState(true);
-	const [deduplicationCronSchedule, setDeduplicationCronSchedule] = useState("");
+	const [deduplicationCronSchedule, setDeduplicationCronSchedule] =
+		useState("");
 
 	// Initialize setup mutation
-	const initializeMutation = useMutation<
-		any,
-		ApiError,
-		InitializeSetupRequest
-	>({
-		mutationFn: setupApi.initialize,
-		onSuccess: (data) => {
-			// Set auth from the returned token
-			setAuth(data.user, data.accessToken);
-			// Move to next step
-			setActive(1);
+	const initializeMutation = useMutation<any, ApiError, InitializeSetupRequest>(
+		{
+			mutationFn: setupApi.initialize,
+			onSuccess: (data) => {
+				// Set auth from the returned token
+				setAuth(data.user, data.accessToken);
+				// Move to next step
+				setActive(1);
+			},
 		},
-	});
+	);
 
 	// Configure settings mutation
 	const configureSettingsMutation = useMutation<
@@ -167,13 +168,15 @@ export function Setup() {
 				"application.name": appName,
 				"task.poll_interval_seconds": pollIntervalSeconds.toString(),
 				"task.cleanup_interval_seconds": cleanupIntervalSeconds.toString(),
-				"task.prioritize_scans_over_analysis": prioritizeScansOverAnalysis.toString(),
+				"task.prioritize_scans_over_analysis":
+					prioritizeScansOverAnalysis.toString(),
 				"deduplication.enabled": deduplicationEnabled.toString(),
 			};
 
 			// Only include cron schedule if deduplication is enabled
 			if (deduplicationEnabled && deduplicationCronSchedule.trim()) {
-				settings["deduplication.cron_schedule"] = deduplicationCronSchedule.trim();
+				settings["deduplication.cron_schedule"] =
+					deduplicationCronSchedule.trim();
 			}
 
 			configureSettingsMutation.mutate({
@@ -188,10 +191,7 @@ export function Setup() {
 	const isPasswordValid = passwordErrors.length === 0;
 	const isEmailValid = email.trim() !== "" && validateEmail(email);
 	const canSubmitAdmin =
-		username.trim() !== "" &&
-		isEmailValid &&
-		isPasswordValid &&
-		passwordsMatch;
+		username.trim() !== "" && isEmailValid && isPasswordValid && passwordsMatch;
 
 	// Don't render if setup is already complete or still loading status
 	if (isStatusLoading || (setupStatus && !setupStatus.setupRequired)) {
@@ -208,7 +208,11 @@ export function Setup() {
 			</Text>
 
 			<Paper withBorder shadow="md" p={30} radius="md">
-				<Stepper active={active} onStepClick={setActive} allowNextStepsSelect={false}>
+				<Stepper
+					active={active}
+					onStepClick={setActive}
+					allowNextStepsSelect={false}
+				>
 					<Stepper.Step
 						label="Admin Account"
 						description="Create your first admin user"
@@ -350,7 +354,6 @@ export function Setup() {
 															setRetryFailedFiles(e.currentTarget.checked)
 														}
 													/>
-
 												</Stack>
 											</Collapse>
 										</Paper>
@@ -432,7 +435,9 @@ export function Setup() {
 														description="When enabled, scan tasks will be processed before analysis tasks in the queue"
 														checked={prioritizeScansOverAnalysis}
 														onChange={(e) =>
-															setPrioritizeScansOverAnalysis(e.currentTarget.checked)
+															setPrioritizeScansOverAnalysis(
+																e.currentTarget.checked,
+															)
 														}
 													/>
 												</Stack>
@@ -471,16 +476,12 @@ export function Setup() {
 													/>
 
 													{deduplicationEnabled && (
-														<TextInput
+														<CronInput
 															label="Cron Schedule"
 															description="Cron expression for automatic duplicate detection (e.g., '0 2 * * *' for daily at 2am). Leave empty to disable automatic scanning."
 															placeholder="0 2 * * *"
 															value={deduplicationCronSchedule}
-															onChange={(e) =>
-																setDeduplicationCronSchedule(
-																	e.currentTarget.value,
-																)
-															}
+															onChange={setDeduplicationCronSchedule}
 														/>
 													)}
 												</Stack>
@@ -501,7 +502,9 @@ export function Setup() {
 									fullWidth
 									loading={configureSettingsMutation.isPending}
 								>
-									{skipSettings ? "Skip and Finish" : "Save Settings and Finish"}
+									{skipSettings
+										? "Skip and Finish"
+										: "Save Settings and Finish"}
 								</Button>
 							</Stack>
 						</form>

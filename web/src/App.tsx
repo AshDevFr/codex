@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import {
 	BrowserRouter,
@@ -7,7 +8,6 @@ import {
 	useLocation,
 	useNavigate,
 } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { setupApi } from "@/api/setup";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useEntityEvents } from "@/hooks/useEntityEvents";
@@ -60,10 +60,7 @@ function SetupRedirect() {
 			navigate("/setup", { replace: true });
 		}
 		// Redirect away from setup if already complete
-		else if (
-			!setupStatus?.setupRequired &&
-			location.pathname === "/setup"
-		) {
+		else if (!setupStatus?.setupRequired && location.pathname === "/setup") {
 			navigate("/", { replace: true });
 		}
 	}, [setupStatus, isLoading, location.pathname, navigate]);

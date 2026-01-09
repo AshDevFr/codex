@@ -300,4 +300,44 @@ describe("TaskProgressIndicator", () => {
 		// Failed tasks are filtered out
 		expect(screen.queryByText("Connection timeout")).not.toBeInTheDocument();
 	});
+
+	it("should not show pending tasks in the indicator", () => {
+		const mockTasks: TaskProgressEvent[] = [
+			{
+				task_id: "task-1",
+				task_type: "analyze_book",
+				status: "running",
+				progress: undefined,
+				error: undefined,
+				started_at: "2026-01-07T12:00:00Z",
+				library_id: "lib-1",
+			},
+			{
+				task_id: "task-2",
+				task_type: "analyze_book",
+				status: "pending",
+				progress: undefined,
+				error: undefined,
+				started_at: "2026-01-07T12:01:00Z",
+				library_id: "lib-1",
+			},
+		];
+
+		vi.mocked(useTaskProgress).mockReturnValue({
+			activeTasks: mockTasks,
+			connectionState: "connected",
+			pendingCounts: {},
+			getTasksByStatus: vi.fn(() => mockTasks),
+			getTasksByLibrary: vi.fn(() => mockTasks),
+			getTask: vi.fn((id) => mockTasks.find((t) => t.task_id === id)),
+		});
+
+		renderWithMantine(<TaskProgressIndicator />);
+
+		// Should only show running task, not pending task
+		expect(screen.getByText("Analyze Book")).toBeInTheDocument();
+		// Should only appear once (for the running task)
+		const analyzeBookElements = screen.queryAllByText("Analyze Book");
+		expect(analyzeBookElements).toHaveLength(1);
+	});
 });

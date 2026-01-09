@@ -17,7 +17,6 @@ import {
 	Text,
 	Textarea,
 	TextInput,
-	Tooltip,
 	UnstyledButton,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
@@ -38,6 +37,7 @@ import type {
 	FileSystemEntry,
 	ScanningConfig,
 } from "@/types/api";
+import { CronInput } from "./CronInput";
 
 interface AddLibraryModalProps {
 	opened: boolean;
@@ -46,19 +46,7 @@ interface AddLibraryModalProps {
 
 type ScanStrategy = "manual" | "auto";
 
-// Simple cron validation - checks basic format
-function isValidCron(expression: string): boolean {
-	if (!expression.trim()) return false;
-
-	const parts = expression.trim().split(/\s+/);
-	// Standard cron has 5 fields (minute, hour, day, month, weekday)
-	// Some systems support 6 fields (with seconds) or 7 (with year)
-	if (parts.length < 5 || parts.length > 7) return false;
-
-	// Basic validation: each part should be either a number, *, */n, n-m, or comma-separated values
-	const cronPartRegex = /^(\*|(\d+|\*\/\d+|\d+-\d+)(,(\d+|\*\/\d+|\d+-\d+))*)$/;
-	return parts.every((part) => cronPartRegex.test(part));
-}
+const ALL_FORMATS = ["CBZ", "CBR", "EPUB", "PDF"];
 
 export function AddLibraryModal({ opened, onClose }: AddLibraryModalProps) {
 	const queryClient = useQueryClient();
@@ -75,7 +63,7 @@ export function AddLibraryModal({ opened, onClose }: AddLibraryModalProps) {
 	const [purgeDeletedOnScan, setPurgeDeletedOnScan] = useState(false);
 
 	// Format filtering state
-	const [allowedFormats, setAllowedFormats] = useState<string[]>([]);
+	const [allowedFormats, setAllowedFormats] = useState<string[]>(ALL_FORMATS);
 	const [excludedPatterns, setExcludedPatterns] = useState("");
 
 	// Load drives when modal opens
@@ -127,7 +115,7 @@ export function AddLibraryModal({ opened, onClose }: AddLibraryModalProps) {
 		setAutoScanOnCreate(false);
 		setScanOnStart(false);
 		setPurgeDeletedOnScan(false);
-		setAllowedFormats([]);
+		setAllowedFormats(ALL_FORMATS);
 		setExcludedPatterns("");
 		onClose();
 	};
@@ -199,22 +187,10 @@ export function AddLibraryModal({ opened, onClose }: AddLibraryModalProps) {
 				});
 				return;
 			}
-
-			if (!isValidCron(cronSchedule)) {
-				notifications.show({
-					title: "Validation Error",
-					message:
-						'Invalid cron expression. Please use the format: "minute hour day month weekday" (e.g., "0 0 * * *")',
-					color: "red",
-				});
-				return;
-			}
 		}
 
 		// Build scanning config based on strategy
-		let scanningConfig: ScanningConfig | undefined;
-
-		scanningConfig = {
+		const scanningConfig: ScanningConfig | undefined = {
 			cronSchedule: scanStrategy === "auto" ? cronSchedule : undefined,
 			scanMode: "normal", // Always use normal mode, deep scans are triggered manually
 			autoScanOnCreate,
@@ -285,11 +261,7 @@ export function AddLibraryModal({ opened, onClose }: AddLibraryModalProps) {
 							styles={{ input: { paddingRight: 80 } }}
 						/>
 
-						<Divider
-							label="Format Filtering"
-							labelPosition="left"
-							mt="md"
-						/>
+						<Divider label="Format Filtering" labelPosition="left" mt="md" />
 
 						<Paper p="md" withBorder>
 							<Stack gap="md">
@@ -360,45 +332,14 @@ export function AddLibraryModal({ opened, onClose }: AddLibraryModalProps) {
 								</Alert>
 
 								{scanStrategy === "auto" && (
-									<>
-										<TextInput
-											label="Cron Schedule"
-											description="Cron expression for automatic scanning (e.g., '0 0 * * *' for daily at midnight)"
-											placeholder="0 0 * * *"
-											value={cronSchedule}
-											onChange={(e) => setCronSchedule(e.currentTarget.value)}
-											required
-											error={
-												cronSchedule && !isValidCron(cronSchedule)
-													? "Invalid cron expression"
-													: undefined
-											}
-											rightSection={
-												<Tooltip label="Common: '0 */6 * * *' (every 6 hours), '0 0 * * 0' (weekly on Sunday)">
-													<IconInfoCircle
-														size={16}
-														style={{ cursor: "help" }}
-													/>
-												</Tooltip>
-											}
-										/>
-										<Alert
-											icon={<IconInfoCircle size={16} />}
-											color="blue"
-											variant="light"
-										>
-											<Text size="xs">
-												<strong>Cron format:</strong> minute hour day month
-												weekday
-												<br />
-												Examples:
-												<br />• <code>0 0 * * *</code> - Daily at midnight
-												<br />• <code>0 */6 * * *</code> - Every 6 hours
-												<br />• <code>0 0 * * 0</code> - Weekly on Sunday
-												<br />• <code>0 2 * * 1-5</code> - Weekdays at 2 AM
-											</Text>
-										</Alert>
-									</>
+									<CronInput
+										label="Cron Schedule"
+										description="Cron expression for automatic scanning (e.g., '0 0 * * *' for daily at midnight)"
+										placeholder="0 0 * * *"
+										value={cronSchedule}
+										onChange={setCronSchedule}
+										required
+									/>
 								)}
 
 								<Stack gap="xs">

@@ -86,6 +86,24 @@ export function useTaskProgress() {
 				console.debug("Initial processing tasks:", tasks);
 				setActiveTasks((prev) => {
 					const next = new Map(prev);
+					// Create a set of current processing task IDs
+					const currentProcessingIds = new Set(
+						tasks.map((task) => task.id),
+					);
+
+					// Remove tasks that were previously "running" (from processing)
+					// but are no longer in the processing list
+					// Preserve tasks with "completed" or "failed" status (from SSE)
+					for (const [taskId, task] of prev.entries()) {
+						if (
+							task.status === "running" &&
+							!currentProcessingIds.has(taskId)
+						) {
+							next.delete(taskId);
+						}
+					}
+
+					// Add or update tasks that are currently processing
 					for (const task of tasks) {
 						const event = convertTaskToEvent(task);
 						next.set(event.task_id, event);
@@ -118,11 +136,40 @@ export function useTaskProgress() {
 				.then((tasks) => {
 					setActiveTasks((prev) => {
 						const next = new Map(prev);
-						// Add processing tasks that aren't already tracked
-						// SSE events take precedence, so we only add if not present
+						// Create a set of current processing task IDs
+						const currentProcessingIds = new Set(
+							tasks.map((task) => task.id),
+						);
+
+						// Remove tasks that were previously "running" (from processing)
+						// but are no longer in the processing list
+						// Preserve tasks with "completed" or "failed" status (from SSE)
+						// These are kept for 5 seconds to show completion state
+						for (const [taskId, task] of prev.entries()) {
+							if (
+								task.status === "running" &&
+								!currentProcessingIds.has(taskId)
+							) {
+								next.delete(taskId);
+							}
+							// Explicitly preserve completed/failed tasks (they're removed by setTimeout in handleEvent)
+							// Don't remove them here even if they're not in the processing list
+						}
+
+						// Add or update tasks that are currently processing
+						// SSE events take precedence, so we only update if:
+						// - Task doesn't exist yet, OR
+						// - Task exists with "running" status and no progress (from previous poll)
+						// Don't overwrite if SSE has updated it (has progress or different status)
 						for (const task of tasks) {
 							const event = convertTaskToEvent(task);
-							if (!next.has(event.task_id)) {
+							const existing = next.get(event.task_id);
+							if (
+								!existing ||
+								(existing.status === "running" &&
+									!existing.progress &&
+									!existing.completed_at)
+							) {
 								next.set(event.task_id, event);
 							}
 						}

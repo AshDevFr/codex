@@ -27,7 +27,10 @@ export default defineConfig({
 					});
 					proxy.on("proxyReq", (proxyReq, req, _res) => {
 						// Don't cache SSE connections
-						if (req.url?.includes("/stream") || req.headers.accept?.includes("text/event-stream")) {
+						if (
+							req.url?.includes("/stream") ||
+							req.headers.accept?.includes("text/event-stream")
+						) {
 							proxyReq.setHeader("Cache-Control", "no-cache");
 							proxyReq.setHeader("Connection", "keep-alive");
 						}

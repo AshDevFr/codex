@@ -1,7 +1,8 @@
 import { MantineProvider } from "@mantine/core";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import type React from "react";
 import { describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import type { TaskProgressEvent } from "@/types/events";
 import { TaskNotificationBadge } from "./TaskNotificationBadge";
@@ -71,21 +72,12 @@ describe("TaskNotificationBadge", () => {
 				started_at: "2026-01-07T12:00:00Z",
 				library_id: "lib-1",
 			},
-			{
-				task_id: "task-2",
-				task_type: "generate_thumbnails",
-				status: "pending",
-				progress: undefined,
-				error: undefined,
-				started_at: "2026-01-07T12:01:00Z",
-				library_id: "lib-2",
-			},
 		];
 
 		vi.mocked(useTaskProgress).mockReturnValue({
 			activeTasks: mockTasks,
 			connectionState: "connected",
-			pendingCounts: {},
+			pendingCounts: { generate_thumbnails: 1 },
 			getTasksByStatus: vi.fn(() => mockTasks),
 			getTasksByLibrary: vi.fn(() => mockTasks),
 			getTask: vi.fn((id) => mockTasks.find((t) => t.task_id === id)),
@@ -93,6 +85,7 @@ describe("TaskNotificationBadge", () => {
 
 		renderWithMantine(<TaskNotificationBadge />);
 
+		// 1 running task + 1 pending task = 2 total
 		expect(screen.getByText("2 pending tasks")).toBeInTheDocument();
 	});
 
@@ -220,15 +213,6 @@ describe("TaskNotificationBadge", () => {
 				library_id: "lib-1",
 			},
 			{
-				task_id: "task-2",
-				task_type: "generate_thumbnails",
-				status: "pending",
-				progress: undefined,
-				error: undefined,
-				started_at: "2026-01-07T12:00:00Z",
-				library_id: "lib-2",
-			},
-			{
 				task_id: "task-3",
 				task_type: "scan_library",
 				status: "running",
@@ -242,7 +226,7 @@ describe("TaskNotificationBadge", () => {
 		vi.mocked(useTaskProgress).mockReturnValue({
 			activeTasks: mockTasks,
 			connectionState: "connected",
-			pendingCounts: {},
+			pendingCounts: { generate_thumbnails: 1 },
 			getTasksByStatus: vi.fn(() => mockTasks),
 			getTasksByLibrary: vi.fn(() => mockTasks),
 			getTask: vi.fn((id) => mockTasks.find((t) => t.task_id === id)),
@@ -250,7 +234,7 @@ describe("TaskNotificationBadge", () => {
 
 		renderWithMantine(<TaskNotificationBadge />);
 
-		// Badge should show count of all active tasks
+		// 2 running tasks + 1 pending task = 3 total
 		expect(screen.getByText("3 pending tasks")).toBeInTheDocument();
 	});
 
@@ -329,34 +313,99 @@ describe("TaskNotificationBadge", () => {
 				started_at: "2026-01-07T12:00:00Z",
 				library_id: "lib-1",
 			},
-			{
-				task_id: "task-2",
-				task_type: "generate_thumbnails",
-				status: "completed",
-				progress: undefined,
-				error: undefined,
-				started_at: "2026-01-07T12:00:00Z",
-				library_id: "lib-2",
-			},
 		];
 
-		// Note: Badge should only count running/pending, not completed
-		const activeTasks = mockTasks.filter(
-			(t) => t.status === "running" || t.status === "pending",
-		);
-
 		vi.mocked(useTaskProgress).mockReturnValue({
-			activeTasks: activeTasks,
+			activeTasks: mockTasks,
 			connectionState: "connected",
 			pendingCounts: {},
-			getTasksByStatus: vi.fn(() => activeTasks),
-			getTasksByLibrary: vi.fn(() => activeTasks),
-			getTask: vi.fn((id) => activeTasks.find((t) => t.task_id === id)),
+			getTasksByStatus: vi.fn(() => mockTasks),
+			getTasksByLibrary: vi.fn(() => mockTasks),
+			getTask: vi.fn((id) => mockTasks.find((t) => t.task_id === id)),
 		});
 
 		renderWithMantine(<TaskNotificationBadge />);
 
-		// Should only count running tasks
+		// Should only count running tasks (completed tasks are excluded)
 		expect(screen.getByText("1 pending task")).toBeInTheDocument();
+	});
+
+	it("should not include pending tasks in running tasks list", () => {
+		const mockTasks: TaskProgressEvent[] = [
+			{
+				task_id: "task-1",
+				task_type: "analyze_book",
+				status: "running",
+				progress: undefined,
+				error: undefined,
+				started_at: "2026-01-07T12:00:00Z",
+				library_id: "lib-1",
+			},
+			{
+				task_id: "task-2",
+				task_type: "analyze_book",
+				status: "pending",
+				progress: undefined,
+				error: undefined,
+				started_at: "2026-01-07T12:01:00Z",
+				library_id: "lib-1",
+			},
+		];
+
+		vi.mocked(useTaskProgress).mockReturnValue({
+			activeTasks: mockTasks,
+			connectionState: "connected",
+			pendingCounts: { analyze_book: 5 },
+			getTasksByStatus: vi.fn(() => mockTasks),
+			getTasksByLibrary: vi.fn(() => mockTasks),
+			getTask: vi.fn((id) => mockTasks.find((t) => t.task_id === id)),
+		});
+
+		renderWithMantine(<TaskNotificationBadge />);
+
+		// Should show 1 running task + 5 pending tasks = 6 total
+		// Pending tasks from activeTasks should NOT be counted as running
+		expect(screen.getByText("6 pending tasks")).toBeInTheDocument();
+	});
+
+	it("should show pending tasks separately from running tasks in tooltip", async () => {
+		const user = userEvent.setup();
+		const mockTasks: TaskProgressEvent[] = [
+			{
+				task_id: "task-1",
+				task_type: "analyze_book",
+				status: "running",
+				progress: undefined,
+				error: undefined,
+				started_at: "2026-01-07T12:00:00Z",
+				library_id: "lib-1",
+			},
+		];
+
+		vi.mocked(useTaskProgress).mockReturnValue({
+			activeTasks: mockTasks,
+			connectionState: "connected",
+			pendingCounts: { analyze_book: 3, scan_library: 2 },
+			getTasksByStatus: vi.fn(() => mockTasks),
+			getTasksByLibrary: vi.fn(() => mockTasks),
+			getTask: vi.fn((id) => mockTasks.find((t) => t.task_id === id)),
+		});
+
+		renderWithMantine(<TaskNotificationBadge />);
+
+		// Should show 1 running + 5 pending = 6 total
+		const badge = screen.getByText("6 pending tasks");
+		expect(badge).toBeInTheDocument();
+
+		// Hover over badge to show tooltip
+		await user.hover(badge);
+
+		// Pending tasks section should show counts
+		await waitFor(() => {
+			const pendingTasksText = screen.queryByText("Pending Tasks (5)", {
+				hidden: true,
+			});
+			expect(pendingTasksText).toBeInTheDocument();
+		});
 	});
 });

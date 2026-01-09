@@ -32,12 +32,20 @@ RUN mkdir -p src migration/src && \
 # Copy the rest of the application
 COPY . .
 
-# Ensure .cargo-watch.toml is available (if it exists)
-# This configures cargo-watch to ignore non-Rust files
-COPY .cargo-watch.toml* ./
-
 # Expose the application port
 EXPOSE 8080
 
 # Use cargo-watch for hot reloading
-CMD ["cargo", "watch", "-x", "run -- serve --config /app/config/config.docker.yaml"]
+# Ignore frontend files and other non-Rust files to avoid unnecessary rebuilds
+CMD ["cargo", "watch", \
+    "-w", ".cargo-watch.toml", \
+    "-w", "Cargo.toml", \
+    "-w", "Cargo.lock", \
+    "-w", "src/", \
+    "-w", "migration/", \
+    "-i", "web/**", \
+    "-i", "docs/**", \
+    "-i", "*.md", \
+    "-i", "Dockerfile*", \
+    "-i", "docker-compose*.yml", \
+    "-x", "run -- serve --config /app/config/config.docker.yaml"]

@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { subscribeToTaskProgress } from "./tasks";
+import {
+	fetchPendingTaskCounts,
+	fetchTaskStats,
+	subscribeToTaskProgress,
+} from "./tasks";
 
 describe("subscribeToTaskProgress", () => {
 	let mockFetch: ReturnType<typeof vi.fn>;
@@ -342,5 +346,227 @@ describe("subscribeToTaskProgress", () => {
 		);
 
 		unsubscribe();
+	});
+});
+
+describe("fetchTaskStats", () => {
+	let mockFetch: ReturnType<typeof vi.fn>;
+
+	beforeEach(() => {
+		Storage.prototype.getItem = vi.fn((key) => {
+			if (key === "jwt_token") return "test-token";
+			return null;
+		});
+
+		mockFetch = vi.fn();
+		global.fetch = mockFetch;
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("should fetch task statistics successfully", async () => {
+		const mockStats = {
+			pending: 8,
+			processing: 2,
+			completed: 10,
+			failed: 0,
+			stale: 0,
+			total: 20,
+			by_type: {
+				analyze_book: {
+					pending: 8,
+					processing: 2,
+					completed: 9,
+					failed: 0,
+					stale: 0,
+					total: 19,
+				},
+				scan_library: {
+					pending: 0,
+					processing: 0,
+					completed: 1,
+					failed: 0,
+					stale: 0,
+					total: 1,
+				},
+			},
+		};
+
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			json: async () => mockStats,
+		});
+
+		const stats = await fetchTaskStats();
+
+		expect(mockFetch).toHaveBeenCalledWith("/api/v1/tasks/stats", {
+			headers: {
+				Authorization: "Bearer test-token",
+			},
+		});
+
+		expect(stats).toEqual(mockStats);
+	});
+
+	it("should return empty stats when not authenticated", async () => {
+		Storage.prototype.getItem = vi.fn(() => null);
+
+		const stats = await fetchTaskStats();
+
+		expect(stats).toEqual({
+			pending: 0,
+			processing: 0,
+			completed: 0,
+			failed: 0,
+			stale: 0,
+			total: 0,
+			by_type: {},
+		});
+
+		expect(mockFetch).not.toHaveBeenCalled();
+	});
+
+	it("should return empty stats on 401 error", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 401,
+		});
+
+		const stats = await fetchTaskStats();
+
+		expect(stats).toEqual({
+			pending: 0,
+			processing: 0,
+			completed: 0,
+			failed: 0,
+			stale: 0,
+			total: 0,
+			by_type: {},
+		});
+	});
+
+	it("should throw error on non-401 errors", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 500,
+			statusText: "Internal Server Error",
+		});
+
+		await expect(fetchTaskStats()).rejects.toThrow(
+			"HTTP 500: Internal Server Error",
+		);
+	});
+});
+
+describe("fetchPendingTaskCounts", () => {
+	let mockFetch: ReturnType<typeof vi.fn>;
+
+	beforeEach(() => {
+		Storage.prototype.getItem = vi.fn((key) => {
+			if (key === "jwt_token") return "test-token";
+			return null;
+		});
+
+		mockFetch = vi.fn();
+		global.fetch = mockFetch;
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("should extract pending counts from task stats", async () => {
+		const mockStats = {
+			pending: 12,
+			processing: 2,
+			completed: 10,
+			failed: 0,
+			stale: 0,
+			total: 24,
+			by_type: {
+				analyze_book: {
+					pending: 12,
+					processing: 2,
+					completed: 9,
+					failed: 0,
+					stale: 0,
+					total: 23,
+				},
+				scan_library: {
+					pending: 0,
+					processing: 0,
+					completed: 1,
+					failed: 0,
+					stale: 0,
+					total: 1,
+				},
+			},
+		};
+
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			json: async () => mockStats,
+		});
+
+		const counts = await fetchPendingTaskCounts();
+
+		expect(counts).toEqual({
+			analyze_book: 12,
+			scan_library: 0,
+		});
+	});
+
+	it("should return empty object when no pending tasks", async () => {
+		const mockStats = {
+			pending: 0,
+			processing: 0,
+			completed: 10,
+			failed: 0,
+			stale: 0,
+			total: 10,
+			by_type: {
+				analyze_book: {
+					pending: 0,
+					processing: 0,
+					completed: 10,
+					failed: 0,
+					stale: 0,
+					total: 10,
+				},
+			},
+		};
+
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			json: async () => mockStats,
+		});
+
+		const counts = await fetchPendingTaskCounts();
+
+		expect(counts).toEqual({
+			analyze_book: 0,
+		});
+	});
+
+	it("should return empty object when not authenticated", async () => {
+		Storage.prototype.getItem = vi.fn(() => null);
+
+		const counts = await fetchPendingTaskCounts();
+
+		expect(counts).toEqual({});
+		expect(mockFetch).not.toHaveBeenCalled();
+	});
+
+	it("should return empty object on 401 error", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 401,
+		});
+
+		const counts = await fetchPendingTaskCounts();
+
+		expect(counts).toEqual({});
 	});
 });

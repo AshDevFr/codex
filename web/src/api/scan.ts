@@ -37,7 +37,7 @@ class SSEReconnectionManager {
 	async connect(): Promise<() => void> {
 		this.onConnectionStateChange?.("connecting");
 
-			const attemptConnection = async (): Promise<void> => {
+		const attemptConnection = async (): Promise<void> => {
 			if (!this.active) return;
 
 			try {

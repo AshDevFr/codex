@@ -1,9 +1,9 @@
 import type {
-	SetupStatusResponse,
-	InitializeSetupRequest,
-	InitializeSetupResponse,
 	ConfigureSettingsRequest,
 	ConfigureSettingsResponse,
+	InitializeSetupRequest,
+	InitializeSetupResponse,
+	SetupStatusResponse,
 } from "@/types/api";
 import { api } from "./client";
 

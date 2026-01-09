@@ -197,7 +197,7 @@ function createTaskProgressReconnectionManager(
 		}
 	};
 
-		const connect = async (): Promise<void> => {
+	const connect = async (): Promise<void> => {
 		if (!isActive) return;
 
 		cleanup();

@@ -52,9 +52,7 @@ export function isBookEvent(
 	);
 }
 
-export function isSeriesEvent(
-	event: EntityEvent,
-): event is
+export function isSeriesEvent(event: EntityEvent): event is
 	| { SeriesCreated: { series_id: string; library_id: string } }
 	| {
 			SeriesUpdated: {

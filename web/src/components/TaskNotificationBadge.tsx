@@ -9,9 +9,10 @@ import { useTaskProgress } from "@/hooks/useTaskProgress";
 export function TaskNotificationBadge() {
 	const { activeTasks, pendingCounts } = useTaskProgress();
 
-	// Filter to only running/pending tasks (processing tasks are shown as running)
+	// Filter to only running tasks (processing tasks are shown as running)
+	// Note: pending tasks are shown separately via pendingCounts, not from activeTasks
 	const runningTasks = activeTasks.filter(
-		(task) => task.status === "running" || task.status === "pending",
+		(task) => task.status === "running",
 	);
 
 	// Calculate total pending count
