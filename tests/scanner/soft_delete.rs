@@ -303,3 +303,99 @@ async fn test_deep_scan_reprocesses_all_files() {
 
     db_wrapper.close().await;
 }
+
+/// Test that purge_deleted_on_scan configuration works correctly via task handler
+#[tokio::test]
+async fn test_purge_deleted_on_scan_config() {
+    let (db_wrapper, temp_dir) = setup_test_db_wrapper().await;
+    let db = db_wrapper.sea_orm_connection();
+
+    // Create library with 3 files
+    let mut library = setup_library_with_files(db, &temp_dir, 3).await;
+
+    // Set scanning_config with purge_deleted_on_scan enabled
+    let scanning_config = serde_json::json!({
+        "enabled": true,
+        "scanMode": "normal",
+        "autoScanOnCreate": false,
+        "scanOnStart": false,
+        "purgeDeletedOnScan": true
+    });
+    library.scanning_config = Some(scanning_config.to_string());
+    LibraryRepository::update(db, &library).await.unwrap();
+
+    // Run initial scan
+    let result = scan_library(db, library.id, ScanMode::Normal, None)
+        .await
+        .unwrap();
+    assert_eq!(result.books_created, 3);
+
+    // Get the created books
+    let series_list = SeriesRepository::list_by_library(db, library.id)
+        .await
+        .unwrap();
+    assert_eq!(series_list.len(), 1);
+
+    let books = BookRepository::list_by_series(db, series_list[0].id, false)
+        .await
+        .unwrap();
+    assert_eq!(books.len(), 3);
+
+    // Delete one file from filesystem
+    let series_path = temp_dir.path().join("test_library/Test Series");
+    let file_to_delete = series_path.join("book2.cbz");
+    fs::remove_file(&file_to_delete).unwrap();
+
+    // Run scan again - should mark book as deleted
+    let result = scan_library(db, library.id, ScanMode::Normal, None)
+        .await
+        .unwrap();
+    assert_eq!(result.books_deleted, 1);
+
+    // Verify book is marked as deleted
+    let all_books = BookRepository::list_by_series(db, series_list[0].id, true)
+        .await
+        .unwrap();
+    let deleted_books: Vec<_> = all_books.iter().filter(|b| b.deleted).collect();
+    assert_eq!(deleted_books.len(), 1);
+
+    // Now test that the task handler purges deleted books when purge_deleted_on_scan is enabled
+    // We need to trigger a scan via the task queue to test the handler
+    use codex::db::repositories::TaskRepository;
+    use codex::tasks::types::TaskType;
+    use codex::tasks::TaskWorker;
+
+    // Trigger scan via task queue
+    let task_type = TaskType::ScanLibrary {
+        library_id: library.id,
+        mode: "normal".to_string(),
+    };
+    TaskRepository::enqueue(db, task_type, 0, None)
+        .await
+        .unwrap();
+
+    // Process the scan task (this should purge deleted books)
+    let worker = TaskWorker::new(db.clone());
+    worker.process_once().await.ok();
+
+    // Wait a bit for task to complete
+    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+    // Verify the deleted book was purged (permanently deleted)
+    let all_books_after = BookRepository::list_by_series(db, series_list[0].id, true)
+        .await
+        .unwrap();
+    let deleted_books_after: Vec<_> = all_books_after.iter().filter(|b| b.deleted).collect();
+    assert_eq!(
+        deleted_books_after.len(),
+        0,
+        "Deleted book should have been purged by scan handler"
+    );
+    assert_eq!(
+        all_books_after.len(),
+        2,
+        "Should only have 2 active books remaining"
+    );
+
+    db_wrapper.close().await;
+}

@@ -46,4 +46,10 @@ export const librariesApi = {
 	): Promise<void> => {
 		await api.post(`/libraries/${id}/scan?mode=${mode}`);
 	},
+
+	// Purge deleted books from a library
+	purgeDeleted: async (id: string): Promise<number> => {
+		const response = await api.delete<number>(`/libraries/${id}/purge-deleted`);
+		return response.data;
+	},
 };

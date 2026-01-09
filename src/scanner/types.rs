@@ -195,6 +195,7 @@ impl Default for ScanResult {
 
 /// Scanning configuration stored in library's scanning_config JSON field
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ScanningConfig {
     /// Cron expression for scheduled scans (e.g., "0 */6 * * *")
     pub cron_schedule: Option<String>,
@@ -306,13 +307,14 @@ mod tests {
 
     #[test]
     fn test_scanning_config_parsing() {
+        // Test with camelCase (as stored in database)
         let json = r#"{
-            "cron_schedule": "0 */6 * * *",
-            "scan_mode": "normal",
-            "auto_scan_on_create": true,
+            "cronSchedule": "0 */6 * * *",
+            "scanMode": "normal",
+            "autoScanOnCreate": true,
             "enabled": true,
-            "scan_on_start": true,
-            "purge_deleted_on_scan": true
+            "scanOnStart": true,
+            "purgeDeletedOnScan": true
         }"#;
 
         let config: ScanningConfig = serde_json::from_str(json).unwrap();
@@ -340,10 +342,34 @@ mod tests {
     #[test]
     fn test_scanning_config_deep_mode() {
         let json = r#"{
-            "scan_mode": "deep"
+            "scanMode": "deep"
         }"#;
 
         let config: ScanningConfig = serde_json::from_str(json).unwrap();
         assert_eq!(config.get_scan_mode().unwrap(), ScanMode::Deep);
+    }
+
+    #[test]
+    fn test_scanning_config_database_format() {
+        // Test with exact format as stored in database (from user report)
+        let json = r#"{
+            "cronSchedule": null,
+            "scanMode": "normal",
+            "autoScanOnCreate": true,
+            "enabled": false,
+            "scanOnStart": false,
+            "purgeDeletedOnScan": true
+        }"#;
+
+        let config: ScanningConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.cron_schedule, None);
+        assert_eq!(config.scan_mode, "normal");
+        assert!(config.auto_scan_on_create);
+        assert!(!config.enabled);
+        assert!(!config.scan_on_start);
+        assert!(
+            config.purge_deleted_on_scan,
+            "purgeDeletedOnScan should be true"
+        );
     }
 }

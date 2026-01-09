@@ -25,6 +25,7 @@ import {
 	IconRadar,
 	IconScan,
 	IconTrash,
+	IconTrashX,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -43,6 +44,8 @@ export function Home() {
 	const [selectedLibrary, setSelectedLibrary] = useState<Library | null>(null);
 	const [deleteConfirmOpened, setDeleteConfirmOpened] = useState(false);
 	const [libraryToDelete, setLibraryToDelete] = useState<Library | null>(null);
+	const [purgeConfirmOpened, setPurgeConfirmOpened] = useState(false);
+	const [libraryToPurge, setLibraryToPurge] = useState<Library | null>(null);
 	const [scanProgress, setScanProgress] = useState<
 		Record<string, ScanProgress>
 	>({});
@@ -152,6 +155,27 @@ export function Home() {
 		},
 	});
 
+	const purgeMutation = useMutation({
+		mutationFn: (libraryId: string) => librariesApi.purgeDeleted(libraryId),
+		onSuccess: (count) => {
+			notifications.show({
+				title: "Success",
+				message: `Purged ${count} deleted book${count !== 1 ? "s" : ""} from library`,
+				color: "green",
+			});
+			queryClient.invalidateQueries({ queryKey: ["libraries"] });
+			setPurgeConfirmOpened(false);
+			setLibraryToPurge(null);
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Error",
+				message: error.message || "Failed to purge deleted books",
+				color: "red",
+			});
+		},
+	});
+
 	const handleEditLibrary = (library: Library) => {
 		setSelectedLibrary(library);
 		setEditLibraryOpened(true);
@@ -165,6 +189,17 @@ export function Home() {
 	const confirmDelete = () => {
 		if (libraryToDelete) {
 			deleteMutation.mutate(libraryToDelete.id);
+		}
+	};
+
+	const handlePurgeDeleted = (library: Library) => {
+		setLibraryToPurge(library);
+		setPurgeConfirmOpened(true);
+	};
+
+	const confirmPurge = () => {
+		if (libraryToPurge) {
+			purgeMutation.mutate(libraryToPurge.id);
 		}
 	};
 
@@ -295,6 +330,14 @@ export function Home() {
 															onClick={() => handleEditLibrary(library)}
 														>
 															Edit Library
+														</Menu.Item>
+														<Menu.Divider />
+														<Menu.Item
+															leftSection={<IconTrashX size={16} />}
+															color="orange"
+															onClick={() => handlePurgeDeleted(library)}
+														>
+															Purge Deleted Books
 														</Menu.Item>
 														<Menu.Item
 															leftSection={<IconTrash size={16} />}
@@ -432,6 +475,45 @@ export function Home() {
 							loading={deleteMutation.isPending}
 						>
 							Delete Library
+						</Button>
+					</Group>
+				</Stack>
+			</Modal>
+
+			<Modal
+				opened={purgeConfirmOpened}
+				onClose={() => {
+					setPurgeConfirmOpened(false);
+					setLibraryToPurge(null);
+				}}
+				title="Purge Deleted Books"
+				centered
+			>
+				<Stack gap="md">
+					<Text>
+						Are you sure you want to permanently delete all soft-deleted books
+						from <strong>{libraryToPurge?.name}</strong>?
+					</Text>
+					<Text size="sm" c="dimmed">
+						This action cannot be undone. All books marked as deleted will be
+						permanently removed from the database.
+					</Text>
+					<Group justify="flex-end" mt="md">
+						<Button
+							variant="subtle"
+							onClick={() => {
+								setPurgeConfirmOpened(false);
+								setLibraryToPurge(null);
+							}}
+						>
+							Cancel
+						</Button>
+						<Button
+							color="orange"
+							onClick={confirmPurge}
+							loading={purgeMutation.isPending}
+						>
+							Purge Deleted Books
 						</Button>
 					</Group>
 				</Stack>

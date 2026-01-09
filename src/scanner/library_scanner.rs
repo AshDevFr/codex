@@ -20,6 +20,21 @@ use super::types::{ScanMode, ScanProgress, ScanResult, ScanStatus};
 
 const SUPPORTED_EXTENSIONS: &[&str] = &["cbz", "cbr", "epub", "pdf"];
 
+/// Parse allowed_formats from library and convert to lowercase extensions
+/// Returns None if no restrictions (all formats allowed), or Some(Vec<String>) with allowed extensions
+fn parse_allowed_formats(library: &crate::db::entities::libraries::Model) -> Option<Vec<String>> {
+    library.allowed_formats.as_ref().and_then(|json| {
+        serde_json::from_str::<Vec<String>>(json)
+            .ok()
+            .map(|formats| {
+                formats
+                    .iter()
+                    .map(|f| f.to_lowercase())
+                    .collect::<Vec<String>>()
+            })
+    })
+}
+
 /// Main library scanner that orchestrates the scanning process
 pub async fn scan_library(
     db: &DatabaseConnection,
@@ -138,13 +153,25 @@ async fn scan_normal(
         load_start.elapsed()
     );
 
+    // Parse allowed formats
+    let allowed_extensions = parse_allowed_formats(library);
+    if let Some(ref formats) = allowed_extensions {
+        info!(
+            "Library '{}' has format restrictions: {:?}",
+            library.name, formats
+        );
+    }
+
     // Discover all files in library (blocking I/O operation)
     let discover_start = Instant::now();
     let library_path = library.path.clone();
+    let allowed_extensions_clone = allowed_extensions.clone();
     info!("Starting file discovery in library path: {}", library_path);
-    let discovered_files = tokio::task::spawn_blocking(move || discover_files(&library_path))
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to spawn file discovery task: {}", e))??;
+    let discovered_files = tokio::task::spawn_blocking(move || {
+        discover_files(&library_path, allowed_extensions_clone.as_deref())
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to spawn file discovery task: {}", e))??;
     let discover_duration = discover_start.elapsed();
     progress.files_total = discovered_files.len();
     send_progress(progress_tx, progress).await;
@@ -281,16 +308,28 @@ async fn scan_deep(
 ) -> Result<ScanResult> {
     let mut result = ScanResult::new();
 
+    // Parse allowed formats
+    let allowed_extensions = parse_allowed_formats(library);
+    if let Some(ref formats) = allowed_extensions {
+        info!(
+            "Library '{}' has format restrictions: {:?}",
+            library.name, formats
+        );
+    }
+
     // Discover all files in library (blocking I/O operation)
     let discover_start = Instant::now();
     let library_path = library.path.clone();
+    let allowed_extensions_clone = allowed_extensions.clone();
     info!(
         "Starting file discovery for deep scan in library path: {}",
         library_path
     );
-    let discovered_files = tokio::task::spawn_blocking(move || discover_files(&library_path))
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to spawn file discovery task: {}", e))??;
+    let discovered_files = tokio::task::spawn_blocking(move || {
+        discover_files(&library_path, allowed_extensions_clone.as_deref())
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to spawn file discovery task: {}", e))??;
     let discover_duration = discover_start.elapsed();
     progress.files_total = discovered_files.len();
     send_progress(progress_tx, progress).await;
@@ -799,11 +838,25 @@ async fn load_existing_books(
 }
 
 /// Discover all supported files in library path
-fn discover_files(library_path: &str) -> Result<Vec<PathBuf>> {
+/// If allowed_extensions is Some, only files with those extensions will be included
+/// If allowed_extensions is None, all supported formats are allowed
+fn discover_files(
+    library_path: &str,
+    allowed_extensions: Option<&[String]>,
+) -> Result<Vec<PathBuf>> {
     let start = Instant::now();
     let mut files = Vec::new();
     let mut dirs_visited = 0;
     let mut files_checked = 0;
+
+    // Determine which extensions to check
+    let extensions_to_check: Vec<&str> = if let Some(allowed) = allowed_extensions {
+        // Only check allowed extensions
+        allowed.iter().map(|s| s.as_str()).collect()
+    } else {
+        // Check all supported extensions
+        SUPPORTED_EXTENSIONS.to_vec()
+    };
 
     for entry in WalkDir::new(library_path)
         .follow_links(false)
@@ -823,7 +876,8 @@ fn discover_files(library_path: &str) -> Result<Vec<PathBuf>> {
         // Check extension
         if let Some(ext) = path.extension() {
             let ext_str = ext.to_string_lossy().to_lowercase();
-            if SUPPORTED_EXTENSIONS.contains(&ext_str.as_str()) {
+            // Check against allowed extensions (if specified) or all supported extensions
+            if extensions_to_check.contains(&ext_str.as_str()) {
                 files.push(path.to_path_buf());
             }
         }
