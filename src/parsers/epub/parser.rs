@@ -1,4 +1,5 @@
 use crate::parsers::image_utils::{get_image_format, is_image_file};
+use crate::parsers::isbn_utils::extract_isbns;
 use crate::parsers::traits::FormatParser;
 use crate::parsers::{BookMetadata, FileFormat, ImageFormat, PageInfo};
 use crate::utils::{hash_file, CodexError, Result};
@@ -38,6 +39,52 @@ impl EpubParser {
         Err(CodexError::ParseError(
             "Could not find rootfile path in container.xml".to_string(),
         ))
+    }
+
+    /// Extract ISBNs from OPF XML metadata
+    ///
+    /// Looks for ISBN identifiers in:
+    /// - <dc:identifier opf:scheme="ISBN">...</dc:identifier>
+    /// - <dc:identifier>ISBN:...</dc:identifier>
+    /// - Any identifier containing ISBN-like patterns
+    fn extract_isbns_from_opf(opf_content: &str) -> Vec<String> {
+        let mut isbns = Vec::new();
+
+        // Look for dc:identifier tags
+        let mut remaining = opf_content;
+        while let Some(start) = remaining.find("<dc:identifier") {
+            let tag_section = &remaining[start..];
+            if let Some(tag_end) = tag_section.find("</dc:identifier>") {
+                let full_tag = &tag_section[..tag_end + 16]; // +16 for "</dc:identifier>"
+
+                // Check if it's explicitly marked as ISBN scheme
+                let is_isbn_scheme = full_tag.contains("opf:scheme=\"ISBN\"")
+                    || full_tag.contains("opf:scheme='ISBN'")
+                    || full_tag.contains("scheme=\"ISBN\"")
+                    || full_tag.contains("scheme='ISBN'");
+
+                // Extract content between tags
+                if let Some(content_start) = full_tag.find('>') {
+                    let content = &full_tag[content_start + 1..full_tag.len() - 16];
+
+                    // If explicitly marked as ISBN or contains "ISBN", try to extract
+                    if is_isbn_scheme || content.to_uppercase().contains("ISBN") {
+                        let extracted = extract_isbns(content, false);
+                        isbns.extend(extracted);
+                    }
+                }
+
+                remaining = &tag_section[tag_end + 16..];
+            } else {
+                break;
+            }
+        }
+
+        // Remove duplicates while preserving order
+        let mut seen = std::collections::HashSet::new();
+        isbns.retain(|isbn| seen.insert(isbn.clone()));
+
+        isbns
     }
 
     /// Parse the OPF file to get metadata and spine (reading order)
@@ -172,6 +219,19 @@ impl FormatParser for EpubParser {
         // Find the OPF file from container.xml
         let opf_path = Self::find_root_file(&mut archive)?;
 
+        // Read OPF content for ISBN extraction
+        let opf_content = {
+            let mut opf_file = archive
+                .by_name(&opf_path)
+                .map_err(|_| CodexError::ParseError(format!("OPF file not found: {}", opf_path)))?;
+            let mut content = String::new();
+            opf_file.read_to_string(&mut content)?;
+            content
+        };
+
+        // Extract ISBNs from OPF metadata
+        let isbns = Self::extract_isbns_from_opf(&opf_content);
+
         // Parse the OPF to get manifest and spine
         let (_manifest, spine_order) = Self::parse_opf(&mut archive, &opf_path)?;
 
@@ -249,8 +309,8 @@ impl FormatParser for EpubParser {
             modified_at,
             page_count,
             pages,
-            comic_info: None,  // EPUB doesn't use ComicInfo.xml
-            isbns: Vec::new(), // TODO: Extract from OPF metadata
+            comic_info: None, // EPUB doesn't use ComicInfo.xml
+            isbns,
         })
     }
 }
@@ -331,5 +391,92 @@ mod tests {
         assert!(!parser.can_parse("test.cbr"));
         assert!(!parser.can_parse("test.pdf"));
         assert!(!parser.can_parse("test.txt"));
+    }
+
+    #[test]
+    fn test_extract_isbns_from_opf_with_scheme() {
+        let opf_content = r#"
+            <?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+                <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+                    <dc:identifier opf:scheme="ISBN">978-0-306-40615-7</dc:identifier>
+                    <dc:title>Test Book</dc:title>
+                </metadata>
+            </package>
+        "#;
+
+        let isbns = EpubParser::extract_isbns_from_opf(opf_content);
+        assert_eq!(isbns.len(), 1);
+        assert_eq!(isbns[0], "9780306406157");
+    }
+
+    #[test]
+    fn test_extract_isbns_from_opf_with_isbn_prefix() {
+        let opf_content = r#"
+            <?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+                <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+                    <dc:identifier>ISBN: 978-0-306-40615-7</dc:identifier>
+                    <dc:title>Test Book</dc:title>
+                </metadata>
+            </package>
+        "#;
+
+        let isbns = EpubParser::extract_isbns_from_opf(opf_content);
+        assert_eq!(isbns.len(), 1);
+        assert_eq!(isbns[0], "9780306406157");
+    }
+
+    #[test]
+    fn test_extract_isbns_from_opf_multiple() {
+        let opf_content = r#"
+            <?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+                <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+                    <dc:identifier opf:scheme="ISBN">978-0-306-40615-7</dc:identifier>
+                    <dc:identifier opf:scheme="ISBN">0-306-40615-2</dc:identifier>
+                    <dc:title>Test Book</dc:title>
+                </metadata>
+            </package>
+        "#;
+
+        let isbns = EpubParser::extract_isbns_from_opf(opf_content);
+        assert_eq!(isbns.len(), 2);
+        assert!(isbns.contains(&"9780306406157".to_string()));
+        assert!(isbns.contains(&"0306406152".to_string()));
+    }
+
+    #[test]
+    fn test_extract_isbns_from_opf_no_isbn() {
+        let opf_content = r#"
+            <?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+                <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+                    <dc:identifier>urn:uuid:12345</dc:identifier>
+                    <dc:title>Test Book</dc:title>
+                </metadata>
+            </package>
+        "#;
+
+        let isbns = EpubParser::extract_isbns_from_opf(opf_content);
+        assert_eq!(isbns.len(), 0);
+    }
+
+    #[test]
+    fn test_extract_isbns_from_opf_deduplicates() {
+        let opf_content = r#"
+            <?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+                <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+                    <dc:identifier opf:scheme="ISBN">978-0-306-40615-7</dc:identifier>
+                    <dc:identifier>ISBN: 978-0-306-40615-7</dc:identifier>
+                    <dc:title>Test Book</dc:title>
+                </metadata>
+            </package>
+        "#;
+
+        let isbns = EpubParser::extract_isbns_from_opf(opf_content);
+        assert_eq!(isbns.len(), 1);
+        assert_eq!(isbns[0], "9780306406157");
     }
 }

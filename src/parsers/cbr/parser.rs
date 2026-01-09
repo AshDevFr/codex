@@ -159,6 +159,39 @@ impl FormatParser for CbrParser {
             page_count,
             pages,
             comic_info,
+            // TODO: Implement barcode detection for CBR files (deferred)
+            //
+            // Barcode detection for ISBN extraction from comic book covers has been
+            // intentionally deferred due to complexity vs. benefit trade-offs.
+            //
+            // WHY DEFERRED:
+            // - High implementation complexity (barcode detection + image processing)
+            // - Limited practical benefit (most comic barcodes are not machine-readable)
+            // - Significant performance impact (scanning images is expensive)
+            // - Lower priority compared to other metadata extraction features
+            //
+            // WHAT WOULD BE REQUIRED:
+            // 1. Barcode detection library (e.g., bardecoder, rxing)
+            // 2. Image processing to locate and extract barcodes from cover pages
+            // 3. Performance optimization for large archives (thousands of images)
+            // 4. Accuracy validation and error handling
+            // 5. Configuration option to enable/disable (due to performance cost)
+            //
+            // ALTERNATIVES:
+            // - Manual metadata editing via API (recommended)
+            // - External tools to extract ISBNs before import
+            // - ComicInfo.xml metadata (if available)
+            //
+            // IF IMPLEMENTING IN THE FUTURE:
+            // - Only scan first/last few pages (likely cover locations)
+            // - Cache results to avoid re-scanning on every parse
+            // - Make it opt-in via configuration flag
+            // - Test with real-world comic archives for accuracy
+            // - Validate extracted ISBNs against checksum before accepting
+            // - Consider async/parallel processing for performance
+            //
+            // RELATED: EPUB and PDF parsers successfully extract ISBNs from metadata
+            // (see epub/parser.rs and pdf/parser.rs for implemented approaches)
             isbns: Vec::new(),
         })
     }

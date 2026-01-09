@@ -52,6 +52,9 @@ thiserror = "1.0"
 # XML parsing (for ComicInfo.xml)
 quick-xml = { version = "0.36", features = ["serialize"] }
 
+# Regular expressions (for ISBN extraction)
+regex = "1.10"
+
 # File system utilities
 walkdir = "2.5"
 dirs = "5.0"

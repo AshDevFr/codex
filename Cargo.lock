@@ -676,6 +676,7 @@ dependencies = [
  "mime_guess",
  "quick-xml",
  "rand 0.8.5",
+ "regex",
  "rust-embed",
  "sea-orm",
  "sea-orm-migration",

@@ -4,11 +4,13 @@ pub mod cbz;
 pub mod comic_info;
 pub mod epub;
 pub mod image_utils;
+pub mod isbn_utils;
 pub mod metadata;
 pub mod pdf;
 pub mod traits;
 
 pub use comic_info::parse_comic_info;
 pub use image_utils::{get_image_format, is_image_file};
+pub use isbn_utils::{clean_isbn, extract_isbns, is_valid_isbn};
 pub use metadata::*;
 pub use traits::FormatParser;
