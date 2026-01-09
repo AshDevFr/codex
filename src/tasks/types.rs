@@ -36,6 +36,9 @@ pub enum TaskType {
     GenerateThumbnails {
         library_id: Option<Uuid>, // None = all libraries
     },
+
+    /// Find and catalog duplicate books across all libraries
+    FindDuplicates,
 }
 
 fn default_mode() -> String {
@@ -56,6 +59,7 @@ impl TaskType {
             TaskType::PurgeDeleted { .. } => "purge_deleted",
             TaskType::RefreshMetadata { .. } => "refresh_metadata",
             TaskType::GenerateThumbnails { .. } => "generate_thumbnails",
+            TaskType::FindDuplicates => "find_duplicates",
         }
     }
 

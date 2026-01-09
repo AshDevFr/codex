@@ -1350,3 +1350,318 @@ async fn test_postgres_skip_locked_with_prioritization() {
         "Worker 3 should get analysis task"
     );
 }
+
+// ============================================================================
+// FindDuplicates Task Handler Tests
+// Tests for the deduplication task handler functionality
+// ============================================================================
+
+/// Helper to create books with duplicate file hashes
+async fn create_duplicate_books(db: &DatabaseConnection, series_id: Uuid) -> (Uuid, Uuid, String) {
+    let now = Utc::now();
+    let shared_hash = format!("duplicate-hash-{}", Uuid::new_v4());
+
+    // Create first book
+    let book_id1 = Uuid::new_v4();
+    let book1 = books::ActiveModel {
+        id: Set(book_id1),
+        series_id: Set(series_id),
+        file_path: Set(format!("/tmp/test-{}.cbz", book_id1)),
+        file_name: Set(format!("test-{}.cbz", book_id1)),
+        file_size: Set(1024),
+        file_hash: Set(shared_hash.clone()),
+        partial_hash: Set(format!("partial-{}", book_id1)),
+        format: Set("cbz".to_string()),
+        page_count: Set(10),
+        modified_at: Set(now),
+        created_at: Set(now),
+        updated_at: Set(now),
+        ..Default::default()
+    };
+    book1.insert(db).await.expect("Failed to create book 1");
+
+    // Create second book with same hash
+    let book_id2 = Uuid::new_v4();
+    let book2 = books::ActiveModel {
+        id: Set(book_id2),
+        series_id: Set(series_id),
+        file_path: Set(format!("/tmp/test-{}.cbz", book_id2)),
+        file_name: Set(format!("test-{}.cbz", book_id2)),
+        file_size: Set(1024),
+        file_hash: Set(shared_hash.clone()),
+        partial_hash: Set(format!("partial-{}", book_id2)),
+        format: Set("cbz".to_string()),
+        page_count: Set(10),
+        modified_at: Set(now),
+        created_at: Set(now),
+        updated_at: Set(now),
+        ..Default::default()
+    };
+    book2.insert(db).await.expect("Failed to create book 2");
+
+    (book_id1, book_id2, shared_hash)
+}
+
+/// Test FindDuplicates task can be enqueued
+#[tokio::test]
+async fn test_enqueue_find_duplicates_task() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let task_type = TaskType::FindDuplicates;
+
+    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    // Verify task was created
+    let task = TaskRepository::get_by_id(&db, task_id)
+        .await
+        .expect("Failed to get task")
+        .expect("Task not found");
+
+    assert_eq!(task.task_type, "find_duplicates");
+    assert_eq!(task.status, "pending");
+    assert_eq!(task.priority, 0);
+    assert_eq!(task.attempts, 0);
+    assert!(
+        task.library_id.is_none(),
+        "FindDuplicates should not have library_id"
+    );
+    assert!(
+        task.series_id.is_none(),
+        "FindDuplicates should not have series_id"
+    );
+    assert!(
+        task.book_id.is_none(),
+        "FindDuplicates should not have book_id"
+    );
+}
+
+/// Test FindDuplicates task handler executes successfully with duplicates
+#[tokio::test]
+async fn test_find_duplicates_handler_with_duplicates() {
+    use codex::db::repositories::BookDuplicatesRepository;
+    use codex::tasks::handlers::{FindDuplicatesHandler, TaskHandler};
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library_id = create_test_library(&db).await;
+    let series_id = create_test_series(&db, library_id).await;
+
+    // Create duplicate books
+    let (_book1, _book2, shared_hash) = create_duplicate_books(&db, series_id).await;
+
+    // Create and enqueue FindDuplicates task
+    let task_type = TaskType::FindDuplicates;
+    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    // Get the task
+    let task = TaskRepository::get_by_id(&db, task_id)
+        .await
+        .expect("Failed to get task")
+        .expect("Task not found");
+
+    // Execute the handler
+    let handler = FindDuplicatesHandler;
+    let result = handler.handle(&task, &db).await.expect("Handler failed");
+
+    assert!(result.success, "Handler should succeed");
+    assert!(
+        result
+            .message
+            .as_ref()
+            .unwrap()
+            .contains("1 duplicate group"),
+        "Should find 1 duplicate group"
+    );
+
+    // Verify duplicate group was created
+    let duplicates = BookDuplicatesRepository::find_all(&db)
+        .await
+        .expect("Failed to find duplicates");
+
+    assert_eq!(duplicates.len(), 1, "Should have 1 duplicate group");
+    assert_eq!(duplicates[0].file_hash, shared_hash, "Hash should match");
+    assert_eq!(duplicates[0].duplicate_count, 2, "Should have 2 duplicates");
+}
+
+/// Test FindDuplicates task handler with no duplicates
+#[tokio::test]
+async fn test_find_duplicates_handler_with_no_duplicates() {
+    use codex::db::repositories::BookDuplicatesRepository;
+    use codex::tasks::handlers::{FindDuplicatesHandler, TaskHandler};
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library_id = create_test_library(&db).await;
+    let series_id = create_test_series(&db, library_id).await;
+
+    // Create unique books (no duplicates)
+    create_test_book(&db, series_id).await;
+    create_test_book(&db, series_id).await;
+
+    // Create and enqueue FindDuplicates task
+    let task_type = TaskType::FindDuplicates;
+    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    // Get the task
+    let task = TaskRepository::get_by_id(&db, task_id)
+        .await
+        .expect("Failed to get task")
+        .expect("Task not found");
+
+    // Execute the handler
+    let handler = FindDuplicatesHandler;
+    let result = handler.handle(&task, &db).await.expect("Handler failed");
+
+    assert!(result.success, "Handler should succeed");
+    assert!(
+        result
+            .message
+            .as_ref()
+            .unwrap()
+            .contains("0 duplicate groups"),
+        "Should find 0 duplicate groups"
+    );
+
+    // Verify no duplicate groups were created
+    let duplicates = BookDuplicatesRepository::find_all(&db)
+        .await
+        .expect("Failed to find duplicates");
+
+    assert_eq!(duplicates.len(), 0, "Should have 0 duplicate groups");
+}
+
+/// Test FindDuplicates task handler with multiple duplicate groups
+#[tokio::test]
+async fn test_find_duplicates_handler_with_multiple_groups() {
+    use codex::db::repositories::BookDuplicatesRepository;
+    use codex::tasks::handlers::{FindDuplicatesHandler, TaskHandler};
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library_id = create_test_library(&db).await;
+    let series_id = create_test_series(&db, library_id).await;
+
+    // Create first duplicate group
+    let (_book1, _book2, hash1) = create_duplicate_books(&db, series_id).await;
+
+    // Create second duplicate group
+    let (_book3, _book4, hash2) = create_duplicate_books(&db, series_id).await;
+
+    // Create and enqueue FindDuplicates task
+    let task_type = TaskType::FindDuplicates;
+    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    // Get the task
+    let task = TaskRepository::get_by_id(&db, task_id)
+        .await
+        .expect("Failed to get task")
+        .expect("Task not found");
+
+    // Execute the handler
+    let handler = FindDuplicatesHandler;
+    let result = handler.handle(&task, &db).await.expect("Handler failed");
+
+    assert!(result.success, "Handler should succeed");
+    assert!(
+        result
+            .message
+            .as_ref()
+            .unwrap()
+            .contains("2 duplicate groups"),
+        "Should find 2 duplicate groups"
+    );
+
+    // Verify duplicate groups were created
+    let duplicates = BookDuplicatesRepository::find_all(&db)
+        .await
+        .expect("Failed to find duplicates");
+
+    assert_eq!(duplicates.len(), 2, "Should have 2 duplicate groups");
+
+    // Verify hashes (order may vary)
+    let found_hashes: Vec<String> = duplicates.iter().map(|d| d.file_hash.clone()).collect();
+    assert!(found_hashes.contains(&hash1), "Should contain first hash");
+    assert!(found_hashes.contains(&hash2), "Should contain second hash");
+
+    // Verify counts
+    for duplicate in duplicates {
+        assert_eq!(
+            duplicate.duplicate_count, 2,
+            "Each group should have 2 duplicates"
+        );
+    }
+}
+
+/// Test FindDuplicates task rebuilds existing duplicates
+#[tokio::test]
+async fn test_find_duplicates_handler_rebuilds_existing() {
+    use codex::db::repositories::BookDuplicatesRepository;
+    use codex::tasks::handlers::{FindDuplicatesHandler, TaskHandler};
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library_id = create_test_library(&db).await;
+    let series_id = create_test_series(&db, library_id).await;
+
+    // Create duplicate books
+    create_duplicate_books(&db, series_id).await;
+
+    // Run first scan
+    let task_type = TaskType::FindDuplicates;
+    let task_id1 = TaskRepository::enqueue(&db, task_type.clone(), 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    let task1 = TaskRepository::get_by_id(&db, task_id1)
+        .await
+        .expect("Failed to get task")
+        .expect("Task not found");
+
+    let handler = FindDuplicatesHandler;
+    handler
+        .handle(&task1, &db)
+        .await
+        .expect("First handler failed");
+
+    // Verify first scan
+    let duplicates1 = BookDuplicatesRepository::find_all(&db)
+        .await
+        .expect("Failed to find duplicates");
+    assert_eq!(
+        duplicates1.len(),
+        1,
+        "Should have 1 duplicate group after first scan"
+    );
+
+    // Create more duplicate books
+    create_duplicate_books(&db, series_id).await;
+
+    // Run second scan
+    let task_id2 = TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    let task2 = TaskRepository::get_by_id(&db, task_id2)
+        .await
+        .expect("Failed to get task")
+        .expect("Task not found");
+
+    handler
+        .handle(&task2, &db)
+        .await
+        .expect("Second handler failed");
+
+    // Verify second scan rebuilt the table
+    let duplicates2 = BookDuplicatesRepository::find_all(&db)
+        .await
+        .expect("Failed to find duplicates");
+    assert_eq!(
+        duplicates2.len(),
+        2,
+        "Should have 2 duplicate groups after second scan"
+    );
+}

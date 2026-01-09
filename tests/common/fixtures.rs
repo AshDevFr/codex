@@ -1,7 +1,10 @@
 use chrono::Utc;
+use codex::db::repositories::{BookRepository, LibraryRepository, SeriesRepository};
+use codex::models::ScanningStrategy;
+use sea_orm::DatabaseConnection;
 use uuid::Uuid;
 
-pub use codex::db::entities::{api_keys, books, pages, users};
+pub use codex::db::entities::{api_keys, books, libraries, pages, series, users};
 
 /// Create a test user model with default values
 pub fn create_test_user(
@@ -120,4 +123,57 @@ pub fn create_test_api_key(
         created_at: now,
         updated_at: now,
     }
+}
+
+/// Create a test library in the database
+pub async fn create_test_library(
+    db: &DatabaseConnection,
+    name: &str,
+    path: &str,
+) -> libraries::Model {
+    LibraryRepository::create(db, name, path, ScanningStrategy::Default)
+        .await
+        .unwrap()
+}
+
+/// Create a test series in the database
+pub async fn create_test_series(
+    db: &DatabaseConnection,
+    library: &libraries::Model,
+    name: &str,
+) -> series::Model {
+    SeriesRepository::create(db, library.id, name)
+        .await
+        .unwrap()
+}
+
+/// Create a test book in the database with a specific file hash
+pub async fn create_test_book_with_hash(
+    db: &DatabaseConnection,
+    library: &libraries::Model,
+    series: &series::Model,
+    title: &str,
+    file_path: &str,
+    file_hash: &str,
+) -> books::Model {
+    let book = books::Model {
+        id: Uuid::new_v4(),
+        series_id: series.id,
+        title: Some(title.to_string()),
+        number: None,
+        file_path: file_path.to_string(),
+        file_name: file_path.split('/').last().unwrap_or(file_path).to_string(),
+        file_size: 1024,
+        file_hash: file_hash.to_string(),
+        partial_hash: String::new(),
+        format: "cbz".to_string(),
+        page_count: 10,
+        deleted: false,
+        analyzed: false,
+        modified_at: Utc::now(),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+    };
+
+    BookRepository::create(db, &book).await.unwrap()
 }

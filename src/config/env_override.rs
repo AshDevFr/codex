@@ -22,21 +22,9 @@ impl EnvOverride for TaskConfig {
 
 impl EnvOverride for ScannerConfig {
     fn apply_env_overrides(&mut self, prefix: &str) {
-        let max_scans_var = format!("{}_MAX_CONCURRENT_SCANS", prefix);
-        match env::var(&max_scans_var) {
-            Ok(max_scans) => {
-                match max_scans.parse::<usize>() {
-                    Ok(count) => {
-                        self.max_concurrent_scans = count;
-                    }
-                    Err(e) => {
-                        // Silently ignore parse errors (same as before)
-                        let _ = e;
-                    }
-                }
-            }
-            Err(_) => {
-                // Env var not set, keep default value
+        if let Ok(max_scans) = env::var(format!("{}_MAX_CONCURRENT_SCANS", prefix)) {
+            if let Ok(count) = max_scans.parse::<usize>() {
+                self.max_concurrent_scans = count;
             }
         }
     }

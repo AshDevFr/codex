@@ -6,6 +6,7 @@ mod events;
 mod models;
 mod parsers;
 mod scanner;
+mod scheduler;
 mod services;
 mod tasks;
 mod utils;

@@ -14,6 +14,7 @@ mod m20260106_000012_create_tasks;
 mod m20260107_000013_create_settings;
 mod m20260107_000014_create_settings_history;
 mod m20260107_000015_seed_settings;
+mod m20260108_000016_create_book_duplicates;
 
 pub struct Migrator;
 
@@ -35,6 +36,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260107_000013_create_settings::Migration),
             Box::new(m20260107_000014_create_settings_history::Migration),
             Box::new(m20260107_000015_seed_settings::Migration),
+            Box::new(m20260108_000016_create_book_duplicates::Migration),
         ]
     }
 }

@@ -168,6 +168,10 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             delete(handlers::task_queue::purge_old_tasks),
         )
         .route("/tasks/nuke", delete(handlers::task_queue::nuke_all_tasks))
+        // Duplicate detection routes (protected)
+        .route("/duplicates", get(handlers::list_duplicates))
+        .route("/duplicates/scan", post(handlers::trigger_duplicate_scan))
+        .route("/duplicates/:id", delete(handlers::delete_duplicate_group))
         // Filesystem routes (protected, admin only)
         .route("/filesystem/browse", get(handlers::browse_filesystem))
         .route("/filesystem/drives", get(handlers::list_drives))

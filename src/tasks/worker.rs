@@ -13,8 +13,8 @@ use crate::db::repositories::TaskRepository;
 use crate::events::{EventBroadcaster, TaskProgressEvent};
 use crate::services::SettingsService;
 use crate::tasks::handlers::{
-    AnalyzeBookHandler, AnalyzeSeriesHandler, GenerateThumbnailsHandler, PurgeDeletedHandler,
-    ScanLibraryHandler, TaskHandler,
+    AnalyzeBookHandler, AnalyzeSeriesHandler, FindDuplicatesHandler, GenerateThumbnailsHandler,
+    PurgeDeletedHandler, ScanLibraryHandler, TaskHandler,
 };
 
 /// Task worker that processes tasks from the queue
@@ -53,6 +53,10 @@ impl TaskWorker {
         handlers.insert(
             "generate_thumbnails".to_string(),
             Arc::new(GenerateThumbnailsHandler::new()),
+        );
+        handlers.insert(
+            "find_duplicates".to_string(),
+            Arc::new(FindDuplicatesHandler::new()),
         );
 
         // Generate worker ID from hostname or random UUID

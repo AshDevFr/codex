@@ -5,6 +5,7 @@ pub mod events;
 pub mod models;
 pub mod parsers;
 pub mod scanner;
+pub mod scheduler;
 pub mod services;
 pub mod tasks;
 pub mod utils;

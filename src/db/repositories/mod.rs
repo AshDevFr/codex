@@ -1,5 +1,6 @@
 pub mod api_key;
 pub mod book;
+pub mod book_duplicates;
 pub mod email_verification_token;
 pub mod library;
 pub mod metadata;
@@ -14,6 +15,7 @@ pub mod user;
 // Re-export repositories
 pub use api_key::ApiKeyRepository;
 pub use book::BookRepository;
+pub use book_duplicates::BookDuplicatesRepository;
 pub use email_verification_token::EmailVerificationTokenRepository;
 pub use library::LibraryRepository;
 pub use metadata::BookMetadataRepository;

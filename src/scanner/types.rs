@@ -1,3 +1,4 @@
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -192,6 +193,43 @@ impl Default for ScanResult {
     }
 }
 
+/// Scanning configuration stored in library's scanning_config JSON field
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScanningConfig {
+    /// Cron expression for scheduled scans (e.g., "0 */6 * * *")
+    pub cron_schedule: Option<String>,
+    /// Default scan mode for scheduled scans ("normal" or "deep")
+    #[serde(default = "default_scan_mode")]
+    pub scan_mode: String,
+    /// Auto-scan when library is created
+    #[serde(default)]
+    pub auto_scan_on_create: bool,
+    /// Whether scheduled scanning is enabled
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+    /// Scan library when the application starts
+    #[serde(default)]
+    pub scan_on_start: bool,
+    /// Purge soft-deleted books after completing a scan
+    #[serde(default)]
+    pub purge_deleted_on_scan: bool,
+}
+
+fn default_scan_mode() -> String {
+    "normal".to_string()
+}
+
+fn default_enabled() -> bool {
+    true
+}
+
+impl ScanningConfig {
+    /// Parse scan mode from config
+    pub fn get_scan_mode(&self) -> Result<ScanMode> {
+        ScanMode::from_str(&self.scan_mode).map_err(|e| anyhow::anyhow!(e))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -264,5 +302,48 @@ mod tests {
         let result = ScanResult::default();
         assert_eq!(result.files_processed, 0);
         assert!(!result.has_errors());
+    }
+
+    #[test]
+    fn test_scanning_config_parsing() {
+        let json = r#"{
+            "cron_schedule": "0 */6 * * *",
+            "scan_mode": "normal",
+            "auto_scan_on_create": true,
+            "enabled": true,
+            "scan_on_start": true,
+            "purge_deleted_on_scan": true
+        }"#;
+
+        let config: ScanningConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.cron_schedule, Some("0 */6 * * *".to_string()));
+        assert_eq!(config.scan_mode, "normal");
+        assert!(config.auto_scan_on_create);
+        assert!(config.enabled);
+        assert!(config.scan_on_start);
+        assert!(config.purge_deleted_on_scan);
+        assert_eq!(config.get_scan_mode().unwrap(), ScanMode::Normal);
+    }
+
+    #[test]
+    fn test_scanning_config_defaults() {
+        let json = r#"{}"#;
+
+        let config: ScanningConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.scan_mode, "normal");
+        assert!(!config.auto_scan_on_create);
+        assert!(config.enabled);
+        assert!(!config.scan_on_start);
+        assert!(!config.purge_deleted_on_scan);
+    }
+
+    #[test]
+    fn test_scanning_config_deep_mode() {
+        let json = r#"{
+            "scan_mode": "deep"
+        }"#;
+
+        let config: ScanningConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.get_scan_mode().unwrap(), ScanMode::Deep);
     }
 }

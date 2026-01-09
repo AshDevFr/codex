@@ -136,6 +136,29 @@ impl MigrationTrait for Migration {
                 None,
                 None,
             ),
+            // Deduplication settings (2 settings)
+            (
+                "deduplication.cron_schedule",
+                "",
+                "String",
+                "Deduplication",
+                "Cron schedule for automatic duplicate detection (e.g., '0 2 * * *' for daily at 2am). Leave empty to disable automatic scanning.",
+                false,
+                "",
+                None,
+                None,
+            ),
+            (
+                "deduplication.enabled",
+                "true",
+                "Boolean",
+                "Deduplication",
+                "Enable automatic duplicate detection scanning",
+                false,
+                "true",
+                None,
+                None,
+            ),
         ];
 
         for (

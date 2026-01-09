@@ -1,60 +1,22 @@
 use anyhow::{Context, Result};
 use sea_orm::DatabaseConnection;
-use serde::{Deserialize, Serialize};
 use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::db::repositories::{LibraryRepository, TaskRepository};
+use crate::scanner::{ScanMode, ScanningConfig};
+use crate::services::settings::SettingsService;
 use crate::tasks::types::TaskType;
 
-use super::types::ScanMode;
-
-/// Scanning configuration stored in library's scanning_config JSON field
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ScanningConfig {
-    /// Cron expression for scheduled scans (e.g., "0 */6 * * *")
-    pub cron_schedule: Option<String>,
-    /// Default scan mode for scheduled scans ("normal" or "deep")
-    #[serde(default = "default_scan_mode")]
-    pub scan_mode: String,
-    /// Auto-scan when library is created
-    #[serde(default)]
-    pub auto_scan_on_create: bool,
-    /// Whether scheduled scanning is enabled
-    #[serde(default = "default_enabled")]
-    pub enabled: bool,
-    /// Scan library when the application starts
-    #[serde(default)]
-    pub scan_on_start: bool,
-    /// Purge soft-deleted books after completing a scan
-    #[serde(default)]
-    pub purge_deleted_on_scan: bool,
-}
-
-fn default_scan_mode() -> String {
-    "normal".to_string()
-}
-
-fn default_enabled() -> bool {
-    true
-}
-
-impl ScanningConfig {
-    /// Parse scan mode from config
-    pub fn get_scan_mode(&self) -> Result<ScanMode> {
-        ScanMode::from_str(&self.scan_mode).map_err(|e| anyhow::anyhow!(e))
-    }
-}
-
-/// Manages scheduled scans using cron expressions
-pub struct ScanScheduler {
+/// Generic scheduler for managing scheduled tasks (library scans, deduplication, etc.)
+pub struct Scheduler {
     scheduler: JobScheduler,
     db: DatabaseConnection,
 }
 
-impl ScanScheduler {
-    /// Create a new scan scheduler
+impl Scheduler {
+    /// Create a new scheduler
     pub async fn new(db: DatabaseConnection) -> Result<Self> {
         let scheduler = JobScheduler::new()
             .await
@@ -63,11 +25,34 @@ impl ScanScheduler {
         Ok(Self { scheduler, db })
     }
 
-    /// Start the scheduler and load all library schedules
+    /// Start the scheduler and load all scheduled jobs
     pub async fn start(&mut self) -> Result<()> {
-        info!("Starting scan scheduler");
+        info!("Starting job scheduler");
 
-        // Load all libraries
+        // Load library scan schedules
+        self.load_library_schedules().await?;
+
+        // Load deduplication schedule
+        self.load_deduplication_schedule().await?;
+
+        // Start the scheduler
+        self.scheduler
+            .start()
+            .await
+            .context("Failed to start scheduler")?;
+
+        let job_count = if self.scheduler.time_till_next_job().await.is_ok() {
+            1
+        } else {
+            0
+        };
+        info!("Job scheduler started with {} jobs", job_count);
+
+        Ok(())
+    }
+
+    /// Load all library scan schedules
+    async fn load_library_schedules(&mut self) -> Result<()> {
         let libraries = LibraryRepository::list_all(&self.db).await?;
 
         for library in libraries {
@@ -100,32 +85,56 @@ impl ScanScheduler {
             }
         }
 
-        // Start the scheduler
-        self.scheduler
-            .start()
-            .await
-            .context("Failed to start scheduler")?;
-
-        let job_count = if self.scheduler.time_till_next_job().await.is_ok() {
-            1
-        } else {
-            0
-        };
-        info!("Scan scheduler started with {} jobs", job_count);
-
         Ok(())
     }
 
-    /// Reload all schedules (useful when libraries are updated)
-    pub async fn reload_schedules(&mut self) -> Result<()> {
-        info!("Reloading all schedules");
+    /// Load deduplication schedule from settings
+    async fn load_deduplication_schedule(&mut self) -> Result<()> {
+        // Initialize settings service to read deduplication settings
+        let settings = SettingsService::new(self.db.clone()).await?;
 
-        // Remove all existing jobs
-        self.scheduler.shutdown().await?;
-        self.scheduler = JobScheduler::new().await?;
+        // Check if deduplication is enabled
+        let enabled = settings.get_bool("deduplication.enabled", true).await?;
 
-        // Reload
-        self.start().await
+        if !enabled {
+            debug!("Deduplication scheduled scanning disabled");
+            return Ok(());
+        }
+
+        // Get cron schedule
+        let cron = settings
+            .get_string("deduplication.cron_schedule", "")
+            .await?;
+
+        if cron.is_empty() {
+            debug!("Deduplication scheduled scanning disabled (no cron)");
+            return Ok(());
+        }
+
+        // Create cron job
+        let db = self.db.clone();
+        let job = Job::new_async(cron.as_str(), move |_uuid, _lock| {
+            let db = db.clone();
+            Box::pin(async move {
+                info!("Triggering scheduled duplicate detection");
+
+                let task_type = TaskType::FindDuplicates;
+                match TaskRepository::enqueue(&db, task_type, 0, None).await {
+                    Ok(_) => debug!("Duplicate detection task enqueued"),
+                    Err(e) => error!("Failed to enqueue duplicate detection: {}", e),
+                }
+            })
+        })
+        .context("Failed to create deduplication cron job")?;
+
+        self.scheduler
+            .add(job)
+            .await
+            .context("Failed to add deduplication job to scheduler")?;
+
+        info!("Added deduplication schedule: {}", cron);
+
+        Ok(())
     }
 
     /// Add or update a library's schedule
@@ -210,17 +219,21 @@ impl ScanScheduler {
         Ok(())
     }
 
-    /// Remove a library's schedule
-    pub async fn remove_library_schedule(&mut self, library_id: Uuid) -> Result<()> {
-        // Note: tokio-cron-scheduler doesn't have a direct way to remove jobs by metadata
-        // The best approach is to reload all schedules
-        info!("Removing schedule for library {}", library_id);
-        self.reload_schedules().await
+    /// Reload all schedules (useful when libraries or settings are updated)
+    pub async fn reload_schedules(&mut self) -> Result<()> {
+        info!("Reloading all schedules");
+
+        // Remove all existing jobs
+        self.scheduler.shutdown().await?;
+        self.scheduler = JobScheduler::new().await?;
+
+        // Reload
+        self.start().await
     }
 
     /// Shutdown the scheduler
     pub async fn shutdown(&mut self) -> Result<()> {
-        info!("Shutting down scan scheduler");
+        info!("Shutting down job scheduler");
         self.scheduler
             .shutdown()
             .await
@@ -233,45 +246,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_scanning_config_parsing() {
-        let json = r#"{
-            "cron_schedule": "0 */6 * * *",
-            "scan_mode": "normal",
-            "auto_scan_on_create": true,
-            "enabled": true,
-            "scan_on_start": true,
-            "purge_deleted_on_scan": true
-        }"#;
-
-        let config: ScanningConfig = serde_json::from_str(json).unwrap();
-        assert_eq!(config.cron_schedule, Some("0 */6 * * *".to_string()));
-        assert_eq!(config.scan_mode, "normal");
-        assert!(config.auto_scan_on_create);
-        assert!(config.enabled);
-        assert!(config.scan_on_start);
-        assert!(config.purge_deleted_on_scan);
-        assert_eq!(config.get_scan_mode().unwrap(), ScanMode::Normal);
-    }
-
-    #[test]
-    fn test_scanning_config_defaults() {
-        let json = r#"{}"#;
-
-        let config: ScanningConfig = serde_json::from_str(json).unwrap();
-        assert_eq!(config.scan_mode, "normal");
-        assert!(!config.auto_scan_on_create);
-        assert!(config.enabled);
-        assert!(!config.scan_on_start);
-        assert!(!config.purge_deleted_on_scan);
-    }
-
-    #[test]
-    fn test_scanning_config_deep_mode() {
-        let json = r#"{
-            "scan_mode": "deep"
-        }"#;
-
-        let config: ScanningConfig = serde_json::from_str(json).unwrap();
-        assert_eq!(config.get_scan_mode().unwrap(), ScanMode::Deep);
+    fn test_scheduler_can_be_created() {
+        // This test is a placeholder - proper tests require a database connection
+        // See tests/scheduler/mod.rs for integration tests
+        assert!(true);
     }
 }

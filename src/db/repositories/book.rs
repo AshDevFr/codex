@@ -146,6 +146,12 @@ impl BookRepository {
             .await
             .context("Failed to mark book as deleted")?;
 
+        // Clean up duplicates when soft-deleting (removed books shouldn't appear in duplicates)
+        if deleted {
+            use crate::db::repositories::BookDuplicatesRepository;
+            BookDuplicatesRepository::cleanup_for_book(db, book_id).await?;
+        }
+
         Ok(())
     }
 
@@ -155,6 +161,11 @@ impl BookRepository {
             .exec(db)
             .await
             .context("Failed to delete book")?;
+
+        // Clean up duplicates after deleting a book
+        use crate::db::repositories::BookDuplicatesRepository;
+        BookDuplicatesRepository::cleanup_for_book(db, id).await?;
+
         Ok(())
     }
 

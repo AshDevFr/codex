@@ -1,6 +1,7 @@
 pub mod api_keys;
 pub mod auth;
 pub mod books;
+pub mod duplicates;
 pub mod events;
 pub mod filesystem;
 pub mod health;
@@ -19,6 +20,7 @@ pub mod users;
 pub use api_keys::*;
 pub use auth::*;
 pub use books::*;
+pub use duplicates::*;
 pub use events::*;
 pub use filesystem::*;
 pub use health::*;

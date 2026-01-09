@@ -40,12 +40,13 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     let db = init_database(&config).await?;
 
     // Create and start scheduler
-    info!("Initializing scan scheduler...");
-    let scheduler = Arc::new(tokio::sync::Mutex::new(
-        crate::scanner::ScanScheduler::new(db.sea_orm_connection().clone()).await?,
-    ));
+    info!("Initializing job scheduler...");
+    let scheduler: Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>> =
+        Arc::new(tokio::sync::Mutex::new(
+            crate::scheduler::Scheduler::new(db.sea_orm_connection().clone()).await?,
+        ));
     scheduler.lock().await.start().await?;
-    info!("Scan scheduler started successfully");
+    info!("Job scheduler started successfully");
 
     // Initialize settings service
     let settings_service = init_settings_service(db.sea_orm_connection()).await?;
@@ -184,7 +185,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     let server_result = graceful.await;
 
     // Shutdown scheduler
-    info!("Shutting down scan scheduler...");
+    info!("Shutting down job scheduler...");
     if let Err(e) = scheduler.lock().await.shutdown().await {
         tracing::warn!("Failed to shutdown scheduler gracefully: {}", e);
     }
