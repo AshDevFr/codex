@@ -283,6 +283,65 @@ impl SeriesRepository {
             .context("Failed to delete series")?;
         Ok(())
     }
+
+    /// Find and delete all series in a library that have no books
+    pub async fn purge_empty_series_in_library(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+    ) -> Result<u64> {
+        use crate::db::entities::{books, prelude::*};
+
+        // Find all series in the library
+        let all_series = Series::find()
+            .filter(series::Column::LibraryId.eq(library_id))
+            .all(db)
+            .await
+            .context("Failed to find series in library")?;
+
+        let mut deleted_count = 0u64;
+
+        // Check each series and delete if empty
+        for series_model in all_series {
+            let book_count = books::Entity::find()
+                .filter(books::Column::SeriesId.eq(series_model.id))
+                .count(db)
+                .await
+                .context("Failed to count books in series")?;
+
+            if book_count == 0 {
+                Series::delete_by_id(series_model.id)
+                    .exec(db)
+                    .await
+                    .context(format!("Failed to delete empty series {}", series_model.id))?;
+                deleted_count += 1;
+            }
+        }
+
+        Ok(deleted_count)
+    }
+
+    /// Check if a series has any books and delete it if empty
+    pub async fn purge_if_empty(db: &DatabaseConnection, series_id: Uuid) -> Result<bool> {
+        use crate::db::entities::books;
+
+        // Check if series has any books
+        let book_count = books::Entity::find()
+            .filter(books::Column::SeriesId.eq(series_id))
+            .count(db)
+            .await
+            .context("Failed to count books in series")?;
+
+        if book_count == 0 {
+            // Series is empty, delete it
+            Series::delete_by_id(series_id)
+                .exec(db)
+                .await
+                .context("Failed to delete empty series")?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
 }
 
 #[cfg(test)]

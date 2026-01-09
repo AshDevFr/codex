@@ -249,7 +249,28 @@ impl BookRepository {
             .await
             .context("Failed to purge deleted books")?;
 
-        Ok(result.rows_affected)
+        let deleted_count = result.rows_affected;
+
+        // Check if we should purge empty series
+        let purge_empty_series = crate::db::repositories::SettingsRepository::get_value::<bool>(
+            db,
+            "purge.purge_empty_series",
+        )
+        .await
+        .unwrap_or(Some(true))
+        .unwrap_or(true);
+
+        if purge_empty_series {
+            // Purge empty series after deleting books
+            let _series_deleted =
+                crate::db::repositories::SeriesRepository::purge_empty_series_in_library(
+                    db, library_id,
+                )
+                .await
+                .context("Failed to purge empty series")?;
+        }
+
+        Ok(deleted_count)
     }
 
     /// Purge all deleted books in a series (permanently delete from database)
@@ -261,7 +282,26 @@ impl BookRepository {
             .await
             .context("Failed to purge deleted books in series")?;
 
-        Ok(result.rows_affected)
+        let deleted_count = result.rows_affected;
+
+        // Check if we should purge empty series
+        let purge_empty_series = crate::db::repositories::SettingsRepository::get_value::<bool>(
+            db,
+            "purge.purge_empty_series",
+        )
+        .await
+        .unwrap_or(Some(true))
+        .unwrap_or(true);
+
+        if purge_empty_series {
+            // Check if series is now empty and delete it if so
+            let _series_deleted =
+                crate::db::repositories::SeriesRepository::purge_if_empty(db, series_id)
+                    .await
+                    .context("Failed to check/purge empty series")?;
+        }
+
+        Ok(deleted_count)
     }
 
     /// Get all unanalyzed books in a library

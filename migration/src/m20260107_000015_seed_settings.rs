@@ -159,6 +159,18 @@ impl MigrationTrait for Migration {
                 None,
                 None,
             ),
+            // Purge settings (1 setting)
+            (
+                "purge.purge_empty_series",
+                "true",
+                "Boolean",
+                "Purge",
+                "When purging deleted books, also delete series that have no remaining books",
+                false,
+                "true",
+                None,
+                None,
+            ),
         ];
 
         for (

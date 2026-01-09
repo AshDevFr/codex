@@ -978,3 +978,293 @@ async fn test_series_reading_direction_clear() {
 
     db.close().await;
 }
+
+#[tokio::test]
+async fn test_purge_deleted_in_library_purges_empty_series_when_enabled() {
+    use codex::db::repositories::SettingsRepository;
+
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Setup: Create library and series
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(conn, library.id, "Series 1")
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(conn, library.id, "Series 2")
+        .await
+        .unwrap();
+
+    // Create books in both series
+    let book1_model = create_test_book(series1.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1 = BookRepository::create(conn, &book1_model).await.unwrap();
+
+    let book2_model = create_test_book(series2.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
+    let _book2 = BookRepository::create(conn, &book2_model).await.unwrap();
+
+    // Mark all books in series1 as deleted
+    BookRepository::mark_deleted(conn, book1.id, true)
+        .await
+        .unwrap();
+
+    // Ensure setting is enabled (default should be true)
+    let setting = SettingsRepository::get(conn, "purge.purge_empty_series")
+        .await
+        .unwrap();
+    if let Some(s) = setting {
+        if s.value != "true" {
+            // Set it to true for this test
+            let user_id = Uuid::new_v4();
+            SettingsRepository::set(
+                conn,
+                "purge.purge_empty_series",
+                "true".to_string(),
+                user_id,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        }
+    }
+
+    // Purge deleted books - should also delete series1 since it's now empty
+    let deleted_count = BookRepository::purge_deleted_in_library(conn, library.id)
+        .await
+        .unwrap();
+
+    assert_eq!(deleted_count, 1, "Should have purged 1 book");
+
+    // Verify series1 was deleted
+    let series1_after = SeriesRepository::get_by_id(conn, series1.id).await.unwrap();
+    assert!(series1_after.is_none(), "Series 1 should have been deleted");
+
+    // Verify series2 still exists
+    let series2_after = SeriesRepository::get_by_id(conn, series2.id).await.unwrap();
+    assert!(series2_after.is_some(), "Series 2 should still exist");
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_purge_deleted_in_library_keeps_empty_series_when_disabled() {
+    use codex::db::repositories::SettingsRepository;
+
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Setup: Create library and series
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(conn, library.id, "Series 1")
+        .await
+        .unwrap();
+
+    // Create book in series
+    let book1_model = create_test_book(series1.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1 = BookRepository::create(conn, &book1_model).await.unwrap();
+
+    // Mark book as deleted
+    BookRepository::mark_deleted(conn, book1.id, true)
+        .await
+        .unwrap();
+
+    // Disable the setting
+    let user_id = Uuid::new_v4();
+    SettingsRepository::set(
+        conn,
+        "purge.purge_empty_series",
+        "false".to_string(),
+        user_id,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    // Purge deleted books - should NOT delete series1 even though it's empty
+    let deleted_count = BookRepository::purge_deleted_in_library(conn, library.id)
+        .await
+        .unwrap();
+
+    assert_eq!(deleted_count, 1, "Should have purged 1 book");
+
+    // Verify series1 still exists
+    let series1_after = SeriesRepository::get_by_id(conn, series1.id).await.unwrap();
+    assert!(
+        series1_after.is_some(),
+        "Series 1 should still exist when setting is disabled"
+    );
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_purge_deleted_in_series_purges_series_when_empty_and_enabled() {
+    use codex::db::repositories::SettingsRepository;
+
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Setup: Create library and series
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(conn, library.id, "Series")
+        .await
+        .unwrap();
+
+    // Create book in series
+    let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "hash1", "cbz", 10);
+    let book = BookRepository::create(conn, &book_model).await.unwrap();
+
+    // Mark book as deleted
+    BookRepository::mark_deleted(conn, book.id, true)
+        .await
+        .unwrap();
+
+    // Ensure setting is enabled
+    let user_id = Uuid::new_v4();
+    SettingsRepository::set(
+        conn,
+        "purge.purge_empty_series",
+        "true".to_string(),
+        user_id,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    // Purge deleted books in series - should also delete the series
+    let deleted_count = BookRepository::purge_deleted_in_series(conn, series.id)
+        .await
+        .unwrap();
+
+    assert_eq!(deleted_count, 1, "Should have purged 1 book");
+
+    // Verify series was deleted
+    let series_after = SeriesRepository::get_by_id(conn, series.id).await.unwrap();
+    assert!(series_after.is_none(), "Series should have been deleted");
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_purge_deleted_in_series_keeps_series_when_empty_but_setting_disabled() {
+    use codex::db::repositories::SettingsRepository;
+
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Setup: Create library and series
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(conn, library.id, "Series")
+        .await
+        .unwrap();
+
+    // Create book in series
+    let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "hash1", "cbz", 10);
+    let book = BookRepository::create(conn, &book_model).await.unwrap();
+
+    // Mark book as deleted
+    BookRepository::mark_deleted(conn, book.id, true)
+        .await
+        .unwrap();
+
+    // Disable the setting
+    let user_id = Uuid::new_v4();
+    SettingsRepository::set(
+        conn,
+        "purge.purge_empty_series",
+        "false".to_string(),
+        user_id,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    // Purge deleted books in series - should NOT delete the series
+    let deleted_count = BookRepository::purge_deleted_in_series(conn, series.id)
+        .await
+        .unwrap();
+
+    assert_eq!(deleted_count, 1, "Should have purged 1 book");
+
+    // Verify series still exists
+    let series_after = SeriesRepository::get_by_id(conn, series.id).await.unwrap();
+    assert!(
+        series_after.is_some(),
+        "Series should still exist when setting is disabled"
+    );
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_purge_deleted_in_series_keeps_series_when_not_empty() {
+    use codex::db::repositories::SettingsRepository;
+
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Setup: Create library and series
+    let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(conn, library.id, "Series")
+        .await
+        .unwrap();
+
+    // Create two books in series
+    let book1_model = create_test_book(series.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1 = BookRepository::create(conn, &book1_model).await.unwrap();
+
+    let book2_model = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
+    let _book2 = BookRepository::create(conn, &book2_model).await.unwrap();
+
+    // Mark only one book as deleted
+    BookRepository::mark_deleted(conn, book1.id, true)
+        .await
+        .unwrap();
+
+    // Ensure setting is enabled
+    let user_id = Uuid::new_v4();
+    SettingsRepository::set(
+        conn,
+        "purge.purge_empty_series",
+        "true".to_string(),
+        user_id,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    // Purge deleted books in series - should NOT delete the series since it still has books
+    let deleted_count = BookRepository::purge_deleted_in_series(conn, series.id)
+        .await
+        .unwrap();
+
+    assert_eq!(deleted_count, 1, "Should have purged 1 book");
+
+    // Verify series still exists (has remaining books)
+    let series_after = SeriesRepository::get_by_id(conn, series.id).await.unwrap();
+    assert!(
+        series_after.is_some(),
+        "Series should still exist since it has remaining books"
+    );
+
+    db.close().await;
+}
