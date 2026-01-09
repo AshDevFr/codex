@@ -242,9 +242,11 @@ pub fn env_string_opt(key: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::env;
 
     #[test]
+    #[serial]
     fn test_env_bool_or() {
         env::set_var("TEST_BOOL_TRUE", "true");
         env::set_var("TEST_BOOL_1", "1");
@@ -261,6 +263,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_env_or() {
         env::set_var("TEST_PORT", "9090");
         assert_eq!(env_or("TEST_PORT", 8080u16), 9090);
@@ -269,6 +272,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_env_string_opt() {
         env::set_var("TEST_STRING", "value");
         env::set_var("TEST_EMPTY", "");
@@ -282,6 +286,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_application_config_override() {
         env::set_var("CODEX_APPLICATION_HOST", "0.0.0.0");
         env::set_var("CODEX_APPLICATION_PORT", "9090");
@@ -301,6 +306,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_task_config_env_override() {
         // Clear any existing env vars first to avoid interference from other tests
         env::remove_var("CODEX_TASK_WORKER_COUNT");
@@ -316,6 +322,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_task_config_env_override_invalid() {
         // Clear any existing env vars first to avoid interference from other tests
         env::remove_var("CODEX_TASK_WORKER_COUNT");
@@ -332,6 +339,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_scanner_config_env_override() {
         // Clear any existing env vars first
         env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
@@ -351,6 +359,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_scanner_config_env_override_partial() {
         // Clear any existing env vars first
         env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
@@ -369,6 +378,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_config_env_override_task_and_scanner() {
         // Clear any existing env vars first
         env::remove_var("CODEX_TASK_WORKER_COUNT");

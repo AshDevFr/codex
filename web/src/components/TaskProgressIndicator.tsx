@@ -112,6 +112,7 @@ function TaskProgressItem({ task }: TaskProgressItemProps) {
 export function TaskProgressIndicator() {
 	const { activeTasks, connectionState } = useTaskProgress();
 
+	// Show running and pending tasks (processing tasks are converted to running in the hook)
 	const visibleTasks = activeTasks.filter(
 		(task) => task.status === "running" || task.status === "pending",
 	);

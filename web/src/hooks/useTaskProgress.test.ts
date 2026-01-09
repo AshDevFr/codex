@@ -6,7 +6,15 @@ import type { TaskProgressEvent } from "@/types/events";
 import { useTaskProgress } from "./useTaskProgress";
 
 // Mock the tasks API
-vi.mock("@/api/tasks");
+vi.mock("@/api/tasks", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@/api/tasks")>();
+	return {
+		...actual,
+		fetchTasksByStatus: vi.fn(),
+		fetchPendingTaskCounts: vi.fn(),
+		subscribeToTaskProgress: vi.fn(),
+	};
+});
 
 // Mock the auth store
 vi.mock("@/store/authStore", () => ({
@@ -28,6 +36,9 @@ describe("useTaskProgress", () => {
 
 		// Mock fetchPendingTaskCounts to return empty object
 		vi.mocked(tasksApi.fetchPendingTaskCounts).mockResolvedValue({});
+
+		// Mock fetchTasksByStatus to return empty array
+		vi.mocked(tasksApi.fetchTasksByStatus).mockResolvedValue([]);
 
 		vi.useFakeTimers();
 	});

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
 	fetchPendingTaskCounts,
+	fetchTasksByStatus,
 	type PendingTaskCounts,
 	subscribeToTaskProgress,
 } from "@/api/tasks";
@@ -38,6 +39,34 @@ export function useTaskProgress() {
 			return;
 		}
 
+		// Convert API task response to TaskProgressEvent format
+		const convertTaskToEvent = (task: {
+			id: string;
+			task_type: string;
+			status: string;
+			library_id?: string;
+			series_id?: string;
+			book_id?: string;
+			started_at?: string;
+		}): TaskProgressEvent => {
+			// Map "processing" status to "running" for UI consistency
+			const status: TaskStatus =
+				task.status === "processing" ? "running" : (task.status as TaskStatus);
+
+			return {
+				task_id: task.id,
+				task_type: task.task_type,
+				status,
+				progress: undefined,
+				error: undefined,
+				started_at: task.started_at || new Date().toISOString(),
+				completed_at: undefined,
+				library_id: task.library_id,
+				series_id: task.series_id,
+				book_id: task.book_id,
+			};
+		};
+
 		// Fetch initial pending task counts
 		fetchPendingTaskCounts()
 			.then((counts) => {
@@ -51,6 +80,26 @@ export function useTaskProgress() {
 				}
 			});
 
+		// Fetch initial processing tasks and add them to activeTasks
+		fetchTasksByStatus("processing", 100)
+			.then((tasks) => {
+				console.debug("Initial processing tasks:", tasks);
+				setActiveTasks((prev) => {
+					const next = new Map(prev);
+					for (const task of tasks) {
+						const event = convertTaskToEvent(task);
+						next.set(event.task_id, event);
+					}
+					return next;
+				});
+			})
+			.catch((error) => {
+				// Only log non-401 errors
+				if (!(error instanceof Error && error.message.includes("401"))) {
+					console.error("Failed to fetch processing tasks:", error);
+				}
+			});
+
 		// Poll for pending counts every 10 seconds
 		const pollInterval = setInterval(() => {
 			fetchPendingTaskCounts()
@@ -61,6 +110,29 @@ export function useTaskProgress() {
 					// Only log non-401 errors
 					if (!(error instanceof Error && error.message.includes("401"))) {
 						console.error("Failed to fetch pending task counts:", error);
+					}
+				});
+
+			// Also poll for processing tasks to catch any that weren't sent via SSE
+			fetchTasksByStatus("processing", 100)
+				.then((tasks) => {
+					setActiveTasks((prev) => {
+						const next = new Map(prev);
+						// Add processing tasks that aren't already tracked
+						// SSE events take precedence, so we only add if not present
+						for (const task of tasks) {
+							const event = convertTaskToEvent(task);
+							if (!next.has(event.task_id)) {
+								next.set(event.task_id, event);
+							}
+						}
+						return next;
+					});
+				})
+				.catch((error) => {
+					// Only log non-401 errors
+					if (!(error instanceof Error && error.message.includes("401"))) {
+						console.error("Failed to fetch processing tasks:", error);
 					}
 				});
 		}, 10000);

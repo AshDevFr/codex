@@ -27,12 +27,18 @@ services:
 
         # Sync migrations
         - action: sync
-          path: ./migrations
-          target: /app/migrations
+          path: ./migration
+          target: /app/migration
+          ignore:
+            - "**/*.swp"
+            - "**/*.tmp"
 
         # Rebuild on config changes
         - action: rebuild
           path: ./Dockerfile.dev
+          ignore:
+            - "**/*.swp"
+            - "**/*.tmp"
 
   codex-dev-worker:
     build:
@@ -59,12 +65,18 @@ services:
 
         # Sync migrations
         - action: sync
-          path: ./migrations
-          target: /app/migrations
+          path: ./migration
+          target: /app/migration
+          ignore:
+            - "**/*.swp"
+            - "**/*.tmp"
 
         # Rebuild on config changes
         - action: rebuild
           path: ./Dockerfile.dev
+          ignore:
+            - "**/*.swp"
+            - "**/*.tmp"
 
   frontend-dev:
     develop:

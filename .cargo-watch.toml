@@ -1,0 +1,37 @@
+# Configuration for cargo-watch
+# This file tells cargo-watch which files to watch and which to ignore
+
+# Watch these file patterns
+watch = ["Cargo.toml", "Cargo.lock", "src/**/*.rs", "migration/**/*.rs"]
+
+# Ignore these patterns
+ignore = [
+    # Frontend files
+    "web/**",
+    # Docker compose files
+    "compose.watch.yml",
+    "docker-compose.yml",
+    "Dockerfile*",
+    # Documentation
+    "docs/**",
+    "*.md",
+    # Config files
+    "*.yaml",
+    "*.yml",
+    "*.json",
+    # Build artifacts
+    "target/**",
+    # Git
+    ".git/**",
+    # IDE files
+    "**/*.swp",
+    "**/*.tmp",
+    "**/.DS_Store",
+    "**/.vscode/**",
+    "**/.idea/**",
+    # Logs
+    "logs/**",
+    # Data
+    "data/**",
+    "docker/data/**",
+]

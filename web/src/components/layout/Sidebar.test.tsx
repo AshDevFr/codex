@@ -10,6 +10,7 @@ vi.mock("@/api/libraries");
 vi.mock("@/api/tasks", () => ({
 	subscribeToTaskProgress: vi.fn(() => vi.fn()),
 	fetchPendingTaskCounts: vi.fn(() => Promise.resolve({})),
+	fetchTasksByStatus: vi.fn(() => Promise.resolve([])),
 }));
 
 describe("Sidebar Component (via AppLayout)", () => {

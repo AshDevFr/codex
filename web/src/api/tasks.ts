@@ -29,6 +29,67 @@ export interface PendingTaskCounts {
 }
 
 /**
+ * Task response from the API
+ */
+export interface TaskResponse {
+	id: string;
+	task_type: string;
+	status: string;
+	priority: number;
+	library_id?: string;
+	series_id?: string;
+	book_id?: string;
+	params?: unknown;
+	locked_by?: string;
+	locked_until?: string;
+	attempts: number;
+	max_attempts: number;
+	last_error?: string;
+	result?: unknown;
+	scheduled_for: string;
+	created_at: string;
+	started_at?: string;
+	completed_at?: string;
+}
+
+/**
+ * Fetch tasks with a specific status
+ *
+ * @param status - Task status to filter by (pending, processing, completed, failed)
+ * @param limit - Maximum number of tasks to return (default: 50)
+ * @returns Array of tasks
+ */
+export const fetchTasksByStatus = async (
+	status: string,
+	limit = 50,
+): Promise<TaskResponse[]> => {
+	const token = localStorage.getItem("jwt_token");
+	if (!token) {
+		return [];
+	}
+
+	const params = new URLSearchParams({
+		status,
+		limit: limit.toString(),
+	});
+
+	const response = await fetch(`/api/v1/tasks?${params.toString()}`, {
+		headers: {
+			Authorization: `Bearer ${token}`,
+		},
+	});
+
+	if (!response.ok) {
+		if (response.status === 401) {
+			return [];
+		}
+		throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+	}
+
+	return await response.json();
+};
+
+/**
  * Fetch comprehensive task queue statistics
  *
  * Includes both aggregate counts and per-task-type breakdowns
