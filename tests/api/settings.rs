@@ -413,8 +413,7 @@ async fn test_filter_settings_by_category() {
     let keys: Vec<&str> = settings.iter().map(|s| s.key.as_str()).collect();
     assert!(keys.contains(&"scanner.scan_timeout_minutes"));
     assert!(keys.contains(&"scanner.retry_failed_files"));
-    // Note: scanner.max_concurrent_scans and scanner.auto_analyze_concurrency
-    // are now in config file (startup-time settings), not in database
+    // Note: scanner.max_concurrent_scans is now in config file (startup-time setting), not in database
 }
 
 #[tokio::test]

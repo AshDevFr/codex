@@ -91,7 +91,6 @@ export function Setup() {
 	const [maxConcurrentScans, setMaxConcurrentScans] = useState(2);
 	const [scanTimeoutMinutes, setScanTimeoutMinutes] = useState(120);
 	const [retryFailedFiles, setRetryFailedFiles] = useState(false);
-	const [autoAnalyzeConcurrency, setAutoAnalyzeConcurrency] = useState(4);
 
 	// Application settings
 	const [appName, setAppName] = useState("Codex");
@@ -161,8 +160,6 @@ export function Setup() {
 					"scanner.max_concurrent_scans": maxConcurrentScans.toString(),
 					"scanner.scan_timeout_minutes": scanTimeoutMinutes.toString(),
 					"scanner.retry_failed_files": retryFailedFiles.toString(),
-					"scanner.auto_analyze_concurrency":
-						autoAnalyzeConcurrency.toString(),
 					"application.name": appName,
 					"task.poll_interval_seconds": pollIntervalSeconds.toString(),
 					"task.cleanup_interval_seconds": cleanupIntervalSeconds.toString(),
@@ -341,16 +338,6 @@ export function Setup() {
 														}
 													/>
 
-													<NumberInput
-														label="Auto-Analyze Concurrency"
-														description="Number of concurrent threads for file analysis"
-														value={autoAnalyzeConcurrency}
-														onChange={(val) =>
-															setAutoAnalyzeConcurrency(Number(val) || 4)
-														}
-														min={1}
-														max={16}
-													/>
 												</Stack>
 											</Collapse>
 										</Paper>

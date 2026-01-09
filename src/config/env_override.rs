@@ -39,23 +39,6 @@ impl EnvOverride for ScannerConfig {
                 // Env var not set, keep default value
             }
         }
-        let concurrency_var = format!("{}_AUTO_ANALYZE_CONCURRENCY", prefix);
-        match env::var(&concurrency_var) {
-            Ok(concurrency) => {
-                match concurrency.parse::<usize>() {
-                    Ok(count) => {
-                        self.auto_analyze_concurrency = count;
-                    }
-                    Err(e) => {
-                        // Silently ignore parse errors (same as before)
-                        let _ = e;
-                    }
-                }
-            }
-            Err(_) => {
-                // Env var not set, keep default value
-            }
-        }
     }
 }
 
@@ -357,48 +340,37 @@ mod tests {
     fn test_scanner_config_env_override() {
         // Clear any existing env vars first
         env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
-        env::remove_var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY");
 
         // Create config with explicit values (not using default which reads env vars)
         let mut config = ScannerConfig {
             max_concurrent_scans: 2,
-            auto_analyze_concurrency: 4,
         };
 
         // Set env vars and apply overrides
         env::set_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS", "6");
-        env::set_var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY", "8");
         config.apply_env_overrides("CODEX_SCANNER");
 
         assert_eq!(config.max_concurrent_scans, 6);
-        assert_eq!(config.auto_analyze_concurrency, 8);
 
         env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
-        env::remove_var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY");
     }
 
     #[test]
     fn test_scanner_config_env_override_partial() {
         // Clear any existing env vars first
         env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
-        env::remove_var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY");
 
         // Create config with explicit values (not using default which reads env vars)
         let mut config = ScannerConfig {
             max_concurrent_scans: 2,
-            auto_analyze_concurrency: 4,
         };
-        let original_concurrency = config.auto_analyze_concurrency;
 
         env::set_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS", "10");
         config.apply_env_overrides("CODEX_SCANNER");
 
         assert_eq!(config.max_concurrent_scans, 10);
-        // Should keep original value if env var not set
-        assert_eq!(config.auto_analyze_concurrency, original_concurrency);
 
         env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
-        env::remove_var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY");
     }
 
     #[test]
@@ -406,7 +378,6 @@ mod tests {
         // Clear any existing env vars first
         env::remove_var("CODEX_TASK_WORKER_COUNT");
         env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
-        env::remove_var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY");
 
         // Create config with explicit values to avoid reading env vars in default()
         // We'll use a helper to create a minimal config
@@ -434,36 +405,26 @@ mod tests {
             task: TaskConfig { worker_count: 4 },
             scanner: ScannerConfig {
                 max_concurrent_scans: 2,
-                auto_analyze_concurrency: 4,
             },
         };
 
         // Set env vars BEFORE applying overrides
         env::set_var("CODEX_TASK_WORKER_COUNT", "12");
         env::set_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS", "5");
-        env::set_var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY", "10");
 
         // Verify env vars are set before applying (capture values for debugging)
         let task_var_before = env::var("CODEX_TASK_WORKER_COUNT").ok();
         let scanner_max_var_before = env::var("CODEX_SCANNER_MAX_CONCURRENT_SCANS").ok();
-        let scanner_concurrency_var_before =
-            env::var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY").ok();
 
         // Double-check env vars are still set right before applying (to catch race conditions)
         // This ensures we capture the value at the exact moment we need it
         let scanner_max_at_call = env::var("CODEX_SCANNER_MAX_CONCURRENT_SCANS").ok();
-        let scanner_concurrency_at_call = env::var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY").ok();
 
         // If env vars are not set at this point, it's a race condition with another test
         assert!(
             scanner_max_at_call.is_some(),
             "Environment variable CODEX_SCANNER_MAX_CONCURRENT_SCANS was cleared by another test (race condition). Value before: {:?}, value at call: {:?}",
             scanner_max_var_before, scanner_max_at_call
-        );
-        assert!(
-            scanner_concurrency_at_call.is_some(),
-            "Environment variable CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY was cleared by another test (race condition). Value before: {:?}, value at call: {:?}",
-            scanner_concurrency_var_before, scanner_concurrency_at_call
         );
 
         // Apply overrides - Config::apply_env_overrides("CODEX") will call:
@@ -473,7 +434,6 @@ mod tests {
 
         // Debug: Check env var after applying (to catch race conditions)
         let scanner_max_var_after = env::var("CODEX_SCANNER_MAX_CONCURRENT_SCANS").ok();
-        let scanner_concurrency_var_after = env::var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY").ok();
 
         // Verify the overrides were applied
         assert_eq!(
@@ -486,14 +446,8 @@ mod tests {
             "Scanner max_concurrent_scans should be overridden to 5 (got: {}, env var before: {:?}, env var at call: {:?}, env var after: {:?}, prefix should be CODEX_SCANNER)",
             config.scanner.max_concurrent_scans, scanner_max_var_before, scanner_max_at_call, scanner_max_var_after
         );
-        assert_eq!(
-            config.scanner.auto_analyze_concurrency, 10,
-            "Scanner auto_analyze_concurrency should be overridden to 10 (got: {}, env var before: {:?}, env var at call: {:?}, env var after: {:?})",
-            config.scanner.auto_analyze_concurrency, scanner_concurrency_var_before, scanner_concurrency_at_call, scanner_concurrency_var_after
-        );
 
         env::remove_var("CODEX_TASK_WORKER_COUNT");
         env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
-        env::remove_var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY");
     }
 }

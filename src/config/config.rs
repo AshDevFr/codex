@@ -347,9 +347,6 @@ pub struct ScannerConfig {
     /// Maximum number of concurrent library scans
     /// This is a startup-time setting - changes require a restart
     pub max_concurrent_scans: usize,
-    /// Number of concurrent analysis tasks to run after scan (0 = disabled)
-    /// This is a startup-time setting - changes require a restart
-    pub auto_analyze_concurrency: usize,
     // Note: scan_timeout_minutes and retry_failed_files remain in database
     // as they are runtime-configurable
 }
@@ -358,7 +355,6 @@ impl Default for ScannerConfig {
     fn default() -> Self {
         Self {
             max_concurrent_scans: env_or("CODEX_SCANNER_MAX_CONCURRENT_SCANS", 2),
-            auto_analyze_concurrency: env_or("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY", 4),
         }
     }
 }
@@ -636,25 +632,20 @@ mod tests {
     fn test_scanner_config_default() {
         let config = ScannerConfig::default();
         assert_eq!(config.max_concurrent_scans, 2);
-        assert_eq!(config.auto_analyze_concurrency, 4);
     }
 
     #[test]
     fn test_scanner_config_serialization() {
         let config = ScannerConfig {
             max_concurrent_scans: 6,
-            auto_analyze_concurrency: 8,
         };
 
         let yaml = serde_yaml::to_string(&config).unwrap();
         assert!(yaml.contains("max_concurrent_scans"));
-        assert!(yaml.contains("auto_analyze_concurrency"));
         assert!(yaml.contains("6"));
-        assert!(yaml.contains("8"));
 
         let deserialized: ScannerConfig = serde_yaml::from_str(&yaml).unwrap();
         assert_eq!(deserialized.max_concurrent_scans, 6);
-        assert_eq!(deserialized.auto_analyze_concurrency, 8);
     }
 
     #[test]
@@ -668,12 +659,10 @@ task:
   worker_count: 8
 scanner:
   max_concurrent_scans: 4
-  auto_analyze_concurrency: 6
 "#;
 
         let config: Config = serde_yaml::from_str(yaml_content).unwrap();
         assert_eq!(config.task.worker_count, 8);
         assert_eq!(config.scanner.max_concurrent_scans, 4);
-        assert_eq!(config.scanner.auto_analyze_concurrency, 6);
     }
 }

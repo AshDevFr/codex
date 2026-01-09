@@ -41,4 +41,3 @@ task:
 # ==================================================
 scanner:
   max_concurrent_scans: 2 # Max concurrent library scans (override: CODEX_SCANNER_MAX_CONCURRENT_SCANS)
-  auto_analyze_concurrency: 4 # Concurrent analysis tasks (override: CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY)

@@ -113,7 +113,6 @@ task:
   worker_count: 6
 scanner:
   max_concurrent_scans: 3
-  auto_analyze_concurrency: 5
 "#;
 
         let temp_file = NamedTempFile::new().unwrap();
@@ -123,7 +122,6 @@ scanner:
 
         assert_eq!(config.task.worker_count, 6);
         assert_eq!(config.scanner.max_concurrent_scans, 3);
-        assert_eq!(config.scanner.auto_analyze_concurrency, 5);
     }
 
     #[test]
@@ -148,7 +146,6 @@ scanner:
             task: TaskConfig { worker_count: 8 },
             scanner: ScannerConfig {
                 max_concurrent_scans: 4,
-                auto_analyze_concurrency: 6,
             },
         };
 
@@ -159,6 +156,5 @@ scanner:
 
         assert_eq!(loaded_config.task.worker_count, 8);
         assert_eq!(loaded_config.scanner.max_concurrent_scans, 4);
-        assert_eq!(loaded_config.scanner.auto_analyze_concurrency, 6);
     }
 }

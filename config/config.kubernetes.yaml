@@ -23,14 +23,12 @@
 # Override via environment variables if needed:
 #   CODEX_TASK_WORKER_COUNT=4
 #   CODEX_SCANNER_MAX_CONCURRENT_SCANS=2
-#   CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY=4
 
 task:
   worker_count: 4 # Number of parallel task workers per pod
 
 scanner:
   max_concurrent_scans: 2 # Max concurrent library scans
-  auto_analyze_concurrency: 4 # Concurrent analysis tasks
 
 # Configuration Priority:
 #   1. Environment Variables (highest - overrides config file)

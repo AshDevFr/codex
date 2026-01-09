@@ -336,8 +336,8 @@ If real-time updates aren't working:
 ### High Memory Usage
 
 1. **Check worker concurrency:**
-   - Reduce `scanner.auto_analyze_concurrency`
    - Reduce `scanner.max_concurrent_scans`
+   - Reduce task worker count
 
 2. **Monitor container resources:**
    ```bash
