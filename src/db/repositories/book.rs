@@ -966,4 +966,237 @@ mod tests {
         assert_eq!(books[2].title, Some("Monkey".to_string()));
         assert_eq!(books[3].title, Some("Zebra".to_string()));
     }
+
+    #[tokio::test]
+    async fn test_list_by_library() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        // Create two libraries
+        let library1 = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Library 1",
+            "/lib1",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let library2 = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Library 2",
+            "/lib2",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Create series in each library
+        let series1 = SeriesRepository::create(db.sea_orm_connection(), library1.id, "Series 1")
+            .await
+            .unwrap();
+        let series2 = SeriesRepository::create(db.sea_orm_connection(), library2.id, "Series 2")
+            .await
+            .unwrap();
+
+        // Create books in library 1
+        for i in 1..=3 {
+            let book = create_book_model(series1.id, &format!("/lib1/book{}.cbz", i), "book.cbz");
+            BookRepository::create(db.sea_orm_connection(), &book)
+                .await
+                .unwrap();
+        }
+
+        // Create books in library 2
+        for i in 1..=2 {
+            let book = create_book_model(series2.id, &format!("/lib2/book{}.cbz", i), "book.cbz");
+            BookRepository::create(db.sea_orm_connection(), &book)
+                .await
+                .unwrap();
+        }
+
+        // Test library 1 books
+        let (books, total) =
+            BookRepository::list_by_library(db.sea_orm_connection(), library1.id, false, 0, 10)
+                .await
+                .unwrap();
+
+        assert_eq!(books.len(), 3);
+        assert_eq!(total, 3);
+
+        // Test library 2 books
+        let (books, total) =
+            BookRepository::list_by_library(db.sea_orm_connection(), library2.id, false, 0, 10)
+                .await
+                .unwrap();
+
+        assert_eq!(books.len(), 2);
+        assert_eq!(total, 2);
+    }
+
+    #[tokio::test]
+    async fn test_list_with_progress() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        // Create library and series
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
+            .await
+            .unwrap();
+
+        // Create books
+        let mut book_ids = Vec::new();
+        for i in 1..=5 {
+            let book = create_book_model(series.id, &format!("/test/book{}.cbz", i), "book.cbz");
+            let created = BookRepository::create(db.sea_orm_connection(), &book)
+                .await
+                .unwrap();
+            book_ids.push(created.id);
+        }
+
+        // Create user
+        use crate::api::permissions::ADMIN_PERMISSIONS;
+        use crate::db::entities::users;
+        use crate::db::repositories::{ReadProgressRepository, UserRepository};
+        use crate::utils::password;
+
+        let password_hash = password::hash_password("test123").unwrap();
+        let permissions_vec: Vec<_> = ADMIN_PERMISSIONS.iter().cloned().collect();
+        let user = users::Model {
+            id: Uuid::new_v4(),
+            username: "testuser".to_string(),
+            email: "test@example.com".to_string(),
+            password_hash,
+            is_admin: false,
+            is_active: true,
+            email_verified: true,
+            permissions: serde_json::to_value(&permissions_vec).unwrap(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_login_at: None,
+        };
+        let created_user = UserRepository::create(db.sea_orm_connection(), &user)
+            .await
+            .unwrap();
+
+        // Add reading progress for some books
+        for i in 0..3 {
+            ReadProgressRepository::upsert(
+                db.sea_orm_connection(),
+                created_user.id,
+                book_ids[i],
+                5,
+                false,
+            )
+            .await
+            .unwrap();
+        }
+
+        // Mark one as completed
+        ReadProgressRepository::upsert(
+            db.sea_orm_connection(),
+            created_user.id,
+            book_ids[3],
+            10,
+            true,
+        )
+        .await
+        .unwrap();
+
+        // Test getting in-progress books (not completed)
+        let (books, total) = BookRepository::list_with_progress(
+            db.sea_orm_connection(),
+            created_user.id,
+            None,
+            Some(false), // only in-progress
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(books.len(), 3);
+        assert_eq!(total, 3);
+
+        // Test getting all books with progress
+        let (books, total) = BookRepository::list_with_progress(
+            db.sea_orm_connection(),
+            created_user.id,
+            None,
+            None, // all with progress
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(books.len(), 4); // 3 in-progress + 1 completed
+        assert_eq!(total, 4);
+    }
+
+    #[tokio::test]
+    async fn test_list_recently_added() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        // Create library and series
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
+            .await
+            .unwrap();
+
+        // Create books with delays to ensure different timestamps
+        for i in 1..=5 {
+            let book = create_book_model(series.id, &format!("/test/book{}.cbz", i), "book.cbz");
+            BookRepository::create(db.sea_orm_connection(), &book)
+                .await
+                .unwrap();
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        }
+
+        // Test getting recently added books
+        let (books, total) =
+            BookRepository::list_recently_added(db.sea_orm_connection(), None, false, 0, 10)
+                .await
+                .unwrap();
+
+        assert_eq!(books.len(), 5);
+        assert_eq!(total, 5);
+
+        // Verify books are ordered by created_at descending (most recent first)
+        for i in 0..books.len() - 1 {
+            assert!(
+                books[i].created_at >= books[i + 1].created_at,
+                "Books should be ordered by created_at descending"
+            );
+        }
+
+        // Test filtering by library
+        let (books, total) = BookRepository::list_recently_added(
+            db.sea_orm_connection(),
+            Some(library.id),
+            false,
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(books.len(), 5);
+        assert_eq!(total, 5);
+    }
 }

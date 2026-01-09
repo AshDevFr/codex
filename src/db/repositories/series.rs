@@ -377,7 +377,8 @@ impl SeriesRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::repositories::LibraryRepository;
+    use crate::db::entities::books;
+    use crate::db::repositories::{BookRepository, LibraryRepository};
     use crate::db::test_helpers::create_test_db;
     use crate::db::ScanningStrategy;
 
@@ -913,5 +914,177 @@ mod tests {
             Some(format!("data/covers/{}.jpg", series.id))
         );
         assert_eq!(retrieved.selected_cover_source, Some("default".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_list_started() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        // Create library
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Create multiple series
+        let series1 = SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 1")
+            .await
+            .unwrap();
+        let series2 = SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 2")
+            .await
+            .unwrap();
+        let series3 = SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 3")
+            .await
+            .unwrap();
+
+        // Create books in each series
+        let book1 = books::Model {
+            id: Uuid::new_v4(),
+            series_id: series1.id,
+            title: Some("Book 1".to_string()),
+            number: None,
+            file_path: "/test/book1.cbz".to_string(),
+            file_name: "book1.cbz".to_string(),
+            file_size: 1024,
+            file_hash: format!("hash_{}", Uuid::new_v4()),
+            partial_hash: String::new(),
+            format: "cbz".to_string(),
+            page_count: 10,
+            deleted: false,
+            analyzed: false,
+            modified_at: Utc::now(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        let book1: books::Model = BookRepository::create(db.sea_orm_connection(), &book1)
+            .await
+            .unwrap();
+
+        let book2 = books::Model {
+            id: Uuid::new_v4(),
+            series_id: series2.id,
+            title: Some("Book 2".to_string()),
+            number: None,
+            file_path: "/test/book2.cbz".to_string(),
+            file_name: "book2.cbz".to_string(),
+            file_size: 1024,
+            file_hash: format!("hash_{}", Uuid::new_v4()),
+            partial_hash: String::new(),
+            format: "cbz".to_string(),
+            page_count: 10,
+            deleted: false,
+            analyzed: false,
+            modified_at: Utc::now(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        let book2: books::Model = BookRepository::create(db.sea_orm_connection(), &book2)
+            .await
+            .unwrap();
+
+        let book3 = books::Model {
+            id: Uuid::new_v4(),
+            series_id: series3.id,
+            title: Some("Book 3".to_string()),
+            number: None,
+            file_path: "/test/book3.cbz".to_string(),
+            file_name: "book3.cbz".to_string(),
+            file_size: 1024,
+            file_hash: format!("hash_{}", Uuid::new_v4()),
+            partial_hash: String::new(),
+            format: "cbz".to_string(),
+            page_count: 10,
+            deleted: false,
+            analyzed: false,
+            modified_at: Utc::now(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        let book3: books::Model = BookRepository::create(db.sea_orm_connection(), &book3)
+            .await
+            .unwrap();
+
+        // Create user
+        use crate::api::permissions::ADMIN_PERMISSIONS;
+        use crate::db::entities::users;
+        use crate::db::repositories::{ReadProgressRepository, UserRepository};
+        use crate::utils::password;
+
+        let password_hash = password::hash_password("test123").unwrap();
+        let permissions_vec: Vec<_> = ADMIN_PERMISSIONS.iter().cloned().collect();
+        let user = users::Model {
+            id: Uuid::new_v4(),
+            username: "testuser".to_string(),
+            email: "test@example.com".to_string(),
+            password_hash,
+            is_admin: false,
+            is_active: true,
+            email_verified: true,
+            permissions: serde_json::to_value(&permissions_vec).unwrap(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_login_at: None,
+        };
+        let created_user = UserRepository::create(db.sea_orm_connection(), &user)
+            .await
+            .unwrap();
+
+        // Add reading progress for series1 and series2 (in-progress)
+        ReadProgressRepository::upsert(
+            db.sea_orm_connection(),
+            created_user.id,
+            book1.id,
+            5,
+            false,
+        )
+        .await
+        .unwrap();
+        ReadProgressRepository::upsert(
+            db.sea_orm_connection(),
+            created_user.id,
+            book2.id,
+            5,
+            false,
+        )
+        .await
+        .unwrap();
+
+        // Mark series3 as completed
+        ReadProgressRepository::upsert(
+            db.sea_orm_connection(),
+            created_user.id,
+            book3.id,
+            10,
+            true,
+        )
+        .await
+        .unwrap();
+
+        // Test getting started series (only in-progress, not completed)
+        let started =
+            SeriesRepository::list_started(db.sea_orm_connection(), created_user.id, None)
+                .await
+                .unwrap();
+
+        assert_eq!(started.len(), 2); // Only series1 and series2 with in-progress books
+        let series_ids: Vec<_> = started.iter().map(|s| s.id).collect();
+        assert!(series_ids.contains(&series1.id));
+        assert!(series_ids.contains(&series2.id));
+        assert!(!series_ids.contains(&series3.id)); // Completed books not included
+
+        // Test filtering by library
+        let started = SeriesRepository::list_started(
+            db.sea_orm_connection(),
+            created_user.id,
+            Some(library.id),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(started.len(), 2);
     }
 }
