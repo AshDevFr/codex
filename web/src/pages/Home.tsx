@@ -29,6 +29,7 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { librariesApi } from "@/api/libraries";
 import { scanApi } from "@/api/scan";
 import { LibraryModal } from "@/components/forms/LibraryModal";
@@ -36,6 +37,7 @@ import { useAuthStore } from "@/store/authStore";
 import type { Library, ScanProgress } from "@/types/api";
 
 export function Home() {
+	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const { isAuthenticated } = useAuthStore();
 	const [addLibraryOpened, setAddLibraryOpened] = useState(false);
@@ -58,6 +60,13 @@ export function Home() {
 			return result;
 		},
 	});
+
+	// Redirect to all libraries view
+	useEffect(() => {
+		if (!isLoading && libraries && libraries.length > 0) {
+			navigate("/libraries/all/recommended", { replace: true });
+		}
+	}, [isLoading, libraries, navigate]);
 
 	// Subscribe to scan progress updates via SSE
 	useEffect(() => {

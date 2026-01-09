@@ -1,8 +1,14 @@
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type RenderOptions, render } from "@testing-library/react";
-import { BrowserRouter } from "react-router-dom";
+import { MemoryRouter, type MemoryRouterProps } from "react-router-dom";
 import { theme } from "@/theme";
+
+type CustomRenderOptions = RenderOptions & {
+	queryClient?: QueryClient;
+	initialEntries?: MemoryRouterProps["initialEntries"];
+	initialIndex?: MemoryRouterProps["initialIndex"];
+};
 
 // Create a custom render function that includes all providers
 export function renderWithProviders(
@@ -14,14 +20,18 @@ export function renderWithProviders(
 				mutations: { retry: false },
 			},
 		}),
+		initialEntries,
+		initialIndex,
 		...renderOptions
-	}: RenderOptions & { queryClient?: QueryClient } = {},
+	}: CustomRenderOptions = {},
 ) {
 	function Wrapper({ children }: { children: React.ReactNode }) {
 		return (
 			<MantineProvider theme={theme} defaultColorScheme="dark">
 				<QueryClientProvider client={queryClient}>
-					<BrowserRouter>{children}</BrowserRouter>
+					<MemoryRouter initialEntries={initialEntries} initialIndex={initialIndex}>
+						{children}
+					</MemoryRouter>
 				</QueryClientProvider>
 			</MantineProvider>
 		);

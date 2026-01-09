@@ -1,0 +1,69 @@
+import type { Book, PaginatedResponse } from "@/types/api";
+import { api } from "./client";
+
+export interface BookFilters {
+	page?: number;
+	pageSize?: number;
+	sort?: string;
+	series_id?: string;
+	genre?: string;
+	status?: string;
+}
+
+export const booksApi = {
+	// Get books by library ID with filters
+	getByLibrary: async (
+		libraryId: string,
+		filters?: BookFilters,
+	): Promise<PaginatedResponse<Book>> => {
+		const params = new URLSearchParams();
+
+		if (filters?.page) params.set("page", filters.page.toString());
+		if (filters?.pageSize)
+			params.set("page_size", filters.pageSize.toString());
+		if (filters?.sort) params.set("sort", filters.sort);
+		if (filters?.series_id) params.set("series_id", filters.series_id);
+		if (filters?.genre) params.set("genre", filters.genre);
+		if (filters?.status) params.set("status", filters.status);
+
+		const queryString = params.toString();
+		const url =
+			libraryId === "all"
+				? `/books${queryString ? `?${queryString}` : ""}`
+				: `/libraries/${libraryId}/books${queryString ? `?${queryString}` : ""}`;
+
+		const response = await api.get<PaginatedResponse<Book>>(url);
+		return response.data;
+	},
+
+	// Get a single book by ID
+	getById: async (id: string): Promise<Book> => {
+		const response = await api.get<Book>(`/books/${id}`);
+		return response.data;
+	},
+
+	// Get books with reading progress (incomplete reads)
+	getInProgress: async (libraryId: string): Promise<Book[]> => {
+		const url =
+			libraryId === "all"
+				? "/books/in-progress"
+				: `/libraries/${libraryId}/books/in-progress`;
+
+		const response = await api.get<Book[]>(url);
+		return response.data;
+	},
+
+	// Get recently added books
+	getRecentlyAdded: async (
+		libraryId: string,
+		limit = 50,
+	): Promise<Book[]> => {
+		const url =
+			libraryId === "all"
+				? `/books/recently-added?limit=${limit}`
+				: `/libraries/${libraryId}/books/recently-added?limit=${limit}`;
+
+		const response = await api.get<Book[]>(url);
+		return response.data;
+	},
+};

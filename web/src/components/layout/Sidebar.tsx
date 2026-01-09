@@ -12,16 +12,20 @@ import {
 import { notifications } from "@mantine/notifications";
 import {
 	IconBooks,
+	IconClipboardList,
 	IconDotsVertical,
 	IconEdit,
+	IconFileText,
 	IconHome,
 	IconLogout,
 	IconPlus,
 	IconRadar,
 	IconScan,
+	IconServer,
 	IconSettings,
 	IconTrash,
 	IconTrashX,
+	IconUser,
 	IconUsers,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -48,6 +52,9 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 	const [libraryToDelete, setLibraryToDelete] = useState<Library | null>(null);
 	const [purgeConfirmOpened, setPurgeConfirmOpened] = useState(false);
 	const [libraryToPurge, setLibraryToPurge] = useState<Library | null>(null);
+	const [settingsOpened, setSettingsOpened] = useState(
+		currentPath.startsWith("/settings")
+	);
 
 	const { data: libraries } = useQuery({
 		queryKey: ["libraries"],
@@ -176,11 +183,13 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 							active={currentPath === "/"}
 						/>
 						<NavLink
+							onClick={() => navigate("/libraries/all/recommended")}
 							label="Libraries"
 							leftSection={<IconBooks size={20} />}
 							opened
 							childrenOffset={32}
 							disableRightSectionRotation
+							active={currentPath.startsWith("/libraries/all")}
 							rightSection={
 								<Group gap={4}>
 									<ActionIcon
@@ -234,10 +243,10 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 								libraries.map((library) => (
 									<NavLink
 										key={library.id}
-										onClick={() => navigate(`/library/${library.id}`)}
+										onClick={() => navigate(`/libraries/${library.id}/recommended`)}
 										label={library.name}
 										// leftSection={<IconFolder size={16} />}
-										active={currentPath === `/library/${library.id}`}
+										active={currentPath.startsWith(`/libraries/${library.id}/`)}
 										styles={{ label: { textTransform: "capitalize" } }}
 										rightSection={
 											<Menu shadow="md" width={200} position="right-start">
@@ -320,23 +329,52 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 							)}
 						</NavLink>
 
-						{isAdmin && (
-							<>
-								<NavLink
-									onClick={() => navigate("/users")}
-									label="Users"
-									leftSection={<IconUsers size={20} />}
-									active={currentPath === "/users"}
-								/>
-							</>
-						)}
-
 						<NavLink
-							onClick={() => navigate("/settings")}
 							label="Settings"
 							leftSection={<IconSettings size={20} />}
-							active={currentPath === "/settings"}
-						/>
+							opened={settingsOpened}
+							onChange={setSettingsOpened}
+							childrenOffset={32}
+							active={currentPath.startsWith("/settings")}
+						>
+							{/* Admin Section */}
+							{isAdmin && (
+								<>
+									<NavLink
+										onClick={() => navigate("/settings/server")}
+										label="Server"
+										leftSection={<IconServer size={16} />}
+										active={currentPath.startsWith("/settings/server")}
+									/>
+									<NavLink
+										onClick={() => navigate("/settings/users")}
+										label="Users"
+										leftSection={<IconUsers size={16} />}
+										active={currentPath.startsWith("/settings/users")}
+									/>
+									<NavLink
+										onClick={() => navigate("/settings/tasks")}
+										label="Tasks"
+										leftSection={<IconClipboardList size={16} />}
+										active={currentPath.startsWith("/settings/tasks")}
+									/>
+									<NavLink
+										onClick={() => navigate("/settings/logs")}
+										label="Logs"
+										leftSection={<IconFileText size={16} />}
+										active={currentPath.startsWith("/settings/logs")}
+									/>
+								</>
+							)}
+
+							{/* User Section */}
+							<NavLink
+								onClick={() => navigate("/settings/profile")}
+								label="Profile"
+								leftSection={<IconUser size={16} />}
+								active={currentPath.startsWith("/settings/profile")}
+							/>
+						</NavLink>
 					</Stack>
 				</AppShell.Section>
 

@@ -79,7 +79,7 @@ describe("Sidebar Component (via AppLayout)", () => {
 		expect(screen.getByText("Users")).toBeInTheDocument();
 	});
 
-	it("should not show Users link for regular users", () => {
+	it("should not show Users link for regular users in sidebar root", () => {
 		const mockUser: User = {
 			id: "1",
 			username: "testuser",
@@ -100,7 +100,90 @@ describe("Sidebar Component (via AppLayout)", () => {
 			</AppLayout>,
 		);
 
-		expect(screen.queryByText("Users")).not.toBeInTheDocument();
+		// Users should now be inside Settings menu, not in root
+		// Check that Settings exists
+		expect(screen.getByText("Settings")).toBeInTheDocument();
+	});
+
+	it("should show Profile link inside Settings for all users", () => {
+		const mockUser: User = {
+			id: "1",
+			username: "testuser",
+			email: "test@example.com",
+			isAdmin: false,
+			emailVerified: true,
+		};
+
+		useAuthStore.setState({
+			user: mockUser,
+			token: "token",
+			isAuthenticated: true,
+		});
+
+		renderWithProviders(
+			<AppLayout>
+				<div>Content</div>
+			</AppLayout>,
+		);
+
+		expect(screen.getByText("Profile")).toBeInTheDocument();
+	});
+
+	it("should show admin settings options for admin users", () => {
+		const mockAdmin: User = {
+			id: "1",
+			username: "admin",
+			email: "admin@example.com",
+			isAdmin: true,
+			emailVerified: true,
+		};
+
+		useAuthStore.setState({
+			user: mockAdmin,
+			token: "token",
+			isAuthenticated: true,
+		});
+
+		renderWithProviders(
+			<AppLayout>
+				<div>Content</div>
+			</AppLayout>,
+		);
+
+		// Admin settings options should be visible inside Settings
+		expect(screen.getByText("Server")).toBeInTheDocument();
+		expect(screen.getByText("Tasks")).toBeInTheDocument();
+		expect(screen.getByText("Logs")).toBeInTheDocument();
+		expect(screen.getByText("Users")).toBeInTheDocument();
+	});
+
+	it("should not show admin settings options for regular users", () => {
+		const mockUser: User = {
+			id: "1",
+			username: "testuser",
+			email: "test@example.com",
+			isAdmin: false,
+			emailVerified: true,
+		};
+
+		useAuthStore.setState({
+			user: mockUser,
+			token: "token",
+			isAuthenticated: true,
+		});
+
+		renderWithProviders(
+			<AppLayout>
+				<div>Content</div>
+			</AppLayout>,
+		);
+
+		// Admin options should not be visible
+		expect(screen.queryByText("Server")).not.toBeInTheDocument();
+		expect(screen.queryByText("Tasks")).not.toBeInTheDocument();
+		expect(screen.queryByText("Logs")).not.toBeInTheDocument();
+		// Profile should still be visible
+		expect(screen.getByText("Profile")).toBeInTheDocument();
 	});
 
 	it("should handle logout", async () => {

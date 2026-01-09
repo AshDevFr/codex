@@ -12,6 +12,7 @@ import { setupApi } from "@/api/setup";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useEntityEvents } from "@/hooks/useEntityEvents";
 import { Home } from "@/pages/Home";
+import { LibraryPage } from "@/pages/Library";
 import { Login } from "@/pages/Login";
 import { Register } from "@/pages/Register";
 import { Setup } from "@/pages/Setup";
@@ -110,6 +111,17 @@ function App() {
 						<ProtectedRoute>
 							<AppLayout currentPath="/libraries">
 								<Home />
+							</AppLayout>
+						</ProtectedRoute>
+					}
+				/>
+
+				<Route
+					path="/libraries/:libraryId/*"
+					element={
+						<ProtectedRoute>
+							<AppLayout currentPath="/libraries/:libraryId">
+								<LibraryPage />
 							</AppLayout>
 						</ProtectedRoute>
 					}
