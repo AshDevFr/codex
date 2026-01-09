@@ -102,6 +102,7 @@ services:
       - dev
 
   # Codex worker (dedicated worker container for development)
+  # Note: Workers also check migrations on startup, but will skip if CODEX_SKIP_MIGRATIONS is set
   codex-dev-worker:
     build:
       context: .
@@ -127,6 +128,7 @@ services:
       RUST_BACKTRACE: 1
       # Worker count (can also be set in config file)
       CODEX_TASK_WORKER_COUNT: "2"
+      CODEX_SKIP_MIGRATIONS: "true"
       # Database connection
       # CODEX_DATABASE_DB_TYPE: postgres
       # CODEX_DATABASE_POSTGRES_HOST: postgres

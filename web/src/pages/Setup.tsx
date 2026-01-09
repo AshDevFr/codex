@@ -86,6 +86,7 @@ export function Setup() {
 	const [scannerExpanded, setScannerExpanded] = useState(true);
 	const [appExpanded, setAppExpanded] = useState(false);
 	const [taskExpanded, setTaskExpanded] = useState(false);
+	const [deduplicationExpanded, setDeduplicationExpanded] = useState(false);
 
 	// Scanner settings
 	const [maxConcurrentScans, setMaxConcurrentScans] = useState(2);
@@ -99,6 +100,10 @@ export function Setup() {
 	const [pollIntervalSeconds, setPollIntervalSeconds] = useState(5);
 	const [cleanupIntervalSeconds, setCleanupIntervalSeconds] = useState(30);
 	const [prioritizeScansOverAnalysis, setPrioritizeScansOverAnalysis] = useState(true);
+
+	// Deduplication settings
+	const [deduplicationEnabled, setDeduplicationEnabled] = useState(true);
+	const [deduplicationCronSchedule, setDeduplicationCronSchedule] = useState("");
 
 	// Initialize setup mutation
 	const initializeMutation = useMutation<
@@ -155,16 +160,24 @@ export function Setup() {
 				skipConfiguration: true,
 			});
 		} else {
+			const settings: Record<string, string> = {
+				"scanner.max_concurrent_scans": maxConcurrentScans.toString(),
+				"scanner.scan_timeout_minutes": scanTimeoutMinutes.toString(),
+				"scanner.retry_failed_files": retryFailedFiles.toString(),
+				"application.name": appName,
+				"task.poll_interval_seconds": pollIntervalSeconds.toString(),
+				"task.cleanup_interval_seconds": cleanupIntervalSeconds.toString(),
+				"task.prioritize_scans_over_analysis": prioritizeScansOverAnalysis.toString(),
+				"deduplication.enabled": deduplicationEnabled.toString(),
+			};
+
+			// Only include cron schedule if deduplication is enabled
+			if (deduplicationEnabled && deduplicationCronSchedule.trim()) {
+				settings["deduplication.cron_schedule"] = deduplicationCronSchedule.trim();
+			}
+
 			configureSettingsMutation.mutate({
-				settings: {
-					"scanner.max_concurrent_scans": maxConcurrentScans.toString(),
-					"scanner.scan_timeout_minutes": scanTimeoutMinutes.toString(),
-					"scanner.retry_failed_files": retryFailedFiles.toString(),
-					"application.name": appName,
-					"task.poll_interval_seconds": pollIntervalSeconds.toString(),
-					"task.cleanup_interval_seconds": cleanupIntervalSeconds.toString(),
-					"task.prioritize_scans_over_analysis": prioritizeScansOverAnalysis.toString(),
-				},
+				settings,
 				skipConfiguration: false,
 			});
 		}
@@ -422,6 +435,54 @@ export function Setup() {
 															setPrioritizeScansOverAnalysis(e.currentTarget.checked)
 														}
 													/>
+												</Stack>
+											</Collapse>
+										</Paper>
+
+										{/* Deduplication Settings */}
+										<Paper withBorder p="md">
+											<Group justify="space-between" mb="xs">
+												<div>
+													<Text fw={500}>Deduplication Settings</Text>
+													<Text size="xs" c="dimmed">
+														Configure automatic duplicate detection
+													</Text>
+												</div>
+												<Button
+													variant="subtle"
+													size="xs"
+													onClick={() =>
+														setDeduplicationExpanded(!deduplicationExpanded)
+													}
+												>
+													{deduplicationExpanded ? "Collapse" : "Expand"}
+												</Button>
+											</Group>
+
+											<Collapse in={deduplicationExpanded}>
+												<Stack gap="sm" mt="sm">
+													<Switch
+														label="Enable Deduplication"
+														description="Enable automatic duplicate detection scanning"
+														checked={deduplicationEnabled}
+														onChange={(e) =>
+															setDeduplicationEnabled(e.currentTarget.checked)
+														}
+													/>
+
+													{deduplicationEnabled && (
+														<TextInput
+															label="Cron Schedule"
+															description="Cron expression for automatic duplicate detection (e.g., '0 2 * * *' for daily at 2am). Leave empty to disable automatic scanning."
+															placeholder="0 2 * * *"
+															value={deduplicationCronSchedule}
+															onChange={(e) =>
+																setDeduplicationCronSchedule(
+																	e.currentTarget.value,
+																)
+															}
+														/>
+													)}
 												</Stack>
 											</Collapse>
 										</Paper>

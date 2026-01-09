@@ -156,6 +156,28 @@ impl Database {
         Ok(())
     }
 
+    /// Check if all migrations are complete
+    ///
+    /// Returns true if all migrations have been applied, false if there are pending migrations.
+    pub async fn migrations_complete(&self) -> Result<bool> {
+        // Get the total number of migrations defined
+        let total_migrations = Migrator::migrations().len();
+
+        // If there are no migrations defined, migrations are not complete (fresh database)
+        if total_migrations == 0 {
+            return Ok(false);
+        }
+
+        // Check if there are any pending migrations
+        // If get_pending_migrations returns an empty vector, all migrations are applied
+        let pending = Migrator::get_pending_migrations(&self.conn)
+            .await
+            .context("Failed to check pending migrations")?;
+
+        // Migrations are complete if there are no pending migrations
+        Ok(pending.is_empty())
+    }
+
     /// Close the database connection
     pub async fn close(self) {
         // DatabaseConnection will be closed automatically when dropped

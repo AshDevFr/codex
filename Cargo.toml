@@ -71,6 +71,11 @@ sea-orm = { version = "1.1", features = [
     "with-chrono",
     "with-uuid",
 ] }
+sea-orm-migration = { version = "1.1", features = [
+    "runtime-tokio-native-tls",
+    "sqlx-postgres",
+    "sqlx-sqlite",
+] }
 migration = { path = "migration" }
 tokio = { version = "1", features = ["full"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }

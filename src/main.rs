@@ -13,7 +13,10 @@ mod utils;
 mod web;
 
 use clap::{Parser, Subcommand};
-use commands::{scan_command, seed_command, serve_command, worker_command};
+use commands::{
+    migrate_command, scan_command, seed_command, serve_command, wait_for_migrations_command,
+    worker_command,
+};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -65,6 +68,28 @@ enum Commands {
         #[arg(short, long, default_value = "codex.yaml")]
         config: PathBuf,
     },
+
+    /// Run database migrations
+    Migrate {
+        /// Path to configuration file
+        #[arg(short, long, default_value = "codex.yaml")]
+        config: PathBuf,
+    },
+
+    /// Wait for database migrations to complete
+    WaitForMigrations {
+        /// Path to configuration file
+        #[arg(short, long, default_value = "codex.yaml")]
+        config: PathBuf,
+
+        /// Timeout in seconds (default: 300)
+        #[arg(short, long, default_value = "300")]
+        timeout: Option<u64>,
+
+        /// Check interval in seconds (default: 2)
+        #[arg(short, long, default_value = "2")]
+        interval: Option<u64>,
+    },
 }
 
 #[tokio::main]
@@ -88,6 +113,16 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Seed { config } => {
             seed_command(config).await?;
+        }
+        Commands::Migrate { config } => {
+            migrate_command(config).await?;
+        }
+        Commands::WaitForMigrations {
+            config,
+            timeout,
+            interval,
+        } => {
+            wait_for_migrations_command(config, timeout, interval).await?;
         }
     }
 

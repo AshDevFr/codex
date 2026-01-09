@@ -21,6 +21,12 @@ pub struct LibraryDto {
     pub book_count: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub series_count: Option<i64>,
+    /// Allowed file formats (e.g., ["CBZ", "CBR", "EPUB"])
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allowed_formats: Option<Vec<String>>,
+    /// Excluded path patterns (newline-separated, e.g., ".DS_Store\nThumbs.db")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub excluded_patterns: Option<String>,
 }
 
 /// Create library request
@@ -38,6 +44,14 @@ pub struct CreateLibraryRequest {
 
     /// Scanning configuration
     pub scanning_config: Option<ScanningConfigDto>,
+
+    /// Allowed file formats (e.g., ["CBZ", "CBR", "EPUB"])
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allowed_formats: Option<Vec<String>>,
+
+    /// Excluded path patterns (newline-separated, e.g., ".DS_Store\nThumbs.db")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub excluded_patterns: Option<String>,
 }
 
 /// Update library request
@@ -58,4 +72,12 @@ pub struct UpdateLibraryRequest {
 
     /// Scanning configuration
     pub scanning_config: Option<ScanningConfigDto>,
+
+    /// Allowed file formats (e.g., ["CBZ", "CBR", "EPUB"])
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allowed_formats: Option<Vec<String>>,
+
+    /// Excluded path patterns (newline-separated, e.g., ".DS_Store\nThumbs.db")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub excluded_patterns: Option<String>,
 }

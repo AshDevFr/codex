@@ -3,6 +3,7 @@ use crate::db::Database;
 use crate::events::EventBroadcaster;
 use crate::services::SettingsService;
 use crate::tasks::TaskWorker;
+use anyhow::Context;
 use sea_orm::DatabaseConnection;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -169,15 +170,38 @@ pub fn display_database_config(config: &Config) {
 }
 
 /// Initialize database connection and run migrations
+///
+/// If CODEX_SKIP_MIGRATIONS environment variable is set to "true" or "1",
+/// migrations will be skipped (useful when migrations are run separately via a job/init container).
 pub async fn init_database(config: &Config) -> anyhow::Result<Database> {
     info!("========================================");
     info!("Initializing database connection...");
     let db = Database::new(&config.database).await?;
     info!("Database connected successfully");
 
-    // Run migrations to ensure database schema is up to date
-    db.run_migrations().await?;
-    info!("Database migrations applied successfully");
+    // Check if migrations should be skipped
+    let skip_migrations = std::env::var("CODEX_SKIP_MIGRATIONS")
+        .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+        .unwrap_or(false);
+
+    if skip_migrations {
+        info!("Skipping migrations (CODEX_SKIP_MIGRATIONS is set)");
+        // Still verify that migrations are complete
+        let complete = db
+            .migrations_complete()
+            .await
+            .context("Failed to check migration status")?;
+        if !complete {
+            anyhow::bail!(
+                "Migrations are not complete. Please run migrations before starting the application."
+            );
+        }
+        info!("Migrations are complete (verified)");
+    } else {
+        // Run migrations to ensure database schema is up to date
+        db.run_migrations().await?;
+        info!("Database migrations applied successfully");
+    }
 
     // Verify database health
     db.health_check().await?;

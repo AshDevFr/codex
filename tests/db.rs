@@ -5,6 +5,7 @@
 mod db {
     mod auth;
     mod book_duplicates;
+    mod migrations;
     mod postgres;
     mod repositories;
 }

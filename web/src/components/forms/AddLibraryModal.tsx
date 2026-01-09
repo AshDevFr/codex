@@ -9,11 +9,13 @@ import {
 	Group,
 	Loader,
 	Modal,
+	MultiSelect,
 	Paper,
 	ScrollArea,
 	Select,
 	Stack,
 	Text,
+	Textarea,
 	TextInput,
 	Tooltip,
 	UnstyledButton,
@@ -72,6 +74,10 @@ export function AddLibraryModal({ opened, onClose }: AddLibraryModalProps) {
 	const [scanOnStart, setScanOnStart] = useState(false);
 	const [purgeDeletedOnScan, setPurgeDeletedOnScan] = useState(false);
 
+	// Format filtering state
+	const [allowedFormats, setAllowedFormats] = useState<string[]>([]);
+	const [excludedPatterns, setExcludedPatterns] = useState("");
+
 	// Load drives when modal opens
 	const { data: drives, isLoading: drivesLoading } = useQuery({
 		queryKey: ["drives"],
@@ -121,6 +127,8 @@ export function AddLibraryModal({ opened, onClose }: AddLibraryModalProps) {
 		setAutoScanOnCreate(false);
 		setScanOnStart(false);
 		setPurgeDeletedOnScan(false);
+		setAllowedFormats([]);
+		setExcludedPatterns("");
 		onClose();
 	};
 
@@ -219,6 +227,8 @@ export function AddLibraryModal({ opened, onClose }: AddLibraryModalProps) {
 			name: libraryName,
 			path: selectedPath,
 			scanningConfig,
+			allowedFormats: allowedFormats.length > 0 ? allowedFormats : undefined,
+			excludedPatterns: excludedPatterns.trim() || undefined,
 		});
 	};
 
@@ -274,6 +284,42 @@ export function AddLibraryModal({ opened, onClose }: AddLibraryModalProps) {
 							}
 							styles={{ input: { paddingRight: 80 } }}
 						/>
+
+						<Divider
+							label="Format Filtering"
+							labelPosition="left"
+							mt="md"
+						/>
+
+						<Paper p="md" withBorder>
+							<Stack gap="md">
+								<MultiSelect
+									label="Allowed Formats"
+									description="Select file formats to include in this library. Leave empty to allow all formats."
+									placeholder="Select formats (leave empty for all)"
+									data={[
+										{ value: "CBZ", label: "CBZ (Comic Book ZIP)" },
+										{ value: "CBR", label: "CBR (Comic Book RAR)" },
+										{ value: "EPUB", label: "EPUB (Ebook)" },
+										{ value: "PDF", label: "PDF (Portable Document Format)" },
+									]}
+									value={allowedFormats}
+									onChange={setAllowedFormats}
+									clearable
+									comboboxProps={{ zIndex: 1001 }}
+								/>
+
+								<Textarea
+									label="Excluded Patterns"
+									description="File or directory patterns to exclude (one per line). Examples: .DS_Store, Thumbs.db, @eaDir/*"
+									placeholder=".DS_Store&#10;Thumbs.db&#10;@eaDir/*"
+									value={excludedPatterns}
+									onChange={(e) => setExcludedPatterns(e.currentTarget.value)}
+									minRows={3}
+									autosize
+								/>
+							</Stack>
+						</Paper>
 
 						<Divider
 							label="Scanning Configuration"

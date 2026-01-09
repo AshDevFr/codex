@@ -135,11 +135,14 @@ dev-down: ## Stop development environment
 dev-down-v: ## Stop development environment and remove volumes
 	docker compose --profile dev down -v
 
-dev-logs: ## View development logs (backend + frontend)
-	docker compose logs -f codex-dev frontend-dev
+dev-logs: ## View development logs (backend + worker + frontend)
+	docker compose logs -f codex-dev codex-dev-worker frontend-dev
 
 dev-logs-backend: ## View backend logs only
 	docker compose logs -f codex-dev
+
+dev-logs-worker: ## View worker logs only
+	docker compose logs -f codex-dev-worker
 
 dev-logs-frontend: ## View frontend logs only
 	docker compose logs -f frontend-dev

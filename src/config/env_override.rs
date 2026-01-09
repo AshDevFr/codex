@@ -22,7 +22,8 @@ impl EnvOverride for TaskConfig {
 
 impl EnvOverride for ScannerConfig {
     fn apply_env_overrides(&mut self, prefix: &str) {
-        if let Ok(max_scans) = env::var(format!("{}_MAX_CONCURRENT_SCANS", prefix)) {
+        let env_key = format!("{}_MAX_CONCURRENT_SCANS", prefix);
+        if let Ok(max_scans) = env::var(&env_key) {
             if let Ok(count) = max_scans.parse::<usize>() {
                 self.max_concurrent_scans = count;
             }
@@ -301,6 +302,9 @@ mod tests {
 
     #[test]
     fn test_task_config_env_override() {
+        // Clear any existing env vars first to avoid interference from other tests
+        env::remove_var("CODEX_TASK_WORKER_COUNT");
+
         env::set_var("CODEX_TASK_WORKER_COUNT", "8");
 
         let mut config = TaskConfig::default();
@@ -313,6 +317,9 @@ mod tests {
 
     #[test]
     fn test_task_config_env_override_invalid() {
+        // Clear any existing env vars first to avoid interference from other tests
+        env::remove_var("CODEX_TASK_WORKER_COUNT");
+
         env::set_var("CODEX_TASK_WORKER_COUNT", "invalid");
 
         let mut config = TaskConfig { worker_count: 4 };
@@ -418,7 +425,10 @@ mod tests {
         // Apply overrides - Config::apply_env_overrides("CODEX") will call:
         // - task.apply_env_overrides("CODEX_TASK") -> looks for CODEX_TASK_WORKER_COUNT
         // - scanner.apply_env_overrides("CODEX_SCANNER") -> looks for CODEX_SCANNER_MAX_CONCURRENT_SCANS
+        // Store value before applying to verify it changes
+        let scanner_value_before = config.scanner.max_concurrent_scans;
         config.apply_env_overrides("CODEX");
+        let scanner_value_after = config.scanner.max_concurrent_scans;
 
         // Debug: Check env var after applying (to catch race conditions)
         let scanner_max_var_after = env::var("CODEX_SCANNER_MAX_CONCURRENT_SCANS").ok();
@@ -429,10 +439,14 @@ mod tests {
             "Task worker count should be overridden to 12 (env var before: {:?})",
             task_var_before
         );
+        // Debug: Check what the scanner config looks like after applying
+        let env_key_used = format!("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
+        let env_value_when_checked = env::var(&env_key_used).ok();
+
         assert_eq!(
-            config.scanner.max_concurrent_scans, 5,
-            "Scanner max_concurrent_scans should be overridden to 5 (got: {}, env var before: {:?}, env var at call: {:?}, env var after: {:?}, prefix should be CODEX_SCANNER)",
-            config.scanner.max_concurrent_scans, scanner_max_var_before, scanner_max_at_call, scanner_max_var_after
+            scanner_value_after, 5,
+            "Scanner max_concurrent_scans should be overridden to 5 (got: {}, was: {}, env var before: {:?}, env var at call: {:?}, env var after: {:?}, env key used: {:?}, env value when checked: {:?})",
+            scanner_value_after, scanner_value_before, scanner_max_var_before, scanner_max_at_call, scanner_max_var_after, env_key_used, env_value_when_checked
         );
 
         env::remove_var("CODEX_TASK_WORKER_COUNT");

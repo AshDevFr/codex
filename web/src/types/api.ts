@@ -29,6 +29,8 @@ export interface Library {
 	updatedAt: string;
 	bookCount?: number;
 	seriesCount?: number;
+	allowedFormats?: string[];
+	excludedPatterns?: string;
 }
 
 export interface Series {
@@ -141,6 +143,8 @@ export interface CreateLibraryRequest {
 	path: string;
 	description?: string;
 	scanningConfig?: ScanningConfig;
+	allowedFormats?: string[];
+	excludedPatterns?: string;
 }
 
 export type ScanStatus =

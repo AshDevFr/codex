@@ -26,6 +26,11 @@ async fn library_to_dto(db: &DatabaseConnection, library: libraries::Model) -> L
         .await
         .ok();
 
+    // Parse allowed_formats from JSON string
+    let allowed_formats = library
+        .allowed_formats
+        .and_then(|json| serde_json::from_str::<Vec<String>>(&json).ok());
+
     LibraryDto {
         id: library.id,
         name: library.name,
@@ -40,6 +45,8 @@ async fn library_to_dto(db: &DatabaseConnection, library: libraries::Model) -> L
         updated_at: library.updated_at,
         book_count,
         series_count,
+        allowed_formats,
+        excluded_patterns: library.excluded_patterns,
     }
 }
 
@@ -148,6 +155,18 @@ pub async fn create_library(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to create library: {}", e)))?;
 
+    // Handle allowed_formats if provided
+    if let Some(formats) = request.allowed_formats {
+        let formats_json = serde_json::to_string(&formats)
+            .map_err(|e| ApiError::BadRequest(format!("Invalid allowed formats: {}", e)))?;
+        library.allowed_formats = Some(formats_json);
+    }
+
+    // Handle excluded_patterns if provided
+    if let Some(patterns) = request.excluded_patterns {
+        library.excluded_patterns = Some(patterns);
+    }
+
     // Handle scanning_config if provided
     if let Some(config_dto) = request.scanning_config {
         // Serialize the config to JSON string for database storage
@@ -232,6 +251,16 @@ pub async fn update_library(
             )));
         }
         library.path = path;
+    }
+    // Handle allowed_formats if provided
+    if let Some(formats) = request.allowed_formats {
+        let formats_json = serde_json::to_string(&formats)
+            .map_err(|e| ApiError::BadRequest(format!("Invalid allowed formats: {}", e)))?;
+        library.allowed_formats = Some(formats_json);
+    }
+    // Handle excluded_patterns if provided
+    if let Some(patterns) = request.excluded_patterns {
+        library.excluded_patterns = Some(patterns);
     }
     // Handle scanning_config if provided
     if let Some(config_dto) = request.scanning_config {

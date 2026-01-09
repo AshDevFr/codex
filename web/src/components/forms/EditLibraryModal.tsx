@@ -5,10 +5,12 @@ import {
 	Divider,
 	Group,
 	Modal,
+	MultiSelect,
 	Paper,
 	Select,
 	Stack,
 	Text,
+	Textarea,
 	TextInput,
 	Tooltip,
 } from "@mantine/core";
@@ -57,6 +59,10 @@ export function EditLibraryModal({
 	const [scanOnStart, setScanOnStart] = useState(false);
 	const [purgeDeletedOnScan, setPurgeDeletedOnScan] = useState(false);
 
+	// Format filtering state
+	const [allowedFormats, setAllowedFormats] = useState<string[]>([]);
+	const [excludedPatterns, setExcludedPatterns] = useState("");
+
 	// Initialize form with library data when library changes
 	useEffect(() => {
 		if (library) {
@@ -75,6 +81,9 @@ export function EditLibraryModal({
 				setScanOnStart(library.scanningConfig.scanOnStart);
 				setPurgeDeletedOnScan(library.scanningConfig.purgeDeletedOnScan);
 			}
+
+			setAllowedFormats(library.allowedFormats || []);
+			setExcludedPatterns(library.excludedPatterns || "");
 		}
 	}, [library]);
 
@@ -152,6 +161,8 @@ export function EditLibraryModal({
 				data: {
 					name: libraryName,
 					scanningConfig,
+					allowedFormats: allowedFormats.length > 0 ? allowedFormats : undefined,
+					excludedPatterns: excludedPatterns.trim() || undefined,
 				},
 			});
 		}
@@ -187,6 +198,38 @@ export function EditLibraryModal({
 					disabled
 					description="Library path cannot be changed after creation"
 				/>
+
+				<Divider label="Format Filtering" labelPosition="left" mt="md" />
+
+				<Paper p="md" withBorder>
+					<Stack gap="md">
+						<MultiSelect
+							label="Allowed Formats"
+							description="Select file formats to include in this library. Leave empty to allow all formats."
+							placeholder="Select formats (leave empty for all)"
+							data={[
+								{ value: "CBZ", label: "CBZ (Comic Book ZIP)" },
+								{ value: "CBR", label: "CBR (Comic Book RAR)" },
+								{ value: "EPUB", label: "EPUB (Ebook)" },
+								{ value: "PDF", label: "PDF (Portable Document Format)" },
+							]}
+							value={allowedFormats}
+							onChange={setAllowedFormats}
+							clearable
+							comboboxProps={{ zIndex: 1001 }}
+						/>
+
+						<Textarea
+							label="Excluded Patterns"
+							description="File or directory patterns to exclude (one per line). Examples: .DS_Store, Thumbs.db, @eaDir/*"
+							placeholder=".DS_Store&#10;Thumbs.db&#10;@eaDir/*"
+							value={excludedPatterns}
+							onChange={(e) => setExcludedPatterns(e.currentTarget.value)}
+							minRows={3}
+							autosize
+						/>
+					</Stack>
+				</Paper>
 
 				<Divider label="Scanning Configuration" labelPosition="left" mt="md" />
 
