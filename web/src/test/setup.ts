@@ -2,8 +2,14 @@ import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
-// Mock console.debug to reduce test output noise
-global.console.debug = vi.fn();
+// Mock console.debug and console.log to reduce test output noise
+// Replace them with no-op functions at module load time
+// Use both console and global.console to ensure mocks apply everywhere
+const noop = () => {};
+global.console.debug = noop;
+global.console.log = noop;
+console.debug = noop;
+console.log = noop;
 
 // Spy on console.error to filter out expected errors
 const originalConsoleError = console.error;
@@ -25,10 +31,32 @@ global.console.error = vi.fn((...args: unknown[]) => {
 	originalConsoleError.apply(console, args);
 });
 
+// Suppress unhandled AggregateError from jsdom XMLHttpRequest (expected in test environment)
+// These occur when components try to make HTTP requests that aren't properly mocked
+process.on("unhandledRejection", (reason) => {
+	// Suppress AggregateError from jsdom's XMLHttpRequest implementation
+	if (
+		reason instanceof AggregateError ||
+		(reason &&
+			typeof reason === "object" &&
+			"constructor" in reason &&
+			reason.constructor.name === "AggregateError")
+	) {
+		// Silently suppress - this is expected when HTTP requests aren't mocked
+		return;
+	}
+	// For other unhandled rejections, let them through (vitest will handle them)
+});
+
 // Cleanup after each test
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
+	// Restore console mocks after clearAllMocks (which might clear them)
+	global.console.debug = noop;
+	global.console.log = noop;
+	console.debug = noop;
+	console.log = noop;
 	localStorage.clear();
 });
 

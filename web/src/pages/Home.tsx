@@ -61,17 +61,17 @@ export function Home() {
 
 	// Subscribe to scan progress updates via SSE
 	useEffect(() => {
-		console.log("[Home] useEffect triggered - isAuthenticated:", isAuthenticated);
+		console.debug("[Home] useEffect triggered - isAuthenticated:", isAuthenticated);
 		// Only subscribe if user is authenticated
 		if (!isAuthenticated) {
-			console.log("[Home] Not authenticated, skipping SSE subscription");
+			console.debug("[Home] Not authenticated, skipping SSE subscription");
 			return;
 		}
 
-		console.log("[Home] Setting up SSE subscription...");
+		console.debug("[Home] Setting up SSE subscription...");
 		const unsubscribe = scanApi.subscribeToProgress(
 			(progress) => {
-				console.log("[Home] SSE scan progress received:", {
+				console.debug("[Home] SSE scan progress received:", {
 					library_id: progress.library_id,
 					status: progress.status,
 					files_processed: progress.files_processed,
@@ -87,12 +87,12 @@ export function Home() {
 
 				// Refresh library data when scan completes
 				if (progress.status === "completed" || progress.status === "failed") {
-					console.log(
+					console.debug(
 						`[Home] Scan ${progress.status} - refetching libraries query`,
 					);
 					// Use refetchQueries to force immediate refetch, bypassing staleTime
 					queryClient.refetchQueries({ queryKey: ["libraries"] }).then(() => {
-						console.log("[Home] Libraries query refetch completed");
+						console.debug("[Home] Libraries query refetch completed");
 					});
 
 					// Show notification
@@ -126,10 +126,10 @@ export function Home() {
 			},
 		);
 
-		console.log("[Home] SSE subscription established");
+		console.debug("[Home] SSE subscription established");
 
 		return () => {
-			console.log("[Home] Cleaning up SSE subscription");
+			console.debug("[Home] Cleaning up SSE subscription");
 			unsubscribe();
 		};
 	}, [queryClient, isAuthenticated]);

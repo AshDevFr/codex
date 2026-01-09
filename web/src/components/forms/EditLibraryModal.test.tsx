@@ -1,10 +1,12 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { filesystemApi } from "@/api/filesystem";
 import { librariesApi } from "@/api/libraries";
 import { renderWithProviders, userEvent } from "@/test/utils";
 import type { Library } from "@/types/api";
 import { LibraryModal } from "./LibraryModal";
 
+vi.mock("@/api/filesystem");
 vi.mock("@/api/libraries");
 vi.mock("@mantine/notifications", () => ({
 	notifications: {
@@ -46,6 +48,13 @@ describe("LibraryModal (Edit Mode)", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		vi.mocked(librariesApi.update).mockResolvedValue(mockLibrary);
+		// Mock filesystem API (used by LibraryModal for path browsing)
+		vi.mocked(filesystemApi.getDrives).mockResolvedValue([]);
+		vi.mocked(filesystemApi.browse).mockResolvedValue({
+			entries: [],
+			current_path: "/",
+			parent_path: null,
+		});
 	});
 
 	it("should not render when closed", () => {

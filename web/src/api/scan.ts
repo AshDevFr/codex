@@ -35,7 +35,7 @@ class SSEReconnectionManager {
 	private currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
 	async connect(): Promise<() => void> {
-		console.log("[SSE] Initiating connection to:", this.url);
+		console.debug("[SSE] Initiating connection to:", this.url);
 		this.onConnectionStateChange?.("connecting");
 
 		const attemptConnection = async (): Promise<void> => {
@@ -49,7 +49,7 @@ class SSEReconnectionManager {
 					return;
 				}
 
-				console.log("[SSE] Attempting to connect...");
+				console.debug("[SSE] Attempting to connect...");
 				const response = await fetch(this.url, {
 					headers: {
 						Authorization: `Bearer ${token}`,
@@ -72,7 +72,7 @@ class SSEReconnectionManager {
 					throw new Error("Response body is null");
 				}
 
-				console.log("[SSE] Connection established successfully");
+				console.debug("[SSE] Connection established successfully");
 				// Reset reconnection counter on successful connection
 				this.reconnectAttempts = 0;
 				this.onConnectionStateChange?.("connected");
@@ -99,7 +99,7 @@ class SSEReconnectionManager {
 									continue;
 								}
 								const progress: ScanProgress = JSON.parse(data);
-								console.log("[SSE] Scan progress event received:", progress);
+								console.debug("[SSE] Scan progress event received:", progress);
 								this.onMessage(progress);
 							} catch (error) {
 								console.error("[SSE] Failed to parse SSE data:", error, line);
