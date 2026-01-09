@@ -495,3 +495,366 @@ pub async fn trigger_book_analysis(
 
     Ok(Json(CreateTaskResponse { task_id }))
 }
+
+/// Trigger forced analysis of all books in a library
+///
+/// # Permission Required
+/// - `libraries:write`
+///
+/// # Behavior
+/// Enqueues AnalyzeBook tasks (with force=true) for ALL books in the library.
+/// This forces re-analysis even for books that have been analyzed before.
+/// Returns immediately with a task_id to track progress.
+#[utoipa::path(
+    post,
+    path = "/api/v1/libraries/{id}/analyze",
+    params(
+        ("id" = Uuid, Path, description = "Library ID")
+    ),
+    responses(
+        (status = 200, description = "Analysis tasks enqueued successfully", body = CreateTaskResponse),
+        (status = 403, description = "Permission denied"),
+        (status = 404, description = "Library not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Scans"
+)]
+pub async fn trigger_library_analysis(
+    Path(library_id): Path<Uuid>,
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+) -> Result<Json<CreateTaskResponse>, ApiError> {
+    // Check permission
+    auth.require_permission(&Permission::LibrariesWrite)?;
+
+    // Verify library exists
+    LibraryRepository::get_by_id(&state.db, library_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check library: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
+
+    // Get all books in the library (including already analyzed)
+    use crate::db::repositories::SeriesRepository;
+    let series_list = SeriesRepository::list_by_library(&state.db, library_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get series: {}", e)))?;
+
+    let mut all_books = Vec::new();
+    for series in series_list {
+        let books = BookRepository::list_by_series(&state.db, series.id, false)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to get books: {}", e)))?;
+        all_books.extend(books);
+    }
+
+    if all_books.is_empty() {
+        return Err(ApiError::BadRequest(
+            "No books found in library".to_string(),
+        ));
+    }
+
+    // Enqueue AnalyzeBook tasks with force=true
+    let mut enqueued = 0;
+    for book in &all_books {
+        match TaskRepository::enqueue(
+            &state.db,
+            TaskType::AnalyzeBook {
+                book_id: book.id,
+                force: true, // Force reanalysis of all books
+            },
+            0,
+            None,
+        )
+        .await
+        {
+            Ok(_) => enqueued += 1,
+            Err(e) => {
+                tracing::error!("Failed to enqueue task for book {}: {}", book.id, e);
+            }
+        }
+    }
+
+    if enqueued == 0 {
+        return Err(ApiError::Internal(
+            "Failed to enqueue any analysis tasks".to_string(),
+        ));
+    }
+
+    // Return the first task ID (for backwards compatibility with single-task response)
+    let task_id = TaskRepository::enqueue(
+        &state.db,
+        TaskType::AnalyzeBook {
+            book_id: all_books[0].id,
+            force: true,
+        },
+        0,
+        None,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to get task ID: {}", e)))?;
+
+    Ok(Json(CreateTaskResponse { task_id }))
+}
+
+/// Trigger analysis of unanalyzed books in a library
+///
+/// # Permission Required
+/// - `libraries:write`
+///
+/// # Behavior
+/// Enqueues AnalyzeBook tasks (with force=false) for books that have not been analyzed yet.
+/// This is useful for recovering from failures or analyzing newly discovered books.
+/// Returns immediately with a task_id to track progress.
+#[utoipa::path(
+    post,
+    path = "/api/v1/libraries/{id}/analyze-unanalyzed",
+    params(
+        ("id" = Uuid, Path, description = "Library ID")
+    ),
+    responses(
+        (status = 200, description = "Analysis tasks enqueued successfully", body = CreateTaskResponse),
+        (status = 403, description = "Permission denied"),
+        (status = 404, description = "Library not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Scans"
+)]
+pub async fn trigger_library_unanalyzed_analysis(
+    Path(library_id): Path<Uuid>,
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+) -> Result<Json<CreateTaskResponse>, ApiError> {
+    // Check permission
+    auth.require_permission(&Permission::LibrariesWrite)?;
+
+    // Verify library exists
+    LibraryRepository::get_by_id(&state.db, library_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check library: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
+
+    // Get unanalyzed books
+    let unanalyzed_books = BookRepository::get_unanalyzed_in_library(&state.db, library_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get unanalyzed books: {}", e)))?;
+
+    if unanalyzed_books.is_empty() {
+        return Err(ApiError::BadRequest(
+            "No unanalyzed books found in library".to_string(),
+        ));
+    }
+
+    // Store first book ID for response
+    let first_book_id = unanalyzed_books[0].id;
+
+    // Enqueue AnalyzeBook tasks with force=false
+    let mut enqueued = 0;
+    for book in &unanalyzed_books {
+        match TaskRepository::enqueue(
+            &state.db,
+            TaskType::AnalyzeBook {
+                book_id: book.id,
+                force: false, // Only analyze if not already analyzed
+            },
+            0,
+            None,
+        )
+        .await
+        {
+            Ok(_) => enqueued += 1,
+            Err(e) => {
+                tracing::error!("Failed to enqueue task for book {}: {}", book.id, e);
+            }
+        }
+    }
+
+    if enqueued == 0 {
+        return Err(ApiError::Internal(
+            "Failed to enqueue any analysis tasks".to_string(),
+        ));
+    }
+
+    // Return the first task ID (for backwards compatibility with single-task response)
+    // Note: In a real implementation, you might want to return all task IDs or a batch ID
+    let task_id = TaskRepository::enqueue(
+        &state.db,
+        TaskType::AnalyzeBook {
+            book_id: first_book_id,
+            force: false,
+        },
+        0,
+        None,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to get task ID: {}", e)))?;
+
+    Ok(Json(CreateTaskResponse { task_id }))
+}
+
+/// Trigger analysis of unanalyzed books in a series
+///
+/// # Permission Required
+/// - `series:write`
+///
+/// # Behavior
+/// Enqueues AnalyzeBook tasks (with force=false) for books in the series that have not been analyzed yet.
+/// This is useful for recovering from failures or analyzing newly discovered books.
+/// Returns immediately with a task_id to track progress.
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/{id}/analyze-unanalyzed",
+    params(
+        ("id" = Uuid, Path, description = "Series ID")
+    ),
+    responses(
+        (status = 200, description = "Analysis tasks enqueued successfully", body = CreateTaskResponse),
+        (status = 403, description = "Permission denied"),
+        (status = 404, description = "Series not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Scans"
+)]
+pub async fn trigger_series_unanalyzed_analysis(
+    Path(series_id): Path<Uuid>,
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+) -> Result<Json<CreateTaskResponse>, ApiError> {
+    // Check permission
+    auth.require_permission(&Permission::SeriesWrite)?;
+
+    // Verify series exists
+    SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Get unanalyzed books
+    let unanalyzed_books = BookRepository::get_unanalyzed_in_series(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get unanalyzed books: {}", e)))?;
+
+    if unanalyzed_books.is_empty() {
+        return Err(ApiError::BadRequest(
+            "No unanalyzed books found in series".to_string(),
+        ));
+    }
+
+    // Store first book ID for response
+    let first_book_id = unanalyzed_books[0].id;
+
+    // Enqueue AnalyzeBook tasks with force=false
+    let mut enqueued = 0;
+    for book in &unanalyzed_books {
+        match TaskRepository::enqueue(
+            &state.db,
+            TaskType::AnalyzeBook {
+                book_id: book.id,
+                force: false, // Only analyze if not already analyzed
+            },
+            0,
+            None,
+        )
+        .await
+        {
+            Ok(_) => enqueued += 1,
+            Err(e) => {
+                tracing::error!("Failed to enqueue task for book {}: {}", book.id, e);
+            }
+        }
+    }
+
+    if enqueued == 0 {
+        return Err(ApiError::Internal(
+            "Failed to enqueue any analysis tasks".to_string(),
+        ));
+    }
+
+    // Return the first task ID (for backwards compatibility with single-task response)
+    let task_id = TaskRepository::enqueue(
+        &state.db,
+        TaskType::AnalyzeBook {
+            book_id: first_book_id,
+            force: false,
+        },
+        0,
+        None,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to get task ID: {}", e)))?;
+
+    Ok(Json(CreateTaskResponse { task_id }))
+}
+
+/// Trigger analysis of a book if not already analyzed
+///
+/// # Permission Required
+/// - `books:write`
+///
+/// # Behavior
+/// Enqueues an AnalyzeBook task with force=false if the book has not been analyzed yet.
+/// Returns 400 if the book is already analyzed.
+/// Returns immediately with a task_id to track progress.
+#[utoipa::path(
+    post,
+    path = "/api/v1/books/{id}/analyze-unanalyzed",
+    params(
+        ("id" = Uuid, Path, description = "Book ID")
+    ),
+    responses(
+        (status = 200, description = "Analysis task enqueued successfully", body = CreateTaskResponse),
+        (status = 400, description = "Book is already analyzed"),
+        (status = 403, description = "Permission denied"),
+        (status = 404, description = "Book not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Scans"
+)]
+pub async fn trigger_book_unanalyzed_analysis(
+    Path(book_id): Path<Uuid>,
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+) -> Result<Json<CreateTaskResponse>, ApiError> {
+    // Check permission
+    auth.require_permission(&Permission::BooksWrite)?;
+
+    // Verify book exists
+    BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Check if book is already analyzed
+    let is_analyzed = BookRepository::is_analyzed(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check analysis status: {}", e)))?;
+
+    if is_analyzed {
+        return Err(ApiError::BadRequest(
+            "Book is already analyzed. Use /analyze endpoint to force reanalysis.".to_string(),
+        ));
+    }
+
+    // Enqueue AnalyzeBook task with force=false
+    let task_type = TaskType::AnalyzeBook {
+        book_id,
+        force: false, // Only analyze if not already analyzed
+    };
+
+    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
+
+    Ok(Json(CreateTaskResponse { task_id }))
+}

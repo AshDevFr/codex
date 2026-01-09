@@ -561,3 +561,440 @@ async fn test_auto_analysis_processes_all_books() {
         "Auto-analysis should analyze all books"
     );
 }
+
+// ============================================================================
+// Unanalyzed Book Analysis Tests (New Endpoints)
+// ============================================================================
+
+#[tokio::test]
+async fn test_trigger_library_unanalyzed_analysis() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Scan to detect files without analysis
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
+    worker.process_once().await.ok();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Verify books exist but are not analyzed
+    let unanalyzed_before = BookRepository::get_unanalyzed_in_library(&db, library.id)
+        .await
+        .unwrap();
+    assert!(
+        !unanalyzed_before.is_empty(),
+        "Should have unanalyzed books"
+    );
+
+    let app = create_test_router_with_app_state(state.clone());
+
+    // Trigger analysis of unanalyzed books
+    let uri = format!("/api/v1/libraries/{}/analyze-unanalyzed", library.id);
+    let request = post_request_with_auth(&uri, &token);
+
+    let (status, response): (StatusCode, Option<CreateTaskResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(response.is_some());
+
+    // Process analysis tasks
+    loop {
+        let stats = TaskRepository::get_stats(&db).await.unwrap();
+        if stats.pending == 0 {
+            break;
+        }
+        worker.process_once().await.ok();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    // Verify all books are now analyzed
+    let unanalyzed_after = BookRepository::get_unanalyzed_in_library(&db, library.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        unanalyzed_after.len(),
+        0,
+        "All books should be analyzed after processing tasks"
+    );
+}
+
+#[tokio::test]
+async fn test_trigger_series_unanalyzed_analysis() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Scan to detect files
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
+    worker.process_once().await.ok();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Get series
+    let series_list = SeriesRepository::list_by_library(&db, library.id)
+        .await
+        .unwrap();
+    assert!(!series_list.is_empty(), "Should have series");
+    let series = &series_list[0];
+
+    // Verify unanalyzed books in series
+    let unanalyzed_before = BookRepository::get_unanalyzed_in_series(&db, series.id)
+        .await
+        .unwrap();
+    assert!(
+        !unanalyzed_before.is_empty(),
+        "Should have unanalyzed books in series"
+    );
+
+    let app = create_test_router_with_app_state(state.clone());
+
+    // Trigger analysis of unanalyzed books in series
+    let uri = format!("/api/v1/series/{}/analyze-unanalyzed", series.id);
+    let request = post_request_with_auth(&uri, &token);
+
+    let (status, response): (StatusCode, Option<CreateTaskResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(response.is_some());
+
+    // Process tasks
+    loop {
+        let stats = TaskRepository::get_stats(&db).await.unwrap();
+        if stats.pending == 0 {
+            break;
+        }
+        worker.process_once().await.ok();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    // Verify all books in series are analyzed
+    let unanalyzed_after = BookRepository::get_unanalyzed_in_series(&db, series.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        unanalyzed_after.len(),
+        0,
+        "All books in series should be analyzed"
+    );
+}
+
+#[tokio::test]
+async fn test_trigger_book_unanalyzed_analysis() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Scan to detect files
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
+    worker.process_once().await.ok();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Get first book
+    let series_list = SeriesRepository::list_by_library(&db, library.id)
+        .await
+        .unwrap();
+    assert!(!series_list.is_empty());
+    let series = &series_list[0];
+
+    let books = BookRepository::list_by_series(&db, series.id, false)
+        .await
+        .unwrap();
+    assert!(!books.is_empty(), "Should have books");
+    let book = &books[0];
+
+    // Verify book is not analyzed
+    let is_analyzed_before = BookRepository::is_analyzed(&db, book.id).await.unwrap();
+    assert!(!is_analyzed_before, "Book should not be analyzed yet");
+
+    let app = create_test_router_with_app_state(state.clone());
+
+    // Trigger analysis of single unanalyzed book
+    let uri = format!("/api/v1/books/{}/analyze-unanalyzed", book.id);
+    let request = post_request_with_auth(&uri, &token);
+
+    let (status, response): (StatusCode, Option<CreateTaskResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(response.is_some());
+
+    // Process task
+    loop {
+        let stats = TaskRepository::get_stats(&db).await.unwrap();
+        if stats.pending == 0 {
+            break;
+        }
+        worker.process_once().await.ok();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    // Verify book is now analyzed
+    let is_analyzed_after = BookRepository::is_analyzed(&db, book.id).await.unwrap();
+    assert!(is_analyzed_after, "Book should be analyzed after task");
+
+    // Test that calling again returns error (book already analyzed)
+    let uri = format!("/api/v1/books/{}/analyze-unanalyzed", book.id);
+    let request = post_request_with_auth(&uri, &token);
+
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "Should return 400 when book is already analyzed"
+    );
+}
+
+#[tokio::test]
+async fn test_trigger_library_analysis_force_all() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Scan and analyze all books first
+    trigger_scan_task(&state.db, library.id, ScanMode::Deep)
+        .await
+        .unwrap();
+
+    let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
+
+    loop {
+        let stats = TaskRepository::get_stats(&db).await.unwrap();
+        if stats.pending == 0 {
+            break;
+        }
+        worker.process_once().await.ok();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    // Verify all books are analyzed
+    let unanalyzed = BookRepository::get_unanalyzed_in_library(&db, library.id)
+        .await
+        .unwrap();
+    assert_eq!(unanalyzed.len(), 0, "All books should be analyzed");
+
+    let app = create_test_router_with_app_state(state.clone());
+
+    // Trigger force analysis of all books (even already analyzed ones)
+    let uri = format!("/api/v1/libraries/{}/analyze", library.id);
+    let request = post_request_with_auth(&uri, &token);
+
+    let (status, response): (StatusCode, Option<CreateTaskResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(response.is_some(), "Should enqueue tasks for all books");
+
+    // Verify tasks were created (don't need to process them, just verify they exist)
+    let stats = TaskRepository::get_stats(&db).await.unwrap();
+    assert!(
+        stats.pending > 0,
+        "Should have pending tasks for force analysis"
+    );
+}
+
+#[tokio::test]
+async fn test_library_unanalyzed_no_books_error() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "Empty Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let app = create_test_router_with_app_state(state);
+
+    // Try to trigger analysis on empty library
+    let uri = format!("/api/v1/libraries/{}/analyze-unanalyzed", library.id);
+    let request = post_request_with_auth(&uri, &token);
+
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "Should return 400 for library with no unanalyzed books"
+    );
+}
+
+#[tokio::test]
+async fn test_series_unanalyzed_no_books_error() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Empty Series")
+        .await
+        .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let app = create_test_router_with_app_state(state);
+
+    // Try to trigger analysis on empty series
+    let uri = format!("/api/v1/series/{}/analyze-unanalyzed", series.id);
+    let request = post_request_with_auth(&uri, &token);
+
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "Should return 400 for series with no unanalyzed books"
+    );
+}
+
+#[tokio::test]
+async fn test_analyze_endpoints_require_permissions() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let readonly_token = create_readonly_and_token(&db, &state).await;
+
+    // Scan to create books
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
+    worker.process_once().await.ok();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let series_list = SeriesRepository::list_by_library(&db, library.id)
+        .await
+        .unwrap();
+    let series = &series_list[0];
+
+    let books = BookRepository::list_by_series(&db, series.id, false)
+        .await
+        .unwrap();
+    let book = &books[0];
+
+    let app = create_test_router_with_app_state(state);
+
+    // Test library unanalyzed endpoint with readonly user
+    let uri = format!("/api/v1/libraries/{}/analyze-unanalyzed", library.id);
+    let request = post_request_with_auth(&uri, &readonly_token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "Readonly user should not be able to trigger library analysis"
+    );
+
+    // Test series unanalyzed endpoint with readonly user
+    let uri = format!("/api/v1/series/{}/analyze-unanalyzed", series.id);
+    let request = post_request_with_auth(&uri, &readonly_token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "Readonly user should not be able to trigger series analysis"
+    );
+
+    // Test book unanalyzed endpoint with readonly user
+    let uri = format!("/api/v1/books/{}/analyze-unanalyzed", book.id);
+    let request = post_request_with_auth(&uri, &readonly_token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "Readonly user should not be able to trigger book analysis"
+    );
+
+    // Test library force analyze endpoint with readonly user
+    let uri = format!("/api/v1/libraries/{}/analyze", library.id);
+    let request = post_request_with_auth(&uri, &readonly_token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "Readonly user should not be able to trigger library force analysis"
+    );
+}

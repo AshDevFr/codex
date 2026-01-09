@@ -36,7 +36,7 @@ pub struct CreateTaskRequest {
     pub scheduled_for: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CreateTaskResponse {
     pub task_id: Uuid,
 }

@@ -327,6 +327,31 @@ impl BookRepository {
             .context("Failed to get unanalyzed books")
     }
 
+    /// Get all unanalyzed books in a series
+    pub async fn get_unanalyzed_in_series(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+    ) -> Result<Vec<books::Model>> {
+        Books::find()
+            .filter(books::Column::SeriesId.eq(series_id))
+            .filter(books::Column::Analyzed.eq(false))
+            .filter(books::Column::Deleted.eq(false))
+            .all(db)
+            .await
+            .context("Failed to get unanalyzed books in series")
+    }
+
+    /// Check if a book is analyzed
+    pub async fn is_analyzed(db: &DatabaseConnection, book_id: Uuid) -> Result<bool> {
+        let book = Books::find_by_id(book_id)
+            .one(db)
+            .await
+            .context("Failed to find book")?
+            .ok_or_else(|| anyhow::anyhow!("Book not found"))?;
+
+        Ok(book.analyzed)
+    }
+
     /// Mark a book as analyzed
     pub async fn mark_analyzed(
         db: &DatabaseConnection,

@@ -88,6 +88,14 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/libraries/:id/scan", post(handlers::trigger_scan))
         .route("/libraries/:id/scan-status", get(handlers::get_scan_status))
         .route("/libraries/:id/scan/cancel", post(handlers::cancel_scan))
+        .route(
+            "/libraries/:id/analyze",
+            post(handlers::trigger_library_analysis),
+        )
+        .route(
+            "/libraries/:id/analyze-unanalyzed",
+            post(handlers::trigger_library_unanalyzed_analysis),
+        )
         .route("/scans/active", get(handlers::list_active_scans))
         .route("/scans/stream", get(handlers::scan_progress_stream))
         // Real-time event routes (protected)
@@ -112,11 +120,19 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/series/:id/analyze",
             post(handlers::trigger_series_analysis),
         )
+        .route(
+            "/series/:id/analyze-unanalyzed",
+            post(handlers::trigger_series_unanalyzed_analysis),
+        )
         // Book routes (protected)
         .route("/books", get(handlers::list_books))
         .route("/books/:id", get(handlers::get_book))
         .route("/books/:id/thumbnail", get(handlers::get_book_thumbnail))
         .route("/books/:id/analyze", post(handlers::trigger_book_analysis))
+        .route(
+            "/books/:id/analyze-unanalyzed",
+            post(handlers::trigger_book_unanalyzed_analysis),
+        )
         // Page routes (protected)
         .route(
             "/books/:book_id/pages/:page_number",
