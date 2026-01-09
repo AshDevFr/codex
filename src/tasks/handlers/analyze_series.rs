@@ -4,9 +4,9 @@ use serde_json::json;
 use tracing::{error, info};
 
 use crate::db::entities::tasks;
-use crate::scanner::{analyze_series_books, AnalyzerConfig};
+use crate::db::repositories::{BookRepository, TaskRepository};
 use crate::tasks::handlers::TaskHandler;
-use crate::tasks::types::TaskResult;
+use crate::tasks::types::{TaskResult, TaskType};
 
 pub struct AnalyzeSeriesHandler;
 
@@ -27,51 +27,61 @@ impl TaskHandler for AnalyzeSeriesHandler {
                 .series_id
                 .ok_or_else(|| anyhow::anyhow!("Missing series_id"))?;
 
-            // Extract concurrency from params (default: 4)
-            let concurrency = task
-                .params
-                .as_ref()
-                .and_then(|p| p.get("concurrency"))
-                .and_then(|v| v.as_u64())
-                .unwrap_or(4) as usize;
-
-            // Extract force parameter from task params (default: false)
-            let force = task
-                .params
-                .as_ref()
-                .and_then(|p| p.get("force"))
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-
             info!(
-                "Task {}: Analyzing series {} with concurrency {} (force={})",
-                task.id, series_id, concurrency, force
+                "Task {}: Enqueuing forced analysis for all books in series {}",
+                task.id, series_id
             );
 
-            let config = AnalyzerConfig {
-                max_concurrent: concurrency,
-            };
+            // Get all books in series from database
+            // Note: This queries DB, not filesystem (unlike deep scan)
+            let books = BookRepository::list_by_series(db, series_id, false).await?;
 
-            match analyze_series_books(db, series_id, config, None, force).await {
-                Ok(result) => {
-                    info!(
-                        "Task {}: Series analysis completed - {} books analyzed",
-                        task.id, result.books_analyzed
-                    );
+            let total_books = books.len();
+            if total_books == 0 {
+                return Ok(TaskResult::success_with_data(
+                    "No books found in series",
+                    json!({ "tasks_enqueued": 0 }),
+                ));
+            }
 
-                    Ok(TaskResult::success_with_data(
-                        format!("Analyzed {} books in series", result.books_analyzed),
-                        json!({
-                            "books_analyzed": result.books_analyzed,
-                            "errors": result.errors.len(),
-                        }),
-                    ))
-                }
-                Err(e) => {
-                    error!("Task {}: Series analysis failed: {}", task.id, e);
-                    Err(e)
+            // Enqueue individual AnalyzeBook tasks with force=true
+            let mut enqueued = 0;
+            let mut errors = Vec::new();
+
+            for book in books {
+                match TaskRepository::enqueue(
+                    db,
+                    TaskType::AnalyzeBook {
+                        book_id: book.id,
+                        force: true, // ALWAYS force for series analysis
+                    },
+                    0,    // priority
+                    None, // schedule now
+                )
+                .await
+                {
+                    Ok(_) => enqueued += 1,
+                    Err(e) => {
+                        let err_msg = format!("Failed to enqueue task for book {}: {}", book.id, e);
+                        error!("{}", err_msg);
+                        errors.push(err_msg);
+                    }
                 }
             }
+
+            info!(
+                "Task {}: Enqueued {} of {} forced book analysis tasks for series",
+                task.id, enqueued, total_books
+            );
+
+            Ok(TaskResult::success_with_data(
+                format!("Enqueued {} book analysis tasks (force=true)", enqueued),
+                json!({
+                    "tasks_enqueued": enqueued,
+                    "total_books": total_books,
+                    "errors": errors.len(),
+                }),
+            ))
         })
     }
 }

@@ -151,19 +151,21 @@ async fn test_task_type_serialization_with_force() -> Result<()> {
     let json = serde_json::to_string(&task)?;
     assert!(json.contains("\"force\":false"));
 
-    // Test AnalyzeSeries with force=true
+    // Test AnalyzeSeries (always forces)
     let task = TaskType::AnalyzeSeries {
         series_id: Uuid::new_v4(),
-        concurrency: 4,
-        force: true,
     };
 
     let json = serde_json::to_string(&task)?;
-    assert!(json.contains("\"force\":true"));
+    // AnalyzeSeries no longer has parameters - verify basic serialization
+    assert!(json.contains("\"type\":\"analyze_series\""));
+    assert!(json.contains("\"series_id\""));
 
     let deserialized: TaskType = serde_json::from_str(&json)?;
     match deserialized {
-        TaskType::AnalyzeSeries { force, .. } => assert!(force),
+        TaskType::AnalyzeSeries { .. } => {
+            // Success - AnalyzeSeries always forces, no need to check
+        }
         _ => panic!("Wrong task type"),
     }
 

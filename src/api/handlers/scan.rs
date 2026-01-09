@@ -14,14 +14,13 @@ use crate::api::{
     dto::{ScanStatusDto, TriggerScanQuery},
     error::ApiError,
     extractors::AuthContext,
+    handlers::task_queue::CreateTaskResponse,
     permissions::Permission,
 };
 use crate::db::repositories::{
     BookRepository, LibraryRepository, SeriesRepository, TaskRepository,
 };
-use crate::scanner::{
-    analyze_book, analyze_library_books, analyze_series_books, AnalyzerConfig, ScanMode,
-};
+use crate::scanner::ScanMode;
 use crate::tasks::types::TaskType;
 
 use super::AppState;
@@ -395,84 +394,23 @@ pub async fn scan_progress_stream(
     ))
 }
 
-/// Trigger analysis of unanalyzed books in a library
-///
-/// # Permission Required
-/// - `libraries:write`
-///
-/// This endpoint triggers the analysis phase for all unanalyzed books in a library.
-/// Books are analyzed in parallel based on the configured concurrency setting.
-#[utoipa::path(
-    post,
-    path = "/api/v1/libraries/{id}/analyze",
-    params(
-        ("id" = Uuid, Path, description = "Library ID"),
-        ("concurrency" = Option<usize>, Query, description = "Number of concurrent analysis tasks (default: 4)")
-    ),
-    responses(
-        (status = 200, description = "Analysis completed successfully"),
-        (status = 403, description = "Permission denied"),
-        (status = 404, description = "Library not found"),
-    ),
-    security(
-        ("bearer_auth" = []),
-        ("api_key" = [])
-    ),
-    tag = "Scans"
-)]
-pub async fn trigger_analysis(
-    Path(library_id): Path<Uuid>,
-    Query(params): Query<std::collections::HashMap<String, String>>,
-    State(state): State<Arc<AppState>>,
-    auth: AuthContext,
-) -> Result<Json<crate::api::dto::scan::AnalysisResult>, ApiError> {
-    // Check permission
-    auth.require_permission(&Permission::LibrariesWrite)?;
-
-    // Check if library exists
-    LibraryRepository::get_by_id(&state.db, library_id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to check library: {}", e)))?
-        .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
-
-    // Get concurrency parameter or use default
-    let concurrency = params
-        .get("concurrency")
-        .and_then(|v| v.parse::<usize>().ok())
-        .unwrap_or(4);
-
-    // Validate concurrency range
-    if concurrency < 1 || concurrency > 16 {
-        return Err(ApiError::BadRequest(
-            "Concurrency must be between 1 and 16".to_string(),
-        ));
-    }
-
-    let config = AnalyzerConfig {
-        max_concurrent: concurrency,
-    };
-
-    // Run analysis (force=true since this is a manual trigger)
-    let result = analyze_library_books(&state.db, library_id, config, None, true)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Analysis failed: {}", e)))?;
-
-    Ok(Json(result.into()))
-}
-
-/// Trigger analysis of unanalyzed books in a series
+/// Trigger analysis of all books in a series
 ///
 /// # Permission Required
 /// - `series:write`
+///
+/// # Behavior
+/// Enqueues an AnalyzeSeries task which will create individual AnalyzeBook tasks
+/// for each book in the series. All books are analyzed with force=true.
+/// Returns immediately with a task_id to track progress.
 #[utoipa::path(
     post,
     path = "/api/v1/series/{id}/analyze",
     params(
-        ("id" = Uuid, Path, description = "Series ID"),
-        ("concurrency" = Option<usize>, Query, description = "Number of concurrent analysis tasks (default: 4)")
+        ("id" = Uuid, Path, description = "Series ID")
     ),
     responses(
-        (status = 200, description = "Analysis completed successfully"),
+        (status = 200, description = "Analysis task enqueued successfully", body = CreateTaskResponse),
         (status = 403, description = "Permission denied"),
         (status = 404, description = "Series not found"),
     ),
@@ -484,48 +422,36 @@ pub async fn trigger_analysis(
 )]
 pub async fn trigger_series_analysis(
     Path(series_id): Path<Uuid>,
-    Query(params): Query<std::collections::HashMap<String, String>>,
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
-) -> Result<Json<crate::api::dto::scan::AnalysisResult>, ApiError> {
+) -> Result<Json<CreateTaskResponse>, ApiError> {
     // Check permission
     auth.require_permission(&Permission::SeriesWrite)?;
 
-    // Check if series exists
+    // Verify series exists
     SeriesRepository::get_by_id(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to check series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
 
-    // Get concurrency parameter or use default
-    let concurrency = params
-        .get("concurrency")
-        .and_then(|v| v.parse::<usize>().ok())
-        .unwrap_or(4);
+    // Enqueue AnalyzeSeries task (always forces re-analysis)
+    let task_type = TaskType::AnalyzeSeries { series_id };
 
-    // Validate concurrency range
-    if concurrency < 1 || concurrency > 16 {
-        return Err(ApiError::BadRequest(
-            "Concurrency must be between 1 and 16".to_string(),
-        ));
-    }
-
-    let config = AnalyzerConfig {
-        max_concurrent: concurrency,
-    };
-
-    // Run analysis (force=true since this is a manual trigger)
-    let result = analyze_series_books(&state.db, series_id, config, None, true)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
         .await
-        .map_err(|e| ApiError::Internal(format!("Analysis failed: {}", e)))?;
+        .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
 
-    Ok(Json(result.into()))
+    Ok(Json(CreateTaskResponse { task_id }))
 }
 
 /// Trigger analysis of a single book (force reanalysis)
 ///
 /// # Permission Required
 /// - `books:write`
+///
+/// # Behavior
+/// Enqueues an AnalyzeBook task with force=true.
+/// Returns immediately with a task_id to track progress.
 #[utoipa::path(
     post,
     path = "/api/v1/books/{id}/analyze",
@@ -533,7 +459,7 @@ pub async fn trigger_series_analysis(
         ("id" = Uuid, Path, description = "Book ID")
     ),
     responses(
-        (status = 200, description = "Analysis completed successfully"),
+        (status = 200, description = "Analysis task enqueued successfully", body = CreateTaskResponse),
         (status = 403, description = "Permission denied"),
         (status = 404, description = "Book not found"),
     ),
@@ -547,20 +473,25 @@ pub async fn trigger_book_analysis(
     Path(book_id): Path<Uuid>,
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
-) -> Result<Json<crate::api::dto::scan::AnalysisResult>, ApiError> {
+) -> Result<Json<CreateTaskResponse>, ApiError> {
     // Check permission
     auth.require_permission(&Permission::BooksWrite)?;
 
-    // Check if book exists
+    // Verify book exists
     BookRepository::get_by_id(&state.db, book_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to check book: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
 
-    // Run analysis (force=true since this is a manual trigger)
-    let result = analyze_book(&state.db, book_id, true)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Analysis failed: {}", e)))?;
+    // Enqueue AnalyzeBook task with force=true
+    let task_type = TaskType::AnalyzeBook {
+        book_id,
+        force: true, // Manual trigger always forces
+    };
 
-    Ok(Json(result.into()))
+    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
+
+    Ok(Json(CreateTaskResponse { task_id }))
 }

@@ -88,7 +88,6 @@ use utoipa::OpenApi;
         handlers::trigger_scan,
         handlers::get_scan_status,
         handlers::cancel_scan,
-        handlers::trigger_analysis,
         handlers::list_active_scans,
         handlers::scan_progress_stream,
 

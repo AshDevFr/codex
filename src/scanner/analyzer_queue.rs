@@ -1,9 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
-use futures::stream::{self, StreamExt};
 use sea_orm::{prelude::Decimal, DatabaseConnection};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
@@ -17,94 +15,11 @@ use crate::scanner::analyze_file;
 
 use super::types::ScanProgress;
 
-/// Configuration for the analysis queue
-#[derive(Debug, Clone)]
-pub struct AnalyzerConfig {
-    /// Maximum number of files to analyze concurrently
-    pub max_concurrent: usize,
-}
-
-impl Default for AnalyzerConfig {
-    fn default() -> Self {
-        Self { max_concurrent: 4 }
-    }
-}
-
 /// Result of analyzing a batch of books
 #[derive(Debug, Default)]
 pub struct AnalysisResult {
     pub books_analyzed: usize,
     pub errors: Vec<String>,
-}
-
-/// Analyze unanalyzed books in a library with parallel processing
-pub async fn analyze_library_books(
-    db: &DatabaseConnection,
-    library_id: Uuid,
-    config: AnalyzerConfig,
-    progress_tx: Option<mpsc::Sender<ScanProgress>>,
-    force: bool,
-) -> Result<AnalysisResult> {
-    let analysis_start = Instant::now();
-    info!(
-        "Starting parallel analysis for library {} with concurrency={}, force={}",
-        library_id, config.max_concurrent, force
-    );
-
-    // Get all unanalyzed books for this library
-    let unanalyzed_books = BookRepository::get_unanalyzed_in_library(db, library_id).await?;
-    analyze_books(
-        db,
-        unanalyzed_books,
-        config,
-        progress_tx,
-        analysis_start,
-        format!("library {}", library_id),
-        force,
-    )
-    .await
-}
-
-/// Analyze unanalyzed books in a series with parallel processing
-///
-/// # Arguments
-/// * `force` - If true, analyze ALL books and bypass hash checks; if false, only analyze unanalyzed books
-pub async fn analyze_series_books(
-    db: &DatabaseConnection,
-    series_id: Uuid,
-    config: AnalyzerConfig,
-    progress_tx: Option<mpsc::Sender<ScanProgress>>,
-    force: bool,
-) -> Result<AnalysisResult> {
-    let analysis_start = Instant::now();
-    info!(
-        "Starting parallel analysis for series {} with concurrency={}, force={}",
-        series_id, config.max_concurrent, force
-    );
-
-    // Get books for this series
-    let books = if force {
-        // Force: analyze ALL books in the series
-        BookRepository::list_by_series(db, series_id, false).await?
-    } else {
-        // Normal: only analyze unanalyzed books
-        BookRepository::list_by_series(db, series_id, false)
-            .await?
-            .into_iter()
-            .filter(|book| !book.analyzed)
-            .collect::<Vec<_>>()
-    };
-
-    analyze_books(
-        db,
-        books,
-        config,
-        progress_tx,
-        analysis_start,
-        format!("series {}", series_id),
-        force,
-    )
-    .await
 }
 
 /// Analyze a single book
@@ -141,80 +56,6 @@ pub async fn analyze_book(
             result.errors.push(error_msg);
         }
     }
-
-    Ok(result)
-}
-
-/// Common function to analyze a list of books with parallel processing
-async fn analyze_books(
-    db: &DatabaseConnection,
-    books: Vec<books::Model>,
-    config: AnalyzerConfig,
-    progress_tx: Option<mpsc::Sender<ScanProgress>>,
-    analysis_start: Instant,
-    context: String,
-    force: bool,
-) -> Result<AnalysisResult> {
-    let total_books = books.len();
-
-    if total_books == 0 {
-        info!("No unanalyzed books found for {}", context);
-        return Ok(AnalysisResult::default());
-    }
-
-    info!(
-        "Found {} unanalyzed books to process for {}",
-        total_books, context
-    );
-
-    let mut result = AnalysisResult::default();
-    let db = Arc::new(db.clone());
-
-    // Process books in parallel with bounded concurrency
-    let results: Vec<Result<(), String>> = stream::iter(books)
-        .map(|book| {
-            let db = Arc::clone(&db);
-            let progress_tx = progress_tx.clone();
-            let book_path = book.file_path.clone();
-
-            async move {
-                match analyze_single_book(&db, book, progress_tx, force).await {
-                    Ok(_) => Ok(()),
-                    Err(e) => {
-                        let error_msg = format!("Failed to analyze book {}: {}", book_path, e);
-                        error!("{}", error_msg);
-                        Err(error_msg)
-                    }
-                }
-            }
-        })
-        .buffer_unordered(config.max_concurrent)
-        .collect()
-        .await;
-
-    // Collect errors
-    for res in results {
-        match res {
-            Ok(_) => result.books_analyzed += 1,
-            Err(e) => result.errors.push(e),
-        }
-    }
-
-    let duration = analysis_start.elapsed();
-    let books_per_sec = if duration.as_secs_f64() > 0.0 {
-        result.books_analyzed as f64 / duration.as_secs_f64()
-    } else {
-        0.0
-    };
-
-    info!(
-        "Analysis completed for {} in {:?} - analyzed {} books ({:.2} books/sec), {} errors",
-        context,
-        duration,
-        result.books_analyzed,
-        books_per_sec,
-        result.errors.len()
-    );
 
     Ok(result)
 }
@@ -538,12 +379,6 @@ fn count_non_null_fields(metadata: &book_metadata_records::Model) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_analyzer_config_default() {
-        let config = AnalyzerConfig::default();
-        assert_eq!(config.max_concurrent, 4);
-    }
 
     #[test]
     fn test_count_non_null_fields() {

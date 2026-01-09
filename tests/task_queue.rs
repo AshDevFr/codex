@@ -754,18 +754,9 @@ async fn test_recover_multiple_stale_tasks() {
     .await
     .expect("Failed to enqueue task 2");
 
-    let task3_id = TaskRepository::enqueue(
-        &db,
-        TaskType::AnalyzeSeries {
-            series_id,
-            concurrency: 4,
-            force: false,
-        },
-        0,
-        None,
-    )
-    .await
-    .expect("Failed to enqueue task 3");
+    let task3_id = TaskRepository::enqueue(&db, TaskType::AnalyzeSeries { series_id }, 0, None)
+        .await
+        .expect("Failed to enqueue task 3");
 
     // Claim all tasks
     TaskRepository::claim_next(&db, "worker-1", 300, false)

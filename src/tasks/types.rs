@@ -20,14 +20,8 @@ pub enum TaskType {
         force: bool,
     },
 
-    /// Analyze all books in a series
-    AnalyzeSeries {
-        series_id: Uuid,
-        #[serde(default = "default_concurrency")]
-        concurrency: usize,
-        #[serde(default)]
-        force: bool,
-    },
+    /// Analyze all books in a series (always forces re-analysis)
+    AnalyzeSeries { series_id: Uuid },
 
     /// Purge soft-deleted books from a library
     PurgeDeleted { library_id: Uuid },
@@ -49,10 +43,6 @@ pub enum TaskType {
 
 fn default_mode() -> String {
     "normal".to_string()
-}
-
-fn default_concurrency() -> usize {
-    4
 }
 
 impl TaskType {
@@ -105,10 +95,8 @@ impl TaskType {
             TaskType::AnalyzeBook { force, .. } => {
                 serde_json::json!({ "force": force })
             }
-            TaskType::AnalyzeSeries {
-                concurrency, force, ..
-            } => {
-                serde_json::json!({ "concurrency": concurrency, "force": force })
+            TaskType::AnalyzeSeries { .. } => {
+                serde_json::json!({})
             }
             TaskType::RefreshMetadata { source, .. } => {
                 serde_json::json!({ "source": source })

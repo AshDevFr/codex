@@ -6,7 +6,7 @@ use codex::db::repositories::{
     BookMetadataRepository, BookRepository, LibraryRepository, PageRepository, SeriesRepository,
 };
 use codex::db::ScanningStrategy;
-use codex::scanner::{analyze_book, AnalyzerConfig};
+use codex::scanner::analyze_book;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
