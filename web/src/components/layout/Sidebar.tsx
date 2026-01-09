@@ -68,7 +68,8 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 				message: `${variables.mode === "deep" ? "Deep" : "Normal"} scan has been initiated`,
 				color: "blue",
 			});
-			queryClient.invalidateQueries({ queryKey: ["libraries"] });
+			// Use refetchQueries to force immediate refetch, bypassing staleTime
+			queryClient.refetchQueries({ queryKey: ["libraries"] });
 		},
 		onError: (error: Error) => {
 			notifications.show({
@@ -87,7 +88,8 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 				message: "Library deleted successfully",
 				color: "green",
 			});
-			queryClient.invalidateQueries({ queryKey: ["libraries"] });
+			// Use refetchQueries to force immediate refetch, bypassing staleTime
+			queryClient.refetchQueries({ queryKey: ["libraries"] });
 			setDeleteConfirmOpened(false);
 			setLibraryToDelete(null);
 		},
@@ -108,7 +110,8 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 				message: `Purged ${count} deleted book${count !== 1 ? "s" : ""} from library`,
 				color: "green",
 			});
-			queryClient.invalidateQueries({ queryKey: ["libraries"] });
+			// Use refetchQueries to force immediate refetch, bypassing staleTime
+			queryClient.refetchQueries({ queryKey: ["libraries"] });
 			setPurgeConfirmOpened(false);
 			setLibraryToPurge(null);
 		},

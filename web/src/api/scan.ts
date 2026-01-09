@@ -35,6 +35,7 @@ class SSEReconnectionManager {
 	private currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
 	async connect(): Promise<() => void> {
+		console.log("[SSE] Initiating connection to:", this.url);
 		this.onConnectionStateChange?.("connecting");
 
 		const attemptConnection = async (): Promise<void> => {
@@ -43,10 +44,12 @@ class SSEReconnectionManager {
 			try {
 				const token = localStorage.getItem("jwt_token");
 				if (!token) {
+					console.warn("[SSE] No JWT token found - skipping connection");
 					// Not authenticated - silently skip connection
 					return;
 				}
 
+				console.log("[SSE] Attempting to connect...");
 				const response = await fetch(this.url, {
 					headers: {
 						Authorization: `Bearer ${token}`,
@@ -57,6 +60,7 @@ class SSEReconnectionManager {
 				if (!response.ok) {
 					// Suppress 401 errors as they're expected when not authenticated
 					if (response.status === 401) {
+						console.warn("[SSE] Authentication failed (401)");
 						return;
 					}
 					throw new Error(
@@ -68,6 +72,7 @@ class SSEReconnectionManager {
 					throw new Error("Response body is null");
 				}
 
+				console.log("[SSE] Connection established successfully");
 				// Reset reconnection counter on successful connection
 				this.reconnectAttempts = 0;
 				this.onConnectionStateChange?.("connected");
@@ -89,11 +94,15 @@ class SSEReconnectionManager {
 						if (line.startsWith("data: ")) {
 							try {
 								const data = line.substring(6);
-								if (data === "keep-alive") continue;
+								if (data === "keep-alive") {
+									console.debug("[SSE] Keep-alive received");
+									continue;
+								}
 								const progress: ScanProgress = JSON.parse(data);
+								console.log("[SSE] Scan progress event received:", progress);
 								this.onMessage(progress);
 							} catch (error) {
-								console.error("Failed to parse SSE data:", error);
+								console.error("[SSE] Failed to parse SSE data:", error, line);
 							}
 						}
 					}

@@ -4,7 +4,6 @@ use sea_orm::{prelude::Decimal, DatabaseConnection};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tokio::sync::mpsc;
@@ -822,12 +821,10 @@ async fn load_existing_books(
     );
 
     let mut books_map = HashMap::new();
-    let mut total_books = 0;
 
     for series in series_list {
         // Include deleted books so we can restore them if they reappear
         let books = BookRepository::list_by_series(db, series.id, true).await?;
-        total_books += books.len();
         for book in books {
             // Store partial_hash for fast scanning comparison
             books_map.insert(book.file_path.clone(), (book.partial_hash.clone(), book));

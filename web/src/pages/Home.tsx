@@ -51,18 +51,35 @@ export function Home() {
 
 	const { data: libraries, isLoading } = useQuery({
 		queryKey: ["libraries"],
-		queryFn: librariesApi.getAll,
+		queryFn: async () => {
+			console.log("[Home] Fetching libraries...");
+			const result = await librariesApi.getAll();
+			console.log("[Home] Libraries fetched:", result);
+			return result;
+		},
 	});
 
 	// Subscribe to scan progress updates via SSE
 	useEffect(() => {
+		console.log("[Home] useEffect triggered - isAuthenticated:", isAuthenticated);
 		// Only subscribe if user is authenticated
 		if (!isAuthenticated) {
+			console.log("[Home] Not authenticated, skipping SSE subscription");
 			return;
 		}
 
+		console.log("[Home] Setting up SSE subscription...");
 		const unsubscribe = scanApi.subscribeToProgress(
 			(progress) => {
+				console.log("[Home] SSE scan progress received:", {
+					library_id: progress.library_id,
+					status: progress.status,
+					files_processed: progress.files_processed,
+					files_total: progress.files_total,
+					books_found: progress.books_found,
+					series_found: progress.series_found,
+				});
+
 				setScanProgress((prev) => ({
 					...prev,
 					[progress.library_id]: progress,
@@ -70,7 +87,13 @@ export function Home() {
 
 				// Refresh library data when scan completes
 				if (progress.status === "completed" || progress.status === "failed") {
-					queryClient.invalidateQueries({ queryKey: ["libraries"] });
+					console.log(
+						`[Home] Scan ${progress.status} - refetching libraries query`,
+					);
+					// Use refetchQueries to force immediate refetch, bypassing staleTime
+					queryClient.refetchQueries({ queryKey: ["libraries"] }).then(() => {
+						console.log("[Home] Libraries query refetch completed");
+					});
 
 					// Show notification
 					if (progress.status === "completed") {
@@ -99,11 +122,14 @@ export function Home() {
 				}
 			},
 			(error) => {
-				console.error("SSE error:", error);
+				console.error("[Home] SSE error:", error);
 			},
 		);
 
+		console.log("[Home] SSE subscription established");
+
 		return () => {
+			console.log("[Home] Cleaning up SSE subscription");
 			unsubscribe();
 		};
 	}, [queryClient, isAuthenticated]);
@@ -122,7 +148,8 @@ export function Home() {
 				message: `${variables.mode === "deep" ? "Deep" : "Normal"} scan has been initiated`,
 				color: "blue",
 			});
-			queryClient.invalidateQueries({ queryKey: ["libraries"] });
+			// Use refetchQueries to force immediate refetch, bypassing staleTime
+			queryClient.refetchQueries({ queryKey: ["libraries"] });
 		},
 		onError: (error: Error) => {
 			notifications.show({
@@ -141,7 +168,8 @@ export function Home() {
 				message: "Library deleted successfully",
 				color: "green",
 			});
-			queryClient.invalidateQueries({ queryKey: ["libraries"] });
+			// Use refetchQueries to force immediate refetch, bypassing staleTime
+			queryClient.refetchQueries({ queryKey: ["libraries"] });
 			setDeleteConfirmOpened(false);
 			setLibraryToDelete(null);
 		},
@@ -162,7 +190,8 @@ export function Home() {
 				message: `Purged ${count} deleted book${count !== 1 ? "s" : ""} from library`,
 				color: "green",
 			});
-			queryClient.invalidateQueries({ queryKey: ["libraries"] });
+			// Use refetchQueries to force immediate refetch, bypassing staleTime
+			queryClient.refetchQueries({ queryKey: ["libraries"] });
 			setPurgeConfirmOpened(false);
 			setLibraryToPurge(null);
 		},

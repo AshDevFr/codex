@@ -147,7 +147,8 @@ export function LibraryModal({
 				message: "Library created successfully",
 				color: "green",
 			});
-			queryClient.invalidateQueries({ queryKey: ["libraries"] });
+			// Use refetchQueries to force immediate refetch, bypassing staleTime
+			queryClient.refetchQueries({ queryKey: ["libraries"] });
 			handleClose();
 		},
 		onError: (error: Error) => {
@@ -169,7 +170,8 @@ export function LibraryModal({
 				message: "Library updated successfully",
 				color: "green",
 			});
-			queryClient.invalidateQueries({ queryKey: ["libraries"] });
+			// Use refetchQueries to force immediate refetch, bypassing staleTime
+			queryClient.refetchQueries({ queryKey: ["libraries"] });
 			handleClose();
 		},
 		onError: (error: Error) => {

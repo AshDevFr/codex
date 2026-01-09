@@ -55,6 +55,32 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     let event_broadcaster = Arc::new(crate::events::EventBroadcaster::new(1000));
     info!("Event broadcaster initialized");
 
+    // Start PostgreSQL task listener for multi-container deployments
+    // This allows workers in separate containers to notify the web server of task completions
+    if config.database.db_type == DatabaseType::Postgres {
+        info!("Starting PostgreSQL task listener for cross-container notifications...");
+        match crate::services::TaskListener::from_sea_orm(
+            db.sea_orm_connection(),
+            event_broadcaster.clone(),
+        ) {
+            Ok(listener) => {
+                tokio::spawn(async move {
+                    if let Err(e) = listener.start().await {
+                        tracing::error!("Task listener error: {}", e);
+                    }
+                });
+                info!("PostgreSQL task listener started successfully");
+            }
+            Err(e) => {
+                tracing::warn!("Failed to start task listener (non-fatal): {}", e);
+                tracing::warn!("SSE events will only work if workers run in the same process");
+            }
+        }
+    } else {
+        info!("Task listener not started (only available with PostgreSQL)");
+        info!("For SSE to work with SQLite, workers must run in the same process");
+    }
+
     // Check if workers should be disabled (useful for web-only pods in k8s)
     let disable_workers = std::env::var("CODEX_DISABLE_WORKERS")
         .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
