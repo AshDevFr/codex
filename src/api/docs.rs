@@ -90,6 +90,10 @@ use utoipa::OpenApi;
         handlers::cancel_scan,
         handlers::list_active_scans,
         handlers::scan_progress_stream,
+        handlers::trigger_library_analysis,
+        handlers::trigger_library_unanalyzed_analysis,
+        handlers::trigger_series_unanalyzed_analysis,
+        handlers::trigger_book_unanalyzed_analysis,
 
         // Task Queue endpoints
         handlers::task_queue::list_tasks,
