@@ -1,13 +1,13 @@
-use crate::config::{Config, DatabaseType, EnvOverride};
+use crate::config::{Config, DatabaseConfig, DatabaseType, EnvOverride};
 use crate::db::Database;
 use crate::events::EventBroadcaster;
 use crate::services::SettingsService;
 use crate::tasks::TaskWorker;
-use anyhow::Context;
 use sea_orm::DatabaseConnection;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tracing::info;
+use std::time::Duration;
+use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
 /// Result of initializing common services
@@ -169,10 +169,99 @@ pub fn display_database_config(config: &Config) {
     }
 }
 
+/// Wait for migrations to complete
+///
+/// Polls the database until migrations are complete or timeout is reached.
+///
+/// Parameters:
+/// - `timeout_seconds`: Optional timeout in seconds (overrides env var)
+/// - `check_interval_seconds`: Optional check interval in seconds (overrides env var)
+///
+/// Environment variables (used if parameters are None):
+/// - CODEX_MIGRATION_WAIT_TIMEOUT: Timeout in seconds (default: 300)
+/// - CODEX_MIGRATION_WAIT_INTERVAL: Check interval in seconds (default: 2)
+pub async fn wait_for_migrations_complete(
+    config: &DatabaseConfig,
+    timeout_seconds: Option<u64>,
+    check_interval_seconds: Option<u64>,
+) -> anyhow::Result<()> {
+    let timeout_seconds = timeout_seconds
+        .or_else(|| {
+            std::env::var("CODEX_MIGRATION_WAIT_TIMEOUT")
+                .ok()
+                .and_then(|v| v.parse().ok())
+        })
+        .unwrap_or(300); // Default 5 minutes
+    let check_interval_seconds = check_interval_seconds
+        .or_else(|| {
+            std::env::var("CODEX_MIGRATION_WAIT_INTERVAL")
+                .ok()
+                .and_then(|v| v.parse().ok())
+        })
+        .unwrap_or(2); // Default 2 seconds
+
+    let timeout = Duration::from_secs(timeout_seconds);
+    let check_interval = Duration::from_secs(check_interval_seconds);
+    let start_time = std::time::Instant::now();
+
+    info!("Waiting for migrations to complete...");
+    info!("  Timeout: {} seconds", timeout.as_secs());
+    info!("  Check interval: {} seconds", check_interval.as_secs());
+
+    loop {
+        // Check if we've exceeded the timeout
+        if start_time.elapsed() > timeout {
+            anyhow::bail!(
+                "Timeout waiting for migrations to complete ({} seconds)",
+                timeout.as_secs()
+            );
+        }
+
+        // Try to connect to database
+        match Database::new(config).await {
+            Ok(db) => {
+                // Check if migrations are complete
+                match db.migrations_complete().await {
+                    Ok(true) => {
+                        info!("✓ All migrations are complete");
+                        return Ok(());
+                    }
+                    Ok(false) => {
+                        let elapsed = start_time.elapsed().as_secs();
+                        warn!(
+                            "Migrations not complete yet (elapsed: {}s, remaining: {}s)",
+                            elapsed,
+                            timeout.as_secs().saturating_sub(elapsed)
+                        );
+                    }
+                    Err(e) => {
+                        let elapsed = start_time.elapsed().as_secs();
+                        warn!(
+                            "Failed to check migration status (elapsed: {}s): {}",
+                            elapsed, e
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                let elapsed = start_time.elapsed().as_secs();
+                warn!(
+                    "Failed to connect to database (elapsed: {}s): {}",
+                    elapsed, e
+                );
+            }
+        }
+
+        // Wait before checking again
+        tokio::time::sleep(check_interval).await;
+    }
+}
+
 /// Initialize database connection and run migrations
 ///
 /// If CODEX_SKIP_MIGRATIONS environment variable is set to "true" or "1",
-/// migrations will be skipped (useful when migrations are run separately via a job/init container).
+/// migrations will be skipped and the function will wait for migrations to complete
+/// (useful when migrations are run separately via a job/init container).
 pub async fn init_database(config: &Config) -> anyhow::Result<Database> {
     info!("========================================");
     info!("Initializing database connection...");
@@ -186,17 +275,11 @@ pub async fn init_database(config: &Config) -> anyhow::Result<Database> {
 
     if skip_migrations {
         info!("Skipping migrations (CODEX_SKIP_MIGRATIONS is set)");
-        // Still verify that migrations are complete
-        let complete = db
-            .migrations_complete()
-            .await
-            .context("Failed to check migration status")?;
-        if !complete {
-            anyhow::bail!(
-                "Migrations are not complete. Please run migrations before starting the application."
-            );
-        }
-        info!("Migrations are complete (verified)");
+        info!("Waiting for migrations to complete (run externally)...");
+        // Wait for migrations to complete (run by external process)
+        // Use environment variables for timeout/interval configuration
+        wait_for_migrations_complete(&config.database, None, None).await?;
+        info!("Migrations are complete");
     } else {
         // Run migrations to ensure database schema is up to date
         db.run_migrations().await?;

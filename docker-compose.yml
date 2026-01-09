@@ -111,6 +111,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      codex-dev:
+        condition: service_started
     volumes:
       - .:/app
       - cargo_cache:/usr/local/cargo/registry
