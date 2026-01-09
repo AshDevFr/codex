@@ -196,3 +196,341 @@ pub async fn get_book(
 
     Ok(Json(response))
 }
+
+/// List books in a specific library
+#[utoipa::path(
+    get,
+    path = "/api/v1/libraries/{library_id}/books",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID"),
+        PaginationParams,
+    ),
+    responses(
+        (status = 200, description = "Paginated list of books in library", body = BookListResponse),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn list_library_books(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(library_id): Path<Uuid>,
+    Query(query): Query<BookListQuery>,
+) -> Result<Json<BookListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Validate and normalize pagination params
+    let page_size = if query.page_size == 0 {
+        default_page_size()
+    } else {
+        query.page_size.min(100)
+    };
+
+    // Fetch books by library
+    let (books_list, total) = BookRepository::list_by_library(
+        &state.db, library_id, false, // exclude deleted
+        query.page, page_size,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch library books: {}", e)))?;
+
+    let dtos: Vec<BookDto> = books_list
+        .into_iter()
+        .map(|book| BookDto {
+            id: book.id,
+            series_id: book.series_id,
+            title: book.title.clone().unwrap_or_default(),
+            sort_title: book.title.clone(),
+            file_path: book.file_path,
+            file_format: book.format,
+            file_size: book.file_size,
+            file_hash: book.file_hash,
+            page_count: book.page_count,
+            number: book
+                .number
+                .map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
+            created_at: book.created_at,
+            updated_at: book.updated_at,
+        })
+        .collect();
+
+    let response = BookListResponse::new(dtos, query.page, page_size, total);
+
+    Ok(Json(response))
+}
+
+/// List books with reading progress (in-progress books)
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/in-progress",
+    params(
+        PaginationParams,
+    ),
+    responses(
+        (status = 200, description = "Paginated list of in-progress books", body = BookListResponse),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn list_in_progress_books(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Query(query): Query<BookListQuery>,
+) -> Result<Json<BookListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Validate and normalize pagination params
+    let page_size = if query.page_size == 0 {
+        default_page_size()
+    } else {
+        query.page_size.min(100)
+    };
+
+    // Fetch books with reading progress (not completed)
+    let (books_list, total) = BookRepository::list_with_progress(
+        &state.db,
+        auth.user_id,
+        None,        // all libraries
+        Some(false), // only in-progress (not completed)
+        query.page,
+        page_size,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress books: {}", e)))?;
+
+    let dtos: Vec<BookDto> = books_list
+        .into_iter()
+        .map(|book| BookDto {
+            id: book.id,
+            series_id: book.series_id,
+            title: book.title.clone().unwrap_or_default(),
+            sort_title: book.title.clone(),
+            file_path: book.file_path,
+            file_format: book.format,
+            file_size: book.file_size,
+            file_hash: book.file_hash,
+            page_count: book.page_count,
+            number: book
+                .number
+                .map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
+            created_at: book.created_at,
+            updated_at: book.updated_at,
+        })
+        .collect();
+
+    let response = BookListResponse::new(dtos, query.page, page_size, total);
+
+    Ok(Json(response))
+}
+
+/// List books with reading progress in a specific library (in-progress books)
+#[utoipa::path(
+    get,
+    path = "/api/v1/libraries/{library_id}/books/in-progress",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID"),
+        PaginationParams,
+    ),
+    responses(
+        (status = 200, description = "Paginated list of in-progress books in library", body = BookListResponse),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn list_library_in_progress_books(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(library_id): Path<Uuid>,
+    Query(query): Query<BookListQuery>,
+) -> Result<Json<BookListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Validate and normalize pagination params
+    let page_size = if query.page_size == 0 {
+        default_page_size()
+    } else {
+        query.page_size.min(100)
+    };
+
+    // Fetch books with reading progress (not completed) in this library
+    let (books_list, total) = BookRepository::list_with_progress(
+        &state.db,
+        auth.user_id,
+        Some(library_id),
+        Some(false), // only in-progress (not completed)
+        query.page,
+        page_size,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress books: {}", e)))?;
+
+    let dtos: Vec<BookDto> = books_list
+        .into_iter()
+        .map(|book| BookDto {
+            id: book.id,
+            series_id: book.series_id,
+            title: book.title.clone().unwrap_or_default(),
+            sort_title: book.title.clone(),
+            file_path: book.file_path,
+            file_format: book.format,
+            file_size: book.file_size,
+            file_hash: book.file_hash,
+            page_count: book.page_count,
+            number: book
+                .number
+                .map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
+            created_at: book.created_at,
+            updated_at: book.updated_at,
+        })
+        .collect();
+
+    let response = BookListResponse::new(dtos, query.page, page_size, total);
+
+    Ok(Json(response))
+}
+
+/// List recently added books
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/recently-added",
+    params(
+        PaginationParams,
+    ),
+    responses(
+        (status = 200, description = "Paginated list of recently added books", body = BookListResponse),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn list_recently_added_books(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Query(query): Query<BookListQuery>,
+) -> Result<Json<BookListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Validate and normalize pagination params
+    let page_size = if query.page_size == 0 {
+        default_page_size()
+    } else {
+        query.page_size.min(100)
+    };
+
+    // Fetch recently added books
+    let (books_list, total) = BookRepository::list_recently_added(
+        &state.db, None,  // all libraries
+        false, // exclude deleted
+        query.page, page_size,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch recently added books: {}", e)))?;
+
+    let dtos: Vec<BookDto> = books_list
+        .into_iter()
+        .map(|book| BookDto {
+            id: book.id,
+            series_id: book.series_id,
+            title: book.title.clone().unwrap_or_default(),
+            sort_title: book.title.clone(),
+            file_path: book.file_path,
+            file_format: book.format,
+            file_size: book.file_size,
+            file_hash: book.file_hash,
+            page_count: book.page_count,
+            number: book
+                .number
+                .map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
+            created_at: book.created_at,
+            updated_at: book.updated_at,
+        })
+        .collect();
+
+    let response = BookListResponse::new(dtos, query.page, page_size, total);
+
+    Ok(Json(response))
+}
+
+/// List recently added books in a specific library
+#[utoipa::path(
+    get,
+    path = "/api/v1/libraries/{library_id}/books/recently-added",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID"),
+        PaginationParams,
+    ),
+    responses(
+        (status = 200, description = "Paginated list of recently added books in library", body = BookListResponse),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn list_library_recently_added_books(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(library_id): Path<Uuid>,
+    Query(query): Query<BookListQuery>,
+) -> Result<Json<BookListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Validate and normalize pagination params
+    let page_size = if query.page_size == 0 {
+        default_page_size()
+    } else {
+        query.page_size.min(100)
+    };
+
+    // Fetch recently added books in this library
+    let (books_list, total) = BookRepository::list_recently_added(
+        &state.db,
+        Some(library_id),
+        false, // exclude deleted
+        query.page,
+        page_size,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch recently added books: {}", e)))?;
+
+    let dtos: Vec<BookDto> = books_list
+        .into_iter()
+        .map(|book| BookDto {
+            id: book.id,
+            series_id: book.series_id,
+            title: book.title.clone().unwrap_or_default(),
+            sort_title: book.title.clone(),
+            file_path: book.file_path,
+            file_format: book.format,
+            file_size: book.file_size,
+            file_hash: book.file_hash,
+            page_count: book.page_count,
+            number: book
+                .number
+                .map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
+            created_at: book.created_at,
+            updated_at: book.updated_at,
+        })
+        .collect();
+
+    let response = BookListResponse::new(dtos, query.page, page_size, total);
+
+    Ok(Json(response))
+}

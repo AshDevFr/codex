@@ -543,6 +543,104 @@ pub async fn get_series_thumbnail(
         .unwrap())
 }
 
+/// List series with started books (series that have at least one book with reading progress)
+#[utoipa::path(
+    get,
+    path = "/api/v1/series/started",
+    responses(
+        (status = 200, description = "List of started series", body = Vec<SeriesDto>),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn list_started_series(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+) -> Result<Json<Vec<SeriesDto>>, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    // Fetch started series for the current user
+    let series_list = SeriesRepository::list_started(&state.db, auth.user_id, None)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch started series: {}", e)))?;
+
+    let dtos: Vec<SeriesDto> = series_list
+        .into_iter()
+        .map(|series| SeriesDto {
+            id: series.id,
+            library_id: series.library_id,
+            name: series.name,
+            sort_name: series.sort_name,
+            description: series.summary,
+            publisher: series.publisher,
+            year: series.year,
+            book_count: series.book_count as i64,
+            path: series.path,
+            selected_cover_source: series.selected_cover_source.clone(),
+            has_custom_cover: Some(series.custom_cover_path.is_some()),
+            created_at: series.created_at,
+            updated_at: series.updated_at,
+        })
+        .collect();
+
+    Ok(Json(dtos))
+}
+
+/// List started series in a specific library
+#[utoipa::path(
+    get,
+    path = "/api/v1/libraries/{library_id}/series/started",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID")
+    ),
+    responses(
+        (status = 200, description = "List of started series in library", body = Vec<SeriesDto>),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn list_library_started_series(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(library_id): Path<Uuid>,
+) -> Result<Json<Vec<SeriesDto>>, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    // Fetch started series for the current user in this library
+    let series_list = SeriesRepository::list_started(&state.db, auth.user_id, Some(library_id))
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch started series: {}", e)))?;
+
+    let dtos: Vec<SeriesDto> = series_list
+        .into_iter()
+        .map(|series| SeriesDto {
+            id: series.id,
+            library_id: series.library_id,
+            name: series.name,
+            sort_name: series.sort_name,
+            description: series.summary,
+            publisher: series.publisher,
+            year: series.year,
+            book_count: series.book_count as i64,
+            path: series.path,
+            selected_cover_source: series.selected_cover_source.clone(),
+            has_custom_cover: Some(series.custom_cover_path.is_some()),
+            created_at: series.created_at,
+            updated_at: series.updated_at,
+        })
+        .collect();
+
+    Ok(Json(dtos))
+}
+
 /// Helper function to get the default series cover (first book's first page)
 async fn get_default_series_cover(
     state: &Arc<AuthState>,

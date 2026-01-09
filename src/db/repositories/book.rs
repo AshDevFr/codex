@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, Set,
+    QueryOrder, QuerySelect, RelationTrait, Set,
 };
 use uuid::Uuid;
 
@@ -116,6 +116,142 @@ impl BookRepository {
             .all(db)
             .await
             .context("Failed to list all books")?;
+
+        Ok((books, total))
+    }
+
+    /// List books by library with pagination
+    pub async fn list_by_library(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        include_deleted: bool,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::db::entities::series;
+        use sea_orm::JoinType;
+
+        // Build query joining books with series to filter by library
+        let mut query = Books::find()
+            .join(JoinType::InnerJoin, books::Relation::Series.def())
+            .filter(series::Column::LibraryId.eq(library_id));
+
+        if !include_deleted {
+            query = query.filter(books::Column::Deleted.eq(false));
+        }
+
+        // Get total count
+        let total = query
+            .clone()
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count books in library")?;
+
+        // Get paginated results
+        let books = query
+            .order_by_asc(books::Column::Title)
+            .order_by_asc(books::Column::FileName)
+            .offset(page * page_size)
+            .limit(page_size)
+            .all(db)
+            .await
+            .context("Failed to list books by library")?;
+
+        Ok((books, total))
+    }
+
+    /// List recently added books with pagination
+    pub async fn list_recently_added(
+        db: &DatabaseConnection,
+        library_id: Option<Uuid>,
+        include_deleted: bool,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::db::entities::series;
+        use sea_orm::JoinType;
+
+        let mut query = Books::find();
+
+        // Join with series if filtering by library
+        if let Some(lib_id) = library_id {
+            query = query
+                .join(JoinType::InnerJoin, books::Relation::Series.def())
+                .filter(series::Column::LibraryId.eq(lib_id));
+        }
+
+        if !include_deleted {
+            query = query.filter(books::Column::Deleted.eq(false));
+        }
+
+        // Get total count
+        let total = query
+            .clone()
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count recently added books")?;
+
+        // Get paginated results, ordered by created_at descending (most recent first)
+        let books = query
+            .order_by_desc(books::Column::CreatedAt)
+            .offset(page * page_size)
+            .limit(page_size)
+            .all(db)
+            .await
+            .context("Failed to list recently added books")?;
+
+        Ok((books, total))
+    }
+
+    /// Get books with reading progress for a user (in-progress books)
+    pub async fn list_with_progress(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        library_id: Option<Uuid>,
+        completed: Option<bool>,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::db::entities::{read_progress, series};
+        use sea_orm::JoinType;
+
+        let mut query = Books::find()
+            .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
+            .filter(read_progress::Column::UserId.eq(user_id));
+
+        // Filter by library if specified
+        if let Some(lib_id) = library_id {
+            query = query
+                .join(JoinType::InnerJoin, books::Relation::Series.def())
+                .filter(series::Column::LibraryId.eq(lib_id));
+        }
+
+        // Filter by completion status if specified
+        if let Some(is_completed) = completed {
+            query = query.filter(read_progress::Column::Completed.eq(is_completed));
+        }
+
+        // Always exclude deleted books
+        query = query.filter(books::Column::Deleted.eq(false));
+
+        // Get total count
+        let total = query
+            .clone()
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count books with progress")?;
+
+        // Get paginated results, ordered by most recently updated
+        let books = query
+            .order_by_desc(read_progress::Column::UpdatedAt)
+            .offset(page * page_size)
+            .limit(page_size)
+            .all(db)
+            .await
+            .context("Failed to list books with progress")?;
 
         Ok((books, total))
     }

@@ -50,12 +50,19 @@ use utoipa::OpenApi;
         handlers::upload_series_cover,
         handlers::set_series_cover_source,
         handlers::trigger_series_analysis,
+        handlers::list_started_series,
+        handlers::list_library_started_series,
 
         // Book endpoints
         handlers::list_books,
         handlers::get_book,
         handlers::get_book_thumbnail,
         handlers::trigger_book_analysis,
+        handlers::list_library_books,
+        handlers::list_in_progress_books,
+        handlers::list_library_in_progress_books,
+        handlers::list_recently_added_books,
+        handlers::list_library_recently_added_books,
 
         // Page endpoints
         handlers::get_page_image,

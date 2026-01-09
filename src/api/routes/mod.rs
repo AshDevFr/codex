@@ -84,6 +84,24 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/libraries/:id/purge-deleted",
             delete(handlers::purge_deleted_books),
         )
+        // Library-specific book routes (protected)
+        .route(
+            "/libraries/:library_id/books",
+            get(handlers::list_library_books),
+        )
+        .route(
+            "/libraries/:library_id/books/in-progress",
+            get(handlers::list_library_in_progress_books),
+        )
+        .route(
+            "/libraries/:library_id/books/recently-added",
+            get(handlers::list_library_recently_added_books),
+        )
+        // Library-specific series routes (protected)
+        .route(
+            "/libraries/:library_id/series/started",
+            get(handlers::list_library_started_series),
+        )
         // Scan routes (protected)
         .route("/libraries/:id/scan", post(handlers::trigger_scan))
         .route("/libraries/:id/scan-status", get(handlers::get_scan_status))
@@ -106,6 +124,8 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/series/search", post(handlers::search_series))
         .route("/series/:id", get(handlers::get_series))
         .route("/series/:id/books", get(handlers::get_series_books))
+        // Series collection routes (protected)
+        .route("/series/started", get(handlers::list_started_series))
         .route(
             "/series/:id/purge-deleted",
             delete(handlers::purge_series_deleted_books),
@@ -132,6 +152,12 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route(
             "/books/:id/analyze-unanalyzed",
             post(handlers::trigger_book_unanalyzed_analysis),
+        )
+        // Book collection routes (protected)
+        .route("/books/in-progress", get(handlers::list_in_progress_books))
+        .route(
+            "/books/recently-added",
+            get(handlers::list_recently_added_books),
         )
         // Page routes (protected)
         .route(

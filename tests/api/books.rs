@@ -403,3 +403,263 @@ async fn test_list_books_requires_authentication() {
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert!(response.is_some());
 }
+
+// ============================================================================
+// List Library Books Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_library_books() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create two libraries
+    let library1 = LibraryRepository::create(&db, "Library 1", "/test1", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let library2 = LibraryRepository::create(&db, "Library 2", "/test2", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series in each library
+    let series1 = SeriesRepository::create(&db, library1.id, "Series 1")
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library2.id, "Series 2")
+        .await
+        .unwrap();
+
+    // Create books in each series
+    for i in 1..=3 {
+        let book = create_test_book_model(
+            series1.id,
+            &format!("/test1/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            Some(format!("Book {}", i)),
+        );
+        BookRepository::create(&db, &book).await.unwrap();
+    }
+
+    for i in 1..=2 {
+        let book = create_test_book_model(
+            series2.id,
+            &format!("/test2/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            Some(format!("Book {}", i)),
+        );
+        BookRepository::create(&db, &book).await.unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request books from library 1
+    let request =
+        get_request_with_auth(&format!("/api/v1/libraries/{}/books", library1.id), &token);
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let book_list = response.unwrap();
+    assert_eq!(book_list.data.len(), 3);
+    assert_eq!(book_list.total, 3);
+
+    // Request books from library 2
+    let request =
+        get_request_with_auth(&format!("/api/v1/libraries/{}/books", library2.id), &token);
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let book_list = response.unwrap();
+    assert_eq!(book_list.data.len(), 2);
+    assert_eq!(book_list.total, 2);
+}
+
+// ============================================================================
+// In-Progress Books Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_in_progress_books() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series")
+        .await
+        .unwrap();
+
+    // Create books
+    let mut book_ids = Vec::new();
+    for i in 1..=5 {
+        let book = create_test_book_model(
+            series.id,
+            &format!("/test/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            Some(format!("Book {}", i)),
+        );
+        let created = BookRepository::create(&db, &book).await.unwrap();
+        book_ids.push(created.id);
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+
+    // Create admin user and get token
+    let password_hash = password::hash_password("admin123").unwrap();
+    let admin = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let admin_user = UserRepository::create(&db, &admin).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(admin_user.id, admin_user.username, admin_user.is_admin)
+        .unwrap();
+
+    // Add reading progress for the admin user
+    use codex::db::repositories::ReadProgressRepository;
+
+    // Mark 3 books as in-progress
+    for i in 0..3 {
+        ReadProgressRepository::upsert(&db, admin_user.id, book_ids[i], 5, false)
+            .await
+            .unwrap();
+    }
+
+    // Mark 1 book as completed
+    ReadProgressRepository::upsert(&db, admin_user.id, book_ids[3], 10, true)
+        .await
+        .unwrap();
+
+    let app = create_test_router(state).await;
+
+    // Request in-progress books (should return 3)
+    let request = get_request_with_auth("/api/v1/books/in-progress", &token);
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let book_list = response.unwrap();
+    assert_eq!(book_list.data.len(), 3); // Only in-progress books, not completed
+    assert_eq!(book_list.total, 3);
+}
+
+// ============================================================================
+// Recently Added Books Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_recently_added_books() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series")
+        .await
+        .unwrap();
+
+    // Create books with small delays to ensure different created_at timestamps
+    for i in 1..=5 {
+        let book = create_test_book_model(
+            series.id,
+            &format!("/test/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            Some(format!("Book {}", i)),
+        );
+        BookRepository::create(&db, &book).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request recently added books
+    let request = get_request_with_auth("/api/v1/books/recently-added", &token);
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let book_list = response.unwrap();
+    assert_eq!(book_list.data.len(), 5);
+    assert_eq!(book_list.total, 5);
+
+    // Verify books are ordered by created_at descending (most recent first)
+    for i in 0..book_list.data.len() - 1 {
+        assert!(
+            book_list.data[i].created_at >= book_list.data[i + 1].created_at,
+            "Books should be ordered by created_at descending"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_list_library_recently_added_books() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create two libraries
+    let library1 = LibraryRepository::create(&db, "Library 1", "/test1", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let library2 = LibraryRepository::create(&db, "Library 2", "/test2", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series in each library
+    let series1 = SeriesRepository::create(&db, library1.id, "Series 1")
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library2.id, "Series 2")
+        .await
+        .unwrap();
+
+    // Create books in library 1
+    for i in 1..=3 {
+        let book = create_test_book_model(
+            series1.id,
+            &format!("/test1/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            Some(format!("Library 1 Book {}", i)),
+        );
+        BookRepository::create(&db, &book).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+    }
+
+    // Create books in library 2
+    for i in 1..=2 {
+        let book = create_test_book_model(
+            series2.id,
+            &format!("/test2/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            Some(format!("Library 2 Book {}", i)),
+        );
+        BookRepository::create(&db, &book).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request recently added books from library 1
+    let request = get_request_with_auth(
+        &format!("/api/v1/libraries/{}/books/recently-added", library1.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let book_list = response.unwrap();
+    assert_eq!(book_list.data.len(), 3);
+    assert_eq!(book_list.total, 3);
+
+    // Verify all books are from library 1
+    for book in &book_list.data {
+        assert!(book.title.contains("Library 1"));
+    }
+}

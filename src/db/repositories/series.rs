@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, Set,
+    QueryOrder, QuerySelect, RelationTrait, Set,
 };
 use uuid::Uuid;
 
@@ -115,6 +115,36 @@ impl SeriesRepository {
             .all(db)
             .await
             .context("Failed to list all series")
+    }
+
+    /// Get series with started books (series that have at least one book with reading progress)
+    pub async fn list_started(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        library_id: Option<Uuid>,
+    ) -> Result<Vec<series::Model>> {
+        use crate::db::entities::{books, read_progress};
+        use sea_orm::JoinType;
+
+        let mut query = Series::find()
+            .join(JoinType::InnerJoin, series::Relation::Books.def())
+            .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .filter(read_progress::Column::Completed.eq(false)); // Only in-progress books
+
+        // Filter by library if specified
+        if let Some(lib_id) = library_id {
+            query = query.filter(series::Column::LibraryId.eq(lib_id));
+        }
+
+        // Group by series to avoid duplicates
+        query
+            .group_by(series::Column::Id)
+            .order_by_asc(series::Column::SortName)
+            .order_by_asc(series::Column::Name)
+            .all(db)
+            .await
+            .context("Failed to list started series")
     }
 
     /// Search series by normalized name

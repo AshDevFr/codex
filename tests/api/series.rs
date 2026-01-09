@@ -299,13 +299,13 @@ async fn test_get_series_books_excludes_deleted_by_default() {
         .unwrap();
 
     // Create 3 books
-    let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", Some("Book 1"));
     let book1 = BookRepository::create(&db, &book1).await.unwrap();
 
-    let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
+    let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", Some("Book 2"));
     let book2 = BookRepository::create(&db, &book2).await.unwrap();
 
-    let book3 = create_test_book(series.id, "/book3.cbz", "book3.cbz", "hash3", "cbz", 10);
+    let book3 = create_test_book(series.id, "/book3.cbz", "book3.cbz", Some("Book 3"));
     let book3 = BookRepository::create(&db, &book3).await.unwrap();
 
     // Mark book2 as deleted
@@ -348,13 +348,13 @@ async fn test_get_series_books_includes_deleted_when_requested() {
         .unwrap();
 
     // Create 3 books
-    let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", Some("Book 1"));
     let book1 = BookRepository::create(&db, &book1).await.unwrap();
 
-    let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
+    let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", Some("Book 2"));
     let book2 = BookRepository::create(&db, &book2).await.unwrap();
 
-    let book3 = create_test_book(series.id, "/book3.cbz", "book3.cbz", "hash3", "cbz", 10);
+    let book3 = create_test_book(series.id, "/book3.cbz", "book3.cbz", Some("Book 3"));
     let book3 = BookRepository::create(&db, &book3).await.unwrap();
 
     // Mark book2 as deleted
@@ -400,13 +400,13 @@ async fn test_get_series_books_with_all_deleted() {
         .unwrap();
 
     // Create 2 books and mark both as deleted
-    let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", Some("Book 1"));
     let book1 = BookRepository::create(&db, &book1).await.unwrap();
     BookRepository::mark_deleted(&db, book1.id, true)
         .await
         .unwrap();
 
-    let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
+    let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", Some("Book 2"));
     let book2 = BookRepository::create(&db, &book2).await.unwrap();
     BookRepository::mark_deleted(&db, book2.id, true)
         .await
@@ -454,10 +454,10 @@ async fn test_get_series_books_include_deleted_false_explicit() {
         .unwrap();
 
     // Create 2 books, mark one as deleted
-    let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", Some("Book 1"));
     let book1 = BookRepository::create(&db, &book1).await.unwrap();
 
-    let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
+    let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", Some("Book 2"));
     let book2 = BookRepository::create(&db, &book2).await.unwrap();
     BookRepository::mark_deleted(&db, book2.id, true)
         .await
@@ -481,4 +481,179 @@ async fn test_get_series_books_include_deleted_false_explicit() {
     // Should only return 1 active book
     assert_eq!(books.len(), 1);
     assert_eq!(books[0].id, book1.id);
+}
+
+// ============================================================================
+// Started Series Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_started_series() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create multiple series
+    let series1 = SeriesRepository::create(&db, library.id, "Series 1")
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "Series 2")
+        .await
+        .unwrap();
+    let series3 = SeriesRepository::create(&db, library.id, "Series 3")
+        .await
+        .unwrap();
+
+    // Create books in each series
+    let book1 = create_test_book(series1.id, "/lib/s1/book1.cbz", "book1.cbz", Some("Book 1"));
+    let book1 = BookRepository::create(&db, &book1).await.unwrap();
+
+    let book2 = create_test_book(series2.id, "/lib/s2/book1.cbz", "book1.cbz", Some("Book 2"));
+    let book2 = BookRepository::create(&db, &book2).await.unwrap();
+
+    let book3 = create_test_book(series3.id, "/lib/s3/book1.cbz", "book1.cbz", Some("Book 3"));
+    let _book3 = BookRepository::create(&db, &book3).await.unwrap();
+
+    // Create admin user and get token
+    let state = create_test_auth_state(db.clone()).await;
+    let password_hash = password::hash_password("admin123").unwrap();
+    let admin = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let admin_user = UserRepository::create(&db, &admin).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(admin_user.id, admin_user.username, admin_user.is_admin)
+        .unwrap();
+
+    // Add reading progress for books in series1 and series2 (in-progress) for the admin user
+    use codex::db::repositories::ReadProgressRepository;
+    ReadProgressRepository::upsert(&db, admin_user.id, book1.id, 5, false)
+        .await
+        .unwrap();
+    ReadProgressRepository::upsert(&db, admin_user.id, book2.id, 5, false)
+        .await
+        .unwrap();
+
+    // Mark series3's book as completed (should not be in started series)
+    // Note: The endpoint filters for non-completed books only
+    let app = create_test_router(state).await;
+
+    // Request started series (should return series1 and series2)
+    let request = get_request_with_auth("/api/v1/series/started", &token);
+    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.len(), 2); // Only series with in-progress books
+
+    // Verify the series are the expected ones
+    let series_ids: Vec<_> = series_list.iter().map(|s| s.id).collect();
+    assert!(series_ids.contains(&series1.id));
+    assert!(series_ids.contains(&series2.id));
+    assert!(!series_ids.contains(&series3.id)); // No in-progress books
+}
+
+#[tokio::test]
+async fn test_list_library_started_series() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create two libraries
+    let library1 = LibraryRepository::create(&db, "Library 1", "/lib1", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let library2 = LibraryRepository::create(&db, "Library 2", "/lib2", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series in each library
+    let series1 = SeriesRepository::create(&db, library1.id, "Series 1")
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library2.id, "Series 2")
+        .await
+        .unwrap();
+
+    // Create books
+    let book1 = create_test_book(series1.id, "/lib1/book1.cbz", "book1.cbz", Some("Book 1"));
+    let book1 = BookRepository::create(&db, &book1).await.unwrap();
+
+    let book2 = create_test_book(series2.id, "/lib2/book1.cbz", "book1.cbz", Some("Book 2"));
+    let book2 = BookRepository::create(&db, &book2).await.unwrap();
+
+    // Create admin user and get token
+    let state = create_test_auth_state(db.clone()).await;
+    let password_hash = password::hash_password("admin123").unwrap();
+    let admin = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let admin_user = UserRepository::create(&db, &admin).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(admin_user.id, admin_user.username, admin_user.is_admin)
+        .unwrap();
+
+    // Add reading progress for both books for the admin user
+    use codex::db::repositories::ReadProgressRepository;
+    ReadProgressRepository::upsert(&db, admin_user.id, book1.id, 5, false)
+        .await
+        .unwrap();
+    ReadProgressRepository::upsert(&db, admin_user.id, book2.id, 5, false)
+        .await
+        .unwrap();
+    let app = create_test_router(state).await;
+
+    // Request started series from library 1
+    let request = get_request_with_auth(
+        &format!("/api/v1/libraries/{}/series/started", library1.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.len(), 1);
+    assert_eq!(series_list[0].id, series1.id);
+
+    // Request started series from library 2
+    let request = get_request_with_auth(
+        &format!("/api/v1/libraries/{}/series/started", library2.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.len(), 1);
+    assert_eq!(series_list[0].id, series2.id);
+}
+
+// Helper function for creating test books
+fn create_test_book(
+    series_id: uuid::Uuid,
+    path: &str,
+    name: &str,
+    title: Option<&str>,
+) -> codex::db::entities::books::Model {
+    use chrono::Utc;
+    codex::db::entities::books::Model {
+        id: uuid::Uuid::new_v4(),
+        series_id,
+        title: title.map(|s| s.to_string()),
+        number: None,
+        file_path: path.to_string(),
+        file_name: name.to_string(),
+        file_size: 1024,
+        file_hash: format!("hash_{}", uuid::Uuid::new_v4()),
+        partial_hash: String::new(),
+        format: "cbz".to_string(),
+        page_count: 10,
+        deleted: false,
+        analyzed: false,
+        modified_at: Utc::now(),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+    }
 }
