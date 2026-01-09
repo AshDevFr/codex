@@ -287,22 +287,23 @@ mod tests {
         let db = setup_test_db().await;
 
         // The seeder should have created default settings
-        let setting = SettingsRepository::get(&db, "scanner.max_concurrent_scans")
+        // Use a setting that exists in the database (runtime-configurable)
+        let setting = SettingsRepository::get(&db, "scanner.scan_timeout_minutes")
             .await
             .expect("Failed to get setting");
 
         assert!(setting.is_some());
         let s = setting.unwrap();
-        assert_eq!(s.key, "scanner.max_concurrent_scans");
-        assert_eq!(s.value, "2");
+        assert_eq!(s.key, "scanner.scan_timeout_minutes");
+        assert_eq!(s.value, "120");
     }
 
     #[tokio::test]
     async fn test_update_setting() {
         let db = setup_test_db().await;
 
-        // Get the setting first
-        let setting = SettingsRepository::get(&db, "scanner.max_concurrent_scans")
+        // Get the setting first - use a setting that exists in the database (runtime-configurable)
+        let setting = SettingsRepository::get(&db, "scanner.scan_timeout_minutes")
             .await
             .expect("Failed to get setting")
             .expect("Setting not found");
@@ -310,13 +311,13 @@ mod tests {
         // Update without user_id (tests don't have users table populated)
         // In real usage, updated_by would reference a valid user
         let mut active: settings::ActiveModel = setting.into();
-        active.value = sea_orm::Set("4".to_string());
+        active.value = sea_orm::Set("240".to_string());
         active.version = sea_orm::Set(2);
         active.updated_at = sea_orm::Set(chrono::Utc::now());
 
         let updated = active.update(&db).await.expect("Failed to update");
 
-        assert_eq!(updated.value, "4");
+        assert_eq!(updated.value, "240");
         assert_eq!(updated.version, 2);
     }
 

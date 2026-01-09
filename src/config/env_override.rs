@@ -1,6 +1,6 @@
-use super::{
+use super::config::{
     ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, LogLevel,
-    LoggingConfig, PostgresConfig, SQLiteConfig,
+    LoggingConfig, PostgresConfig, SQLiteConfig, ScannerConfig, TaskConfig,
 };
 use std::env;
 
@@ -8,6 +8,55 @@ use std::env;
 pub trait EnvOverride {
     /// Apply environment variable overrides with a given prefix
     fn apply_env_overrides(&mut self, prefix: &str);
+}
+
+impl EnvOverride for TaskConfig {
+    fn apply_env_overrides(&mut self, prefix: &str) {
+        if let Ok(worker_count) = env::var(format!("{}_WORKER_COUNT", prefix)) {
+            if let Ok(count) = worker_count.parse::<u32>() {
+                self.worker_count = count;
+            }
+        }
+    }
+}
+
+impl EnvOverride for ScannerConfig {
+    fn apply_env_overrides(&mut self, prefix: &str) {
+        let max_scans_var = format!("{}_MAX_CONCURRENT_SCANS", prefix);
+        match env::var(&max_scans_var) {
+            Ok(max_scans) => {
+                match max_scans.parse::<usize>() {
+                    Ok(count) => {
+                        self.max_concurrent_scans = count;
+                    }
+                    Err(e) => {
+                        // Silently ignore parse errors (same as before)
+                        let _ = e;
+                    }
+                }
+            }
+            Err(_) => {
+                // Env var not set, keep default value
+            }
+        }
+        let concurrency_var = format!("{}_AUTO_ANALYZE_CONCURRENCY", prefix);
+        match env::var(&concurrency_var) {
+            Ok(concurrency) => {
+                match concurrency.parse::<usize>() {
+                    Ok(count) => {
+                        self.auto_analyze_concurrency = count;
+                    }
+                    Err(e) => {
+                        // Silently ignore parse errors (same as before)
+                        let _ = e;
+                    }
+                }
+            }
+            Err(_) => {
+                // Env var not set, keep default value
+            }
+        }
+    }
 }
 
 impl EnvOverride for Config {
@@ -20,6 +69,9 @@ impl EnvOverride for Config {
             .apply_env_overrides(&format!("{}_LOGGING", prefix));
         self.auth.apply_env_overrides(&format!("{}_AUTH", prefix));
         self.api.apply_env_overrides(&format!("{}_API", prefix));
+        self.task.apply_env_overrides(&format!("{}_TASK", prefix));
+        self.scanner
+            .apply_env_overrides(&format!("{}_SCANNER", prefix));
     }
 }
 
@@ -274,5 +326,174 @@ mod tests {
 
         env::remove_var("CODEX_APPLICATION_HOST");
         env::remove_var("CODEX_APPLICATION_PORT");
+    }
+
+    #[test]
+    fn test_task_config_env_override() {
+        env::set_var("CODEX_TASK_WORKER_COUNT", "8");
+
+        let mut config = TaskConfig::default();
+        config.apply_env_overrides("CODEX_TASK");
+
+        assert_eq!(config.worker_count, 8);
+
+        env::remove_var("CODEX_TASK_WORKER_COUNT");
+    }
+
+    #[test]
+    fn test_task_config_env_override_invalid() {
+        env::set_var("CODEX_TASK_WORKER_COUNT", "invalid");
+
+        let mut config = TaskConfig { worker_count: 4 };
+        config.apply_env_overrides("CODEX_TASK");
+
+        // Should keep original value if env var is invalid
+        assert_eq!(config.worker_count, 4);
+
+        env::remove_var("CODEX_TASK_WORKER_COUNT");
+    }
+
+    #[test]
+    fn test_scanner_config_env_override() {
+        // Clear any existing env vars first
+        env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
+        env::remove_var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY");
+
+        // Create config with explicit values (not using default which reads env vars)
+        let mut config = ScannerConfig {
+            max_concurrent_scans: 2,
+            auto_analyze_concurrency: 4,
+        };
+
+        // Set env vars and apply overrides
+        env::set_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS", "6");
+        env::set_var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY", "8");
+        config.apply_env_overrides("CODEX_SCANNER");
+
+        assert_eq!(config.max_concurrent_scans, 6);
+        assert_eq!(config.auto_analyze_concurrency, 8);
+
+        env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
+        env::remove_var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY");
+    }
+
+    #[test]
+    fn test_scanner_config_env_override_partial() {
+        // Clear any existing env vars first
+        env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
+        env::remove_var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY");
+
+        // Create config with explicit values (not using default which reads env vars)
+        let mut config = ScannerConfig {
+            max_concurrent_scans: 2,
+            auto_analyze_concurrency: 4,
+        };
+        let original_concurrency = config.auto_analyze_concurrency;
+
+        env::set_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS", "10");
+        config.apply_env_overrides("CODEX_SCANNER");
+
+        assert_eq!(config.max_concurrent_scans, 10);
+        // Should keep original value if env var not set
+        assert_eq!(config.auto_analyze_concurrency, original_concurrency);
+
+        env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
+        env::remove_var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY");
+    }
+
+    #[test]
+    fn test_config_env_override_task_and_scanner() {
+        // Clear any existing env vars first
+        env::remove_var("CODEX_TASK_WORKER_COUNT");
+        env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
+        env::remove_var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY");
+
+        // Create config with explicit values to avoid reading env vars in default()
+        // We'll use a helper to create a minimal config
+        use crate::config::{
+            ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
+            LoggingConfig, SQLiteConfig,
+        };
+        let mut config = Config {
+            database: DatabaseConfig {
+                db_type: DatabaseType::SQLite,
+                postgres: None,
+                sqlite: Some(SQLiteConfig {
+                    path: "./test.db".to_string(),
+                    pragmas: None,
+                }),
+            },
+            application: ApplicationConfig {
+                host: "127.0.0.1".to_string(),
+                port: 8080,
+            },
+            logging: LoggingConfig::default(),
+            auth: AuthConfig::default(),
+            api: ApiConfig::default(),
+            email: EmailConfig::default(),
+            task: TaskConfig { worker_count: 4 },
+            scanner: ScannerConfig {
+                max_concurrent_scans: 2,
+                auto_analyze_concurrency: 4,
+            },
+        };
+
+        // Set env vars BEFORE applying overrides
+        env::set_var("CODEX_TASK_WORKER_COUNT", "12");
+        env::set_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS", "5");
+        env::set_var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY", "10");
+
+        // Verify env vars are set before applying (capture values for debugging)
+        let task_var_before = env::var("CODEX_TASK_WORKER_COUNT").ok();
+        let scanner_max_var_before = env::var("CODEX_SCANNER_MAX_CONCURRENT_SCANS").ok();
+        let scanner_concurrency_var_before =
+            env::var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY").ok();
+
+        // Double-check env vars are still set right before applying (to catch race conditions)
+        // This ensures we capture the value at the exact moment we need it
+        let scanner_max_at_call = env::var("CODEX_SCANNER_MAX_CONCURRENT_SCANS").ok();
+        let scanner_concurrency_at_call = env::var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY").ok();
+
+        // If env vars are not set at this point, it's a race condition with another test
+        assert!(
+            scanner_max_at_call.is_some(),
+            "Environment variable CODEX_SCANNER_MAX_CONCURRENT_SCANS was cleared by another test (race condition). Value before: {:?}, value at call: {:?}",
+            scanner_max_var_before, scanner_max_at_call
+        );
+        assert!(
+            scanner_concurrency_at_call.is_some(),
+            "Environment variable CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY was cleared by another test (race condition). Value before: {:?}, value at call: {:?}",
+            scanner_concurrency_var_before, scanner_concurrency_at_call
+        );
+
+        // Apply overrides - Config::apply_env_overrides("CODEX") will call:
+        // - task.apply_env_overrides("CODEX_TASK") -> looks for CODEX_TASK_WORKER_COUNT
+        // - scanner.apply_env_overrides("CODEX_SCANNER") -> looks for CODEX_SCANNER_MAX_CONCURRENT_SCANS
+        config.apply_env_overrides("CODEX");
+
+        // Debug: Check env var after applying (to catch race conditions)
+        let scanner_max_var_after = env::var("CODEX_SCANNER_MAX_CONCURRENT_SCANS").ok();
+        let scanner_concurrency_var_after = env::var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY").ok();
+
+        // Verify the overrides were applied
+        assert_eq!(
+            config.task.worker_count, 12,
+            "Task worker count should be overridden to 12 (env var before: {:?})",
+            task_var_before
+        );
+        assert_eq!(
+            config.scanner.max_concurrent_scans, 5,
+            "Scanner max_concurrent_scans should be overridden to 5 (got: {}, env var before: {:?}, env var at call: {:?}, env var after: {:?}, prefix should be CODEX_SCANNER)",
+            config.scanner.max_concurrent_scans, scanner_max_var_before, scanner_max_at_call, scanner_max_var_after
+        );
+        assert_eq!(
+            config.scanner.auto_analyze_concurrency, 10,
+            "Scanner auto_analyze_concurrency should be overridden to 10 (got: {}, env var before: {:?}, env var at call: {:?}, env var after: {:?})",
+            config.scanner.auto_analyze_concurrency, scanner_concurrency_var_before, scanner_concurrency_at_call, scanner_concurrency_var_after
+        );
+
+        env::remove_var("CODEX_TASK_WORKER_COUNT");
+        env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
+        env::remove_var("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY");
     }
 }

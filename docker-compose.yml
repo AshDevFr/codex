@@ -41,8 +41,11 @@ services:
       EMAIL_SMTP_PORT: 1025
       # Configuration overrides (optional - uses CODEX_ prefix)
       # These override values in the config file
+      # Application configuration
       # CODEX_APPLICATION_HOST: 0.0.0.0
       # CODEX_APPLICATION_PORT: 8080
+
+      # Database connection
       # CODEX_DATABASE_DB_TYPE: postgres
       # CODEX_DATABASE_POSTGRES_HOST: postgres
       # CODEX_DATABASE_POSTGRES_PORT: 5432
@@ -50,34 +53,10 @@ services:
       # CODEX_DATABASE_POSTGRES_PASSWORD: codex
       # CODEX_DATABASE_POSTGRES_DATABASE_NAME: codex
       #
-      # Database Settings (Runtime Configurable via Admin API)
-      # ========================================================
-      # Most settings have been moved to the database for runtime configurability.
-      # To change these settings without restarting the container, use the admin API:
-      #   docker exec -it codex-app curl -X PUT http://localhost:8080/api/v1/admin/settings/{key} \
-      #     -H "Authorization: Bearer <token>" -d '{"value": "..."}'
-      #
-      # Scanner settings (in database):
-      #   - scanner.max_concurrent_scans (default: 2)
-      #   - scanner.scan_timeout_minutes (default: 120)
-      #   - scanner.retry_failed_files (default: false)
-      #   - scanner.auto_analyze_concurrency (default: 4)
-      #
-      # Application settings (in database):
-      #   - application.name (default: "Codex")
-      #
-      # Logging settings (in database):
-      #   - logging.level (default: "info")
-      #   - logging.console (default: true)
-      #
-      # Task worker settings (in database):
-      #   - task.poll_interval_seconds (default: 5)
-      #   - task.cleanup_interval_seconds (default: 30)
-      #
-      # NOTE: Environment variables override database settings!
-      # Uncomment below to force specific values (prevents runtime configurability):
-      # CODEX_LOGGING_LEVEL: info
-      # CODEX_SCANNER_MAX_CONCURRENT_SCANS: 2
+      # Startup-time settings (in config file, require restart):
+      # CODEX_TASK_WORKER_COUNT: 4 # Number of parallel task workers per pod
+      # CODEX_SCANNER_MAX_CONCURRENT_SCANS: 2 # Maximum number of concurrent library scans
+      # CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY: 4 # Number of concurrent analysis tasks to run after scan (0 = disabled)
     networks:
       - codex-network
     restart: unless-stopped
@@ -106,19 +85,57 @@ services:
       # Email configuration for Mailhog
       EMAIL_SMTP_HOST: mailhog
       EMAIL_SMTP_PORT: 1025
+      # Disable workers in web container (workers run in separate container)
+      CODEX_DISABLE_WORKERS: "true"
       # Configuration overrides (optional - uses CODEX_ prefix)
       # Uncomment and modify as needed to override config.docker.yaml values
-      # CODEX_APPLICATION_HOST: 0.0.0.0
-      # CODEX_APPLICATION_PORT: 8080
+      # Database connection
+      # CODEX_DATABASE_DB_TYPE: postgres
       # CODEX_DATABASE_POSTGRES_HOST: postgres
       # CODEX_DATABASE_POSTGRES_PORT: 5432
       # CODEX_DATABASE_POSTGRES_USERNAME: codex
       # CODEX_DATABASE_POSTGRES_PASSWORD: codex
       # CODEX_DATABASE_POSTGRES_DATABASE_NAME: codex
       CODEX_LOGGING_LEVEL: debug
-      #
-      # Database Settings - see production service above for details
-      # Most settings now runtime configurable via admin API
+    networks:
+      - codex-network
+    profiles:
+      - dev
+
+  # Codex worker (dedicated worker container for development)
+  codex-dev-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: codex-dev-worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - cargo_cache:/usr/local/cargo/registry
+      - target_cache:/app/target
+      - ./config:/app/config:ro
+      - ./docker/data/library:/library:ro
+    command:
+      [
+        "cargo",
+        "watch",
+        "-x",
+        "run -- worker --config /app/config/config.docker.yaml",
+      ]
+    environment:
+      RUST_BACKTRACE: 1
+      # Worker count (can also be set in config file)
+      CODEX_TASK_WORKER_COUNT: "2"
+      # Database connection
+      # CODEX_DATABASE_DB_TYPE: postgres
+      # CODEX_DATABASE_POSTGRES_HOST: postgres
+      # CODEX_DATABASE_POSTGRES_PORT: 5432
+      # CODEX_DATABASE_POSTGRES_USERNAME: codex
+      # CODEX_DATABASE_POSTGRES_PASSWORD: codex
+      # CODEX_DATABASE_POSTGRES_DATABASE_NAME: codex
+      CODEX_LOGGING_LEVEL: debug
     networks:
       - codex-network
     profiles:

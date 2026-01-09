@@ -55,18 +55,7 @@ impl MigrationTrait for Migration {
 
         // Seed default settings (only runtime-configurable operational settings)
         let settings = vec![
-            // Scanner settings (4 settings)
-            (
-                "scanner.max_concurrent_scans",
-                "2",
-                "Integer",
-                "Scanner",
-                "Maximum number of concurrent library scans",
-                false,
-                "2",
-                Some(1),
-                Some(10),
-            ),
+            // Scanner settings (2 runtime-configurable settings)
             (
                 "scanner.scan_timeout_minutes",
                 "120",
@@ -88,17 +77,6 @@ impl MigrationTrait for Migration {
                 "false",
                 None,
                 None,
-            ),
-            (
-                "scanner.auto_analyze_concurrency",
-                "4",
-                "Integer",
-                "Scanner",
-                "Number of concurrent threads for file analysis",
-                false,
-                "4",
-                Some(1),
-                Some(16),
             ),
             // Application settings (1 setting)
             (

@@ -12,7 +12,7 @@ mod utils;
 mod web;
 
 use clap::{Parser, Subcommand};
-use commands::{scan_command, seed_command, serve_command};
+use commands::{scan_command, seed_command, serve_command, worker_command};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -51,6 +51,13 @@ enum Commands {
         config: PathBuf,
     },
 
+    /// Start task workers (without web server)
+    Worker {
+        /// Path to configuration file
+        #[arg(short, long, default_value = "codex.yaml")]
+        config: PathBuf,
+    },
+
     /// Create initial admin user and API key
     Seed {
         /// Path to configuration file
@@ -74,6 +81,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Serve { config } => {
             serve_command(config).await?;
+        }
+        Commands::Worker { config } => {
+            worker_command(config).await?;
         }
         Commands::Seed { config } => {
             seed_command(config).await?;

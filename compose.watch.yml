@@ -34,6 +34,38 @@ services:
         - action: rebuild
           path: ./Dockerfile.dev
 
+  codex-dev-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    develop:
+      watch:
+        # Sync source code changes
+        - action: sync
+          path: ./src
+          target: /app/src
+          ignore:
+            - "**/*.swp"
+            - "**/*.tmp"
+
+        # Sync Cargo files
+        - action: sync
+          path: ./Cargo.toml
+          target: /app/Cargo.toml
+
+        - action: sync
+          path: ./Cargo.lock
+          target: /app/Cargo.lock
+
+        # Sync migrations
+        - action: sync
+          path: ./migrations
+          target: /app/migrations
+
+        # Rebuild on config changes
+        - action: rebuild
+          path: ./Dockerfile.dev
+
   frontend-dev:
     develop:
       watch:

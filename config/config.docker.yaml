@@ -23,31 +23,20 @@ logging:
 # Auth config - uses defaults, override with CODEX_AUTH_* env vars
 # Security settings - kept in config (not moved to database)
 auth:
-  jwt_secret: "CHANGE_ME_IN_PRODUCTION"  # Override with CODEX_AUTH_JWT_SECRET env var
+  jwt_secret: "CHANGE_ME_IN_PRODUCTION" # Override with CODEX_AUTH_JWT_SECRET env var
 
 # API config - security boundaries, kept in config (not moved to database)
 api:
-  enable_swagger: true  # Enabled in Docker for easier API testing
+  enable_swagger: true # Enabled in Docker for easier API testing
 
-# Scanner Settings - MOVED TO DATABASE (Runtime Configurable)
-# =============================================================
-# Scanner settings are now stored in the database and can be changed
-# at runtime via the admin API without restarting the container.
-#
-# Default values (automatically seeded on first run):
-#   - scanner.max_concurrent_scans: 2 (range: 1-10)
-#   - scanner.scan_timeout_minutes: 120 (range: 10-1440)
-#   - scanner.retry_failed_files: false
-#   - scanner.auto_analyze_concurrency: 4 (range: 1-16)
-#
-# To modify scanner settings at runtime:
-#   docker exec -it codex curl -X PUT http://localhost:8080/api/v1/admin/settings/scanner.max_concurrent_scans \
-#     -H "Authorization: Bearer <admin-token>" \
-#     -H "Content-Type: application/json" \
-#     -d '{"value": "4"}'
-#
-# Uncomment below to override database defaults (not recommended):
-# scanner:
-#   max_concurrent_scans: 2
-#   scan_timeout_minutes: 120
-#   retry_failed_files: false
+# Task Worker Settings (Startup-Time - Require Restart)
+# ======================================================
+# These settings control worker behavior and require a restart to take effect.
+task:
+  worker_count: 4 # Number of parallel task workers (override: CODEX_TASK_WORKER_COUNT)
+
+# Scanner Settings (Startup-Time - Require Restart)
+# ==================================================
+scanner:
+  max_concurrent_scans: 2 # Max concurrent library scans (override: CODEX_SCANNER_MAX_CONCURRENT_SCANS)
+  auto_analyze_concurrency: 4 # Concurrent analysis tasks (override: CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY)

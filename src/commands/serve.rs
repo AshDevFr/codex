@@ -1,32 +1,17 @@
-use crate::config::{Config, DatabaseType, EnvOverride};
-use crate::db::Database;
-use std::path::{Path, PathBuf};
+use crate::commands::common::{
+    display_database_config, get_worker_count, init_database, init_settings_service, init_tracing,
+    load_config, shutdown_workers, spawn_workers,
+};
+use crate::config::DatabaseType;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;
 use tracing::info;
-use tracing_subscriber::EnvFilter;
 
 /// Serve command handler - starts the media server
 pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
-    // Check if config file exists, if not create a default one
-    let config_created = if !config_path.exists() {
-        println!(
-            "Config file not found at {:?}, creating default configuration...",
-            config_path
-        );
-        let default_config = Config::default();
-        default_config.to_file(&config_path)?;
-        println!("Default config file created at {:?}", config_path);
-        true
-    } else {
-        false
-    };
-
     // Load configuration
-    let mut config = Config::from_file(config_path.to_str().unwrap())?;
-
-    // Apply environment variable overrides
-    config.apply_env_overrides("CODEX");
+    let (config, config_created) = load_config(config_path.clone())?;
 
     // Initialize tracing with config
     let (log_guard, log_level) = init_tracing(&config)?;
@@ -49,42 +34,10 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("  Port: {}", config.application.port);
 
     // Display database configuration
-    info!("Database Configuration:");
-    match config.database.db_type {
-        DatabaseType::Postgres => {
-            let pg_config = config.database.postgres.as_ref().unwrap();
-            info!("  Type: PostgreSQL");
-            info!("  Host: {}", pg_config.host);
-            info!("  Port: {}", pg_config.port);
-            info!("  Database: {}", pg_config.database_name);
-            info!("  Username: {}", pg_config.username);
-        }
-        DatabaseType::SQLite => {
-            let sqlite_config = config.database.sqlite.as_ref().unwrap();
-            info!("  Type: SQLite");
-            info!("  Path: {}", sqlite_config.path);
-            if let Some(pragmas) = &sqlite_config.pragmas {
-                info!("  Pragmas:");
-                for (key, value) in pragmas {
-                    info!("    {}: {}", key, value);
-                }
-            }
-        }
-    }
+    display_database_config(&config);
 
     // Initialize database connection
-    info!("========================================");
-    info!("Initializing database connection...");
-    let db = Database::new(&config.database).await?;
-    info!("Database connected successfully");
-
-    // Run migrations to ensure database schema is up to date
-    db.run_migrations().await?;
-    info!("Database migrations applied successfully");
-
-    // Verify database health
-    db.health_check().await?;
-    info!("Database health check passed");
+    let db = init_database(&config).await?;
 
     // Create and start scheduler
     info!("Initializing scan scheduler...");
@@ -95,44 +48,51 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Scan scheduler started successfully");
 
     // Initialize settings service
-    info!("Initializing settings service...");
-    let settings_service = Arc::new(
-        crate::services::SettingsService::new(db.sea_orm_connection().clone())
-            .await
-            .expect("Failed to initialize settings service"),
-    );
-    info!(
-        "Settings service initialized with {} cached settings",
-        settings_service.cache_size().await
-    );
-
-    // Start auto-reload task for settings service (reload every 10 seconds)
-    let settings_clone = settings_service.clone();
-    tokio::spawn(async move {
-        settings_clone.start_auto_reload(10).await;
-    });
-    info!("Settings service auto-reload task started (10 second interval)");
+    let settings_service = init_settings_service(db.sea_orm_connection()).await?;
 
     // Create event broadcaster for real-time updates
     let event_broadcaster = Arc::new(crate::events::EventBroadcaster::new(1000));
     info!("Event broadcaster initialized");
 
-    // Start task worker in background with shutdown support
-    info!("Starting task queue worker...");
-    let task_worker = crate::tasks::TaskWorker::new(db.sea_orm_connection().clone())
-        .with_event_broadcaster((*event_broadcaster).clone())
-        .with_settings_service(settings_service.clone());
+    // Check if workers should be disabled (useful for web-only pods in k8s)
+    let disable_workers = std::env::var("CODEX_DISABLE_WORKERS")
+        .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+        .unwrap_or(false);
 
-    let (mut task_worker, worker_shutdown_tx) = task_worker.with_shutdown();
-    let worker_id = task_worker.worker_id().to_string();
+    // Initialize worker tracking variables
+    let mut worker_handles = Vec::new();
+    let mut worker_shutdown_channels = Vec::new();
+    let mut worker_count = 0u32;
 
-    let worker_handle = tokio::spawn(async move {
-        if let Err(e) = task_worker.run().await {
-            tracing::error!("Task worker error: {}", e);
+    if disable_workers {
+        info!("Workers disabled via CODEX_DISABLE_WORKERS environment variable");
+    } else {
+        // Get worker count from config (which includes env override) or settings fallback
+        worker_count = get_worker_count(Some(&config.task), Some(&settings_service)).await;
+
+        if let Ok(env_count) = std::env::var("CODEX_TASK_WORKER_COUNT") {
+            info!(
+                "Worker count from environment variable CODEX_TASK_WORKER_COUNT: {}",
+                env_count
+            );
+        } else {
+            info!("Worker count from settings: {}", worker_count);
         }
-    });
 
-    info!("Task worker {} started", worker_id);
+        info!("Starting {} task queue worker(s)...", worker_count);
+
+        // Spawn multiple workers for parallel task processing
+        let (handles, channels) = spawn_workers(
+            db.sea_orm_connection(),
+            worker_count,
+            event_broadcaster.clone(),
+            settings_service.clone(),
+        );
+        worker_handles = handles;
+        worker_shutdown_channels = channels;
+
+        info!("All {} task workers started successfully", worker_count);
+    }
 
     // Initialize email service
     info!("Initializing email service...");
@@ -223,22 +183,15 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Run server with graceful shutdown
     let server_result = graceful.await;
 
-    // Signal worker to shutdown
-    info!("Shutting down task worker...");
-    let _ = worker_shutdown_tx.send(());
-
     // Shutdown scheduler
     info!("Shutting down scan scheduler...");
     if let Err(e) = scheduler.lock().await.shutdown().await {
         tracing::warn!("Failed to shutdown scheduler gracefully: {}", e);
     }
 
-    // Wait for worker to finish (with timeout)
-    match tokio::time::timeout(std::time::Duration::from_secs(30), worker_handle).await {
-        Ok(_) => info!("Task worker shut down successfully"),
-        Err(_) => {
-            tracing::warn!("Task worker did not shut down within 30 seconds");
-        }
+    // Shutdown workers if they were started
+    if !disable_workers && worker_count > 0 {
+        shutdown_workers(worker_handles, worker_shutdown_channels, worker_count).await;
     }
 
     info!("Shutdown complete");
@@ -275,117 +228,4 @@ async fn shutdown_signal() {
     }
 
     info!("Starting graceful shutdown...");
-}
-
-/// Initialize tracing with both console and file output based on config
-/// Returns an optional guard that must be kept alive for the duration of the application
-/// and the log level string that was used
-fn init_tracing(
-    config: &Config,
-) -> anyhow::Result<(Option<tracing_appender::non_blocking::WorkerGuard>, String)> {
-    use std::fs;
-    use std::io;
-    use tracing_subscriber::fmt::writer::MakeWriterExt;
-
-    // Get log level from config or environment
-    // Priority: RUST_LOG env var > config.logging.level (which includes CODEX_LOGGING_LEVEL env var)
-    let log_level = if let Ok(env_log) = std::env::var("RUST_LOG") {
-        // RUST_LOG is set - check if it already has sqlx filter
-        if env_log.contains("sqlx=") {
-            env_log
-        } else {
-            // Apply sqlx filter based on the level
-            let base_level = if env_log.contains(',') {
-                // Extract the first level if multiple are specified
-                env_log.split(',').next().unwrap_or(&env_log).trim()
-            } else {
-                &env_log
-            };
-            match base_level {
-                "debug" | "trace" => env_log,
-                _ => format!("{},sqlx=warn", env_log),
-            }
-        }
-    } else {
-        // No RUST_LOG set, use config.logging.level (from YAML or CODEX_LOGGING_LEVEL env var)
-        let config_level = config.logging.level.as_str();
-        match config_level {
-            "debug" | "trace" => config_level.to_string(),
-            _ => format!("{},sqlx=warn", config_level),
-        }
-    };
-
-    // Create EnvFilter directly from our constructed log_level
-    // This ensures our custom filtering (like sqlx=warn) is always applied
-    let env_filter = EnvFilter::new(&log_level);
-
-    // Create a combined writer for console and/or file
-    // Use config.logging.console (from YAML or CODEX_LOGGING_CONSOLE env var)
-    let console_enabled = config.logging.console;
-
-    let guard = match (console_enabled, &config.logging.file) {
-        (true, Some(log_file_path)) => {
-            // Both console and file
-            let log_path = Path::new(log_file_path);
-            if let Some(parent) = log_path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-
-            let directory = log_path.parent().unwrap_or_else(|| Path::new("."));
-            let filename = log_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("codex.log");
-
-            let file_appender = tracing_appender::rolling::daily(directory, filename);
-            let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
-
-            let writer = io::stdout.and(non_blocking);
-
-            tracing_subscriber::fmt()
-                .with_env_filter(env_filter)
-                .with_writer(writer)
-                .init();
-
-            Some(guard)
-        }
-        (true, None) => {
-            // Console only
-            tracing_subscriber::fmt().with_env_filter(env_filter).init();
-
-            None
-        }
-        (false, Some(log_file_path)) => {
-            // File only
-            let log_path = Path::new(log_file_path);
-            if let Some(parent) = log_path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-
-            let directory = log_path.parent().unwrap_or_else(|| Path::new("."));
-            let filename = log_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("codex.log");
-
-            let file_appender = tracing_appender::rolling::daily(directory, filename);
-            let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
-
-            tracing_subscriber::fmt()
-                .with_env_filter(env_filter)
-                .with_writer(non_blocking)
-                .with_ansi(false)
-                .init();
-
-            Some(guard)
-        }
-        (false, None) => {
-            // Neither (fallback to console)
-            tracing_subscriber::fmt().with_env_filter(env_filter).init();
-
-            None
-        }
-    };
-
-    Ok((guard, log_level))
 }

@@ -2,6 +2,23 @@ use super::env_override::{env_bool_or, env_or, env_string_opt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+// TaskConfig must be defined before Config since Config references it
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct TaskConfig {
+    /// Number of parallel task workers to process tasks from the queue
+    /// This is a startup-time setting - changes require a restart
+    pub worker_count: u32,
+}
+
+impl Default for TaskConfig {
+    fn default() -> Self {
+        Self {
+            worker_count: env_or("CODEX_TASK_WORKER_COUNT", 4),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     #[serde(default)]
@@ -16,6 +33,10 @@ pub struct Config {
     pub api: ApiConfig,
     #[serde(default)]
     pub email: EmailConfig,
+    #[serde(default)]
+    pub task: TaskConfig,
+    #[serde(default)]
+    pub scanner: ScannerConfig,
 }
 
 impl Default for Config {
@@ -81,6 +102,8 @@ impl Default for Config {
             auth: AuthConfig::default(),
             api: ApiConfig::default(),
             email: EmailConfig::default(),
+            task: TaskConfig::default(),
+            scanner: ScannerConfig::default(),
         }
     }
 }
@@ -321,19 +344,20 @@ impl LogLevel {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct ScannerConfig {
+    /// Maximum number of concurrent library scans
+    /// This is a startup-time setting - changes require a restart
     pub max_concurrent_scans: usize,
-    pub scan_timeout_minutes: u64,
-    pub retry_failed_files: bool,
     /// Number of concurrent analysis tasks to run after scan (0 = disabled)
+    /// This is a startup-time setting - changes require a restart
     pub auto_analyze_concurrency: usize,
+    // Note: scan_timeout_minutes and retry_failed_files remain in database
+    // as they are runtime-configurable
 }
 
 impl Default for ScannerConfig {
     fn default() -> Self {
         Self {
             max_concurrent_scans: env_or("CODEX_SCANNER_MAX_CONCURRENT_SCANS", 2),
-            scan_timeout_minutes: env_or("CODEX_SCANNER_SCAN_TIMEOUT_MINUTES", 120),
-            retry_failed_files: env_bool_or("CODEX_SCANNER_RETRY_FAILED_FILES", false),
             auto_analyze_concurrency: env_or("CODEX_SCANNER_AUTO_ANALYZE_CONCURRENCY", 4),
         }
     }
@@ -507,6 +531,8 @@ mod tests {
             auth: AuthConfig::default(),
             api: ApiConfig::default(),
             email: EmailConfig::default(),
+            task: TaskConfig::default(),
+            scanner: ScannerConfig::default(),
         };
 
         // Application name moved to database settings
@@ -586,5 +612,68 @@ mod tests {
         assert_eq!(deserialized.base_path, "/api/v2");
         assert!(deserialized.enable_swagger);
         assert_eq!(deserialized.max_page_size, 200);
+    }
+
+    #[test]
+    fn test_task_config_default() {
+        let config = TaskConfig::default();
+        assert_eq!(config.worker_count, 4);
+    }
+
+    #[test]
+    fn test_task_config_serialization() {
+        let config = TaskConfig { worker_count: 8 };
+
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        assert!(yaml.contains("worker_count"));
+        assert!(yaml.contains("8"));
+
+        let deserialized: TaskConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(deserialized.worker_count, 8);
+    }
+
+    #[test]
+    fn test_scanner_config_default() {
+        let config = ScannerConfig::default();
+        assert_eq!(config.max_concurrent_scans, 2);
+        assert_eq!(config.auto_analyze_concurrency, 4);
+    }
+
+    #[test]
+    fn test_scanner_config_serialization() {
+        let config = ScannerConfig {
+            max_concurrent_scans: 6,
+            auto_analyze_concurrency: 8,
+        };
+
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        assert!(yaml.contains("max_concurrent_scans"));
+        assert!(yaml.contains("auto_analyze_concurrency"));
+        assert!(yaml.contains("6"));
+        assert!(yaml.contains("8"));
+
+        let deserialized: ScannerConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(deserialized.max_concurrent_scans, 6);
+        assert_eq!(deserialized.auto_analyze_concurrency, 8);
+    }
+
+    #[test]
+    fn test_config_with_task_and_scanner() {
+        let yaml_content = r#"
+database:
+  db_type: sqlite
+  sqlite:
+    path: ./test.db
+task:
+  worker_count: 8
+scanner:
+  max_concurrent_scans: 4
+  auto_analyze_concurrency: 6
+"#;
+
+        let config: Config = serde_yaml::from_str(yaml_content).unwrap();
+        assert_eq!(config.task.worker_count, 8);
+        assert_eq!(config.scanner.max_concurrent_scans, 4);
+        assert_eq!(config.scanner.auto_analyze_concurrency, 6);
     }
 }

@@ -186,12 +186,13 @@ mod tests {
             .await
             .expect("Failed to create service");
 
+        // Use a setting that exists in the database (runtime-configurable)
         let value: Option<i64> = service
-            .get("scanner.max_concurrent_scans")
+            .get("scanner.scan_timeout_minutes")
             .await
             .expect("Failed to get setting");
 
-        assert_eq!(value, Some(2));
+        assert_eq!(value, Some(120));
     }
 
     #[tokio::test]
@@ -201,12 +202,12 @@ mod tests {
             .await
             .expect("Failed to create service");
 
-        // Existing setting
+        // Existing setting - use a setting that exists in the database (runtime-configurable)
         let value = service
-            .get_int("scanner.max_concurrent_scans", 10)
+            .get_int("scanner.scan_timeout_minutes", 10)
             .await
             .expect("Failed to get setting");
-        assert_eq!(value, 2);
+        assert_eq!(value, 120);
 
         // Non-existing setting should return default
         let value = service
@@ -241,11 +242,11 @@ mod tests {
             .expect("Failed to create service");
         let user_id = Uuid::new_v4();
 
-        // Update a setting
+        // Update a setting - use a setting that exists in the database (runtime-configurable)
         service
             .set(
-                "scanner.max_concurrent_scans",
-                "5".to_string(),
+                "scanner.scan_timeout_minutes",
+                "240".to_string(),
                 user_id,
                 Some("Test update".to_string()),
                 None,
@@ -255,9 +256,9 @@ mod tests {
 
         // Value should be updated in cache
         let value = service
-            .get_int("scanner.max_concurrent_scans", 2)
+            .get_int("scanner.scan_timeout_minutes", 120)
             .await
             .expect("Failed to get setting");
-        assert_eq!(value, 5);
+        assert_eq!(value, 240);
     }
 }
