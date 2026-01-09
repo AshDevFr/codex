@@ -299,3 +299,61 @@ pub fn create_test_cbz_files_in_dir(dir: &std::path::Path) {
         fs::copy(cbz_path, target_path).unwrap();
     }
 }
+
+/// Create a test CBZ file with rich ComicInfo.xml metadata
+pub fn create_test_cbz_with_metadata(temp_dir: &TempDir, filename: &str) -> std::path::PathBuf {
+    use std::fs;
+
+    let file_path = temp_dir.path().join(filename);
+    let file = fs::File::create(&file_path).unwrap();
+    let mut zip = ZipWriter::new(file);
+
+    let options: FileOptions<'_, ()> =
+        FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    // Add ComicInfo.xml with rich metadata
+    let comic_info_xml = r#"<?xml version="1.0"?>
+<ComicInfo xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Title>Test Comic Title</Title>
+  <Series>Test Series</Series>
+  <Number>1</Number>
+  <Count>12</Count>
+  <Volume>1</Volume>
+  <Summary>This is a test comic book summary with detailed description.</Summary>
+  <Year>2024</Year>
+  <Month>1</Month>
+  <Day>15</Day>
+  <Writer>Test Writer</Writer>
+  <Penciller>Test Penciller</Penciller>
+  <Inker>Test Inker</Inker>
+  <Colorist>Test Colorist</Colorist>
+  <Letterer>Test Letterer</Letterer>
+  <CoverArtist>Test Cover Artist</CoverArtist>
+  <Editor>Test Editor</Editor>
+  <Publisher>Test Publisher</Publisher>
+  <Imprint>Test Imprint</Imprint>
+  <Genre>Action, Adventure</Genre>
+  <Web>https://example.com/comic</Web>
+  <PageCount>3</PageCount>
+  <LanguageISO>en</LanguageISO>
+  <Format>Comic</Format>
+  <BlackAndWhite>No</BlackAndWhite>
+  <Manga>No</Manga>
+</ComicInfo>"#;
+
+    zip.start_file("ComicInfo.xml", options).unwrap();
+    zip.write_all(comic_info_xml.as_bytes()).unwrap();
+
+    // Add some test image pages (simple PNG files)
+    for i in 1..=3 {
+        let page_name = format!("page{:03}.png", i);
+        zip.start_file(&page_name, options).unwrap();
+
+        // Create a minimal valid PNG file
+        let png_data = create_test_png(10, 10);
+        zip.write_all(&png_data).unwrap();
+    }
+
+    zip.finish().unwrap();
+    file_path
+}

@@ -27,9 +27,20 @@ impl TaskHandler for AnalyzeBookHandler {
                 .book_id
                 .ok_or_else(|| anyhow::anyhow!("Missing book_id"))?;
 
-            info!("Task {}: Analyzing book {}", task.id, book_id);
+            // Extract force parameter from task params (default: false)
+            let force = task
+                .params
+                .as_ref()
+                .and_then(|p| p.get("force"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
 
-            match analyze_book(db, book_id).await {
+            info!(
+                "Task {}: Analyzing book {} (force={})",
+                task.id, book_id, force
+            );
+
+            match analyze_book(db, book_id, force).await {
                 Ok(result) => {
                     info!(
                         "Task {}: Book analysis completed - {} books analyzed",

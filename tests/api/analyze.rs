@@ -759,7 +759,7 @@ async fn test_analyze_library_books_with_no_unanalyzed() {
     .unwrap();
 
     let config = AnalyzerConfig::default();
-    let result = analyze_library_books(&db, library.id, config, None)
+    let result = analyze_library_books(&db, library.id, config, None, false)
         .await
         .unwrap();
 

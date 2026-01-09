@@ -452,8 +452,8 @@ pub async fn trigger_analysis(
         max_concurrent: concurrency,
     };
 
-    // Run analysis
-    let result = analyze_library_books(&state.db, library_id, config, None)
+    // Run analysis (force=true since this is a manual trigger)
+    let result = analyze_library_books(&state.db, library_id, config, None, true)
         .await
         .map_err(|e| ApiError::Internal(format!("Analysis failed: {}", e)))?;
 
@@ -514,8 +514,8 @@ pub async fn trigger_series_analysis(
         max_concurrent: concurrency,
     };
 
-    // Run analysis
-    let result = analyze_series_books(&state.db, series_id, config, None)
+    // Run analysis (force=true since this is a manual trigger)
+    let result = analyze_series_books(&state.db, series_id, config, None, true)
         .await
         .map_err(|e| ApiError::Internal(format!("Analysis failed: {}", e)))?;
 
@@ -557,8 +557,8 @@ pub async fn trigger_book_analysis(
         .map_err(|e| ApiError::Internal(format!("Failed to check book: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
 
-    // Run analysis
-    let result = analyze_book(&state.db, book_id)
+    // Run analysis (force=true since this is a manual trigger)
+    let result = analyze_book(&state.db, book_id, true)
         .await
         .map_err(|e| ApiError::Internal(format!("Analysis failed: {}", e)))?;
 

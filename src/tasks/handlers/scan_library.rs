@@ -81,10 +81,16 @@ impl TaskHandler for ScanLibraryHandler {
                     };
 
                     let mut tasks_queued = 0;
+                    // Deep scans should force re-analysis even if file hash hasn't changed
+                    let force = matches!(scan_mode, ScanMode::Deep);
+
                     for book in books_to_analyze {
                         match TaskRepository::enqueue(
                             db,
-                            TaskType::AnalyzeBook { book_id: book.id },
+                            TaskType::AnalyzeBook {
+                                book_id: book.id,
+                                force,
+                            },
                             0, // Priority 0 for auto-queued tasks
                             None,
                         )

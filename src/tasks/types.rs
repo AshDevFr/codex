@@ -14,13 +14,19 @@ pub enum TaskType {
     },
 
     /// Analyze a single book's metadata
-    AnalyzeBook { book_id: Uuid },
+    AnalyzeBook {
+        book_id: Uuid,
+        #[serde(default)]
+        force: bool,
+    },
 
     /// Analyze all books in a series
     AnalyzeSeries {
         series_id: Uuid,
         #[serde(default = "default_concurrency")]
         concurrency: usize,
+        #[serde(default)]
+        force: bool,
     },
 
     /// Purge soft-deleted books from a library
@@ -84,7 +90,7 @@ impl TaskType {
     /// Extract book_id if present
     pub fn book_id(&self) -> Option<Uuid> {
         match self {
-            TaskType::AnalyzeBook { book_id } => Some(*book_id),
+            TaskType::AnalyzeBook { book_id, .. } => Some(*book_id),
             TaskType::RefreshMetadata { book_id, .. } => Some(*book_id),
             _ => None,
         }
@@ -96,8 +102,13 @@ impl TaskType {
             TaskType::ScanLibrary { mode, .. } => {
                 serde_json::json!({ "mode": mode })
             }
-            TaskType::AnalyzeSeries { concurrency, .. } => {
-                serde_json::json!({ "concurrency": concurrency })
+            TaskType::AnalyzeBook { force, .. } => {
+                serde_json::json!({ "force": force })
+            }
+            TaskType::AnalyzeSeries {
+                concurrency, force, ..
+            } => {
+                serde_json::json!({ "concurrency": concurrency, "force": force })
             }
             TaskType::RefreshMetadata { source, .. } => {
                 serde_json::json!({ "source": source })
@@ -218,14 +229,18 @@ mod tests {
     #[test]
     fn test_analyze_book_extraction() {
         let book_id = Uuid::new_v4();
-        let task = TaskType::AnalyzeBook { book_id };
+        let task = TaskType::AnalyzeBook {
+            book_id,
+            force: false,
+        };
 
         assert_eq!(task.type_string(), "analyze_book");
 
-        let (_, lib_id, series_id, extracted_book_id, _) = task.extract_fields();
+        let (_, lib_id, series_id, extracted_book_id, params) = task.extract_fields();
         assert_eq!(lib_id, None);
         assert_eq!(series_id, None);
         assert_eq!(extracted_book_id, Some(book_id));
+        assert!(params.is_some());
     }
 
     #[test]

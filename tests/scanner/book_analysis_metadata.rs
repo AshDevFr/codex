@@ -17,7 +17,7 @@ use zip::ZipWriter;
 
 #[path = "../common/mod.rs"]
 mod common;
-use common::{files::create_test_png, setup_test_db_wrapper};
+use common::{files::create_test_cbz_with_metadata, files::create_test_png, setup_test_db_wrapper};
 
 /// Helper to create a test book in database
 async fn create_test_book(
@@ -62,71 +62,13 @@ async fn create_test_book(
     Ok((created_book, series))
 }
 
-/// Helper to create a CBZ file with ComicInfo.xml
-fn create_test_cbz_with_metadata(temp_dir: &TempDir, filename: &str) -> Result<PathBuf> {
-    let file_path = temp_dir.path().join(filename);
-    let file = fs::File::create(&file_path)?;
-    let mut zip = ZipWriter::new(file);
-
-    // Add ComicInfo.xml with rich metadata
-    let comic_info_xml = r#"<?xml version="1.0"?>
-<ComicInfo xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <Title>Test Comic Title</Title>
-  <Series>Test Series</Series>
-  <Number>1</Number>
-  <Count>12</Count>
-  <Volume>1</Volume>
-  <Summary>This is a test comic book summary with detailed description.</Summary>
-  <Year>2024</Year>
-  <Month>1</Month>
-  <Day>15</Day>
-  <Writer>Test Writer</Writer>
-  <Penciller>Test Penciller</Penciller>
-  <Inker>Test Inker</Inker>
-  <Colorist>Test Colorist</Colorist>
-  <Letterer>Test Letterer</Letterer>
-  <CoverArtist>Test Cover Artist</CoverArtist>
-  <Editor>Test Editor</Editor>
-  <Publisher>Test Publisher</Publisher>
-  <Imprint>Test Imprint</Imprint>
-  <Genre>Action, Adventure</Genre>
-  <Web>https://example.com/comic</Web>
-  <PageCount>3</PageCount>
-  <LanguageISO>en</LanguageISO>
-  <Format>Comic</Format>
-  <BlackAndWhite>No</BlackAndWhite>
-  <Manga>No</Manga>
-</ComicInfo>"#;
-
-    zip.start_file("ComicInfo.xml", SimpleFileOptions::default())?;
-    zip.write_all(comic_info_xml.as_bytes())?;
-
-    // Add some test image pages (simple PNG files)
-    for i in 1..=3 {
-        let page_name = format!("page{:03}.png", i);
-        zip.start_file(&page_name, SimpleFileOptions::default())?;
-
-        // Create a minimal valid PNG file (1x1 pixel, black)
-        let png_data = create_minimal_png()?;
-        zip.write_all(&png_data)?;
-    }
-
-    zip.finish()?;
-    Ok(file_path)
-}
-
-/// Create a minimal valid PNG file using the test helper
-fn create_minimal_png() -> Result<Vec<u8>> {
-    Ok(create_test_png(10, 10))
-}
-
 #[tokio::test]
 async fn test_analyze_book_saves_metadata() -> Result<()> {
     let (db, _temp_dir) = setup_test_db_wrapper().await;
     let temp_dir = TempDir::new()?;
 
     // Create a test CBZ file with metadata
-    let cbz_path = create_test_cbz_with_metadata(&temp_dir, "test_comic.cbz")?;
+    let cbz_path = create_test_cbz_with_metadata(&temp_dir, "test_comic.cbz");
 
     // Create book record in database
     let (book, _series) = create_test_book(&db, cbz_path.to_str().unwrap()).await?;
@@ -135,7 +77,7 @@ async fn test_analyze_book_saves_metadata() -> Result<()> {
     assert!(!book.analyzed);
 
     // Analyze the book
-    let result = analyze_book(db.sea_orm_connection(), book.id).await?;
+    let result = analyze_book(db.sea_orm_connection(), book.id, false).await?;
 
     // Verify analysis succeeded
     if !result.errors.is_empty() {
@@ -199,13 +141,13 @@ async fn test_analyze_book_saves_pages() -> Result<()> {
     let temp_dir = TempDir::new()?;
 
     // Create a test CBZ file
-    let cbz_path = create_test_cbz_with_metadata(&temp_dir, "test_pages.cbz")?;
+    let cbz_path = create_test_cbz_with_metadata(&temp_dir, "test_pages.cbz");
 
     // Create book record in database
     let (book, _series) = create_test_book(&db, cbz_path.to_str().unwrap()).await?;
 
     // Analyze the book
-    analyze_book(db.sea_orm_connection(), book.id).await?;
+    analyze_book(db.sea_orm_connection(), book.id, false).await?;
 
     // Verify pages were saved
     let pages = PageRepository::list_by_book(db.sea_orm_connection(), book.id).await?;
@@ -239,7 +181,7 @@ async fn test_analyze_book_without_comic_info() -> Result<()> {
     for i in 1..=2 {
         let page_name = format!("page{:03}.png", i);
         zip.start_file(&page_name, SimpleFileOptions::default())?;
-        let png_data = create_minimal_png()?;
+        let png_data = create_test_png(10, 10);
         zip.write_all(&png_data)?;
     }
 
@@ -249,7 +191,7 @@ async fn test_analyze_book_without_comic_info() -> Result<()> {
     let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
 
     // Analyze the book
-    let result = analyze_book(db.sea_orm_connection(), book.id).await?;
+    let result = analyze_book(db.sea_orm_connection(), book.id, false).await?;
 
     // Verify analysis succeeded even without metadata
     assert_eq!(result.books_analyzed, 1);
@@ -282,11 +224,11 @@ async fn test_reanalyze_book_updates_metadata() -> Result<()> {
     let temp_dir = TempDir::new()?;
 
     // Create initial CBZ
-    let cbz_path = create_test_cbz_with_metadata(&temp_dir, "reanalysis_test.cbz")?;
+    let cbz_path = create_test_cbz_with_metadata(&temp_dir, "reanalysis_test.cbz");
 
     // Create and analyze book
     let (book, _series) = create_test_book(&db, cbz_path.to_str().unwrap()).await?;
-    analyze_book(db.sea_orm_connection(), book.id).await?;
+    analyze_book(db.sea_orm_connection(), book.id, false).await?;
 
     // Get initial metadata
     let initial_metadata = BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), book.id)
@@ -312,12 +254,12 @@ async fn test_reanalyze_book_updates_metadata() -> Result<()> {
     zip.write_all(comic_info_xml.as_bytes())?;
 
     zip.start_file("page001.png", SimpleFileOptions::default())?;
-    zip.write_all(&create_minimal_png()?)?;
+    zip.write_all(&create_test_png(10, 10))?;
 
     zip.finish()?;
 
     // Re-analyze the book
-    let reanalysis_result = analyze_book(db.sea_orm_connection(), book.id).await?;
+    let reanalysis_result = analyze_book(db.sea_orm_connection(), book.id, false).await?;
     if !reanalysis_result.errors.is_empty() {
         eprintln!("Re-analysis errors: {:?}", reanalysis_result.errors);
     }
@@ -371,13 +313,13 @@ async fn test_analyze_book_with_isbns() -> Result<()> {
     zip.write_all(comic_info_xml.as_bytes())?;
 
     zip.start_file("page001.png", SimpleFileOptions::default())?;
-    zip.write_all(&create_minimal_png()?)?;
+    zip.write_all(&create_test_png(10, 10))?;
 
     zip.finish()?;
 
     // Create and analyze book
     let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
-    analyze_book(db.sea_orm_connection(), book.id).await?;
+    analyze_book(db.sea_orm_connection(), book.id, false).await?;
 
     // Note: ISBN extraction happens in the parser if barcodes are detected
     // For now, we just verify the metadata exists
@@ -414,12 +356,12 @@ async fn test_analyze_book_with_manga_flag() -> Result<()> {
     zip.write_all(comic_info_xml.as_bytes())?;
 
     zip.start_file("page001.png", SimpleFileOptions::default())?;
-    zip.write_all(&create_minimal_png()?)?;
+    zip.write_all(&create_test_png(10, 10))?;
 
     zip.finish()?;
 
     let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
-    analyze_book(db.sea_orm_connection(), book.id).await?;
+    analyze_book(db.sea_orm_connection(), book.id, false).await?;
 
     let metadata = BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), book.id)
         .await?
@@ -475,7 +417,7 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
     zip.write_all(comic_info_xml.as_bytes())?;
 
     zip.start_file("page001.png", SimpleFileOptions::default())?;
-    zip.write_all(&create_minimal_png()?)?;
+    zip.write_all(&create_test_png(10, 10))?;
 
     zip.finish()?;
 
@@ -501,7 +443,7 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
     };
 
     BookRepository::create(db.sea_orm_connection(), &book1).await?;
-    analyze_book(db.sea_orm_connection(), book1.id).await?;
+    analyze_book(db.sea_orm_connection(), book1.id, false).await?;
 
     // Verify series metadata was populated from the first book
     let series = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
@@ -532,7 +474,7 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
     zip.write_all(comic_info_xml2.as_bytes())?;
 
     zip.start_file("page001.png", SimpleFileOptions::default())?;
-    zip.write_all(&create_minimal_png()?)?;
+    zip.write_all(&create_test_png(10, 10))?;
 
     zip.finish()?;
 
@@ -557,7 +499,7 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
     };
 
     BookRepository::create(db.sea_orm_connection(), &book2).await?;
-    analyze_book(db.sea_orm_connection(), book2.id).await?;
+    analyze_book(db.sea_orm_connection(), book2.id, false).await?;
 
     // Verify series metadata was NOT overwritten by the second book
     let series = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
@@ -616,12 +558,12 @@ async fn test_series_metadata_respects_manual_changes() -> Result<()> {
     zip.write_all(comic_info_xml.as_bytes())?;
 
     zip.start_file("page001.png", SimpleFileOptions::default())?;
-    zip.write_all(&create_minimal_png()?)?;
+    zip.write_all(&create_test_png(10, 10))?;
 
     zip.finish()?;
 
     let (book, _) = create_test_book(&db, file_path.to_str().unwrap()).await?;
-    analyze_book(db.sea_orm_connection(), book.id).await?;
+    analyze_book(db.sea_orm_connection(), book.id, false).await?;
 
     // Verify series metadata was NOT overwritten (manual data preserved)
     let series = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)

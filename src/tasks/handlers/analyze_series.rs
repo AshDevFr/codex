@@ -35,16 +35,24 @@ impl TaskHandler for AnalyzeSeriesHandler {
                 .and_then(|v| v.as_u64())
                 .unwrap_or(4) as usize;
 
+            // Extract force parameter from task params (default: false)
+            let force = task
+                .params
+                .as_ref()
+                .and_then(|p| p.get("force"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+
             info!(
-                "Task {}: Analyzing series {} with concurrency {}",
-                task.id, series_id, concurrency
+                "Task {}: Analyzing series {} with concurrency {} (force={})",
+                task.id, series_id, concurrency, force
             );
 
             let config = AnalyzerConfig {
                 max_concurrent: concurrency,
             };
 
-            match analyze_series_books(db, series_id, config, None).await {
+            match analyze_series_books(db, series_id, config, None, force).await {
                 Ok(result) => {
                     info!(
                         "Task {}: Series analysis completed - {} books analyzed",

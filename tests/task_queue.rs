@@ -453,9 +453,17 @@ async fn test_queue_stats() {
     .await
     .expect("Failed to enqueue");
 
-    let task2_id = TaskRepository::enqueue(&db, TaskType::AnalyzeBook { book_id }, 0, None)
-        .await
-        .expect("Failed to enqueue");
+    let task2_id = TaskRepository::enqueue(
+        &db,
+        TaskType::AnalyzeBook {
+            book_id,
+            force: false,
+        },
+        0,
+        None,
+    )
+    .await
+    .expect("Failed to enqueue");
 
     // Claim one
     TaskRepository::claim_next(&db, "worker-1", 300, false)
@@ -734,15 +742,24 @@ async fn test_recover_multiple_stale_tasks() {
     .await
     .expect("Failed to enqueue task 1");
 
-    let task2_id = TaskRepository::enqueue(&db, TaskType::AnalyzeBook { book_id }, 0, None)
-        .await
-        .expect("Failed to enqueue task 2");
+    let task2_id = TaskRepository::enqueue(
+        &db,
+        TaskType::AnalyzeBook {
+            book_id,
+            force: false,
+        },
+        0,
+        None,
+    )
+    .await
+    .expect("Failed to enqueue task 2");
 
     let task3_id = TaskRepository::enqueue(
         &db,
         TaskType::AnalyzeSeries {
             series_id,
             concurrency: 4,
+            force: false,
         },
         0,
         None,
@@ -893,9 +910,17 @@ async fn test_prioritize_scans_over_analysis() {
 
     // Enqueue tasks with same priority and scheduled_for time
     // Analysis task first (should be picked second if prioritization works)
-    TaskRepository::enqueue(&db, TaskType::AnalyzeBook { book_id }, 0, None)
-        .await
-        .expect("Failed to enqueue analyze task");
+    TaskRepository::enqueue(
+        &db,
+        TaskType::AnalyzeBook {
+            book_id,
+            force: false,
+        },
+        0,
+        None,
+    )
+    .await
+    .expect("Failed to enqueue analyze task");
 
     // Scan task second (should be picked first if prioritization works)
     TaskRepository::enqueue(
@@ -961,7 +986,10 @@ async fn test_no_prioritization_uses_priority() {
     // Enqueue analysis task with higher priority
     TaskRepository::enqueue(
         &db,
-        TaskType::AnalyzeBook { book_id },
+        TaskType::AnalyzeBook {
+            book_id,
+            force: false,
+        },
         10, // Higher priority
         None,
     )
@@ -991,7 +1019,10 @@ async fn test_prioritize_scans_even_with_lower_priority() {
     // Enqueue analysis task with higher priority
     TaskRepository::enqueue(
         &db,
-        TaskType::AnalyzeBook { book_id },
+        TaskType::AnalyzeBook {
+            book_id,
+            force: false,
+        },
         10, // Higher priority
         None,
     )
@@ -1034,12 +1065,28 @@ async fn test_prioritize_multiple_scans_over_analysis() {
     let book_id2 = create_test_book(&db, create_test_series(&db, library_id2).await).await;
 
     // Enqueue analysis tasks first
-    TaskRepository::enqueue(&db, TaskType::AnalyzeBook { book_id: book_id1 }, 0, None)
-        .await
-        .expect("Failed to enqueue analyze task 1");
-    TaskRepository::enqueue(&db, TaskType::AnalyzeBook { book_id: book_id2 }, 0, None)
-        .await
-        .expect("Failed to enqueue analyze task 2");
+    TaskRepository::enqueue(
+        &db,
+        TaskType::AnalyzeBook {
+            book_id: book_id1,
+            force: false,
+        },
+        0,
+        None,
+    )
+    .await
+    .expect("Failed to enqueue analyze task 1");
+    TaskRepository::enqueue(
+        &db,
+        TaskType::AnalyzeBook {
+            book_id: book_id2,
+            force: false,
+        },
+        0,
+        None,
+    )
+    .await
+    .expect("Failed to enqueue analyze task 2");
 
     // Enqueue scan tasks second
     TaskRepository::enqueue(
@@ -1129,9 +1176,17 @@ async fn test_postgres_prioritize_scans_over_analysis() {
 
     // Enqueue tasks with same priority and scheduled_for time
     // Analysis task first (should be picked second if prioritization works)
-    TaskRepository::enqueue(&db, TaskType::AnalyzeBook { book_id }, 0, None)
-        .await
-        .expect("Failed to enqueue analyze task");
+    TaskRepository::enqueue(
+        &db,
+        TaskType::AnalyzeBook {
+            book_id,
+            force: false,
+        },
+        0,
+        None,
+    )
+    .await
+    .expect("Failed to enqueue analyze task");
 
     // Scan task second (should be picked first if prioritization works)
     TaskRepository::enqueue(
@@ -1190,7 +1245,10 @@ async fn test_postgres_prioritize_scans_even_with_lower_priority() {
     // Enqueue analysis task with higher priority
     TaskRepository::enqueue(
         &db,
-        TaskType::AnalyzeBook { book_id },
+        TaskType::AnalyzeBook {
+            book_id,
+            force: false,
+        },
         10, // Higher priority
         None,
     )
@@ -1252,7 +1310,10 @@ async fn test_postgres_no_prioritization_uses_priority() {
     // Enqueue analysis task with higher priority
     TaskRepository::enqueue(
         &db,
-        TaskType::AnalyzeBook { book_id },
+        TaskType::AnalyzeBook {
+            book_id,
+            force: false,
+        },
         10, // Higher priority
         None,
     )
@@ -1287,9 +1348,17 @@ async fn test_postgres_skip_locked_with_prioritization() {
     let book_id = create_test_book(&db, create_test_series(&db, library_id1).await).await;
 
     // Enqueue multiple tasks
-    TaskRepository::enqueue(&db, TaskType::AnalyzeBook { book_id }, 0, None)
-        .await
-        .expect("Failed to enqueue analyze task");
+    TaskRepository::enqueue(
+        &db,
+        TaskType::AnalyzeBook {
+            book_id,
+            force: false,
+        },
+        0,
+        None,
+    )
+    .await
+    .expect("Failed to enqueue analyze task");
 
     TaskRepository::enqueue(
         &db,

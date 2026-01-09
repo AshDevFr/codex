@@ -314,9 +314,17 @@ async fn test_worker_reads_prioritize_scans_setting() {
 
     // Enqueue tasks with same priority
     // Analysis task first
-    let analyze_task_id = TaskRepository::enqueue(&db, TaskType::AnalyzeBook { book_id }, 0, None)
-        .await
-        .expect("Failed to enqueue analyze task");
+    let analyze_task_id = TaskRepository::enqueue(
+        &db,
+        TaskType::AnalyzeBook {
+            book_id,
+            force: false,
+        },
+        0,
+        None,
+    )
+    .await
+    .expect("Failed to enqueue analyze task");
 
     // Scan task second
     let scan_task_id = TaskRepository::enqueue(
@@ -408,9 +416,17 @@ async fn test_worker_with_prioritize_scans_enabled() {
 
     // Enqueue tasks with same priority and scheduled_for
     // Analysis task first
-    let analyze_task_id = TaskRepository::enqueue(&db, TaskType::AnalyzeBook { book_id }, 0, None)
-        .await
-        .expect("Failed to enqueue analyze task");
+    let analyze_task_id = TaskRepository::enqueue(
+        &db,
+        TaskType::AnalyzeBook {
+            book_id,
+            force: false,
+        },
+        0,
+        None,
+    )
+    .await
+    .expect("Failed to enqueue analyze task");
 
     // Scan task second
     let scan_task_id = TaskRepository::enqueue(

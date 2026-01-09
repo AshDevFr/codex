@@ -43,11 +43,12 @@ pub async fn analyze_library_books(
     library_id: Uuid,
     config: AnalyzerConfig,
     progress_tx: Option<mpsc::Sender<ScanProgress>>,
+    force: bool,
 ) -> Result<AnalysisResult> {
     let analysis_start = Instant::now();
     info!(
-        "Starting parallel analysis for library {} with concurrency={}",
-        library_id, config.max_concurrent
+        "Starting parallel analysis for library {} with concurrency={}, force={}",
+        library_id, config.max_concurrent, force
     );
 
     // Get all unanalyzed books for this library
@@ -59,45 +60,64 @@ pub async fn analyze_library_books(
         progress_tx,
         analysis_start,
         format!("library {}", library_id),
+        force,
     )
     .await
 }
 
 /// Analyze unanalyzed books in a series with parallel processing
+///
+/// # Arguments
+/// * `force` - If true, analyze ALL books and bypass hash checks; if false, only analyze unanalyzed books
 pub async fn analyze_series_books(
     db: &DatabaseConnection,
     series_id: Uuid,
     config: AnalyzerConfig,
     progress_tx: Option<mpsc::Sender<ScanProgress>>,
+    force: bool,
 ) -> Result<AnalysisResult> {
     let analysis_start = Instant::now();
     info!(
-        "Starting parallel analysis for series {} with concurrency={}",
-        series_id, config.max_concurrent
+        "Starting parallel analysis for series {} with concurrency={}, force={}",
+        series_id, config.max_concurrent, force
     );
 
-    // Get all unanalyzed books for this series
-    let unanalyzed_books = BookRepository::list_by_series(db, series_id, false)
-        .await?
-        .into_iter()
-        .filter(|book| !book.analyzed)
-        .collect::<Vec<_>>();
+    // Get books for this series
+    let books = if force {
+        // Force: analyze ALL books in the series
+        BookRepository::list_by_series(db, series_id, false).await?
+    } else {
+        // Normal: only analyze unanalyzed books
+        BookRepository::list_by_series(db, series_id, false)
+            .await?
+            .into_iter()
+            .filter(|book| !book.analyzed)
+            .collect::<Vec<_>>()
+    };
 
     analyze_books(
         db,
-        unanalyzed_books,
+        books,
         config,
         progress_tx,
         analysis_start,
         format!("series {}", series_id),
+        force,
     )
     .await
 }
 
-/// Analyze a single book (force reanalysis even if already analyzed)
-pub async fn analyze_book(db: &DatabaseConnection, book_id: Uuid) -> Result<AnalysisResult> {
+/// Analyze a single book
+///
+/// # Arguments
+/// * `force` - If true, bypass full hash check and force re-analysis even if file hasn't changed
+pub async fn analyze_book(
+    db: &DatabaseConnection,
+    book_id: Uuid,
+    force: bool,
+) -> Result<AnalysisResult> {
     let analysis_start = Instant::now();
-    info!("Starting analysis for book {}", book_id);
+    info!("Starting analysis for book {} (force={})", book_id, force);
 
     // Get the book
     let book = BookRepository::get_by_id(db, book_id)
@@ -106,7 +126,7 @@ pub async fn analyze_book(db: &DatabaseConnection, book_id: Uuid) -> Result<Anal
 
     let mut result = AnalysisResult::default();
 
-    match analyze_single_book(db, book, None).await {
+    match analyze_single_book(db, book, None, force).await {
         Ok(_) => {
             result.books_analyzed = 1;
             info!(
@@ -133,6 +153,7 @@ async fn analyze_books(
     progress_tx: Option<mpsc::Sender<ScanProgress>>,
     analysis_start: Instant,
     context: String,
+    force: bool,
 ) -> Result<AnalysisResult> {
     let total_books = books.len();
 
@@ -157,7 +178,7 @@ async fn analyze_books(
             let book_path = book.file_path.clone();
 
             async move {
-                match analyze_single_book(&db, book, progress_tx).await {
+                match analyze_single_book(&db, book, progress_tx, force).await {
                     Ok(_) => Ok(()),
                     Err(e) => {
                         let error_msg = format!("Failed to analyze book {}: {}", book_path, e);
@@ -203,16 +224,18 @@ async fn analyze_single_book(
     db: &DatabaseConnection,
     mut book: books::Model,
     progress_tx: Option<mpsc::Sender<ScanProgress>>,
+    force: bool,
 ) -> Result<()> {
     let analyze_start = Instant::now();
     let file_path = PathBuf::from(&book.file_path);
 
-    debug!("Analyzing book: {}", book.file_path);
+    debug!("Analyzing book: {} (force={})", book.file_path, force);
 
     // FULL HASH VERIFICATION PHASE:
     // Before expensive analysis, verify the file actually changed using full hash
     // This catches false positives from partial hash changes (e.g., Docker mount issues)
-    if !book.file_hash.is_empty() {
+    // Skip this check if force=true
+    if !force && !book.file_hash.is_empty() {
         // Book was previously analyzed and has a full hash
         // Compute full hash to verify the file actually changed
         let file_path_clone = file_path.clone();
