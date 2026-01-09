@@ -232,6 +232,42 @@ pub fn put_json_request_with_auth<T: serde::Serialize>(
         .unwrap()
 }
 
+/// Helper to create a PUT request with JSON body, Authorization header, and custom IP headers
+pub fn put_json_request_with_auth_and_ip<T: serde::Serialize>(
+    uri: &str,
+    body: &T,
+    token: &str,
+    ip_address: &str,
+) -> Request<String> {
+    let json = serde_json::to_string(body).unwrap();
+    Request::builder()
+        .method("PUT")
+        .uri(uri)
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", token))
+        .header("X-Forwarded-For", ip_address)
+        .body(json)
+        .unwrap()
+}
+
+/// Helper to create a POST request with JSON body, Authorization header, and custom IP headers
+pub fn post_json_request_with_auth_and_ip<T: serde::Serialize>(
+    uri: &str,
+    body: &T,
+    token: &str,
+    ip_address: &str,
+) -> Request<String> {
+    let json = serde_json::to_string(body).unwrap();
+    Request::builder()
+        .method("POST")
+        .uri(uri)
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", token))
+        .header("X-Forwarded-For", ip_address)
+        .body(json)
+        .unwrap()
+}
+
 /// Helper to create a DELETE request with Authorization header
 pub fn delete_request_with_auth(uri: &str, token: &str) -> Request<String> {
     Request::builder()

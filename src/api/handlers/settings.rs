@@ -143,13 +143,13 @@ pub async fn get_setting(
 pub async fn update_setting(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
+    client_info: crate::api::extractors::ClientInfo,
     Path(key): Path<String>,
     Json(request): Json<UpdateSettingRequest>,
 ) -> Result<Json<SettingDto>, ApiError> {
     require_admin!(auth)?;
 
-    // TODO: Extract IP address from request headers
-    let ip_address = None;
+    let ip_address = client_info.ip_address;
 
     let setting = SettingsRepository::set(
         &state.db,
@@ -224,6 +224,7 @@ pub async fn update_setting(
 pub async fn bulk_update_settings(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
+    client_info: crate::api::extractors::ClientInfo,
     Json(request): Json<BulkUpdateSettingsRequest>,
 ) -> Result<Json<Vec<SettingDto>>, ApiError> {
     require_admin!(auth)?;
@@ -234,8 +235,7 @@ pub async fn bulk_update_settings(
         .map(|u| (u.key, u.value))
         .collect();
 
-    // TODO: Extract IP address from request headers
-    let ip_address = None;
+    let ip_address = client_info.ip_address;
 
     let settings = SettingsRepository::bulk_update(
         &state.db,
@@ -301,12 +301,12 @@ pub async fn bulk_update_settings(
 pub async fn reset_setting(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
+    client_info: crate::api::extractors::ClientInfo,
     Path(key): Path<String>,
 ) -> Result<Json<SettingDto>, ApiError> {
     require_admin!(auth)?;
 
-    // TODO: Extract IP address from request headers
-    let ip_address = None;
+    let ip_address = client_info.ip_address;
 
     let setting = SettingsRepository::reset_to_default(
         &state.db,

@@ -569,3 +569,179 @@ async fn test_hot_reload_mechanism() {
         .unwrap();
     assert_eq!(updated_value, 240);
 }
+
+#[tokio::test]
+async fn test_update_setting_captures_ip_address() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_app_state(db.clone()).await;
+    let app = create_test_router_with_app_state(state.clone());
+
+    let token = create_admin_and_token(&db, &state).await;
+
+    let update = UpdateSettingRequest {
+        value: "240".to_string(),
+        change_reason: Some("Test IP capture".to_string()),
+    };
+
+    // Send request with X-Forwarded-For header
+    let request = put_json_request_with_auth_and_ip(
+        "/api/v1/admin/settings/scanner.scan_timeout_minutes",
+        &update,
+        &token,
+        "192.168.1.100, 10.0.0.1",
+    );
+    let (status, _): (StatusCode, Option<SettingDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Verify IP address was stored in history
+    let history = SettingsRepository::get_history(&db, "scanner.scan_timeout_minutes", Some(1))
+        .await
+        .unwrap();
+
+    assert_eq!(history.len(), 1);
+    assert_eq!(
+        history[0].ip_address,
+        Some("192.168.1.100".to_string()),
+        "Should capture leftmost IP from X-Forwarded-For"
+    );
+    assert_eq!(history[0].new_value, "240");
+}
+
+#[tokio::test]
+async fn test_bulk_update_settings_captures_ip_address() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_app_state(db.clone()).await;
+    let app = create_test_router_with_app_state(state.clone());
+
+    let token = create_admin_and_token(&db, &state).await;
+
+    let updates = vec![
+        BulkSettingUpdate {
+            key: "scanner.scan_timeout_minutes".to_string(),
+            value: "240".to_string(),
+        },
+        BulkSettingUpdate {
+            key: "scanner.retry_failed_files".to_string(),
+            value: "true".to_string(),
+        },
+    ];
+
+    let request_body = BulkUpdateSettingsRequest {
+        updates,
+        change_reason: Some("Bulk update IP test".to_string()),
+    };
+
+    // Send request with X-Real-IP header
+    let request = post_json_request_with_auth_and_ip(
+        "/api/v1/admin/settings/bulk",
+        &request_body,
+        &token,
+        "203.0.113.42",
+    );
+    let (status, _): (StatusCode, Option<Vec<SettingDto>>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Verify IP address was stored in history for both settings
+    let history1 = SettingsRepository::get_history(&db, "scanner.scan_timeout_minutes", Some(1))
+        .await
+        .unwrap();
+    let history2 = SettingsRepository::get_history(&db, "scanner.retry_failed_files", Some(1))
+        .await
+        .unwrap();
+
+    assert_eq!(history1.len(), 1);
+    assert_eq!(
+        history1[0].ip_address,
+        Some("203.0.113.42".to_string()),
+        "Should capture IP from X-Forwarded-For for first setting"
+    );
+
+    assert_eq!(history2.len(), 1);
+    assert_eq!(
+        history2[0].ip_address,
+        Some("203.0.113.42".to_string()),
+        "Should capture IP from X-Forwarded-For for second setting"
+    );
+}
+
+#[tokio::test]
+async fn test_reset_setting_captures_ip_address() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_app_state(db.clone()).await;
+    let app = create_test_router_with_app_state(state.clone());
+
+    let token = create_admin_and_token(&db, &state).await;
+
+    // First, update the setting to a non-default value
+    let update = UpdateSettingRequest {
+        value: "240".to_string(),
+        change_reason: Some("Setup for reset test".to_string()),
+    };
+    let request = put_json_request_with_auth(
+        "/api/v1/admin/settings/scanner.scan_timeout_minutes",
+        &update,
+        &token,
+    );
+    let (status, _): (StatusCode, Option<SettingDto>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Now reset it with IP tracking
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/admin/settings/scanner.scan_timeout_minutes/reset")
+        .header("Authorization", format!("Bearer {}", token))
+        .header("X-Forwarded-For", "198.51.100.25")
+        .body(String::new())
+        .unwrap();
+
+    let (status, _): (StatusCode, Option<SettingDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Verify IP address was stored in history (most recent record)
+    let history = SettingsRepository::get_history(&db, "scanner.scan_timeout_minutes", Some(1))
+        .await
+        .unwrap();
+
+    assert_eq!(history.len(), 1);
+    assert_eq!(
+        history[0].ip_address,
+        Some("198.51.100.25".to_string()),
+        "Should capture IP from X-Forwarded-For on reset"
+    );
+    assert_eq!(history[0].new_value, "120"); // Default value
+}
+
+#[tokio::test]
+async fn test_update_setting_without_ip_header() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_app_state(db.clone()).await;
+    let app = create_test_router_with_app_state(state.clone());
+
+    let token = create_admin_and_token(&db, &state).await;
+
+    let update = UpdateSettingRequest {
+        value: "240".to_string(),
+        change_reason: Some("No IP test".to_string()),
+    };
+
+    // Send request without IP headers
+    let request = put_json_request_with_auth(
+        "/api/v1/admin/settings/scanner.scan_timeout_minutes",
+        &update,
+        &token,
+    );
+    let (status, _): (StatusCode, Option<SettingDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Verify IP address is None in history
+    let history = SettingsRepository::get_history(&db, "scanner.scan_timeout_minutes", Some(1))
+        .await
+        .unwrap();
+
+    assert_eq!(history.len(), 1);
+    assert_eq!(
+        history[0].ip_address, None,
+        "Should have None when no IP headers present"
+    );
+}
