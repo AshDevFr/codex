@@ -194,13 +194,13 @@ pub async fn create_library(
         }
     }
 
-    // TODO: Reload scheduler to pick up new library's scanning schedule
-    // This requires adding the scheduler to AppState as Arc<Mutex<Scheduler>>.
-    // Call reload_schedules() which will reload all library schedules.
-    // Example implementation:
-    //   if let Some(scheduler) = &state.scheduler {
-    //       scheduler.lock().await.reload_schedules().await?;
-    //   }
+    // Reload scheduler to pick up new library's scanning schedule
+    if let Some(scheduler) = &state.scheduler {
+        if let Err(e) = scheduler.lock().await.reload_schedules().await {
+            tracing::warn!("Failed to reload scheduler after library creation: {}", e);
+            // Don't fail the request - library was created successfully
+        }
+    }
 
     Ok(Json(library_to_dto(&state.db, library).await))
 }
@@ -283,13 +283,13 @@ pub async fn update_library(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch updated library: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Library not found after update".to_string()))?;
 
-    // TODO: Reload scheduler to pick up updated library's scanning schedule
-    // This requires adding the scheduler to AppState as Arc<Mutex<Scheduler>>.
-    // Call reload_schedules() which will reload all library schedules.
-    // Example implementation:
-    //   if let Some(scheduler) = &state.scheduler {
-    //       scheduler.lock().await.reload_schedules().await?;
-    //   }
+    // Reload scheduler to pick up updated library's scanning schedule
+    if let Some(scheduler) = &state.scheduler {
+        if let Err(e) = scheduler.lock().await.reload_schedules().await {
+            tracing::warn!("Failed to reload scheduler after library update: {}", e);
+            // Don't fail the request - library was updated successfully
+        }
+    }
 
     Ok(Json(library_to_dto(&state.db, updated).await))
 }
@@ -323,13 +323,13 @@ pub async fn delete_library(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to delete library: {}", e)))?;
 
-    // TODO: Reload scheduler to remove deleted library's scanning schedule
-    // This requires adding the scheduler to AppState as Arc<Mutex<Scheduler>>.
-    // Call reload_schedules() which will reload all library schedules and exclude deleted ones.
-    // Example implementation:
-    //   if let Some(scheduler) = &state.scheduler {
-    //       scheduler.lock().await.reload_schedules().await?;
-    //   }
+    // Reload scheduler to remove deleted library's scanning schedule
+    if let Some(scheduler) = &state.scheduler {
+        if let Err(e) = scheduler.lock().await.reload_schedules().await {
+            tracing::warn!("Failed to reload scheduler after library deletion: {}", e);
+            // Don't fail the request - library was deleted successfully
+        }
+    }
 
     Ok(())
 }

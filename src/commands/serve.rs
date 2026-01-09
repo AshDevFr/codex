@@ -115,6 +115,11 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         email_service,
         event_broadcaster,
         settings_service,
+        scheduler: if disable_workers {
+            None
+        } else {
+            Some(scheduler.clone())
+        },
     });
 
     // Build router using API module

@@ -173,16 +173,18 @@ pub async fn update_setting(
         }
     })?;
 
-    // TODO: Reload scheduler when deduplication settings are updated
-    // If the setting key starts with "deduplication." or library scanning settings change,
-    // trigger a scheduler.reload_schedules() call to pick up the new cron schedule.
-    // This requires adding the scheduler to AppState as Arc<Mutex<Scheduler>>.
-    // Example implementation:
-    //   if key.starts_with("deduplication.") {
-    //       if let Some(scheduler) = &state.scheduler {
-    //           scheduler.lock().await.reload_schedules().await?;
-    //       }
-    //   }
+    // Reload scheduler when deduplication settings are updated
+    if key.starts_with("deduplication.") {
+        if let Some(scheduler) = &state.scheduler {
+            if let Err(e) = scheduler.lock().await.reload_schedules().await {
+                tracing::warn!(
+                    "Failed to reload scheduler after deduplication settings update: {}",
+                    e
+                );
+                // Don't fail the request - setting was updated successfully
+            }
+        }
+    }
 
     let dto = SettingDto {
         id: setting.id,

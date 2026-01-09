@@ -651,3 +651,109 @@ async fn test_series_count_accuracy() {
         "API series count should match repository count"
     );
 }
+
+// ============================================================================
+// Scheduler Reload Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_create_library_with_scheduler_succeeds_without_scheduler() {
+    let (db, temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    // Create temporary directory for library
+    let lib_path = temp_dir.path().join("test_library");
+    std::fs::create_dir_all(&lib_path).unwrap();
+
+    let request_body = CreateLibraryRequest {
+        name: "Test Library".to_string(),
+        path: lib_path.to_string_lossy().to_string(),
+        description: None,
+        allowed_formats: None,
+        excluded_patterns: None,
+        scanning_config: None,
+    };
+
+    let request = post_json_request_with_auth("/api/v1/libraries", &request_body, &token);
+    let (status, response): (StatusCode, Option<LibraryDto>) =
+        make_json_request(app, request).await;
+
+    // Should succeed even without scheduler (graceful degradation)
+    assert_eq!(status, StatusCode::OK);
+    assert!(response.is_some());
+    let library = response.unwrap();
+    assert_eq!(library.name, "Test Library");
+}
+
+#[tokio::test]
+async fn test_update_library_with_scheduler_succeeds_without_scheduler() {
+    let (db, temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    // Create temporary directory for library
+    let lib_path = temp_dir.path().join("test_library");
+    std::fs::create_dir_all(&lib_path).unwrap();
+
+    // Create a library
+    let library = LibraryRepository::create(
+        &db,
+        "Original Name",
+        lib_path.to_string_lossy().as_ref(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    // Update the library
+    let request_body = UpdateLibraryRequest {
+        name: Some("Updated Name".to_string()),
+        path: None,
+        description: None,
+        is_active: None,
+        allowed_formats: None,
+        excluded_patterns: None,
+        scanning_config: None,
+    };
+
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/libraries/{}", library.id),
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<LibraryDto>) =
+        make_json_request(app, request).await;
+
+    // Should succeed even without scheduler (graceful degradation)
+    assert_eq!(status, StatusCode::OK);
+    assert!(response.is_some());
+    let updated_library = response.unwrap();
+    assert_eq!(updated_library.name, "Updated Name");
+}
+
+#[tokio::test]
+async fn test_delete_library_with_scheduler_succeeds_without_scheduler() {
+    let (db, temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    // Create a library
+    let library = LibraryRepository::create(&db, "To Delete", "/path", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Delete the library
+    let request = delete_request_with_auth(&format!("/api/v1/libraries/{}", library.id), &token);
+    let (status, _): (StatusCode, Option<()>) = make_json_request(app, request).await;
+
+    // Should succeed even without scheduler (graceful degradation)
+    assert_eq!(status, StatusCode::OK);
+
+    // Verify library is deleted
+    let deleted = LibraryRepository::get_by_id(&db, library.id).await.unwrap();
+    assert!(deleted.is_none());
+}
