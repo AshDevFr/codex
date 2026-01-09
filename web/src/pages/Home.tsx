@@ -29,7 +29,6 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { librariesApi } from "@/api/libraries";
 import { scanApi } from "@/api/scan";
 import { LibraryModal } from "@/components/forms/LibraryModal";
@@ -37,7 +36,6 @@ import { useAuthStore } from "@/store/authStore";
 import type { Library, ScanProgress } from "@/types/api";
 
 export function Home() {
-	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const { isAuthenticated } = useAuthStore();
 	const [addLibraryOpened, setAddLibraryOpened] = useState(false);
@@ -56,19 +54,12 @@ export function Home() {
 		queryFn: async () => {
 			console.log("[Home] Fetching libraries...");
 			const result = await librariesApi.getAll();
-			console.log("[Home] Libraries fetched:", result);
-			return result;
-		},
-	});
+		console.log("[Home] Libraries fetched:", result);
+		return result;
+	},
+});
 
-	// Redirect to all libraries view
-	useEffect(() => {
-		if (!isLoading && libraries && libraries.length > 0) {
-			navigate("/libraries/all/recommended", { replace: true });
-		}
-	}, [isLoading, libraries, navigate]);
-
-	// Subscribe to scan progress updates via SSE
+// Subscribe to scan progress updates via SSE
 	useEffect(() => {
 		console.debug("[Home] useEffect triggered - isAuthenticated:", isAuthenticated);
 		// Only subscribe if user is authenticated
@@ -81,17 +72,17 @@ export function Home() {
 		const unsubscribe = scanApi.subscribeToProgress(
 			(progress) => {
 				console.debug("[Home] SSE scan progress received:", {
-					library_id: progress.library_id,
+					libraryId: progress.libraryId,
 					status: progress.status,
-					files_processed: progress.files_processed,
-					files_total: progress.files_total,
-					books_found: progress.books_found,
-					series_found: progress.series_found,
+					filesProcessed: progress.filesProcessed,
+					filesTotal: progress.filesTotal,
+					booksFound: progress.booksFound,
+					seriesFound: progress.seriesFound,
 				});
 
 				setScanProgress((prev) => ({
 					...prev,
-					[progress.library_id]: progress,
+					[progress.libraryId]: progress,
 				}));
 
 				// Refresh library data when scan completes
@@ -108,14 +99,13 @@ export function Home() {
 					if (progress.status === "completed") {
 						notifications.show({
 							title: "Scan completed",
-							message: `Found ${progress.books_found} books in ${progress.series_found} series from ${progress.files_processed} files`,
+							message: `Found ${progress.booksFound} books in ${progress.seriesFound} series from ${progress.filesProcessed} files`,
 							color: "green",
 						});
 					} else if (progress.status === "failed") {
 						notifications.show({
 							title: "Scan failed",
-							message:
-								progress.error_message || "An error occurred during scanning",
+							message: "An error occurred during scanning",
 							color: "red",
 						});
 					}
@@ -124,7 +114,7 @@ export function Home() {
 					setTimeout(() => {
 						setScanProgress((prev) => {
 							const updated = { ...prev };
-							delete updated[progress.library_id];
+							delete updated[progress.libraryId];
 							return updated;
 						});
 					}, 5000);
@@ -309,9 +299,9 @@ export function Home() {
 								progress &&
 								(progress.status === "pending" ||
 									progress.status === "running");
-							const progressPercent = progress?.files_total
+							const progressPercent = progress?.filesTotal
 								? Math.round(
-										(progress.files_processed / progress.files_total) * 100,
+										(progress.filesProcessed / progress.filesTotal) * 100,
 									)
 								: 0;
 
@@ -425,15 +415,15 @@ export function Home() {
 															: "Scanning..."}
 													</Text>
 													<Text size="sm" c="dimmed">
-														{progress.files_processed} / {progress.files_total}
+														{progress.filesProcessed} / {progress.filesTotal}
 													</Text>
 												</Group>
 												<Progress value={progressPercent} size="sm" animated />
-												{(progress.books_found > 0 ||
-													progress.series_found > 0) && (
+												{(progress.booksFound > 0 ||
+													progress.seriesFound > 0) && (
 													<Text size="xs" c="dimmed">
-														Found {progress.books_found} books in{" "}
-														{progress.series_found} series
+														Found {progress.booksFound} books in{" "}
+														{progress.seriesFound} series
 													</Text>
 												)}
 											</Stack>

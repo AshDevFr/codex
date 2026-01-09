@@ -51,6 +51,7 @@ use utoipa::OpenApi;
         handlers::set_series_cover_source,
         handlers::trigger_series_analysis,
         handlers::list_started_series,
+        handlers::list_library_series,
         handlers::list_library_started_series,
 
         // Book endpoints

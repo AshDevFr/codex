@@ -1,5 +1,5 @@
 use crate::api::{
-    dto::{BookDto, SearchSeriesRequest, SeriesDto, SeriesFilter},
+    dto::{BookDto, SearchSeriesRequest, SeriesDto, SeriesFilter, SeriesListResponse},
     error::ApiError,
     extractors::{AuthContext, AuthState},
     permissions::Permission,
@@ -31,15 +31,38 @@ pub struct ListBooksQuery {
     pub include_deleted: bool,
 }
 
-/// List series with optional library filter
+/// Query parameters for listing series
+#[derive(Debug, Deserialize)]
+pub struct SeriesListQuery {
+    /// Page number (0-indexed)
+    #[serde(default)]
+    pub page: u64,
+
+    /// Number of items per page (max 100)
+    #[serde(default = "default_page_size")]
+    pub page_size: u64,
+
+    /// Sort parameter (format: "field,direction" e.g. "name,asc")
+    #[serde(default)]
+    pub sort: Option<String>,
+}
+
+fn default_page_size() -> u64 {
+    20
+}
+
+/// List series with optional library filter and pagination
 #[utoipa::path(
     get,
     path = "/api/v1/series",
     params(
-        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID")
+        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID"),
+        ("page" = Option<u64>, Query, description = "Page number (0-indexed)"),
+        ("page_size" = Option<u64>, Query, description = "Number of items per page (max 100)"),
+        ("sort" = Option<String>, Query, description = "Sort parameter (format: 'field,direction')")
     ),
     responses(
-        (status = 200, description = "List of series", body = Vec<SeriesDto>),
+        (status = 200, description = "Paginated list of series", body = SeriesListResponse),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -51,32 +74,57 @@ pub struct ListBooksQuery {
 pub async fn list_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Query(filter): Query<SeriesFilter>,
-) -> Result<Json<Vec<SeriesDto>>, ApiError> {
+    Query(query): Query<SeriesListQuery>,
+) -> Result<Json<SeriesListResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    // Fetch series based on filter
-    let series_list = if let Some(lib_id) = filter.library_id {
-        SeriesRepository::list_by_library(&state.db, lib_id)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+    // Validate and normalize pagination params
+    let page_size = if query.page_size == 0 {
+        default_page_size()
     } else {
-        SeriesRepository::list_all(&state.db)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        query.page_size.min(100)
     };
 
-    let dtos: Vec<SeriesDto> = series_list
+    // Fetch series based on filter (all libraries)
+    let mut series_list = SeriesRepository::list_all(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
+
+    // Apply sorting if specified
+    if let Some(sort_param) = &query.sort {
+        apply_series_sorting(&mut series_list, sort_param);
+    }
+
+    let total = series_list.len() as u64;
+
+    // Apply pagination manually
+    let offset = query.page * page_size;
+    let start = offset as usize;
+
+    // If start is beyond the list, return empty results
+    if start >= series_list.len() {
+        return Ok(Json(SeriesListResponse::new(
+            vec![],
+            query.page,
+            page_size,
+            total,
+        )));
+    }
+
+    let end = (start + page_size as usize).min(series_list.len());
+    let paginated = series_list[start..end].to_vec();
+
+    let dtos: Vec<SeriesDto> = paginated
         .into_iter()
         .map(|series| SeriesDto {
             id: series.id,
             library_id: series.library_id,
             name: series.name,
             sort_name: series.sort_name,
-            description: series.summary, // Use summary instead of description
+            description: series.summary,
             publisher: series.publisher,
             year: series.year,
-            book_count: series.book_count as i64, // Convert i32 to i64
+            book_count: series.book_count as i64,
             path: series.path,
             selected_cover_source: series.selected_cover_source.clone(),
             has_custom_cover: Some(series.custom_cover_path.is_some()),
@@ -85,7 +133,9 @@ pub async fn list_series(
         })
         .collect();
 
-    Ok(Json(dtos))
+    let response = SeriesListResponse::new(dtos, query.page, page_size, total);
+
+    Ok(Json(response))
 }
 
 /// Get series by ID
@@ -232,29 +282,8 @@ pub async fn get_series_books(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?;
 
-    // Convert to DTOs
-    let dtos: Vec<BookDto> = books
-        .into_iter()
-        .map(|book| {
-            let title = book.title.clone().unwrap_or_else(|| book.file_name.clone());
-            BookDto {
-                id: book.id,
-                series_id: book.series_id,
-                title: title.clone(),
-                sort_title: book.title,
-                file_path: book.file_path,
-                file_format: book.format,
-                file_size: book.file_size,
-                file_hash: book.file_hash,
-                page_count: book.page_count,
-                number: book
-                    .number
-                    .map(|n| n.to_string().parse::<i32>().unwrap_or(0)),
-                created_at: book.created_at,
-                updated_at: book.updated_at,
-            }
-        })
-        .collect();
+    // Convert to DTOs using helper function
+    let dtos = crate::api::handlers::books::books_to_dtos(&state.db, books).await?;
 
     Ok(Json(dtos))
 }
@@ -590,6 +619,93 @@ pub async fn list_started_series(
     Ok(Json(dtos))
 }
 
+/// List series in a specific library with pagination
+#[utoipa::path(
+    get,
+    path = "/api/v1/libraries/{library_id}/series",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID"),
+        ("page" = Option<u64>, Query, description = "Page number (0-indexed)"),
+        ("page_size" = Option<u64>, Query, description = "Number of items per page (max 100)")
+    ),
+    responses(
+        (status = 200, description = "Paginated list of series in library", body = SeriesListResponse),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn list_library_series(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(library_id): Path<Uuid>,
+    Query(query): Query<SeriesListQuery>,
+) -> Result<Json<SeriesListResponse>, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    // Validate and normalize pagination params
+    let page_size = if query.page_size == 0 {
+        default_page_size()
+    } else {
+        query.page_size.min(100)
+    };
+
+    // Fetch series for this library
+    let mut series_list = SeriesRepository::list_by_library(&state.db, library_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
+
+    // Apply sorting if specified
+    if let Some(sort_param) = &query.sort {
+        apply_series_sorting(&mut series_list, sort_param);
+    }
+
+    let total = series_list.len() as u64;
+
+    // Apply pagination manually
+    let offset = query.page * page_size;
+    let start = offset as usize;
+
+    // If start is beyond the list, return empty results
+    if start >= series_list.len() {
+        return Ok(Json(SeriesListResponse::new(
+            vec![],
+            query.page,
+            page_size,
+            total,
+        )));
+    }
+
+    let end = (start + page_size as usize).min(series_list.len());
+    let paginated = series_list[start..end].to_vec();
+
+    let dtos: Vec<SeriesDto> = paginated
+        .into_iter()
+        .map(|series| SeriesDto {
+            id: series.id,
+            library_id: series.library_id,
+            name: series.name,
+            sort_name: series.sort_name,
+            description: series.summary,
+            publisher: series.publisher,
+            year: series.year,
+            book_count: series.book_count as i64,
+            path: series.path,
+            selected_cover_source: series.selected_cover_source.clone(),
+            has_custom_cover: Some(series.custom_cover_path.is_some()),
+            created_at: series.created_at,
+            updated_at: series.updated_at,
+        })
+        .collect();
+
+    let response = SeriesListResponse::new(dtos, query.page, page_size, total);
+
+    Ok(Json(response))
+}
+
 /// List started series in a specific library
 #[utoipa::path(
     get,
@@ -639,6 +755,62 @@ pub async fn list_library_started_series(
         .collect();
 
     Ok(Json(dtos))
+}
+
+/// Apply sorting to series list
+fn apply_series_sorting(series_list: &mut [crate::db::entities::series::Model], sort_param: &str) {
+    let parts: Vec<&str> = sort_param.split(',').collect();
+    if parts.len() != 2 {
+        return; // Invalid format, skip sorting
+    }
+
+    let field = parts[0];
+    let direction = parts[1];
+    let ascending = direction == "asc";
+
+    match field {
+        "name" => {
+            series_list.sort_by(|a, b| {
+                let cmp = a.name.cmp(&b.name);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        "created_at" => {
+            series_list.sort_by(|a, b| {
+                let cmp = a.created_at.cmp(&b.created_at);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        "book_count" => {
+            series_list.sort_by(|a, b| {
+                let cmp = a.book_count.cmp(&b.book_count);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        "year" => {
+            series_list.sort_by(|a, b| {
+                let cmp = a.year.cmp(&b.year);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        _ => {} // Unknown field, skip sorting
+    }
 }
 
 /// Helper function to get the default series cover (first book's first page)

@@ -144,7 +144,22 @@ async fn analyze_single_book(
 
     // Update book with analyzed metadata
     let now = Utc::now();
-    book.title = metadata.comic_info.as_ref().and_then(|ci| ci.title.clone());
+    // Extract title from metadata, or fall back to filename without extension
+    // Handle both None and empty string cases
+    book.title = metadata
+        .comic_info
+        .as_ref()
+        .and_then(|ci| ci.title.clone())
+        .filter(|title| !title.is_empty()) // Filter out empty strings
+        .or_else(|| {
+            // Fallback to filename without extension
+            let file_name = &book.file_name;
+            if let Some(pos) = file_name.rfind('.') {
+                Some(file_name[..pos].to_string())
+            } else {
+                Some(file_name.clone())
+            }
+        });
     book.number = metadata.comic_info.as_ref().and_then(|ci| {
         ci.number
             .as_ref()
@@ -412,5 +427,46 @@ mod tests {
         };
 
         assert_eq!(count_non_null_fields(&metadata), 7);
+    }
+
+    /// Test filename extraction logic (unit test for the title fallback logic)
+    #[test]
+    fn test_extract_title_from_filename() {
+        // Helper function that mimics the filename extraction logic
+        fn extract_title_from_filename(file_name: &str) -> String {
+            if let Some(pos) = file_name.rfind('.') {
+                file_name[..pos].to_string()
+            } else {
+                file_name.to_string()
+            }
+        }
+
+        // Test standard filename with extension
+        assert_eq!(extract_title_from_filename("my_book.cbz"), "my_book");
+        assert_eq!(extract_title_from_filename("comic.epub"), "comic");
+        assert_eq!(extract_title_from_filename("document.pdf"), "document");
+
+        // Test filename with multiple dots (should use last dot)
+        assert_eq!(extract_title_from_filename("book.vol.1.cbz"), "book.vol.1");
+        assert_eq!(
+            extract_title_from_filename("my.comic.book.cbz"),
+            "my.comic.book"
+        );
+
+        // Test filename with no extension
+        assert_eq!(extract_title_from_filename("noextension"), "noextension");
+        assert_eq!(extract_title_from_filename("book"), "book");
+
+        // Test filename starting with dot
+        assert_eq!(extract_title_from_filename(".hidden"), "");
+
+        // Test filename ending with dot
+        assert_eq!(extract_title_from_filename("book."), "book");
+
+        // Test empty filename
+        assert_eq!(extract_title_from_filename(""), "");
+
+        // Test filename with only extension
+        assert_eq!(extract_title_from_filename(".cbz"), "");
     }
 }

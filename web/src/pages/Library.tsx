@@ -100,7 +100,7 @@ export function LibraryPage() {
 		<Container size="xl" py="xl">
 			<Stack gap="xl">
 				{/* Header with library name (or "All Libraries") */}
-				<Title order={1}>
+				<Title order={1} tt="capitalize">
 					{isAllLibraries ? "All Libraries" : library?.name || "Library"}
 				</Title>
 

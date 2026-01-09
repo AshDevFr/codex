@@ -66,4 +66,20 @@ export const booksApi = {
 		const response = await api.get<Book[]>(url);
 		return response.data;
 	},
+
+	// Trigger book analysis (force)
+	analyze: async (bookId: string): Promise<{ message: string }> => {
+		const response = await api.post<{ message: string }>(
+			`/books/${bookId}/analyze`,
+		);
+		return response.data;
+	},
+
+	// Trigger book analysis if not already analyzed
+	analyzeUnanalyzed: async (bookId: string): Promise<{ message: string }> => {
+		const response = await api.post<{ message: string }>(
+			`/books/${bookId}/analyze-unanalyzed`,
+		);
+		return response.data;
+	},
 };

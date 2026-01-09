@@ -99,6 +99,10 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         )
         // Library-specific series routes (protected)
         .route(
+            "/libraries/:library_id/series",
+            get(handlers::list_library_series),
+        )
+        .route(
             "/libraries/:library_id/series/started",
             get(handlers::list_library_started_series),
         )

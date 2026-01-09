@@ -204,6 +204,13 @@ async fn test_analyze_book_without_comic_info() -> Result<()> {
     assert!(updated_book.analyzed);
     assert_eq!(updated_book.page_count, 2);
 
+    // Verify title is set from filename when no metadata is available
+    assert_eq!(
+        updated_book.title,
+        Some("no_metadata".to_string()),
+        "Title should be extracted from filename when ComicInfo.xml is missing"
+    );
+
     // Verify no metadata record was created
     let metadata = BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), book.id).await?;
     assert!(
@@ -214,6 +221,281 @@ async fn test_analyze_book_without_comic_info() -> Result<()> {
     // Verify pages were still saved
     let pages = PageRepository::list_by_book(db.sea_orm_connection(), book.id).await?;
     assert_eq!(pages.len(), 2);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_analyze_book_title_fallback_to_filename() -> Result<()> {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let temp_dir = TempDir::new()?;
+
+    // Create a CBZ with ComicInfo.xml but without Title field
+    let file_path = temp_dir.path().join("my_awesome_book.cbz");
+    let file = fs::File::create(&file_path)?;
+    let mut zip = ZipWriter::new(file);
+
+    // ComicInfo.xml without Title field
+    let comic_info_xml = r#"<?xml version="1.0"?>
+<ComicInfo>
+  <Writer>Test Writer</Writer>
+  <Publisher>Test Publisher</Publisher>
+</ComicInfo>"#;
+
+    zip.start_file("ComicInfo.xml", SimpleFileOptions::default())?;
+    zip.write_all(comic_info_xml.as_bytes())?;
+
+    // Add image pages
+    for i in 1..=2 {
+        let page_name = format!("page{:03}.png", i);
+        zip.start_file(&page_name, SimpleFileOptions::default())?;
+        let png_data = create_test_png(10, 10);
+        zip.write_all(&png_data)?;
+    }
+
+    zip.finish()?;
+
+    // Create book record
+    let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
+
+    // Analyze the book
+    let result = analyze_book(db.sea_orm_connection(), book.id, false).await?;
+
+    // Verify analysis succeeded
+    assert_eq!(result.books_analyzed, 1);
+    assert!(result.errors.is_empty());
+
+    // Verify book is marked as analyzed
+    let updated_book = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+        .await?
+        .expect("Book should exist");
+    assert!(updated_book.analyzed);
+
+    // Verify title is set from filename when Title field is missing from ComicInfo
+    assert_eq!(
+        updated_book.title,
+        Some("my_awesome_book".to_string()),
+        "Title should be extracted from filename when Title field is missing from ComicInfo.xml"
+    );
+
+    // Verify metadata record was still created (other fields exist)
+    let metadata = BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), book.id)
+        .await?
+        .expect("Metadata should exist even without Title");
+    assert_eq!(metadata.writer, Some("Test Writer".to_string()));
+    assert_eq!(metadata.publisher, Some("Test Publisher".to_string()));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_analyze_book_title_from_metadata_takes_precedence() -> Result<()> {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let temp_dir = TempDir::new()?;
+
+    // Create a CBZ with ComicInfo.xml that has a Title field
+    let file_path = temp_dir.path().join("filename_fallback.cbz");
+    let file = fs::File::create(&file_path)?;
+    let mut zip = ZipWriter::new(file);
+
+    // ComicInfo.xml with Title field - should take precedence over filename
+    let comic_info_xml = r#"<?xml version="1.0"?>
+<ComicInfo>
+  <Title>Actual Book Title from Metadata</Title>
+  <Writer>Test Writer</Writer>
+</ComicInfo>"#;
+
+    zip.start_file("ComicInfo.xml", SimpleFileOptions::default())?;
+    zip.write_all(comic_info_xml.as_bytes())?;
+
+    // Add image pages
+    for i in 1..=2 {
+        let page_name = format!("page{:03}.png", i);
+        zip.start_file(&page_name, SimpleFileOptions::default())?;
+        let png_data = create_test_png(10, 10);
+        zip.write_all(&png_data)?;
+    }
+
+    zip.finish()?;
+
+    // Create book record
+    let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
+
+    // Analyze the book
+    let result = analyze_book(db.sea_orm_connection(), book.id, false).await?;
+
+    // Verify analysis succeeded
+    assert_eq!(result.books_analyzed, 1);
+    assert!(result.errors.is_empty());
+
+    // Verify book is marked as analyzed
+    let updated_book = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+        .await?
+        .expect("Book should exist");
+    assert!(updated_book.analyzed);
+
+    // Verify title from metadata is used, not filename
+    assert_eq!(
+        updated_book.title,
+        Some("Actual Book Title from Metadata".to_string()),
+        "Title from ComicInfo.xml should take precedence over filename"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_analyze_book_filename_no_extension() -> Result<()> {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let temp_dir = TempDir::new()?;
+
+    // Create a CBZ without ComicInfo.xml
+    // Use .cbz extension for format detection, but test filename extraction logic
+    // by creating a book with a file_name that has no extension (simulating edge case)
+    let file_path = temp_dir.path().join("noextension.cbz");
+    let file = fs::File::create(&file_path)?;
+    let mut zip = ZipWriter::new(file);
+
+    // Add only image pages, no ComicInfo.xml
+    for i in 1..=2 {
+        let page_name = format!("page{:03}.png", i);
+        zip.start_file(&page_name, SimpleFileOptions::default())?;
+        let png_data = create_test_png(10, 10);
+        zip.write_all(&png_data)?;
+    }
+
+    zip.finish()?;
+
+    // Create book record - file_path has extension but we'll test with file_name without extension
+    let (mut book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
+
+    // Manually set file_name to have no extension to test the fallback logic
+    book.file_name = "noextension".to_string();
+    BookRepository::update(db.sea_orm_connection(), &book).await?;
+
+    // Analyze the book
+    let result = analyze_book(db.sea_orm_connection(), book.id, false).await?;
+
+    // Verify analysis succeeded
+    assert_eq!(result.books_analyzed, 1);
+    assert!(result.errors.is_empty());
+
+    // Verify book is marked as analyzed
+    let updated_book = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+        .await?
+        .expect("Book should exist");
+    assert!(updated_book.analyzed);
+
+    // Verify title is set from full filename when no extension exists in file_name
+    assert_eq!(
+        updated_book.title,
+        Some("noextension".to_string()),
+        "Title should be the full filename when file_name has no extension"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_analyze_book_filename_multiple_dots() -> Result<()> {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let temp_dir = TempDir::new()?;
+
+    // Create a CBZ without ComicInfo.xml and with filename that has multiple dots
+    let file_path = temp_dir.path().join("book.vol.1.cbz");
+    let file = fs::File::create(&file_path)?;
+    let mut zip = ZipWriter::new(file);
+
+    // Add only image pages, no ComicInfo.xml
+    for i in 1..=2 {
+        let page_name = format!("page{:03}.png", i);
+        zip.start_file(&page_name, SimpleFileOptions::default())?;
+        let png_data = create_test_png(10, 10);
+        zip.write_all(&png_data)?;
+    }
+
+    zip.finish()?;
+
+    // Create book record
+    let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
+
+    // Analyze the book
+    let result = analyze_book(db.sea_orm_connection(), book.id, false).await?;
+
+    // Verify analysis succeeded
+    assert_eq!(result.books_analyzed, 1);
+    assert!(result.errors.is_empty());
+
+    // Verify book is marked as analyzed
+    let updated_book = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+        .await?
+        .expect("Book should exist");
+    assert!(updated_book.analyzed);
+
+    // Verify title uses last dot as extension separator (book.vol.1)
+    assert_eq!(
+        updated_book.title,
+        Some("book.vol.1".to_string()),
+        "Title should extract filename up to the last dot when multiple dots exist"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_analyze_book_empty_title_in_comic_info() -> Result<()> {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let temp_dir = TempDir::new()?;
+
+    // Create a CBZ with ComicInfo.xml that has an empty Title field
+    let file_path = temp_dir.path().join("empty_title_test.cbz");
+    let file = fs::File::create(&file_path)?;
+    let mut zip = ZipWriter::new(file);
+
+    // ComicInfo.xml with empty Title field
+    let comic_info_xml = r#"<?xml version="1.0"?>
+<ComicInfo>
+  <Title></Title>
+  <Writer>Test Writer</Writer>
+</ComicInfo>"#;
+
+    zip.start_file("ComicInfo.xml", SimpleFileOptions::default())?;
+    zip.write_all(comic_info_xml.as_bytes())?;
+
+    // Add image pages
+    for i in 1..=2 {
+        let page_name = format!("page{:03}.png", i);
+        zip.start_file(&page_name, SimpleFileOptions::default())?;
+        let png_data = create_test_png(10, 10);
+        zip.write_all(&png_data)?;
+    }
+
+    zip.finish()?;
+
+    // Create book record
+    let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
+
+    // Analyze the book
+    let result = analyze_book(db.sea_orm_connection(), book.id, false).await?;
+
+    // Verify analysis succeeded
+    assert_eq!(result.books_analyzed, 1);
+    assert!(result.errors.is_empty());
+
+    // Verify book is marked as analyzed
+    let updated_book = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+        .await?
+        .expect("Book should exist");
+    assert!(updated_book.analyzed);
+
+    // Verify title falls back to filename when Title field is empty string
+    // Empty <Title></Title> in XML becomes Some("") in Rust, which we filter out
+    // and fallback to filename
+    assert_eq!(
+        updated_book.title,
+        Some("empty_title_test".to_string()),
+        "Title should fallback to filename when ComicInfo Title is empty string"
+    );
 
     Ok(())
 }

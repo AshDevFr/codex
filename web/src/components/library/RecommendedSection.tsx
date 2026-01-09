@@ -1,8 +1,19 @@
-import { Stack, Title, Text, SimpleGrid, Card, Group } from "@mantine/core";
-import { useQuery } from "@tanstack/react-query";
+import {
+	ActionIcon,
+	Card,
+	Group,
+	Menu,
+	SimpleGrid,
+	Stack,
+	Text,
+	Title,
+} from "@mantine/core";
+import { notifications } from "@mantine/notifications";
+import { IconAnalyze, IconDots } from "@tabler/icons-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { booksApi } from "@/api/books";
 import { seriesApi } from "@/api/series";
-import type { Book } from "@/types/api";
+import type { Book, Series } from "@/types/api";
 
 interface RecommendedSectionProps {
 	libraryId: string;
@@ -98,10 +109,53 @@ function BookCard({
 	book: Book;
 	showProgress?: boolean;
 }) {
+	const queryClient = useQueryClient();
+
+	const analyzeMutation = useMutation({
+		mutationFn: () => booksApi.analyze(book.id),
+		onSuccess: () => {
+			notifications.show({
+				title: "Analysis started",
+				message: "Book analysis has been queued",
+				color: "blue",
+			});
+			queryClient.invalidateQueries({ queryKey: ["books"] });
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Analysis failed",
+				message: error.message || "Failed to start book analysis",
+				color: "red",
+			});
+		},
+	});
+
 	return (
 		<Card shadow="sm" padding="lg" radius="md" withBorder>
 			<Stack gap="xs">
-				<Text fw={500} lineClamp={2}>
+				<Group justify="space-between" align="flex-start">
+					<Text fw={500} lineClamp={1} c="dimmed" size="sm" style={{ flex: 1 }}>
+						{book.seriesName}
+					</Text>
+					<Menu position="bottom-end" shadow="md" withinPortal>
+						<Menu.Target>
+							<ActionIcon variant="subtle" color="gray" size="sm">
+								<IconDots size={16} />
+							</ActionIcon>
+						</Menu.Target>
+						<Menu.Dropdown>
+							<Menu.Item
+								leftSection={<IconAnalyze size={14} />}
+								onClick={() => analyzeMutation.mutate()}
+								disabled={analyzeMutation.isPending}
+							>
+								{analyzeMutation.isPending ? "Analyzing..." : "Analyze"}
+							</Menu.Item>
+						</Menu.Dropdown>
+					</Menu>
+				</Group>
+				<Text fw={600} lineClamp={2}>
+					{book.number !== undefined && book.number !== null ? `${book.number} - ` : ""}
 					{book.title}
 				</Text>
 				{showProgress && (
@@ -109,24 +163,86 @@ function BookCard({
 						Continue reading
 					</Text>
 				)}
-				{book.chapter_number && (
-					<Text size="xs" c="dimmed">
-						Chapter {book.chapter_number}
-					</Text>
-				)}
 			</Stack>
 		</Card>
 	);
 }
 
-function SeriesCard({ series }: { series: { id: string; name: string } }) {
+function SeriesCard({ series }: { series: Series }) {
+	const queryClient = useQueryClient();
+
+	const analyzeMutation = useMutation({
+		mutationFn: () => seriesApi.analyze(series.id),
+		onSuccess: () => {
+			notifications.show({
+				title: "Analysis started",
+				message: "All books in series queued for analysis",
+				color: "blue",
+			});
+			queryClient.invalidateQueries({ queryKey: ["series"] });
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Analysis failed",
+				message: error.message || "Failed to start series analysis",
+				color: "red",
+			});
+		},
+	});
+
+	const analyzeUnanalyzedMutation = useMutation({
+		mutationFn: () => seriesApi.analyzeUnanalyzed(series.id),
+		onSuccess: () => {
+			notifications.show({
+				title: "Analysis started",
+				message: "Unanalyzed books queued for analysis",
+				color: "blue",
+			});
+			queryClient.invalidateQueries({ queryKey: ["series"] });
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Analysis failed",
+				message: error.message || "Failed to start analysis",
+				color: "red",
+			});
+		},
+	});
+
 	return (
 		<Card shadow="sm" padding="lg" radius="md" withBorder>
-			<Group justify="space-between">
-				<Text fw={500} lineClamp={2}>
-					{series.name}
-				</Text>
-			</Group>
+			<Stack gap="xs">
+				<Group justify="space-between" align="flex-start">
+					<Text fw={500} lineClamp={2} style={{ flex: 1 }}>
+						{series.name}
+					</Text>
+					<Menu position="bottom-end" shadow="md" withinPortal>
+						<Menu.Target>
+							<ActionIcon variant="subtle" color="gray" size="sm">
+								<IconDots size={16} />
+							</ActionIcon>
+						</Menu.Target>
+						<Menu.Dropdown>
+							<Menu.Item
+								leftSection={<IconAnalyze size={14} />}
+								onClick={() => analyzeMutation.mutate()}
+								disabled={analyzeMutation.isPending}
+							>
+								{analyzeMutation.isPending ? "Analyzing..." : "Analyze All"}
+							</Menu.Item>
+							<Menu.Item
+								leftSection={<IconAnalyze size={14} />}
+								onClick={() => analyzeUnanalyzedMutation.mutate()}
+								disabled={analyzeUnanalyzedMutation.isPending}
+							>
+								{analyzeUnanalyzedMutation.isPending
+									? "Analyzing..."
+									: "Analyze Unanalyzed"}
+							</Menu.Item>
+						</Menu.Dropdown>
+					</Menu>
+				</Group>
+			</Stack>
 		</Card>
 	);
 }

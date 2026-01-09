@@ -34,47 +34,36 @@ export interface Library {
 
 export interface Series {
 	id: string;
-	library_id: string;
+	libraryId: string;
 	name: string;
-	sort_name?: string;
+	sortName?: string;
 	publisher?: string;
 	year?: number;
 	description?: string;
 	status?: string;
-	cover_path?: string;
-	created_at: string;
-	updated_at: string;
-	book_count?: number;
+	coverPath?: string;
+	createdAt: string;
+	updatedAt: string;
+	bookCount?: number;
+	path?: string;
+	selectedCoverSource?: string;
+	hasCustomCover?: boolean;
 }
 
 export interface Book {
 	id: string;
-	series_id: string;
+	seriesId: string;
+	seriesName: string;
 	title: string;
-	sort_title?: string;
-	file_path: string;
-	file_size: number;
-	file_hash: string;
-	page_count?: number;
-	chapter_number?: string;
-	release_date?: string;
-	writer?: string;
-	penciller?: string;
-	inker?: string;
-	colorist?: string;
-	letterer?: string;
-	cover_artist?: string;
-	editor?: string;
-	publisher?: string;
-	imprint?: string;
-	genre?: string;
-	tags?: string[];
-	description?: string;
-	isbn?: string;
-	age_rating?: string;
-	file_last_modified: string;
-	created_at: string;
-	updated_at: string;
+	sortTitle?: string;
+	filePath: string;
+	fileFormat: string;
+	fileSize: number;
+	fileHash: string;
+	pageCount: number;
+	number?: number;
+	createdAt: string;
+	updatedAt: string;
 }
 
 export interface ReadProgress {
@@ -118,10 +107,11 @@ export interface ApiError {
 }
 
 export interface PaginatedResponse<T> {
-	items: T[];
+	data: T[];
 	total: number;
 	page: number;
-	page_size: number;
+	pageSize: number;
+	totalPages: number;
 }
 
 export interface FileSystemEntry {
@@ -155,16 +145,15 @@ export type ScanStatus =
 	| "cancelled";
 
 export interface ScanProgress {
-	library_id: string;
+	libraryId: string;
 	status: ScanStatus;
-	files_total: number;
-	files_processed: number;
-	series_found: number;
-	books_found: number;
+	filesTotal: number;
+	filesProcessed: number;
+	seriesFound: number;
+	booksFound: number;
 	errors: string[];
-	started_at?: string;
-	completed_at?: string;
-	error_message?: string;
+	startedAt: string;
+	completedAt?: string;
 }
 
 // Setup wizard types

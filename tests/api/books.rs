@@ -663,3 +663,121 @@ async fn test_list_library_recently_added_books() {
         assert!(book.title.contains("Library 1"));
     }
 }
+
+// ============================================================================
+// Series Name and Title Fallback Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_books_include_series_name() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series Name")
+        .await
+        .unwrap();
+
+    // Create a book with a title
+    let book = create_test_book_model(
+        series.id,
+        "/test/book1.cbz",
+        "book1.cbz",
+        Some("Book Title".to_string()),
+    );
+    BookRepository::create(&db, &book).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request the book
+    let request = get_request_with_auth("/api/v1/books", &token);
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let book_list = response.unwrap();
+    assert_eq!(book_list.data.len(), 1);
+
+    // Verify series name is included
+    let returned_book = &book_list.data[0];
+    assert_eq!(returned_book.series_name, "Test Series Name");
+    assert_eq!(returned_book.title, "Book Title");
+}
+
+#[tokio::test]
+async fn test_books_use_filename_when_title_is_none() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series")
+        .await
+        .unwrap();
+
+    // Create a book without a title (title is None)
+    let book = create_test_book_model(series.id, "/test/mybook.cbz", "mybook.cbz", None);
+    BookRepository::create(&db, &book).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request the book
+    let request = get_request_with_auth("/api/v1/books", &token);
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let book_list = response.unwrap();
+    assert_eq!(book_list.data.len(), 1);
+
+    // Verify filename (without extension) is used as title
+    let returned_book = &book_list.data[0];
+    assert_eq!(returned_book.title, "mybook");
+}
+
+#[tokio::test]
+async fn test_books_filename_fallback_with_multiple_extensions() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series")
+        .await
+        .unwrap();
+
+    // Create a book with multiple dots in filename
+    let book = create_test_book_model(series.id, "/test/book.vol.1.cbz", "book.vol.1.cbz", None);
+    BookRepository::create(&db, &book).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request the book
+    let request = get_request_with_auth("/api/v1/books", &token);
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let book_list = response.unwrap();
+    assert_eq!(book_list.data.len(), 1);
+
+    // Verify filename without last extension is used
+    let returned_book = &book_list.data[0];
+    assert_eq!(returned_book.title, "book.vol.1");
+}

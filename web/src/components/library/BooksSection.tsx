@@ -1,6 +1,8 @@
 import {
+	ActionIcon,
 	Card,
 	Group,
+	Menu,
 	Pagination,
 	Select,
 	SimpleGrid,
@@ -9,8 +11,9 @@ import {
 	TextInput,
 } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
-import { IconSearch } from "@tabler/icons-react";
-import { useQuery } from "@tanstack/react-query";
+import { notifications } from "@mantine/notifications";
+import { IconAnalyze, IconDots, IconSearch } from "@tabler/icons-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { booksApi } from "@/api/books";
@@ -24,9 +27,9 @@ interface BooksSectionProps {
 export function BooksSection({ libraryId, searchParams }: BooksSectionProps) {
 	const navigate = useNavigate();
 
-	// Read query parameters
-	const page = parseInt(searchParams.get("page") || "1");
-	const pageSize = parseInt(searchParams.get("pageSize") || "20");
+	// Read query parameters (URL uses 1-indexed pages for user-friendly URLs)
+	const page = parseInt(searchParams.get("page") || "1", 10);
+	const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
 	const sort = searchParams.get("sort") || "title,asc";
 	const seriesFilter = searchParams.get("series") || "";
 	const genreFilter = searchParams.get("genre") || "";
@@ -35,7 +38,7 @@ export function BooksSection({ libraryId, searchParams }: BooksSectionProps) {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [debouncedSearch] = useDebouncedValue(searchQuery, 300);
 
-	// Fetch books data
+	// Fetch books data (convert to 0-indexed for backend)
 	const { data: booksData, isLoading } = useQuery({
 		queryKey: [
 			"books",
@@ -49,12 +52,14 @@ export function BooksSection({ libraryId, searchParams }: BooksSectionProps) {
 		],
 		queryFn: () =>
 			booksApi.getByLibrary(libraryId, {
-				page,
+				page: page - 1, // Convert to 0-indexed for backend
 				pageSize,
 				sort,
 				series_id: seriesFilter,
 				genre: genreFilter,
 			}),
+		staleTime: 30000, // 30 seconds - shorter than global default
+		refetchOnMount: true, // Always refetch when component mounts
 	});
 
 	// Update URL when filters change
@@ -88,7 +93,7 @@ export function BooksSection({ libraryId, searchParams }: BooksSectionProps) {
 	};
 
 	const totalPages = booksData
-		? Math.ceil(booksData.total / booksData.page_size)
+		? Math.ceil(booksData.total / booksData.pageSize)
 		: 1;
 
 	return (
@@ -132,13 +137,13 @@ export function BooksSection({ libraryId, searchParams }: BooksSectionProps) {
 				/>
 			</Group>
 
-			{/* Books Grid */}
-			{isLoading ? (
-				<Text c="dimmed">Loading books...</Text>
-			) : booksData && booksData.items.length > 0 ? (
+	{/* Books Grid */}
+	{isLoading ? (
+		<Text c="dimmed">Loading books...</Text>
+	) : booksData?.data && booksData.data.length > 0 ? (
 				<>
 					<SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4, xl: 5 }}>
-						{booksData.items.map((book) => (
+						{booksData.data.map((book) => (
 							<BookCard key={book.id} book={book} />
 						))}
 					</SimpleGrid>
@@ -175,27 +180,63 @@ export function BooksSection({ libraryId, searchParams }: BooksSectionProps) {
 
 // Placeholder BookCard component
 function BookCard({ book }: { book: Book }) {
+	const queryClient = useQueryClient();
+
+	const analyzeMutation = useMutation({
+		mutationFn: () => booksApi.analyze(book.id),
+		onSuccess: () => {
+			notifications.show({
+				title: "Analysis started",
+				message: "Book analysis has been queued",
+				color: "blue",
+			});
+			queryClient.invalidateQueries({ queryKey: ["books"] });
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Analysis failed",
+				message: error.message || "Failed to start book analysis",
+				color: "red",
+			});
+		},
+	});
+
 	return (
 		<Card shadow="sm" padding="lg" radius="md" withBorder>
 			<Stack gap="xs">
-				<Text fw={500} lineClamp={2}>
+				<Group justify="space-between" align="flex-start">
+					<Text fw={500} lineClamp={1} c="dimmed" size="sm" style={{ flex: 1 }}>
+						{book.seriesName}
+					</Text>
+					<Menu position="bottom-end" shadow="md" withinPortal>
+						<Menu.Target>
+							<ActionIcon variant="subtle" color="gray" size="sm">
+								<IconDots size={16} />
+							</ActionIcon>
+						</Menu.Target>
+						<Menu.Dropdown>
+							<Menu.Item
+								leftSection={<IconAnalyze size={14} />}
+								onClick={() => analyzeMutation.mutate()}
+								disabled={analyzeMutation.isPending}
+							>
+								{analyzeMutation.isPending ? "Analyzing..." : "Analyze"}
+							</Menu.Item>
+						</Menu.Dropdown>
+					</Menu>
+				</Group>
+				<Text fw={600} lineClamp={2}>
+					{book.number !== undefined && book.number !== null ? `${book.number} - ` : ""}
 					{book.title}
 				</Text>
-				{book.chapter_number && (
+				{book.pageCount && (
 					<Text size="xs" c="dimmed">
-						Chapter {book.chapter_number}
+						{book.pageCount} pages
 					</Text>
 				)}
-				{book.writer && (
-					<Text size="xs" c="dimmed" lineClamp={1}>
-						{book.writer}
-					</Text>
-				)}
-				{book.page_count && (
-					<Text size="xs" c="dimmed">
-						{book.page_count} pages
-					</Text>
-				)}
+				<Text size="xs" c="dimmed">
+					{book.fileFormat.toUpperCase()}
+				</Text>
 			</Stack>
 		</Card>
 	);

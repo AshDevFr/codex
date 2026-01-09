@@ -4,13 +4,14 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
-use crate::db::repositories::{BookMetadataRepository, BookRepository};
+use crate::db::repositories::{BookMetadataRepository, BookRepository, SeriesRepository};
 use crate::require_permission;
 use axum::{
     extract::{Path, Query, State},
     Json,
 };
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -28,10 +29,78 @@ pub struct BookListQuery {
     /// Number of items per page (max 100)
     #[serde(default = "default_page_size")]
     pub page_size: u64,
+
+    /// Sort parameter (format: "field,direction" e.g. "title,asc")
+    #[serde(default)]
+    pub sort: Option<String>,
 }
 
 fn default_page_size() -> u64 {
     20
+}
+
+/// Helper function to convert books to DTOs with series information
+pub async fn books_to_dtos(
+    db: &sea_orm::DatabaseConnection,
+    books: Vec<crate::db::entities::books::Model>,
+) -> Result<Vec<BookDto>, ApiError> {
+    // Collect unique series IDs
+    let series_ids: Vec<Uuid> = books
+        .iter()
+        .map(|b| b.series_id)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    // Fetch all series in one query
+    let mut series_map = HashMap::new();
+    for series_id in series_ids {
+        if let Ok(Some(series)) = SeriesRepository::get_by_id(db, series_id).await {
+            series_map.insert(series_id, series.name);
+        }
+    }
+
+    // Convert books to DTOs
+    let dtos = books
+        .into_iter()
+        .map(|book| {
+            let series_name = series_map
+                .get(&book.series_id)
+                .cloned()
+                .unwrap_or_else(|| "Unknown Series".to_string());
+
+            // Use title if available, otherwise use file_name
+            let title = book.title.clone().unwrap_or_else(|| {
+                // Extract filename without extension
+                let file_name = &book.file_name;
+                if let Some(pos) = file_name.rfind('.') {
+                    file_name[..pos].to_string()
+                } else {
+                    file_name.clone()
+                }
+            });
+
+            BookDto {
+                id: book.id,
+                series_id: book.series_id,
+                series_name,
+                title,
+                sort_title: book.title.clone(),
+                file_path: book.file_path,
+                file_format: book.format,
+                file_size: book.file_size,
+                file_hash: book.file_hash,
+                page_count: book.page_count,
+                number: book
+                    .number
+                    .map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
+                created_at: book.created_at,
+                updated_at: book.updated_at,
+            }
+        })
+        .collect();
+
+    Ok(dtos)
 }
 
 /// List books with pagination
@@ -77,8 +146,14 @@ pub async fn list_books(
         // Apply pagination manually
         let offset = query.page * page_size;
         let start = offset as usize;
-        let end = (start + page_size as usize).min(books.len());
-        let paginated = books[start..end].to_vec();
+
+        // If start is beyond the list, return empty results
+        let paginated = if start >= books.len() {
+            vec![]
+        } else {
+            let end = (start + page_size as usize).min(books.len());
+            books[start..end].to_vec()
+        };
 
         (paginated, total)
     } else {
@@ -91,29 +166,86 @@ pub async fn list_books(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
     };
 
-    let dtos: Vec<BookDto> = books_list
-        .into_iter()
-        .map(|book| BookDto {
-            id: book.id,
-            series_id: book.series_id,
-            title: book.title.clone().unwrap_or_default(),
-            sort_title: book.title.clone(), // No sort_title field, use title (Option<String>)
-            file_path: book.file_path,
-            file_format: book.format,
-            file_size: book.file_size,
-            file_hash: book.file_hash,
-            page_count: book.page_count,
-            number: book
-                .number
-                .map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
-            created_at: book.created_at,
-            updated_at: book.updated_at,
-        })
-        .collect();
+    let dtos = books_to_dtos(&state.db, books_list).await?;
 
     let response = BookListResponse::new(dtos, query.page, page_size, total);
 
     Ok(Json(response))
+}
+
+/// Apply sorting to books list
+fn apply_book_sorting(books_list: &mut [crate::db::entities::books::Model], sort_param: &str) {
+    let parts: Vec<&str> = sort_param.split(',').collect();
+    if parts.len() != 2 {
+        return; // Invalid format, skip sorting
+    }
+
+    let field = parts[0];
+    let direction = parts[1];
+    let ascending = direction == "asc";
+
+    match field {
+        "title" => {
+            books_list.sort_by(|a, b| {
+                let a_title = a.title.as_deref().unwrap_or(&a.file_name);
+                let b_title = b.title.as_deref().unwrap_or(&b.file_name);
+                let cmp = a_title.cmp(b_title);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        "created_at" => {
+            books_list.sort_by(|a, b| {
+                let cmp = a.created_at.cmp(&b.created_at);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        "release_date" => {
+            books_list.sort_by(|a, b| {
+                // Handle None values - put them at the end
+                match (&a.number, &b.number) {
+                    (Some(a_num), Some(b_num)) => {
+                        let cmp = a_num
+                            .partial_cmp(b_num)
+                            .unwrap_or(std::cmp::Ordering::Equal);
+                        if ascending {
+                            cmp
+                        } else {
+                            cmp.reverse()
+                        }
+                    }
+                    (Some(_), None) => std::cmp::Ordering::Less,
+                    (None, Some(_)) => std::cmp::Ordering::Greater,
+                    (None, None) => std::cmp::Ordering::Equal,
+                }
+            });
+        }
+        "chapter_number" => {
+            books_list.sort_by(|a, b| match (&a.number, &b.number) {
+                (Some(a_num), Some(b_num)) => {
+                    let cmp = a_num
+                        .partial_cmp(b_num)
+                        .unwrap_or(std::cmp::Ordering::Equal);
+                    if ascending {
+                        cmp
+                    } else {
+                        cmp.reverse()
+                    }
+                }
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => std::cmp::Ordering::Equal,
+            });
+        }
+        _ => {} // Unknown field, skip sorting
+    }
 }
 
 /// Get book by ID
@@ -172,22 +304,8 @@ pub async fn get_book(
             editors: meta.editor.map(|s| vec![s]).unwrap_or_default(),
         });
 
-    let book_dto = BookDto {
-        id: book.id,
-        series_id: book.series_id,
-        title: book.title.clone().unwrap_or_default(),
-        sort_title: book.title.clone(), // No sort_title field, use title (Option<String>)
-        file_path: book.file_path,
-        file_format: book.format,
-        file_size: book.file_size,
-        file_hash: book.file_hash,
-        page_count: book.page_count,
-        number: book
-            .number
-            .map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
-        created_at: book.created_at,
-        updated_at: book.updated_at,
-    };
+    let mut dtos = books_to_dtos(&state.db, vec![book]).await?;
+    let book_dto = dtos.pop().unwrap(); // Safe because we just passed a single book
 
     let response = BookDetailResponse {
         book: book_dto,
@@ -231,32 +349,19 @@ pub async fn list_library_books(
     };
 
     // Fetch books by library
-    let (books_list, total) = BookRepository::list_by_library(
+    let (mut books_list, total) = BookRepository::list_by_library(
         &state.db, library_id, false, // exclude deleted
         query.page, page_size,
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch library books: {}", e)))?;
 
-    let dtos: Vec<BookDto> = books_list
-        .into_iter()
-        .map(|book| BookDto {
-            id: book.id,
-            series_id: book.series_id,
-            title: book.title.clone().unwrap_or_default(),
-            sort_title: book.title.clone(),
-            file_path: book.file_path,
-            file_format: book.format,
-            file_size: book.file_size,
-            file_hash: book.file_hash,
-            page_count: book.page_count,
-            number: book
-                .number
-                .map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
-            created_at: book.created_at,
-            updated_at: book.updated_at,
-        })
-        .collect();
+    // Apply sorting if specified (Note: pagination already applied by repository, so this only sorts the current page)
+    if let Some(sort_param) = &query.sort {
+        apply_book_sorting(&mut books_list, sort_param);
+    }
+
+    let dtos = books_to_dtos(&state.db, books_list).await?;
 
     let response = BookListResponse::new(dtos, query.page, page_size, total);
 
@@ -306,25 +411,7 @@ pub async fn list_in_progress_books(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress books: {}", e)))?;
 
-    let dtos: Vec<BookDto> = books_list
-        .into_iter()
-        .map(|book| BookDto {
-            id: book.id,
-            series_id: book.series_id,
-            title: book.title.clone().unwrap_or_default(),
-            sort_title: book.title.clone(),
-            file_path: book.file_path,
-            file_format: book.format,
-            file_size: book.file_size,
-            file_hash: book.file_hash,
-            page_count: book.page_count,
-            number: book
-                .number
-                .map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
-            created_at: book.created_at,
-            updated_at: book.updated_at,
-        })
-        .collect();
+    let dtos = books_to_dtos(&state.db, books_list).await?;
 
     let response = BookListResponse::new(dtos, query.page, page_size, total);
 
@@ -376,25 +463,7 @@ pub async fn list_library_in_progress_books(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress books: {}", e)))?;
 
-    let dtos: Vec<BookDto> = books_list
-        .into_iter()
-        .map(|book| BookDto {
-            id: book.id,
-            series_id: book.series_id,
-            title: book.title.clone().unwrap_or_default(),
-            sort_title: book.title.clone(),
-            file_path: book.file_path,
-            file_format: book.format,
-            file_size: book.file_size,
-            file_hash: book.file_hash,
-            page_count: book.page_count,
-            number: book
-                .number
-                .map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
-            created_at: book.created_at,
-            updated_at: book.updated_at,
-        })
-        .collect();
+    let dtos = books_to_dtos(&state.db, books_list).await?;
 
     let response = BookListResponse::new(dtos, query.page, page_size, total);
 
@@ -441,25 +510,7 @@ pub async fn list_recently_added_books(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch recently added books: {}", e)))?;
 
-    let dtos: Vec<BookDto> = books_list
-        .into_iter()
-        .map(|book| BookDto {
-            id: book.id,
-            series_id: book.series_id,
-            title: book.title.clone().unwrap_or_default(),
-            sort_title: book.title.clone(),
-            file_path: book.file_path,
-            file_format: book.format,
-            file_size: book.file_size,
-            file_hash: book.file_hash,
-            page_count: book.page_count,
-            number: book
-                .number
-                .map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
-            created_at: book.created_at,
-            updated_at: book.updated_at,
-        })
-        .collect();
+    let dtos = books_to_dtos(&state.db, books_list).await?;
 
     let response = BookListResponse::new(dtos, query.page, page_size, total);
 
@@ -510,25 +561,7 @@ pub async fn list_library_recently_added_books(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch recently added books: {}", e)))?;
 
-    let dtos: Vec<BookDto> = books_list
-        .into_iter()
-        .map(|book| BookDto {
-            id: book.id,
-            series_id: book.series_id,
-            title: book.title.clone().unwrap_or_default(),
-            sort_title: book.title.clone(),
-            file_path: book.file_path,
-            file_format: book.format,
-            file_size: book.file_size,
-            file_hash: book.file_hash,
-            page_count: book.page_count,
-            number: book
-                .number
-                .map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
-            created_at: book.created_at,
-            updated_at: book.updated_at,
-        })
-        .collect();
+    let dtos = books_to_dtos(&state.db, books_list).await?;
 
     let response = BookListResponse::new(dtos, query.page, page_size, total);
 

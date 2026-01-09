@@ -1,6 +1,8 @@
 import {
+	ActionIcon,
 	Card,
 	Group,
+	Menu,
 	Pagination,
 	Select,
 	SimpleGrid,
@@ -9,8 +11,9 @@ import {
 	TextInput,
 } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
-import { IconSearch } from "@tabler/icons-react";
-import { useQuery } from "@tanstack/react-query";
+import { notifications } from "@mantine/notifications";
+import { IconAnalyze, IconDots, IconSearch } from "@tabler/icons-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { seriesApi } from "@/api/series";
@@ -27,9 +30,9 @@ export function SeriesSection({
 }: SeriesSectionProps) {
 	const navigate = useNavigate();
 
-	// Read query parameters
-	const page = parseInt(searchParams.get("page") || "1");
-	const pageSize = parseInt(searchParams.get("pageSize") || "20");
+	// Read query parameters (URL uses 1-indexed pages for user-friendly URLs)
+	const page = parseInt(searchParams.get("page") || "1", 10);
+	const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
 	const sort = searchParams.get("sort") || "name,asc";
 	const genreFilter = searchParams.get("genre") || "";
 	const statusFilter = searchParams.get("status") || "";
@@ -38,7 +41,7 @@ export function SeriesSection({
 	const [searchQuery, setSearchQuery] = useState("");
 	const [debouncedSearch] = useDebouncedValue(searchQuery, 300);
 
-	// Fetch series data
+	// Fetch series data (convert to 0-indexed for backend)
 	const { data: seriesData, isLoading } = useQuery({
 		queryKey: [
 			"series",
@@ -52,12 +55,14 @@ export function SeriesSection({
 		],
 		queryFn: () =>
 			seriesApi.getByLibrary(libraryId, {
-				page,
+				page: page - 1, // Convert to 0-indexed for backend
 				pageSize,
 				sort,
 				genre: genreFilter,
 				status: statusFilter,
 			}),
+		staleTime: 30000, // 30 seconds - shorter than global default
+		refetchOnMount: true, // Always refetch when component mounts
 	});
 
 	// Update URL when filters change
@@ -91,7 +96,7 @@ export function SeriesSection({
 	};
 
 	const totalPages = seriesData
-		? Math.ceil(seriesData.total / seriesData.page_size)
+		? Math.ceil(seriesData.total / seriesData.pageSize)
 		: 1;
 
 	return (
@@ -123,7 +128,7 @@ export function SeriesSection({
 					label="Page Size"
 					value={pageSize.toString()}
 					onChange={(value) =>
-						value && handleFilterChange({ pageSize: parseInt(value) })
+						value && handleFilterChange({ pageSize: parseInt(value, 10) })
 					}
 					data={[
 						{ value: "20", label: "20 per page" },
@@ -135,13 +140,13 @@ export function SeriesSection({
 				/>
 			</Group>
 
-			{/* Series Grid */}
-			{isLoading ? (
-				<Text c="dimmed">Loading series...</Text>
-			) : seriesData && seriesData.items.length > 0 ? (
+	{/* Series Grid */}
+	{isLoading ? (
+		<Text c="dimmed">Loading series...</Text>
+	) : seriesData?.data && seriesData.data.length > 0 ? (
 				<>
 					<SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }}>
-						{seriesData.items.map((series) => (
+						{seriesData.data.map((series) => (
 							<SeriesCard key={series.id} series={series} />
 						))}
 					</SimpleGrid>
@@ -182,20 +187,87 @@ export function SeriesSection({
 
 // Placeholder SeriesCard component
 function SeriesCard({ series }: { series: Series }) {
+	const queryClient = useQueryClient();
+
+	const analyzeMutation = useMutation({
+		mutationFn: () => seriesApi.analyze(series.id),
+		onSuccess: () => {
+			notifications.show({
+				title: "Analysis started",
+				message: "All books in series queued for analysis",
+				color: "blue",
+			});
+			queryClient.invalidateQueries({ queryKey: ["series"] });
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Analysis failed",
+				message: error.message || "Failed to start series analysis",
+				color: "red",
+			});
+		},
+	});
+
+	const analyzeUnanalyzedMutation = useMutation({
+		mutationFn: () => seriesApi.analyzeUnanalyzed(series.id),
+		onSuccess: () => {
+			notifications.show({
+				title: "Analysis started",
+				message: "Unanalyzed books queued for analysis",
+				color: "blue",
+			});
+			queryClient.invalidateQueries({ queryKey: ["series"] });
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Analysis failed",
+				message: error.message || "Failed to start analysis",
+				color: "red",
+			});
+		},
+	});
+
 	return (
 		<Card shadow="sm" padding="lg" radius="md" withBorder>
 			<Stack gap="xs">
-				<Text fw={500} lineClamp={2}>
-					{series.name}
-				</Text>
+				<Group justify="space-between" align="flex-start">
+					<Text fw={500} lineClamp={2} style={{ flex: 1 }}>
+						{series.name}
+					</Text>
+					<Menu position="bottom-end" shadow="md" withinPortal>
+						<Menu.Target>
+							<ActionIcon variant="subtle" color="gray" size="sm">
+								<IconDots size={16} />
+							</ActionIcon>
+						</Menu.Target>
+						<Menu.Dropdown>
+							<Menu.Item
+								leftSection={<IconAnalyze size={14} />}
+								onClick={() => analyzeMutation.mutate()}
+								disabled={analyzeMutation.isPending}
+							>
+								{analyzeMutation.isPending ? "Analyzing..." : "Analyze All"}
+							</Menu.Item>
+							<Menu.Item
+								leftSection={<IconAnalyze size={14} />}
+								onClick={() => analyzeUnanalyzedMutation.mutate()}
+								disabled={analyzeUnanalyzedMutation.isPending}
+							>
+								{analyzeUnanalyzedMutation.isPending
+									? "Analyzing..."
+									: "Analyze Unanalyzed"}
+							</Menu.Item>
+						</Menu.Dropdown>
+					</Menu>
+				</Group>
 				{series.publisher && (
 					<Text size="xs" c="dimmed">
 						{series.publisher}
 					</Text>
 				)}
-				{series.book_count !== undefined && (
+				{series.bookCount !== undefined && (
 					<Text size="xs" c="dimmed">
-						{series.book_count} book{series.book_count !== 1 ? "s" : ""}
+						{series.bookCount} book{series.bookCount !== 1 ? "s" : ""}
 					</Text>
 				)}
 				{series.year && (

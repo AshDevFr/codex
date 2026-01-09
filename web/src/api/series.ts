@@ -54,4 +54,20 @@ export const seriesApi = {
 		const response = await api.get<Series[]>(url);
 		return response.data;
 	},
+
+	// Trigger series analysis (force - all books)
+	analyze: async (seriesId: string): Promise<{ message: string }> => {
+		const response = await api.post<{ message: string }>(
+			`/series/${seriesId}/analyze`,
+		);
+		return response.data;
+	},
+
+	// Trigger series analysis for unanalyzed books only
+	analyzeUnanalyzed: async (seriesId: string): Promise<{ message: string }> => {
+		const response = await api.post<{ message: string }>(
+			`/series/${seriesId}/analyze-unanalyzed`,
+		);
+		return response.data;
+	},
 };

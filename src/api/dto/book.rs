@@ -10,6 +10,7 @@ use super::common::PaginatedResponse;
 pub struct BookDto {
     pub id: uuid::Uuid,
     pub series_id: uuid::Uuid,
+    pub series_name: String,
     pub title: String,
     pub sort_title: Option<String>,
     pub file_path: String,

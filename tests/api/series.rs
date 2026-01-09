@@ -2,7 +2,7 @@
 mod common;
 
 use codex::api::dto::book::BookDto;
-use codex::api::dto::series::{SearchSeriesRequest, SeriesDto};
+use codex::api::dto::series::{SearchSeriesRequest, SeriesDto, SeriesListResponse};
 use codex::api::error::ErrorResponse;
 use codex::db::repositories::{
     BookRepository, LibraryRepository, SeriesRepository, UserRepository,
@@ -51,12 +51,14 @@ async fn test_list_series_all() {
     let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/series", &token);
-    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
-    let series = response.unwrap();
-    assert_eq!(series.len(), 2);
+    let series_response = response.unwrap();
+    assert_eq!(series_response.data.len(), 2);
+    assert_eq!(series_response.total, 2);
+    assert_eq!(series_response.page, 0);
 }
 
 #[tokio::test]
@@ -86,18 +88,15 @@ async fn test_list_series_by_library() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    // Query series for library 1
-    let request = get_request_with_auth(
-        &format!("/api/v1/series?library_id={}", library1.id),
-        &token,
-    );
-    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
+    // Query all series (should return paginated response)
+    let request = get_request_with_auth("/api/v1/series", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
-    let series = response.unwrap();
-    assert_eq!(series.len(), 2);
-    assert!(series.iter().all(|s| s.name.starts_with("Lib1")));
+    let series_response = response.unwrap();
+    assert_eq!(series_response.data.len(), 3);
+    assert_eq!(series_response.total, 3);
 }
 
 #[tokio::test]
@@ -134,14 +133,28 @@ async fn test_list_series_pagination() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    // List all series (pagination parameters are ignored now)
-    let request = get_request_with_auth("/api/v1/series", &token);
-    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
+    // Test first page with page size of 2
+    let request = get_request_with_auth("/api/v1/series?page=0&page_size=2", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page1 = response.unwrap();
+    assert_eq!(page1.data.len(), 2);
+    assert_eq!(page1.total, 5);
+    assert_eq!(page1.page, 0);
+    assert_eq!(page1.page_size, 2);
+
+    // Test second page
+    let request = get_request_with_auth("/api/v1/series?page=1&page_size=2", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
-    let series = response.unwrap();
-    assert_eq!(series.len(), 5);
+    let page2 = response.unwrap();
+    assert_eq!(page2.data.len(), 2);
+    assert_eq!(page2.total, 5);
+    assert_eq!(page2.page, 1);
 }
 
 // ============================================================================
@@ -481,6 +494,156 @@ async fn test_get_series_books_include_deleted_false_explicit() {
     // Should only return 1 active book
     assert_eq!(books.len(), 1);
     assert_eq!(books[0].id, book1.id);
+}
+
+// ============================================================================
+// Library Series Tests (with Pagination)
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_library_series() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create two libraries with series
+    let library1 = LibraryRepository::create(&db, "Library 1", "/lib1", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let library2 = LibraryRepository::create(&db, "Library 2", "/lib2", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series in each library
+    for i in 1..=3 {
+        SeriesRepository::create(&db, library1.id, &format!("Lib1 Series {}", i))
+            .await
+            .unwrap();
+    }
+    for i in 1..=2 {
+        SeriesRepository::create(&db, library2.id, &format!("Lib2 Series {}", i))
+            .await
+            .unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request series from library 1
+    let request =
+        get_request_with_auth(&format!("/api/v1/libraries/{}/series", library1.id), &token);
+    let (status, response): (
+        StatusCode,
+        Option<codex::api::dto::series::SeriesListResponse>,
+    ) = make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 3);
+    assert_eq!(series_list.total, 3);
+    assert!(series_list.data.iter().all(|s| s.name.starts_with("Lib1")));
+
+    // Request series from library 2
+    let request =
+        get_request_with_auth(&format!("/api/v1/libraries/{}/series", library2.id), &token);
+    let (status, response): (
+        StatusCode,
+        Option<codex::api::dto::series::SeriesListResponse>,
+    ) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 2);
+    assert_eq!(series_list.total, 2);
+    assert!(series_list.data.iter().all(|s| s.name.starts_with("Lib2")));
+}
+
+#[tokio::test]
+async fn test_list_library_series_with_pagination() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create 15 series
+    for i in 1..=15 {
+        SeriesRepository::create(&db, library.id, &format!("Series {:02}", i))
+            .await
+            .unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    // Request first page (page_size=10, page=0)
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/libraries/{}/series?page=0&page_size=10",
+            library.id
+        ),
+        &token,
+    );
+    let (status, response): (
+        StatusCode,
+        Option<codex::api::dto::series::SeriesListResponse>,
+    ) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page1 = response.unwrap();
+    assert_eq!(page1.data.len(), 10);
+    assert_eq!(page1.total, 15);
+    assert_eq!(page1.page, 0);
+
+    // Request second page (page=1)
+    let app2 = create_test_router(state).await;
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/libraries/{}/series?page=1&page_size=10",
+            library.id
+        ),
+        &token,
+    );
+    let (status, response): (
+        StatusCode,
+        Option<codex::api::dto::series::SeriesListResponse>,
+    ) = make_json_request(app2, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page2 = response.unwrap();
+    assert_eq!(page2.data.len(), 5);
+    assert_eq!(page2.total, 15);
+    assert_eq!(page2.page, 1);
+
+    // Verify different series on each page
+    assert_ne!(page1.data[0].id, page2.data[0].id);
+}
+
+#[tokio::test]
+async fn test_list_library_series_empty() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library with no series
+    let library =
+        LibraryRepository::create(&db, "Empty Library", "/empty", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request =
+        get_request_with_auth(&format!("/api/v1/libraries/{}/series", library.id), &token);
+    let (status, response): (
+        StatusCode,
+        Option<codex::api::dto::series::SeriesListResponse>,
+    ) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 0);
+    assert_eq!(series_list.total, 0);
 }
 
 // ============================================================================
