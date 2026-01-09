@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { librariesApi } from "@/api/libraries";
 import { renderWithProviders, userEvent } from "@/test/utils";
 import type { Library } from "@/types/api";
-import { EditLibraryModal } from "./EditLibraryModal";
+import { LibraryModal } from "./LibraryModal";
 
 vi.mock("@/api/libraries");
 vi.mock("@mantine/notifications", () => ({
@@ -22,7 +22,6 @@ const mockLibrary: Library = {
 	scanningConfig: {
 		enabled: false,
 		scanMode: "normal",
-		autoScanOnCreate: false,
 		scanOnStart: false,
 		purgeDeletedOnScan: false,
 	},
@@ -36,13 +35,12 @@ const mockLibraryWithAutoScan: Library = {
 		enabled: true,
 		scanMode: "normal",
 		cronSchedule: "0 */6 * * *",
-		autoScanOnCreate: true,
 		scanOnStart: false,
 		purgeDeletedOnScan: true,
 	},
 };
 
-describe("EditLibraryModal", () => {
+describe("LibraryModal (Edit Mode)", () => {
 	const mockOnClose = vi.fn();
 
 	beforeEach(() => {
@@ -52,7 +50,7 @@ describe("EditLibraryModal", () => {
 
 	it("should not render when closed", () => {
 		renderWithProviders(
-			<EditLibraryModal
+			<LibraryModal
 				opened={false}
 				onClose={mockOnClose}
 				library={mockLibrary}
@@ -64,7 +62,7 @@ describe("EditLibraryModal", () => {
 
 	it("should not render when library is null", () => {
 		renderWithProviders(
-			<EditLibraryModal opened={true} onClose={mockOnClose} library={null} />,
+			<LibraryModal opened={true} onClose={mockOnClose} library={null} />,
 		);
 
 		expect(screen.queryByText("Edit Library")).not.toBeInTheDocument();
@@ -72,7 +70,7 @@ describe("EditLibraryModal", () => {
 
 	it("should render form with library data when opened", async () => {
 		renderWithProviders(
-			<EditLibraryModal
+			<LibraryModal
 				opened={true}
 				onClose={mockOnClose}
 				library={mockLibrary}
@@ -110,7 +108,7 @@ describe("EditLibraryModal", () => {
 
 	it("should show cron input when library has auto scan enabled", async () => {
 		renderWithProviders(
-			<EditLibraryModal
+			<LibraryModal
 				opened={true}
 				onClose={mockOnClose}
 				library={mockLibraryWithAutoScan}
@@ -148,7 +146,7 @@ describe("EditLibraryModal", () => {
 
 	it("should not show cron input when library has manual scan", async () => {
 		renderWithProviders(
-			<EditLibraryModal
+			<LibraryModal
 				opened={true}
 				onClose={mockOnClose}
 				library={mockLibrary}
@@ -171,7 +169,7 @@ describe("EditLibraryModal", () => {
 	it("should show cron input when switching to auto scan", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<EditLibraryModal
+			<LibraryModal
 				opened={true}
 				onClose={mockOnClose}
 				library={mockLibrary}
@@ -245,7 +243,7 @@ describe("EditLibraryModal", () => {
 	it("should update library with cron schedule when auto scan is enabled", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<EditLibraryModal
+			<LibraryModal
 				opened={true}
 				onClose={mockOnClose}
 				library={mockLibrary}
@@ -333,7 +331,7 @@ describe("EditLibraryModal", () => {
 	it("should update library without cron schedule when manual scan is selected", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<EditLibraryModal
+			<LibraryModal
 				opened={true}
 				onClose={mockOnClose}
 				library={mockLibraryWithAutoScan}
@@ -402,7 +400,7 @@ describe("EditLibraryModal", () => {
 	it("should close modal when Cancel is clicked", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<EditLibraryModal
+			<LibraryModal
 				opened={true}
 				onClose={mockOnClose}
 				library={mockLibrary}
@@ -422,7 +420,7 @@ describe("EditLibraryModal", () => {
 	it("should validate cron input when auto scan is enabled", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<EditLibraryModal
+			<LibraryModal
 				opened={true}
 				onClose={mockOnClose}
 				library={mockLibrary}
@@ -498,7 +496,7 @@ describe("EditLibraryModal", () => {
 
 	it("should default to all formats when library has empty allowedFormats", async () => {
 		renderWithProviders(
-			<EditLibraryModal
+			<LibraryModal
 				opened={true}
 				onClose={mockOnClose}
 				library={mockLibrary}
@@ -541,7 +539,7 @@ describe("EditLibraryModal", () => {
 		};
 
 		renderWithProviders(
-			<EditLibraryModal
+			<LibraryModal
 				opened={true}
 				onClose={mockOnClose}
 				library={libraryWithoutFormats}
@@ -578,7 +576,7 @@ describe("EditLibraryModal", () => {
 		};
 
 		renderWithProviders(
-			<EditLibraryModal
+			<LibraryModal
 				opened={true}
 				onClose={mockOnClose}
 				library={libraryWithFormats}
@@ -600,7 +598,7 @@ describe("EditLibraryModal", () => {
 	it("should submit with all formats when all are selected", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<EditLibraryModal
+			<LibraryModal
 				opened={true}
 				onClose={mockOnClose}
 				library={mockLibrary}
@@ -628,7 +626,7 @@ describe("EditLibraryModal", () => {
 	it("should submit with selected formats when some are deselected", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<EditLibraryModal
+			<LibraryModal
 				opened={true}
 				onClose={mockOnClose}
 				library={mockLibrary}

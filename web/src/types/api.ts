@@ -11,7 +11,6 @@ export interface User {
 export interface ScanningConfig {
 	cronSchedule?: string;
 	scanMode: "normal" | "deep";
-	autoScanOnCreate: boolean;
 	enabled: boolean;
 	scanOnStart: boolean;
 	purgeDeletedOnScan: boolean;
@@ -143,6 +142,7 @@ export interface CreateLibraryRequest {
 	path: string;
 	description?: string;
 	scanningConfig?: ScanningConfig;
+	scanImmediately?: boolean;
 	allowedFormats?: string[];
 	excludedPatterns?: string;
 }

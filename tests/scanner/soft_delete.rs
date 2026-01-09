@@ -317,7 +317,6 @@ async fn test_purge_deleted_on_scan_config() {
     let scanning_config = serde_json::json!({
         "enabled": true,
         "scanMode": "normal",
-        "autoScanOnCreate": false,
         "scanOnStart": false,
         "purgeDeletedOnScan": true
     });

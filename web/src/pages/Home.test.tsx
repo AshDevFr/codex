@@ -23,7 +23,6 @@ const mockLibraries: Library[] = [
 		scanningConfig: {
 			enabled: true,
 			scanMode: "normal",
-			autoScanOnCreate: false,
 			scanOnStart: false,
 			purgeDeletedOnScan: false,
 			cronSchedule: "0 0 * * *",
@@ -42,7 +41,6 @@ const mockLibraries: Library[] = [
 		scanningConfig: {
 			enabled: false,
 			scanMode: "normal",
-			autoScanOnCreate: false,
 			scanOnStart: false,
 			purgeDeletedOnScan: false,
 		},
@@ -60,7 +58,7 @@ describe("Home Component", () => {
 		// Mock localStorage for SSE authentication (scan API checks for 'token')
 		localStorage.setItem("token", "test-token");
 
-		// Mock filesystem API (used by AddLibraryModal)
+		// Mock filesystem API (used by LibraryModal in add mode)
 		vi.mocked(filesystemApi.getDrives).mockResolvedValue([]);
 		vi.mocked(filesystemApi.browse).mockResolvedValue({
 			entries: [],

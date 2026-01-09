@@ -201,6 +201,7 @@ async fn test_create_library_success() {
         path: lib_path.to_str().unwrap().to_string(),
         description: None,
         scanning_config: None,
+        scan_immediately: false,
         allowed_formats: None,
         excluded_patterns: None,
     };
@@ -227,6 +228,7 @@ async fn test_create_library_without_permission() {
         name: "New Library".to_string(),
         path: "/new/path".to_string(),
         description: None,
+        scan_immediately: false,
         scanning_config: None,
         allowed_formats: None,
         excluded_patterns: None,
@@ -674,6 +676,7 @@ async fn test_create_library_with_scheduler_succeeds_without_scheduler() {
         allowed_formats: None,
         excluded_patterns: None,
         scanning_config: None,
+        scan_immediately: false,
     };
 
     let request = post_json_request_with_auth("/api/v1/libraries", &request_body, &token);

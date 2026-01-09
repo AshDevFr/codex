@@ -177,21 +177,18 @@ pub async fn create_library(
         LibraryRepository::update(&state.db, &library)
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to update library config: {}", e)))?;
+    }
 
-        // Trigger auto-scan if enabled
-        if config_dto.auto_scan_on_create {
-            let scan_mode = crate::scanner::ScanMode::from_str(&config_dto.scan_mode)
-                .map_err(|e| ApiError::BadRequest(e))?;
+    // Trigger scan immediately after creation if requested
+    if request.scan_immediately {
+        let task_type = crate::tasks::types::TaskType::ScanLibrary {
+            library_id: library.id,
+            mode: "normal".to_string(),
+        };
 
-            let task_type = crate::tasks::types::TaskType::ScanLibrary {
-                library_id: library.id,
-                mode: scan_mode.to_string(),
-            };
-
-            crate::db::repositories::TaskRepository::enqueue(&state.db, task_type, 0, None)
-                .await
-                .map_err(|e| ApiError::Internal(format!("Failed to trigger auto-scan: {}", e)))?;
-        }
+        crate::db::repositories::TaskRepository::enqueue(&state.db, task_type, 0, None)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to trigger auto-scan: {}", e)))?;
     }
 
     // Reload scheduler to pick up new library's scanning schedule

@@ -4,7 +4,7 @@ import { filesystemApi } from "@/api/filesystem";
 import { librariesApi } from "@/api/libraries";
 import { renderWithProviders, userEvent } from "@/test/utils";
 import type { BrowseResponse, FileSystemEntry } from "@/types/api";
-import { AddLibraryModal } from "./AddLibraryModal";
+import { LibraryModal } from "./LibraryModal";
 
 vi.mock("@/api/filesystem");
 vi.mock("@/api/libraries");
@@ -49,7 +49,7 @@ const mockBrowseResponse: BrowseResponse = {
 	],
 };
 
-describe("AddLibraryModal", () => {
+describe("LibraryModal (Add Mode)", () => {
 	const mockOnClose = vi.fn();
 
 	beforeEach(() => {
@@ -60,7 +60,7 @@ describe("AddLibraryModal", () => {
 
 	it("should not render when closed", () => {
 		renderWithProviders(
-			<AddLibraryModal opened={false} onClose={mockOnClose} />,
+			<LibraryModal opened={false} onClose={mockOnClose} />,
 		);
 
 		expect(screen.queryByText("Add New Library")).not.toBeInTheDocument();
@@ -68,7 +68,7 @@ describe("AddLibraryModal", () => {
 
 	it("should render form fields when opened", async () => {
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		// Wait for modal to be fully rendered - check for title
@@ -111,7 +111,7 @@ describe("AddLibraryModal", () => {
 	it("should open path browser when Browse button is clicked", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		await waitFor(() => {
@@ -130,7 +130,7 @@ describe("AddLibraryModal", () => {
 	it("should display drives in path browser", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		await waitFor(() => {
@@ -149,7 +149,7 @@ describe("AddLibraryModal", () => {
 	it("should browse directory when drive is selected", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		// Open browser
@@ -174,7 +174,7 @@ describe("AddLibraryModal", () => {
 	it("should only show directories, not files", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		const browseButton = await screen.findByText("Browse");
@@ -198,7 +198,7 @@ describe("AddLibraryModal", () => {
 	it("should select path and auto-generate library name", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		// Wait for modal and find form fields
@@ -259,7 +259,7 @@ describe("AddLibraryModal", () => {
 			.mockResolvedValueOnce(parentBrowseResponse);
 
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		// Navigate to a directory
@@ -296,7 +296,7 @@ describe("AddLibraryModal", () => {
 		vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		// Wait for modal and find form fields
@@ -347,7 +347,7 @@ describe("AddLibraryModal", () => {
 
 	it("should show validation error when name is missing", async () => {
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		// Wait for modal and verify form is rendered
@@ -370,7 +370,7 @@ describe("AddLibraryModal", () => {
 	it("should show validation error when path is missing", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		// Wait for modal and find form fields
@@ -393,7 +393,7 @@ describe("AddLibraryModal", () => {
 	it("should close modal when Cancel is clicked", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		await waitFor(() => {
@@ -409,7 +409,7 @@ describe("AddLibraryModal", () => {
 	it("should navigate back to drives when breadcrumb is clicked", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		// Navigate to a directory
@@ -437,7 +437,7 @@ describe("AddLibraryModal", () => {
 	it("should show cron input when auto scan strategy is selected", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		// Wait for modal
@@ -508,7 +508,7 @@ describe("AddLibraryModal", () => {
 
 	it("should not show cron input when manual scan strategy is selected", async () => {
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		// Wait for modal
@@ -537,7 +537,7 @@ describe("AddLibraryModal", () => {
 		vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		// Wait for modal and find form fields
@@ -642,7 +642,7 @@ describe("AddLibraryModal", () => {
 	it("should validate cron schedule is required when auto scan is enabled", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		// Wait for modal
@@ -734,7 +734,7 @@ describe("AddLibraryModal", () => {
 
 	it("should have all formats selected by default", async () => {
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		// Wait for modal
@@ -775,7 +775,7 @@ describe("AddLibraryModal", () => {
 		vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		// Wait for modal and find form fields
@@ -835,7 +835,7 @@ describe("AddLibraryModal", () => {
 		vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		// Wait for modal and find form fields
@@ -940,7 +940,7 @@ describe("AddLibraryModal", () => {
 	it("should reset to all formats when modal closes", async () => {
 		const user = userEvent.setup();
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		// Wait for modal
@@ -983,7 +983,7 @@ describe("AddLibraryModal", () => {
 
 		// Reopen modal - formats should be reset to all
 		renderWithProviders(
-			<AddLibraryModal opened={true} onClose={mockOnClose} />,
+			<LibraryModal opened={true} onClose={mockOnClose} />,
 		);
 
 		const newModal = await screen.findByRole("dialog", {}, { timeout: 3000 });

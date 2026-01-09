@@ -31,8 +31,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { librariesApi } from "@/api/libraries";
 import { scanApi } from "@/api/scan";
-import { AddLibraryModal } from "@/components/forms/AddLibraryModal";
-import { EditLibraryModal } from "@/components/forms/EditLibraryModal";
+import { LibraryModal } from "@/components/forms/LibraryModal";
 import { useAuthStore } from "@/store/authStore";
 import type { Library, ScanProgress } from "@/types/api";
 
@@ -427,12 +426,12 @@ export function Home() {
 				)}
 			</Stack>
 
-			<AddLibraryModal
+			<LibraryModal
 				opened={addLibraryOpened}
 				onClose={() => setAddLibraryOpened(false)}
 			/>
 
-			<EditLibraryModal
+			<LibraryModal
 				opened={editLibraryOpened}
 				onClose={() => {
 					setEditLibraryOpened(false);

@@ -45,6 +45,10 @@ pub struct CreateLibraryRequest {
     /// Scanning configuration
     pub scanning_config: Option<ScanningConfigDto>,
 
+    /// Scan immediately after creation (not stored in DB)
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub scan_immediately: bool,
+
     /// Allowed file formats (e.g., ["CBZ", "CBR", "EPUB"])
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allowed_formats: Option<Vec<String>>,
@@ -52,6 +56,10 @@ pub struct CreateLibraryRequest {
     /// Excluded path patterns (newline-separated, e.g., ".DS_Store\nThumbs.db")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub excluded_patterns: Option<String>,
+}
+
+fn is_false(b: &bool) -> bool {
+    !b
 }
 
 /// Update library request

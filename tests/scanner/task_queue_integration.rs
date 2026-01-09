@@ -459,7 +459,6 @@ async fn test_purge_deleted_on_scan_enabled() {
     let scanning_config = serde_json::json!({
         "enabled": true,
         "scanMode": "normal",
-        "autoScanOnCreate": false,
         "scanOnStart": false,
         "purgeDeletedOnScan": true
     });
@@ -592,7 +591,6 @@ async fn test_purge_deleted_on_scan_disabled() {
     let scanning_config = serde_json::json!({
         "enabled": true,
         "scanMode": "normal",
-        "autoScanOnCreate": false,
         "scanOnStart": false,
         "purgeDeletedOnScan": false
     });
@@ -725,7 +723,6 @@ async fn test_purge_deleted_on_scan_with_deep_scan() {
     let scanning_config = serde_json::json!({
         "enabled": true,
         "scanMode": "deep",
-        "autoScanOnCreate": false,
         "scanOnStart": false,
         "purgeDeletedOnScan": true
     });

@@ -28,7 +28,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { librariesApi } from "@/api/libraries";
-import { EditLibraryModal } from "@/components/forms/EditLibraryModal";
+import { LibraryModal } from "@/components/forms/LibraryModal";
 import { TaskNotificationBadge } from "@/components/TaskNotificationBadge";
 import { useAuthStore } from "@/store/authStore";
 import type { Library } from "@/types/api";
@@ -350,7 +350,7 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 				</AppShell.Section>
 			</AppShell.Navbar>
 
-			<EditLibraryModal
+			<LibraryModal
 				opened={editLibraryOpened}
 				onClose={() => {
 					setEditLibraryOpened(false);

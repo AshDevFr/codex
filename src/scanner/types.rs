@@ -202,9 +202,6 @@ pub struct ScanningConfig {
     /// Default scan mode for scheduled scans ("normal" or "deep")
     #[serde(default = "default_scan_mode")]
     pub scan_mode: String,
-    /// Auto-scan when library is created
-    #[serde(default)]
-    pub auto_scan_on_create: bool,
     /// Whether scheduled scanning is enabled
     #[serde(default = "default_enabled")]
     pub enabled: bool,
@@ -311,7 +308,6 @@ mod tests {
         let json = r#"{
             "cronSchedule": "0 */6 * * *",
             "scanMode": "normal",
-            "autoScanOnCreate": true,
             "enabled": true,
             "scanOnStart": true,
             "purgeDeletedOnScan": true
@@ -320,7 +316,6 @@ mod tests {
         let config: ScanningConfig = serde_json::from_str(json).unwrap();
         assert_eq!(config.cron_schedule, Some("0 */6 * * *".to_string()));
         assert_eq!(config.scan_mode, "normal");
-        assert!(config.auto_scan_on_create);
         assert!(config.enabled);
         assert!(config.scan_on_start);
         assert!(config.purge_deleted_on_scan);
@@ -333,7 +328,6 @@ mod tests {
 
         let config: ScanningConfig = serde_json::from_str(json).unwrap();
         assert_eq!(config.scan_mode, "normal");
-        assert!(!config.auto_scan_on_create);
         assert!(config.enabled);
         assert!(!config.scan_on_start);
         assert!(!config.purge_deleted_on_scan);
@@ -351,11 +345,10 @@ mod tests {
 
     #[test]
     fn test_scanning_config_database_format() {
-        // Test with exact format as stored in database (from user report)
+        // Test with exact format as stored in database
         let json = r#"{
             "cronSchedule": null,
             "scanMode": "normal",
-            "autoScanOnCreate": true,
             "enabled": false,
             "scanOnStart": false,
             "purgeDeletedOnScan": true
@@ -364,7 +357,6 @@ mod tests {
         let config: ScanningConfig = serde_json::from_str(json).unwrap();
         assert_eq!(config.cron_schedule, None);
         assert_eq!(config.scan_mode, "normal");
-        assert!(config.auto_scan_on_create);
         assert!(!config.enabled);
         assert!(!config.scan_on_start);
         assert!(

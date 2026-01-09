@@ -89,7 +89,7 @@ describe("Setup", () => {
 		// The cron input is in the settings step and only appears when deduplication is enabled
 		// Since Setup is a complex multi-step form, we verify the component structure
 		// The actual cron input functionality is tested in CronInput.test.tsx
-		// and the integration with forms is tested in AddLibraryModal and EditLibraryModal tests
+		// and the integration with forms is tested in LibraryModal tests
 
 		expect(screen.queryByLabelText("Cron Schedule")).not.toBeInTheDocument();
 	});

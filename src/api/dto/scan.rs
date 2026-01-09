@@ -66,8 +66,6 @@ pub struct ScanningConfigDto {
     pub cron_schedule: Option<String>,
     /// Default scan mode for scheduled scans ("normal" or "deep")
     pub scan_mode: String,
-    /// Auto-scan when library is created
-    pub auto_scan_on_create: bool,
     /// Whether scheduled scanning is enabled
     pub enabled: bool,
     /// Scan library when the application starts
@@ -83,7 +81,6 @@ impl Default for ScanningConfigDto {
         Self {
             cron_schedule: None,
             scan_mode: "normal".to_string(),
-            auto_scan_on_create: false,
             enabled: true,
             scan_on_start: false,
             purge_deleted_on_scan: false,
