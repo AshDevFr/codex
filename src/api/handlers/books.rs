@@ -10,8 +10,29 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
+use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
+
+/// Query parameters for listing books
+#[derive(Debug, Deserialize)]
+pub struct BookListQuery {
+    /// Optional series filter
+    #[serde(default)]
+    pub series_id: Option<Uuid>,
+
+    /// Page number (0-indexed)
+    #[serde(default)]
+    pub page: u64,
+
+    /// Number of items per page (max 100)
+    #[serde(default = "default_page_size")]
+    pub page_size: u64,
+}
+
+fn default_page_size() -> u64 {
+    20
+}
 
 /// List books with pagination
 #[utoipa::path(
@@ -34,15 +55,19 @@ use uuid::Uuid;
 pub async fn list_books(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Query(pagination): Query<PaginationParams>,
-    Query(series_id): Query<Option<Uuid>>,
+    Query(query): Query<BookListQuery>,
 ) -> Result<Json<BookListResponse>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    let pagination = pagination.validate(100);
+    // Validate and normalize pagination params
+    let page_size = if query.page_size == 0 {
+        default_page_size()
+    } else {
+        query.page_size.min(100)
+    };
 
     // Fetch books based on filter
-    let (books_list, total) = if let Some(ser_id) = series_id {
+    let (books_list, total) = if let Some(ser_id) = query.series_id {
         // By default, don't include deleted books in API responses
         let books = BookRepository::list_by_series(&state.db, ser_id, false)
             .await
@@ -50,16 +75,20 @@ pub async fn list_books(
         let total = books.len() as u64;
 
         // Apply pagination manually
-        let start = pagination.offset() as usize;
-        let end = (start + pagination.limit() as usize).min(books.len());
+        let offset = query.page * page_size;
+        let start = offset as usize;
+        let end = (start + page_size as usize).min(books.len());
         let paginated = books[start..end].to_vec();
 
         (paginated, total)
     } else {
-        // Note: There's no list_all method, so we need to handle this differently
-        // For now, return empty list when no series_id is provided
-        // TODO: Implement a proper list_all method in BookRepository
-        (vec![], 0)
+        // List all books with pagination
+        BookRepository::list_all(
+            &state.db, false, // exclude deleted
+            query.page, page_size,
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
     };
 
     let dtos: Vec<BookDto> = books_list
@@ -82,7 +111,7 @@ pub async fn list_books(
         })
         .collect();
 
-    let response = BookListResponse::new(dtos, pagination.page, pagination.page_size, total);
+    let response = BookListResponse::new(dtos, query.page, page_size, total);
 
     Ok(Json(response))
 }

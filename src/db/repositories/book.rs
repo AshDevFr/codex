@@ -86,6 +86,40 @@ impl BookRepository {
             .context("Failed to list books by series")
     }
 
+    /// List all books with pagination
+    pub async fn list_all(
+        db: &DatabaseConnection,
+        include_deleted: bool,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        let mut query = Books::find();
+
+        if !include_deleted {
+            query = query.filter(books::Column::Deleted.eq(false));
+        }
+
+        // Get total count
+        let total = query
+            .clone()
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count books")?;
+
+        // Get paginated results
+        let books = query
+            .order_by_asc(books::Column::Title)
+            .order_by_asc(books::Column::FileName)
+            .offset(page * page_size)
+            .limit(page_size)
+            .all(db)
+            .await
+            .context("Failed to list all books")?;
+
+        Ok((books, total))
+    }
+
     /// Search books by title (case-insensitive)
     pub async fn search_by_title(
         db: &DatabaseConnection,
@@ -537,5 +571,198 @@ mod tests {
             .unwrap();
 
         assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_list_all_books() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
+            .await
+            .unwrap();
+
+        // Create test books
+        for i in 1..=5 {
+            let book = create_book_model(
+                series.id,
+                &format!("/test/book{}.cbz", i),
+                &format!("book{}.cbz", i),
+            );
+            BookRepository::create(db.sea_orm_connection(), &book)
+                .await
+                .unwrap();
+        }
+
+        let (books, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10)
+            .await
+            .unwrap();
+
+        assert_eq!(books.len(), 5);
+        assert_eq!(total, 5);
+    }
+
+    #[tokio::test]
+    async fn test_list_all_books_with_pagination() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
+            .await
+            .unwrap();
+
+        // Create 10 test books
+        for i in 1..=10 {
+            let book = create_book_model(
+                series.id,
+                &format!("/test/book{:02}.cbz", i),
+                &format!("book{:02}.cbz", i),
+            );
+            BookRepository::create(db.sea_orm_connection(), &book)
+                .await
+                .unwrap();
+        }
+
+        // Get first page (5 items)
+        let (books_page1, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 5)
+            .await
+            .unwrap();
+
+        assert_eq!(books_page1.len(), 5);
+        assert_eq!(total, 10);
+
+        // Get second page (5 items)
+        let (books_page2, total) = BookRepository::list_all(db.sea_orm_connection(), false, 1, 5)
+            .await
+            .unwrap();
+
+        assert_eq!(books_page2.len(), 5);
+        assert_eq!(total, 10);
+
+        // Verify different books on each page
+        assert_ne!(books_page1[0].id, books_page2[0].id);
+    }
+
+    #[tokio::test]
+    async fn test_list_all_books_excludes_deleted() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
+            .await
+            .unwrap();
+
+        // Create 3 books
+        let mut book_ids = vec![];
+        for i in 1..=3 {
+            let book = create_book_model(
+                series.id,
+                &format!("/test/book{}.cbz", i),
+                &format!("book{}.cbz", i),
+            );
+            let created = BookRepository::create(db.sea_orm_connection(), &book)
+                .await
+                .unwrap();
+            book_ids.push(created.id);
+        }
+
+        // Mark one book as deleted
+        BookRepository::mark_deleted(db.sea_orm_connection(), book_ids[1], true)
+            .await
+            .unwrap();
+
+        // List without deleted
+        let (books, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10)
+            .await
+            .unwrap();
+
+        assert_eq!(books.len(), 2);
+        assert_eq!(total, 2);
+
+        // List with deleted
+        let (books_with_deleted, total_with_deleted) =
+            BookRepository::list_all(db.sea_orm_connection(), true, 0, 10)
+                .await
+                .unwrap();
+
+        assert_eq!(books_with_deleted.len(), 3);
+        assert_eq!(total_with_deleted, 3);
+    }
+
+    #[tokio::test]
+    async fn test_list_all_books_empty() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let (books, total) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10)
+            .await
+            .unwrap();
+
+        assert_eq!(books.len(), 0);
+        assert_eq!(total, 0);
+    }
+
+    #[tokio::test]
+    async fn test_list_all_books_orders_by_title() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
+            .await
+            .unwrap();
+
+        // Create books with different titles
+        let titles = vec!["Zebra", "Apple", "Monkey", "Banana"];
+        for title in titles {
+            let mut book = create_book_model(
+                series.id,
+                &format!("/test/{}.cbz", title),
+                &format!("{}.cbz", title),
+            );
+            book.title = Some(title.to_string());
+            BookRepository::create(db.sea_orm_connection(), &book)
+                .await
+                .unwrap();
+        }
+
+        let (books, _) = BookRepository::list_all(db.sea_orm_connection(), false, 0, 10)
+            .await
+            .unwrap();
+
+        assert_eq!(books[0].title, Some("Apple".to_string()));
+        assert_eq!(books[1].title, Some("Banana".to_string()));
+        assert_eq!(books[2].title, Some("Monkey".to_string()));
+        assert_eq!(books[3].title, Some("Zebra".to_string()));
     }
 }

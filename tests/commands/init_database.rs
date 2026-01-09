@@ -383,4 +383,3 @@ async fn test_init_database_with_skip_migrations_timeout() {
     env::remove_var("CODEX_MIGRATION_WAIT_TIMEOUT");
     env::remove_var("CODEX_MIGRATION_WAIT_INTERVAL");
 }
-

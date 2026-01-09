@@ -7,6 +7,7 @@ mod api {
     mod analyze;
     mod api_keys;
     mod auth;
+    mod books;
     mod duplicates;
     mod filesystem;
     mod libraries;
