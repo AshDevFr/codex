@@ -1,10 +1,11 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::{DateTime, Utc};
-use sea_orm::{prelude::Decimal, DatabaseConnection};
+use sea_orm::DatabaseConnection;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
@@ -13,7 +14,7 @@ use walkdir::WalkDir;
 
 use crate::db::entities::{books, series};
 use crate::db::repositories::{BookRepository, LibraryRepository, SeriesRepository};
-use crate::scanner::analyze_file;
+use crate::events::EventBroadcaster;
 
 use super::types::{ScanMode, ScanProgress, ScanResult, ScanStatus};
 
@@ -40,6 +41,7 @@ pub async fn scan_library(
     library_id: Uuid,
     mode: ScanMode,
     progress_tx: Option<mpsc::Sender<ScanProgress>>,
+    event_broadcaster: Option<&Arc<EventBroadcaster>>,
 ) -> Result<ScanResult> {
     let scan_start = Instant::now();
     info!("Starting {} scan for library {}", mode, library_id);
@@ -70,8 +72,12 @@ pub async fn scan_library(
 
     // Execute scan based on mode
     let result = match mode {
-        ScanMode::Normal => scan_normal(db, &library, &mut progress, &progress_tx).await,
-        ScanMode::Deep => scan_deep(db, &library, &mut progress, &progress_tx).await,
+        ScanMode::Normal => {
+            scan_normal(db, &library, &mut progress, &progress_tx, event_broadcaster).await
+        }
+        ScanMode::Deep => {
+            scan_deep(db, &library, &mut progress, &progress_tx, event_broadcaster).await
+        }
     };
 
     // Update progress based on result
@@ -140,6 +146,7 @@ async fn scan_normal(
     library: &crate::db::entities::libraries::Model,
     progress: &mut ScanProgress,
     progress_tx: &Option<mpsc::Sender<ScanProgress>>,
+    event_broadcaster: Option<&Arc<EventBroadcaster>>,
 ) -> Result<ScanResult> {
     let mut result = ScanResult::new();
 
@@ -228,6 +235,7 @@ async fn scan_normal(
             progress,
             progress_tx,
             &mut result,
+            event_broadcaster,
         )
         .await
         {
@@ -257,7 +265,7 @@ async fn scan_normal(
             if !book.deleted {
                 // Mark as deleted
                 debug!("Marking missing book as deleted: {}", path);
-                match BookRepository::mark_deleted(db, book.id, true).await {
+                match BookRepository::mark_deleted(db, book.id, true, event_broadcaster).await {
                     Ok(_) => {
                         deleted_count += 1;
                         result.books_deleted += 1;
@@ -272,7 +280,7 @@ async fn scan_normal(
         } else if book.deleted {
             // File reappeared on filesystem, restore it
             debug!("Restoring deleted book: {}", path);
-            match BookRepository::mark_deleted(db, book.id, false).await {
+            match BookRepository::mark_deleted(db, book.id, false, event_broadcaster).await {
                 Ok(_) => {
                     restored_count += 1;
                     result.books_restored += 1;
@@ -304,6 +312,7 @@ async fn scan_deep(
     library: &crate::db::entities::libraries::Model,
     progress: &mut ScanProgress,
     progress_tx: &Option<mpsc::Sender<ScanProgress>>,
+    event_broadcaster: Option<&Arc<EventBroadcaster>>,
 ) -> Result<ScanResult> {
     let mut result = ScanResult::new();
 
@@ -381,6 +390,7 @@ async fn scan_deep(
             progress,
             progress_tx,
             &mut result,
+            event_broadcaster,
         )
         .await
         {
@@ -413,6 +423,7 @@ async fn process_series(
     progress: &mut ScanProgress,
     progress_tx: &Option<mpsc::Sender<ScanProgress>>,
     result: &mut ScanResult,
+    event_broadcaster: Option<&Arc<EventBroadcaster>>,
 ) -> Result<()> {
     // Calculate series fingerprint from file paths
     let file_refs: Vec<&PathBuf> = file_paths.iter().collect();
@@ -442,6 +453,7 @@ async fn process_series(
         series_name,
         Some(&fingerprint),
         series_path.as_deref(),
+        event_broadcaster,
     )
     .await?;
 
@@ -472,6 +484,7 @@ async fn process_series(
             mode,
             progress,
             result,
+            event_broadcaster,
         )
         .await
         {
@@ -554,6 +567,7 @@ async fn process_file(
     mode: ScanMode,
     progress: &mut ScanProgress,
     result: &mut ScanResult,
+    event_broadcaster: Option<&Arc<EventBroadcaster>>,
 ) -> Result<()> {
     let path_str = file_path.to_string_lossy().to_string();
 
@@ -649,7 +663,7 @@ async fn process_file(
             existing.analyzed
         };
 
-        BookRepository::update(db, &existing).await?;
+        BookRepository::update(db, &existing, event_broadcaster).await?;
 
         // Only count as updated if something actually changed
         if anything_changed {
@@ -693,7 +707,7 @@ async fn process_file(
             updated_at: now,
         };
 
-        BookRepository::create(db, &book_model).await?;
+        BookRepository::create(db, &book_model, event_broadcaster).await?;
         SeriesRepository::increment_book_count(db, series_model.id).await?;
 
         result.books_created += 1;
@@ -748,6 +762,7 @@ async fn find_or_create_series(
     series_name: &str,
     fingerprint: Option<&str>,
     path: Option<&str>,
+    event_broadcaster: Option<&Arc<EventBroadcaster>>,
 ) -> Result<series::Model> {
     let series_list = SeriesRepository::list_by_library(db, library_id).await?;
 
@@ -803,6 +818,7 @@ async fn find_or_create_series(
         series_name,
         fingerprint.map(String::from),
         path.map(String::from),
+        event_broadcaster,
     )
     .await
 }

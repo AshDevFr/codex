@@ -490,7 +490,7 @@ async fn test_purge_deleted_on_scan_enabled() {
     assert!(books.len() >= 2, "Should have at least 2 books");
 
     // Mark one book as deleted
-    BookRepository::mark_deleted(&db, books[0].id, true)
+    BookRepository::mark_deleted(&db, books[0].id, true, None)
         .await
         .unwrap();
 
@@ -622,7 +622,7 @@ async fn test_purge_deleted_on_scan_disabled() {
     assert!(books.len() >= 2, "Should have at least 2 books");
 
     // Mark one book as deleted
-    BookRepository::mark_deleted(&db, books[0].id, true)
+    BookRepository::mark_deleted(&db, books[0].id, true, None)
         .await
         .unwrap();
 
@@ -754,7 +754,7 @@ async fn test_purge_deleted_on_scan_with_deep_scan() {
     assert!(books.len() >= 1, "Should have at least 1 book");
 
     // Mark one book as deleted
-    BookRepository::mark_deleted(&db, books[0].id, true)
+    BookRepository::mark_deleted(&db, books[0].id, true, None)
         .await
         .unwrap();
 

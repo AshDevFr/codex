@@ -1,10 +1,12 @@
 use anyhow::Result;
 use sea_orm::DatabaseConnection;
 use serde_json::json;
+use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
 use crate::db::entities::tasks;
 use crate::db::repositories::{BookRepository, LibraryRepository, TaskRepository};
+use crate::events::EventBroadcaster;
 use crate::scanner::{scan_library, ScanMode, ScanningConfig};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
@@ -22,6 +24,7 @@ impl TaskHandler for ScanLibraryHandler {
         &'a self,
         task: &'a tasks::Model,
         db: &'a DatabaseConnection,
+        event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>> {
         Box::pin(async move {
             let library_id = task
@@ -46,8 +49,8 @@ impl TaskHandler for ScanLibraryHandler {
                 task.id, library_id, scan_mode
             );
 
-            // Execute scan (without progress channel for now)
-            match scan_library(db, library_id, scan_mode, None).await {
+            // Execute scan (without progress channel for now, pass event_broadcaster)
+            match scan_library(db, library_id, scan_mode, None, event_broadcaster).await {
                 Ok(result) => {
                     info!(
                         "Task {}: Library scan completed - {} files processed, {} series, {} books",
@@ -122,7 +125,9 @@ impl TaskHandler for ScanLibraryHandler {
                                             task.id, library_id
                                         );
                                         match BookRepository::purge_deleted_in_library(
-                                            db, library_id,
+                                            db,
+                                            library_id,
+                                            event_broadcaster,
                                         )
                                         .await
                                         {

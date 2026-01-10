@@ -1,5 +1,5 @@
 use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission, AppState};
-use crate::events::{EntityChangeEvent, TaskProgressEvent};
+use crate::events::EntityChangeEvent;
 use axum::{
     extract::State,
     response::sse::{Event, KeepAlive, Sse},

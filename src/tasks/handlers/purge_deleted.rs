@@ -1,10 +1,12 @@
 use anyhow::Result;
 use sea_orm::DatabaseConnection;
 use serde_json::json;
+use std::sync::Arc;
 use tracing::{error, info};
 
 use crate::db::entities::tasks;
 use crate::db::repositories::BookRepository;
+use crate::events::EventBroadcaster;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
 
@@ -21,6 +23,7 @@ impl TaskHandler for PurgeDeletedHandler {
         &'a self,
         task: &'a tasks::Model,
         db: &'a DatabaseConnection,
+        event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>> {
         Box::pin(async move {
             let library_id = task
@@ -32,7 +35,8 @@ impl TaskHandler for PurgeDeletedHandler {
                 task.id, library_id
             );
 
-            match BookRepository::purge_deleted_in_library(db, library_id).await {
+            match BookRepository::purge_deleted_in_library(db, library_id, event_broadcaster).await
+            {
                 Ok(deleted_count) => {
                     info!(
                         "Task {}: Purged {} deleted books from library {}",

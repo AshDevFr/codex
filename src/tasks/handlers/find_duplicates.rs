@@ -1,9 +1,11 @@
 use anyhow::Result;
 use sea_orm::DatabaseConnection;
+use std::sync::Arc;
 use tracing::info;
 
 use crate::db::entities::tasks;
 use crate::db::repositories::BookDuplicatesRepository;
+use crate::events::EventBroadcaster;
 use crate::tasks::types::TaskResult;
 
 use super::TaskHandler;
@@ -22,6 +24,7 @@ impl TaskHandler for FindDuplicatesHandler {
         &'a self,
         _task: &'a tasks::Model,
         db: &'a DatabaseConnection,
+        _event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>> {
         Box::pin(async move {
             info!("Starting duplicate detection scan");

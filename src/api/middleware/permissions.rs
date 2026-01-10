@@ -1,5 +1,3 @@
-use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission};
-
 /// Macro for declarative permission checking in handlers
 ///
 /// Usage:

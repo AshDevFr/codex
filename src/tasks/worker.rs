@@ -23,7 +23,7 @@ pub struct TaskWorker {
     handlers: HashMap<String, Arc<dyn TaskHandler>>,
     worker_id: String,
     poll_interval: Duration,
-    event_broadcaster: Option<EventBroadcaster>,
+    event_broadcaster: Option<Arc<EventBroadcaster>>,
     settings_service: Option<Arc<SettingsService>>,
     shutdown_tx: Option<broadcast::Sender<()>>,
 }
@@ -88,7 +88,7 @@ impl TaskWorker {
     }
 
     /// Set the event broadcaster for task progress events
-    pub fn with_event_broadcaster(mut self, broadcaster: EventBroadcaster) -> Self {
+    pub fn with_event_broadcaster(mut self, broadcaster: Arc<EventBroadcaster>) -> Self {
         self.event_broadcaster = Some(broadcaster);
         self
     }
@@ -308,7 +308,9 @@ impl TaskWorker {
         })?;
 
         // Execute task
-        let result = handler.handle(&task, &self.db).await;
+        let result = handler
+            .handle(&task, &self.db, self.event_broadcaster.as_ref())
+            .await;
 
         // Update task status based on result
         match result {

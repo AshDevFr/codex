@@ -1,7 +1,5 @@
 use crate::api::{
-    dto::{
-        BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesFilter, SeriesListResponse,
-    },
+    dto::{BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListResponse},
     error::ApiError,
     extractors::{AuthContext, AuthState},
     permissions::Permission,
@@ -14,7 +12,7 @@ use axum::{
     body::Body,
     extract::{Multipart, Path, Query, State},
     http::{header, StatusCode},
-    response::{IntoResponse, Response},
+    response::Response,
     Json,
 };
 use chrono::Utc;
@@ -328,9 +326,13 @@ pub async fn purge_series_deleted_books(
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
 
     // Purge deleted books
-    let count = BookRepository::purge_deleted_in_series(&state.db, series_id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to purge deleted books: {}", e)))?;
+    let count = BookRepository::purge_deleted_in_series(
+        &state.db,
+        series_id,
+        Some(&state.event_broadcaster),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to purge deleted books: {}", e)))?;
 
     // Emit bulk purge event if any books were deleted
     if count > 0 {
@@ -899,7 +901,7 @@ pub async fn mark_series_as_read(
     require_permission!(auth, Permission::BooksRead)?;
 
     // Verify series exists
-    let series = SeriesRepository::get_by_id(&state.db, series_id)
+    let _series = SeriesRepository::get_by_id(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
@@ -959,7 +961,7 @@ pub async fn mark_series_as_unread(
     require_permission!(auth, Permission::BooksRead)?;
 
     // Verify series exists
-    let series = SeriesRepository::get_by_id(&state.db, series_id)
+    let _series = SeriesRepository::get_by_id(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;

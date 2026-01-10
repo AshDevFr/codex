@@ -21,7 +21,7 @@ async fn create_analyzed_book(
     let library = create_test_library(db_conn, "Test Library", "/test/library").await;
 
     // Create series
-    let series = SeriesRepository::create(db_conn, library.id, "Test Series").await?;
+    let series = SeriesRepository::create(db_conn, library.id, "Test Series", None).await?;
 
     // Create book
     let book = books::Model {
@@ -42,7 +42,7 @@ async fn create_analyzed_book(
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
-    BookRepository::create(db_conn, &book).await?;
+    BookRepository::create(db_conn, &book, None).await?;
 
     Ok((book, series))
 }
@@ -59,7 +59,7 @@ async fn test_analyze_book_with_force_reanalyzes_unchanged_file() -> Result<()> 
     // Update the book to have a specific fake hash to test force re-analysis
     book.file_hash = "fake_hash_12345".to_string();
     book.analyzed = true;
-    BookRepository::update(&db, &book).await?;
+    BookRepository::update(&db, &book, None).await?;
 
     // Get the book state before force analysis
     let before_analysis = BookRepository::get_by_id(&db, book.id).await?.unwrap();
@@ -67,7 +67,7 @@ async fn test_analyze_book_with_force_reanalyzes_unchanged_file() -> Result<()> 
     assert!(before_analysis.analyzed);
 
     // Analyze with force=true - should re-analyze even if we set analyzed=true
-    let result = analyze_book(&db, book.id, true).await?;
+    let result = analyze_book(&db, book.id, true, None).await?;
 
     // Should successfully analyze 1 book
     assert_eq!(result.books_analyzed, 1);
@@ -98,7 +98,7 @@ async fn test_analyze_book_without_force_skips_if_hash_matches() -> Result<()> {
     let (book, _series) = create_analyzed_book(&db, cbz_path.to_str().unwrap()).await?;
 
     // First analysis with force=true to get the actual hash
-    let first_result = analyze_book(&db, book.id, true).await?;
+    let first_result = analyze_book(&db, book.id, true, None).await?;
     assert_eq!(first_result.books_analyzed, 1);
 
     let after_first = BookRepository::get_by_id(&db, book.id).await?.unwrap();
@@ -107,7 +107,7 @@ async fn test_analyze_book_without_force_skips_if_hash_matches() -> Result<()> {
     assert_ne!(real_hash, "existing_hash"); // Should have changed from our fake hash
 
     // Now analyze again with force=false - should skip since hash matches
-    let second_result = analyze_book(&db, book.id, false).await?;
+    let second_result = analyze_book(&db, book.id, false, None).await?;
 
     // Should analyze the book (books_analyzed=1) but detect no actual changes via hash
     // The function still returns success, but internally it skips re-analysis

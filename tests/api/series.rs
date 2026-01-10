@@ -39,10 +39,10 @@ async fn test_list_series_all() {
         .await
         .unwrap();
 
-    SeriesRepository::create(&db, library.id, "Series 1")
+    SeriesRepository::create(&db, library.id, "Series 1", None)
         .await
         .unwrap();
-    SeriesRepository::create(&db, library.id, "Series 2")
+    SeriesRepository::create(&db, library.id, "Series 2", None)
         .await
         .unwrap();
 
@@ -74,13 +74,13 @@ async fn test_list_series_by_library() {
         .await
         .unwrap();
 
-    SeriesRepository::create(&db, library1.id, "Lib1 Series 1")
+    SeriesRepository::create(&db, library1.id, "Lib1 Series 1", None)
         .await
         .unwrap();
-    SeriesRepository::create(&db, library1.id, "Lib1 Series 2")
+    SeriesRepository::create(&db, library1.id, "Lib1 Series 2", None)
         .await
         .unwrap();
-    SeriesRepository::create(&db, library2.id, "Lib2 Series 1")
+    SeriesRepository::create(&db, library2.id, "Lib2 Series 1", None)
         .await
         .unwrap();
 
@@ -124,7 +124,7 @@ async fn test_list_series_pagination() {
 
     // Create 5 series
     for i in 1..=5 {
-        SeriesRepository::create(&db, library.id, &format!("Series {}", i))
+        SeriesRepository::create(&db, library.id, &format!("Series {}", i), None)
             .await
             .unwrap();
     }
@@ -169,7 +169,7 @@ async fn test_get_series_by_id() {
         .await
         .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -215,13 +215,13 @@ async fn test_search_series_by_name() {
         .await
         .unwrap();
 
-    SeriesRepository::create(&db, library.id, "Batman Comics")
+    SeriesRepository::create(&db, library.id, "Batman Comics", None)
         .await
         .unwrap();
-    SeriesRepository::create(&db, library.id, "Superman Comics")
+    SeriesRepository::create(&db, library.id, "Superman Comics", None)
         .await
         .unwrap();
-    SeriesRepository::create(&db, library.id, "Batman Graphic Novels")
+    SeriesRepository::create(&db, library.id, "Batman Graphic Novels", None)
         .await
         .unwrap();
 
@@ -252,7 +252,7 @@ async fn test_search_series_no_results() {
         .await
         .unwrap();
 
-    SeriesRepository::create(&db, library.id, "Series")
+    SeriesRepository::create(&db, library.id, "Series", None)
         .await
         .unwrap();
 
@@ -307,22 +307,22 @@ async fn test_get_series_books_excludes_deleted_by_default() {
         .await
         .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
     // Create 3 books
     let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", Some("Book 1"));
-    let book1 = BookRepository::create(&db, &book1).await.unwrap();
+    let book1 = BookRepository::create(&db, &book1, None).await.unwrap();
 
     let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", Some("Book 2"));
-    let book2 = BookRepository::create(&db, &book2).await.unwrap();
+    let book2 = BookRepository::create(&db, &book2, None).await.unwrap();
 
     let book3 = create_test_book(series.id, "/book3.cbz", "book3.cbz", Some("Book 3"));
-    let book3 = BookRepository::create(&db, &book3).await.unwrap();
+    let book3 = BookRepository::create(&db, &book3, None).await.unwrap();
 
     // Mark book2 as deleted
-    BookRepository::mark_deleted(&db, book2.id, true)
+    BookRepository::mark_deleted(&db, book2.id, true, None)
         .await
         .unwrap();
 
@@ -356,22 +356,22 @@ async fn test_get_series_books_includes_deleted_when_requested() {
         .await
         .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
     // Create 3 books
     let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", Some("Book 1"));
-    let book1 = BookRepository::create(&db, &book1).await.unwrap();
+    let book1 = BookRepository::create(&db, &book1, None).await.unwrap();
 
     let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", Some("Book 2"));
-    let book2 = BookRepository::create(&db, &book2).await.unwrap();
+    let book2 = BookRepository::create(&db, &book2, None).await.unwrap();
 
     let book3 = create_test_book(series.id, "/book3.cbz", "book3.cbz", Some("Book 3"));
-    let book3 = BookRepository::create(&db, &book3).await.unwrap();
+    let book3 = BookRepository::create(&db, &book3, None).await.unwrap();
 
     // Mark book2 as deleted
-    BookRepository::mark_deleted(&db, book2.id, true)
+    BookRepository::mark_deleted(&db, book2.id, true, None)
         .await
         .unwrap();
 
@@ -408,20 +408,20 @@ async fn test_get_series_books_with_all_deleted() {
         .await
         .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
     // Create 2 books and mark both as deleted
     let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", Some("Book 1"));
-    let book1 = BookRepository::create(&db, &book1).await.unwrap();
-    BookRepository::mark_deleted(&db, book1.id, true)
+    let book1 = BookRepository::create(&db, &book1, None).await.unwrap();
+    BookRepository::mark_deleted(&db, book1.id, true, None)
         .await
         .unwrap();
 
     let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", Some("Book 2"));
-    let book2 = BookRepository::create(&db, &book2).await.unwrap();
-    BookRepository::mark_deleted(&db, book2.id, true)
+    let book2 = BookRepository::create(&db, &book2, None).await.unwrap();
+    BookRepository::mark_deleted(&db, book2.id, true, None)
         .await
         .unwrap();
 
@@ -462,17 +462,17 @@ async fn test_get_series_books_include_deleted_false_explicit() {
         .await
         .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
     // Create 2 books, mark one as deleted
     let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", Some("Book 1"));
-    let book1 = BookRepository::create(&db, &book1).await.unwrap();
+    let book1 = BookRepository::create(&db, &book1, None).await.unwrap();
 
     let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", Some("Book 2"));
-    let book2 = BookRepository::create(&db, &book2).await.unwrap();
-    BookRepository::mark_deleted(&db, book2.id, true)
+    let book2 = BookRepository::create(&db, &book2, None).await.unwrap();
+    BookRepository::mark_deleted(&db, book2.id, true, None)
         .await
         .unwrap();
 
@@ -514,12 +514,12 @@ async fn test_list_library_series() {
 
     // Create series in each library
     for i in 1..=3 {
-        SeriesRepository::create(&db, library1.id, &format!("Lib1 Series {}", i))
+        SeriesRepository::create(&db, library1.id, &format!("Lib1 Series {}", i), None)
             .await
             .unwrap();
     }
     for i in 1..=2 {
-        SeriesRepository::create(&db, library2.id, &format!("Lib2 Series {}", i))
+        SeriesRepository::create(&db, library2.id, &format!("Lib2 Series {}", i), None)
             .await
             .unwrap();
     }
@@ -567,7 +567,7 @@ async fn test_list_library_series_with_pagination() {
 
     // Create 15 series
     for i in 1..=15 {
-        SeriesRepository::create(&db, library.id, &format!("Series {:02}", i))
+        SeriesRepository::create(&db, library.id, &format!("Series {:02}", i), None)
             .await
             .unwrap();
     }
@@ -660,25 +660,25 @@ async fn test_list_started_series() {
         .unwrap();
 
     // Create multiple series
-    let series1 = SeriesRepository::create(&db, library.id, "Series 1")
+    let series1 = SeriesRepository::create(&db, library.id, "Series 1", None)
         .await
         .unwrap();
-    let series2 = SeriesRepository::create(&db, library.id, "Series 2")
+    let series2 = SeriesRepository::create(&db, library.id, "Series 2", None)
         .await
         .unwrap();
-    let series3 = SeriesRepository::create(&db, library.id, "Series 3")
+    let series3 = SeriesRepository::create(&db, library.id, "Series 3", None)
         .await
         .unwrap();
 
     // Create books in each series
     let book1 = create_test_book(series1.id, "/lib/s1/book1.cbz", "book1.cbz", Some("Book 1"));
-    let book1 = BookRepository::create(&db, &book1).await.unwrap();
+    let book1 = BookRepository::create(&db, &book1, None).await.unwrap();
 
     let book2 = create_test_book(series2.id, "/lib/s2/book1.cbz", "book1.cbz", Some("Book 2"));
-    let book2 = BookRepository::create(&db, &book2).await.unwrap();
+    let book2 = BookRepository::create(&db, &book2, None).await.unwrap();
 
     let book3 = create_test_book(series3.id, "/lib/s3/book1.cbz", "book1.cbz", Some("Book 3"));
-    let _book3 = BookRepository::create(&db, &book3).await.unwrap();
+    let _book3 = BookRepository::create(&db, &book3, None).await.unwrap();
 
     // Create admin user and get token
     let state = create_test_auth_state(db.clone()).await;
@@ -732,19 +732,19 @@ async fn test_list_library_started_series() {
         .unwrap();
 
     // Create series in each library
-    let series1 = SeriesRepository::create(&db, library1.id, "Series 1")
+    let series1 = SeriesRepository::create(&db, library1.id, "Series 1", None)
         .await
         .unwrap();
-    let series2 = SeriesRepository::create(&db, library2.id, "Series 2")
+    let series2 = SeriesRepository::create(&db, library2.id, "Series 2", None)
         .await
         .unwrap();
 
     // Create books
     let book1 = create_test_book(series1.id, "/lib1/book1.cbz", "book1.cbz", Some("Book 1"));
-    let book1 = BookRepository::create(&db, &book1).await.unwrap();
+    let book1 = BookRepository::create(&db, &book1, None).await.unwrap();
 
     let book2 = create_test_book(series2.id, "/lib2/book1.cbz", "book1.cbz", Some("Book 2"));
-    let book2 = BookRepository::create(&db, &book2).await.unwrap();
+    let book2 = BookRepository::create(&db, &book2, None).await.unwrap();
 
     // Create admin user and get token
     let state = create_test_auth_state(db.clone()).await;

@@ -68,7 +68,7 @@ async fn test_list_all_books() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -80,7 +80,7 @@ async fn test_list_all_books() {
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),
         );
-        BookRepository::create(&db, &book).await.unwrap();
+        BookRepository::create(&db, &book, None).await.unwrap();
     }
 
     let state = create_test_auth_state(db.clone()).await;
@@ -109,7 +109,7 @@ async fn test_list_all_books_with_pagination() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -121,7 +121,7 @@ async fn test_list_all_books_with_pagination() {
             &format!("book{:02}.cbz", i),
             Some(format!("Book {:02}", i)),
         );
-        BookRepository::create(&db, &book).await.unwrap();
+        BookRepository::create(&db, &book, None).await.unwrap();
     }
 
     let state = create_test_auth_state(db.clone()).await;
@@ -184,7 +184,7 @@ async fn test_list_all_books_excludes_deleted() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -197,12 +197,12 @@ async fn test_list_all_books_excludes_deleted() {
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),
         );
-        let created = BookRepository::create(&db, &book).await.unwrap();
+        let created = BookRepository::create(&db, &book, None).await.unwrap();
         book_ids.push(created.id);
     }
 
     // Mark one book as deleted
-    BookRepository::mark_deleted(&db, book_ids[1], true)
+    BookRepository::mark_deleted(&db, book_ids[1], true, None)
         .await
         .unwrap();
 
@@ -234,7 +234,7 @@ async fn test_list_all_books_ordered_by_title() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -247,7 +247,7 @@ async fn test_list_all_books_ordered_by_title() {
             &format!("{}.cbz", title),
             Some(title.to_string()),
         );
-        BookRepository::create(&db, &book).await.unwrap();
+        BookRepository::create(&db, &book, None).await.unwrap();
     }
 
     let state = create_test_auth_state(db.clone()).await;
@@ -280,11 +280,11 @@ async fn test_list_all_books_across_multiple_series() {
             .await
             .unwrap();
 
-    let series1 = SeriesRepository::create(&db, library.id, "Series 1")
+    let series1 = SeriesRepository::create(&db, library.id, "Series 1", None)
         .await
         .unwrap();
 
-    let series2 = SeriesRepository::create(&db, library.id, "Series 2")
+    let series2 = SeriesRepository::create(&db, library.id, "Series 2", None)
         .await
         .unwrap();
 
@@ -296,7 +296,7 @@ async fn test_list_all_books_across_multiple_series() {
             &format!("s1_book{}.cbz", i),
             Some(format!("Series 1 Book {}", i)),
         );
-        BookRepository::create(&db, &book).await.unwrap();
+        BookRepository::create(&db, &book, None).await.unwrap();
     }
 
     // Create books in series 2
@@ -307,7 +307,7 @@ async fn test_list_all_books_across_multiple_series() {
             &format!("s2_book{}.cbz", i),
             Some(format!("Series 2 Book {}", i)),
         );
-        BookRepository::create(&db, &book).await.unwrap();
+        BookRepository::create(&db, &book, None).await.unwrap();
     }
 
     let state = create_test_auth_state(db.clone()).await;
@@ -353,7 +353,7 @@ async fn test_list_books_by_series() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -365,7 +365,7 @@ async fn test_list_books_by_series() {
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),
         );
-        BookRepository::create(&db, &book).await.unwrap();
+        BookRepository::create(&db, &book, None).await.unwrap();
     }
 
     let state = create_test_auth_state(db.clone()).await;
@@ -421,10 +421,10 @@ async fn test_list_library_books() {
         .unwrap();
 
     // Create series in each library
-    let series1 = SeriesRepository::create(&db, library1.id, "Series 1")
+    let series1 = SeriesRepository::create(&db, library1.id, "Series 1", None)
         .await
         .unwrap();
-    let series2 = SeriesRepository::create(&db, library2.id, "Series 2")
+    let series2 = SeriesRepository::create(&db, library2.id, "Series 2", None)
         .await
         .unwrap();
 
@@ -436,7 +436,7 @@ async fn test_list_library_books() {
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),
         );
-        BookRepository::create(&db, &book).await.unwrap();
+        BookRepository::create(&db, &book, None).await.unwrap();
     }
 
     for i in 1..=2 {
@@ -446,7 +446,7 @@ async fn test_list_library_books() {
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),
         );
-        BookRepository::create(&db, &book).await.unwrap();
+        BookRepository::create(&db, &book, None).await.unwrap();
     }
 
     let state = create_test_auth_state(db.clone()).await;
@@ -489,7 +489,7 @@ async fn test_list_in_progress_books() {
         LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
             .await
             .unwrap();
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -502,7 +502,7 @@ async fn test_list_in_progress_books() {
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),
         );
-        let created = BookRepository::create(&db, &book).await.unwrap();
+        let created = BookRepository::create(&db, &book, None).await.unwrap();
         book_ids.push(created.id);
     }
 
@@ -558,7 +558,7 @@ async fn test_list_recently_added_books() {
         LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
             .await
             .unwrap();
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -570,7 +570,7 @@ async fn test_list_recently_added_books() {
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),
         );
-        BookRepository::create(&db, &book).await.unwrap();
+        BookRepository::create(&db, &book, None).await.unwrap();
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     }
 
@@ -610,10 +610,10 @@ async fn test_list_library_recently_added_books() {
         .unwrap();
 
     // Create series in each library
-    let series1 = SeriesRepository::create(&db, library1.id, "Series 1")
+    let series1 = SeriesRepository::create(&db, library1.id, "Series 1", None)
         .await
         .unwrap();
-    let series2 = SeriesRepository::create(&db, library2.id, "Series 2")
+    let series2 = SeriesRepository::create(&db, library2.id, "Series 2", None)
         .await
         .unwrap();
 
@@ -625,7 +625,7 @@ async fn test_list_library_recently_added_books() {
             &format!("book{}.cbz", i),
             Some(format!("Library 1 Book {}", i)),
         );
-        BookRepository::create(&db, &book).await.unwrap();
+        BookRepository::create(&db, &book, None).await.unwrap();
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     }
 
@@ -637,7 +637,7 @@ async fn test_list_library_recently_added_books() {
             &format!("book{}.cbz", i),
             Some(format!("Library 2 Book {}", i)),
         );
-        BookRepository::create(&db, &book).await.unwrap();
+        BookRepository::create(&db, &book, None).await.unwrap();
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     }
 
@@ -678,7 +678,7 @@ async fn test_books_include_series_name() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series Name")
+    let series = SeriesRepository::create(&db, library.id, "Test Series Name", None)
         .await
         .unwrap();
 
@@ -689,7 +689,7 @@ async fn test_books_include_series_name() {
         "book1.cbz",
         Some("Book Title".to_string()),
     );
-    BookRepository::create(&db, &book).await.unwrap();
+    BookRepository::create(&db, &book, None).await.unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -720,13 +720,13 @@ async fn test_books_use_filename_when_title_is_none() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
     // Create a book without a title (title is None)
     let book = create_test_book_model(series.id, "/test/mybook.cbz", "mybook.cbz", None);
-    BookRepository::create(&db, &book).await.unwrap();
+    BookRepository::create(&db, &book, None).await.unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -756,13 +756,13 @@ async fn test_books_filename_fallback_with_multiple_extensions() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
     // Create a book with multiple dots in filename
     let book = create_test_book_model(series.id, "/test/book.vol.1.cbz", "book.vol.1.cbz", None);
-    BookRepository::create(&db, &book).await.unwrap();
+    BookRepository::create(&db, &book, None).await.unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;

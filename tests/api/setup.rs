@@ -5,13 +5,12 @@ use codex::api::dto::setup::{
     ConfigureSettingsRequest, InitializeSetupRequest, InitializeSetupResponse, SetupStatusResponse,
 };
 use codex::api::error::ErrorResponse;
-use codex::db::repositories::{SettingsRepository, UserRepository};
+use codex::db::repositories::UserRepository;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;
 use serde_json::json;
 use std::collections::HashMap;
-use uuid::Uuid;
 
 // ============================================================================
 // Setup Status Tests

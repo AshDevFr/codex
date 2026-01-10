@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::scanner::{ScanProgress, ScanStatus};
+use crate::scanner::ScanProgress;
 
 /// Scan status response
 #[derive(Debug, Serialize, Deserialize, ToSchema)]

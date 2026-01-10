@@ -18,7 +18,7 @@ async fn create_user_with_api_key_perms(
     is_admin: bool,
 ) -> (uuid::Uuid, String) {
     let hashed_password = password::hash_password("password123").unwrap();
-    let mut permissions = if is_admin {
+    let permissions = if is_admin {
         ADMIN_PERMISSIONS.iter().cloned().collect()
     } else {
         let mut perms = READONLY_PERMISSIONS

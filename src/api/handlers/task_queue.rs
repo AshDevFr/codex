@@ -11,7 +11,6 @@ use uuid::Uuid;
 use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::repositories::TaskRepository;
 use crate::tasks::types::{TaskStats, TaskType};
-use std::collections::HashMap;
 
 use super::AppState;
 

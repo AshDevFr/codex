@@ -51,7 +51,7 @@ async fn test_scan_marks_missing_books_deleted() {
     let library = setup_library_with_files(db, &temp_dir, 3).await;
 
     // Run initial scan to populate database
-    let result = scan_library(db, library.id, ScanMode::Normal, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
         .await
         .unwrap();
 
@@ -75,7 +75,7 @@ async fn test_scan_marks_missing_books_deleted() {
     fs::remove_file(file_to_delete).unwrap();
 
     // Run scan again - should mark book as deleted
-    let result = scan_library(db, library.id, ScanMode::Normal, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
         .await
         .unwrap();
 
@@ -111,7 +111,7 @@ async fn test_scan_restores_reappeared_books() {
     let library = setup_library_with_files(db, &temp_dir, 2).await;
 
     // Run initial scan
-    let result = scan_library(db, library.id, ScanMode::Normal, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
         .await
         .unwrap();
     assert_eq!(result.books_created, 2);
@@ -127,7 +127,7 @@ async fn test_scan_restores_reappeared_books() {
     fs::rename(&file_path, &backup_path).unwrap();
 
     // Scan - should mark as deleted
-    let result = scan_library(db, library.id, ScanMode::Normal, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
         .await
         .unwrap();
     assert_eq!(result.books_deleted, 1);
@@ -142,7 +142,7 @@ async fn test_scan_restores_reappeared_books() {
     fs::rename(&backup_path, &file_path).unwrap();
 
     // Scan again - should restore the book
-    let result = scan_library(db, library.id, ScanMode::Normal, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
         .await
         .unwrap();
     assert_eq!(result.books_restored, 1);
@@ -172,7 +172,7 @@ async fn test_scan_leaves_deleted_books_unchanged() {
     let library = setup_library_with_files(db, &temp_dir, 2).await;
 
     // Run initial scan
-    scan_library(db, library.id, ScanMode::Normal, None)
+    scan_library(db, library.id, ScanMode::Normal, None, None)
         .await
         .unwrap();
 
@@ -185,13 +185,13 @@ async fn test_scan_leaves_deleted_books_unchanged() {
     fs::remove_file(series_path.join("book1.cbz")).unwrap();
 
     // First scan - marks as deleted
-    let result = scan_library(db, library.id, ScanMode::Normal, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
         .await
         .unwrap();
     assert_eq!(result.books_deleted, 1);
 
     // Second scan - file still missing, should not change anything
-    let result = scan_library(db, library.id, ScanMode::Normal, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
         .await
         .unwrap();
     assert_eq!(result.books_deleted, 0); // Already deleted
@@ -215,7 +215,7 @@ async fn test_scan_multiple_files_deleted_and_restored() {
     let library = setup_library_with_files(db, &temp_dir, 4).await;
 
     // Run initial scan
-    scan_library(db, library.id, ScanMode::Normal, None)
+    scan_library(db, library.id, ScanMode::Normal, None, None)
         .await
         .unwrap();
 
@@ -229,7 +229,7 @@ async fn test_scan_multiple_files_deleted_and_restored() {
     fs::remove_file(series_path.join("book3.cbz")).unwrap();
 
     // Scan - should mark 2 as deleted
-    let result = scan_library(db, library.id, ScanMode::Normal, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
         .await
         .unwrap();
     assert_eq!(result.books_deleted, 2);
@@ -245,7 +245,7 @@ async fn test_scan_multiple_files_deleted_and_restored() {
     fs::copy(&cbz_path, series_path.join("book1.cbz")).unwrap();
 
     // Scan - should restore 1 book
-    let result = scan_library(db, library.id, ScanMode::Normal, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
         .await
         .unwrap();
     assert_eq!(result.books_restored, 1);
@@ -278,7 +278,7 @@ async fn test_deep_scan_reprocesses_all_files() {
     let library = setup_library_with_files(db, &temp_dir, 2).await;
 
     // Run initial scan
-    scan_library(db, library.id, ScanMode::Normal, None)
+    scan_library(db, library.id, ScanMode::Normal, None, None)
         .await
         .unwrap();
 
@@ -287,7 +287,7 @@ async fn test_deep_scan_reprocesses_all_files() {
         .unwrap();
 
     // Run deep scan - should reprocess all files but not report updates (since nothing changed)
-    let result = scan_library(db, library.id, ScanMode::Deep, None)
+    let result = scan_library(db, library.id, ScanMode::Deep, None, None)
         .await
         .unwrap();
 
@@ -324,7 +324,7 @@ async fn test_purge_deleted_on_scan_config() {
     LibraryRepository::update(db, &library).await.unwrap();
 
     // Run initial scan
-    let result = scan_library(db, library.id, ScanMode::Normal, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
         .await
         .unwrap();
     assert_eq!(result.books_created, 3);
@@ -346,7 +346,7 @@ async fn test_purge_deleted_on_scan_config() {
     fs::remove_file(&file_to_delete).unwrap();
 
     // Run scan again - should mark book as deleted
-    let result = scan_library(db, library.id, ScanMode::Normal, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
         .await
         .unwrap();
     assert_eq!(result.books_deleted, 1);

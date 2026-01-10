@@ -72,7 +72,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::extract::FromRequest;
     use axum::http::{HeaderMap, HeaderValue, Request};
 
     #[test]

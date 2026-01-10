@@ -152,9 +152,10 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         let book = crate::db::entities::books::Model {
             id: Uuid::new_v4(),
@@ -175,7 +176,7 @@ mod tests {
             updated_at: Utc::now(),
         };
 
-        BookRepository::create(db.sea_orm_connection(), &book)
+        BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
             .unwrap()
     }

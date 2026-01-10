@@ -1,10 +1,12 @@
 use anyhow::Result;
 use sea_orm::DatabaseConnection;
 use serde_json::json;
+use std::sync::Arc;
 use tracing::{error, info};
 
 use crate::db::entities::tasks;
 use crate::db::repositories::{BookRepository, TaskRepository};
+use crate::events::EventBroadcaster;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
 
@@ -21,6 +23,7 @@ impl TaskHandler for AnalyzeSeriesHandler {
         &'a self,
         task: &'a tasks::Model,
         db: &'a DatabaseConnection,
+        _event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>> {
         Box::pin(async move {
             let series_id = task

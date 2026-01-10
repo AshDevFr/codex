@@ -4,9 +4,12 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
     QueryOrder, QuerySelect, RelationTrait, Set,
 };
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::db::entities::{books, prelude::*};
+use crate::db::repositories::SeriesRepository;
+use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 
 /// Repository for Book operations
 pub struct BookRepository;
@@ -16,6 +19,7 @@ impl BookRepository {
     pub async fn create(
         db: &DatabaseConnection,
         book_model: &books::Model,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
     ) -> Result<books::Model> {
         let book = books::ActiveModel {
             id: Set(book_model.id),
@@ -36,7 +40,28 @@ impl BookRepository {
             updated_at: Set(book_model.updated_at),
         };
 
-        book.insert(db).await.context("Failed to create book")
+        let created_book = book.insert(db).await.context("Failed to create book")?;
+
+        // Emit BookCreated event if broadcaster is available
+        if let Some(broadcaster) = event_broadcaster {
+            // Get library_id by finding the series
+            if let Ok(Some(series)) =
+                crate::db::repositories::SeriesRepository::get_by_id(db, created_book.series_id)
+                    .await
+            {
+                let event = EntityChangeEvent::new(
+                    EntityEvent::BookCreated {
+                        book_id: created_book.id,
+                        series_id: created_book.series_id,
+                        library_id: series.library_id,
+                    },
+                    None, // System-triggered, no user_id
+                );
+                let _ = broadcaster.emit(event);
+            }
+        }
+
+        Ok(created_book)
     }
 
     /// Get a book by ID
@@ -274,7 +299,11 @@ impl BookRepository {
     }
 
     /// Update book
-    pub async fn update(db: &DatabaseConnection, book_model: &books::Model) -> Result<()> {
+    pub async fn update(
+        db: &DatabaseConnection,
+        book_model: &books::Model,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
+    ) -> Result<()> {
         let active = books::ActiveModel {
             id: Set(book_model.id),
             series_id: Set(book_model.series_id),
@@ -296,17 +325,40 @@ impl BookRepository {
 
         active.update(db).await.context("Failed to update book")?;
 
+        // Emit BookUpdated event if broadcaster is available
+        if let Some(broadcaster) = event_broadcaster {
+            // Get library_id by finding the series
+            if let Ok(Some(series)) = SeriesRepository::get_by_id(db, book_model.series_id).await {
+                let event = EntityChangeEvent::new(
+                    EntityEvent::BookUpdated {
+                        book_id: book_model.id,
+                        series_id: book_model.series_id,
+                        library_id: series.library_id,
+                        fields: None, // Could track specific fields that changed if needed
+                    },
+                    None, // System-triggered, no user_id
+                );
+                let _ = broadcaster.emit(event);
+            }
+        }
+
         Ok(())
     }
 
     /// Mark a book as deleted or restore it
-    pub async fn mark_deleted(db: &DatabaseConnection, book_id: Uuid, deleted: bool) -> Result<()> {
+    pub async fn mark_deleted(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        deleted: bool,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
+    ) -> Result<()> {
         let book = Books::find_by_id(book_id)
             .one(db)
             .await
             .context("Failed to find book")?
             .ok_or_else(|| anyhow::anyhow!("Book not found"))?;
 
+        let series_id = book.series_id;
         let mut active: books::ActiveModel = book.into();
         active.deleted = Set(deleted);
         active.updated_at = Set(Utc::now());
@@ -320,6 +372,23 @@ impl BookRepository {
         if deleted {
             use crate::db::repositories::BookDuplicatesRepository;
             BookDuplicatesRepository::cleanup_for_book(db, book_id).await?;
+        }
+
+        // Emit BookUpdated event if broadcaster is available
+        if let Some(broadcaster) = event_broadcaster {
+            // Get library_id by finding the series
+            if let Ok(Some(series)) = SeriesRepository::get_by_id(db, series_id).await {
+                let event = EntityChangeEvent::new(
+                    EntityEvent::BookUpdated {
+                        book_id,
+                        series_id,
+                        library_id: series.library_id,
+                        fields: Some(vec!["deleted".to_string()]),
+                    },
+                    None, // System-triggered, no user_id
+                );
+                let _ = broadcaster.emit(event);
+            }
         }
 
         Ok(())
@@ -367,6 +436,7 @@ impl BookRepository {
     pub async fn purge_deleted_in_library(
         db: &DatabaseConnection,
         library_id: Uuid,
+        event_broadcaster: Option<&Arc<crate::events::EventBroadcaster>>,
     ) -> Result<u64> {
         // Get all series in the library
         let series_list =
@@ -377,6 +447,14 @@ impl BookRepository {
             return Ok(0);
         }
 
+        // First, fetch all books that will be deleted so we can emit events
+        let books_to_delete = Books::find()
+            .filter(books::Column::SeriesId.is_in(series_ids.clone()))
+            .filter(books::Column::Deleted.eq(true))
+            .all(db)
+            .await
+            .context("Failed to fetch books to purge")?;
+
         // Delete all books that are marked as deleted in this library
         let result = Books::delete_many()
             .filter(books::Column::SeriesId.is_in(series_ids))
@@ -386,6 +464,31 @@ impl BookRepository {
             .context("Failed to purge deleted books")?;
 
         let deleted_count = result.rows_affected;
+
+        // Emit BookDeleted events for each purged book
+        if let Some(broadcaster) = event_broadcaster {
+            use crate::events::{EntityChangeEvent, EntityEvent};
+            use tracing::warn;
+
+            for book in books_to_delete {
+                let event = EntityChangeEvent {
+                    event: EntityEvent::BookDeleted {
+                        library_id,
+                        series_id: book.series_id,
+                        book_id: book.id,
+                    },
+                    user_id: None,
+                    timestamp: chrono::Utc::now(),
+                };
+
+                if let Err(e) = broadcaster.emit(event) {
+                    warn!(
+                        "Failed to emit BookDeleted event for book {}: {:?}",
+                        book.id, e
+                    );
+                }
+            }
+        }
 
         // Check if we should purge empty series
         let purge_empty_series = crate::db::repositories::SettingsRepository::get_value::<bool>(
@@ -400,7 +503,9 @@ impl BookRepository {
             // Purge empty series after deleting books
             let _series_deleted =
                 crate::db::repositories::SeriesRepository::purge_empty_series_in_library(
-                    db, library_id,
+                    db,
+                    library_id,
+                    event_broadcaster,
                 )
                 .await
                 .context("Failed to purge empty series")?;
@@ -410,7 +515,23 @@ impl BookRepository {
     }
 
     /// Purge all deleted books in a series (permanently delete from database)
-    pub async fn purge_deleted_in_series(db: &DatabaseConnection, series_id: Uuid) -> Result<u64> {
+    pub async fn purge_deleted_in_series(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+        event_broadcaster: Option<&Arc<crate::events::EventBroadcaster>>,
+    ) -> Result<u64> {
+        // First, fetch the series to get library_id and all books that will be deleted
+        let series = crate::db::repositories::SeriesRepository::get_by_id(db, series_id)
+            .await?
+            .context("Series not found")?;
+
+        let books_to_delete = Books::find()
+            .filter(books::Column::SeriesId.eq(series_id))
+            .filter(books::Column::Deleted.eq(true))
+            .all(db)
+            .await
+            .context("Failed to fetch books to purge")?;
+
         let result = Books::delete_many()
             .filter(books::Column::SeriesId.eq(series_id))
             .filter(books::Column::Deleted.eq(true))
@@ -419,6 +540,31 @@ impl BookRepository {
             .context("Failed to purge deleted books in series")?;
 
         let deleted_count = result.rows_affected;
+
+        // Emit BookDeleted events for each purged book
+        if let Some(broadcaster) = event_broadcaster {
+            use crate::events::{EntityChangeEvent, EntityEvent};
+            use tracing::warn;
+
+            for book in books_to_delete {
+                let event = EntityChangeEvent {
+                    event: EntityEvent::BookDeleted {
+                        library_id: series.library_id,
+                        series_id,
+                        book_id: book.id,
+                    },
+                    user_id: None,
+                    timestamp: chrono::Utc::now(),
+                };
+
+                if let Err(e) = broadcaster.emit(event) {
+                    warn!(
+                        "Failed to emit BookDeleted event for book {}: {:?}",
+                        book.id, e
+                    );
+                }
+            }
+        }
 
         // Check if we should purge empty series
         let purge_empty_series = crate::db::repositories::SettingsRepository::get_value::<bool>(
@@ -431,10 +577,13 @@ impl BookRepository {
 
         if purge_empty_series {
             // Check if series is now empty and delete it if so
-            let _series_deleted =
-                crate::db::repositories::SeriesRepository::purge_if_empty(db, series_id)
-                    .await
-                    .context("Failed to check/purge empty series")?;
+            let _series_deleted = crate::db::repositories::SeriesRepository::purge_if_empty(
+                db,
+                series_id,
+                event_broadcaster,
+            )
+            .await
+            .context("Failed to check/purge empty series")?;
         }
 
         Ok(deleted_count)
@@ -590,12 +739,13 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         let book = create_book_model(series.id, "/test/book.cbz", "book.cbz");
-        let created = BookRepository::create(db.sea_orm_connection(), &book)
+        let created = BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
             .unwrap();
 
@@ -617,12 +767,13 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         let book = create_book_model(series.id, "/test/book.cbz", "book.cbz");
-        BookRepository::create(db.sea_orm_connection(), &book)
+        BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
             .unwrap();
 
@@ -648,14 +799,15 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         let mut book = create_book_model(series.id, "/test/book.cbz", "book.cbz");
         book.file_hash = "unique_hash_123".to_string();
 
-        BookRepository::create(db.sea_orm_connection(), &book)
+        BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
             .unwrap();
 
@@ -681,12 +833,13 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         let book = create_book_model(series.id, "/test/book.cbz", "book.cbz");
-        BookRepository::create(db.sea_orm_connection(), &book)
+        BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
             .unwrap();
 
@@ -712,9 +865,10 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         let mut book1 = create_book_model(series.id, "/test/book1.cbz", "book1.cbz");
         book1.number = Some(Decimal::from(1));
@@ -722,10 +876,10 @@ mod tests {
         let mut book2 = create_book_model(series.id, "/test/book2.cbz", "book2.cbz");
         book2.number = Some(Decimal::from(2));
 
-        BookRepository::create(db.sea_orm_connection(), &book1)
+        BookRepository::create(db.sea_orm_connection(), &book1, None)
             .await
             .unwrap();
-        BookRepository::create(db.sea_orm_connection(), &book2)
+        BookRepository::create(db.sea_orm_connection(), &book2, None)
             .await
             .unwrap();
 
@@ -749,19 +903,20 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         let mut book = create_book_model(series.id, "/test/book.cbz", "book.cbz");
-        BookRepository::create(db.sea_orm_connection(), &book)
+        BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
             .unwrap();
 
         book.title = Some("Updated Title".to_string());
         book.number = Some(Decimal::from(5));
 
-        BookRepository::update(db.sea_orm_connection(), &book)
+        BookRepository::update(db.sea_orm_connection(), &book, None)
             .await
             .unwrap();
 
@@ -787,12 +942,13 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         let book = create_book_model(series.id, "/test/book.cbz", "book.cbz");
-        BookRepository::create(db.sea_orm_connection(), &book)
+        BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
             .unwrap();
 
@@ -820,9 +976,10 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         // Create test books
         for i in 1..=5 {
@@ -831,7 +988,7 @@ mod tests {
                 &format!("/test/book{}.cbz", i),
                 &format!("book{}.cbz", i),
             );
-            BookRepository::create(db.sea_orm_connection(), &book)
+            BookRepository::create(db.sea_orm_connection(), &book, None)
                 .await
                 .unwrap();
         }
@@ -857,9 +1014,10 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         // Create 10 test books
         for i in 1..=10 {
@@ -868,7 +1026,7 @@ mod tests {
                 &format!("/test/book{:02}.cbz", i),
                 &format!("book{:02}.cbz", i),
             );
-            BookRepository::create(db.sea_orm_connection(), &book)
+            BookRepository::create(db.sea_orm_connection(), &book, None)
                 .await
                 .unwrap();
         }
@@ -906,9 +1064,10 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         // Create 3 books
         let mut book_ids = vec![];
@@ -918,14 +1077,14 @@ mod tests {
                 &format!("/test/book{}.cbz", i),
                 &format!("book{}.cbz", i),
             );
-            let created = BookRepository::create(db.sea_orm_connection(), &book)
+            let created = BookRepository::create(db.sea_orm_connection(), &book, None)
                 .await
                 .unwrap();
             book_ids.push(created.id);
         }
 
         // Mark one book as deleted
-        BookRepository::mark_deleted(db.sea_orm_connection(), book_ids[1], true)
+        BookRepository::mark_deleted(db.sea_orm_connection(), book_ids[1], true, None)
             .await
             .unwrap();
 
@@ -972,9 +1131,10 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         // Create books with different titles
         let titles = vec!["Zebra", "Apple", "Monkey", "Banana"];
@@ -985,7 +1145,7 @@ mod tests {
                 &format!("{}.cbz", title),
             );
             book.title = Some(title.to_string());
-            BookRepository::create(db.sea_orm_connection(), &book)
+            BookRepository::create(db.sea_orm_connection(), &book, None)
                 .await
                 .unwrap();
         }
@@ -1024,17 +1184,19 @@ mod tests {
         .unwrap();
 
         // Create series in each library
-        let series1 = SeriesRepository::create(db.sea_orm_connection(), library1.id, "Series 1")
-            .await
-            .unwrap();
-        let series2 = SeriesRepository::create(db.sea_orm_connection(), library2.id, "Series 2")
-            .await
-            .unwrap();
+        let series1 =
+            SeriesRepository::create(db.sea_orm_connection(), library1.id, "Series 1", None)
+                .await
+                .unwrap();
+        let series2 =
+            SeriesRepository::create(db.sea_orm_connection(), library2.id, "Series 2", None)
+                .await
+                .unwrap();
 
         // Create books in library 1
         for i in 1..=3 {
             let book = create_book_model(series1.id, &format!("/lib1/book{}.cbz", i), "book.cbz");
-            BookRepository::create(db.sea_orm_connection(), &book)
+            BookRepository::create(db.sea_orm_connection(), &book, None)
                 .await
                 .unwrap();
         }
@@ -1042,7 +1204,7 @@ mod tests {
         // Create books in library 2
         for i in 1..=2 {
             let book = create_book_model(series2.id, &format!("/lib2/book{}.cbz", i), "book.cbz");
-            BookRepository::create(db.sea_orm_connection(), &book)
+            BookRepository::create(db.sea_orm_connection(), &book, None)
                 .await
                 .unwrap();
         }
@@ -1080,15 +1242,16 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         // Create books
         let mut book_ids = Vec::new();
         for i in 1..=5 {
             let book = create_book_model(series.id, &format!("/test/book{}.cbz", i), "book.cbz");
-            let created = BookRepository::create(db.sea_orm_connection(), &book)
+            let created = BookRepository::create(db.sea_orm_connection(), &book, None)
                 .await
                 .unwrap();
             book_ids.push(created.id);
@@ -1188,14 +1351,15 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         // Create books with delays to ensure different timestamps
         for i in 1..=5 {
             let book = create_book_model(series.id, &format!("/test/book{}.cbz", i), "book.cbz");
-            BookRepository::create(db.sea_orm_connection(), &book)
+            BookRepository::create(db.sea_orm_connection(), &book, None)
                 .await
                 .unwrap();
             tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;

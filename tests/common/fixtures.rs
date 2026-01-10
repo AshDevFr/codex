@@ -142,7 +142,7 @@ pub async fn create_test_series(
     library: &libraries::Model,
     name: &str,
 ) -> series::Model {
-    SeriesRepository::create(db, library.id, name)
+    SeriesRepository::create(db, library.id, name, None)
         .await
         .unwrap()
 }
@@ -150,7 +150,7 @@ pub async fn create_test_series(
 /// Create a test book in the database with a specific file hash
 pub async fn create_test_book_with_hash(
     db: &DatabaseConnection,
-    library: &libraries::Model,
+    _library: &libraries::Model,
     series: &series::Model,
     title: &str,
     file_path: &str,
@@ -175,5 +175,5 @@ pub async fn create_test_book_with_hash(
         updated_at: Utc::now(),
     };
 
-    BookRepository::create(db, &book).await.unwrap()
+    BookRepository::create(db, &book, None).await.unwrap()
 }

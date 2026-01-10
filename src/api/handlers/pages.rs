@@ -9,7 +9,7 @@ use axum::{
     body::Body,
     extract::{Path, State},
     http::{header, StatusCode},
-    response::{IntoResponse, Response},
+    response::Response,
 };
 use image::{imageops::FilterType, ImageFormat};
 use std::io::Cursor;

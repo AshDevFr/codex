@@ -1,11 +1,12 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::common::PaginatedResponse;
 use codex::api::dto::library::{CreateLibraryRequest, LibraryDto, UpdateLibraryRequest};
 use codex::api::error::ErrorResponse;
-use codex::api::permissions::{serialize_permissions, Permission, READONLY_PERMISSIONS};
-use codex::db::repositories::{ApiKeyRepository, LibraryRepository, UserRepository};
+use codex::api::permissions::{serialize_permissions, Permission};
+use codex::db::repositories::{
+    ApiKeyRepository, BookRepository, LibraryRepository, SeriesRepository, UserRepository,
+};
 use codex::db::ScanningStrategy;
 use codex::utils::password;
 use common::*;
@@ -399,7 +400,6 @@ async fn test_delete_library_not_found() {
 
 #[tokio::test]
 async fn test_library_includes_book_and_series_counts() {
-    use codex::db::repositories::{BookRepository, SeriesRepository};
     use codex::scanner::ScanMode;
 
     let (db, temp_dir) = setup_test_db().await;
@@ -541,7 +541,6 @@ async fn test_list_libraries_includes_counts() {
 
 #[tokio::test]
 async fn test_book_count_excludes_deleted_books() {
-    use codex::db::repositories::{BookRepository, SeriesRepository};
     use codex::scanner::ScanMode;
 
     let (db, temp_dir) = setup_test_db().await;
@@ -582,7 +581,7 @@ async fn test_book_count_excludes_deleted_books() {
                 .await
                 .unwrap();
             if !books.is_empty() {
-                BookRepository::mark_deleted(&db, books[0].id, true)
+                BookRepository::mark_deleted(&db, books[0].id, true, None)
                     .await
                     .unwrap();
 

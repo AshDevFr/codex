@@ -2,7 +2,7 @@ use crate::db::entities::{
     email_verification_tokens, email_verification_tokens::Entity as EmailVerificationToken,
 };
 use anyhow::Result;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use sea_orm::*;
 use uuid::Uuid;
 

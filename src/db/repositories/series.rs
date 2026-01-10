@@ -7,6 +7,8 @@ use sea_orm::{
 use uuid::Uuid;
 
 use crate::db::entities::{prelude::*, series};
+use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
+use std::sync::Arc;
 
 /// Repository for Series operations
 pub struct SeriesRepository;
@@ -28,8 +30,9 @@ impl SeriesRepository {
         db: &DatabaseConnection,
         library_id: Uuid,
         name: &str,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
     ) -> Result<series::Model> {
-        Self::create_with_fingerprint(db, library_id, name, None, None).await
+        Self::create_with_fingerprint(db, library_id, name, None, None, event_broadcaster).await
     }
 
     /// Create a new series with optional fingerprint
@@ -39,6 +42,7 @@ impl SeriesRepository {
         name: &str,
         fingerprint: Option<String>,
         path: Option<String>,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
     ) -> Result<series::Model> {
         let now = Utc::now();
         let normalized_name = Self::normalize_name(name);
@@ -68,7 +72,21 @@ impl SeriesRepository {
             updated_at: Set(now),
         };
 
-        series.insert(db).await.context("Failed to create series")
+        let created_series = series.insert(db).await.context("Failed to create series")?;
+
+        // Emit SeriesCreated event if broadcaster is available
+        if let Some(broadcaster) = event_broadcaster {
+            let event = EntityChangeEvent::new(
+                EntityEvent::SeriesCreated {
+                    series_id: created_series.id,
+                    library_id,
+                },
+                None, // System-triggered, no user_id
+            );
+            let _ = broadcaster.emit(event);
+        }
+
+        Ok(created_series)
     }
 
     /// Get a series by ID
@@ -164,7 +182,11 @@ impl SeriesRepository {
     }
 
     /// Update series
-    pub async fn update(db: &DatabaseConnection, series_model: &series::Model) -> Result<()> {
+    pub async fn update(
+        db: &DatabaseConnection,
+        series_model: &series::Model,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
+    ) -> Result<()> {
         let active = series::ActiveModel {
             id: Set(series_model.id),
             library_id: Set(series_model.library_id),
@@ -191,6 +213,19 @@ impl SeriesRepository {
         };
 
         active.update(db).await.context("Failed to update series")?;
+
+        // Emit SeriesUpdated event if broadcaster is available
+        if let Some(broadcaster) = event_broadcaster {
+            let event = EntityChangeEvent::new(
+                EntityEvent::SeriesUpdated {
+                    series_id: series_model.id,
+                    library_id: series_model.library_id,
+                    fields: None, // Could track specific fields if needed
+                },
+                None, // System-triggered, no user_id
+            );
+            let _ = broadcaster.emit(event);
+        }
 
         Ok(())
     }
@@ -318,6 +353,7 @@ impl SeriesRepository {
     pub async fn purge_empty_series_in_library(
         db: &DatabaseConnection,
         library_id: Uuid,
+        event_broadcaster: Option<&Arc<crate::events::EventBroadcaster>>,
     ) -> Result<u64> {
         use crate::db::entities::{books, prelude::*};
 
@@ -339,11 +375,35 @@ impl SeriesRepository {
                 .context("Failed to count books in series")?;
 
             if book_count == 0 {
-                Series::delete_by_id(series_model.id)
+                let series_id = series_model.id;
+
+                Series::delete_by_id(series_id)
                     .exec(db)
                     .await
-                    .context(format!("Failed to delete empty series {}", series_model.id))?;
+                    .context(format!("Failed to delete empty series {}", series_id))?;
                 deleted_count += 1;
+
+                // Emit SeriesDeleted event
+                if let Some(broadcaster) = event_broadcaster {
+                    use crate::events::{EntityChangeEvent, EntityEvent};
+                    use tracing::warn;
+
+                    let event = EntityChangeEvent {
+                        event: EntityEvent::SeriesDeleted {
+                            library_id,
+                            series_id,
+                        },
+                        user_id: None,
+                        timestamp: chrono::Utc::now(),
+                    };
+
+                    if let Err(e) = broadcaster.emit(event) {
+                        warn!(
+                            "Failed to emit SeriesDeleted event for series {}: {:?}",
+                            series_id, e
+                        );
+                    }
+                }
             }
         }
 
@@ -351,8 +411,18 @@ impl SeriesRepository {
     }
 
     /// Check if a series has any books and delete it if empty
-    pub async fn purge_if_empty(db: &DatabaseConnection, series_id: Uuid) -> Result<bool> {
+    pub async fn purge_if_empty(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+        event_broadcaster: Option<&Arc<crate::events::EventBroadcaster>>,
+    ) -> Result<bool> {
         use crate::db::entities::books;
+
+        // First get series info for library_id before deletion
+        let series = Self::get_by_id(db, series_id)
+            .await?
+            .context("Series not found")?;
+        let library_id = series.library_id;
 
         // Check if series has any books
         let book_count = books::Entity::find()
@@ -367,6 +437,29 @@ impl SeriesRepository {
                 .exec(db)
                 .await
                 .context("Failed to delete empty series")?;
+
+            // Emit SeriesDeleted event
+            if let Some(broadcaster) = event_broadcaster {
+                use crate::events::{EntityChangeEvent, EntityEvent};
+                use tracing::warn;
+
+                let event = EntityChangeEvent {
+                    event: EntityEvent::SeriesDeleted {
+                        library_id,
+                        series_id,
+                    },
+                    user_id: None,
+                    timestamp: chrono::Utc::now(),
+                };
+
+                if let Err(e) = broadcaster.emit(event) {
+                    warn!(
+                        "Failed to emit SeriesDeleted event for series {}: {:?}",
+                        series_id, e
+                    );
+                }
+            }
+
             Ok(true)
         } else {
             Ok(false)
@@ -395,9 +488,10 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         assert_eq!(series.name, "Test Series");
         assert_eq!(series.library_id, library.id);
@@ -418,9 +512,10 @@ mod tests {
         .await
         .unwrap();
 
-        let created = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let created =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), created.id)
             .await
@@ -444,10 +539,10 @@ mod tests {
         .await
         .unwrap();
 
-        SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 1")
+        SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 1", None)
             .await
             .unwrap();
-        SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 2")
+        SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 2", None)
             .await
             .unwrap();
 
@@ -471,10 +566,10 @@ mod tests {
         .await
         .unwrap();
 
-        SeriesRepository::create(db.sea_orm_connection(), library.id, "One Piece")
+        SeriesRepository::create(db.sea_orm_connection(), library.id, "One Piece", None)
             .await
             .unwrap();
-        SeriesRepository::create(db.sea_orm_connection(), library.id, "Naruto")
+        SeriesRepository::create(db.sea_orm_connection(), library.id, "Naruto", None)
             .await
             .unwrap();
 
@@ -500,7 +595,7 @@ mod tests {
         .unwrap();
 
         let mut series =
-            SeriesRepository::create(db.sea_orm_connection(), library.id, "Original Name")
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Original Name", None)
                 .await
                 .unwrap();
 
@@ -508,7 +603,7 @@ mod tests {
         series.normalized_name = SeriesRepository::normalize_name(&series.name);
         series.summary = Some("Updated summary".to_string());
 
-        SeriesRepository::update(db.sea_orm_connection(), &series)
+        SeriesRepository::update(db.sea_orm_connection(), &series, None)
             .await
             .unwrap();
 
@@ -534,9 +629,10 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         assert_eq!(series.book_count, 0);
 
@@ -565,9 +661,10 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "To Delete")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "To Delete", None)
+                .await
+                .unwrap();
 
         SeriesRepository::delete(db.sea_orm_connection(), series.id)
             .await
@@ -593,9 +690,10 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         // reading_direction should default to None (inherits from library)
         assert_eq!(series.reading_direction, None);
@@ -615,13 +713,13 @@ mod tests {
         .unwrap();
 
         let mut series =
-            SeriesRepository::create(db.sea_orm_connection(), library.id, "Manga Series")
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Manga Series", None)
                 .await
                 .unwrap();
 
         // Override reading direction for this specific series
         series.reading_direction = Some("RIGHT_TO_LEFT".to_string());
-        SeriesRepository::update(db.sea_orm_connection(), &series)
+        SeriesRepository::update(db.sea_orm_connection(), &series, None)
             .await
             .unwrap();
 
@@ -650,19 +748,19 @@ mod tests {
         .unwrap();
 
         let mut series =
-            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
                 .await
                 .unwrap();
 
         // Set a reading direction
         series.reading_direction = Some("TOP_TO_BOTTOM".to_string());
-        SeriesRepository::update(db.sea_orm_connection(), &series)
+        SeriesRepository::update(db.sea_orm_connection(), &series, None)
             .await
             .unwrap();
 
         // Clear it to revert to library default
         series.reading_direction = None;
-        SeriesRepository::update(db.sea_orm_connection(), &series)
+        SeriesRepository::update(db.sea_orm_connection(), &series, None)
             .await
             .unwrap();
 
@@ -693,16 +791,18 @@ mod tests {
             .unwrap();
 
         // Create series without reading direction (should inherit library default)
-        let series1 = SeriesRepository::create(db.sea_orm_connection(), library.id, "Manga 1")
-            .await
-            .unwrap();
+        let series1 =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Manga 1", None)
+                .await
+                .unwrap();
 
         // Create series with explicit override
-        let mut series2 = SeriesRepository::create(db.sea_orm_connection(), library.id, "Webtoon")
-            .await
-            .unwrap();
+        let mut series2 =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Webtoon", None)
+                .await
+                .unwrap();
         series2.reading_direction = Some("TOP_TO_BOTTOM".to_string());
-        SeriesRepository::update(db.sea_orm_connection(), &series2)
+        SeriesRepository::update(db.sea_orm_connection(), &series2, None)
             .await
             .unwrap();
 
@@ -746,9 +846,10 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         // Initially no custom cover
         assert_eq!(series.custom_cover_path, None);
@@ -798,9 +899,10 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         // Initially no selected cover source (defaults to first book cover)
         assert_eq!(series.selected_cover_source, None);
@@ -863,9 +965,10 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         // Simulate uploading a custom cover
         let cover_path = format!("data/covers/{}.jpg", series.id);
@@ -931,15 +1034,18 @@ mod tests {
         .unwrap();
 
         // Create multiple series
-        let series1 = SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 1")
-            .await
-            .unwrap();
-        let series2 = SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 2")
-            .await
-            .unwrap();
-        let series3 = SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 3")
-            .await
-            .unwrap();
+        let series1 =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 1", None)
+                .await
+                .unwrap();
+        let series2 =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 2", None)
+                .await
+                .unwrap();
+        let series3 =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 3", None)
+                .await
+                .unwrap();
 
         // Create books in each series
         let book1 = books::Model {
@@ -960,7 +1066,7 @@ mod tests {
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
-        let book1: books::Model = BookRepository::create(db.sea_orm_connection(), &book1)
+        let book1: books::Model = BookRepository::create(db.sea_orm_connection(), &book1, None)
             .await
             .unwrap();
 
@@ -982,7 +1088,7 @@ mod tests {
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
-        let book2: books::Model = BookRepository::create(db.sea_orm_connection(), &book2)
+        let book2: books::Model = BookRepository::create(db.sea_orm_connection(), &book2, None)
             .await
             .unwrap();
 
@@ -1004,7 +1110,7 @@ mod tests {
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
-        let book3: books::Model = BookRepository::create(db.sea_orm_connection(), &book3)
+        let book3: books::Model = BookRepository::create(db.sea_orm_connection(), &book3, None)
             .await
             .unwrap();
 

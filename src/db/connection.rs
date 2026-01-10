@@ -257,7 +257,7 @@ impl Database {
         library_id: Uuid,
         name: &str,
     ) -> Result<entities::series::Model> {
-        SeriesRepository::create(&self.conn, library_id, name).await
+        SeriesRepository::create(&self.conn, library_id, name, None).await
     }
 
     /// Get a series by ID
@@ -280,7 +280,7 @@ impl Database {
 
     /// Update series
     pub async fn update_series(&self, series: &entities::series::Model) -> Result<()> {
-        SeriesRepository::update(&self.conn, series).await
+        SeriesRepository::update(&self.conn, series, None).await
     }
 
     /// Increment book count for a series
@@ -302,7 +302,7 @@ impl Database {
         &self,
         book: &entities::books::Model,
     ) -> Result<entities::books::Model> {
-        BookRepository::create(&self.conn, book).await
+        BookRepository::create(&self.conn, book, None).await
     }
 
     /// Get a book by ID
@@ -330,7 +330,7 @@ impl Database {
 
     /// Update book
     pub async fn update_book(&self, book: &entities::books::Model) -> Result<()> {
-        BookRepository::update(&self.conn, book).await
+        BookRepository::update(&self.conn, book, None).await
     }
 
     /// Delete a book

@@ -241,7 +241,7 @@ pub async fn update_api_key(
     auth.require_permission(&Permission::ApiKeysWrite)?;
 
     // Fetch existing API key
-    let mut key = ApiKeyRepository::get_by_id(&state.db, id)
+    let key = ApiKeyRepository::get_by_id(&state.db, id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch API key: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("API key not found".to_string()))?;

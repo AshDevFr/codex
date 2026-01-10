@@ -13,7 +13,6 @@ use axum::{
     Json,
 };
 use std::sync::Arc;
-use utoipa::IntoParams;
 
 /// List all settings (admin only)
 #[utoipa::path(

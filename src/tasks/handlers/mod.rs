@@ -1,7 +1,9 @@
 use anyhow::Result;
 use sea_orm::DatabaseConnection;
+use std::sync::Arc;
 
 use crate::db::entities::tasks;
+use crate::events::EventBroadcaster;
 use crate::tasks::types::TaskResult;
 
 pub mod analyze_book;
@@ -28,5 +30,6 @@ pub trait TaskHandler: Send + Sync {
         &'a self,
         task: &'a tasks::Model,
         db: &'a DatabaseConnection,
+        event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
     ) -> Pin<Box<dyn Future<Output = Result<TaskResult>> + Send + 'a>>;
 }

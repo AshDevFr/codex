@@ -76,10 +76,10 @@ async fn test_get_metrics_with_auth() {
         .unwrap();
 
     // Create series in library1
-    let series1 = SeriesRepository::create(&db, library1.id, "Series 1")
+    let series1 = SeriesRepository::create(&db, library1.id, "Series 1", None)
         .await
         .unwrap();
-    let series2 = SeriesRepository::create(&db, library1.id, "Series 2")
+    let series2 = SeriesRepository::create(&db, library1.id, "Series 2", None)
         .await
         .unwrap();
 
@@ -94,7 +94,7 @@ async fn test_get_metrics_with_auth() {
     );
     let mut book1 = book1;
     book1.file_size = 1000000;
-    BookRepository::create(&db, &book1).await.unwrap();
+    BookRepository::create(&db, &book1, None).await.unwrap();
 
     let book2 = create_test_book(
         series2.id,
@@ -106,7 +106,7 @@ async fn test_get_metrics_with_auth() {
     );
     let mut book2 = book2;
     book2.file_size = 2000000;
-    BookRepository::create(&db, &book2).await.unwrap();
+    BookRepository::create(&db, &book2, None).await.unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -227,7 +227,7 @@ async fn test_get_metrics_with_file_sizes() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -242,7 +242,7 @@ async fn test_get_metrics_with_file_sizes() {
     );
     let mut book1 = book1;
     book1.file_size = 5000000; // 5MB
-    BookRepository::create(&db, &book1).await.unwrap();
+    BookRepository::create(&db, &book1, None).await.unwrap();
 
     let book2 = create_test_book(
         series.id,
@@ -254,7 +254,7 @@ async fn test_get_metrics_with_file_sizes() {
     );
     let mut book2 = book2;
     book2.file_size = 10000000; // 10MB
-    BookRepository::create(&db, &book2).await.unwrap();
+    BookRepository::create(&db, &book2, None).await.unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -294,7 +294,7 @@ async fn test_get_metrics_postgres() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -309,7 +309,7 @@ async fn test_get_metrics_postgres() {
     );
     let mut book1 = book1;
     book1.file_size = 5000000; // 5MB
-    BookRepository::create(&db, &book1).await.unwrap();
+    BookRepository::create(&db, &book1, None).await.unwrap();
 
     let book2 = create_test_book(
         series.id,
@@ -321,7 +321,7 @@ async fn test_get_metrics_postgres() {
     );
     let mut book2 = book2;
     book2.file_size = 10000000; // 10MB
-    BookRepository::create(&db, &book2).await.unwrap();
+    BookRepository::create(&db, &book2, None).await.unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;

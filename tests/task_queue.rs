@@ -1524,7 +1524,10 @@ async fn test_find_duplicates_handler_with_duplicates() {
 
     // Execute the handler
     let handler = FindDuplicatesHandler;
-    let result = handler.handle(&task, &db).await.expect("Handler failed");
+    let result = handler
+        .handle(&task, &db, None)
+        .await
+        .expect("Handler failed");
 
     assert!(result.success, "Handler should succeed");
     assert!(
@@ -1574,7 +1577,10 @@ async fn test_find_duplicates_handler_with_no_duplicates() {
 
     // Execute the handler
     let handler = FindDuplicatesHandler;
-    let result = handler.handle(&task, &db).await.expect("Handler failed");
+    let result = handler
+        .handle(&task, &db, None)
+        .await
+        .expect("Handler failed");
 
     assert!(result.success, "Handler should succeed");
     assert!(
@@ -1624,7 +1630,10 @@ async fn test_find_duplicates_handler_with_multiple_groups() {
 
     // Execute the handler
     let handler = FindDuplicatesHandler;
-    let result = handler.handle(&task, &db).await.expect("Handler failed");
+    let result = handler
+        .handle(&task, &db, None)
+        .await
+        .expect("Handler failed");
 
     assert!(result.success, "Handler should succeed");
     assert!(
@@ -1683,7 +1692,7 @@ async fn test_find_duplicates_handler_rebuilds_existing() {
 
     let handler = FindDuplicatesHandler;
     handler
-        .handle(&task1, &db)
+        .handle(&task1, &db, None)
         .await
         .expect("First handler failed");
 
@@ -1711,7 +1720,7 @@ async fn test_find_duplicates_handler_rebuilds_existing() {
         .expect("Task not found");
 
     handler
-        .handle(&task2, &db)
+        .handle(&task2, &db, None)
         .await
         .expect("Second handler failed");
 

@@ -6,7 +6,6 @@ use codex::db::ScanningStrategy;
 use codex::events::{EntityChangeEvent, EntityEvent, TaskProgressEvent};
 use codex::utils::password;
 use common::*;
-use futures::StreamExt;
 use hyper::{Request, StatusCode};
 use std::time::Duration;
 use tokio::time::timeout;
@@ -49,7 +48,7 @@ fn parse_sse_event(data: &str) -> Option<String> {
 
 #[tokio::test]
 async fn test_entity_events_stream_requires_auth() {
-    let (db, _temp_dir) = setup_test_db().await;
+    let (db, temp_dir) = setup_test_db().await;
     let state = create_test_app_state(db).await;
     let app = create_test_router_with_app_state(state);
 
@@ -62,7 +61,7 @@ async fn test_entity_events_stream_requires_auth() {
 
 #[tokio::test]
 async fn test_entity_events_stream_connects_with_auth() {
-    let (db, _temp_dir) = setup_test_db().await;
+    let (db, temp_dir) = setup_test_db().await;
     let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state.clone());
@@ -100,7 +99,7 @@ async fn test_entity_events_stream_receives_cover_updated() {
     .await
     .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -136,7 +135,7 @@ async fn test_entity_events_stream_receives_cover_updated() {
 
 #[tokio::test]
 async fn test_task_progress_stream_requires_auth() {
-    let (db, _temp_dir) = setup_test_db().await;
+    let (db, temp_dir) = setup_test_db().await;
     let state = create_test_app_state(db).await;
     let app = create_test_router_with_app_state(state);
 
@@ -149,7 +148,7 @@ async fn test_task_progress_stream_requires_auth() {
 
 #[tokio::test]
 async fn test_task_progress_stream_connects_with_auth() {
-    let (db, _temp_dir) = setup_test_db().await;
+    let (db, temp_dir) = setup_test_db().await;
     let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state.clone());
@@ -252,7 +251,7 @@ async fn test_event_broadcaster_entity_channel() {
 
 #[tokio::test]
 async fn test_event_broadcaster_task_channel() {
-    use codex::events::{EventBroadcaster, TaskProgress, TaskStatus};
+    use codex::events::{EventBroadcaster, TaskStatus};
     use uuid::Uuid;
 
     let broadcaster = EventBroadcaster::new(100);
@@ -332,7 +331,7 @@ async fn test_event_broadcaster_multiple_subscribers() {
 
 #[tokio::test]
 async fn test_sse_stream_content_type() {
-    let (db, _temp_dir) = setup_test_db().await;
+    let (db, temp_dir) = setup_test_db().await;
     let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state.clone());

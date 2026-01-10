@@ -1,9 +1,11 @@
 use anyhow::Result;
 use sea_orm::DatabaseConnection;
 use serde_json::json;
+use std::sync::Arc;
 use tracing::{error, info};
 
 use crate::db::entities::tasks;
+use crate::events::EventBroadcaster;
 use crate::scanner::analyze_book;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
@@ -21,6 +23,7 @@ impl TaskHandler for AnalyzeBookHandler {
         &'a self,
         task: &'a tasks::Model,
         db: &'a DatabaseConnection,
+        event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>> {
         Box::pin(async move {
             let book_id = task
@@ -40,7 +43,7 @@ impl TaskHandler for AnalyzeBookHandler {
                 task.id, book_id, force
             );
 
-            match analyze_book(db, book_id, force).await {
+            match analyze_book(db, book_id, force, event_broadcaster).await {
                 Ok(result) => {
                     info!(
                         "Task {}: Book analysis completed - {} books analyzed",

@@ -33,7 +33,7 @@ async fn create_test_book(
     .await?;
 
     let series =
-        SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series").await?;
+        SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None).await?;
 
     let book = books::Model {
         id: Uuid::new_v4(),
@@ -58,7 +58,7 @@ async fn create_test_book(
         updated_at: Utc::now(),
     };
 
-    let created_book = BookRepository::create(db.sea_orm_connection(), &book).await?;
+    let created_book = BookRepository::create(db.sea_orm_connection(), &book, None).await?;
     Ok((created_book, series))
 }
 
@@ -77,7 +77,7 @@ async fn test_analyze_book_saves_metadata() -> Result<()> {
     assert!(!book.analyzed);
 
     // Analyze the book
-    let result = analyze_book(db.sea_orm_connection(), book.id, false).await?;
+    let result = analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
 
     // Verify analysis succeeded
     if !result.errors.is_empty() {
@@ -147,7 +147,7 @@ async fn test_analyze_book_saves_pages() -> Result<()> {
     let (book, _series) = create_test_book(&db, cbz_path.to_str().unwrap()).await?;
 
     // Analyze the book
-    analyze_book(db.sea_orm_connection(), book.id, false).await?;
+    analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
 
     // Verify pages were saved
     let pages = PageRepository::list_by_book(db.sea_orm_connection(), book.id).await?;
@@ -191,7 +191,7 @@ async fn test_analyze_book_without_comic_info() -> Result<()> {
     let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
 
     // Analyze the book
-    let result = analyze_book(db.sea_orm_connection(), book.id, false).await?;
+    let result = analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
 
     // Verify analysis succeeded even without metadata
     assert_eq!(result.books_analyzed, 1);
@@ -259,7 +259,7 @@ async fn test_analyze_book_title_fallback_to_filename() -> Result<()> {
     let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
 
     // Analyze the book
-    let result = analyze_book(db.sea_orm_connection(), book.id, false).await?;
+    let result = analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
 
     // Verify analysis succeeded
     assert_eq!(result.books_analyzed, 1);
@@ -322,7 +322,7 @@ async fn test_analyze_book_title_from_metadata_takes_precedence() -> Result<()> 
     let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
 
     // Analyze the book
-    let result = analyze_book(db.sea_orm_connection(), book.id, false).await?;
+    let result = analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
 
     // Verify analysis succeeded
     assert_eq!(result.books_analyzed, 1);
@@ -371,10 +371,10 @@ async fn test_analyze_book_filename_no_extension() -> Result<()> {
 
     // Manually set file_name to have no extension to test the fallback logic
     book.file_name = "noextension".to_string();
-    BookRepository::update(db.sea_orm_connection(), &book).await?;
+    BookRepository::update(db.sea_orm_connection(), &book, None).await?;
 
     // Analyze the book
-    let result = analyze_book(db.sea_orm_connection(), book.id, false).await?;
+    let result = analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
 
     // Verify analysis succeeded
     assert_eq!(result.books_analyzed, 1);
@@ -420,7 +420,7 @@ async fn test_analyze_book_filename_multiple_dots() -> Result<()> {
     let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
 
     // Analyze the book
-    let result = analyze_book(db.sea_orm_connection(), book.id, false).await?;
+    let result = analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
 
     // Verify analysis succeeded
     assert_eq!(result.books_analyzed, 1);
@@ -476,7 +476,7 @@ async fn test_analyze_book_empty_title_in_comic_info() -> Result<()> {
     let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
 
     // Analyze the book
-    let result = analyze_book(db.sea_orm_connection(), book.id, false).await?;
+    let result = analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
 
     // Verify analysis succeeded
     assert_eq!(result.books_analyzed, 1);
@@ -510,7 +510,7 @@ async fn test_reanalyze_book_updates_metadata() -> Result<()> {
 
     // Create and analyze book
     let (book, _series) = create_test_book(&db, cbz_path.to_str().unwrap()).await?;
-    analyze_book(db.sea_orm_connection(), book.id, false).await?;
+    analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
 
     // Get initial metadata
     let initial_metadata = BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), book.id)
@@ -541,7 +541,7 @@ async fn test_reanalyze_book_updates_metadata() -> Result<()> {
     zip.finish()?;
 
     // Re-analyze the book
-    let reanalysis_result = analyze_book(db.sea_orm_connection(), book.id, false).await?;
+    let reanalysis_result = analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
     if !reanalysis_result.errors.is_empty() {
         eprintln!("Re-analysis errors: {:?}", reanalysis_result.errors);
     }
@@ -601,7 +601,7 @@ async fn test_analyze_book_with_isbns() -> Result<()> {
 
     // Create and analyze book
     let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
-    analyze_book(db.sea_orm_connection(), book.id, false).await?;
+    analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
 
     // Note: ISBN extraction happens in the parser if barcodes are detected
     // For now, we just verify the metadata exists
@@ -643,7 +643,7 @@ async fn test_analyze_book_with_manga_flag() -> Result<()> {
     zip.finish()?;
 
     let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
-    analyze_book(db.sea_orm_connection(), book.id, false).await?;
+    analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
 
     let metadata = BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), book.id)
         .await?
@@ -671,7 +671,7 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
 
     // Create a series manually
     let series =
-        SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series").await?;
+        SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None).await?;
 
     // Verify series has no metadata initially
     assert_eq!(series.summary, None);
@@ -724,8 +724,8 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
         updated_at: now,
     };
 
-    BookRepository::create(db.sea_orm_connection(), &book1).await?;
-    analyze_book(db.sea_orm_connection(), book1.id, false).await?;
+    BookRepository::create(db.sea_orm_connection(), &book1, None).await?;
+    analyze_book(db.sea_orm_connection(), book1.id, false, None).await?;
 
     // Verify series metadata was populated from the first book
     let series = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
@@ -780,8 +780,8 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
         updated_at: now,
     };
 
-    BookRepository::create(db.sea_orm_connection(), &book2).await?;
-    analyze_book(db.sea_orm_connection(), book2.id, false).await?;
+    BookRepository::create(db.sea_orm_connection(), &book2, None).await?;
+    analyze_book(db.sea_orm_connection(), book2.id, false, None).await?;
 
     // Verify series metadata was NOT overwritten by the second book
     let series = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
@@ -813,13 +813,13 @@ async fn test_series_metadata_respects_manual_changes() -> Result<()> {
 
     // Create a series with manually set metadata
     let mut series =
-        SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series").await?;
+        SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None).await?;
 
     // Manually set series metadata (simulating user edit)
     series.summary = Some("Manually Set Summary".to_string());
     series.publisher = Some("Custom Publisher".to_string());
     series.year = Some(2020);
-    SeriesRepository::update(db.sea_orm_connection(), &series).await?;
+    SeriesRepository::update(db.sea_orm_connection(), &series, None).await?;
 
     // Create a book with different metadata
     let file_path = temp_dir.path().join("book1.cbz");
@@ -845,7 +845,7 @@ async fn test_series_metadata_respects_manual_changes() -> Result<()> {
     zip.finish()?;
 
     let (book, _) = create_test_book(&db, file_path.to_str().unwrap()).await?;
-    analyze_book(db.sea_orm_connection(), book.id, false).await?;
+    analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
 
     // Verify series metadata was NOT overwritten (manual data preserved)
     let series = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)

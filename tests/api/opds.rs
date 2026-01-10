@@ -173,10 +173,10 @@ async fn test_opds_library_series() {
             .await
             .unwrap();
 
-    SeriesRepository::create(&db, library.id, "Series 1")
+    SeriesRepository::create(&db, library.id, "Series 1", None)
         .await
         .unwrap();
-    SeriesRepository::create(&db, library.id, "Series 2")
+    SeriesRepository::create(&db, library.id, "Series 2", None)
         .await
         .unwrap();
 
@@ -227,12 +227,12 @@ async fn test_opds_series_books_with_thumbnails() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
     let book = create_test_book_model(series.id, "Test Book #1", "/test/book1.cbz", 1, 25);
-    BookRepository::create(&db, &book).await.unwrap();
+    BookRepository::create(&db, &book, None).await.unwrap();
 
     // Create test user
     let password_hash = password::hash_password("password").unwrap();
@@ -331,7 +331,7 @@ async fn test_opds_search_books() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Spider-Man")
+    let series = SeriesRepository::create(&db, library.id, "Spider-Man", None)
         .await
         .unwrap();
 
@@ -349,8 +349,8 @@ async fn test_opds_search_books() {
         2,
         30,
     );
-    BookRepository::create(&db, &book1).await.unwrap();
-    BookRepository::create(&db, &book2).await.unwrap();
+    BookRepository::create(&db, &book1, None).await.unwrap();
+    BookRepository::create(&db, &book2, None).await.unwrap();
 
     // Create test user
     let password_hash = password::hash_password("password").unwrap();
@@ -436,12 +436,12 @@ async fn test_opds_pse_page_feed() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
     let book = create_test_book_model(series.id, "Test Book", "/test/book.cbz", 1, 42);
-    let created_book = BookRepository::create(&db, &book).await.unwrap();
+    let created_book = BookRepository::create(&db, &book, None).await.unwrap();
 
     // Create test user
     let password_hash = password::hash_password("password").unwrap();

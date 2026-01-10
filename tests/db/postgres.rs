@@ -98,7 +98,7 @@ async fn test_postgres_series_book_relationship() {
             .unwrap();
 
     // Create series
-    let series = SeriesRepository::create(conn, library.id, "Postgres Series")
+    let series = SeriesRepository::create(conn, library.id, "Postgres Series", None)
         .await
         .unwrap();
 
@@ -123,7 +123,9 @@ async fn test_postgres_series_book_relationship() {
         updated_at: now,
     };
 
-    let book = BookRepository::create(conn, &book_model).await.unwrap();
+    let book = BookRepository::create(conn, &book_model, None)
+        .await
+        .unwrap();
 
     // Query book with series join using SeaORM
     let book_with_series = books::Entity::find_by_id(book.id)
@@ -156,7 +158,7 @@ async fn test_postgres_cascade_delete() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(conn, library.id, "Test Series")
+    let series = SeriesRepository::create(conn, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -230,7 +232,7 @@ async fn test_postgres_metrics_repository() {
     .await
     .unwrap();
 
-    let series = SeriesRepository::create(conn, library.id, "Metrics Test Series")
+    let series = SeriesRepository::create(conn, library.id, "Metrics Test Series", None)
         .await
         .unwrap();
 
@@ -258,7 +260,9 @@ async fn test_postgres_metrics_repository() {
             updated_at: now,
         };
 
-        BookRepository::create(conn, &book_model).await.unwrap();
+        BookRepository::create(conn, &book_model, None)
+            .await
+            .unwrap();
     }
 
     // Test total_book_size - this is where the PostgreSQL NUMERIC type issue would occur

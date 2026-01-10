@@ -4,8 +4,7 @@
 //! The frontend is embedded into the binary when the `embed-frontend` feature is enabled.
 
 use axum::{
-    body::Body,
-    http::{header, HeaderValue, Response, StatusCode, Uri},
+    http::{StatusCode, Uri},
     response::IntoResponse,
 };
 

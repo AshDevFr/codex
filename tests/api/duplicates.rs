@@ -88,7 +88,7 @@ async fn create_duplicate_books(
 
 #[tokio::test]
 async fn test_list_duplicates_empty() {
-    let (db, _temp_dir) = setup_test_db().await;
+    let (db, temp_dir) = setup_test_db().await;
 
     let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -170,7 +170,7 @@ async fn test_list_duplicates_with_data() {
 
 #[tokio::test]
 async fn test_trigger_duplicate_scan() {
-    let (db, _temp_dir) = setup_test_db().await;
+    let (db, temp_dir) = setup_test_db().await;
 
     let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -193,7 +193,7 @@ async fn test_trigger_duplicate_scan() {
 
 #[tokio::test]
 async fn test_trigger_duplicate_scan_unauthorized() {
-    let (db, _temp_dir) = setup_test_db().await;
+    let (db, temp_dir) = setup_test_db().await;
 
     let state = create_test_app_state(db.clone()).await;
     let app = create_test_router_with_app_state(state);
@@ -275,7 +275,7 @@ async fn test_delete_duplicate_group() {
 
 #[tokio::test]
 async fn test_delete_duplicate_group_not_found() {
-    let (db, _temp_dir) = setup_test_db().await;
+    let (db, temp_dir) = setup_test_db().await;
 
     let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -325,7 +325,7 @@ async fn test_duplicates_after_book_deletion() {
 
     // Create duplicate books
     let shared_hash = "duplicate-hash-789";
-    let (book1, book2) = create_duplicate_books(&db, series_id, shared_hash).await;
+    let (book1, _book2) = create_duplicate_books(&db, series_id, shared_hash).await;
 
     // Rebuild duplicates
     BookDuplicatesRepository::rebuild_from_books(&db)
@@ -375,7 +375,7 @@ async fn test_duplicates_exclude_soft_deleted_books() {
 
     // Create duplicate books
     let shared_hash = "duplicate-hash-soft-delete";
-    let (book1, book2) = create_duplicate_books(&db, series_id, shared_hash).await;
+    let (book1, _book2) = create_duplicate_books(&db, series_id, shared_hash).await;
 
     // Rebuild duplicates
     BookDuplicatesRepository::rebuild_from_books(&db)
@@ -388,7 +388,7 @@ async fn test_duplicates_exclude_soft_deleted_books() {
     assert_eq!(duplicates[0].duplicate_count, 2);
 
     // Soft delete one book
-    BookRepository::mark_deleted(&db, book1, true)
+    BookRepository::mark_deleted(&db, book1, true, None)
         .await
         .unwrap();
 

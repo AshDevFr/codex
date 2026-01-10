@@ -2,15 +2,17 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{prelude::Decimal, DatabaseConnection};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use crate::db::entities::{book_metadata_records, books, pages};
 use crate::db::repositories::{
     BookMetadataRepository, BookRepository, PageRepository, SeriesRepository,
 };
+use crate::events::EventBroadcaster;
 use crate::scanner::analyze_file;
 
 use super::types::ScanProgress;
@@ -26,10 +28,12 @@ pub struct AnalysisResult {
 ///
 /// # Arguments
 /// * `force` - If true, bypass full hash check and force re-analysis even if file hasn't changed
+/// * `event_broadcaster` - Optional event broadcaster for emitting entity change events
 pub async fn analyze_book(
     db: &DatabaseConnection,
     book_id: Uuid,
     force: bool,
+    event_broadcaster: Option<&Arc<EventBroadcaster>>,
 ) -> Result<AnalysisResult> {
     let analysis_start = Instant::now();
     info!("Starting analysis for book {} (force={})", book_id, force);
@@ -41,7 +45,7 @@ pub async fn analyze_book(
 
     let mut result = AnalysisResult::default();
 
-    match analyze_single_book(db, book, None, force).await {
+    match analyze_single_book(db, book, None, force, event_broadcaster).await {
         Ok(_) => {
             result.books_analyzed = 1;
             info!(
@@ -66,6 +70,7 @@ async fn analyze_single_book(
     mut book: books::Model,
     progress_tx: Option<mpsc::Sender<ScanProgress>>,
     force: bool,
+    event_broadcaster: Option<&Arc<EventBroadcaster>>,
 ) -> Result<()> {
     let analyze_start = Instant::now();
     let file_path = PathBuf::from(&book.file_path);
@@ -101,7 +106,7 @@ async fn analyze_single_book(
             book.partial_hash = current_partial_hash;
             book.analyzed = true; // Mark as analyzed since nothing changed
             book.updated_at = chrono::Utc::now();
-            BookRepository::update(db, &book).await?;
+            BookRepository::update(db, &book, event_broadcaster).await?;
 
             debug!(
                 "Skipping analysis - full hash unchanged (false positive from partial hash): {}",
@@ -144,6 +149,10 @@ async fn analyze_single_book(
 
     // Update book with analyzed metadata
     let now = Utc::now();
+
+    // Track if cover is becoming available (page_count going from 0 to positive)
+    let cover_now_available = book.page_count == 0 && metadata.page_count > 0;
+
     // Extract title from metadata, or fall back to filename without extension
     // Handle both None and empty string cases
     book.title = metadata
@@ -175,7 +184,43 @@ async fn analyze_single_book(
     book.analyzed = true; // Mark as analyzed
     book.updated_at = now;
 
-    BookRepository::update(db, &book).await?;
+    BookRepository::update(db, &book, event_broadcaster).await?;
+
+    // Emit CoverUpdated event if cover became available during analysis
+    if cover_now_available {
+        if let Some(broadcaster) = event_broadcaster {
+            // Get library_id from series
+            if let Ok(Some(series)) = SeriesRepository::get_by_id(db, book.series_id).await {
+                use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
+                use tracing::{debug, warn};
+
+                let event = EntityChangeEvent {
+                    event: EntityEvent::CoverUpdated {
+                        entity_type: EntityType::Book,
+                        entity_id: book.id,
+                        library_id: Some(series.library_id),
+                    },
+                    user_id: None,
+                    timestamp: Utc::now(),
+                };
+
+                match broadcaster.emit(event) {
+                    Ok(count) => {
+                        debug!(
+                            "Emitted CoverUpdated event to {} subscribers for book: {}",
+                            count, book.id
+                        );
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to emit CoverUpdated event for book {}: {:?}",
+                            book.id, e
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     // Save ComicInfo metadata to book_metadata_records table if available
     if let Some(comic_info) = &metadata.comic_info {
@@ -263,7 +308,7 @@ async fn analyze_single_book(
                     series.year = comic_info.year;
                     series.metadata_populated_from_book = true;
 
-                    SeriesRepository::update(db, &series).await?;
+                    SeriesRepository::update(db, &series, event_broadcaster).await?;
                     info!(
                         "Populated series '{}' metadata from book: {}",
                         series.name, book.file_path

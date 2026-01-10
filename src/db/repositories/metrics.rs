@@ -343,9 +343,10 @@ mod tests {
         .unwrap();
 
         // Create series
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         // Create book
         let now = Utc::now();
@@ -368,7 +369,7 @@ mod tests {
             updated_at: now,
         };
 
-        BookRepository::create(db.sea_orm_connection(), &book_model)
+        BookRepository::create(db.sea_orm_connection(), &book_model, None)
             .await
             .unwrap();
 
@@ -403,9 +404,10 @@ mod tests {
         .await
         .unwrap();
 
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         // Create multiple books with different sizes
         let now = Utc::now();
@@ -431,7 +433,7 @@ mod tests {
                 updated_at: now,
             };
 
-            BookRepository::create(db.sea_orm_connection(), &book_model)
+            BookRepository::create(db.sea_orm_connection(), &book_model, None)
                 .await
                 .unwrap();
         }
@@ -473,9 +475,10 @@ mod tests {
         .unwrap();
 
         // Create series
-        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series")
-            .await
-            .unwrap();
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
 
         // Create book
         let now = Utc::now();
@@ -498,7 +501,7 @@ mod tests {
             updated_at: now,
         };
 
-        BookRepository::create(db.sea_orm_connection(), &book_model)
+        BookRepository::create(db.sea_orm_connection(), &book_model, None)
             .await
             .unwrap();
 

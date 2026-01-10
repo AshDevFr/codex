@@ -122,7 +122,7 @@ async fn test_series_book_relationship() {
             .unwrap();
 
     // Create series
-    let series = SeriesRepository::create(conn, library.id, "Test Series")
+    let series = SeriesRepository::create(conn, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -136,7 +136,9 @@ async fn test_series_book_relationship() {
         10,
     );
 
-    let book = BookRepository::create(conn, &book_model).await.unwrap();
+    let book = BookRepository::create(conn, &book_model, None)
+        .await
+        .unwrap();
 
     // Query book with series join using SeaORM
     let book_with_series = books::Entity::find_by_id(book.id)
@@ -165,7 +167,7 @@ async fn test_cascade_delete_library_to_series() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(conn, library.id, "Test Series")
+    let series = SeriesRepository::create(conn, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -202,12 +204,14 @@ async fn test_user_read_progress() {
         .await
         .unwrap();
 
-    let series = SeriesRepository::create(conn, library.id, "Series")
+    let series = SeriesRepository::create(conn, library.id, "Series", None)
         .await
         .unwrap();
 
     let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "test_hash", "cbz", 10);
-    let book = BookRepository::create(conn, &book_model).await.unwrap();
+    let book = BookRepository::create(conn, &book_model, None)
+        .await
+        .unwrap();
 
     // Create read progress using ActiveModel
     let progress = read_progress::ActiveModel {
@@ -276,7 +280,7 @@ async fn test_unique_file_path_constraint() {
         .await
         .unwrap();
 
-    let series = SeriesRepository::create(conn, library.id, "Series")
+    let series = SeriesRepository::create(conn, library.id, "Series", None)
         .await
         .unwrap();
 
@@ -289,7 +293,9 @@ async fn test_unique_file_path_constraint() {
         "cbz",
         10,
     );
-    BookRepository::create(conn, &book1_model).await.unwrap();
+    BookRepository::create(conn, &book1_model, None)
+        .await
+        .unwrap();
 
     // Try to insert second book with same file path (should fail)
     let book2_model = create_test_book(
@@ -301,7 +307,7 @@ async fn test_unique_file_path_constraint() {
         10,
     );
 
-    let result = BookRepository::create(conn, &book2_model).await;
+    let result = BookRepository::create(conn, &book2_model, None).await;
     assert!(result.is_err());
 
     db.close().await;
@@ -321,14 +327,16 @@ async fn test_file_hash_index_lookup() {
         .await
         .unwrap();
 
-    let series = SeriesRepository::create(conn, library.id, "Series")
+    let series = SeriesRepository::create(conn, library.id, "Series", None)
         .await
         .unwrap();
 
     // Insert book with specific hash
     let test_hash = "abc123hash";
     let book_model = create_test_book(series.id, "/book1.cbz", "book1.cbz", test_hash, "cbz", 10);
-    BookRepository::create(conn, &book_model).await.unwrap();
+    BookRepository::create(conn, &book_model, None)
+        .await
+        .unwrap();
 
     // Query by hash (should use index)
     let result = books::Entity::find()
@@ -357,12 +365,14 @@ async fn test_pages_insert_and_query() {
         .await
         .unwrap();
 
-    let series = SeriesRepository::create(conn, library.id, "Series")
+    let series = SeriesRepository::create(conn, library.id, "Series", None)
         .await
         .unwrap();
 
     let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "test_hash", "cbz", 10);
-    let book = BookRepository::create(conn, &book_model).await.unwrap();
+    let book = BookRepository::create(conn, &book_model, None)
+        .await
+        .unwrap();
 
     // Insert pages
     for i in 1..=3 {
@@ -396,18 +406,20 @@ async fn test_mark_book_deleted() {
         .await
         .unwrap();
 
-    let series = SeriesRepository::create(conn, library.id, "Series")
+    let series = SeriesRepository::create(conn, library.id, "Series", None)
         .await
         .unwrap();
 
     let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "test_hash", "cbz", 10);
-    let book = BookRepository::create(conn, &book_model).await.unwrap();
+    let book = BookRepository::create(conn, &book_model, None)
+        .await
+        .unwrap();
 
     // Verify book is not deleted initially
     assert_eq!(book.deleted, false);
 
     // Mark book as deleted
-    BookRepository::mark_deleted(conn, book.id, true)
+    BookRepository::mark_deleted(conn, book.id, true, None)
         .await
         .unwrap();
 
@@ -434,15 +446,17 @@ async fn test_restore_deleted_book() {
         .await
         .unwrap();
 
-    let series = SeriesRepository::create(conn, library.id, "Series")
+    let series = SeriesRepository::create(conn, library.id, "Series", None)
         .await
         .unwrap();
 
     let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "test_hash", "cbz", 10);
-    let book = BookRepository::create(conn, &book_model).await.unwrap();
+    let book = BookRepository::create(conn, &book_model, None)
+        .await
+        .unwrap();
 
     // Mark book as deleted
-    BookRepository::mark_deleted(conn, book.id, true)
+    BookRepository::mark_deleted(conn, book.id, true, None)
         .await
         .unwrap();
 
@@ -454,7 +468,7 @@ async fn test_restore_deleted_book() {
     assert_eq!(deleted_book.deleted, true);
 
     // Restore the book
-    BookRepository::mark_deleted(conn, book.id, false)
+    BookRepository::mark_deleted(conn, book.id, false, None)
         .await
         .unwrap();
 
@@ -481,19 +495,23 @@ async fn test_list_by_series_filters_deleted_by_default() {
         .await
         .unwrap();
 
-    let series = SeriesRepository::create(conn, library.id, "Series")
+    let series = SeriesRepository::create(conn, library.id, "Series", None)
         .await
         .unwrap();
 
     // Create two books
     let book1_model = create_test_book(series.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
-    let book1 = BookRepository::create(conn, &book1_model).await.unwrap();
+    let book1 = BookRepository::create(conn, &book1_model, None)
+        .await
+        .unwrap();
 
     let book2_model = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
-    let book2 = BookRepository::create(conn, &book2_model).await.unwrap();
+    let book2 = BookRepository::create(conn, &book2_model, None)
+        .await
+        .unwrap();
 
     // Mark book1 as deleted
-    BookRepository::mark_deleted(conn, book1.id, true)
+    BookRepository::mark_deleted(conn, book1.id, true, None)
         .await
         .unwrap();
 
@@ -520,19 +538,23 @@ async fn test_list_by_series_includes_deleted_when_requested() {
         .await
         .unwrap();
 
-    let series = SeriesRepository::create(conn, library.id, "Series")
+    let series = SeriesRepository::create(conn, library.id, "Series", None)
         .await
         .unwrap();
 
     // Create two books
     let book1_model = create_test_book(series.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
-    let book1 = BookRepository::create(conn, &book1_model).await.unwrap();
+    let book1 = BookRepository::create(conn, &book1_model, None)
+        .await
+        .unwrap();
 
     let book2_model = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
-    let _book2 = BookRepository::create(conn, &book2_model).await.unwrap();
+    let _book2 = BookRepository::create(conn, &book2_model, None)
+        .await
+        .unwrap();
 
     // Mark book1 as deleted
-    BookRepository::mark_deleted(conn, book1.id, true)
+    BookRepository::mark_deleted(conn, book1.id, true, None)
         .await
         .unwrap();
 
@@ -560,7 +582,7 @@ async fn test_mark_deleted_nonexistent_book_fails() {
     let conn = db.sea_orm_connection();
 
     let fake_id = Uuid::new_v4();
-    let result = BookRepository::mark_deleted(conn, fake_id, true).await;
+    let result = BookRepository::mark_deleted(conn, fake_id, true, None).await;
 
     assert!(result.is_err());
 
@@ -589,6 +611,7 @@ async fn test_create_series_with_fingerprint() {
         "Test Series",
         Some(fingerprint.clone()),
         None,
+        None,
     )
     .await
     .unwrap();
@@ -611,10 +634,16 @@ async fn test_create_series_without_fingerprint() {
         .unwrap();
 
     // Create series without fingerprint
-    let series =
-        SeriesRepository::create_with_fingerprint(conn, library.id, "Test Series", None, None)
-            .await
-            .unwrap();
+    let series = SeriesRepository::create_with_fingerprint(
+        conn,
+        library.id,
+        "Test Series",
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
     // Verify series was created without fingerprint
     assert_eq!(series.name, "Test Series");
@@ -640,6 +669,7 @@ async fn test_update_series_name() {
         library.id,
         "Original Name",
         Some(fingerprint.clone()),
+        None,
         None,
     )
     .await
@@ -677,7 +707,7 @@ async fn test_update_series_fingerprint() {
         .unwrap();
 
     // Create series without fingerprint
-    let series = SeriesRepository::create(conn, library.id, "Test Series")
+    let series = SeriesRepository::create(conn, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -721,6 +751,7 @@ async fn test_update_series_fingerprint_to_none() {
         library.id,
         "Test Series",
         Some("fingerprint".to_string()),
+        None,
         None,
     )
     .await
@@ -917,17 +948,19 @@ async fn test_series_reading_direction_override() {
     LibraryRepository::update(conn, &library).await.unwrap();
 
     // Create series that inherits library default (reading_direction = None)
-    let series1 = SeriesRepository::create(conn, library.id, "Regular Manga")
+    let series1 = SeriesRepository::create(conn, library.id, "Regular Manga", None)
         .await
         .unwrap();
     assert_eq!(series1.reading_direction, None);
 
     // Create series with explicit override for webtoon
-    let mut series2 = SeriesRepository::create(conn, library.id, "Webtoon")
+    let mut series2 = SeriesRepository::create(conn, library.id, "Webtoon", None)
         .await
         .unwrap();
     series2.reading_direction = Some("TOP_TO_BOTTOM".to_string());
-    SeriesRepository::update(conn, &series2).await.unwrap();
+    SeriesRepository::update(conn, &series2, None)
+        .await
+        .unwrap();
 
     // Verify both series persisted correctly
     let retrieved1 = SeriesRepository::get_by_id(conn, series1.id)
@@ -959,15 +992,15 @@ async fn test_series_reading_direction_clear() {
             .unwrap();
 
     // Create series with explicit direction
-    let mut series = SeriesRepository::create(conn, library.id, "Test Series")
+    let mut series = SeriesRepository::create(conn, library.id, "Test Series", None)
         .await
         .unwrap();
     series.reading_direction = Some("TOP_TO_BOTTOM".to_string());
-    SeriesRepository::update(conn, &series).await.unwrap();
+    SeriesRepository::update(conn, &series, None).await.unwrap();
 
     // Clear it to revert to library default
     series.reading_direction = None;
-    SeriesRepository::update(conn, &series).await.unwrap();
+    SeriesRepository::update(conn, &series, None).await.unwrap();
 
     // Verify it's cleared
     let retrieved = SeriesRepository::get_by_id(conn, series.id)
@@ -991,22 +1024,26 @@ async fn test_purge_deleted_in_library_purges_empty_series_when_enabled() {
         .await
         .unwrap();
 
-    let series1 = SeriesRepository::create(conn, library.id, "Series 1")
+    let series1 = SeriesRepository::create(conn, library.id, "Series 1", None)
         .await
         .unwrap();
-    let series2 = SeriesRepository::create(conn, library.id, "Series 2")
+    let series2 = SeriesRepository::create(conn, library.id, "Series 2", None)
         .await
         .unwrap();
 
     // Create books in both series
     let book1_model = create_test_book(series1.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
-    let book1 = BookRepository::create(conn, &book1_model).await.unwrap();
+    let book1 = BookRepository::create(conn, &book1_model, None)
+        .await
+        .unwrap();
 
     let book2_model = create_test_book(series2.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
-    let _book2 = BookRepository::create(conn, &book2_model).await.unwrap();
+    let _book2 = BookRepository::create(conn, &book2_model, None)
+        .await
+        .unwrap();
 
     // Mark all books in series1 as deleted
-    BookRepository::mark_deleted(conn, book1.id, true)
+    BookRepository::mark_deleted(conn, book1.id, true, None)
         .await
         .unwrap();
 
@@ -1032,7 +1069,7 @@ async fn test_purge_deleted_in_library_purges_empty_series_when_enabled() {
     }
 
     // Purge deleted books - should also delete series1 since it's now empty
-    let deleted_count = BookRepository::purge_deleted_in_library(conn, library.id)
+    let deleted_count = BookRepository::purge_deleted_in_library(conn, library.id, None)
         .await
         .unwrap();
 
@@ -1061,16 +1098,18 @@ async fn test_purge_deleted_in_library_keeps_empty_series_when_disabled() {
         .await
         .unwrap();
 
-    let series1 = SeriesRepository::create(conn, library.id, "Series 1")
+    let series1 = SeriesRepository::create(conn, library.id, "Series 1", None)
         .await
         .unwrap();
 
     // Create book in series
     let book1_model = create_test_book(series1.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
-    let book1 = BookRepository::create(conn, &book1_model).await.unwrap();
+    let book1 = BookRepository::create(conn, &book1_model, None)
+        .await
+        .unwrap();
 
     // Mark book as deleted
-    BookRepository::mark_deleted(conn, book1.id, true)
+    BookRepository::mark_deleted(conn, book1.id, true, None)
         .await
         .unwrap();
 
@@ -1088,7 +1127,7 @@ async fn test_purge_deleted_in_library_keeps_empty_series_when_disabled() {
     .unwrap();
 
     // Purge deleted books - should NOT delete series1 even though it's empty
-    let deleted_count = BookRepository::purge_deleted_in_library(conn, library.id)
+    let deleted_count = BookRepository::purge_deleted_in_library(conn, library.id, None)
         .await
         .unwrap();
 
@@ -1116,16 +1155,18 @@ async fn test_purge_deleted_in_series_purges_series_when_empty_and_enabled() {
         .await
         .unwrap();
 
-    let series = SeriesRepository::create(conn, library.id, "Series")
+    let series = SeriesRepository::create(conn, library.id, "Series", None)
         .await
         .unwrap();
 
     // Create book in series
     let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "hash1", "cbz", 10);
-    let book = BookRepository::create(conn, &book_model).await.unwrap();
+    let book = BookRepository::create(conn, &book_model, None)
+        .await
+        .unwrap();
 
     // Mark book as deleted
-    BookRepository::mark_deleted(conn, book.id, true)
+    BookRepository::mark_deleted(conn, book.id, true, None)
         .await
         .unwrap();
 
@@ -1143,7 +1184,7 @@ async fn test_purge_deleted_in_series_purges_series_when_empty_and_enabled() {
     .unwrap();
 
     // Purge deleted books in series - should also delete the series
-    let deleted_count = BookRepository::purge_deleted_in_series(conn, series.id)
+    let deleted_count = BookRepository::purge_deleted_in_series(conn, series.id, None)
         .await
         .unwrap();
 
@@ -1168,16 +1209,18 @@ async fn test_purge_deleted_in_series_keeps_series_when_empty_but_setting_disabl
         .await
         .unwrap();
 
-    let series = SeriesRepository::create(conn, library.id, "Series")
+    let series = SeriesRepository::create(conn, library.id, "Series", None)
         .await
         .unwrap();
 
     // Create book in series
     let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "hash1", "cbz", 10);
-    let book = BookRepository::create(conn, &book_model).await.unwrap();
+    let book = BookRepository::create(conn, &book_model, None)
+        .await
+        .unwrap();
 
     // Mark book as deleted
-    BookRepository::mark_deleted(conn, book.id, true)
+    BookRepository::mark_deleted(conn, book.id, true, None)
         .await
         .unwrap();
 
@@ -1195,7 +1238,7 @@ async fn test_purge_deleted_in_series_keeps_series_when_empty_but_setting_disabl
     .unwrap();
 
     // Purge deleted books in series - should NOT delete the series
-    let deleted_count = BookRepository::purge_deleted_in_series(conn, series.id)
+    let deleted_count = BookRepository::purge_deleted_in_series(conn, series.id, None)
         .await
         .unwrap();
 
@@ -1223,19 +1266,23 @@ async fn test_purge_deleted_in_series_keeps_series_when_not_empty() {
         .await
         .unwrap();
 
-    let series = SeriesRepository::create(conn, library.id, "Series")
+    let series = SeriesRepository::create(conn, library.id, "Series", None)
         .await
         .unwrap();
 
     // Create two books in series
     let book1_model = create_test_book(series.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
-    let book1 = BookRepository::create(conn, &book1_model).await.unwrap();
+    let book1 = BookRepository::create(conn, &book1_model, None)
+        .await
+        .unwrap();
 
     let book2_model = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
-    let _book2 = BookRepository::create(conn, &book2_model).await.unwrap();
+    let _book2 = BookRepository::create(conn, &book2_model, None)
+        .await
+        .unwrap();
 
     // Mark only one book as deleted
-    BookRepository::mark_deleted(conn, book1.id, true)
+    BookRepository::mark_deleted(conn, book1.id, true, None)
         .await
         .unwrap();
 
@@ -1253,7 +1300,7 @@ async fn test_purge_deleted_in_series_keeps_series_when_not_empty() {
     .unwrap();
 
     // Purge deleted books in series - should NOT delete the series since it still has books
-    let deleted_count = BookRepository::purge_deleted_in_series(conn, series.id)
+    let deleted_count = BookRepository::purge_deleted_in_series(conn, series.id, None)
         .await
         .unwrap();
 

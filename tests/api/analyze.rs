@@ -141,7 +141,7 @@ async fn test_analyze_series_with_concurrency() {
     let uri = format!("/api/v1/series/{}/analyze?concurrency=4", series.id);
     let request = post_request_with_auth(&uri, &token);
 
-    let (status, response): (StatusCode, Option<AnalysisResult>) =
+    let (status, _response): (StatusCode, Option<AnalysisResult>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -166,7 +166,7 @@ async fn test_analyze_series_requires_write_permission() {
 
 #[tokio::test]
 async fn test_analyze_series_not_found() {
-    let (db, _temp_dir) = setup_test_db().await;
+    let (db, temp_dir) = setup_test_db().await;
 
     let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -312,7 +312,7 @@ async fn test_analyze_book_force_reanalysis() {
 
 #[tokio::test]
 async fn test_analyze_book_requires_write_permission() {
-    let (db, _temp_dir) = setup_test_db().await;
+    let (db, temp_dir) = setup_test_db().await;
 
     let state = create_test_app_state(db.clone()).await;
     let token = create_readonly_and_token(&db, &state).await;
@@ -329,7 +329,7 @@ async fn test_analyze_book_requires_write_permission() {
 
 #[tokio::test]
 async fn test_analyze_book_not_found() {
-    let (db, _temp_dir) = setup_test_db().await;
+    let (db, temp_dir) = setup_test_db().await;
 
     let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -887,14 +887,14 @@ async fn test_library_unanalyzed_no_books_error() {
 
 #[tokio::test]
 async fn test_series_unanalyzed_no_books_error() {
-    let (db, _temp_dir) = setup_test_db().await;
+    let (db, temp_dir) = setup_test_db().await;
 
     let library =
         LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Empty Series")
+    let series = SeriesRepository::create(&db, library.id, "Empty Series", None)
         .await
         .unwrap();
 

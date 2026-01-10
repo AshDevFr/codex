@@ -10,7 +10,6 @@ use crate::db::{entities::users, repositories::UserRepository};
 use crate::utils::password;
 use axum::{extract::State, Json};
 use chrono::Utc;
-use sea_orm::Set;
 use std::sync::Arc;
 use uuid::Uuid;
 

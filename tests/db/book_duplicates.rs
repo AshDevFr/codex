@@ -118,7 +118,7 @@ async fn test_rebuild_excludes_deleted_books() {
 
     // Create two books with the same hash
     let file_hash = "abc123";
-    let book1 = create_test_book_with_hash(
+    let _book1 = create_test_book_with_hash(
         &db,
         &library,
         &series,
@@ -138,7 +138,7 @@ async fn test_rebuild_excludes_deleted_books() {
     .await;
 
     // Soft delete book2
-    BookRepository::mark_deleted(&db, book2.id, true)
+    BookRepository::mark_deleted(&db, book2.id, true, None)
         .await
         .unwrap();
 
@@ -153,7 +153,7 @@ async fn test_rebuild_excludes_deleted_books() {
     assert_eq!(duplicates.len(), 0);
 
     // Restore book2
-    BookRepository::mark_deleted(&db, book2.id, false)
+    BookRepository::mark_deleted(&db, book2.id, false, None)
         .await
         .unwrap();
 
@@ -237,7 +237,7 @@ async fn test_cleanup_deletes_group_when_only_one_remains() {
 
     // Create two books with the same hash
     let file_hash = "abc123";
-    let book1 = create_test_book_with_hash(
+    let _book1 = create_test_book_with_hash(
         &db,
         &library,
         &series,

@@ -159,7 +159,7 @@ impl ReadProgressRepository {
         user_id: Uuid,
         book_ids: Vec<(Uuid, i32)>, // Vec of (book_id, page_count)
     ) -> Result<usize> {
-        let now = Utc::now();
+        let _now = Utc::now();
         let mut count = 0;
 
         // Process each book
@@ -234,7 +234,7 @@ mod tests {
         .unwrap();
 
         // Create a series
-        let series = SeriesRepository::create(db, library.id, "Test Series")
+        let series = SeriesRepository::create(db, library.id, "Test Series", None)
             .await
             .unwrap();
 
@@ -257,7 +257,7 @@ mod tests {
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
-        BookRepository::create(db, &book).await.unwrap()
+        BookRepository::create(db, &book, None).await.unwrap()
     }
 
     #[tokio::test]

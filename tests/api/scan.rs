@@ -1,7 +1,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::scan::{ScanStatusDto, TriggerScanQuery};
+use codex::api::dto::scan::ScanStatusDto;
 use codex::api::error::ErrorResponse;
 use codex::db::repositories::{LibraryRepository, UserRepository};
 use codex::db::ScanningStrategy;
@@ -161,7 +161,7 @@ async fn test_trigger_scan_requires_write_permission() {
     let uri = format!("/api/v1/libraries/{}/scan?mode=normal", library.id);
     let request = post_request_with_auth(&uri, &token);
 
-    let (status, response): (StatusCode, Option<ErrorResponse>) =
+    let (status, _response): (StatusCode, Option<ErrorResponse>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::FORBIDDEN);
@@ -179,7 +179,7 @@ async fn test_trigger_scan_library_not_found() {
     let uri = format!("/api/v1/libraries/{}/scan?mode=normal", fake_id);
     let request = post_request_with_auth(&uri, &token);
 
-    let (status, response): (StatusCode, Option<ErrorResponse>) =
+    let (status, _response): (StatusCode, Option<ErrorResponse>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::NOT_FOUND);
@@ -441,7 +441,7 @@ async fn test_list_active_scans_requires_read_permission() {
 
 #[tokio::test]
 async fn test_scan_progress_stream_requires_auth() {
-    let (db, _temp_dir) = setup_test_db().await;
+    let (db, temp_dir) = setup_test_db().await;
     let state = create_test_app_state(db.clone()).await;
     let app = create_test_router_with_app_state(state);
 
@@ -454,7 +454,7 @@ async fn test_scan_progress_stream_requires_auth() {
 
 #[tokio::test]
 async fn test_scan_progress_stream_requires_read_permission() {
-    let (db, _temp_dir) = setup_test_db().await;
+    let (db, temp_dir) = setup_test_db().await;
     let state = create_test_app_state(db.clone()).await;
 
     // Create a user with no permissions
@@ -483,7 +483,7 @@ async fn test_scan_progress_stream_requires_read_permission() {
 
 #[tokio::test]
 async fn test_scan_progress_stream_connection() {
-    let (db, _temp_dir) = setup_test_db().await;
+    let (db, temp_dir) = setup_test_db().await;
     let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
@@ -518,7 +518,7 @@ async fn test_scan_progress_stream_connection() {
 
 #[tokio::test]
 async fn test_scan_manager_subscribe() {
-    let (db, _temp_dir) = setup_test_db().await;
+    let (db, temp_dir) = setup_test_db().await;
     let state = create_test_app_state(db.clone()).await;
 
     // Test that we can subscribe to task progress updates
@@ -554,7 +554,7 @@ async fn test_scan_progress_broadcast() {
 
     // Create a worker with event broadcaster
     let worker = TaskWorker::new(db.clone())
-        .with_event_broadcaster((*state.event_broadcaster).clone())
+        .with_event_broadcaster(state.event_broadcaster.clone())
         .with_poll_interval(Duration::from_millis(100));
 
     // Trigger a scan
@@ -628,7 +628,7 @@ async fn test_full_scan_with_progress_updates() {
 
     // Create a worker with event broadcaster to process tasks
     let worker = TaskWorker::new(db.clone())
-        .with_event_broadcaster((*state.event_broadcaster).clone())
+        .with_event_broadcaster(state.event_broadcaster.clone())
         .with_poll_interval(Duration::from_millis(100));
 
     // Trigger scan via API
@@ -724,7 +724,7 @@ async fn test_multiple_concurrent_sse_subscribers() {
 
     // Create a worker with event broadcaster
     let worker = TaskWorker::new(db.clone())
-        .with_event_broadcaster((*state.event_broadcaster).clone())
+        .with_event_broadcaster(state.event_broadcaster.clone())
         .with_poll_interval(Duration::from_millis(100));
 
     // Trigger a scan

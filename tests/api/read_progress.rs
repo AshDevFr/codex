@@ -10,7 +10,6 @@ use codex::db::ScanningStrategy;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;
-use sea_orm::prelude::Decimal;
 
 // Helper to create admin and token
 async fn create_admin_and_token(
@@ -70,7 +69,7 @@ async fn test_mark_book_as_read() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -82,7 +81,7 @@ async fn test_mark_book_as_read() {
         Some("Book 1".to_string()),
         50,
     );
-    let book = BookRepository::create(&db, &book).await.unwrap();
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
     let (user_id, token) = create_admin_and_token(&db, &state).await;
@@ -112,7 +111,7 @@ async fn test_mark_book_as_unread() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -124,7 +123,7 @@ async fn test_mark_book_as_unread() {
         Some("Book 1".to_string()),
         50,
     );
-    let book = BookRepository::create(&db, &book).await.unwrap();
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
     let (user_id, token) = create_admin_and_token(&db, &state).await;
@@ -190,7 +189,7 @@ async fn test_mark_series_as_read() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -204,7 +203,7 @@ async fn test_mark_series_as_read() {
             Some(format!("Book {}", i)),
             50,
         );
-        let book = BookRepository::create(&db, &book).await.unwrap();
+        let book = BookRepository::create(&db, &book, None).await.unwrap();
         books.push(book);
     }
 
@@ -243,7 +242,7 @@ async fn test_mark_series_as_unread() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Test Series")
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
 
@@ -257,7 +256,7 @@ async fn test_mark_series_as_unread() {
             Some(format!("Book {}", i)),
             50,
         );
-        let book = BookRepository::create(&db, &book).await.unwrap();
+        let book = BookRepository::create(&db, &book, None).await.unwrap();
         books.push(book);
     }
 
@@ -329,7 +328,7 @@ async fn test_mark_empty_series_as_read() {
             .await
             .unwrap();
 
-    let series = SeriesRepository::create(&db, library.id, "Empty Series")
+    let series = SeriesRepository::create(&db, library.id, "Empty Series", None)
         .await
         .unwrap();
 

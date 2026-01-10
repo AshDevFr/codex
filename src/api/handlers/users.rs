@@ -2,7 +2,6 @@ use crate::api::{
     dto::{CreateUserRequest, UpdateUserRequest, UserDto},
     error::ApiError,
     extractors::{AuthContext, AuthState},
-    permissions::Permission,
 };
 use crate::db::entities::users;
 use crate::db::repositories::UserRepository;

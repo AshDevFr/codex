@@ -356,7 +356,7 @@ mod tests {
     #[test]
     fn test_extract_isbns_from_pdf_empty() {
         // Create a minimal PDF document
-        let mut doc = Document::with_version("1.4");
+        let doc = Document::with_version("1.4");
         let isbns = PdfParser::extract_isbns_from_pdf(&doc);
         assert_eq!(isbns.len(), 0);
     }

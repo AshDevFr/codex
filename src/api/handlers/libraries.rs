@@ -274,6 +274,25 @@ pub async fn update_library(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to update library: {}", e)))?;
 
+    // Emit LibraryUpdated event
+    {
+        use crate::events::{EntityChangeEvent, EntityEvent};
+
+        let event = EntityChangeEvent {
+            event: EntityEvent::LibraryUpdated { library_id: id },
+            user_id: Some(auth.user_id),
+            timestamp: Utc::now(),
+        };
+
+        if let Err(e) = state.event_broadcaster.emit(event) {
+            tracing::warn!(
+                "Failed to emit LibraryUpdated event for library {}: {:?}",
+                id,
+                e
+            );
+        }
+    }
+
     // Fetch the updated library since update returns ()
     let updated = LibraryRepository::get_by_id(&state.db, id)
         .await
@@ -320,6 +339,25 @@ pub async fn delete_library(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to delete library: {}", e)))?;
 
+    // Emit LibraryDeleted event
+    {
+        use crate::events::{EntityChangeEvent, EntityEvent};
+
+        let event = EntityChangeEvent {
+            event: EntityEvent::LibraryDeleted { library_id: id },
+            user_id: Some(auth.user_id),
+            timestamp: Utc::now(),
+        };
+
+        if let Err(e) = state.event_broadcaster.emit(event) {
+            tracing::warn!(
+                "Failed to emit LibraryDeleted event for library {}: {:?}",
+                id,
+                e
+            );
+        }
+    }
+
     // Reload scheduler to remove deleted library's scanning schedule
     if let Some(scheduler) = &state.scheduler {
         if let Err(e) = scheduler.lock().await.reload_schedules().await {
@@ -363,10 +401,13 @@ pub async fn purge_deleted_books(
         .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
 
     // Purge deleted books
-    let count =
-        crate::db::repositories::BookRepository::purge_deleted_in_library(&state.db, library_id)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to purge deleted books: {}", e)))?;
+    let count = crate::db::repositories::BookRepository::purge_deleted_in_library(
+        &state.db,
+        library_id,
+        Some(&state.event_broadcaster),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to purge deleted books: {}", e)))?;
 
     Ok(Json(count))
 }
