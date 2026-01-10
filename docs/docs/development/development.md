@@ -109,7 +109,7 @@ cargo test --no-default-features
 
 ### PostgreSQL Integration Tests
 
-See the [Docker Testing Guide](../DOCKER.md#running-tests-with-postgresql) for running PostgreSQL tests.
+For running PostgreSQL tests, start the test container with `make test-up` and run `make test-postgres`.
 
 ## Development Workflow
 
@@ -156,7 +156,7 @@ npm run dev
 
 **Important**: Always use `http://localhost:5173` (frontend) in development. The Vite dev server automatically proxies API requests to the backend at `http://localhost:8080`.
 
-See [FRONTEND.md](../../FRONTEND.md) for detailed frontend setup and architecture.
+The frontend is a React/TypeScript application using Vite, Mantine UI, and TanStack Query.
 
 ### Code Formatting
 
@@ -279,5 +279,5 @@ cargo build --release
 ## Next Steps
 
 - Review the [Architecture](./architecture) documentation
-- Check the [API Documentation](./api) for endpoint details
-- See [Configuration](./configuration) for available options
+- Check the [API Documentation](../api) for endpoint details
+- See [Configuration](../configuration) for available options

@@ -347,6 +347,6 @@ tests/
 
 ## Next Steps
 
-- Review [deployment options](./deployment)
-- Learn about [API usage](./api)
-- Explore [configuration options](./configuration)
+- Review [deployment options](../deployment)
+- Learn about [API usage](../api)
+- Explore [configuration options](../configuration)

@@ -56,8 +56,10 @@ jobs:
 
       - name: Setup Node.js
         run: |
+          apt-get remove -y nodejs npm || true
           curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
           apt-get install -y nodejs
+          node --version
 
       - name: Build frontend
         working-directory: web
