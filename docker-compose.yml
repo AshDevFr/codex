@@ -32,7 +32,7 @@ services:
         condition: service_healthy
     volumes:
       - ./config:/app/config:ro
-      - codex_data:/app/data
+      - codex_data:/app/data  # Includes thumbnail cache at /app/data/thumbnails
       - ./docker/data/library:/library:ro
     command: ["codex", "serve", "--config", "/app/config/config.docker.yaml"]
     environment:
@@ -56,6 +56,7 @@ services:
       # Startup-time settings (in config file, require restart):
       # CODEX_TASK_WORKER_COUNT: 4 # Number of parallel task workers per pod
       # CODEX_SCANNER_MAX_CONCURRENT_SCANS: 2 # Maximum number of concurrent library scans
+      # CODEX_THUMBNAIL_CACHE_DIR: data/thumbnails # Thumbnail cache directory (default: data/thumbnails)
     networks:
       - codex-network
     restart: unless-stopped

@@ -27,8 +27,7 @@ async fn test_e2e_task_execution() {
 
     // Create thumbnail service
     let thumbnail_config = codex::config::ThumbnailConfig {
-        data_dir: "./data".to_string(),
-        cache_dir: "thumbnails".to_string(),
+        cache_dir: "data/thumbnails".to_string(),
     };
     let thumbnail_service = Arc::new(ThumbnailService::new(thumbnail_config));
 
@@ -140,8 +139,7 @@ async fn test_concurrent_workers_skip_locked() {
 
     // Create thumbnail service
     let thumbnail_config = codex::config::ThumbnailConfig {
-        data_dir: "./data".to_string(),
-        cache_dir: "thumbnails".to_string(),
+        cache_dir: "data/thumbnails".to_string(),
     };
     let thumbnail_service = Arc::new(ThumbnailService::new(thumbnail_config));
 
@@ -278,8 +276,7 @@ async fn test_stale_task_recovery() {
 
     // Create thumbnail service
     let thumbnail_config = codex::config::ThumbnailConfig {
-        data_dir: "./data".to_string(),
-        cache_dir: "thumbnails".to_string(),
+        cache_dir: "data/thumbnails".to_string(),
     };
     let thumbnail_service = Arc::new(ThumbnailService::new(thumbnail_config));
 

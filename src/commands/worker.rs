@@ -54,8 +54,8 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         config.thumbnail.clone(),
     ));
     info!(
-        "Thumbnail service initialized (cache: {}/{})",
-        config.thumbnail.data_dir, config.thumbnail.cache_dir
+        "Thumbnail service initialized (cache: {})",
+        config.thumbnail.cache_dir
     );
 
     // Spawn multiple workers for parallel task processing

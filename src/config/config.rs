@@ -365,20 +365,16 @@ impl Default for ScannerConfig {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct ThumbnailConfig {
-    /// Base directory for thumbnail cache storage
+    /// Full path to thumbnail cache directory
     /// This is a startup-time setting - changes require a restart
     pub cache_dir: String,
-    /// Data directory for application data (contains cache_dir)
-    pub data_dir: String,
 }
 
 impl Default for ThumbnailConfig {
     fn default() -> Self {
         Self {
             cache_dir: env_string_opt("CODEX_THUMBNAIL_CACHE_DIR")
-                .unwrap_or_else(|| "thumbnails".to_string()),
-            data_dir: env_string_opt("CODEX_THUMBNAIL_DATA_DIR")
-                .unwrap_or_else(|| "data".to_string()),
+                .unwrap_or_else(|| "data/thumbnails".to_string()),
         }
     }
 }

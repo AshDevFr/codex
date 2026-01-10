@@ -41,3 +41,10 @@ task:
 # ==================================================
 scanner:
   max_concurrent_scans: 2 # Max concurrent library scans (override: CODEX_SCANNER_MAX_CONCURRENT_SCANS)
+
+# Thumbnail Settings (Startup-Time - Require Restart)
+# ====================================================
+# Runtime settings (max_dimension, jpeg_quality) are stored in the database
+# and can be changed via the Settings API without restart.
+thumbnail:
+  cache_dir: data/thumbnails # Thumbnail cache directory (override: CODEX_THUMBNAIL_CACHE_DIR)

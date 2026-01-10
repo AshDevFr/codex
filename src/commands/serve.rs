@@ -91,8 +91,8 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         config.thumbnail.clone(),
     ));
     info!(
-        "Thumbnail service initialized (cache: {}/{})",
-        config.thumbnail.data_dir, config.thumbnail.cache_dir
+        "Thumbnail service initialized (cache: {})",
+        config.thumbnail.cache_dir
     );
 
     // Initialize worker tracking variables

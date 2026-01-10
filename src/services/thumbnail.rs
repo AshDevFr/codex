@@ -67,7 +67,7 @@ impl ThumbnailService {
 
     /// Get the full path to thumbnail cache directory
     fn get_cache_base_dir(&self) -> PathBuf {
-        PathBuf::from(&self.config.data_dir).join(&self.config.cache_dir)
+        PathBuf::from(&self.config.cache_dir)
     }
 
     /// Get the subdirectory path for a book's thumbnail (based on first 2 chars of UUID)
@@ -334,8 +334,7 @@ mod tests {
     #[test]
     fn test_thumbnail_path_generation() {
         let config = ThumbnailConfig {
-            data_dir: "data".to_string(),
-            cache_dir: "thumbnails".to_string(),
+            cache_dir: "data/thumbnails".to_string(),
         };
         let service = ThumbnailService::new(config);
 
@@ -351,8 +350,7 @@ mod tests {
     #[test]
     fn test_thumbnail_subdirectory_bucketing() {
         let config = ThumbnailConfig {
-            data_dir: "data".to_string(),
-            cache_dir: "thumbnails".to_string(),
+            cache_dir: "data/thumbnails".to_string(),
         };
         let service = ThumbnailService::new(config);
 

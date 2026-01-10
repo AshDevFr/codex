@@ -23,12 +23,16 @@
 # Override via environment variables if needed:
 #   CODEX_TASK_WORKER_COUNT=4
 #   CODEX_SCANNER_MAX_CONCURRENT_SCANS=2
+#   CODEX_THUMBNAIL_CACHE_DIR=data/thumbnails
 
 task:
   worker_count: 4 # Number of parallel task workers per pod
 
 scanner:
   max_concurrent_scans: 2 # Max concurrent library scans
+
+thumbnail:
+  cache_dir: data/thumbnails # Thumbnail cache directory (persistent volume mount)
 
 # Configuration Priority:
 #   1. Environment Variables (highest - overrides config file)
