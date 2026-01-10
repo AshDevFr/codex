@@ -1676,28 +1676,68 @@ export interface components {
     schemas: {
         /** @description Analysis result response */
         AnalysisResult: {
-            /** @description Number of books successfully analyzed */
+            /**
+             * @description Number of books successfully analyzed
+             * @example 150
+             */
             booksAnalyzed: number;
             /** @description List of errors encountered during analysis */
             errors: string[];
         };
         /** @description API key data transfer object */
         ApiKeyDto: {
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the key was created
+             * @example 2024-01-01T00:00:00Z
+             */
             createdAt: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the key expires (if set)
+             * @example 2025-12-31T23:59:59Z
+             */
             expiresAt?: string | null;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Unique API key identifier
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
             id: string;
+            /**
+             * @description Whether the key is currently active
+             * @example true
+             */
             isActive: boolean;
+            /**
+             * @description Prefix of the key for identification
+             * @example cdx_a1b2c3
+             */
             keyPrefix: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the key was last used
+             * @example 2024-01-15T10:30:00Z
+             */
             lastUsedAt?: string | null;
+            /**
+             * @description Human-readable name for the key
+             * @example Mobile App Key
+             */
             name: string;
+            /** @description Permissions granted to this key */
             permissions: unknown;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the key was last updated
+             * @example 2024-01-15T10:30:00Z
+             */
             updatedAt: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Owner user ID
+             * @example 550e8400-e29b-41d4-a716-446655440001
+             */
             userId: string;
         };
         /** @description Detailed book response with metadata */
@@ -1837,6 +1877,26 @@ export interface components {
              */
             writers: string[];
         };
+        /**
+         * @example {
+         *       "current_path": "/home/user/Documents",
+         *       "entries": [
+         *         {
+         *           "is_directory": true,
+         *           "is_readable": true,
+         *           "name": "Comics",
+         *           "path": "/home/user/Documents/Comics"
+         *         },
+         *         {
+         *           "is_directory": true,
+         *           "is_readable": true,
+         *           "name": "Manga",
+         *           "path": "/home/user/Documents/Manga"
+         *         }
+         *       ],
+         *       "parent_path": "/home/user"
+         *     }
+         */
         BrowseResponse: {
             /** @description Current directory path */
             current_path: string;
@@ -1845,13 +1905,27 @@ export interface components {
             /** @description Parent directory path (None if at root) */
             parent_path?: string | null;
         };
+        /** @description Single setting update in a bulk operation */
         BulkSettingUpdate: {
+            /**
+             * @description Setting key to update
+             * @example scan.concurrent_jobs
+             */
             key: string;
+            /**
+             * @description New value for the setting
+             * @example 4
+             */
             value: string;
         };
         /** @description Bulk update settings request */
         BulkUpdateSettingsRequest: {
+            /**
+             * @description Optional reason for the changes (for audit log)
+             * @example Batch configuration update for production
+             */
             change_reason?: string | null;
+            /** @description List of settings to update */
             updates: components["schemas"]["BulkSettingUpdate"][];
         };
         /** @description Configure initial settings request */
@@ -1875,9 +1949,13 @@ export interface components {
             /**
              * Format: date-time
              * @description Optional expiration date
+             * @example 2025-12-31T23:59:59Z
              */
             expiresAt?: string | null;
-            /** @description Name/description for the API key */
+            /**
+             * @description Name/description for the API key
+             * @example Mobile App Key
+             */
             name: string;
             /**
              * @description Permissions for the API key (array of permission strings)
@@ -1887,7 +1965,10 @@ export interface components {
         };
         /** @description API key creation response (includes plaintext key only on creation) */
         CreateApiKeyResponse: components["schemas"]["ApiKeyDto"] & {
-            /** @description The plaintext API key (only shown once on creation) */
+            /**
+             * @description The plaintext API key (only shown once on creation)
+             * @example cdx_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+             */
             key: string;
         };
         /** @description Create library request */
@@ -1930,36 +2011,82 @@ export interface components {
             scanningConfig?: null | components["schemas"]["ScanningConfigDto"];
         };
         CreateTaskRequest: {
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Priority level (higher = more urgent)
+             * @example 0
+             */
             priority?: number | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When to run the task (defaults to now)
+             * @example 2024-01-15T12:00:00Z
+             */
             scheduled_for?: string | null;
+            /** @description Type of task to create */
             task_type: components["schemas"]["TaskType"];
         };
         CreateTaskResponse: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description ID of the created task
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
             task_id: string;
         };
         /** @description Create user request */
         CreateUserRequest: {
-            /** @description Email address */
+            /**
+             * @description Email address for the new account
+             * @example newuser@example.com
+             */
             email: string;
-            /** @description Admin flag */
+            /**
+             * @description Whether to grant admin privileges
+             * @example false
+             */
             isAdmin?: boolean;
-            /** @description Password */
+            /**
+             * @description Password for the new account
+             * @example securePassword123!
+             */
             password: string;
-            /** @description Username */
+            /**
+             * @description Username for the new account
+             * @example newuser
+             */
             username: string;
         };
         /** @description A group of duplicate books */
         DuplicateGroup: {
+            /** @description List of book IDs that share this hash */
             book_ids: string[];
+            /**
+             * @description When the duplicate was first detected
+             * @example 2024-01-15T10:30:00Z
+             */
             created_at: string;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Number of duplicate copies found
+             * @example 3
+             */
             duplicate_count: number;
+            /**
+             * @description SHA-256 hash of the file content
+             * @example e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+             */
             file_hash: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Unique identifier for the duplicate group
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
             id: string;
+            /**
+             * @description When the group was last updated
+             * @example 2024-01-15T10:30:00Z
+             */
             updated_at: string;
         };
         /** @description Complete entity change event with metadata */
@@ -2169,34 +2296,54 @@ export interface components {
             /**
              * Format: int64
              * @description Number of books in this library
+             * @example 1200
              */
             book_count: number;
             /**
              * Format: uuid
              * @description Library ID
+             * @example 550e8400-e29b-41d4-a716-446655440000
              */
             id: string;
-            /** @description Library name */
+            /**
+             * @description Library name
+             * @example Comics
+             */
             name: string;
             /**
              * Format: int64
              * @description Number of series in this library
+             * @example 45
              */
             series_count: number;
             /**
              * Format: int64
-             * @description Total size of books in bytes
+             * @description Total size of books in bytes (approx. 15GB)
+             * @example 15728640000
              */
             total_size: number;
         };
         /** @description Response for listing duplicates */
         ListDuplicatesResponse: {
+            /** @description List of duplicate groups */
             duplicates: components["schemas"]["DuplicateGroup"][];
+            /**
+             * @description Total number of books that are duplicates
+             * @example 15
+             */
             total_duplicate_books: number;
+            /**
+             * @description Total number of duplicate groups
+             * @example 5
+             */
             total_groups: number;
         };
         /** @description Query parameters for listing settings */
         ListSettingsQuery: {
+            /**
+             * @description Filter settings by category
+             * @example scanning
+             */
             category?: string | null;
         };
         /** @description Login request */
@@ -2247,6 +2394,10 @@ export interface components {
             message: string;
         };
         MessageResponse: {
+            /**
+             * @description Response message
+             * @example Task 550e8400-e29b-41d4-a716-446655440000 cancelled
+             */
             message: string;
         };
         /** @description Application metrics response */
@@ -2254,11 +2405,13 @@ export interface components {
             /**
              * Format: int64
              * @description Total number of books across all libraries
+             * @example 3500
              */
             book_count: number;
             /**
              * Format: int64
              * @description Database size in bytes (approximate)
+             * @example 10485760
              */
             database_size: number;
             /** @description Breakdown by library */
@@ -2266,44 +2419,81 @@ export interface components {
             /**
              * Format: int64
              * @description Total number of libraries in the system
+             * @example 5
              */
             library_count: number;
             /**
              * Format: int64
              * @description Number of pages across all books
+             * @example 175000
              */
             page_count: number;
             /**
              * Format: int64
              * @description Total number of series across all libraries
+             * @example 150
              */
             series_count: number;
             /**
              * Format: int64
-             * @description Total size of all books in bytes
+             * @description Total size of all books in bytes (approx. 50GB)
+             * @example 52428800000
              */
             total_book_size: number;
             /**
              * Format: int64
              * @description Number of registered users
+             * @example 12
              */
             user_count: number;
         };
         /** @description Page data transfer object */
         PageDto: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Book this page belongs to
+             * @example 550e8400-e29b-41d4-a716-446655440001
+             */
             bookId: string;
+            /**
+             * @description Image format (jpg, png, webp, etc.)
+             * @example jpg
+             */
             fileFormat: string;
+            /**
+             * @description Original filename within the archive
+             * @example page_001.jpg
+             */
             fileName: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description File size in bytes
+             * @example 524288
+             */
             fileSize: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Image height in pixels
+             * @example 1800
+             */
             height?: number | null;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Unique page identifier
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
             id: string;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Page number within the book (0-indexed)
+             * @example 0
+             */
             pageNumber: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Image width in pixels
+             * @example 1200
+             */
             width?: number | null;
         };
         /** @description Generic paginated response wrapper */
@@ -2313,21 +2503,25 @@ export interface components {
             /**
              * Format: int64
              * @description Current page number (0-indexed)
+             * @example 0
              */
             page: number;
             /**
              * Format: int64
              * @description Number of items per page
+             * @example 20
              */
             pageSize: number;
             /**
              * Format: int64
              * @description Total number of items across all pages
+             * @example 150
              */
             total: number;
             /**
              * Format: int64
              * @description Total number of pages
+             * @example 8
              */
             totalPages: number;
         };
@@ -2387,21 +2581,25 @@ export interface components {
             /**
              * Format: int64
              * @description Current page number (0-indexed)
+             * @example 0
              */
             page: number;
             /**
              * Format: int64
              * @description Number of items per page
+             * @example 20
              */
             pageSize: number;
             /**
              * Format: int64
              * @description Total number of items across all pages
+             * @example 150
              */
             total: number;
             /**
              * Format: int64
              * @description Total number of pages
+             * @example 8
              */
             totalPages: number;
         };
@@ -2462,21 +2660,25 @@ export interface components {
             /**
              * Format: int64
              * @description Current page number (0-indexed)
+             * @example 0
              */
             page: number;
             /**
              * Format: int64
              * @description Number of items per page
+             * @example 20
              */
             pageSize: number;
             /**
              * Format: int64
              * @description Total number of items across all pages
+             * @example 150
              */
             total: number;
             /**
              * Format: int64
              * @description Total number of pages
+             * @example 8
              */
             totalPages: number;
         };
@@ -2484,49 +2686,92 @@ export interface components {
         PaginatedResponse_UserDto: {
             /** @description The data items for this page */
             data: {
-                /** Format: date-time */
+                /**
+                 * Format: date-time
+                 * @description Account creation timestamp
+                 * @example 2024-01-01T00:00:00Z
+                 */
                 createdAt: string;
+                /**
+                 * @description User email address
+                 * @example john.doe@example.com
+                 */
                 email: string;
-                /** Format: uuid */
+                /**
+                 * Format: uuid
+                 * @description Unique user identifier
+                 * @example 550e8400-e29b-41d4-a716-446655440000
+                 */
                 id: string;
+                /**
+                 * @description Whether the account is active
+                 * @example true
+                 */
                 isActive: boolean;
+                /**
+                 * @description Whether user has admin privileges
+                 * @example false
+                 */
                 isAdmin: boolean;
-                /** Format: date-time */
+                /**
+                 * Format: date-time
+                 * @description Timestamp of last login
+                 * @example 2024-01-15T10:30:00Z
+                 */
                 lastLoginAt?: string | null;
-                /** Format: date-time */
+                /**
+                 * Format: date-time
+                 * @description Last account update timestamp
+                 * @example 2024-01-15T10:30:00Z
+                 */
                 updatedAt: string;
+                /**
+                 * @description Username for login
+                 * @example johndoe
+                 */
                 username: string;
             }[];
             /**
              * Format: int64
              * @description Current page number (0-indexed)
+             * @example 0
              */
             page: number;
             /**
              * Format: int64
              * @description Number of items per page
+             * @example 20
              */
             pageSize: number;
             /**
              * Format: int64
              * @description Total number of items across all pages
+             * @example 150
              */
             total: number;
             /**
              * Format: int64
              * @description Total number of pages
+             * @example 8
              */
             totalPages: number;
         };
         PurgeTasksResponse: {
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Number of tasks deleted
+             * @example 42
+             */
             deleted: number;
         };
         /** @description Response containing a list of reading progress records */
         ReadProgressListResponse: {
             /** @description List of progress records */
             progress: components["schemas"]["ReadProgressResponse"][];
-            /** @description Total count */
+            /**
+             * @description Total count
+             * @example 25
+             */
             total: number;
         };
         /** @description Response containing reading progress for a book */
@@ -2534,6 +2779,7 @@ export interface components {
             /**
              * Format: uuid
              * @description Book ID
+             * @example 550e8400-e29b-41d4-a716-446655440002
              */
             book_id: string;
             /**
@@ -2544,6 +2790,7 @@ export interface components {
             /**
              * Format: date-time
              * @description When the book was completed (if completed)
+             * @example 2024-01-20T20:00:00Z
              */
             completed_at?: string | null;
             /**
@@ -2555,21 +2802,25 @@ export interface components {
             /**
              * Format: uuid
              * @description Progress record ID
+             * @example 550e8400-e29b-41d4-a716-446655440000
              */
             id: string;
             /**
              * Format: date-time
              * @description When reading started
+             * @example 2024-01-10T14:30:00Z
              */
             started_at: string;
             /**
              * Format: date-time
              * @description When progress was last updated
+             * @example 2024-01-15T18:45:00Z
              */
             updated_at: string;
             /**
              * Format: uuid
              * @description User ID
+             * @example 550e8400-e29b-41d4-a716-446655440001
              */
             user_id: string;
         };
@@ -2635,45 +2886,78 @@ export interface components {
         };
         /** @description Scan status response */
         ScanStatusDto: {
-            /** @description Number of books found/created */
+            /**
+             * @description Number of books found/created
+             * @example 750
+             */
             booksFound: number;
             /**
              * Format: date-time
              * @description When the scan completed (if finished)
+             * @example 2024-01-15T10:45:00Z
              */
             completedAt?: string | null;
             /** @description List of errors encountered during scan */
             errors: string[];
-            /** @description Number of files processed so far */
+            /**
+             * @description Number of files processed so far
+             * @example 750
+             */
             filesProcessed: number;
-            /** @description Total number of files discovered */
+            /**
+             * @description Total number of files discovered
+             * @example 1500
+             */
             filesTotal: number;
             /**
              * Format: uuid
              * @description Library ID being scanned
+             * @example 550e8400-e29b-41d4-a716-446655440000
              */
             libraryId: string;
-            /** @description Number of series found/created */
+            /**
+             * @description Number of series found/created
+             * @example 45
+             */
             seriesFound: number;
             /**
              * Format: date-time
              * @description When the scan started
+             * @example 2024-01-15T10:30:00Z
              */
             startedAt: string;
-            /** @description Current status of the scan */
+            /**
+             * @description Current status of the scan (scanning, completed, failed)
+             * @example scanning
+             */
             status: string;
         };
         /** @description Scanning configuration for a library */
         ScanningConfigDto: {
-            /** @description Cron expression for scheduled scans (e.g., "0 *\/6 * * *") */
+            /**
+             * @description Cron expression for scheduled scans (e.g., "0 *\/6 * * *")
+             * @example 0 *\/6 * * *
+             */
             cronSchedule?: string | null;
-            /** @description Whether scheduled scanning is enabled */
+            /**
+             * @description Whether scheduled scanning is enabled
+             * @example true
+             */
             enabled: boolean;
-            /** @description Purge soft-deleted books after completing a scan */
+            /**
+             * @description Purge soft-deleted books after completing a scan
+             * @example false
+             */
             purgeDeletedOnScan?: boolean;
-            /** @description Default scan mode for scheduled scans ("normal" or "deep") */
+            /**
+             * @description Default scan mode for scheduled scans ("normal" or "deep")
+             * @example normal
+             */
             scanMode: string;
-            /** @description Scan library when the application starts */
+            /**
+             * @description Scan library when the application starts
+             * @example false
+             */
             scanOnStart?: boolean;
         };
         /** @description Search series request */
@@ -2749,40 +3033,127 @@ export interface components {
         };
         /** @description Setting response DTO */
         SettingDto: {
+            /**
+             * @description Category for grouping settings
+             * @example scanning
+             */
             category: string;
+            /**
+             * @description Default value for this setting
+             * @example 2
+             */
             default_value: string;
+            /**
+             * @description Human-readable description
+             * @example Number of concurrent scanning jobs
+             */
             description: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Setting unique identifier
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
             id: string;
+            /**
+             * @description Whether value should be masked in responses
+             * @example false
+             */
             is_sensitive: boolean;
+            /**
+             * @description Setting key name
+             * @example scan.concurrent_jobs
+             */
             key: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Maximum allowed value (for numeric settings)
+             * @example 16
+             */
             max_value?: number | null;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Minimum allowed value (for numeric settings)
+             * @example 1
+             */
             min_value?: number | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the setting was last updated
+             * @example 2024-01-15T10:30:00Z
+             */
             updated_at: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description User who last updated the setting
+             */
             updated_by?: string | null;
+            /**
+             * @description Current setting value
+             * @example 4
+             */
             value: string;
+            /**
+             * @description Data type of the value (string, integer, boolean, etc.)
+             * @example integer
+             */
             value_type: string;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Version number for optimistic locking
+             * @example 1
+             */
             version: number;
         };
         /** @description Setting history entry DTO */
         SettingHistoryDto: {
+            /**
+             * @description Reason provided for the change
+             * @example Performance optimization
+             */
             change_reason?: string | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the change was made
+             * @example 2024-01-15T10:30:00Z
+             */
             changed_at: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description User who made the change
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
             changed_by: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description History entry ID
+             * @example 550e8400-e29b-41d4-a716-446655440001
+             */
             id: string;
+            /**
+             * @description IP address of the user who made the change
+             * @example 192.168.1.100
+             */
             ip_address?: string | null;
+            /**
+             * @description Setting key that was changed
+             * @example scan.concurrent_jobs
+             */
             key: string;
+            /**
+             * @description New value after the change
+             * @example 4
+             */
             new_value: string;
+            /**
+             * @description Previous value before the change
+             * @example 2
+             */
             old_value: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description ID of the setting that was changed
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
             setting_id: string;
         };
         /** @description Setup status response */
@@ -2851,35 +3222,93 @@ export interface components {
             task_type: string;
         };
         TaskResponse: {
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Number of execution attempts
+             * @example 0
+             */
             attempts: number;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Associated book ID (if applicable)
+             */
             book_id?: string | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When task execution completed
+             */
             completed_at?: string | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the task was created
+             * @example 2024-01-15T10:00:00Z
+             */
             created_at: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Unique task identifier
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
             id: string;
+            /** @description Error message from last failed attempt */
             last_error?: string | null;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Associated library ID (if applicable)
+             * @example 550e8400-e29b-41d4-a716-446655440001
+             */
             library_id?: string | null;
+            /**
+             * @description Worker ID that has locked this task
+             * @example worker-1
+             */
             locked_by?: string | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the lock expires
+             */
             locked_until?: string | null;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Maximum number of allowed attempts
+             * @example 3
+             */
             max_attempts: number;
+            /** @description Task-specific parameters */
             params?: unknown;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Priority level (higher = more urgent)
+             * @example 0
+             */
             priority: number;
+            /** @description Task execution result */
             result?: unknown;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the task is scheduled to run
+             * @example 2024-01-15T12:00:00Z
+             */
             scheduled_for: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Associated series ID (if applicable)
+             */
             series_id?: string | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When task execution started
+             */
             started_at?: string | null;
+            /**
+             * @description Current status (pending, processing, completed, failed)
+             * @example pending
+             */
             status: string;
+            /**
+             * @description Type of task (scan_library, generate_thumbnail, etc.)
+             * @example scan_library
+             */
             task_type: string;
         };
         /** @description Task queue statistics */
@@ -2983,13 +3412,24 @@ export interface components {
         };
         /** @description Response for triggering a duplicate scan */
         TriggerDuplicateScanResponse: {
+            /**
+             * @description Status message
+             * @example Duplicate scan started
+             */
             message: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Task ID for tracking the scan progress
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
             task_id: string;
         };
         /** @description Query parameters for triggering a scan */
         TriggerScanQuery: {
-            /** @description Scan mode: "normal" or "deep" (defaults to "normal") */
+            /**
+             * @description Scan mode: "normal" or "deep" (defaults to "normal")
+             * @example normal
+             */
             mode?: string;
         };
         /** @description Update API key request */
@@ -2997,11 +3437,18 @@ export interface components {
             /**
              * Format: date-time
              * @description Optional expiration date
+             * @example 2025-12-31T23:59:59Z
              */
             expiresAt?: string | null;
-            /** @description Active status */
+            /**
+             * @description Active status
+             * @example true
+             */
             isActive?: boolean | null;
-            /** @description Name/description for the API key */
+            /**
+             * @description Name/description for the API key
+             * @example Updated Key Name
+             */
             name?: string | null;
             /** @description Permissions for the API key (array of permission strings) */
             permissions?: string[] | null;
@@ -3059,35 +3506,90 @@ export interface components {
         };
         /** @description Update setting request */
         UpdateSettingRequest: {
+            /**
+             * @description Optional reason for the change (for audit log)
+             * @example Increased concurrency for faster scanning
+             */
             change_reason?: string | null;
+            /**
+             * @description New value for the setting
+             * @example 8
+             */
             value: string;
         };
         /** @description Update user request */
         UpdateUserRequest: {
-            /** @description Email address */
+            /**
+             * @description New email address
+             * @example updated@example.com
+             */
             email?: string | null;
-            /** @description Active status */
+            /**
+             * @description Update active status
+             * @example true
+             */
             isActive?: boolean | null;
-            /** @description Admin flag */
+            /**
+             * @description Update admin privileges
+             * @example false
+             */
             isAdmin?: boolean | null;
-            /** @description New password */
+            /**
+             * @description New password
+             * @example newSecurePassword123!
+             */
             password?: string | null;
-            /** @description Username */
+            /**
+             * @description New username
+             * @example updateduser
+             */
             username?: string | null;
         };
         /** @description User data transfer object */
         UserDto: {
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Account creation timestamp
+             * @example 2024-01-01T00:00:00Z
+             */
             createdAt: string;
+            /**
+             * @description User email address
+             * @example john.doe@example.com
+             */
             email: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Unique user identifier
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
             id: string;
+            /**
+             * @description Whether the account is active
+             * @example true
+             */
             isActive: boolean;
+            /**
+             * @description Whether user has admin privileges
+             * @example false
+             */
             isAdmin: boolean;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Timestamp of last login
+             * @example 2024-01-15T10:30:00Z
+             */
             lastLoginAt?: string | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Last account update timestamp
+             * @example 2024-01-15T10:30:00Z
+             */
             updatedAt: string;
+            /**
+             * @description Username for login
+             * @example johndoe
+             */
             username: string;
         };
         /** @description User information in login response */

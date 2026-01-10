@@ -7,15 +7,47 @@ on:
       - "!v*-alpha" # Excludes tags ending with '-alpha'
 
 jobs:
-  release:
-    name: Build Binaries and Docker Image
+  # Build binaries for all platforms
+  build:
+    name: Build ${{ matrix.artifact_name }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     container:
       image: catthehacker/ubuntu:act-latest
 
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64 (native build with RAR support)
+          - target: x86_64-unknown-linux-gnu
+            artifact_name: codex-x86_64-linux-gnu
+            use_cross: false
+            features: "rar"
+          # Linux ARM64
+          - target: aarch64-unknown-linux-gnu
+            artifact_name: codex-aarch64-linux-gnu
+            use_cross: true
+            features: ""
+          # macOS x86_64
+          - target: x86_64-apple-darwin
+            artifact_name: codex-x86_64-macos
+            use_cross: true
+            features: ""
+          # macOS ARM64 (Apple Silicon)
+          - target: aarch64-apple-darwin
+            artifact_name: codex-aarch64-macos
+            use_cross: true
+            features: ""
+          # Windows x86_64
+          - target: x86_64-pc-windows-gnu
+            artifact_name: codex-x86_64-windows
+            use_cross: true
+            features: ""
+            extension: ".exe"
+
     permissions:
-      contents: write
-      packages: write
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -23,11 +55,14 @@ jobs:
           fetch-depth: 0
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          override: true
-          components: rustfmt, clippy
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.use_cross
+        run: |
+          cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Cache Cargo dependencies
         uses: actions/cache@v4
@@ -38,132 +73,62 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Install cargo-dist
+      - name: Build release binary (native)
+        if: ${{ !matrix.use_cross }}
         run: |
-          cargo install cargo-dist --locked
+          cargo build --release --target ${{ matrix.target }} ${{ matrix.features && format('--features {0}', matrix.features) || '--no-default-features' }}
 
-      - name: Plan build
+      - name: Build release binary (cross)
+        if: matrix.use_cross
         run: |
-          cargo dist plan --output-format=json > dist-manifest.json || true
+          cross build --release --target ${{ matrix.target }} ${{ matrix.features && format('--features {0}', matrix.features) || '--no-default-features' }}
 
-      - name: Build artifacts
+      - name: Prepare artifact
         run: |
-          cargo dist build --output-format=json > dist-manifest.json
+          mkdir -p artifacts
+          cp target/${{ matrix.target }}/release/codex${{ matrix.extension || '' }} artifacts/
+          cd artifacts
+          if [ -n "${{ matrix.extension }}" ]; then
+            zip ${{ matrix.artifact_name }}.zip codex${{ matrix.extension }}
+          else
+            chmod +x codex
+            tar -czf ${{ matrix.artifact_name }}.tar.gz codex
+          fi
+          rm codex${{ matrix.extension || '' }}
+          ls -lh
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: artifacts/${{ matrix.artifact_name }}.*
+          retention-days: 30
+
+  # Build and push Docker image
+  docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      tags: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Get version info
         id: version
         run: |
-          # Extract tag name from the ref (e.g., refs/tags/v1.0.0 -> v1.0.0)
           TAG_NAME=${GITHUB_REF#refs/tags/}
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
-          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          # Format date for display
-          export TZ=UTC
-          echo "date=$(date +'%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_OUTPUT
-
-      - name: List built artifacts
-        run: |
-          echo "Built artifacts:"
-          find target/dist -type f -name "*.zip" -o -name "*.tar.gz" -o -name "*.msi" -o -name "*.pkg" | head -20 || true
-          ls -lh target/dist/**/* || true
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-artifacts
-          path: |
-            target/dist/**/*
-            dist-manifest.json
-          retention-days: 30
-
-      - name: Publish packages to registry
-        env:
-          GITHUB_TOKEN: ${{ secrets.PACKAGE_TOKEN || secrets.GITHUB_TOKEN }}
-        run: |
-          # Find all built artifacts
-          for artifact in $(find target/dist -type f \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.msi" -o -name "*.pkg" \) 2>/dev/null); do
-            filename=$(basename "$artifact")
-            echo "Publishing $filename..."
-
-            # Determine content type
-            case "$artifact" in
-              *.zip)
-                content_type="application/zip"
-                ;;
-              *.tar.gz)
-                content_type="application/gzip"
-                ;;
-              *.msi)
-                content_type="application/x-msi"
-                ;;
-              *.pkg)
-                content_type="application/x-apple-installer-package"
-                ;;
-              *)
-                content_type="application/octet-stream"
-                ;;
-            esac
-
-            # Upload to Gitea package registry
-            curl -v -X PUT \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Content-Type: $content_type" \
-              --data-binary @"$artifact" \
-              "${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/${{ steps.version.outputs.tag }}/$filename" || echo "Failed to upload $filename"
-          done
-
-      - name: Create Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.PACKAGE_TOKEN || secrets.GITHUB_TOKEN }}
-        run: |
-          # Build package URLs
-          PACKAGE_URL="${{ github.server_url }}/${{ github.repository_owner }}/-/packages/generic/codex/${{ steps.version.outputs.tag }}"
-
-          # Build download links from artifacts
-          DOWNLOAD_LINKS=""
-          for artifact in $(find target/dist -type f \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.msi" -o -name "*.pkg" \) 2>/dev/null); do
-            filename=$(basename "$artifact")
-            DOWNLOAD_URL="${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/${{ steps.version.outputs.tag }}/$filename"
-
-            # Determine platform from filename
-            if echo "$filename" | grep -q "windows"; then
-              icon="🪟"
-              platform="Windows"
-            elif echo "$filename" | grep -q "apple-darwin\|macos"; then
-              icon="🍎"
-              platform="macOS"
-            elif echo "$filename" | grep -q "linux"; then
-              icon="🐧"
-              platform="Linux"
-            else
-              icon="📦"
-              platform="Binary"
-            fi
-
-            DOWNLOAD_LINKS="${DOWNLOAD_LINKS}${icon} [${platform} - ${filename}](${DOWNLOAD_URL})\n"
-          done
-
-          # Create release with links to all packages
-          RELEASE_BODY="Codex release ${{ steps.version.outputs.tag }}\n\nBuilt from commit ${{ steps.version.outputs.sha_short }} on ${{ steps.version.outputs.date }}\n\n## Downloads\n\n${DOWNLOAD_LINKS}\n\n🔗 [View All Packages](${PACKAGE_URL})"
-
-          RESPONSE=$(curl -s -X POST \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"tag_name\": \"${{ steps.version.outputs.tag }}\",
-              \"name\": \"Codex ${{ steps.version.outputs.tag }}\",
-              \"body\": $(echo "$RELEASE_BODY" | jq -Rs .),
-              \"draft\": false,
-              \"prerelease\": false
-            }" \
-            "${{ github.api_url }}/repos/${{ github.repository }}/releases")
-
-          echo "Release created"
-          echo "$RESPONSE" | jq '.' || echo "$RESPONSE"
 
       - name: Registry FQDN Setup
         id: registry
@@ -185,14 +150,13 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          # list of Docker images to use as base name for tags
           images: |
             ${{ steps.registry.outputs.registry }}/${{ github.repository }}
-          # generate Docker tags based on the following events/attributes
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
+            type=raw,value=latest
             type=sha
 
       - name: Build and push Docker image
@@ -209,3 +173,157 @@ jobs:
             BUILD_ENV=production
           cache-from: type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache
           cache-to: type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache,mode=max
+
+  # Publish all artifacts and create release
+  release:
+    name: Create Release
+    needs: [build, docker]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+          pattern: codex-*
+          merge-multiple: true
+
+      - name: Get version info
+        id: version
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          export TZ=UTC
+          echo "date=$(date +'%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_OUTPUT
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          for file in *.tar.gz *.zip; do
+            if [ -f "$file" ]; then
+              sha256sum "$file" > "$file.sha256"
+            fi
+          done
+          echo "Release artifacts:"
+          ls -lh
+
+      - name: Publish packages to registry
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          cd artifacts
+          version="${{ steps.version.outputs.tag }}"
+
+          for file in *.tar.gz *.zip; do
+            if [ -f "$file" ]; then
+              echo "Publishing $file..."
+
+              # Determine content type
+              if [[ "$file" == *.zip ]]; then
+                content_type="application/zip"
+              else
+                content_type="application/gzip"
+              fi
+
+              curl -s -X PUT \
+                -H "Authorization: token $GITHUB_TOKEN" \
+                -H "Content-Type: $content_type" \
+                --data-binary @"$file" \
+                "${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/$version/$file" || echo "Failed to upload $file"
+
+              # Upload checksum
+              if [ -f "$file.sha256" ]; then
+                curl -s -X PUT \
+                  -H "Authorization: token $GITHUB_TOKEN" \
+                  -H "Content-Type: text/plain" \
+                  --data-binary @"$file.sha256" \
+                  "${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/$version/$file.sha256" || echo "Failed to upload $file.sha256"
+              fi
+            fi
+          done
+
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          cd artifacts
+          version="${{ steps.version.outputs.tag }}"
+          PACKAGE_URL="${{ github.server_url }}/${{ github.repository_owner }}/-/packages/generic/codex/$version"
+
+          # Build download links
+          DOWNLOAD_LINKS=""
+          for file in *.tar.gz *.zip; do
+            if [ -f "$file" ]; then
+              DOWNLOAD_URL="${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/$version/$file"
+
+              # Determine platform from filename
+              if echo "$file" | grep -q "windows"; then
+                platform="Windows x64"
+              elif echo "$file" | grep -q "aarch64.*macos"; then
+                platform="macOS ARM64 (Apple Silicon)"
+              elif echo "$file" | grep -q "x86_64.*macos"; then
+                platform="macOS x64 (Intel)"
+              elif echo "$file" | grep -q "aarch64.*linux"; then
+                platform="Linux ARM64"
+              elif echo "$file" | grep -q "x86_64.*linux"; then
+                platform="Linux x64"
+              else
+                platform="Binary"
+              fi
+
+              DOWNLOAD_LINKS="${DOWNLOAD_LINKS}- **${platform}**: [$file](${DOWNLOAD_URL})\n"
+            fi
+          done
+
+          # Create release body
+          RELEASE_BODY="## Codex $version
+
+Built from commit \`${{ steps.version.outputs.sha_short }}\` on ${{ steps.version.outputs.date }}
+
+### Downloads
+
+${DOWNLOAD_LINKS}
+
+### Checksums
+
+SHA256 checksums are available for each download (append \`.sha256\` to the URL).
+
+### Docker
+
+\`\`\`bash
+docker pull ${{ github.server_url }}/${{ github.repository }}:$version
+\`\`\`
+
+### Notes
+
+- **Linux x64** includes CBR/RAR support
+- **Other platforms** support CBZ, EPUB, and PDF only (no RAR due to cross-compilation limitations)
+- **macOS users**: You may need to allow the app in System Preferences > Security & Privacy
+
+[View All Packages](${PACKAGE_URL})"
+
+          # Create the release
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"tag_name\": \"$version\",
+              \"name\": \"Codex $version\",
+              \"body\": $(echo -e "$RELEASE_BODY" | jq -Rs .),
+              \"draft\": false,
+              \"prerelease\": false
+            }" \
+            "${{ github.api_url }}/repos/${{ github.repository }}/releases")
+
+          echo "Release created:"
+          echo "$RESPONSE" | jq -r '.html_url // .message' || echo "$RESPONSE"

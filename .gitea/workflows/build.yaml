@@ -27,10 +27,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Cargo dependencies
         uses: actions/cache@v4
@@ -60,10 +57,8 @@ jobs:
           fetch-depth: 0
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          override: true
           components: rustfmt, clippy
 
       - name: Cache Cargo dependencies
@@ -82,7 +77,6 @@ jobs:
           cargo fmt -- --check
 
       - name: Clippy check
-        continue-on-error: true
         run: |
           cargo clippy --features rar -- -D warnings
 
@@ -117,7 +111,6 @@ jobs:
 
       - name: Lint check
         working-directory: web
-        continue-on-error: true
         run: npm run lint
 
       - name: Run tests
@@ -128,13 +121,44 @@ jobs:
         working-directory: web
         run: npm run build
 
-  # Stage 2: Build release binary (after tests pass)
+  # Stage 2: Build release binaries for all platforms (after tests pass)
   build:
     needs: [test, lint, frontend]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     container:
       image: catthehacker/ubuntu:act-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64 (native build with RAR support)
+          - target: x86_64-unknown-linux-gnu
+            artifact_name: codex-x86_64-linux-gnu
+            use_cross: false
+            features: "rar"
+          # Linux ARM64
+          - target: aarch64-unknown-linux-gnu
+            artifact_name: codex-aarch64-linux-gnu
+            use_cross: true
+            features: ""
+          # macOS x86_64
+          - target: x86_64-apple-darwin
+            artifact_name: codex-x86_64-macos
+            use_cross: true
+            features: ""
+          # macOS ARM64 (Apple Silicon)
+          - target: aarch64-apple-darwin
+            artifact_name: codex-aarch64-macos
+            use_cross: true
+            features: ""
+          # Windows x86_64
+          - target: x86_64-pc-windows-gnu
+            artifact_name: codex-x86_64-windows
+            use_cross: true
+            features: ""
+            extension: ".exe"
 
     permissions:
       contents: write
@@ -146,10 +170,14 @@ jobs:
           fetch-depth: 0
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          override: true
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.use_cross
+        run: |
+          cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Cache Cargo dependencies
         uses: actions/cache@v4
@@ -160,22 +188,38 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Build release binary
+      - name: Build release binary (native)
+        if: ${{ !matrix.use_cross }}
         run: |
-          # Build optimized release binary
-          cargo build --release --features rar
-          # Show binary info
-          ls -lh target/release/codex
-          file target/release/codex
+          cargo build --release --target ${{ matrix.target }} ${{ matrix.features && format('--features {0}', matrix.features) || '--no-default-features' }}
+
+      - name: Build release binary (cross)
+        if: matrix.use_cross
+        run: |
+          cross build --release --target ${{ matrix.target }} ${{ matrix.features && format('--features {0}', matrix.features) || '--no-default-features' }}
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p artifacts
+          cp target/${{ matrix.target }}/release/codex${{ matrix.extension || '' }} artifacts/
+          cd artifacts
+          if [ -n "${{ matrix.extension }}" ]; then
+            zip ${{ matrix.artifact_name }}.zip codex${{ matrix.extension }}
+          else
+            chmod +x codex
+            tar -czf ${{ matrix.artifact_name }}.tar.gz codex
+          fi
+          rm codex${{ matrix.extension || '' }}
+          ls -lh
 
       - name: Upload binary artifact
         if: github.event_name == 'push'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: codex-binary
-          path: target/release/codex
+          name: ${{ matrix.artifact_name }}
+          path: artifacts/${{ matrix.artifact_name }}.*
           retention-days: 7
 
   # Stage 2: Build and push Docker image (parallel with build)
@@ -243,12 +287,12 @@ jobs:
             type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache-latest,mode=min
             type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache,mode=min
 
-  # Stage 3: Publish binary (after build completes, push only)
+  # Stage 3: Publish all binaries (after build completes, push only)
   publish:
     needs: [build]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     permissions:
       contents: write
@@ -259,11 +303,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download binary
-        uses: actions/download-artifact@v3
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
-          name: codex-binary
           path: ./artifacts
+          pattern: codex-*
+          merge-multiple: true
 
       - name: Get version info
         id: version
@@ -271,33 +316,50 @@ jobs:
           echo "version=dev-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Create tarball
+      - name: Generate checksums
         run: |
           cd artifacts
-          chmod +x codex
-          tar -czf codex-x86_64-linux-gnu.tar.gz codex
-          sha256sum codex-x86_64-linux-gnu.tar.gz > codex-x86_64-linux-gnu.tar.gz.sha256
+          for file in *.tar.gz *.zip; do
+            if [ -f "$file" ]; then
+              sha256sum "$file" > "$file.sha256"
+            fi
+          done
+          echo "Artifacts to publish:"
           ls -lh
 
-      - name: Publish binary to registry
+      - name: Publish binaries to registry
         env:
           GITHUB_TOKEN: ${{ secrets.PACKAGE_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           cd artifacts
           version="${{ steps.version.outputs.version }}"
 
-          # Upload tarball
-          echo "Publishing codex-x86_64-linux-gnu.tar.gz..."
-          curl -v -X PUT \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Content-Type: application/gzip" \
-            --data-binary @"codex-x86_64-linux-gnu.tar.gz" \
-            "${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/$version/codex-x86_64-linux-gnu.tar.gz" || echo "Failed to upload tarball"
+          for file in *.tar.gz *.zip; do
+            if [ -f "$file" ]; then
+              echo "Publishing $file..."
 
-          # Upload checksum
-          echo "Publishing checksum..."
-          curl -v -X PUT \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Content-Type: text/plain" \
-            --data-binary @"codex-x86_64-linux-gnu.tar.gz.sha256" \
-            "${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/$version/codex-x86_64-linux-gnu.tar.gz.sha256" || echo "Failed to upload checksum"
+              # Determine content type
+              if [[ "$file" == *.zip ]]; then
+                content_type="application/zip"
+              else
+                content_type="application/gzip"
+              fi
+
+              curl -s -X PUT \
+                -H "Authorization: token $GITHUB_TOKEN" \
+                -H "Content-Type: $content_type" \
+                --data-binary @"$file" \
+                "${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/$version/$file" || echo "Failed to upload $file"
+
+              # Upload checksum
+              if [ -f "$file.sha256" ]; then
+                curl -s -X PUT \
+                  -H "Authorization: token $GITHUB_TOKEN" \
+                  -H "Content-Type: text/plain" \
+                  --data-binary @"$file.sha256" \
+                  "${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/$version/$file.sha256" || echo "Failed to upload $file.sha256"
+              fi
+            fi
+          done
+
+          echo "All artifacts published to version: $version"
