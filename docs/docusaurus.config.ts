@@ -93,7 +93,7 @@ const config: Config = {
           label: 'Docs',
         },
         {
-          href: 'https://github.com/yourusername/codex',
+          href: 'https://github.com/AshDevFr/codex',
           label: 'GitHub',
           position: 'right',
         },
@@ -128,11 +128,11 @@ const config: Config = {
           items: [
             {
               label: 'GitHub',
-              href: 'https://github.com/yourusername/codex',
+              href: 'https://github.com/AshDevFr/codex',
             },
             {
               label: 'Issues',
-              href: 'https://github.com/yourusername/codex/issues',
+              href: 'https://github.com/AshDevFr/codex/issues',
             },
           ],
         },

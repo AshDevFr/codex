@@ -1,5 +1,4 @@
 ---
-sidebar_position: 10
 ---
 
 # Development
@@ -47,7 +46,7 @@ sudo dnf install gcc openssl-devel
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/codex.git
+git clone https://github.com/AshDevFr/codex.git
 cd codex
 ```
 

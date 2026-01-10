@@ -24,16 +24,29 @@ const queryClient = new QueryClient({
 	},
 });
 
-const rootElement = document.getElementById("root");
-if (rootElement) {
-	createRoot(rootElement).render(
-		<StrictMode>
-			<MantineProvider theme={theme} defaultColorScheme="dark">
-				<Notifications />
-				<QueryClientProvider client={queryClient}>
-					<App />
-				</QueryClientProvider>
-			</MantineProvider>
-		</StrictMode>,
-	);
+// Initialize mock service worker in development
+async function enableMocking() {
+	if (import.meta.env.VITE_MOCK_API !== "true") {
+		return;
+	}
+
+	const { startMockServiceWorker } = await import("./mocks/browser");
+	return startMockServiceWorker();
 }
+
+// Start the application after mocking is ready
+enableMocking().then(() => {
+	const rootElement = document.getElementById("root");
+	if (rootElement) {
+		createRoot(rootElement).render(
+			<StrictMode>
+				<MantineProvider theme={theme} defaultColorScheme="dark">
+					<Notifications />
+					<QueryClientProvider client={queryClient}>
+						<App />
+					</QueryClientProvider>
+				</MantineProvider>
+			</StrictMode>,
+		);
+	}
+});

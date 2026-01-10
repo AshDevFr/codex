@@ -15,7 +15,7 @@
 # Optional overrides (most settings now in database):
 #   CODEX_APPLICATION_HOST=0.0.0.0
 #   CODEX_APPLICATION_PORT=8080
-#   CODEX_API_ENABLE_SWAGGER=false
+#   CODEX_API_ENABLE_API_DOCS=false
 #
 # Startup-Time Settings (Require Pod Restart)
 # ============================================

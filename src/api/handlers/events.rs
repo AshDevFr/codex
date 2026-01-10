@@ -1,5 +1,4 @@
 use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission, AppState};
-use crate::events::EntityChangeEvent;
 use axum::{
     extract::State,
     response::sse::{Event, KeepAlive, Sse},
@@ -32,6 +31,20 @@ use tracing::{debug, warn};
 ///
 /// ## Keep-Alive
 /// A keep-alive message is sent every 15 seconds to prevent connection timeout.
+#[utoipa::path(
+    get,
+    path = "/api/v1/events/stream",
+    responses(
+        (status = 200, description = "SSE stream of entity change events", content_type = "text/event-stream"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "events"
+)]
 pub async fn entity_events_stream(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
@@ -120,6 +133,20 @@ pub async fn entity_events_stream(
 ///
 /// ## Keep-Alive
 /// A keep-alive message is sent every 15 seconds to prevent connection timeout.
+#[utoipa::path(
+    get,
+    path = "/api/v1/tasks/stream",
+    responses(
+        (status = 200, description = "SSE stream of task progress events", content_type = "text/event-stream"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "events"
+)]
 pub async fn task_progress_stream(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
@@ -186,8 +213,7 @@ pub async fn task_progress_stream(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::events::{EntityEvent, EventBroadcaster};
+    use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
     use uuid::Uuid;
 
     #[tokio::test]

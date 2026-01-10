@@ -174,22 +174,19 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
 
     let mut app = crate::api::create_router(api_state, &config.api);
 
-    // Conditionally mount Swagger UI if enabled
-    if config.api.enable_swagger {
+    // Conditionally mount Scalar API docs if enabled
+    if config.api.enable_api_docs {
         use crate::api::ApiDoc;
         use utoipa::OpenApi;
-        use utoipa_swagger_ui::SwaggerUi;
+        use utoipa_scalar::{Scalar, Servable};
 
-        info!("Swagger UI enabled at {}", config.api.swagger_path);
+        info!("API docs (Scalar) enabled at {}", config.api.api_docs_path);
 
-        // SwaggerUi needs a 'static string, so we leak it
+        // Scalar needs a 'static string, so we leak it
         // This is acceptable since it's created once at server startup
-        let swagger_path: &'static str =
-            Box::leak(config.api.swagger_path.clone().into_boxed_str());
-        app = app.merge(
-            SwaggerUi::new(swagger_path)
-                .url("/api-docs/openapi.json", <ApiDoc as OpenApi>::openapi()),
-        );
+        let api_docs_path: &'static str =
+            Box::leak(config.api.api_docs_path.clone().into_boxed_str());
+        app = app.merge(Scalar::with_url(api_docs_path, ApiDoc::openapi()));
     }
 
     info!("Registered routes:");
@@ -200,8 +197,8 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("  GET  /api/v1/series - List series");
     info!("  GET  /api/v1/books - List books");
     info!("  GET  /api/v1/users - List users (admin)");
-    if config.api.enable_swagger {
-        info!("  GET  {} - Swagger UI", config.api.swagger_path);
+    if config.api.enable_api_docs {
+        info!("  GET  {} - API docs (Scalar)", config.api.api_docs_path);
     }
 
     // Keep log guard alive

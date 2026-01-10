@@ -5,13 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:mock": "VITE_MOCK_API=true vite",
     "build": "tsc -b && vite build",
     "lint": "biome check .",
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "generate:types": "openapi-typescript ./openapi.json -o ./src/types/api.generated.ts"
   },
   "dependencies": {
     "@mantine/core": "^7.14.0",
@@ -35,6 +37,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.11",
+    "@faker-js/faker": "^10.2.0",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
@@ -50,6 +53,7 @@
     "happy-dom": "^16.7.0",
     "jsdom": "^25.0.1",
     "msw": "^2.7.0",
+    "openapi-typescript": "^7.10.1",
     "postcss": "^8.4.49",
     "postcss-preset-mantine": "^1.18.0",
     "postcss-simple-vars": "^7.0.1",
@@ -57,5 +61,10 @@
     "vite": "^7.2.4",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^2.1.8"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }

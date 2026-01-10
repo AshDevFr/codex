@@ -14,8 +14,8 @@ mod web;
 
 use clap::{Parser, Subcommand};
 use commands::{
-    migrate_command, scan_command, seed_command, serve_command, wait_for_migrations_command,
-    worker_command,
+    migrate_command, openapi_command, scan_command, seed_command, serve_command,
+    wait_for_migrations_command, worker_command, OpenApiFormat,
 };
 use std::path::PathBuf;
 
@@ -90,6 +90,17 @@ enum Commands {
         #[arg(short, long, default_value = "2")]
         interval: Option<u64>,
     },
+
+    /// Export OpenAPI specification to a file
+    Openapi {
+        /// Output file path
+        #[arg(short, long, default_value = "openapi.json")]
+        output: PathBuf,
+
+        /// Output format (json or yaml)
+        #[arg(short, long, default_value = "json")]
+        format: OpenApiFormat,
+    },
 }
 
 #[tokio::main]
@@ -123,6 +134,9 @@ async fn main() -> anyhow::Result<()> {
             interval,
         } => {
             wait_for_migrations_command(config, timeout, interval).await?;
+        }
+        Commands::Openapi { output, format } => {
+            openapi_command(output, format)?;
         }
     }
 

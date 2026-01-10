@@ -30,6 +30,14 @@ pub struct FileSystemEntry {
 }
 
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+#[schema(example = json!({
+    "current_path": "/home/user/Documents",
+    "parent_path": "/home/user",
+    "entries": [
+        {"name": "Comics", "path": "/home/user/Documents/Comics", "is_directory": true, "is_readable": true},
+        {"name": "Manga", "path": "/home/user/Documents/Manga", "is_directory": true, "is_readable": true}
+    ]
+}))]
 pub struct BrowseResponse {
     /// Current directory path
     pub current_path: String,

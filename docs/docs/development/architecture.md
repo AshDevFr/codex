@@ -1,5 +1,4 @@
 ---
-sidebar_position: 9
 ---
 
 # Architecture
@@ -79,7 +78,7 @@ Built with **Axum**, a modern Rust web framework:
 - **Type-safe routing** - Compile-time route validation
 - **Middleware support** - Authentication, CORS, logging
 - **Async/await** - Non-blocking I/O
-- **OpenAPI/Swagger** - Auto-generated API docs
+- **OpenAPI/Scalar** - Auto-generated API docs
 
 ### Database Layer
 

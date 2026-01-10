@@ -75,8 +75,8 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
 pub fn create_test_api_config() -> ApiConfig {
     ApiConfig {
         base_path: "/api/v1".to_string(),
-        enable_swagger: false,
-        swagger_path: "/docs".to_string(),
+        enable_api_docs: false,
+        api_docs_path: "/docs".to_string(),
         // Disable CORS in tests to avoid conflicts with allow_credentials
         // Tests don't need CORS since they make direct requests, not cross-origin
         cors_enabled: false,

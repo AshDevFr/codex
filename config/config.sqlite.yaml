@@ -26,10 +26,10 @@ auth:
   jwt_secret: "CHANGE_ME_IN_PRODUCTION" # Override with CODEX_AUTH_JWT_SECRET env var
 
 # API config - all fields use defaults
-# Defaults: enable_swagger=false, swagger_path="/docs", cors_enabled=true, max_page_size=100
-# Uncomment below to enable Swagger UI:
+# Defaults: enable_api_docs=false, api_docs_path="/docs", cors_enabled=true, max_page_size=100
+# Uncomment below to enable API docs (Scalar):
 # api:
-#   enable_swagger: true
+#   enable_api_docs: true
 
 # Task Worker Settings (Startup-Time - Require Restart)
 # ======================================================

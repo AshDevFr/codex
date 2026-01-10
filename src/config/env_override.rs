@@ -194,12 +194,12 @@ impl EnvOverride for ApiConfig {
         if let Ok(base_path) = env::var(format!("{}_BASE_PATH", prefix)) {
             self.base_path = base_path;
         }
-        if let Ok(enable_swagger) = env::var(format!("{}_ENABLE_SWAGGER", prefix)) {
-            self.enable_swagger =
-                enable_swagger.eq_ignore_ascii_case("true") || enable_swagger == "1";
+        if let Ok(enable_api_docs) = env::var(format!("{}_ENABLE_API_DOCS", prefix)) {
+            self.enable_api_docs =
+                enable_api_docs.eq_ignore_ascii_case("true") || enable_api_docs == "1";
         }
-        if let Ok(swagger_path) = env::var(format!("{}_SWAGGER_PATH", prefix)) {
-            self.swagger_path = swagger_path;
+        if let Ok(api_docs_path) = env::var(format!("{}_API_DOCS_PATH", prefix)) {
+            self.api_docs_path = api_docs_path;
         }
         if let Ok(cors_enabled) = env::var(format!("{}_CORS_ENABLED", prefix)) {
             self.cors_enabled = cors_enabled.eq_ignore_ascii_case("true") || cors_enabled == "1";

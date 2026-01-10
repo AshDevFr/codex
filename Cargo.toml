@@ -105,8 +105,8 @@ base64 = "0.22"
 lettre = { version = "0.11", features = ["tokio1", "tokio1-native-tls", "smtp-transport", "builder"] }
 
 # API Documentation
-utoipa = { version = "5.0", features = ["axum_extras", "chrono", "uuid"] }
-utoipa-swagger-ui = { version = "8.0", features = ["axum"] }
+utoipa = { version = "5.0", features = ["axum_extras", "chrono", "uuid", "yaml"] }
+utoipa-scalar = { version = "0.2", features = ["axum"] }
 
 # Job Scheduling
 tokio-cron-scheduler = "0.10"

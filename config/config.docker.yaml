@@ -27,7 +27,7 @@ auth:
 
 # API config - security boundaries, kept in config (not moved to database)
 api:
-  enable_swagger: true # Enabled in Docker for easier API testing
+  enable_api_docs: true # Enabled in Docker for easier API testing
 
 # Task Worker Settings (Startup-Time - Require Restart)
 # ======================================================

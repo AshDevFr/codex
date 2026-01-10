@@ -30,35 +30,89 @@ fn default_limit() -> u64 {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateTaskRequest {
+    /// Type of task to create
     pub task_type: TaskType,
+
+    /// Priority level (higher = more urgent)
+    #[schema(example = 0)]
     pub priority: Option<i32>,
+
+    /// When to run the task (defaults to now)
+    #[schema(example = "2024-01-15T12:00:00Z")]
     pub scheduled_for: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CreateTaskResponse {
+    /// ID of the created task
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub task_id: Uuid,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct TaskResponse {
+    /// Unique task identifier
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub id: Uuid,
+
+    /// Type of task (scan_library, generate_thumbnail, etc.)
+    #[schema(example = "scan_library")]
     pub task_type: String,
+
+    /// Current status (pending, processing, completed, failed)
+    #[schema(example = "pending")]
     pub status: String,
+
+    /// Priority level (higher = more urgent)
+    #[schema(example = 0)]
     pub priority: i32,
+
+    /// Associated library ID (if applicable)
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440001")]
     pub library_id: Option<Uuid>,
+
+    /// Associated series ID (if applicable)
     pub series_id: Option<Uuid>,
+
+    /// Associated book ID (if applicable)
     pub book_id: Option<Uuid>,
+
+    /// Task-specific parameters
     pub params: Option<serde_json::Value>,
+
+    /// Worker ID that has locked this task
+    #[schema(example = "worker-1")]
     pub locked_by: Option<String>,
+
+    /// When the lock expires
     pub locked_until: Option<DateTime<Utc>>,
+
+    /// Number of execution attempts
+    #[schema(example = 0)]
     pub attempts: i32,
+
+    /// Maximum number of allowed attempts
+    #[schema(example = 3)]
     pub max_attempts: i32,
+
+    /// Error message from last failed attempt
     pub last_error: Option<String>,
+
+    /// Task execution result
     pub result: Option<serde_json::Value>,
+
+    /// When the task is scheduled to run
+    #[schema(example = "2024-01-15T12:00:00Z")]
     pub scheduled_for: DateTime<Utc>,
+
+    /// When the task was created
+    #[schema(example = "2024-01-15T10:00:00Z")]
     pub created_at: DateTime<Utc>,
+
+    /// When task execution started
     pub started_at: Option<DateTime<Utc>>,
+
+    /// When task execution completed
     pub completed_at: Option<DateTime<Utc>>,
 }
 
@@ -99,11 +153,15 @@ fn default_purge_days() -> i64 {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct PurgeTasksResponse {
+    /// Number of tasks deleted
+    #[schema(example = 42)]
     pub deleted: u64,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct MessageResponse {
+    /// Response message
+    #[schema(example = "Task 550e8400-e29b-41d4-a716-446655440000 cancelled")]
     pub message: String,
 }
 

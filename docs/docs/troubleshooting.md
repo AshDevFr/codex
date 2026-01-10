@@ -1,405 +1,622 @@
+---
+---
+
 # Troubleshooting
 
 This guide helps you diagnose and fix common issues with Codex.
 
-## Server Hanging on Page Reload / Container Restart
+## Quick Diagnostics
 
-### Symptoms
+Before diving into specific issues, run these checks:
 
-- Frontend page takes 30-60 seconds to reload
-- Docker container restarts hang for 10+ seconds
-- Backend process doesn't respond to Ctrl+C immediately
-- Database locks persist after shutdown
+### Health Check
 
-### Root Causes
-
-This issue had **two separate root causes** that were both fixed:
-
-#### 1. Worker Tasks Without Graceful Shutdown
-
-**Problem:** Background worker tasks (scan workers, cleanup tasks, stale task recovery) ran in infinite loops with no shutdown mechanism. When the server received SIGTERM (Docker stop) or SIGINT (Ctrl+C), these tasks continued running until the process was forcefully killed.
-
-**Impact:**
-
-- Docker `stop` command waited 10 seconds before SIGKILL
-- Database connections and locks weren't released cleanly
-- In-progress tasks were interrupted mid-execution
-
-**Solution:** Implemented graceful shutdown using Tokio broadcast channels:
-
-```rust
-// Worker now responds to shutdown signals
-let (mut worker, shutdown_tx) = worker.with_shutdown();
-
-tokio::select! {
-    _ = shutdown_rx.recv() => {
-        // Graceful shutdown
-        break;
-    }
-    _ = process_task() => {
-        // Continue work
-    }
-}
+```bash
+curl http://localhost:8080/health
 ```
 
-**Implementation Details:**
+Expected: `{"status":"ok"}`
 
-- Added `tokio::sync::broadcast` channel for shutdown coordination
-- Main worker loop uses `tokio::select!` to listen for shutdown signals
-- Background cleanup tasks also respect shutdown signals
-- Server waits up to 30 seconds for worker to complete
-- See `src/tasks/worker.rs` and `src/commands/serve.rs`
+### View Logs
 
-#### 2. Server-Sent Events (SSE) Not Detecting Disconnects
+```bash
+# Docker
+docker compose logs --tail=100 codex
 
-**Problem:** Real-time event streams (`/api/v1/events/stream` and `/api/v1/tasks/stream`) waited indefinitely in loops. When a client disconnected or the server restarted, these streams didn't detect the disconnect and kept waiting.
+# Systemd
+journalctl -u codex --since "1 hour ago"
 
-**Impact:**
-
-- Page reloads hung waiting for old SSE connections to timeout
-- Frontend reconnection attempts failed while old connections were active
-- Vite dev proxy cached stale connections
-
-**Solution:** Added timeout-based disconnect detection:
-
-```rust
-// SSE stream with timeout detection
-tokio::select! {
-    Ok(event) = timeout(Duration::from_secs(30), receiver.recv()) => {
-        // Send event to client
-    }
-    Err(_) => {
-        // Timeout - continue (keep-alive will trigger)
-    }
-}
+# Binary (if file logging enabled)
+tail -f /var/log/codex/codex.log
 ```
 
-**Implementation Details:**
+### Check Configuration
 
-- 30-second timeout (2x the 15-second keep-alive interval)
-- Streams automatically close when broadcaster shuts down
-- Proper cleanup logging when streams end
-- Enhanced Vite proxy configuration for SSE handling
-- See `src/api/handlers/events.rs` and `web/vite.config.ts`
+```bash
+# Docker
+docker compose exec codex cat /app/config/config.docker.yaml
 
-### Performance Impact
+# Verify environment variables
+docker compose exec codex env | grep CODEX
+```
 
-| Metric           | Before Fix        | After Fix          |
-| ---------------- | ----------------- | ------------------ |
-| Page reload      | 40-70 seconds     | 1-2 seconds        |
-| Backend restart  | 10+ seconds       | 2-5 seconds        |
-| SSE disconnect   | 30-60 seconds     | < 1 second         |
-| Database cleanup | Forced/incomplete | Clean and complete |
+## Server Issues
 
-### Verification
+### Server Won't Start
 
-1. **Test graceful shutdown:**
+#### Symptoms
 
+- Service fails to start
+- Exit immediately after starting
+- "Address already in use" error
+
+#### Solutions
+
+1. **Check port availability**:
    ```bash
-   # Start the dev environment
-   docker-compose --profile dev up
-
-   # In another terminal, restart should be fast
-   time docker-compose --profile dev restart codex-dev
-   # Should complete in 2-5 seconds
+   lsof -i :8080
+   # Kill conflicting process or change port
    ```
 
-2. **Check logs for proper shutdown:**
-
+2. **Verify configuration**:
    ```bash
-   docker-compose logs codex-dev | tail -20
+   # Check for YAML syntax errors
+   cat codex.yaml | python -c "import yaml,sys; yaml.safe_load(sys.stdin)"
+   ```
+
+3. **Check database path**:
+   ```bash
+   # For SQLite, ensure directory exists
+   mkdir -p ./data
+   ```
+
+4. **Check permissions**:
+   ```bash
+   # Ensure user can write to data directory
+   ls -la ./data
+   ```
+
+### Slow Performance
+
+#### Symptoms
+
+- Slow page loads
+- API requests timeout
+- High CPU/memory usage
+
+#### Solutions
+
+1. **Check resource usage**:
+   ```bash
+   docker stats codex
+   # or
+   htop
+   ```
+
+2. **Reduce concurrent scans**:
+   ```yaml
+   scanner:
+     max_concurrent_scans: 1
+   ```
+
+3. **Check database performance**:
+   ```bash
+   # PostgreSQL
+   docker compose exec postgres psql -U codex -c "SELECT count(*) FROM books;"
+   ```
+
+4. **Enable debug logging temporarily**:
+   ```bash
+   CODEX_LOGGING_LEVEL=debug docker compose up
+   ```
+
+### Server Hanging on Restart
+
+#### Symptoms
+
+- Container takes 10+ seconds to stop
+- Frontend reloads slowly (30-60 seconds)
+- Ctrl+C doesn't stop server immediately
+
+#### Root Cause
+
+This was fixed in recent versions. If you experience this:
+
+1. **Update to latest version**:
+   ```bash
+   git pull
+   docker compose build
+   docker compose up -d
+   ```
+
+2. **Verify graceful shutdown**:
+   ```bash
+   docker compose logs | grep -i "shutdown"
    ```
 
    You should see:
-
    ```
-   [INFO] Received SIGTERM signal
-   [INFO] Starting graceful shutdown...
-   [INFO] Shutting down task worker...
-   [INFO] Task worker received shutdown signal
-   [INFO] Cleanup task shutting down...
-   [INFO] Task worker shut down successfully
-   [INFO] Shutdown complete
+   Received SIGTERM signal
+   Starting graceful shutdown...
+   Task worker shut down successfully
+   Shutdown complete
    ```
 
-3. **Test page reload:**
+## Database Issues
 
-   - Open http://localhost:5173 in your browser
-   - Open browser console (F12)
-   - Look for: `Entity events connection state: connected`
-   - Press F5 to reload
-   - Page should reload in 1-2 seconds
-   - Console should show quick reconnection
+### Connection Failed
 
-4. **Test SSE reconnection:**
+#### Symptoms
 
+- "Connection refused" error
+- "Database not found" error
+- Timeout connecting to database
+
+#### Solutions
+
+**PostgreSQL**:
+
+1. Check database is running:
    ```bash
-   # With dev environment running
-   docker-compose --profile dev restart codex-dev
-
-   # Watch browser console for:
-   # - "Proxy error: ..." (expected during restart)
-   # - "Entity events connection state: connecting"
-   # - "Entity events connection state: connected" (within 5 seconds)
+   docker compose exec postgres pg_isready -U codex
    ```
 
-### Related Files
-
-**Backend:**
-
-- `src/tasks/worker.rs` - Worker shutdown implementation
-- `src/commands/serve.rs` - Signal handling and shutdown coordination
-- `src/commands/tasks.rs` - CLI worker shutdown
-- `src/api/handlers/events.rs` - SSE timeout detection
-
-**Frontend:**
-
-- `web/vite.config.ts` - Proxy configuration for SSE
-- `web/src/api/events.ts` - Entity events SSE client
-- `web/src/api/tasks.ts` - Task progress SSE client
-
-**Documentation:**
-
-- `GRACEFUL_SHUTDOWN.md` - Technical implementation details
-- `tmp/impl/COMPLETE-SOLUTION.md` - Complete problem analysis and solution
-
-### Additional Notes
-
-- The fix is backward compatible - no API or configuration changes needed
-- Works correctly with Docker's default 10-second SIGTERM timeout
-- Properly handles both SIGTERM (Docker) and SIGINT (Ctrl+C)
-- Frontend SSE clients automatically reconnect with exponential backoff
-- Keep-alive messages prevent premature connection timeout
-
-## Database Connection Issues
-
-### Symptoms
-
-- Connection timeout errors
-- "Too many connections" errors
-- Slow query performance
-
-### Solutions
-
-1. **Check database health:**
-
-   ```bash
-   docker-compose exec postgres pg_isready -U codex
-   ```
-
-2. **Verify connection settings:**
-
+2. Verify connection settings:
    ```yaml
-   # config/config.docker.yaml
    database:
      db_type: postgres
      postgres:
-       host: postgres
+       host: postgres  # Docker service name
        port: 5432
-       # ... other settings
+       username: codex
+       password: codex
+       database_name: codex
    ```
 
-3. **Restart database container:**
-
+3. Check network connectivity:
    ```bash
-   docker-compose restart postgres
+   docker compose exec codex ping postgres
    ```
 
-4. **Check for connection leaks:**
+**SQLite**:
+
+1. Check file permissions:
    ```bash
-   docker-compose exec postgres psql -U codex -c \
-     "SELECT count(*) FROM pg_stat_activity WHERE datname = 'codex';"
+   ls -la ./data/codex.db
    ```
 
-## Worker Task Issues
-
-### Tasks Not Processing
-
-1. **Check worker status:**
-
+2. Check directory is writable:
    ```bash
-   # Look for worker startup messages
-   docker-compose logs codex-dev | grep "Task worker"
+   touch ./data/test && rm ./data/test
    ```
 
-2. **Check task queue:**
+### Database Locked (SQLite)
 
-   ```sql
-   SELECT status, count(*) FROM tasks GROUP BY status;
+#### Symptoms
+
+- "database is locked" errors
+- Operations fail intermittently
+- Scan hangs
+
+#### Solutions
+
+1. **Don't run separate workers with SQLite**:
+   SQLite cannot handle concurrent writes from multiple processes.
+
+2. **Use WAL mode** (recommended):
+   ```yaml
+   database:
+     sqlite:
+       pragmas:
+         journal_mode: WAL
    ```
 
-3. **Check for stale locks:**
-   ```sql
-   SELECT * FROM tasks
-   WHERE status = 'processing'
-   AND locked_until < NOW();
+3. **Reduce concurrent operations**:
+   ```yaml
+   scanner:
+     max_concurrent_scans: 1
+   task:
+     worker_count: 2
    ```
 
-### Tasks Failing
+4. **Consider PostgreSQL** for multi-user environments.
 
-1. **View task errors:**
+### Migration Errors
 
+#### Symptoms
+
+- "Migration failed" on startup
+- Database schema errors
+- Missing columns/tables
+
+#### Solutions
+
+1. **Check migration status**:
    ```bash
-   docker-compose logs codex-dev | grep "Task.*failed"
+   docker compose exec codex codex migrate --config /app/config/config.docker.yaml
    ```
 
-2. **Check specific task:**
-   Use the API to get task details:
+2. **Backup and reset** (development only):
    ```bash
-   curl -H "Authorization: Bearer <token>" \
-     http://localhost:8080/api/v1/tasks/<task-id>
+   # Backup
+   pg_dump -U codex codex > backup.sql
+
+   # Reset
+   docker compose down -v
+   docker compose up -d
    ```
 
-## Frontend Build Issues
+## Library & Scanning Issues
 
-### Vite Proxy Errors
+### Library Not Found
 
-1. **Check backend is running:**
+#### Symptoms
 
+- "Path does not exist" error
+- Library shows 0 books
+- Scan fails immediately
+
+#### Solutions
+
+1. **Check path exists** (Docker):
    ```bash
-   curl http://localhost:8080/health
+   docker compose exec codex ls -la /library
    ```
 
-2. **Verify proxy configuration:**
-
-   ```typescript
-   // web/vite.config.ts
-   proxy: {
-     "/api": {
-       target: process.env.VITE_API_URL || "http://localhost:8080",
-       changeOrigin: true,
-     },
-   }
+2. **Verify volume mount**:
+   ```yaml
+   volumes:
+     - /your/actual/path:/library:ro
    ```
 
-3. **Check Vite logs:**
+3. **Check permissions**:
    ```bash
-   docker-compose logs frontend-dev
+   # The codex user needs read access
+   ls -la /your/actual/path
    ```
 
-### SSE Connection Issues
+### Scan Not Finding Files
 
-If real-time updates aren't working:
+#### Symptoms
 
-1. **Check authentication:**
+- Scan completes with 0 books
+- Files exist but aren't detected
+- Some formats not recognized
 
-   - Open browser DevTools → Application → Local Storage
-   - Verify `jwt_token` exists and is valid
+#### Solutions
 
-2. **Check network tab:**
+1. **Check file extensions**:
+   Supported: `.cbz`, `.cbr`, `.epub`, `.pdf`
 
-   - Open DevTools → Network
-   - Filter for "stream"
-   - Should see `/api/v1/events/stream` with status 200
-   - Connection should stay open (pending)
-
-3. **Check console for errors:**
-
-   - Look for "SSE connection failed" messages
-   - Look for connection state changes
-
-4. **Manually test SSE endpoint:**
+2. **Verify files aren't corrupted**:
    ```bash
-   curl -H "Authorization: Bearer <token>" \
-        -H "Accept: text/event-stream" \
-        http://localhost:8080/api/v1/events/stream
+   file /library/somebook.cbz
+   unzip -t /library/somebook.cbz
    ```
+
+3. **Check scan logs**:
+   ```bash
+   docker compose logs codex | grep -i "scan\|error"
+   ```
+
+4. **Try deep scan**:
+   ```bash
+   curl -X POST "http://localhost:8080/api/v1/libraries/{id}/scan?mode=deep" \
+     -H "Authorization: Bearer $TOKEN"
+   ```
+
+### Scan Taking Too Long
+
+#### Symptoms
+
+- Scan running for hours
+- Progress stuck at certain percentage
+- High disk I/O
+
+#### Solutions
+
+1. **Check library size**:
+   Large libraries (10,000+ books) take time on first scan.
+
+2. **Use normal scan** for updates:
+   Deep scans re-process everything.
+
+3. **Check disk I/O**:
+   ```bash
+   iostat -x 1
+   ```
+
+4. **Reduce concurrent scans**:
+   ```yaml
+   scanner:
+     max_concurrent_scans: 1
+   ```
+
+### Metadata Not Extracted
+
+#### Symptoms
+
+- Books show with wrong titles
+- Series not detected
+- Missing author/publisher info
+
+#### Solutions
+
+1. **Add ComicInfo.xml** to comics:
+   ```xml
+   <?xml version="1.0"?>
+   <ComicInfo>
+     <Title>Issue Title</Title>
+     <Series>Series Name</Series>
+     <Number>1</Number>
+   </ComicInfo>
+   ```
+
+2. **Run deep scan** to re-extract:
+   ```bash
+   curl -X POST "http://localhost:8080/api/v1/libraries/{id}/scan?mode=deep" \
+     -H "Authorization: Bearer $TOKEN"
+   ```
+
+3. **Check filename format**:
+   `Series Name 001.cbz` is better than `random_name.cbz`
+
+## Authentication Issues
+
+### Login Failed
+
+#### Symptoms
+
+- "Invalid credentials" error
+- Can't log in after setup
+- Token expired errors
+
+#### Solutions
+
+1. **Verify credentials** (case-sensitive):
+   ```bash
+   curl -X POST http://localhost:8080/api/v1/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"username":"admin","password":"yourpassword"}'
+   ```
+
+2. **Reset password** (via admin):
+   ```bash
+   curl -X PUT http://localhost:8080/api/v1/users/{id} \
+     -H "Authorization: Bearer $ADMIN_TOKEN" \
+     -d '{"password":"newpassword"}'
+   ```
+
+3. **Check JWT secret is set**:
+   ```yaml
+   auth:
+     jwt_secret: "your-secret-here"  # Must be set!
+   ```
+
+### API Key Not Working
+
+#### Symptoms
+
+- "Unauthorized" with valid key
+- Key works in curl but not in app
+- Permissions denied
+
+#### Solutions
+
+1. **Check key format**:
+   ```bash
+   # As header
+   curl -H "Authorization: Bearer codex_abc123..."
+
+   # As X-API-Key
+   curl -H "X-API-Key: codex_abc123..."
+   ```
+
+2. **Verify key permissions**:
+   Keys can only have permissions the creator has.
+
+3. **Check key isn't revoked**:
+   ```bash
+   curl http://localhost:8080/api/v1/api-keys \
+     -H "Authorization: Bearer $TOKEN"
+   ```
+
+## SSE (Real-Time Updates) Issues
+
+### Events Not Received
+
+#### Symptoms
+
+- Progress not updating in real-time
+- Scan status shows "unknown"
+- No notifications for new books
+
+#### Solutions
+
+1. **Check SSE connection** (browser DevTools):
+   - Network tab > filter "stream"
+   - Status should be 200 (pending)
+
+2. **Verify authentication**:
+   SSE streams require valid auth token.
+
+3. **Check reverse proxy config**:
+   ```nginx
+   # Nginx - disable buffering for SSE
+   proxy_buffering off;
+   proxy_cache off;
+   ```
+
+### SSE Disconnecting Frequently
+
+#### Symptoms
+
+- Connection drops every 30 seconds
+- "Reconnecting..." messages
+- Inconsistent updates
+
+#### Solutions
+
+1. **Extend timeout** in reverse proxy:
+   ```nginx
+   proxy_read_timeout 86400s;
+   proxy_send_timeout 86400s;
+   ```
+
+2. **Check keep-alive settings**:
+   Codex sends keep-alive every 15 seconds.
+
+3. **Update to latest version**:
+   Recent fixes improved SSE reliability.
 
 ## Docker Issues
 
-### Containers Won't Start
+### Container Won't Start
 
-1. **Check for port conflicts:**
+#### Symptoms
 
+- Container restarts repeatedly
+- "Exited with code 1"
+- Health check failing
+
+#### Solutions
+
+1. **Check logs**:
    ```bash
-   lsof -i :5173  # Frontend
-   lsof -i :8080  # Backend
-   lsof -i :5432  # Postgres
+   docker compose logs codex
    ```
 
-2. **Clear volumes and restart:**
-
+2. **Verify dependencies**:
    ```bash
-   docker-compose down -v
-   docker-compose --profile dev up
+   docker compose ps
+   # postgres should be healthy before codex starts
    ```
 
-3. **Check Docker resources:**
-   - Ensure Docker has enough memory (recommend 4GB+)
-   - Check disk space
-
-### Containers Keep Restarting
-
-1. **Check logs for errors:**
-
+3. **Check resources**:
    ```bash
-   docker-compose logs --tail=100
+   docker system df
+   # Ensure disk space available
    ```
 
-2. **Check health status:**
+### Port Conflicts
 
+#### Symptoms
+
+- "Port already in use"
+- Can't access Codex
+
+#### Solutions
+
+1. **Find conflicting process**:
    ```bash
-   docker-compose ps
+   lsof -i :8080
+   lsof -i :5432
    ```
 
-3. **Verify dependencies:**
-   - Backend depends on postgres being healthy
-   - Frontend depends on backend being available
-
-## Performance Issues
-
-### Slow Scans
-
-1. **Check concurrent scan limit:**
-
-   ```sql
-   SELECT value FROM settings WHERE key = 'scanner.max_concurrent_scans';
+2. **Change ports** in docker-compose:
+   ```yaml
+   ports:
+     - "8081:8080"  # Map to different host port
    ```
 
-2. **Adjust via API:**
+### Volume Permission Issues
+
+#### Symptoms
+
+- "Permission denied" errors
+- Can't write to data directory
+- Scan can't read files
+
+#### Solutions
+
+1. **Check host permissions**:
    ```bash
-   curl -X PUT http://localhost:8080/api/v1/admin/settings/scanner.max_concurrent_scans \
-     -H "Authorization: Bearer <token>" \
-     -d '{"value": "4"}'
+   ls -la /path/to/library
    ```
 
-### High Memory Usage
+2. **Run as correct user** (Linux):
+   ```yaml
+   services:
+     codex:
+       user: "1000:1000"  # Match host user
+   ```
 
-1. **Check worker concurrency:**
+## Frontend Issues
 
-   - Reduce `scanner.max_concurrent_scans`
-   - Reduce task worker count
+### Page Not Loading
 
-2. **Monitor container resources:**
+#### Symptoms
+
+- Blank page
+- JavaScript errors
+- API calls failing
+
+#### Solutions
+
+1. **Check API is responding**:
    ```bash
-   docker stats
+   curl http://localhost:8080/api/v1/auth/me \
+     -H "Authorization: Bearer $TOKEN"
    ```
+
+2. **Clear browser cache**:
+   Hard refresh: Ctrl+Shift+R
+
+3. **Check browser console** for errors.
+
+### Images Not Loading
+
+#### Symptoms
+
+- Covers show placeholder
+- Pages don't display
+- 404 errors for images
+
+#### Solutions
+
+1. **Check thumbnail directory**:
+   ```bash
+   ls -la ./data/thumbnails/
+   ```
+
+2. **Verify file permissions**:
+   Codex needs write access to thumbnail cache.
+
+3. **Regenerate thumbnails**:
+   Run a scan to regenerate missing thumbnails.
 
 ## Getting Help
 
 If you're still experiencing issues:
 
-1. **Enable debug logging:**
+### Gather Information
 
-   ```yaml
-   # config/config.docker.yaml or environment variable
-   CODEX_LOGGING_LEVEL: debug
-   ```
-
-2. **Collect logs:**
-
+1. **Codex version**:
    ```bash
-   docker-compose logs > codex-logs.txt
+   codex --version
    ```
 
-3. **Check for known issues:**
+2. **Full logs**:
+   ```bash
+   docker compose logs > codex-logs.txt
+   ```
 
-   - Review GitHub issues
-   - Check recent commits for fixes
+3. **Configuration** (redact secrets):
+   ```bash
+   cat codex.yaml
+   ```
 
-4. **Provide details when reporting:**
-   - Codex version
-   - Docker/system info
-   - Complete error messages
-   - Steps to reproduce
-   - Relevant configuration
+4. **System info**:
+   ```bash
+   docker version
+   uname -a
+   ```
+
+### Report Issues
+
+- [GitHub Issues](https://github.com/AshDevFr/codex/issues)
+- Include:
+  - Steps to reproduce
+  - Expected vs actual behavior
+  - Logs and configuration
+  - System information

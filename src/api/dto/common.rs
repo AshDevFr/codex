@@ -58,15 +58,19 @@ pub struct PaginatedResponse<T> {
     pub data: Vec<T>,
 
     /// Current page number (0-indexed)
+    #[schema(example = 0)]
     pub page: u64,
 
     /// Number of items per page
+    #[schema(example = 20)]
     pub page_size: u64,
 
     /// Total number of items across all pages
+    #[schema(example = 150)]
     pub total: u64,
 
     /// Total number of pages
+    #[schema(example = 8)]
     pub total_pages: u64,
 }
 

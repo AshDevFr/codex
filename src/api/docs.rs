@@ -4,7 +4,7 @@ use utoipa::OpenApi;
 /// OpenAPI documentation for Codex REST API
 ///
 /// This struct aggregates all API endpoints, DTOs, and security schemes
-/// for automatic Swagger UI generation.
+/// for automatic API documentation generation (Scalar).
 #[derive(OpenApi)]
 #[openapi(
     info(
@@ -129,6 +129,24 @@ use utoipa::OpenApi;
         handlers::settings::bulk_update_settings,
         handlers::settings::reset_setting,
         handlers::settings::get_setting_history,
+
+        // Duplicates endpoints
+        handlers::duplicates::list_duplicates,
+        handlers::duplicates::trigger_duplicate_scan,
+        handlers::duplicates::delete_duplicate_group,
+
+        // SSE streaming endpoints
+        handlers::events::entity_events_stream,
+        handlers::events::task_progress_stream,
+
+        // OPDS catalog endpoints
+        handlers::opds::catalog::root_catalog,
+        handlers::opds::catalog::opds_list_libraries,
+        handlers::opds::catalog::opds_library_series,
+        handlers::opds::catalog::opds_series_books,
+        handlers::opds::search::opensearch_descriptor,
+        handlers::opds::search::opds_search,
+        handlers::opds::pse::opds_book_pages,
     ),
     components(
         schemas(
@@ -209,6 +227,16 @@ use utoipa::OpenApi;
             crate::tasks::types::TaskTypeStats,
             crate::tasks::types::TaskType,
 
+            // Duplicates DTOs
+            dto::DuplicateGroup,
+            dto::ListDuplicatesResponse,
+            dto::TriggerDuplicateScanResponse,
+
+            // SSE Event DTOs
+            crate::events::EntityChangeEvent,
+            crate::events::EntityEvent,
+            crate::events::TaskProgressEvent,
+
             // Error responses
             ErrorResponse,
         )
@@ -228,6 +256,9 @@ use utoipa::OpenApi;
         (name = "Task Queue", description = "Distributed task queue for background jobs (analysis, thumbnails, scans)"),
         (name = "filesystem", description = "Filesystem browsing for library path selection"),
         (name = "settings", description = "Runtime configuration settings management (admin only)"),
+        (name = "duplicates", description = "Duplicate book detection and management"),
+        (name = "events", description = "Server-Sent Events for real-time updates"),
+        (name = "opds", description = "OPDS catalog feed for e-reader applications"),
     ),
     modifiers(&SecurityAddon),
 )]

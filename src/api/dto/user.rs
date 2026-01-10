@@ -6,13 +6,36 @@ use utoipa::ToSchema;
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserDto {
+    /// Unique user identifier
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub id: uuid::Uuid,
+
+    /// Username for login
+    #[schema(example = "johndoe")]
     pub username: String,
+
+    /// User email address
+    #[schema(example = "john.doe@example.com")]
     pub email: String,
+
+    /// Whether user has admin privileges
+    #[schema(example = false)]
     pub is_admin: bool,
+
+    /// Whether the account is active
+    #[schema(example = true)]
     pub is_active: bool,
+
+    /// Timestamp of last login
+    #[schema(example = "2024-01-15T10:30:00Z")]
     pub last_login_at: Option<DateTime<Utc>>,
+
+    /// Account creation timestamp
+    #[schema(example = "2024-01-01T00:00:00Z")]
     pub created_at: DateTime<Utc>,
+
+    /// Last account update timestamp
+    #[schema(example = "2024-01-15T10:30:00Z")]
     pub updated_at: DateTime<Utc>,
 }
 
@@ -20,16 +43,20 @@ pub struct UserDto {
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateUserRequest {
-    /// Username
+    /// Username for the new account
+    #[schema(example = "newuser")]
     pub username: String,
 
-    /// Email address
+    /// Email address for the new account
+    #[schema(example = "newuser@example.com")]
     pub email: String,
 
-    /// Password
+    /// Password for the new account
+    #[schema(example = "securePassword123!")]
     pub password: String,
 
-    /// Admin flag
+    /// Whether to grant admin privileges
+    #[schema(example = false)]
     #[serde(default)]
     pub is_admin: bool,
 }
@@ -38,18 +65,23 @@ pub struct CreateUserRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateUserRequest {
-    /// Username
+    /// New username
+    #[schema(example = "updateduser")]
     pub username: Option<String>,
 
-    /// Email address
+    /// New email address
+    #[schema(example = "updated@example.com")]
     pub email: Option<String>,
 
     /// New password
+    #[schema(example = "newSecurePassword123!")]
     pub password: Option<String>,
 
-    /// Admin flag
+    /// Update admin privileges
+    #[schema(example = false)]
     pub is_admin: Option<bool>,
 
-    /// Active status
+    /// Update active status
+    #[schema(example = true)]
     pub is_active: Option<bool>,
 }

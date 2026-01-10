@@ -1,230 +1,367 @@
 ---
-sidebar_position: 8
 ---
 
 # Supported Formats
 
-Codex supports multiple digital book and comic formats. This page details what's supported and how each format is handled.
+Codex supports multiple digital book and comic formats. This guide details each format's capabilities, metadata support, and best practices.
 
 ## Comic Formats
 
 ### CBZ (Comic Book ZIP)
 
-**Status:** ✅ Fully Supported
+**Status**: Fully Supported
 
-CBZ files are ZIP archives containing image files (typically JPG or PNG).
+CBZ files are ZIP archives containing image files, the standard format for digital comics.
 
-**Features:**
+| Feature | Support |
+|---------|---------|
+| Page extraction | Full |
+| Metadata (ComicInfo.xml) | Full |
+| Cover detection | Automatic |
+| Processing speed | Fast |
 
-- Automatic page extraction
-- Image metadata reading (dimensions, format)
-- ComicInfo.xml metadata parsing
-- Fast extraction (standard ZIP)
-
-**Example Structure:**
+**Structure:**
 
 ```
-comic.cbz
+comic.cbz (ZIP archive)
 ├── page001.jpg
 ├── page002.jpg
 ├── page003.png
+├── ...
 └── ComicInfo.xml (optional)
 ```
 
+**Best Practices:**
+- Use sequential page numbering
+- Include ComicInfo.xml for rich metadata
+- Use JPEG for photos, PNG for art with transparency
+- Keep file sizes reasonable (< 500MB recommended)
+
 ### CBR (Comic Book RAR)
 
-**Status:** ✅ Supported (with optional dependency)
+**Status**: Supported (Optional Feature)
 
 CBR files are RAR archives containing image files.
 
-**Features:**
+| Feature | Support |
+|---------|---------|
+| Page extraction | Full |
+| Metadata (ComicInfo.xml) | Full |
+| Cover detection | Automatic |
+| Processing speed | Moderate |
 
-- Same features as CBZ
-- Requires UnRAR library (proprietary license)
+:::note CBR Licensing
+CBR support requires the UnRAR library, which uses a **proprietary license**. Pre-built binaries include CBR support. To build without it:
 
-**Building:**
+```bash
+cargo build --release --no-default-features
+```
+:::
 
-- **With CBR:** `cargo build --release` (default)
-- **Without CBR:** `cargo build --release --no-default-features`
-
-**Note:** The UnRAR library uses a proprietary license. See [CBR Support and Licensing](../intro#cbr-support-and-licensing) for details.
+**Why CBZ over CBR:**
+- CBZ uses open ZIP format
+- Faster extraction
+- No proprietary dependencies
+- Better tool support
 
 ## Ebook Formats
 
 ### EPUB
 
-**Status:** ✅ Fully Supported
+**Status**: Fully Supported
 
-EPUB is the standard ebook format.
+EPUB is the standard ebook format, supported in versions 2.0 and 3.0.
 
-**Features:**
+| Feature | Support |
+|---------|---------|
+| Metadata extraction | Full |
+| Cover extraction | Automatic |
+| Chapter structure | Partial |
+| Text content | Preserved |
 
-- Metadata extraction (title, author, publisher, etc.)
-- Chapter/page structure parsing
-- Cover image extraction
-- Text content extraction (for search indexing - planned)
+**Supported Metadata:**
+- Title
+- Author(s)
+- Publisher
+- Publication date
+- ISBN
+- Description/Summary
+- Series information
+- Cover image
 
-**Supported EPUB Versions:**
+**EPUB Structure:**
 
-- EPUB 2.0
-- EPUB 3.0
+```
+book.epub (ZIP archive)
+├── META-INF/
+│   └── container.xml
+├── OEBPS/
+│   ├── content.opf (metadata)
+│   ├── toc.ncx (table of contents)
+│   ├── cover.jpg
+│   ├── chapter1.xhtml
+│   └── ...
+└── mimetype
+```
 
 ### PDF
 
-**Status:** ✅ Supported
+**Status**: Supported
 
 PDF files are supported for both comics and ebooks.
 
-**Features:**
+| Feature | Support |
+|---------|---------|
+| Page count detection | Full |
+| Metadata extraction | Full |
+| Cover extraction | Automatic (first page) |
+| Page rendering | Full |
 
-- Page extraction
-- Metadata reading (title, author, subject)
-- Page count detection
-- Text extraction (for search - planned)
+**Supported Metadata:**
+- Title
+- Author
+- Subject
+- Creator (application)
+- Creation date
+- Page count
 
 **Limitations:**
-
-- Large PDFs may take longer to process
-- Scanned PDFs (image-only) are supported but text search won't work
-
-## Metadata Support
-
-### ComicInfo.xml
-
-ComicInfo.xml is a standard metadata format for comics, supported by many comic readers.
-
-**Supported Fields:**
-
-- Title, Series, Number, Count
-- Writer, Penciller, Inker, Colorist
-- Publisher, Imprint
-- Publication Date
-- Genre, Tags
-- Summary/Description
-- Cover Artist
-- And many more...
-
-**Location:**
-
-- CBZ/CBR: Root of archive
-- EPUB: Can be embedded in metadata
-
-**Example:**
-
-```xml
-<?xml version="1.0"?>
-<ComicInfo>
-  <Title>Amazing Comic #1</Title>
-  <Series>Amazing Comic</Series>
-  <Number>1</Number>
-  <Writer>John Doe</Writer>
-  <Penciller>Jane Smith</Penciller>
-  <Publisher>Comic Publisher</Publisher>
-  <PublicationDate>2024-01-01</PublicationDate>
-</ComicInfo>
-```
+- Large PDFs may process slowly
+- Scanned PDFs (image-only) work but lack text search
+- Memory usage scales with file size
 
 ## Image Formats
 
-Within archives, Codex supports:
+Within archives, Codex supports these image formats:
 
-- **JPEG/JPG** - Most common for photos
-- **PNG** - Lossless format, common for digital art
-- **GIF** - Animated GIFs supported
-- **WebP** - Modern format with good compression
+| Format | Extension | Best For |
+|--------|-----------|----------|
+| JPEG | `.jpg`, `.jpeg` | Photos, color comics |
+| PNG | `.png` | Art with transparency, line art |
+| WebP | `.webp` | Modern compression |
+| GIF | `.gif` | Simple graphics |
+
+### Image Handling
+
+- **Automatic orientation**: EXIF data respected
+- **Color profiles**: sRGB conversion for consistency
+- **Thumbnails**: Generated for fast previews
+- **On-demand resizing**: Reduces bandwidth
+
+## Metadata Support
+
+### ComicInfo.xml (Comics)
+
+ComicInfo.xml is the standard metadata format for comic archives:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<ComicInfo>
+  <Title>Amazing Spider-Man #300</Title>
+  <Series>Amazing Spider-Man</Series>
+  <Number>300</Number>
+  <Count>700</Count>
+  <Volume>1</Volume>
+  <AlternateSeries>Spider-Man: Birth of Venom</AlternateSeries>
+  <AlternateNumber>1</AlternateNumber>
+  <AlternateCount>5</AlternateCount>
+  <Summary>First appearance of Venom...</Summary>
+  <Notes>Key issue</Notes>
+  <Year>1988</Year>
+  <Month>5</Month>
+  <Day>10</Day>
+  <Writer>David Michelinie</Writer>
+  <Penciller>Todd McFarlane</Penciller>
+  <Inker>Todd McFarlane</Inker>
+  <Colorist>Bob Sharen</Colorist>
+  <Letterer>Rick Parker</Letterer>
+  <CoverArtist>Todd McFarlane</CoverArtist>
+  <Editor>Jim Salicrup</Editor>
+  <Publisher>Marvel</Publisher>
+  <Imprint></Imprint>
+  <Genre>Superhero, Action</Genre>
+  <Tags>Venom, Key Issue, First Appearance</Tags>
+  <Web>https://marvel.com</Web>
+  <PageCount>32</PageCount>
+  <LanguageISO>en</LanguageISO>
+  <Format>Standard</Format>
+  <AgeRating>Teen</AgeRating>
+</ComicInfo>
+```
+
+**Supported Fields:**
+
+| Field | Description |
+|-------|-------------|
+| `Title` | Issue/book title |
+| `Series` | Series name |
+| `Number` | Issue number |
+| `Count` | Total issues in series |
+| `Volume` | Volume number |
+| `Summary` | Description/synopsis |
+| `Year`, `Month`, `Day` | Publication date |
+| `Writer`, `Penciller`, `Inker`, `Colorist` | Credits |
+| `Publisher`, `Imprint` | Publisher info |
+| `Genre`, `Tags` | Categorization |
+| `PageCount` | Number of pages |
+| `LanguageISO` | Language code (e.g., "en") |
+| `AgeRating` | Content rating |
+
+### EPUB Metadata (OPF)
+
+EPUB metadata is extracted from the OPF file:
+
+```xml
+<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <dc:title>Book Title</dc:title>
+  <dc:creator>Author Name</dc:creator>
+  <dc:publisher>Publisher</dc:publisher>
+  <dc:date>2024-01-15</dc:date>
+  <dc:identifier>isbn:978-0-123456-78-9</dc:identifier>
+  <dc:description>Book summary...</dc:description>
+  <meta property="belongs-to-collection">Series Name</meta>
+  <meta property="group-position">1</meta>
+</metadata>
+```
+
+### PDF Metadata
+
+PDF metadata is extracted from document properties:
+
+- Title
+- Author
+- Subject
+- Keywords
+- Creator (application)
+- Creation/Modification dates
 
 ## File Organization
 
 ### Recommended Structure
 
-For best results, organize your files:
-
 ```
-library/
-├── Series Name/
-│   ├── Series Name v01.cbz
-│   ├── Series Name v02.cbz
-│   └── Series Name v03.cbz
-└── Another Series/
-    └── ...
+/library/
+├── Comics/
+│   └── [Publisher]/
+│       └── [Series Name]/
+│           ├── Series Name 001.cbz
+│           ├── Series Name 002.cbz
+│           └── ...
+├── Manga/
+│   └── [Series Name]/
+│       ├── Series Name v01.cbz
+│       ├── Series Name v02.cbz
+│       └── ...
+└── Ebooks/
+    └── [Author]/
+        └── Book Title.epub
 ```
 
 ### Naming Conventions
 
-Codex can extract series and volume information from filenames:
+Codex parses metadata from filenames. Consistent naming improves detection:
 
-- `Series Name v01.cbz` → Series: "Series Name", Volume: 1
-- `Series-Name-001.cbz` → Series: "Series Name", Number: 1
-- `Series Name #001.cbz` → Series: "Series Name", Number: 1
+| Pattern | Example | Extracted |
+|---------|---------|-----------|
+| Series + Number | `Batman 001.cbz` | Series: Batman, #1 |
+| Series + Volume | `One Piece v01.cbz` | Series: One Piece, Vol 1 |
+| Series + Year + Number | `Batman (2016) 001.cbz` | Series: Batman, Year: 2016, #1 |
+| Series - Number | `Spider-Man-001.cbz` | Series: Spider-Man, #1 |
+| Series # Number | `X-Men #142.cbz` | Series: X-Men, #142 |
 
-Metadata in ComicInfo.xml takes precedence over filename parsing.
+**Tips:**
+- Use leading zeros for proper sorting: `001`, `002`, not `1`, `2`
+- Keep series names consistent across files
+- Avoid special characters in filenames
+- Use underscores or hyphens instead of spaces
 
 ## Format Detection
 
-Codex automatically detects file formats by:
+Codex detects formats using:
 
-1. **File extension** - Quick initial check
-2. **File signature** - Magic bytes for accurate detection
-3. **Content analysis** - Validates format structure
+1. **File extension**: Initial identification
+2. **Magic bytes**: Binary signature verification
+3. **Content analysis**: Structure validation
 
 This ensures correct handling even with incorrect extensions.
 
-## Performance Considerations
+## Processing Performance
 
-### Processing Speed
+### Speed Comparison
 
-Fastest to slowest:
-
-1. **CBZ** - Standard ZIP, very fast
-2. **CBR** - RAR extraction, slightly slower
-3. **EPUB** - XML parsing, moderate speed
-4. **PDF** - Can be slow for large files
-
-### Storage
-
-- **CBZ/CBR**: Images stored in archive, extracted on-demand
-- **EPUB**: Content extracted and cached
-- **PDF**: Pages extracted and cached
+| Format | Extraction | Metadata | Overall |
+|--------|------------|----------|---------|
+| CBZ | Fast | Fast | Fast |
+| CBR | Moderate | Fast | Moderate |
+| EPUB | Fast | Fast | Fast |
+| PDF | Varies | Fast | Varies |
 
 ### Memory Usage
 
-- Small files (< 50MB): Minimal memory
-- Medium files (50-200MB): Moderate memory
-- Large files (> 200MB): Higher memory usage
+| File Size | Memory Impact |
+|-----------|---------------|
+| < 50 MB | Minimal |
+| 50-200 MB | Moderate |
+| 200-500 MB | Significant |
+| > 500 MB | High |
 
-Consider this when configuring your server resources.
+:::tip Large Files
+For very large files (> 500MB), consider:
+- Splitting into multiple volumes
+- Reducing image resolution
+- Using more efficient compression
+:::
+
+## Format Conversion
+
+Codex reads files as-is and doesn't convert formats. For conversion, use external tools:
+
+- **Calibre**: Ebook conversion
+- **ComicTagger**: Comic metadata editing
+- **ImageMagick**: Image processing
 
 ## Future Format Support
 
 Planned formats:
 
-- **MOBI/AZW** - Kindle formats
-- **CBT** - Comic Book TAR
-- **CB7** - 7z-based comics
-- **DJVU** - Document format
+| Format | Status | Notes |
+|--------|--------|-------|
+| MOBI/AZW | Planned | Kindle formats |
+| CB7 | Planned | 7-Zip comics |
+| CBT | Planned | TAR comics |
+| DJVU | Considered | Document format |
 
 ## Troubleshooting
 
 ### Format Not Recognized
 
-1. Check file extension matches format
-2. Verify file isn't corrupted
-3. Check file signature with: `file filename.cbz`
+1. Verify file extension matches content
+2. Check file isn't corrupted: `file filename.cbz`
+3. Try opening with appropriate tool (7-Zip, Calibre)
 
 ### Metadata Not Extracted
 
-1. Ensure ComicInfo.xml exists (for comics)
-2. Check XML is well-formed
-3. Verify metadata fields are correct
+1. Verify ComicInfo.xml exists and is valid XML
+2. Check EPUB OPF file structure
+3. Re-scan with deep mode
+4. Check logs for parsing errors
 
 ### Slow Processing
 
-1. Large files take time - be patient
-2. Check system resources (CPU, memory, disk I/O)
-3. Consider processing during off-peak hours
+1. Check file size (large files are slower)
+2. Verify disk I/O performance
+3. Consider splitting large files
+4. Reduce concurrent scan limit
+
+### Images Not Displaying
+
+1. Verify image format is supported
+2. Check image file isn't corrupted
+3. Try extracting manually with 7-Zip
+4. Check server logs for errors
 
 ## Next Steps
 
-- Learn about [scanning strategies](./getting-started#scanning)
-- Configure [library settings](./configuration)
-- Explore [API endpoints](./api) for format information
+- [Configure libraries](./libraries)
+- [Set up OPDS](./opds)
+- [API documentation](./api)

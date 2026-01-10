@@ -1,3 +1,6 @@
+---
+---
+
 # Database Migration Strategy
 
 Codex provides two commands for managing database migrations in multi-container environments:

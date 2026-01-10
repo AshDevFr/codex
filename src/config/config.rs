@@ -146,8 +146,8 @@ impl Default for AuthConfig {
 #[serde(default)]
 pub struct ApiConfig {
     pub base_path: String,
-    pub enable_swagger: bool,
-    pub swagger_path: String,
+    pub enable_api_docs: bool,
+    pub api_docs_path: String,
     pub cors_enabled: bool,
     pub cors_origins: Vec<String>,
     pub max_page_size: usize,
@@ -158,8 +158,8 @@ impl Default for ApiConfig {
         Self {
             base_path: env_string_opt("CODEX_API_BASE_PATH")
                 .unwrap_or_else(|| "/api/v1".to_string()),
-            enable_swagger: env_bool_or("CODEX_API_ENABLE_SWAGGER", false),
-            swagger_path: env_string_opt("CODEX_API_SWAGGER_PATH")
+            enable_api_docs: env_bool_or("CODEX_API_ENABLE_API_DOCS", false),
+            api_docs_path: env_string_opt("CODEX_API_DOCS_PATH")
                 .unwrap_or_else(|| "/docs".to_string()),
             cors_enabled: env_bool_or("CODEX_API_CORS_ENABLED", true),
             cors_origins: env_string_opt("CODEX_API_CORS_ORIGINS")
@@ -580,8 +580,8 @@ mod tests {
         let config = ApiConfig::default();
 
         assert_eq!(config.base_path, "/api/v1");
-        assert!(!config.enable_swagger); // Disabled by default
-        assert_eq!(config.swagger_path, "/docs");
+        assert!(!config.enable_api_docs); // Disabled by default
+        assert_eq!(config.api_docs_path, "/docs");
         assert!(config.cors_enabled);
         assert_eq!(config.cors_origins, vec!["*".to_string()]);
         assert_eq!(config.max_page_size, 100);
@@ -614,8 +614,8 @@ mod tests {
     fn test_api_config_serialization() {
         let config = ApiConfig {
             base_path: "/api/v2".to_string(),
-            enable_swagger: true,
-            swagger_path: "/api-docs".to_string(),
+            enable_api_docs: true,
+            api_docs_path: "/api-docs".to_string(),
             cors_enabled: false,
             cors_origins: vec!["https://example.com".to_string()],
             max_page_size: 200,
@@ -623,11 +623,11 @@ mod tests {
 
         let yaml = serde_yaml::to_string(&config).unwrap();
         assert!(yaml.contains("/api/v2"));
-        assert!(yaml.contains("true")); // enable_swagger
+        assert!(yaml.contains("true")); // enable_api_docs
 
         let deserialized: ApiConfig = serde_yaml::from_str(&yaml).unwrap();
         assert_eq!(deserialized.base_path, "/api/v2");
-        assert!(deserialized.enable_swagger);
+        assert!(deserialized.enable_api_docs);
         assert_eq!(deserialized.max_page_size, 200);
     }
 

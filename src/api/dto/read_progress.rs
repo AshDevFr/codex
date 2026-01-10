@@ -20,12 +20,15 @@ pub struct UpdateProgressRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ReadProgressResponse {
     /// Progress record ID
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub id: Uuid,
 
     /// User ID
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440001")]
     pub user_id: Uuid,
 
     /// Book ID
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]
     pub book_id: Uuid,
 
     /// Current page (0-indexed)
@@ -37,12 +40,15 @@ pub struct ReadProgressResponse {
     pub completed: bool,
 
     /// When reading started
+    #[schema(example = "2024-01-10T14:30:00Z")]
     pub started_at: DateTime<Utc>,
 
     /// When progress was last updated
+    #[schema(example = "2024-01-15T18:45:00Z")]
     pub updated_at: DateTime<Utc>,
 
     /// When the book was completed (if completed)
+    #[schema(example = "2024-01-20T20:00:00Z")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<DateTime<Utc>>,
 }
@@ -69,6 +75,7 @@ pub struct ReadProgressListResponse {
     pub progress: Vec<ReadProgressResponse>,
 
     /// Total count
+    #[schema(example = 25)]
     pub total: usize,
 }
 

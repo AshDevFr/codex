@@ -1,56 +1,87 @@
-import type {ReactNode} from 'react';
-import clsx from 'clsx';
-import Heading from '@theme/Heading';
-import styles from './styles.module.css';
+import type { ReactNode } from "react";
+import clsx from "clsx";
+import Heading from "@theme/Heading";
+import styles from "./styles.module.css";
 
 type FeatureItem = {
   title: string;
-  Svg: React.ComponentType<React.ComponentProps<'svg'>>;
+  icon: string;
   description: ReactNode;
 };
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'Multiple Formats',
-    Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
+    title: "Multiple Formats",
+    icon: "📚",
     description: (
       <>
-        Support for CBZ, CBR, EPUB, and PDF formats. Codex automatically
-        extracts metadata and organizes your digital library collection.
+        Native support for <strong>CBZ</strong>, <strong>CBR</strong>,{" "}
+        <strong>EPUB</strong>, and <strong>PDF</strong>. Automatic metadata
+        extraction from ComicInfo.xml and OPF files.
       </>
     ),
   },
   {
-    title: 'Scalable Architecture',
-    Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
+    title: "OPDS Catalog",
+    icon: "📡",
     description: (
       <>
-        Built with horizontal scaling in mind. Deploy on Kubernetes or run
-        simply with SQLite for homelab setups. Stateless design for maximum flexibility.
+        Full OPDS 1.2 support for streaming to your favorite reading apps.
+        Compatible with Panels, Chunky, Moon+ Reader, and more.
       </>
     ),
   },
   {
-    title: 'Built with Rust',
-    Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
+    title: "Built with Rust",
+    icon: "⚡",
     description: (
       <>
-        High performance and memory safety. Fast metadata extraction and
-        efficient resource usage make Codex perfect for large collections.
+        High performance and memory safety. Efficient resource usage makes Codex
+        perfect for large collections on modest hardware.
+      </>
+    ),
+  },
+  {
+    title: "Scalable Architecture",
+    icon: "🔧",
+    description: (
+      <>
+        Run with SQLite for homelab setups or PostgreSQL for larger
+        deployments. Stateless design enables horizontal scaling.
+      </>
+    ),
+  },
+  {
+    title: "Reading Progress",
+    icon: "📖",
+    description: (
+      <>
+        Track your reading progress across devices. Resume where you left off
+        with automatic page synchronization.
+      </>
+    ),
+  },
+  {
+    title: "Multi-User Support",
+    icon: "👥",
+    description: (
+      <>
+        Create accounts with granular permissions. Each user has their own
+        reading progress and library access.
       </>
     ),
   },
 ];
 
-function Feature({title, Svg, description}: FeatureItem) {
+function Feature({ title, icon, description }: FeatureItem) {
   return (
-    <div className={clsx('col col--4')}>
-      <div className="text--center">
-        <Svg className={styles.featureSvg} role="img" />
-      </div>
-      <div className="text--center padding-horiz--md">
-        <Heading as="h3">{title}</Heading>
-        <p>{description}</p>
+    <div className={clsx("col col--4")}>
+      <div className={styles.featureCard}>
+        <div className={styles.featureIcon}>{icon}</div>
+        <Heading as="h3" className={styles.featureTitle}>
+          {title}
+        </Heading>
+        <p className={styles.featureDescription}>{description}</p>
       </div>
     </div>
   );

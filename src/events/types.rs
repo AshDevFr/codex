@@ -1,9 +1,10 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 /// Type of entity that was changed
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum EntityType {
     Book,
@@ -12,7 +13,7 @@ pub enum EntityType {
 }
 
 /// Task status for progress tracking
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum TaskStatus {
     /// Task is pending and waiting to be processed
@@ -26,19 +27,22 @@ pub enum TaskStatus {
 }
 
 /// Progress information for a running task
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TaskProgress {
     /// Current progress value
+    #[schema(example = 5)]
     pub current: usize,
     /// Total work to be done
+    #[schema(example = 10)]
     pub total: usize,
     /// Optional progress message
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Processing book 5 of 10")]
     pub message: Option<String>,
 }
 
 /// Specific event types for entity changes
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum EntityEvent {
     /// A book was created
@@ -92,7 +96,7 @@ pub enum EntityEvent {
 }
 
 /// Complete entity change event with metadata
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct EntityChangeEvent {
     /// The specific event that occurred
     #[serde(flatten)]
@@ -132,7 +136,7 @@ impl EntityChangeEvent {
 }
 
 /// Task progress event for background operations
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TaskProgressEvent {
     /// Unique identifier for this task instance
     pub task_id: Uuid,
