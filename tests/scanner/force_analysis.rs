@@ -27,6 +27,7 @@ async fn create_analyzed_book(
     let book = books::Model {
         id: Uuid::new_v4(),
         series_id: series.id,
+        library_id: library.id,
         title: Some("Test Book".to_string()),
         number: None,
         file_path: file_path.to_string(),

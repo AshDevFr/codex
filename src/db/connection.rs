@@ -315,9 +315,13 @@ impl Database {
         BookRepository::get_by_hash(&self.conn, hash).await
     }
 
-    /// Get a book by file path
-    pub async fn get_book_by_path(&self, path: &str) -> Result<Option<entities::books::Model>> {
-        BookRepository::get_by_path(&self.conn, path).await
+    /// Get a book by file path and library ID
+    pub async fn get_book_by_path(
+        &self,
+        library_id: Uuid,
+        path: &str,
+    ) -> Result<Option<entities::books::Model>> {
+        BookRepository::get_by_path(&self.conn, library_id, path).await
     }
 
     /// Get all books in a series

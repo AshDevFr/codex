@@ -38,6 +38,7 @@ async fn create_test_book(
     let book = books::Model {
         id: Uuid::new_v4(),
         series_id: series.id,
+        library_id: library.id,
         title: None,
         number: None,
         file_path: file_path.to_string(),
@@ -708,6 +709,7 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
     let book1 = books::Model {
         id: Uuid::new_v4(),
         series_id: series.id,
+        library_id: library.id,
         title: None,
         number: None,
         file_path: file_path.to_string_lossy().to_string(),
@@ -764,6 +766,7 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
     let book2 = books::Model {
         id: Uuid::new_v4(),
         series_id: series.id,
+        library_id: library.id,
         title: None,
         number: None,
         file_path: file_path2.to_string_lossy().to_string(),

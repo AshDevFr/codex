@@ -231,7 +231,14 @@ async fn test_opds_series_books_with_thumbnails() {
         .await
         .unwrap();
 
-    let book = create_test_book_model(series.id, "Test Book #1", "/test/book1.cbz", 1, 25);
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "Test Book #1",
+        "/test/book1.cbz",
+        1,
+        25,
+    );
     BookRepository::create(&db, &book, None).await.unwrap();
 
     // Create test user
@@ -337,6 +344,7 @@ async fn test_opds_search_books() {
 
     let book1 = create_test_book_model(
         series.id,
+        library.id,
         "Amazing Spider-Man #1",
         "/test/spiderman1.cbz",
         1,
@@ -344,6 +352,7 @@ async fn test_opds_search_books() {
     );
     let book2 = create_test_book_model(
         series.id,
+        library.id,
         "Spider-Man: Blue",
         "/test/spiderman_blue.cbz",
         2,
@@ -440,7 +449,7 @@ async fn test_opds_pse_page_feed() {
         .await
         .unwrap();
 
-    let book = create_test_book_model(series.id, "Test Book", "/test/book.cbz", 1, 42);
+    let book = create_test_book_model(series.id, library.id, "Test Book", "/test/book.cbz", 1, 42);
     let created_book = BookRepository::create(&db, &book, None).await.unwrap();
 
     // Create test user
@@ -487,6 +496,7 @@ async fn test_opds_pse_page_feed() {
 
 fn create_test_book_model(
     series_id: uuid::Uuid,
+    library_id: uuid::Uuid,
     title: &str,
     file_path: &str,
     number: i32,
@@ -498,6 +508,7 @@ fn create_test_book_model(
     codex::db::entities::books::Model {
         id: Uuid::new_v4(),
         series_id,
+        library_id,
         title: Some(title.to_string()),
         file_path: file_path.to_string(),
         file_name: file_path.split('/').last().unwrap().to_string(),

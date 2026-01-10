@@ -152,6 +152,7 @@ mod tests {
         let book = crate::db::entities::books::Model {
             id: Uuid::new_v4(),
             series_id: series.id,
+            library_id: library.id,
             title: None,
             number: None,
             file_path: "/test/book.cbz".to_string(),
@@ -203,6 +204,7 @@ mod tests {
         let book = crate::db::entities::books::Model {
             id: Uuid::new_v4(),
             series_id: series.id,
+            library_id: library.id,
             title: None,
             number: None,
             file_path: "/test/book.cbz".to_string(),
@@ -257,6 +259,7 @@ mod tests {
         let book = crate::db::entities::books::Model {
             id: Uuid::new_v4(),
             series_id: series.id,
+            library_id: library.id,
             title: None,
             number: None,
             file_path: "/test/book.cbz".to_string(),
@@ -311,6 +314,7 @@ mod tests {
         let book = crate::db::entities::books::Model {
             id: Uuid::new_v4(),
             series_id: series.id,
+            library_id: library.id,
             title: None,
             number: None,
             file_path: "/test/book.cbz".to_string(),
@@ -367,6 +371,7 @@ mod tests {
         let book = crate::db::entities::books::Model {
             id: Uuid::new_v4(),
             series_id: series.id,
+            library_id: library.id,
             title: None,
             number: None,
             file_path: "/test/book.cbz".to_string(),
@@ -422,6 +427,7 @@ mod tests {
         let book = crate::db::entities::books::Model {
             id: Uuid::new_v4(),
             series_id: series.id,
+            library_id: library.id,
             title: None,
             number: None,
             file_path: "/test/book.cbz".to_string(),

@@ -37,6 +37,7 @@ async fn create_admin_and_token(
 async fn create_duplicate_books(
     db: &DatabaseConnection,
     series_id: Uuid,
+    library_id: Uuid,
     shared_hash: &str,
 ) -> (Uuid, Uuid) {
     let now = Utc::now();
@@ -46,6 +47,7 @@ async fn create_duplicate_books(
     let book1 = books::ActiveModel {
         id: Set(book_id1),
         series_id: Set(series_id),
+        library_id: Set(library_id),
         file_path: Set(format!("/tmp/test-{}.cbz", book_id1)),
         file_name: Set(format!("test-{}.cbz", book_id1)),
         file_size: Set(1024),
@@ -65,6 +67,7 @@ async fn create_duplicate_books(
     let book2 = books::ActiveModel {
         id: Set(book_id2),
         series_id: Set(series_id),
+        library_id: Set(library_id),
         file_path: Set(format!("/tmp/test-{}.cbz", book_id2)),
         file_name: Set(format!("test-{}.cbz", book_id2)),
         file_size: Set(1024),
@@ -136,7 +139,7 @@ async fn test_list_duplicates_with_data() {
 
     // Create duplicate books
     let shared_hash = "duplicate-hash-123";
-    let (_book1, _book2) = create_duplicate_books(&db, series_id, shared_hash).await;
+    let (_book1, _book2) = create_duplicate_books(&db, series_id, library.id, shared_hash).await;
 
     // Rebuild duplicates
     BookDuplicatesRepository::rebuild_from_books(&db)
@@ -245,7 +248,7 @@ async fn test_delete_duplicate_group() {
 
     // Create duplicate books
     let shared_hash = "duplicate-hash-456";
-    create_duplicate_books(&db, series_id, shared_hash).await;
+    create_duplicate_books(&db, series_id, library.id, shared_hash).await;
 
     // Rebuild duplicates
     BookDuplicatesRepository::rebuild_from_books(&db)
@@ -325,7 +328,7 @@ async fn test_duplicates_after_book_deletion() {
 
     // Create duplicate books
     let shared_hash = "duplicate-hash-789";
-    let (book1, _book2) = create_duplicate_books(&db, series_id, shared_hash).await;
+    let (book1, _book2) = create_duplicate_books(&db, series_id, library.id, shared_hash).await;
 
     // Rebuild duplicates
     BookDuplicatesRepository::rebuild_from_books(&db)
@@ -375,7 +378,7 @@ async fn test_duplicates_exclude_soft_deleted_books() {
 
     // Create duplicate books
     let shared_hash = "duplicate-hash-soft-delete";
-    let (book1, _book2) = create_duplicate_books(&db, series_id, shared_hash).await;
+    let (book1, _book2) = create_duplicate_books(&db, series_id, library.id, shared_hash).await;
 
     // Rebuild duplicates
     BookDuplicatesRepository::rebuild_from_books(&db)

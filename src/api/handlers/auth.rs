@@ -20,8 +20,35 @@ use axum::{
 use chrono::Utc;
 use sea_orm::ActiveModelTrait;
 use sea_orm::Set;
+use std::env;
 use std::sync::Arc;
 use uuid::Uuid;
+
+/// Build authentication cookie string
+///
+/// Conditionally includes `Secure` flag based on environment:
+/// - If `CODEX_COOKIE_SECURE` env var is set, uses that value
+/// - Otherwise, defaults to `false` for development (allows HTTP cookies)
+/// - In production, should be set to `true` via env var
+fn build_auth_cookie(token: &str, max_age: u64) -> String {
+    // Check environment variable first
+    let use_secure = env::var("CODEX_COOKIE_SECURE")
+        .ok()
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false); // Default to false for development (allows HTTP)
+
+    if use_secure {
+        format!(
+            "auth_token={}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age={}",
+            token, max_age
+        )
+    } else {
+        format!(
+            "auth_token={}; HttpOnly; SameSite=Lax; Path=/; Max-Age={}",
+            token, max_age
+        )
+    }
+}
 
 /// Login handler
 ///
@@ -93,11 +120,7 @@ pub async fn login(
 
     // Create HTTP-only cookie for image authentication
     // Using SameSite=Lax instead of Strict to allow images to load from direct links
-    let cookie = format!(
-        "auth_token={}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age={}",
-        access_token,
-        24 * 3600 // 24 hours (match JWT expiry)
-    );
+    let cookie = build_auth_cookie(&access_token, 24 * 3600);
 
     // Build response with cookie
     let mut headers = HeaderMap::new();
@@ -291,11 +314,7 @@ pub async fn register(
         };
 
         // Create HTTP-only cookie for image authentication
-        let cookie = format!(
-            "auth_token={}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age={}",
-            access_token,
-            24 * 3600 // 24 hours (match JWT expiry)
-        );
+        let cookie = build_auth_cookie(&access_token, 24 * 3600);
 
         // Build response with cookie
         let mut headers = HeaderMap::new();
@@ -392,11 +411,7 @@ pub async fn verify_email(
     };
 
     // Create HTTP-only cookie for image authentication
-    let cookie = format!(
-        "auth_token={}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age={}",
-        access_token,
-        24 * 3600 // 24 hours (match JWT expiry)
-    );
+    let cookie = build_auth_cookie(&access_token, 24 * 3600);
 
     // Build response with cookie
     let mut headers = HeaderMap::new();

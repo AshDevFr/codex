@@ -24,6 +24,7 @@ impl BookRepository {
         let book = books::ActiveModel {
             id: Set(book_model.id),
             series_id: Set(book_model.series_id),
+            library_id: Set(book_model.library_id),
             title: Set(book_model.title.clone()),
             number: Set(book_model.number),
             file_path: Set(book_model.file_path.clone()),
@@ -81,9 +82,14 @@ impl BookRepository {
             .context("Failed to get book by hash")
     }
 
-    /// Get a book by file path
-    pub async fn get_by_path(db: &DatabaseConnection, path: &str) -> Result<Option<books::Model>> {
+    /// Get a book by file path and library ID
+    pub async fn get_by_path(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        path: &str,
+    ) -> Result<Option<books::Model>> {
         Books::find()
+            .filter(books::Column::LibraryId.eq(library_id))
             .filter(books::Column::FilePath.eq(path))
             .one(db)
             .await
@@ -153,13 +159,8 @@ impl BookRepository {
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<books::Model>, u64)> {
-        use crate::db::entities::series;
-        use sea_orm::JoinType;
-
-        // Build query joining books with series to filter by library
-        let mut query = Books::find()
-            .join(JoinType::InnerJoin, books::Relation::Series.def())
-            .filter(series::Column::LibraryId.eq(library_id));
+        // Build query filtering directly by library_id (now on books table)
+        let mut query = Books::find().filter(books::Column::LibraryId.eq(library_id));
 
         if !include_deleted {
             query = query.filter(books::Column::Deleted.eq(false));
@@ -307,6 +308,7 @@ impl BookRepository {
         let active = books::ActiveModel {
             id: Set(book_model.id),
             series_id: Set(book_model.series_id),
+            library_id: Set(book_model.library_id),
             title: Set(book_model.title.clone()),
             number: Set(book_model.number),
             file_path: Set(book_model.file_path.clone()),
@@ -704,11 +706,17 @@ mod tests {
     use sea_orm::prelude::Decimal;
 
     /// Helper to create a test book model
-    fn create_book_model(series_id: Uuid, path: &str, name: &str) -> books::Model {
+    fn create_book_model(
+        series_id: Uuid,
+        library_id: Uuid,
+        path: &str,
+        name: &str,
+    ) -> books::Model {
         let now = Utc::now();
         books::Model {
             id: Uuid::new_v4(),
             series_id,
+            library_id,
             title: None,
             number: None,
             file_path: path.to_string(),
@@ -744,7 +752,7 @@ mod tests {
                 .await
                 .unwrap();
 
-        let book = create_book_model(series.id, "/test/book.cbz", "book.cbz");
+        let book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
         let created = BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
             .unwrap();
@@ -772,7 +780,7 @@ mod tests {
                 .await
                 .unwrap();
 
-        let book = create_book_model(series.id, "/test/book.cbz", "book.cbz");
+        let book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
             .unwrap();
@@ -804,7 +812,7 @@ mod tests {
                 .await
                 .unwrap();
 
-        let mut book = create_book_model(series.id, "/test/book.cbz", "book.cbz");
+        let mut book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
         book.file_hash = "unique_hash_123".to_string();
 
         BookRepository::create(db.sea_orm_connection(), &book, None)
@@ -838,15 +846,16 @@ mod tests {
                 .await
                 .unwrap();
 
-        let book = create_book_model(series.id, "/test/book.cbz", "book.cbz");
+        let book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
             .unwrap();
 
-        let retrieved = BookRepository::get_by_path(db.sea_orm_connection(), "/test/book.cbz")
-            .await
-            .unwrap()
-            .unwrap();
+        let retrieved =
+            BookRepository::get_by_path(db.sea_orm_connection(), library.id, "/test/book.cbz")
+                .await
+                .unwrap()
+                .unwrap();
 
         assert_eq!(retrieved.id, book.id);
         assert_eq!(retrieved.file_path, "/test/book.cbz");
@@ -870,10 +879,10 @@ mod tests {
                 .await
                 .unwrap();
 
-        let mut book1 = create_book_model(series.id, "/test/book1.cbz", "book1.cbz");
+        let mut book1 = create_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz");
         book1.number = Some(Decimal::from(1));
 
-        let mut book2 = create_book_model(series.id, "/test/book2.cbz", "book2.cbz");
+        let mut book2 = create_book_model(series.id, library.id, "/test/book2.cbz", "book2.cbz");
         book2.number = Some(Decimal::from(2));
 
         BookRepository::create(db.sea_orm_connection(), &book1, None)
@@ -908,7 +917,7 @@ mod tests {
                 .await
                 .unwrap();
 
-        let mut book = create_book_model(series.id, "/test/book.cbz", "book.cbz");
+        let mut book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
             .unwrap();
@@ -947,7 +956,7 @@ mod tests {
                 .await
                 .unwrap();
 
-        let book = create_book_model(series.id, "/test/book.cbz", "book.cbz");
+        let book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
             .unwrap();
@@ -985,6 +994,7 @@ mod tests {
         for i in 1..=5 {
             let book = create_book_model(
                 series.id,
+                library.id,
                 &format!("/test/book{}.cbz", i),
                 &format!("book{}.cbz", i),
             );
@@ -1023,6 +1033,7 @@ mod tests {
         for i in 1..=10 {
             let book = create_book_model(
                 series.id,
+                library.id,
                 &format!("/test/book{:02}.cbz", i),
                 &format!("book{:02}.cbz", i),
             );
@@ -1074,6 +1085,7 @@ mod tests {
         for i in 1..=3 {
             let book = create_book_model(
                 series.id,
+                library.id,
                 &format!("/test/book{}.cbz", i),
                 &format!("book{}.cbz", i),
             );
@@ -1141,6 +1153,7 @@ mod tests {
         for title in titles {
             let mut book = create_book_model(
                 series.id,
+                library.id,
                 &format!("/test/{}.cbz", title),
                 &format!("{}.cbz", title),
             );
@@ -1195,7 +1208,12 @@ mod tests {
 
         // Create books in library 1
         for i in 1..=3 {
-            let book = create_book_model(series1.id, &format!("/lib1/book{}.cbz", i), "book.cbz");
+            let book = create_book_model(
+                series1.id,
+                library1.id,
+                &format!("/lib1/book{}.cbz", i),
+                "book.cbz",
+            );
             BookRepository::create(db.sea_orm_connection(), &book, None)
                 .await
                 .unwrap();
@@ -1203,7 +1221,12 @@ mod tests {
 
         // Create books in library 2
         for i in 1..=2 {
-            let book = create_book_model(series2.id, &format!("/lib2/book{}.cbz", i), "book.cbz");
+            let book = create_book_model(
+                series2.id,
+                library2.id,
+                &format!("/lib2/book{}.cbz", i),
+                "book.cbz",
+            );
             BookRepository::create(db.sea_orm_connection(), &book, None)
                 .await
                 .unwrap();
@@ -1250,7 +1273,12 @@ mod tests {
         // Create books
         let mut book_ids = Vec::new();
         for i in 1..=5 {
-            let book = create_book_model(series.id, &format!("/test/book{}.cbz", i), "book.cbz");
+            let book = create_book_model(
+                series.id,
+                library.id,
+                &format!("/test/book{}.cbz", i),
+                "book.cbz",
+            );
             let created = BookRepository::create(db.sea_orm_connection(), &book, None)
                 .await
                 .unwrap();
@@ -1358,7 +1386,12 @@ mod tests {
 
         // Create books with delays to ensure different timestamps
         for i in 1..=5 {
-            let book = create_book_model(series.id, &format!("/test/book{}.cbz", i), "book.cbz");
+            let book = create_book_model(
+                series.id,
+                library.id,
+                &format!("/test/book{}.cbz", i),
+                "book.cbz",
+            );
             BookRepository::create(db.sea_orm_connection(), &book, None)
                 .await
                 .unwrap();

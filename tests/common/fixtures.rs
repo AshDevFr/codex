@@ -54,6 +54,7 @@ pub fn create_test_user_with_permissions(
 /// Create a test book model with default values
 pub fn create_test_book(
     series_id: Uuid,
+    library_id: Uuid,
     file_path: &str,
     file_name: &str,
     file_hash: &str,
@@ -64,6 +65,7 @@ pub fn create_test_book(
     books::Model {
         id: Uuid::new_v4(),
         series_id,
+        library_id,
         title: None,
         number: None,
         file_path: file_path.to_string(),
@@ -159,6 +161,7 @@ pub async fn create_test_book_with_hash(
     let book = books::Model {
         id: Uuid::new_v4(),
         series_id: series.id,
+        library_id: series.library_id,
         title: Some(title.to_string()),
         number: None,
         file_path: file_path.to_string(),

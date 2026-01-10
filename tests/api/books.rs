@@ -29,6 +29,7 @@ async fn create_admin_and_token(
 // Helper to create a test book
 fn create_test_book_model(
     series_id: uuid::Uuid,
+    library_id: uuid::Uuid,
     path: &str,
     name: &str,
     title: Option<String>,
@@ -37,6 +38,7 @@ fn create_test_book_model(
     codex::db::entities::books::Model {
         id: uuid::Uuid::new_v4(),
         series_id,
+        library_id,
         title,
         number: None,
         file_path: path.to_string(),
@@ -76,6 +78,7 @@ async fn test_list_all_books() {
     for i in 1..=5 {
         let book = create_test_book_model(
             series.id,
+            library.id,
             &format!("/test/book{}.cbz", i),
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),
@@ -117,6 +120,7 @@ async fn test_list_all_books_with_pagination() {
     for i in 1..=15 {
         let book = create_test_book_model(
             series.id,
+            library.id,
             &format!("/test/book{:02}.cbz", i),
             &format!("book{:02}.cbz", i),
             Some(format!("Book {:02}", i)),
@@ -193,6 +197,7 @@ async fn test_list_all_books_excludes_deleted() {
     for i in 1..=3 {
         let book = create_test_book_model(
             series.id,
+            library.id,
             &format!("/test/book{}.cbz", i),
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),
@@ -243,6 +248,7 @@ async fn test_list_all_books_ordered_by_title() {
     for title in titles {
         let book = create_test_book_model(
             series.id,
+            library.id,
             &format!("/test/{}.cbz", title),
             &format!("{}.cbz", title),
             Some(title.to_string()),
@@ -292,6 +298,7 @@ async fn test_list_all_books_across_multiple_series() {
     for i in 1..=3 {
         let book = create_test_book_model(
             series1.id,
+            library.id,
             &format!("/test/s1/book{}.cbz", i),
             &format!("s1_book{}.cbz", i),
             Some(format!("Series 1 Book {}", i)),
@@ -303,6 +310,7 @@ async fn test_list_all_books_across_multiple_series() {
     for i in 1..=2 {
         let book = create_test_book_model(
             series2.id,
+            library.id,
             &format!("/test/s2/book{}.cbz", i),
             &format!("s2_book{}.cbz", i),
             Some(format!("Series 2 Book {}", i)),
@@ -361,6 +369,7 @@ async fn test_list_books_by_series() {
     for i in 1..=3 {
         let book = create_test_book_model(
             series.id,
+            library.id,
             &format!("/test/book{}.cbz", i),
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),
@@ -432,6 +441,7 @@ async fn test_list_library_books() {
     for i in 1..=3 {
         let book = create_test_book_model(
             series1.id,
+            library1.id,
             &format!("/test1/book{}.cbz", i),
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),
@@ -442,6 +452,7 @@ async fn test_list_library_books() {
     for i in 1..=2 {
         let book = create_test_book_model(
             series2.id,
+            library2.id,
             &format!("/test2/book{}.cbz", i),
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),
@@ -498,6 +509,7 @@ async fn test_list_in_progress_books() {
     for i in 1..=5 {
         let book = create_test_book_model(
             series.id,
+            library.id,
             &format!("/test/book{}.cbz", i),
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),
@@ -566,6 +578,7 @@ async fn test_list_recently_added_books() {
     for i in 1..=5 {
         let book = create_test_book_model(
             series.id,
+            library.id,
             &format!("/test/book{}.cbz", i),
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),
@@ -621,6 +634,7 @@ async fn test_list_library_recently_added_books() {
     for i in 1..=3 {
         let book = create_test_book_model(
             series1.id,
+            library1.id,
             &format!("/test1/book{}.cbz", i),
             &format!("book{}.cbz", i),
             Some(format!("Library 1 Book {}", i)),
@@ -633,6 +647,7 @@ async fn test_list_library_recently_added_books() {
     for i in 1..=2 {
         let book = create_test_book_model(
             series2.id,
+            library2.id,
             &format!("/test2/book{}.cbz", i),
             &format!("book{}.cbz", i),
             Some(format!("Library 2 Book {}", i)),
@@ -685,6 +700,7 @@ async fn test_books_include_series_name() {
     // Create a book with a title
     let book = create_test_book_model(
         series.id,
+        library.id,
         "/test/book1.cbz",
         "book1.cbz",
         Some("Book Title".to_string()),
@@ -725,7 +741,13 @@ async fn test_books_use_filename_when_title_is_none() {
         .unwrap();
 
     // Create a book without a title (title is None)
-    let book = create_test_book_model(series.id, "/test/mybook.cbz", "mybook.cbz", None);
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/test/mybook.cbz",
+        "mybook.cbz",
+        None,
+    );
     BookRepository::create(&db, &book, None).await.unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
@@ -761,7 +783,13 @@ async fn test_books_filename_fallback_with_multiple_extensions() {
         .unwrap();
 
     // Create a book with multiple dots in filename
-    let book = create_test_book_model(series.id, "/test/book.vol.1.cbz", "book.vol.1.cbz", None);
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/test/book.vol.1.cbz",
+        "book.vol.1.cbz",
+        None,
+    );
     BookRepository::create(&db, &book, None).await.unwrap();
 
     let state = create_test_auth_state(db.clone()).await;

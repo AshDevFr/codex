@@ -9,9 +9,9 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub series_id: Uuid,
+    pub library_id: Uuid,
     pub title: Option<String>,
     pub number: Option<Decimal>,
-    #[sea_orm(unique)]
     pub file_path: String,
     pub file_name: String,
     pub file_size: i64,
@@ -42,6 +42,14 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Series,
+    #[sea_orm(
+        belongs_to = "super::libraries::Entity",
+        from = "Column::LibraryId",
+        to = "super::libraries::Column::Id",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    Libraries,
 }
 
 impl Related<super::book_metadata_records::Entity> for Entity {
@@ -65,6 +73,12 @@ impl Related<super::read_progress::Entity> for Entity {
 impl Related<super::series::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Series.def()
+    }
+}
+
+impl Related<super::libraries::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Libraries.def()
     }
 }
 

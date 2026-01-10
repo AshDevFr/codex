@@ -49,6 +49,7 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 	// Only subscribe to getLastTab action (doesn't cause re-renders since it's not state)
 	const getLastTab = useLibraryPreferencesStore((state) => state.getLastTab);
 	const isAdmin = user?.isAdmin;
+	const [addLibraryOpened, setAddLibraryOpened] = useState(false);
 	const [editLibraryOpened, setEditLibraryOpened] = useState(false);
 	const [selectedLibrary, setSelectedLibrary] = useState<Library | null>(null);
 	const [deleteConfirmOpened, setDeleteConfirmOpened] = useState(false);
@@ -203,7 +204,7 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 										size="sm"
 										onClick={(e: React.MouseEvent) => {
 											e.stopPropagation();
-											navigate("/libraries");
+											setAddLibraryOpened(true);
 										}}
 										title="Add Library"
 									>
@@ -399,6 +400,11 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 					</Stack>
 				</AppShell.Section>
 			</AppShell.Navbar>
+
+			<LibraryModal
+				opened={addLibraryOpened}
+				onClose={() => setAddLibraryOpened(false)}
+			/>
 
 			<LibraryModal
 				opened={editLibraryOpened}

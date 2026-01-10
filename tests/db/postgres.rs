@@ -107,6 +107,7 @@ async fn test_postgres_series_book_relationship() {
     let book_model = books::Model {
         id: Uuid::new_v4(),
         series_id: series.id,
+        library_id: library.id,
         title: None,
         number: None,
         file_path: "/test/postgres_book.cbz".to_string(),
@@ -244,6 +245,7 @@ async fn test_postgres_metrics_repository() {
         let book_model = books::Model {
             id: Uuid::new_v4(),
             series_id: series.id,
+            library_id: library.id,
             title: Some(format!("Metrics Book {}", idx + 1)),
             number: None,
             file_path: format!("/test/metrics/book{}.cbz", idx + 1),

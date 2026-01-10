@@ -29,6 +29,7 @@ async fn create_admin_and_token(
 // Helper to create a test book
 fn create_test_book_model(
     series_id: uuid::Uuid,
+    library_id: uuid::Uuid,
     path: &str,
     name: &str,
     title: Option<String>,
@@ -38,6 +39,7 @@ fn create_test_book_model(
     codex::db::entities::books::Model {
         id: uuid::Uuid::new_v4(),
         series_id,
+        library_id,
         title,
         number: None,
         file_path: path.to_string(),
@@ -76,6 +78,7 @@ async fn test_mark_book_as_read() {
     // Create a test book with 50 pages
     let book = create_test_book_model(
         series.id,
+        library.id,
         "/test/book1.cbz",
         "book1.cbz",
         Some("Book 1".to_string()),
@@ -118,6 +121,7 @@ async fn test_mark_book_as_unread() {
     // Create a test book
     let book = create_test_book_model(
         series.id,
+        library.id,
         "/test/book1.cbz",
         "book1.cbz",
         Some("Book 1".to_string()),
@@ -198,6 +202,7 @@ async fn test_mark_series_as_read() {
     for i in 1..=3 {
         let book = create_test_book_model(
             series.id,
+            library.id,
             &format!("/test/book{}.cbz", i),
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),
@@ -251,6 +256,7 @@ async fn test_mark_series_as_unread() {
     for i in 1..=3 {
         let book = create_test_book_model(
             series.id,
+            library.id,
             &format!("/test/book{}.cbz", i),
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),

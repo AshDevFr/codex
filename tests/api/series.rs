@@ -312,13 +312,31 @@ async fn test_get_series_books_excludes_deleted_by_default() {
         .unwrap();
 
     // Create 3 books
-    let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", Some("Book 1"));
+    let book1 = create_test_book(
+        series.id,
+        library.id,
+        "/book1.cbz",
+        "book1.cbz",
+        Some("Book 1"),
+    );
     let book1 = BookRepository::create(&db, &book1, None).await.unwrap();
 
-    let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", Some("Book 2"));
+    let book2 = create_test_book(
+        series.id,
+        library.id,
+        "/book2.cbz",
+        "book2.cbz",
+        Some("Book 2"),
+    );
     let book2 = BookRepository::create(&db, &book2, None).await.unwrap();
 
-    let book3 = create_test_book(series.id, "/book3.cbz", "book3.cbz", Some("Book 3"));
+    let book3 = create_test_book(
+        series.id,
+        library.id,
+        "/book3.cbz",
+        "book3.cbz",
+        Some("Book 3"),
+    );
     let book3 = BookRepository::create(&db, &book3, None).await.unwrap();
 
     // Mark book2 as deleted
@@ -361,13 +379,31 @@ async fn test_get_series_books_includes_deleted_when_requested() {
         .unwrap();
 
     // Create 3 books
-    let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", Some("Book 1"));
+    let book1 = create_test_book(
+        series.id,
+        library.id,
+        "/book1.cbz",
+        "book1.cbz",
+        Some("Book 1"),
+    );
     let book1 = BookRepository::create(&db, &book1, None).await.unwrap();
 
-    let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", Some("Book 2"));
+    let book2 = create_test_book(
+        series.id,
+        library.id,
+        "/book2.cbz",
+        "book2.cbz",
+        Some("Book 2"),
+    );
     let book2 = BookRepository::create(&db, &book2, None).await.unwrap();
 
-    let book3 = create_test_book(series.id, "/book3.cbz", "book3.cbz", Some("Book 3"));
+    let book3 = create_test_book(
+        series.id,
+        library.id,
+        "/book3.cbz",
+        "book3.cbz",
+        Some("Book 3"),
+    );
     let book3 = BookRepository::create(&db, &book3, None).await.unwrap();
 
     // Mark book2 as deleted
@@ -413,13 +449,25 @@ async fn test_get_series_books_with_all_deleted() {
         .unwrap();
 
     // Create 2 books and mark both as deleted
-    let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", Some("Book 1"));
+    let book1 = create_test_book(
+        series.id,
+        library.id,
+        "/book1.cbz",
+        "book1.cbz",
+        Some("Book 1"),
+    );
     let book1 = BookRepository::create(&db, &book1, None).await.unwrap();
     BookRepository::mark_deleted(&db, book1.id, true, None)
         .await
         .unwrap();
 
-    let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", Some("Book 2"));
+    let book2 = create_test_book(
+        series.id,
+        library.id,
+        "/book2.cbz",
+        "book2.cbz",
+        Some("Book 2"),
+    );
     let book2 = BookRepository::create(&db, &book2, None).await.unwrap();
     BookRepository::mark_deleted(&db, book2.id, true, None)
         .await
@@ -467,10 +515,22 @@ async fn test_get_series_books_include_deleted_false_explicit() {
         .unwrap();
 
     // Create 2 books, mark one as deleted
-    let book1 = create_test_book(series.id, "/book1.cbz", "book1.cbz", Some("Book 1"));
+    let book1 = create_test_book(
+        series.id,
+        library.id,
+        "/book1.cbz",
+        "book1.cbz",
+        Some("Book 1"),
+    );
     let book1 = BookRepository::create(&db, &book1, None).await.unwrap();
 
-    let book2 = create_test_book(series.id, "/book2.cbz", "book2.cbz", Some("Book 2"));
+    let book2 = create_test_book(
+        series.id,
+        library.id,
+        "/book2.cbz",
+        "book2.cbz",
+        Some("Book 2"),
+    );
     let book2 = BookRepository::create(&db, &book2, None).await.unwrap();
     BookRepository::mark_deleted(&db, book2.id, true, None)
         .await
@@ -671,13 +731,31 @@ async fn test_list_started_series() {
         .unwrap();
 
     // Create books in each series
-    let book1 = create_test_book(series1.id, "/lib/s1/book1.cbz", "book1.cbz", Some("Book 1"));
+    let book1 = create_test_book(
+        series1.id,
+        library.id,
+        "/lib/s1/book1.cbz",
+        "book1.cbz",
+        Some("Book 1"),
+    );
     let book1 = BookRepository::create(&db, &book1, None).await.unwrap();
 
-    let book2 = create_test_book(series2.id, "/lib/s2/book1.cbz", "book1.cbz", Some("Book 2"));
+    let book2 = create_test_book(
+        series2.id,
+        library.id,
+        "/lib/s2/book1.cbz",
+        "book1.cbz",
+        Some("Book 2"),
+    );
     let book2 = BookRepository::create(&db, &book2, None).await.unwrap();
 
-    let book3 = create_test_book(series3.id, "/lib/s3/book1.cbz", "book1.cbz", Some("Book 3"));
+    let book3 = create_test_book(
+        series3.id,
+        library.id,
+        "/lib/s3/book1.cbz",
+        "book1.cbz",
+        Some("Book 3"),
+    );
     let _book3 = BookRepository::create(&db, &book3, None).await.unwrap();
 
     // Create admin user and get token
@@ -740,10 +818,22 @@ async fn test_list_library_started_series() {
         .unwrap();
 
     // Create books
-    let book1 = create_test_book(series1.id, "/lib1/book1.cbz", "book1.cbz", Some("Book 1"));
+    let book1 = create_test_book(
+        series1.id,
+        library1.id,
+        "/lib1/book1.cbz",
+        "book1.cbz",
+        Some("Book 1"),
+    );
     let book1 = BookRepository::create(&db, &book1, None).await.unwrap();
 
-    let book2 = create_test_book(series2.id, "/lib2/book1.cbz", "book1.cbz", Some("Book 2"));
+    let book2 = create_test_book(
+        series2.id,
+        library2.id,
+        "/lib2/book1.cbz",
+        "book1.cbz",
+        Some("Book 2"),
+    );
     let book2 = BookRepository::create(&db, &book2, None).await.unwrap();
 
     // Create admin user and get token
@@ -796,6 +886,7 @@ async fn test_list_library_started_series() {
 // Helper function for creating test books
 fn create_test_book(
     series_id: uuid::Uuid,
+    library_id: uuid::Uuid,
     path: &str,
     name: &str,
     title: Option<&str>,
@@ -804,6 +895,7 @@ fn create_test_book(
     codex::db::entities::books::Model {
         id: uuid::Uuid::new_v4(),
         series_id,
+        library_id,
         title: title.map(|s| s.to_string()),
         number: None,
         file_path: path.to_string(),

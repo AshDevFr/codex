@@ -1051,6 +1051,7 @@ mod tests {
         let book1 = books::Model {
             id: Uuid::new_v4(),
             series_id: series1.id,
+            library_id: library.id,
             title: Some("Book 1".to_string()),
             number: None,
             file_path: "/test/book1.cbz".to_string(),
@@ -1073,6 +1074,7 @@ mod tests {
         let book2 = books::Model {
             id: Uuid::new_v4(),
             series_id: series2.id,
+            library_id: library.id,
             title: Some("Book 2".to_string()),
             number: None,
             file_path: "/test/book2.cbz".to_string(),
@@ -1095,6 +1097,7 @@ mod tests {
         let book3 = books::Model {
             id: Uuid::new_v4(),
             series_id: series3.id,
+            library_id: library.id,
             title: Some("Book 3".to_string()),
             number: None,
             file_path: "/test/book3.cbz".to_string(),

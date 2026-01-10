@@ -353,6 +353,7 @@ mod tests {
         let book_model = books::Model {
             id: Uuid::new_v4(),
             series_id: series.id,
+            library_id: library.id,
             title: None,
             number: None,
             file_path: "/test/path/series/book.cbz".to_string(),
@@ -417,6 +418,7 @@ mod tests {
             let book_model = books::Model {
                 id: Uuid::new_v4(),
                 series_id: series.id,
+                library_id: library.id,
                 title: Some(format!("Book {}", idx + 1)),
                 number: None,
                 file_path: format!("/test/path/series/book{}.cbz", idx + 1),
@@ -485,6 +487,7 @@ mod tests {
         let book_model = books::Model {
             id: Uuid::new_v4(),
             series_id: series.id,
+            library_id: library.id,
             title: None,
             number: None,
             file_path: "/test/path/series/book.cbz".to_string(),

@@ -13,14 +13,10 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(ColumnDef::new(Books::Id).uuid().not_null().primary_key())
                     .col(ColumnDef::new(Books::SeriesId).uuid().not_null())
+                    .col(ColumnDef::new(Books::LibraryId).uuid().not_null())
                     .col(ColumnDef::new(Books::Title).string())
                     .col(ColumnDef::new(Books::Number).decimal())
-                    .col(
-                        ColumnDef::new(Books::FilePath)
-                            .string()
-                            .not_null()
-                            .unique_key(),
-                    )
+                    .col(ColumnDef::new(Books::FilePath).string().not_null())
                     .col(ColumnDef::new(Books::FileName).string().not_null())
                     .col(ColumnDef::new(Books::FileSize).big_integer().not_null())
                     .col(ColumnDef::new(Books::FileHash).string().not_null())
@@ -67,6 +63,14 @@ impl MigrationTrait for Migration {
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::NoAction),
                     )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk_books_library_id")
+                            .from(Books::Table, Books::LibraryId)
+                            .to(Libraries::Table, Libraries::Id)
+                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_update(ForeignKeyAction::NoAction),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -104,6 +108,20 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        // Add composite unique index on library_id + file_path
+        // This ensures the same file path can only exist once per library
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_books_library_file_path_unique")
+                    .table(Books::Table)
+                    .col(Books::LibraryId)
+                    .col(Books::FilePath)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 
@@ -119,6 +137,7 @@ enum Books {
     Table,
     Id,
     SeriesId,
+    LibraryId,
     Title,
     Number,
     FilePath,
@@ -137,6 +156,12 @@ enum Books {
 
 #[derive(DeriveIden)]
 enum Series {
+    Table,
+    Id,
+}
+
+#[derive(DeriveIden)]
+enum Libraries {
     Table,
     Id,
 }

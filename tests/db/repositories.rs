@@ -129,6 +129,7 @@ async fn test_series_book_relationship() {
     // Create book
     let book_model = create_test_book(
         series.id,
+        library.id,
         "/test/book.cbz",
         "book.cbz",
         "test_hash",
@@ -208,7 +209,15 @@ async fn test_user_read_progress() {
         .await
         .unwrap();
 
-    let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "test_hash", "cbz", 10);
+    let book_model = create_test_book(
+        series.id,
+        library.id,
+        "/book.cbz",
+        "book.cbz",
+        "test_hash",
+        "cbz",
+        10,
+    );
     let book = BookRepository::create(conn, &book_model, None)
         .await
         .unwrap();
@@ -287,6 +296,7 @@ async fn test_unique_file_path_constraint() {
     // Insert first book
     let book1_model = create_test_book(
         series.id,
+        library.id,
         "/same/path/book.cbz",
         "book.cbz",
         "hash1",
@@ -297,9 +307,10 @@ async fn test_unique_file_path_constraint() {
         .await
         .unwrap();
 
-    // Try to insert second book with same file path (should fail)
+    // Try to insert second book with same file path in same library (should fail)
     let book2_model = create_test_book(
         series.id,
+        library.id,
         "/same/path/book.cbz",
         "book.cbz",
         "hash2",
@@ -309,6 +320,27 @@ async fn test_unique_file_path_constraint() {
 
     let result = BookRepository::create(conn, &book2_model, None).await;
     assert!(result.is_err());
+
+    // But same file path in different library should succeed
+    let library2 = LibraryRepository::create(conn, "Lib2", "/lib2", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(conn, library2.id, "Series2", None)
+        .await
+        .unwrap();
+
+    let book3_model = create_test_book(
+        series2.id,
+        library2.id,
+        "/same/path/book.cbz", // Same path, different library
+        "book.cbz",
+        "hash3",
+        "cbz",
+        10,
+    );
+
+    let result = BookRepository::create(conn, &book3_model, None).await;
+    assert!(result.is_ok()); // Should succeed - different library
 
     db.close().await;
 }
@@ -333,7 +365,15 @@ async fn test_file_hash_index_lookup() {
 
     // Insert book with specific hash
     let test_hash = "abc123hash";
-    let book_model = create_test_book(series.id, "/book1.cbz", "book1.cbz", test_hash, "cbz", 10);
+    let book_model = create_test_book(
+        series.id,
+        library.id,
+        "/book1.cbz",
+        "book1.cbz",
+        test_hash,
+        "cbz",
+        10,
+    );
     BookRepository::create(conn, &book_model, None)
         .await
         .unwrap();
@@ -369,7 +409,15 @@ async fn test_pages_insert_and_query() {
         .await
         .unwrap();
 
-    let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "test_hash", "cbz", 10);
+    let book_model = create_test_book(
+        series.id,
+        library.id,
+        "/book.cbz",
+        "book.cbz",
+        "test_hash",
+        "cbz",
+        10,
+    );
     let book = BookRepository::create(conn, &book_model, None)
         .await
         .unwrap();
@@ -410,7 +458,15 @@ async fn test_mark_book_deleted() {
         .await
         .unwrap();
 
-    let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "test_hash", "cbz", 10);
+    let book_model = create_test_book(
+        series.id,
+        library.id,
+        "/book.cbz",
+        "book.cbz",
+        "test_hash",
+        "cbz",
+        10,
+    );
     let book = BookRepository::create(conn, &book_model, None)
         .await
         .unwrap();
@@ -450,7 +506,15 @@ async fn test_restore_deleted_book() {
         .await
         .unwrap();
 
-    let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "test_hash", "cbz", 10);
+    let book_model = create_test_book(
+        series.id,
+        library.id,
+        "/book.cbz",
+        "book.cbz",
+        "test_hash",
+        "cbz",
+        10,
+    );
     let book = BookRepository::create(conn, &book_model, None)
         .await
         .unwrap();
@@ -500,12 +564,28 @@ async fn test_list_by_series_filters_deleted_by_default() {
         .unwrap();
 
     // Create two books
-    let book1_model = create_test_book(series.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1_model = create_test_book(
+        series.id,
+        library.id,
+        "/book1.cbz",
+        "book1.cbz",
+        "hash1",
+        "cbz",
+        10,
+    );
     let book1 = BookRepository::create(conn, &book1_model, None)
         .await
         .unwrap();
 
-    let book2_model = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
+    let book2_model = create_test_book(
+        series.id,
+        library.id,
+        "/book2.cbz",
+        "book2.cbz",
+        "hash2",
+        "cbz",
+        10,
+    );
     let book2 = BookRepository::create(conn, &book2_model, None)
         .await
         .unwrap();
@@ -543,12 +623,28 @@ async fn test_list_by_series_includes_deleted_when_requested() {
         .unwrap();
 
     // Create two books
-    let book1_model = create_test_book(series.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1_model = create_test_book(
+        series.id,
+        library.id,
+        "/book1.cbz",
+        "book1.cbz",
+        "hash1",
+        "cbz",
+        10,
+    );
     let book1 = BookRepository::create(conn, &book1_model, None)
         .await
         .unwrap();
 
-    let book2_model = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
+    let book2_model = create_test_book(
+        series.id,
+        library.id,
+        "/book2.cbz",
+        "book2.cbz",
+        "hash2",
+        "cbz",
+        10,
+    );
     let _book2 = BookRepository::create(conn, &book2_model, None)
         .await
         .unwrap();
@@ -1032,12 +1128,28 @@ async fn test_purge_deleted_in_library_purges_empty_series_when_enabled() {
         .unwrap();
 
     // Create books in both series
-    let book1_model = create_test_book(series1.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1_model = create_test_book(
+        series1.id,
+        library.id,
+        "/book1.cbz",
+        "book1.cbz",
+        "hash1",
+        "cbz",
+        10,
+    );
     let book1 = BookRepository::create(conn, &book1_model, None)
         .await
         .unwrap();
 
-    let book2_model = create_test_book(series2.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
+    let book2_model = create_test_book(
+        series2.id,
+        library.id,
+        "/book2.cbz",
+        "book2.cbz",
+        "hash2",
+        "cbz",
+        10,
+    );
     let _book2 = BookRepository::create(conn, &book2_model, None)
         .await
         .unwrap();
@@ -1103,7 +1215,15 @@ async fn test_purge_deleted_in_library_keeps_empty_series_when_disabled() {
         .unwrap();
 
     // Create book in series
-    let book1_model = create_test_book(series1.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1_model = create_test_book(
+        series1.id,
+        library.id,
+        "/book1.cbz",
+        "book1.cbz",
+        "hash1",
+        "cbz",
+        10,
+    );
     let book1 = BookRepository::create(conn, &book1_model, None)
         .await
         .unwrap();
@@ -1160,7 +1280,15 @@ async fn test_purge_deleted_in_series_purges_series_when_empty_and_enabled() {
         .unwrap();
 
     // Create book in series
-    let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "hash1", "cbz", 10);
+    let book_model = create_test_book(
+        series.id,
+        library.id,
+        "/book.cbz",
+        "book.cbz",
+        "hash1",
+        "cbz",
+        10,
+    );
     let book = BookRepository::create(conn, &book_model, None)
         .await
         .unwrap();
@@ -1214,7 +1342,15 @@ async fn test_purge_deleted_in_series_keeps_series_when_empty_but_setting_disabl
         .unwrap();
 
     // Create book in series
-    let book_model = create_test_book(series.id, "/book.cbz", "book.cbz", "hash1", "cbz", 10);
+    let book_model = create_test_book(
+        series.id,
+        library.id,
+        "/book.cbz",
+        "book.cbz",
+        "hash1",
+        "cbz",
+        10,
+    );
     let book = BookRepository::create(conn, &book_model, None)
         .await
         .unwrap();
@@ -1271,12 +1407,28 @@ async fn test_purge_deleted_in_series_keeps_series_when_not_empty() {
         .unwrap();
 
     // Create two books in series
-    let book1_model = create_test_book(series.id, "/book1.cbz", "book1.cbz", "hash1", "cbz", 10);
+    let book1_model = create_test_book(
+        series.id,
+        library.id,
+        "/book1.cbz",
+        "book1.cbz",
+        "hash1",
+        "cbz",
+        10,
+    );
     let book1 = BookRepository::create(conn, &book1_model, None)
         .await
         .unwrap();
 
-    let book2_model = create_test_book(series.id, "/book2.cbz", "book2.cbz", "hash2", "cbz", 10);
+    let book2_model = create_test_book(
+        series.id,
+        library.id,
+        "/book2.cbz",
+        "book2.cbz",
+        "hash2",
+        "cbz",
+        10,
+    );
     let _book2 = BookRepository::create(conn, &book2_model, None)
         .await
         .unwrap();

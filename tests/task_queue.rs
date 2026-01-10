@@ -44,7 +44,7 @@ async fn create_test_series(db: &DatabaseConnection, library_id: Uuid) -> Uuid {
 }
 
 /// Helper to create a test book
-async fn create_test_book(db: &DatabaseConnection, series_id: Uuid) -> Uuid {
+async fn create_test_book(db: &DatabaseConnection, series_id: Uuid, library_id: Uuid) -> Uuid {
     let book_id = Uuid::new_v4();
     let now = Utc::now();
     // Use book_id in file_path to ensure uniqueness
@@ -54,6 +54,7 @@ async fn create_test_book(db: &DatabaseConnection, series_id: Uuid) -> Uuid {
     let book = books::ActiveModel {
         id: Set(book_id),
         series_id: Set(series_id),
+        library_id: Set(library_id),
         file_path: Set(file_path),
         file_name: Set(file_name),
         file_size: Set(1024),
@@ -438,7 +439,7 @@ async fn test_queue_stats() {
     let (db, _temp_dir) = setup_test_db().await;
     let library_id = create_test_library(&db).await;
     let series_id = create_test_series(&db, library_id).await;
-    let book_id = create_test_book(&db, series_id).await;
+    let book_id = create_test_book(&db, series_id, library_id).await;
 
     // Create tasks in different states
     let task1_id = TaskRepository::enqueue(
@@ -727,7 +728,7 @@ async fn test_recover_multiple_stale_tasks() {
     let (db, _temp_dir) = setup_test_db().await;
     let library_id = create_test_library(&db).await;
     let series_id = create_test_series(&db, library_id).await;
-    let book_id = create_test_book(&db, series_id).await;
+    let book_id = create_test_book(&db, series_id, library_id).await;
 
     // Create and claim multiple tasks
     let task1_id = TaskRepository::enqueue(
@@ -897,7 +898,7 @@ async fn test_prioritize_scans_over_analysis() {
     let (db, _temp_dir) = setup_test_db().await;
     let library_id = create_test_library(&db).await;
     let series_id = create_test_series(&db, library_id).await;
-    let book_id = create_test_book(&db, series_id).await;
+    let book_id = create_test_book(&db, series_id, library_id).await;
 
     // Enqueue tasks with same priority and scheduled_for time
     // Analysis task first (should be picked second if prioritization works)
@@ -959,7 +960,8 @@ async fn test_prioritize_scans_over_analysis() {
 async fn test_no_prioritization_uses_priority() {
     let (db, _temp_dir) = setup_test_db().await;
     let library_id = create_test_library(&db).await;
-    let book_id = create_test_book(&db, create_test_series(&db, library_id).await).await;
+    let book_id =
+        create_test_book(&db, create_test_series(&db, library_id).await, library_id).await;
 
     // Enqueue scan task with lower priority
     TaskRepository::enqueue(
@@ -1005,7 +1007,8 @@ async fn test_no_prioritization_uses_priority() {
 async fn test_prioritize_scans_even_with_lower_priority() {
     let (db, _temp_dir) = setup_test_db().await;
     let library_id = create_test_library(&db).await;
-    let book_id = create_test_book(&db, create_test_series(&db, library_id).await).await;
+    let book_id =
+        create_test_book(&db, create_test_series(&db, library_id).await, library_id).await;
 
     // Enqueue analysis task with higher priority
     TaskRepository::enqueue(
@@ -1052,8 +1055,10 @@ async fn test_prioritize_multiple_scans_over_analysis() {
     let (db, _temp_dir) = setup_test_db().await;
     let library_id1 = create_test_library(&db).await;
     let library_id2 = create_test_library(&db).await;
-    let book_id1 = create_test_book(&db, create_test_series(&db, library_id1).await).await;
-    let book_id2 = create_test_book(&db, create_test_series(&db, library_id2).await).await;
+    let book_id1 =
+        create_test_book(&db, create_test_series(&db, library_id1).await, library_id1).await;
+    let book_id2 =
+        create_test_book(&db, create_test_series(&db, library_id2).await, library_id2).await;
 
     // Enqueue analysis tasks first
     TaskRepository::enqueue(
@@ -1163,7 +1168,7 @@ async fn test_postgres_prioritize_scans_over_analysis() {
 
     let library_id = create_test_library(&db).await;
     let series_id = create_test_series(&db, library_id).await;
-    let book_id = create_test_book(&db, series_id).await;
+    let book_id = create_test_book(&db, series_id, library_id).await;
 
     // Enqueue tasks with same priority and scheduled_for time
     // Analysis task first (should be picked second if prioritization works)
@@ -1231,7 +1236,8 @@ async fn test_postgres_prioritize_scans_even_with_lower_priority() {
     };
 
     let library_id = create_test_library(&db).await;
-    let book_id = create_test_book(&db, create_test_series(&db, library_id).await).await;
+    let book_id =
+        create_test_book(&db, create_test_series(&db, library_id).await, library_id).await;
 
     // Enqueue analysis task with higher priority
     TaskRepository::enqueue(
@@ -1283,7 +1289,8 @@ async fn test_postgres_no_prioritization_uses_priority() {
     };
 
     let library_id = create_test_library(&db).await;
-    let book_id = create_test_book(&db, create_test_series(&db, library_id).await).await;
+    let book_id =
+        create_test_book(&db, create_test_series(&db, library_id).await, library_id).await;
 
     // Enqueue scan task with lower priority
     TaskRepository::enqueue(
@@ -1336,7 +1343,8 @@ async fn test_postgres_skip_locked_with_prioritization() {
 
     let library_id1 = create_test_library(&db).await;
     let library_id2 = create_test_library(&db).await;
-    let book_id = create_test_book(&db, create_test_series(&db, library_id1).await).await;
+    let book_id =
+        create_test_book(&db, create_test_series(&db, library_id1).await, library_id1).await;
 
     // Enqueue multiple tasks
     TaskRepository::enqueue(
@@ -1417,7 +1425,11 @@ async fn test_postgres_skip_locked_with_prioritization() {
 // ============================================================================
 
 /// Helper to create books with duplicate file hashes
-async fn create_duplicate_books(db: &DatabaseConnection, series_id: Uuid) -> (Uuid, Uuid, String) {
+async fn create_duplicate_books(
+    db: &DatabaseConnection,
+    series_id: Uuid,
+    library_id: Uuid,
+) -> (Uuid, Uuid, String) {
     let now = Utc::now();
     let shared_hash = format!("duplicate-hash-{}", Uuid::new_v4());
 
@@ -1426,6 +1438,7 @@ async fn create_duplicate_books(db: &DatabaseConnection, series_id: Uuid) -> (Uu
     let book1 = books::ActiveModel {
         id: Set(book_id1),
         series_id: Set(series_id),
+        library_id: Set(library_id),
         file_path: Set(format!("/tmp/test-{}.cbz", book_id1)),
         file_name: Set(format!("test-{}.cbz", book_id1)),
         file_size: Set(1024),
@@ -1445,6 +1458,7 @@ async fn create_duplicate_books(db: &DatabaseConnection, series_id: Uuid) -> (Uu
     let book2 = books::ActiveModel {
         id: Set(book_id2),
         series_id: Set(series_id),
+        library_id: Set(library_id),
         file_path: Set(format!("/tmp/test-{}.cbz", book_id2)),
         file_name: Set(format!("test-{}.cbz", book_id2)),
         file_size: Set(1024),
@@ -1508,7 +1522,7 @@ async fn test_find_duplicates_handler_with_duplicates() {
     let series_id = create_test_series(&db, library_id).await;
 
     // Create duplicate books
-    let (_book1, _book2, shared_hash) = create_duplicate_books(&db, series_id).await;
+    let (_book1, _book2, shared_hash) = create_duplicate_books(&db, series_id, library_id).await;
 
     // Create and enqueue FindDuplicates task
     let task_type = TaskType::FindDuplicates;
@@ -1560,8 +1574,8 @@ async fn test_find_duplicates_handler_with_no_duplicates() {
     let series_id = create_test_series(&db, library_id).await;
 
     // Create unique books (no duplicates)
-    create_test_book(&db, series_id).await;
-    create_test_book(&db, series_id).await;
+    create_test_book(&db, series_id, library_id).await;
+    create_test_book(&db, series_id, library_id).await;
 
     // Create and enqueue FindDuplicates task
     let task_type = TaskType::FindDuplicates;
@@ -1611,10 +1625,10 @@ async fn test_find_duplicates_handler_with_multiple_groups() {
     let series_id = create_test_series(&db, library_id).await;
 
     // Create first duplicate group
-    let (_book1, _book2, hash1) = create_duplicate_books(&db, series_id).await;
+    let (_book1, _book2, hash1) = create_duplicate_books(&db, series_id, library_id).await;
 
     // Create second duplicate group
-    let (_book3, _book4, hash2) = create_duplicate_books(&db, series_id).await;
+    let (_book3, _book4, hash2) = create_duplicate_books(&db, series_id, library_id).await;
 
     // Create and enqueue FindDuplicates task
     let task_type = TaskType::FindDuplicates;
@@ -1677,7 +1691,7 @@ async fn test_find_duplicates_handler_rebuilds_existing() {
     let series_id = create_test_series(&db, library_id).await;
 
     // Create duplicate books
-    create_duplicate_books(&db, series_id).await;
+    create_duplicate_books(&db, series_id, library_id).await;
 
     // Run first scan
     let task_type = TaskType::FindDuplicates;
@@ -1707,7 +1721,7 @@ async fn test_find_duplicates_handler_rebuilds_existing() {
     );
 
     // Create more duplicate books
-    create_duplicate_books(&db, series_id).await;
+    create_duplicate_books(&db, series_id, library_id).await;
 
     // Run second scan
     let task_id2 = TaskRepository::enqueue(&db, task_type, 0, None)

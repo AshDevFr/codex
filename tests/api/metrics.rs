@@ -86,6 +86,7 @@ async fn test_get_metrics_with_auth() {
     // Create books
     let book1 = create_test_book(
         series1.id,
+        library1.id,
         "/path1/series1/book1.cbz",
         "book1.cbz",
         "hash1",
@@ -98,6 +99,7 @@ async fn test_get_metrics_with_auth() {
 
     let book2 = create_test_book(
         series2.id,
+        library1.id,
         "/path1/series2/book2.cbz",
         "book2.cbz",
         "hash2",
@@ -234,6 +236,7 @@ async fn test_get_metrics_with_file_sizes() {
     // Create multiple books with different file sizes
     let book1 = create_test_book(
         series.id,
+        library.id,
         "/path/series/book1.cbz",
         "book1.cbz",
         "hash1",
@@ -246,6 +249,7 @@ async fn test_get_metrics_with_file_sizes() {
 
     let book2 = create_test_book(
         series.id,
+        library.id,
         "/path/series/book2.cbz",
         "book2.cbz",
         "hash2",
@@ -301,6 +305,7 @@ async fn test_get_metrics_postgres() {
     // Create books with file sizes
     let book1 = create_test_book(
         series.id,
+        library.id,
         "/path/series/book1.cbz",
         "book1.cbz",
         "hash1",
@@ -313,6 +318,7 @@ async fn test_get_metrics_postgres() {
 
     let book2 = create_test_book(
         series.id,
+        library.id,
         "/path/series/book2.cbz",
         "book2.cbz",
         "hash2",

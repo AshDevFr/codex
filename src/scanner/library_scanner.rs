@@ -632,8 +632,8 @@ async fn process_file(
         .unwrap_or("unknown")
         .to_lowercase();
 
-    // Check if book already exists by path
-    let existing_book = BookRepository::get_by_path(db, &path_str).await?;
+    // Check if book already exists by path and library
+    let existing_book = BookRepository::get_by_path(db, series_model.library_id, &path_str).await?;
     let now = Utc::now();
 
     if let Some(mut existing) = existing_book {
@@ -687,6 +687,7 @@ async fn process_file(
         let book_model = books::Model {
             id: Uuid::new_v4(),
             series_id: series_model.id,
+            library_id: series_model.library_id,
             title: None,  // Will be filled during analysis phase
             number: None, // Will be filled during analysis phase
             file_path: path_str.clone(),

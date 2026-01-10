@@ -288,7 +288,7 @@ async fn test_worker_reads_prioritize_scans_setting() {
     let (db, _temp_dir) = setup_test_db().await;
     let library_id = create_test_library(&db).await;
     let series_id = create_test_series(&db, library_id).await;
-    let book_id = create_test_book(&db, series_id).await;
+    let book_id = create_test_book(&db, series_id, library_id).await;
 
     // Create settings service
     let settings_service = Arc::new(
@@ -390,7 +390,7 @@ async fn test_worker_with_prioritize_scans_enabled() {
     let (db, _temp_dir) = setup_test_db().await;
     let library_id = create_test_library(&db).await;
     let series_id = create_test_series(&db, library_id).await;
-    let book_id = create_test_book(&db, series_id).await;
+    let book_id = create_test_book(&db, series_id, library_id).await;
 
     // Create settings service
     let settings_service = Arc::new(
@@ -526,7 +526,11 @@ async fn create_test_series(db: &sea_orm::DatabaseConnection, library_id: Uuid) 
 }
 
 /// Helper to create a test book
-async fn create_test_book(db: &sea_orm::DatabaseConnection, series_id: Uuid) -> Uuid {
+async fn create_test_book(
+    db: &sea_orm::DatabaseConnection,
+    series_id: Uuid,
+    library_id: Uuid,
+) -> Uuid {
     use chrono::Utc;
     use codex::db::entities::books;
     use sea_orm::{ActiveModelTrait, Set};
@@ -536,6 +540,7 @@ async fn create_test_book(db: &sea_orm::DatabaseConnection, series_id: Uuid) -> 
     let book = books::ActiveModel {
         id: Set(book_id),
         series_id: Set(series_id),
+        library_id: Set(library_id),
         file_path: Set("/tmp/test.cbz".to_string()),
         file_name: Set("test.cbz".to_string()),
         file_size: Set(1024),
