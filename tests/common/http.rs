@@ -73,8 +73,10 @@ pub fn create_test_api_config() -> ApiConfig {
         base_path: "/api/v1".to_string(),
         enable_swagger: false,
         swagger_path: "/docs".to_string(),
-        cors_enabled: true,
-        cors_origins: vec!["*".to_string()],
+        // Disable CORS in tests to avoid conflicts with allow_credentials
+        // Tests don't need CORS since they make direct requests, not cross-origin
+        cors_enabled: false,
+        cors_origins: vec![],
         max_page_size: 100,
     }
 }

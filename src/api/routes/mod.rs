@@ -32,9 +32,34 @@ pub fn create_router(state: Arc<AppState>, api_config: &ApiConfig) -> Router {
 
     // Add CORS middleware if enabled
     if api_config.cors_enabled {
+        // When allow_credentials is true, we cannot use wildcard (*) for headers or methods
+        // Must specify exact headers and methods that are allowed
+        use axum::http::Method;
+        use tower_http::cors::{AllowHeaders, AllowMethods};
+
+        // Define allowed HTTP methods used by the API
+        let allowed_methods = vec![
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::PATCH,
+            Method::OPTIONS, // Required for CORS preflight requests
+        ];
+
         let cors = if api_config.cors_origins.contains(&"*".to_string()) {
-            // Allow all origins
-            CorsLayer::permissive()
+            // Allow all origins with credentials for development
+            // IMPORTANT: allow_credentials(true) is required for cookie-based auth to work
+            // Cannot use permissive() with credentials, so build manually
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(AllowMethods::list(allowed_methods.clone()))
+                .allow_headers(AllowHeaders::list([
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::header::AUTHORIZATION,
+                    axum::http::header::ACCEPT,
+                ]))
+                .allow_credentials(true)
         } else {
             // Allow specific origins
             let origins: Vec<_> = api_config
@@ -45,8 +70,13 @@ pub fn create_router(state: Arc<AppState>, api_config: &ApiConfig) -> Router {
 
             CorsLayer::new()
                 .allow_origin(origins)
-                .allow_methods(Any)
-                .allow_headers(Any)
+                .allow_methods(AllowMethods::list(allowed_methods))
+                .allow_headers(AllowHeaders::list([
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::header::AUTHORIZATION,
+                    axum::http::header::ACCEPT,
+                ]))
+                .allow_credentials(true) // IMPORTANT: Required for cookie-based auth
         };
 
         router = router.layer(cors);

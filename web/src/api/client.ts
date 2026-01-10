@@ -10,6 +10,8 @@ export const api: AxiosInstance = axios.create({
 	headers: {
 		"Content-Type": "application/json",
 	},
+	// IMPORTANT: Send cookies with requests (required for cookie-based image auth)
+	withCredentials: true,
 });
 
 // Request interceptor to add auth token

@@ -21,6 +21,10 @@ export default defineConfig({
 				timeout: 60000, // 60s timeout for long-running SSE
 				proxyTimeout: 60000,
 				ws: true, // Enable WebSocket proxying (for future use)
+				// IMPORTANT: Preserve cookies between frontend and backend
+				cookieDomainRewrite: {
+					"localhost": "localhost",
+				},
 				configure: (proxy, _options) => {
 					proxy.on("error", (err, _req, _res) => {
 						console.log("Proxy error:", err.message);
