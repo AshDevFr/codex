@@ -266,16 +266,21 @@ jobs:
       - name: Create Release
         env:
           GITHUB_TOKEN: ${{ secrets.PACKAGE_TOKEN || secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.tag }}
+          SHA_SHORT: ${{ steps.version.outputs.sha_short }}
+          BUILD_DATE: ${{ steps.version.outputs.date }}
+          SERVER_URL: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          API_URL: ${{ github.api_url }}
         run: |
           cd artifacts
-          version="${{ steps.version.outputs.tag }}"
-          PACKAGE_URL="${{ github.server_url }}/${{ github.repository_owner }}/-/packages/generic/codex/$version"
 
           # Build download links
           DOWNLOAD_LINKS=""
           for file in *.tar.gz *.zip; do
             if [ -f "$file" ]; then
-              DOWNLOAD_URL="${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codex/$version/$file"
+              DOWNLOAD_URL="${SERVER_URL}/api/packages/${REPO_OWNER}/generic/codex/${VERSION}/$file"
 
               # Determine platform from filename
               if echo "$file" | grep -q "windows"; then
@@ -292,49 +297,45 @@ jobs:
                 platform="Binary"
               fi
 
-              DOWNLOAD_LINKS="${DOWNLOAD_LINKS}- **${platform}**: [$file](${DOWNLOAD_URL})\n"
+              DOWNLOAD_LINKS="${DOWNLOAD_LINKS}- **${platform}**: [$file](${DOWNLOAD_URL})"$'\n'
             fi
           done
 
-          # Create release body
-          RELEASE_BODY="## Codex $version
+          PACKAGE_URL="${SERVER_URL}/${REPO_OWNER}/-/packages/generic/codex/${VERSION}"
 
-Built from commit \`${{ steps.version.outputs.sha_short }}\` on ${{ steps.version.outputs.date }}
+          # Create release body using heredoc
+          cat > /tmp/release_body.md << EOF
+          ## Codex ${VERSION}
 
-### Downloads
+          Built from commit ${SHA_SHORT} on ${BUILD_DATE}
 
-${DOWNLOAD_LINKS}
+          ### Downloads
 
-### Checksums
+          ${DOWNLOAD_LINKS}
 
-SHA256 checksums are available for each download (append \`.sha256\` to the URL).
+          ### Checksums
 
-### Docker
+          SHA256 checksums are available for each download (append .sha256 to the URL).
 
-\`\`\`bash
-docker pull ${{ github.server_url }}/${{ github.repository }}:$version
-\`\`\`
+          ### Docker
 
-### Notes
+          docker pull ${SERVER_URL}/${REPO}:${VERSION}
 
-- **Linux x64** includes CBR/RAR support
-- **Other platforms** support CBZ, EPUB, and PDF only (no RAR due to cross-compilation limitations)
-- **macOS users**: You may need to allow the app in System Preferences > Security & Privacy
+          ### Notes
 
-[View All Packages](${PACKAGE_URL})"
+          - **Linux x64** includes CBR/RAR support
+          - **Other platforms** support CBZ, EPUB, and PDF only (no RAR due to cross-compilation limitations)
+          - **macOS users**: You may need to allow the app in System Preferences > Security & Privacy
+
+          [View All Packages](${PACKAGE_URL})
+          EOF
 
           # Create the release
           RESPONSE=$(curl -s -X POST \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"tag_name\": \"$version\",
-              \"name\": \"Codex $version\",
-              \"body\": $(echo -e "$RELEASE_BODY" | jq -Rs .),
-              \"draft\": false,
-              \"prerelease\": false
-            }" \
-            "${{ github.api_url }}/repos/${{ github.repository }}/releases")
+            -d "$(jq -n --arg tag "$VERSION" --arg name "Codex $VERSION" --rawfile body /tmp/release_body.md '{tag_name: $tag, name: $name, body: $body, draft: false, prerelease: false}')" \
+            "${API_URL}/repos/${REPO}/releases")
 
           echo "Release created:"
           echo "$RESPONSE" | jq -r '.html_url // .message' || echo "$RESPONSE"
