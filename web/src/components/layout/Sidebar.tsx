@@ -35,6 +35,7 @@ import { librariesApi } from "@/api/libraries";
 import { LibraryModal } from "@/components/forms/LibraryModal";
 import { TaskNotificationBadge } from "@/components/TaskNotificationBadge";
 import { useAuthStore } from "@/store/authStore";
+import { useLibraryPreferencesStore } from "@/store/libraryPreferencesStore";
 import type { Library } from "@/types/api";
 
 interface SidebarProps {
@@ -45,6 +46,8 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const { user, clearAuth } = useAuthStore();
+	// Only subscribe to getLastTab action (doesn't cause re-renders since it's not state)
+	const getLastTab = useLibraryPreferencesStore((state) => state.getLastTab);
 	const isAdmin = user?.isAdmin;
 	const [editLibraryOpened, setEditLibraryOpened] = useState(false);
 	const [selectedLibrary, setSelectedLibrary] = useState<Library | null>(null);
@@ -183,7 +186,10 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 							active={currentPath === "/"}
 						/>
 						<NavLink
-							onClick={() => navigate("/libraries/all/recommended")}
+							onClick={() => {
+								const lastTab = getLastTab("all");
+								navigate(`/libraries/all/${lastTab}`);
+							}}
 							label="Libraries"
 							leftSection={<IconBooks size={20} />}
 							opened
@@ -243,7 +249,10 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 								libraries.map((library) => (
 									<NavLink
 										key={library.id}
-										onClick={() => navigate(`/libraries/${library.id}/recommended`)}
+										onClick={() => {
+											const lastTab = getLastTab(library.id);
+											navigate(`/libraries/${library.id}/${lastTab}`);
+										}}
 										label={library.name}
 										// leftSection={<IconFolder size={16} />}
 										active={currentPath.startsWith(`/libraries/${library.id}/`)}

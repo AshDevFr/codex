@@ -39,6 +39,7 @@ import { BooksSection } from "@/components/library/BooksSection";
 import { RecommendedSection } from "@/components/library/RecommendedSection";
 import { SeriesSection } from "@/components/library/SeriesSection";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
+import { useLibraryPreferencesStore } from "@/store/libraryPreferencesStore";
 import type { Library } from "@/types/api";
 
 export function LibraryPage() {
@@ -46,6 +47,15 @@ export function LibraryPage() {
 	const location = useLocation();
 	const navigate = useNavigate();
 	const [searchParams, setSearchParams] = useSearchParams();
+
+	// Use performance selectors - only subscribe to actions (no re-renders)
+	const getTabPreferences = useLibraryPreferencesStore(
+		(state) => state.getTabPreferences,
+	);
+	const setTabPreferences = useLibraryPreferencesStore(
+		(state) => state.setTabPreferences,
+	);
+	const setLastTab = useLibraryPreferencesStore((state) => state.setLastTab);
 
 	// Determine current tab from URL
 	const pathParts = location.pathname.split("/");
@@ -116,6 +126,51 @@ export function LibraryPage() {
 			navigate("/", { replace: true });
 		}
 	}, [error, isAllLibraries, navigate]);
+
+	// Restore preferences from localStorage or update store from URL
+	useEffect(() => {
+		if (!libraryId) return;
+
+		const hasUrlParams = Array.from(searchParams.keys()).length > 0;
+		const storedPrefs = getTabPreferences(libraryId, currentTab);
+
+		if (!hasUrlParams && storedPrefs) {
+			// Restore from localStorage
+			const params = new URLSearchParams();
+			if (storedPrefs.pageSize)
+				params.set("pageSize", storedPrefs.pageSize.toString());
+			if (storedPrefs.sort) params.set("sort", storedPrefs.sort);
+			if (storedPrefs.filters) {
+				Object.entries(storedPrefs.filters).forEach(([key, value]) => {
+					params.set(key, value);
+				});
+			}
+			setSearchParams(params, { replace: true });
+		} else if (hasUrlParams) {
+			// URL params exist - update store to match
+			const currentPrefs = {
+				pageSize: parseInt(searchParams.get("pageSize") || "20", 10),
+				sort: searchParams.get("sort") || undefined,
+				filters: {} as Record<string, string>,
+			};
+
+			// Capture filter params (anything that's not page/pageSize/sort)
+			searchParams.forEach((value, key) => {
+				if (!["page", "pageSize", "sort"].includes(key)) {
+					currentPrefs.filters[key] = value;
+				}
+			});
+
+			setTabPreferences(libraryId, currentTab, currentPrefs);
+		}
+	}, [
+		libraryId,
+		currentTab,
+		searchParams,
+		getTabPreferences,
+		setTabPreferences,
+		setSearchParams,
+	]);
 
 	// Mutations for library actions
 	const scanMutation = useMutation({
@@ -190,7 +245,8 @@ export function LibraryPage() {
 
 	// Tab navigation
 	const handleTabChange = (value: string | null) => {
-		if (value) {
+		if (value && libraryId) {
+			setLastTab(libraryId, value);
 			navigate(`/libraries/${libraryId}/${value}`);
 		}
 	};
@@ -234,6 +290,8 @@ export function LibraryPage() {
 
 	// Handle filter changes
 	const handleFilterChange = (updates: Record<string, string | number>) => {
+		if (!libraryId) return;
+
 		const params = new URLSearchParams(searchParams);
 
 		Object.entries(updates).forEach(([key, value]) => {
@@ -250,17 +308,50 @@ export function LibraryPage() {
 		}
 
 		setSearchParams(params, { replace: true });
+
+		// Persist filters to store (exclude page/pageSize/sort)
+		const currentPrefs = getTabPreferences(libraryId, currentTab) || {};
+		const newFilters = { ...currentPrefs.filters };
+
+		Object.entries(updates).forEach(([key, value]) => {
+			if (!["page", "pageSize", "sort"].includes(key)) {
+				if (value) {
+					newFilters[key] = value.toString();
+				} else {
+					delete newFilters[key];
+				}
+			}
+		});
+
+		setTabPreferences(libraryId, currentTab, {
+			...currentPrefs,
+			filters: newFilters,
+		});
 	};
 
 	const handleSortChange = (value: string | null) => {
-		if (value) {
+		if (value && libraryId) {
 			handleFilterChange({ sort: value });
+
+			// Persist to store
+			const currentPrefs = getTabPreferences(libraryId, currentTab) || {};
+			setTabPreferences(libraryId, currentTab, {
+				...currentPrefs,
+				sort: value,
+			});
 		}
 	};
 
 	const handlePageSizeChange = (value: string | null) => {
-		if (value) {
+		if (value && libraryId) {
 			handleFilterChange({ pageSize: parseInt(value, 10) });
+
+			// Persist to store
+			const currentPrefs = getTabPreferences(libraryId, currentTab) || {};
+			setTabPreferences(libraryId, currentTab, {
+				...currentPrefs,
+				pageSize: parseInt(value, 10),
+			});
 		}
 	};
 
