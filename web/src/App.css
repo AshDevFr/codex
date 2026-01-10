@@ -40,3 +40,13 @@
 .read-the-docs {
 	color: #888;
 }
+
+/* Ensure cards scale properly with browser zoom */
+[data-mantine-simple-grid] {
+	width: 100%;
+}
+
+[data-mantine-simple-grid] > * {
+	min-width: 0;
+	width: 100%;
+}

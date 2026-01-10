@@ -1,32 +1,26 @@
 import {
-	ActionIcon,
 	Card,
 	Group,
-	Menu,
 	Pagination,
-	Select,
-	SimpleGrid,
 	Stack,
 	Text,
-	TextInput,
 } from "@mantine/core";
-import { useDebouncedValue } from "@mantine/hooks";
-import { notifications } from "@mantine/notifications";
-import { IconAnalyze, IconDots, IconSearch } from "@tabler/icons-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { seriesApi } from "@/api/series";
-import type { Series } from "@/types/api";
+import { MediaCard } from "@/components/library/MediaCard";
 
 interface SeriesSectionProps {
 	libraryId: string;
 	searchParams: URLSearchParams;
+	onTotalChange?: (total: number) => void;
 }
 
 export function SeriesSection({
 	libraryId,
 	searchParams,
+	onTotalChange,
 }: SeriesSectionProps) {
 	const navigate = useNavigate();
 
@@ -36,10 +30,6 @@ export function SeriesSection({
 	const sort = searchParams.get("sort") || "name,asc";
 	const genreFilter = searchParams.get("genre") || "";
 	const statusFilter = searchParams.get("status") || "";
-
-	// Local search state
-	const [searchQuery, setSearchQuery] = useState("");
-	const [debouncedSearch] = useDebouncedValue(searchQuery, 300);
 
 	// Fetch series data (convert to 0-indexed for backend)
 	const { data: seriesData, isLoading } = useQuery({
@@ -51,7 +41,6 @@ export function SeriesSection({
 			sort,
 			genreFilter,
 			statusFilter,
-			debouncedSearch,
 		],
 		queryFn: () =>
 			seriesApi.getByLibrary(libraryId, {
@@ -89,70 +78,52 @@ export function SeriesSection({
 		handleFilterChange({ page: newPage });
 	};
 
-	const handleSortChange = (value: string | null) => {
-		if (value) {
-			handleFilterChange({ sort: value });
-		}
-	};
-
 	const totalPages = seriesData
 		? Math.ceil(seriesData.total / seriesData.pageSize)
 		: 1;
 
+	const showPagination = seriesData ? seriesData.total > pageSize : false;
+
+	// Notify parent of total count change
+	useEffect(() => {
+		if (seriesData && onTotalChange) {
+			onTotalChange(seriesData.total);
+		}
+	}, [seriesData, onTotalChange]);
+
 	return (
 		<Stack gap="md">
-			{/* Filter Bar */}
-			<Group>
-				<TextInput
-					placeholder="Search series..."
-					leftSection={<IconSearch size={16} />}
-					value={searchQuery}
-					onChange={(e) => setSearchQuery(e.currentTarget.value)}
-					style={{ flex: 1, minWidth: 200 }}
-				/>
-				<Select
-					label="Sort"
-					value={sort}
-					onChange={handleSortChange}
-					data={[
-						{ value: "name,asc", label: "Name (A-Z)" },
-						{ value: "name,desc", label: "Name (Z-A)" },
-						{ value: "created_at,desc", label: "Recently Added" },
-						{ value: "book_count,desc", label: "Most Books" },
-						{ value: "year,desc", label: "Year (Newest)" },
-						{ value: "year,asc", label: "Year (Oldest)" },
-					]}
-					style={{ minWidth: 180 }}
-				/>
-				<Select
-					label="Page Size"
-					value={pageSize.toString()}
-					onChange={(value) =>
-						value && handleFilterChange({ pageSize: parseInt(value, 10) })
-					}
-					data={[
-						{ value: "20", label: "20 per page" },
-						{ value: "50", label: "50 per page" },
-						{ value: "100", label: "100 per page" },
-						{ value: "500", label: "500 per page" },
-					]}
-					style={{ minWidth: 140 }}
-				/>
-			</Group>
-
-	{/* Series Grid */}
+			{/* Series Grid */}
 	{isLoading ? (
 		<Text c="dimmed">Loading series...</Text>
 	) : seriesData?.data && seriesData.data.length > 0 ? (
 				<>
-					<SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }}>
-						{seriesData.data.map((series) => (
-							<SeriesCard key={series.id} series={series} />
-						))}
-					</SimpleGrid>
+					{/* Top Pagination */}
+					{showPagination && (
+						<Group justify="center">
+							<Pagination
+								value={page}
+								onChange={handlePageChange}
+								total={totalPages}
+							/>
+						</Group>
+					)}
 
-					{/* Pagination */}
-					{totalPages > 1 && (
+					<div
+						style={{
+							display: "grid",
+							gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+							gap: "var(--mantine-spacing-md)",
+							width: "100%",
+						}}
+					>
+						{seriesData.data.map((series) => (
+							<MediaCard key={series.id} type="series" data={series} />
+						))}
+					</div>
+
+					{/* Bottom Pagination */}
+					{showPagination && (
 						<Group justify="center" mt="xl">
 							<Pagination
 								value={page}
@@ -185,97 +156,3 @@ export function SeriesSection({
 	);
 }
 
-// Placeholder SeriesCard component
-function SeriesCard({ series }: { series: Series }) {
-	const queryClient = useQueryClient();
-
-	const analyzeMutation = useMutation({
-		mutationFn: () => seriesApi.analyze(series.id),
-		onSuccess: () => {
-			notifications.show({
-				title: "Analysis started",
-				message: "All books in series queued for analysis",
-				color: "blue",
-			});
-			queryClient.invalidateQueries({ queryKey: ["series"] });
-		},
-		onError: (error: Error) => {
-			notifications.show({
-				title: "Analysis failed",
-				message: error.message || "Failed to start series analysis",
-				color: "red",
-			});
-		},
-	});
-
-	const analyzeUnanalyzedMutation = useMutation({
-		mutationFn: () => seriesApi.analyzeUnanalyzed(series.id),
-		onSuccess: () => {
-			notifications.show({
-				title: "Analysis started",
-				message: "Unanalyzed books queued for analysis",
-				color: "blue",
-			});
-			queryClient.invalidateQueries({ queryKey: ["series"] });
-		},
-		onError: (error: Error) => {
-			notifications.show({
-				title: "Analysis failed",
-				message: error.message || "Failed to start analysis",
-				color: "red",
-			});
-		},
-	});
-
-	return (
-		<Card shadow="sm" padding="lg" radius="md" withBorder>
-			<Stack gap="xs">
-				<Group justify="space-between" align="flex-start">
-					<Text fw={500} lineClamp={2} style={{ flex: 1 }}>
-						{series.name}
-					</Text>
-					<Menu position="bottom-end" shadow="md" withinPortal>
-						<Menu.Target>
-							<ActionIcon variant="subtle" color="gray" size="sm">
-								<IconDots size={16} />
-							</ActionIcon>
-						</Menu.Target>
-						<Menu.Dropdown>
-							<Menu.Item
-								leftSection={<IconAnalyze size={14} />}
-								onClick={() => analyzeMutation.mutate()}
-								disabled={analyzeMutation.isPending}
-							>
-								{analyzeMutation.isPending ? "Analyzing..." : "Analyze All"}
-							</Menu.Item>
-							<Menu.Item
-								leftSection={<IconAnalyze size={14} />}
-								onClick={() => analyzeUnanalyzedMutation.mutate()}
-								disabled={analyzeUnanalyzedMutation.isPending}
-							>
-								{analyzeUnanalyzedMutation.isPending
-									? "Analyzing..."
-									: "Analyze Unanalyzed"}
-							</Menu.Item>
-						</Menu.Dropdown>
-					</Menu>
-				</Group>
-				{series.publisher && (
-					<Text size="xs" c="dimmed">
-						{series.publisher}
-					</Text>
-				)}
-				{series.bookCount !== undefined && (
-					<Text size="xs" c="dimmed">
-						{series.bookCount} book{series.bookCount !== 1 ? "s" : ""}
-					</Text>
-				)}
-				{series.year && (
-					<Text size="xs" c="dimmed">
-						{series.year}
-					</Text>
-				)}
-			</Stack>
-		</Card>
-	);
-}

@@ -48,6 +48,7 @@ export interface Series {
 	path?: string;
 	selectedCoverSource?: string;
 	hasCustomCover?: boolean;
+	unreadCount?: number;
 }
 
 export interface Book {
@@ -64,6 +65,7 @@ export interface Book {
 	number?: number;
 	createdAt: string;
 	updatedAt: string;
+	readProgress?: ReadProgress;
 }
 
 export interface ReadProgress {

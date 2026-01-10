@@ -477,6 +477,39 @@ impl BookRepository {
             .context("Failed to get unanalyzed books in series")
     }
 
+    /// Count unread books in a series for a specific user
+    /// A book is considered unread if it has no read progress or the progress is not completed
+    pub async fn count_unread_in_series(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<i64> {
+        use crate::db::entities::read_progress;
+        use sea_orm::JoinType;
+
+        // Count all non-deleted books in the series
+        let total_books = Books::find()
+            .filter(books::Column::SeriesId.eq(series_id))
+            .filter(books::Column::Deleted.eq(false))
+            .count(db)
+            .await
+            .context("Failed to count books in series")?;
+
+        // Count books with completed read progress
+        let completed_count = Books::find()
+            .filter(books::Column::SeriesId.eq(series_id))
+            .filter(books::Column::Deleted.eq(false))
+            .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .filter(read_progress::Column::Completed.eq(true))
+            .count(db)
+            .await
+            .context("Failed to count completed books in series")?;
+
+        // Unread = total - completed
+        Ok((total_books - completed_count) as i64)
+    }
+
     /// Check if a book is analyzed
     pub async fn is_analyzed(db: &DatabaseConnection, book_id: Uuid) -> Result<bool> {
         let book = Books::find_by_id(book_id)

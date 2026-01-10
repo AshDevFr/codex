@@ -22,6 +22,8 @@ pub struct SeriesDto {
     pub selected_cover_source: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub has_custom_cover: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unread_count: Option<i64>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

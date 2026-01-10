@@ -4,6 +4,7 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
+use crate::db::entities::series;
 use crate::db::repositories::{BookRepository, SeriesRepository};
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
 use crate::require_permission;
@@ -16,6 +17,7 @@ use axum::{
 };
 use chrono::Utc;
 use image::{imageops::FilterType, ImageFormat};
+use sea_orm::DatabaseConnection;
 use serde::Deserialize;
 use std::io::Cursor;
 use std::sync::Arc;
@@ -49,6 +51,39 @@ pub struct SeriesListQuery {
 
 fn default_page_size() -> u64 {
     20
+}
+
+/// Helper function to convert series model to DTO with unread count
+async fn series_to_dto(
+    db: &DatabaseConnection,
+    series: series::Model,
+    user_id: Option<Uuid>,
+) -> Result<SeriesDto, ApiError> {
+    let unread_count = if let Some(uid) = user_id {
+        BookRepository::count_unread_in_series(db, series.id, uid)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to count unread books: {:?}", e)))
+            .map(Some)?
+    } else {
+        None
+    };
+
+    Ok(SeriesDto {
+        id: series.id,
+        library_id: series.library_id,
+        name: series.name,
+        sort_name: series.sort_name,
+        description: series.summary,
+        publisher: series.publisher,
+        year: series.year,
+        book_count: series.book_count as i64,
+        path: series.path,
+        selected_cover_source: series.selected_cover_source.clone(),
+        has_custom_cover: Some(series.custom_cover_path.is_some()),
+        unread_count,
+        created_at: series.created_at,
+        updated_at: series.updated_at,
+    })
 }
 
 /// List series with optional library filter and pagination
@@ -114,24 +149,16 @@ pub async fn list_series(
     let end = (start + page_size as usize).min(series_list.len());
     let paginated = series_list[start..end].to_vec();
 
-    let dtos: Vec<SeriesDto> = paginated
-        .into_iter()
-        .map(|series| SeriesDto {
-            id: series.id,
-            library_id: series.library_id,
-            name: series.name,
-            sort_name: series.sort_name,
-            description: series.summary,
-            publisher: series.publisher,
-            year: series.year,
-            book_count: series.book_count as i64,
-            path: series.path,
-            selected_cover_source: series.selected_cover_source.clone(),
-            has_custom_cover: Some(series.custom_cover_path.is_some()),
-            created_at: series.created_at,
-            updated_at: series.updated_at,
-        })
-        .collect();
+    let user_id = Some(auth.user_id);
+    let dtos: Vec<SeriesDto> = futures::future::join_all(
+        paginated
+            .into_iter()
+            .map(|series| series_to_dto(&state.db, series, user_id)),
+    )
+    .await
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
     let response = SeriesListResponse::new(dtos, query.page, page_size, total);
 
@@ -167,21 +194,8 @@ pub async fn get_series(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
 
-    let dto = SeriesDto {
-        id: series.id,
-        library_id: series.library_id,
-        name: series.name,
-        sort_name: series.sort_name,
-        description: series.summary, // Use summary instead of description
-        publisher: series.publisher,
-        year: series.year,
-        book_count: series.book_count as i64, // Convert i32 to i64
-        path: series.path,
-        selected_cover_source: series.selected_cover_source.clone(),
-        has_custom_cover: Some(series.custom_cover_path.is_some()),
-        created_at: series.created_at,
-        updated_at: series.updated_at,
-    };
+    let user_id = Some(auth.user_id);
+    let dto = series_to_dto(&state.db, series, user_id).await?;
 
     Ok(Json(dto))
 }
@@ -222,24 +236,16 @@ pub async fn search_series(
         series_list
     };
 
-    let dtos: Vec<SeriesDto> = filtered
-        .into_iter()
-        .map(|series| SeriesDto {
-            id: series.id,
-            library_id: series.library_id,
-            name: series.name,
-            sort_name: series.sort_name,
-            description: series.summary, // Use summary instead of description
-            publisher: series.publisher,
-            year: series.year,
-            book_count: series.book_count as i64, // Convert i32 to i64
-            path: series.path,
-            selected_cover_source: series.selected_cover_source.clone(),
-            has_custom_cover: Some(series.custom_cover_path.is_some()),
-            created_at: series.created_at,
-            updated_at: series.updated_at,
-        })
-        .collect();
+    let user_id = Some(auth.user_id);
+    let dtos: Vec<SeriesDto> = futures::future::join_all(
+        filtered
+            .into_iter()
+            .map(|series| series_to_dto(&state.db, series, user_id)),
+    )
+    .await
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
     Ok(Json(dtos))
 }
@@ -597,24 +603,16 @@ pub async fn list_started_series(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch started series: {}", e)))?;
 
-    let dtos: Vec<SeriesDto> = series_list
-        .into_iter()
-        .map(|series| SeriesDto {
-            id: series.id,
-            library_id: series.library_id,
-            name: series.name,
-            sort_name: series.sort_name,
-            description: series.summary,
-            publisher: series.publisher,
-            year: series.year,
-            book_count: series.book_count as i64,
-            path: series.path,
-            selected_cover_source: series.selected_cover_source.clone(),
-            has_custom_cover: Some(series.custom_cover_path.is_some()),
-            created_at: series.created_at,
-            updated_at: series.updated_at,
-        })
-        .collect();
+    let user_id = Some(auth.user_id);
+    let dtos: Vec<SeriesDto> = futures::future::join_all(
+        series_list
+            .into_iter()
+            .map(|series| series_to_dto(&state.db, series, user_id)),
+    )
+    .await
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
     Ok(Json(dtos))
 }
@@ -682,24 +680,16 @@ pub async fn list_library_series(
     let end = (start + page_size as usize).min(series_list.len());
     let paginated = series_list[start..end].to_vec();
 
-    let dtos: Vec<SeriesDto> = paginated
-        .into_iter()
-        .map(|series| SeriesDto {
-            id: series.id,
-            library_id: series.library_id,
-            name: series.name,
-            sort_name: series.sort_name,
-            description: series.summary,
-            publisher: series.publisher,
-            year: series.year,
-            book_count: series.book_count as i64,
-            path: series.path,
-            selected_cover_source: series.selected_cover_source.clone(),
-            has_custom_cover: Some(series.custom_cover_path.is_some()),
-            created_at: series.created_at,
-            updated_at: series.updated_at,
-        })
-        .collect();
+    let user_id = Some(auth.user_id);
+    let dtos: Vec<SeriesDto> = futures::future::join_all(
+        paginated
+            .into_iter()
+            .map(|series| series_to_dto(&state.db, series, user_id)),
+    )
+    .await
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
     let response = SeriesListResponse::new(dtos, query.page, page_size, total);
 
@@ -735,24 +725,16 @@ pub async fn list_library_started_series(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch started series: {}", e)))?;
 
-    let dtos: Vec<SeriesDto> = series_list
-        .into_iter()
-        .map(|series| SeriesDto {
-            id: series.id,
-            library_id: series.library_id,
-            name: series.name,
-            sort_name: series.sort_name,
-            description: series.summary,
-            publisher: series.publisher,
-            year: series.year,
-            book_count: series.book_count as i64,
-            path: series.path,
-            selected_cover_source: series.selected_cover_source.clone(),
-            has_custom_cover: Some(series.custom_cover_path.is_some()),
-            created_at: series.created_at,
-            updated_at: series.updated_at,
-        })
-        .collect();
+    let user_id = Some(auth.user_id);
+    let dtos: Vec<SeriesDto> = futures::future::join_all(
+        series_list
+            .into_iter()
+            .map(|series| series_to_dto(&state.db, series, user_id)),
+    )
+    .await
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
     Ok(Json(dtos))
 }
