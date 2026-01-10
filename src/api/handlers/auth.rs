@@ -11,7 +11,12 @@ use crate::db::{
     repositories::{EmailVerificationTokenRepository, UserRepository},
 };
 use crate::utils::password;
-use axum::{extract::State, Json};
+use axum::{
+    extract::State,
+    http::{header, HeaderMap},
+    response::{IntoResponse, Response},
+    Json,
+};
 use chrono::Utc;
 use sea_orm::ActiveModelTrait;
 use sea_orm::Set;
@@ -34,7 +39,7 @@ use uuid::Uuid;
 pub async fn login(
     State(state): State<Arc<AuthState>>,
     Json(request): Json<LoginRequest>,
-) -> Result<Json<LoginResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     // Try to find user by username first
     let user = match UserRepository::get_by_username(&state.db, &request.username).await {
         Ok(Some(user)) => user,
@@ -74,7 +79,7 @@ pub async fn login(
 
     // Build response
     let response = LoginResponse {
-        access_token,
+        access_token: access_token.clone(),
         token_type: "Bearer".to_string(),
         expires_in: 24 * 3600, // 24 hours in seconds
         user: UserInfo {
@@ -86,7 +91,24 @@ pub async fn login(
         },
     };
 
-    Ok(Json(response))
+    // Create HTTP-only cookie for image authentication
+    // Using SameSite=Lax instead of Strict to allow images to load from direct links
+    let cookie = format!(
+        "auth_token={}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age={}",
+        access_token,
+        24 * 3600 // 24 hours (match JWT expiry)
+    );
+
+    // Build response with cookie
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::SET_COOKIE,
+        cookie
+            .parse()
+            .map_err(|_| ApiError::Internal("Failed to create cookie header".to_string()))?,
+    );
+
+    Ok((headers, Json(response)).into_response())
 }
 
 /// Logout handler
@@ -129,7 +151,7 @@ pub async fn logout(_auth: AuthContext) -> Result<Json<serde_json::Value>, ApiEr
 pub async fn register(
     State(state): State<Arc<AuthState>>,
     Json(request): Json<RegisterRequest>,
-) -> Result<Json<RegisterResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     // Check if registration is enabled (from database settings)
     use crate::db::repositories::SettingsRepository;
     let registration_enabled =
@@ -207,7 +229,7 @@ pub async fn register(
         .map_err(|e| ApiError::Internal(format!("Failed to create user: {}", e)))?;
 
     // Build response based on email confirmation requirement
-    let response = if email_confirmation_required {
+    if email_confirmation_required {
         // Create verification token
         let expiry_hours = state.email_service.config.verification_token_expiry_hours as i64;
         let token =
@@ -224,8 +246,8 @@ pub async fn register(
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to send verification email: {}", e)))?;
 
-        // Email confirmation required - don't generate token yet
-        RegisterResponse {
+        // Email confirmation required - don't generate token yet (no cookie)
+        let response = RegisterResponse {
             access_token: None,
             token_type: None,
             expires_in: None,
@@ -240,7 +262,9 @@ pub async fn register(
                 "Registration successful. Please verify your email to activate your account."
                     .to_string(),
             ),
-        }
+        };
+
+        Ok(Json(response).into_response())
     } else {
         // No email confirmation required - generate token immediately
         let access_token = state
@@ -252,8 +276,8 @@ pub async fn register(
             )
             .map_err(|e| ApiError::Internal(format!("Failed to generate token: {}", e)))?;
 
-        RegisterResponse {
-            access_token: Some(access_token),
+        let response = RegisterResponse {
+            access_token: Some(access_token.clone()),
             token_type: Some("Bearer".to_string()),
             expires_in: Some(24 * 3600), // 24 hours in seconds
             user: UserInfo {
@@ -264,10 +288,26 @@ pub async fn register(
                 email_verified: created_user.email_verified,
             },
             message: Some("Registration successful. You are now logged in.".to_string()),
-        }
-    };
+        };
 
-    Ok(Json(response))
+        // Create HTTP-only cookie for image authentication
+        let cookie = format!(
+            "auth_token={}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age={}",
+            access_token,
+            24 * 3600 // 24 hours (match JWT expiry)
+        );
+
+        // Build response with cookie
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::SET_COOKIE,
+            cookie
+                .parse()
+                .map_err(|_| ApiError::Internal("Failed to create cookie header".to_string()))?,
+        );
+
+        Ok((headers, Json(response)).into_response())
+    }
 }
 
 /// Verify email handler
@@ -286,7 +326,7 @@ pub async fn register(
 pub async fn verify_email(
     State(state): State<Arc<AuthState>>,
     Json(request): Json<VerifyEmailRequest>,
-) -> Result<Json<VerifyEmailResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     // Get the token from database
     let token_model = EmailVerificationTokenRepository::get_by_token(&state.db, &request.token)
         .await
@@ -339,7 +379,7 @@ pub async fn verify_email(
     // Build response
     let response = VerifyEmailResponse {
         message: "Email verified successfully. Your account is now active.".to_string(),
-        access_token,
+        access_token: access_token.clone(),
         token_type: "Bearer".to_string(),
         expires_in: 24 * 3600, // 24 hours in seconds
         user: UserInfo {
@@ -351,7 +391,23 @@ pub async fn verify_email(
         },
     };
 
-    Ok(Json(response))
+    // Create HTTP-only cookie for image authentication
+    let cookie = format!(
+        "auth_token={}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age={}",
+        access_token,
+        24 * 3600 // 24 hours (match JWT expiry)
+    );
+
+    // Build response with cookie
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::SET_COOKIE,
+        cookie
+            .parse()
+            .map_err(|_| ApiError::Internal("Failed to create cookie header".to_string()))?,
+    );
+
+    Ok((headers, Json(response)).into_response())
 }
 
 /// Resend verification email handler

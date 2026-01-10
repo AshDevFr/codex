@@ -1,5 +1,6 @@
 import {
 	ActionIcon,
+	Badge,
 	Box,
 	Container,
 	Group,
@@ -37,6 +38,7 @@ import { LibraryModal } from "@/components/forms/LibraryModal";
 import { BooksSection } from "@/components/library/BooksSection";
 import { RecommendedSection } from "@/components/library/RecommendedSection";
 import { SeriesSection } from "@/components/library/SeriesSection";
+import { useTaskProgress } from "@/hooks/useTaskProgress";
 import type { Library } from "@/types/api";
 
 export function LibraryPage() {
@@ -64,6 +66,17 @@ export function LibraryPage() {
 	const [libraryToPurge, setLibraryToPurge] = useState<Library | null>(null);
 
 	const queryClient = useQueryClient();
+
+	// Get active tasks for progress display
+	const { getTasksByLibrary } = useTaskProgress();
+
+	// Get active scan tasks for this library
+	const activeScanTasks = libraryId
+		? getTasksByLibrary(libraryId).filter(
+				(task) =>
+					task.task_type === "scan_library" && task.status === "running",
+			)
+		: [];
 
 	// Reset counts when tab changes
 	useEffect(() => {
@@ -371,6 +384,13 @@ export function LibraryPage() {
 								<Text size="lg" c="dimmed" fw={500}>
 									{currentCount} {countLabel}
 								</Text>
+							)}
+							{/* Show scan progress badge when scanning */}
+							{activeScanTasks.length > 0 && activeScanTasks[0].progress && (
+								<Badge color="blue" variant="filled" size="lg">
+									Scanning... {activeScanTasks[0].progress.current} /{" "}
+									{activeScanTasks[0].progress.total}
+								</Badge>
 							)}
 						</Group>
 					</Group>

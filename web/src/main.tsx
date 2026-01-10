@@ -15,7 +15,10 @@ import "./index.css";
 const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
-			staleTime: 1000 * 60 * 5, // 5 minutes
+			staleTime: 5000, // 5 seconds - reduced for real-time updates
+			refetchOnWindowFocus: true, // Refetch when switching tabs
+			refetchOnMount: true, // Refetch when component mounts
+			refetchOnReconnect: true, // Refetch when network reconnects
 			retry: 1,
 		},
 	},

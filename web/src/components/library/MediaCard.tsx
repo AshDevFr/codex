@@ -15,9 +15,9 @@ import {
 	IconDotsVertical,
 } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { booksApi } from "@/api/books";
 import { seriesApi } from "@/api/series";
-import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
 import type { Book, Series } from "@/types/api";
 
 interface MediaCardProps {
@@ -28,14 +28,31 @@ interface MediaCardProps {
 
 export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 	const queryClient = useQueryClient();
+	// Use API endpoint directly - browser will send auth cookie automatically
 	const coverUrl =
 		type === "book"
-			? `/books/${(data as Book).id}/thumbnail`
-			: `/series/${(data as Series).id}/thumbnail`;
-	const authenticatedImageUrl = useAuthenticatedImage(coverUrl);
+			? `/api/v1/books/${(data as Book).id}/thumbnail`
+			: `/api/v1/series/${(data as Series).id}/thumbnail`;
 
 	const book = type === "book" ? (data as Book) : null;
 	const series = type === "series" ? (data as Series) : null;
+
+	// Track if item is newly created (for animation)
+	const [isNew, setIsNew] = useState(false);
+
+	useEffect(() => {
+		// Check if item was created recently (within last 5 seconds)
+		const createdAt = new Date(data.createdAt);
+		const now = new Date();
+		const diffMs = now.getTime() - createdAt.getTime();
+
+		if (diffMs < 5000) {
+			setIsNew(true);
+			// Remove animation after 3 seconds
+			const timer = setTimeout(() => setIsNew(false), 3000);
+			return () => clearTimeout(timer);
+		}
+	}, [data.createdAt]);
 
 	// Book analysis mutation
 	const bookAnalyzeMutation = useMutation({
@@ -223,6 +240,8 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 				minHeight: 0,
 				width: "100%", // Ensure full width of grid cell
 				boxSizing: "border-box", // Include border in width calculation
+				animation: isNew ? "fadeIn 0.5s ease-in" : undefined,
+				border: isNew ? "2px solid var(--mantine-color-blue-6)" : undefined,
 			}}
 		>
 			<Stack gap={0} style={{ height: "100%", minHeight: 0 }}>
@@ -237,7 +256,7 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 					}}
 				>
 					<Image
-						src={authenticatedImageUrl || undefined}
+						src={coverUrl}
 						alt={altText}
 						fit="cover"
 						style={{ width: "100%", height: "100%", objectFit: "cover" }}

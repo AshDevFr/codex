@@ -1,6 +1,6 @@
 use crate::api::{
     error::ApiError,
-    extractors::{AuthContext, AuthState},
+    extractors::{AuthContext, AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
 use crate::db::repositories::{BookRepository, PageRepository};
@@ -117,7 +117,7 @@ pub async fn get_page_image(
 )]
 pub async fn get_book_thumbnail(
     State(state): State<Arc<AuthState>>,
-    auth: AuthContext,
+    FlexibleAuthContext(auth): FlexibleAuthContext,
     Path(book_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;

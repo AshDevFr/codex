@@ -125,6 +125,11 @@ describe("useEntityEvents", () => {
 		await waitFor(() => {
 			expect(invalidateSpy).toHaveBeenCalledWith({
 				queryKey: ["series", "series-123"],
+				refetchType: "active",
+			});
+			expect(invalidateSpy).toHaveBeenCalledWith({
+				queryKey: ["series"],
+				refetchType: "active",
 			});
 		});
 	});
@@ -165,6 +170,11 @@ describe("useEntityEvents", () => {
 		await waitFor(() => {
 			expect(invalidateSpy).toHaveBeenCalledWith({
 				queryKey: ["series"],
+				refetchType: "active",
+			});
+			expect(invalidateSpy).toHaveBeenCalledWith({
+				queryKey: ["libraries", "lib-2"],
+				refetchType: "active",
 			});
 		});
 	});

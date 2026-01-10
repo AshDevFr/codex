@@ -2,6 +2,7 @@ use crate::api::error::ApiError;
 use crate::api::permissions::Permission;
 use crate::db::repositories::{ApiKeyRepository, UserRepository};
 use crate::utils::{jwt::JwtService, password};
+use axum::http::header::COOKIE;
 use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
@@ -280,4 +281,73 @@ async fn extract_from_basic_auth(
         permissions,
         auth_method: AuthMethod::BasicAuth,
     })
+}
+
+/// Flexible authentication context that accepts both Bearer tokens and cookies
+/// Used primarily for thumbnail endpoints to allow browser image tags to work
+#[derive(Debug, Clone)]
+pub struct FlexibleAuthContext(pub AuthContext);
+
+#[async_trait]
+impl FromRequestParts<Arc<AppState>> for FlexibleAuthContext {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<AppState>,
+    ) -> Result<Self, Self::Rejection> {
+        // Try Authorization header first (Bearer token, Basic auth, API key)
+        if let Some(auth_header) = parts.headers.get("authorization") {
+            if let Ok(auth_str) = auth_header.to_str() {
+                // Try JWT Bearer token
+                if let Some(token) = auth_str.strip_prefix("Bearer ") {
+                    return extract_from_jwt(token, state)
+                        .await
+                        .map(FlexibleAuthContext);
+                }
+                // Try HTTP Basic authentication
+                if let Some(credentials) = auth_str.strip_prefix("Basic ") {
+                    return extract_from_basic_auth(credentials, state)
+                        .await
+                        .map(FlexibleAuthContext);
+                }
+            }
+        }
+
+        // Try X-API-Key header
+        if let Some(api_key_header) = parts.headers.get("x-api-key") {
+            if let Ok(api_key) = api_key_header.to_str() {
+                return extract_from_api_key(api_key, state)
+                    .await
+                    .map(FlexibleAuthContext);
+            }
+        }
+
+        // Try cookie as fallback
+        if let Some(cookie_header) = parts.headers.get(COOKIE) {
+            if let Ok(cookie_str) = cookie_header.to_str() {
+                // Parse cookies to find auth_token
+                if let Some(token) = extract_token_from_cookies(cookie_str) {
+                    return extract_from_jwt(&token, state)
+                        .await
+                        .map(FlexibleAuthContext);
+                }
+            }
+        }
+
+        Err(ApiError::Unauthorized(
+            "Missing or invalid authentication credentials".to_string(),
+        ))
+    }
+}
+
+/// Extract auth_token value from cookie header string
+fn extract_token_from_cookies(cookie_str: &str) -> Option<String> {
+    for cookie in cookie_str.split(';') {
+        let cookie = cookie.trim();
+        if let Some(value) = cookie.strip_prefix("auth_token=") {
+            return Some(value.to_string());
+        }
+    }
+    None
 }

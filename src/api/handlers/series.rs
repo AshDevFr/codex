@@ -1,7 +1,7 @@
 use crate::api::{
     dto::{BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListResponse},
     error::ApiError,
-    extractors::{AuthContext, AuthState},
+    extractors::{AuthContext, AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
 use crate::db::entities::series;
@@ -538,7 +538,7 @@ pub async fn set_series_cover_source(
 )]
 pub async fn get_series_thumbnail(
     State(state): State<Arc<AuthState>>,
-    auth: AuthContext,
+    FlexibleAuthContext(auth): FlexibleAuthContext,
     Path(series_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
