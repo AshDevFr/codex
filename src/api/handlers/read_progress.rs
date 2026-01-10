@@ -1,11 +1,13 @@
 use crate::api::{
-    dto::{ReadProgressListResponse, ReadProgressResponse, UpdateProgressRequest},
+    dto::{
+        MarkReadResponse, ReadProgressListResponse, ReadProgressResponse, UpdateProgressRequest,
+    },
     error::ApiError,
     extractors::AuthContext,
     permissions::Permission,
     AppState,
 };
-use crate::db::repositories::ReadProgressRepository;
+use crate::db::repositories::{BookRepository, ReadProgressRepository};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -23,11 +25,14 @@ use uuid::Uuid;
         delete_reading_progress,
         get_user_progress,
         get_currently_reading,
+        mark_book_as_read,
+        mark_book_as_unread,
     ),
     components(schemas(
         UpdateProgressRequest,
         ReadProgressResponse,
         ReadProgressListResponse,
+        MarkReadResponse,
     )),
     tags(
         (name = "Reading Progress", description = "Reading progress tracking endpoints")
@@ -203,4 +208,74 @@ pub async fn get_currently_reading(
     let progress: Vec<ReadProgressResponse> = progress_list.into_iter().map(Into::into).collect();
 
     Ok(Json(ReadProgressListResponse { progress, total }))
+}
+
+/// Mark a book as read (completed)
+#[utoipa::path(
+    post,
+    path = "/api/v1/books/{book_id}/read",
+    responses(
+        (status = 200, description = "Book marked as read", body = ReadProgressResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Book not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Reading Progress"
+)]
+pub async fn mark_book_as_read(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+) -> Result<Json<ReadProgressResponse>, ApiError> {
+    // Check permission
+    auth.require_permission(&Permission::BooksRead)?;
+
+    // Get the book to get its page count
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Mark as read
+    let progress =
+        ReadProgressRepository::mark_as_read(&state.db, auth.user_id, book_id, book.page_count)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to mark book as read: {}", e)))?;
+
+    Ok(Json(progress.into()))
+}
+
+/// Mark a book as unread (removes reading progress)
+#[utoipa::path(
+    post,
+    path = "/api/v1/books/{book_id}/unread",
+    responses(
+        (status = 204, description = "Book marked as unread"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Reading Progress"
+)]
+pub async fn mark_book_as_unread(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    // Check permission
+    auth.require_permission(&Permission::BooksRead)?;
+
+    // Mark as unread (delete progress)
+    ReadProgressRepository::mark_as_unread(&state.db, auth.user_id, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to mark book as unread: {}", e)))?;
+
+    Ok(StatusCode::NO_CONTENT)
 }

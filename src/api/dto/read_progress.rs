@@ -17,7 +17,7 @@ pub struct UpdateProgressRequest {
 }
 
 /// Response containing reading progress for a book
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ReadProgressResponse {
     /// Progress record ID
     pub id: Uuid,
@@ -70,4 +70,16 @@ pub struct ReadProgressListResponse {
 
     /// Total count
     pub total: usize,
+}
+
+/// Response for bulk mark as read/unread operations
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct MarkReadResponse {
+    /// Number of books affected
+    #[schema(example = 5)]
+    pub count: usize,
+
+    /// Message describing the operation
+    #[schema(example = "Marked 5 books as read")]
+    pub message: String,
 }

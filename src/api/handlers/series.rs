@@ -1,11 +1,13 @@
 use crate::api::{
-    dto::{BookDto, SearchSeriesRequest, SeriesDto, SeriesFilter, SeriesListResponse},
+    dto::{
+        BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesFilter, SeriesListResponse,
+    },
     error::ApiError,
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
 use crate::db::entities::series;
-use crate::db::repositories::{BookRepository, SeriesRepository};
+use crate::db::repositories::{BookRepository, ReadProgressRepository, SeriesRepository};
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
 use crate::require_permission;
 use axum::{
@@ -289,7 +291,7 @@ pub async fn get_series_books(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?;
 
     // Convert to DTOs using helper function
-    let dtos = crate::api::handlers::books::books_to_dtos(&state.db, books).await?;
+    let dtos = crate::api::handlers::books::books_to_dtos(&state.db, auth.user_id, books).await?;
 
     Ok(Json(dtos))
 }
@@ -869,4 +871,120 @@ async fn extract_page_image(
 pub struct SelectCoverSourceRequest {
     /// Cover source: "default" (first book cover) or "custom" (uploaded cover)
     pub source: String,
+}
+
+/// Mark all books in a series as read
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/{id}/read",
+    params(
+        ("id" = Uuid, Path, description = "Series ID")
+    ),
+    responses(
+        (status = 200, description = "Series marked as read", body = MarkReadResponse),
+        (status = 404, description = "Series not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn mark_series_as_read(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+) -> Result<Json<MarkReadResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Verify series exists
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Get all books in the series with their page counts
+    let books = BookRepository::list_by_series(&state.db, series_id, false)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch books in series: {}", e)))?;
+
+    if books.is_empty() {
+        return Ok(Json(MarkReadResponse {
+            count: 0,
+            message: "No books in series to mark as read".to_string(),
+        }));
+    }
+
+    // Create a vector of (book_id, page_count) tuples
+    let book_data: Vec<(Uuid, i32)> = books
+        .iter()
+        .map(|book| (book.id, book.page_count))
+        .collect();
+
+    // Mark all books as read
+    let count = ReadProgressRepository::mark_series_as_read(&state.db, auth.user_id, book_data)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to mark series as read: {}", e)))?;
+
+    Ok(Json(MarkReadResponse {
+        count,
+        message: format!("Marked {} books as read", count),
+    }))
+}
+
+/// Mark all books in a series as unread
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/{id}/unread",
+    params(
+        ("id" = Uuid, Path, description = "Series ID")
+    ),
+    responses(
+        (status = 200, description = "Series marked as unread", body = MarkReadResponse),
+        (status = 404, description = "Series not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn mark_series_as_unread(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+) -> Result<Json<MarkReadResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Verify series exists
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Get all book IDs in the series
+    let books = BookRepository::list_by_series(&state.db, series_id, false)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch books in series: {}", e)))?;
+
+    if books.is_empty() {
+        return Ok(Json(MarkReadResponse {
+            count: 0,
+            message: "No books in series to mark as unread".to_string(),
+        }));
+    }
+
+    let book_ids: Vec<Uuid> = books.iter().map(|book| book.id).collect();
+
+    // Mark all books as unread (delete progress records)
+    let count = ReadProgressRepository::mark_series_as_unread(&state.db, auth.user_id, book_ids)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to mark series as unread: {}", e)))?;
+
+    Ok(Json(MarkReadResponse {
+        count: count as usize,
+        message: format!("Marked {} books as unread", count),
+    }))
 }

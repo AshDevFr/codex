@@ -74,6 +74,10 @@ use utoipa::OpenApi;
         handlers::delete_reading_progress,
         handlers::get_user_progress,
         handlers::get_currently_reading,
+        handlers::mark_book_as_read,
+        handlers::mark_book_as_unread,
+        handlers::mark_series_as_read,
+        handlers::mark_series_as_unread,
 
         // User endpoints
         handlers::list_users,
@@ -181,6 +185,7 @@ use utoipa::OpenApi;
             dto::UpdateProgressRequest,
             dto::ReadProgressResponse,
             dto::ReadProgressListResponse,
+            dto::MarkReadResponse,
 
             // Filesystem DTOs
             handlers::filesystem::FileSystemEntry,

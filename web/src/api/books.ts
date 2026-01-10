@@ -82,4 +82,16 @@ export const booksApi = {
 		);
 		return response.data;
 	},
+
+	// Mark a book as read
+	markAsRead: async (bookId: string): Promise<void> => {
+		const response = await api.post(`/books/${bookId}/read`);
+		return response.data;
+	},
+
+	// Mark a book as unread
+	markAsUnread: async (bookId: string): Promise<void> => {
+		const response = await api.post(`/books/${bookId}/unread`);
+		return response.data;
+	},
 };

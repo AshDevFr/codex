@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::common::PaginatedResponse;
+use super::read_progress::ReadProgressResponse;
 
 /// Book data transfer object
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -21,6 +22,8 @@ pub struct BookDto {
     pub number: Option<i32>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub read_progress: Option<ReadProgressResponse>,
 }
 
 /// Book list response

@@ -4,7 +4,9 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
-use crate::db::repositories::{BookMetadataRepository, BookRepository, SeriesRepository};
+use crate::db::repositories::{
+    BookMetadataRepository, BookRepository, ReadProgressRepository, SeriesRepository,
+};
 use crate::require_permission;
 use axum::{
     extract::{Path, Query, State},
@@ -39,9 +41,10 @@ fn default_page_size() -> u64 {
     20
 }
 
-/// Helper function to convert books to DTOs with series information
+/// Helper function to convert books to DTOs with series information and read progress
 pub async fn books_to_dtos(
     db: &sea_orm::DatabaseConnection,
+    user_id: Uuid,
     books: Vec<crate::db::entities::books::Model>,
 ) -> Result<Vec<BookDto>, ApiError> {
     // Collect unique series IDs
@@ -57,6 +60,16 @@ pub async fn books_to_dtos(
     for series_id in series_ids {
         if let Ok(Some(series)) = SeriesRepository::get_by_id(db, series_id).await {
             series_map.insert(series_id, series.name);
+        }
+    }
+
+    // Fetch read progress for all books
+    let mut progress_map = HashMap::new();
+    for book in &books {
+        if let Ok(Some(progress)) =
+            ReadProgressRepository::get_by_user_and_book(db, user_id, book.id).await
+        {
+            progress_map.insert(book.id, progress.into());
         }
     }
 
@@ -80,6 +93,8 @@ pub async fn books_to_dtos(
                 }
             });
 
+            let read_progress = progress_map.get(&book.id).cloned();
+
             BookDto {
                 id: book.id,
                 series_id: book.series_id,
@@ -96,6 +111,7 @@ pub async fn books_to_dtos(
                     .map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
                 created_at: book.created_at,
                 updated_at: book.updated_at,
+                read_progress,
             }
         })
         .collect();
@@ -166,7 +182,7 @@ pub async fn list_books(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
     };
 
-    let dtos = books_to_dtos(&state.db, books_list).await?;
+    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
     let response = BookListResponse::new(dtos, query.page, page_size, total);
 
@@ -304,7 +320,7 @@ pub async fn get_book(
             editors: meta.editor.map(|s| vec![s]).unwrap_or_default(),
         });
 
-    let mut dtos = books_to_dtos(&state.db, vec![book]).await?;
+    let mut dtos = books_to_dtos(&state.db, auth.user_id, vec![book]).await?;
     let book_dto = dtos.pop().unwrap(); // Safe because we just passed a single book
 
     let response = BookDetailResponse {
@@ -361,7 +377,7 @@ pub async fn list_library_books(
         apply_book_sorting(&mut books_list, sort_param);
     }
 
-    let dtos = books_to_dtos(&state.db, books_list).await?;
+    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
     let response = BookListResponse::new(dtos, query.page, page_size, total);
 
@@ -411,7 +427,7 @@ pub async fn list_in_progress_books(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress books: {}", e)))?;
 
-    let dtos = books_to_dtos(&state.db, books_list).await?;
+    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
     let response = BookListResponse::new(dtos, query.page, page_size, total);
 
@@ -463,7 +479,7 @@ pub async fn list_library_in_progress_books(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress books: {}", e)))?;
 
-    let dtos = books_to_dtos(&state.db, books_list).await?;
+    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
     let response = BookListResponse::new(dtos, query.page, page_size, total);
 
@@ -510,7 +526,7 @@ pub async fn list_recently_added_books(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch recently added books: {}", e)))?;
 
-    let dtos = books_to_dtos(&state.db, books_list).await?;
+    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
     let response = BookListResponse::new(dtos, query.page, page_size, total);
 
@@ -561,7 +577,7 @@ pub async fn list_library_recently_added_books(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch recently added books: {}", e)))?;
 
-    let dtos = books_to_dtos(&state.db, books_list).await?;
+    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
     let response = BookListResponse::new(dtos, query.page, page_size, total);
 

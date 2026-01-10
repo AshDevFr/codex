@@ -8,7 +8,12 @@ import {
 	Text,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconAnalyze, IconDotsVertical } from "@tabler/icons-react";
+import {
+	IconAnalyze,
+	IconBookOff,
+	IconCheck,
+	IconDotsVertical,
+} from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { booksApi } from "@/api/books";
 import { seriesApi } from "@/api/series";
@@ -95,6 +100,106 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 			notifications.show({
 				title: "Analysis failed",
 				message: error.message || "Failed to start analysis",
+				color: "red",
+			});
+		},
+	});
+
+	// Book mark as read/unread mutations
+	const bookMarkAsReadMutation = useMutation({
+		mutationFn: () => {
+			if (!book) throw new Error("Book not available");
+			return booksApi.markAsRead(book.id);
+		},
+		onSuccess: () => {
+			notifications.show({
+				title: "Marked as read",
+				message: "Book marked as read",
+				color: "green",
+			});
+			// Invalidate all book-related queries to refresh UI
+			queryClient.invalidateQueries({ queryKey: ["books"] });
+			queryClient.invalidateQueries({ queryKey: ["series"] });
+			queryClient.invalidateQueries({ queryKey: ["library-books"] });
+			queryClient.invalidateQueries({ queryKey: ["in-progress"] });
+			queryClient.invalidateQueries({ queryKey: ["recently-added"] });
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Failed to mark as read",
+				message: error.message || "Failed to mark book as read",
+				color: "red",
+			});
+		},
+	});
+
+	const bookMarkAsUnreadMutation = useMutation({
+		mutationFn: () => {
+			if (!book) throw new Error("Book not available");
+			return booksApi.markAsUnread(book.id);
+		},
+		onSuccess: () => {
+			notifications.show({
+				title: "Marked as unread",
+				message: "Book marked as unread",
+				color: "blue",
+			});
+			// Invalidate all book-related queries to refresh UI
+			queryClient.invalidateQueries({ queryKey: ["books"] });
+			queryClient.invalidateQueries({ queryKey: ["series"] });
+			queryClient.invalidateQueries({ queryKey: ["library-books"] });
+			queryClient.invalidateQueries({ queryKey: ["in-progress"] });
+			queryClient.invalidateQueries({ queryKey: ["recently-added"] });
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Failed to mark as unread",
+				message: error.message || "Failed to mark book as unread",
+				color: "red",
+			});
+		},
+	});
+
+	// Series mark as read/unread mutations
+	const seriesMarkAsReadMutation = useMutation({
+		mutationFn: () => {
+			if (!series) throw new Error("Series not available");
+			return seriesApi.markAsRead(series.id);
+		},
+		onSuccess: (data) => {
+			notifications.show({
+				title: "Marked as read",
+				message: data.message,
+				color: "green",
+			});
+			queryClient.invalidateQueries({ queryKey: ["series"] });
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Failed to mark as read",
+				message: error.message || "Failed to mark series as read",
+				color: "red",
+			});
+		},
+	});
+
+	const seriesMarkAsUnreadMutation = useMutation({
+		mutationFn: () => {
+			if (!series) throw new Error("Series not available");
+			return seriesApi.markAsUnread(series.id);
+		},
+		onSuccess: (data) => {
+			notifications.show({
+				title: "Marked as unread",
+				message: data.message,
+				color: "blue",
+			});
+			queryClient.invalidateQueries({ queryKey: ["series"] });
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Failed to mark as unread",
+				message: error.message || "Failed to mark series as unread",
 				color: "red",
 			});
 		},
@@ -199,15 +304,57 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 							</Menu.Target>
 							<Menu.Dropdown>
 								{type === "book" ? (
-									<Menu.Item
-										leftSection={<IconAnalyze size={14} />}
-										onClick={() => bookAnalyzeMutation.mutate()}
-										disabled={bookAnalyzeMutation.isPending}
-									>
-										{bookAnalyzeMutation.isPending ? "Analyzing..." : "Analyze"}
-									</Menu.Item>
+									<>
+										{/* Show Mark as Read if book is unread (no progress or not completed) */}
+										{(!book?.readProgress || !book.readProgress.completed) && (
+											<Menu.Item
+												leftSection={<IconCheck size={14} />}
+												onClick={() => bookMarkAsReadMutation.mutate()}
+												disabled={bookMarkAsReadMutation.isPending}
+											>
+												{bookMarkAsReadMutation.isPending ? "Marking..." : "Mark as Read"}
+											</Menu.Item>
+										)}
+										{/* Show Mark as Unread if book has progress */}
+										{book?.readProgress && (
+											<Menu.Item
+												leftSection={<IconBookOff size={14} />}
+												onClick={() => bookMarkAsUnreadMutation.mutate()}
+												disabled={bookMarkAsUnreadMutation.isPending}
+											>
+												{bookMarkAsUnreadMutation.isPending ? "Marking..." : "Mark as Unread"}
+											</Menu.Item>
+										)}
+										<Menu.Item
+											leftSection={<IconAnalyze size={14} />}
+											onClick={() => bookAnalyzeMutation.mutate()}
+											disabled={bookAnalyzeMutation.isPending}
+										>
+											{bookAnalyzeMutation.isPending ? "Analyzing..." : "Analyze"}
+										</Menu.Item>
+									</>
 								) : (
 									<>
+										{/* Show Mark as Read if series has any unread books */}
+										{series && (series.unreadCount ?? 0) > 0 && (
+											<Menu.Item
+												leftSection={<IconCheck size={14} />}
+												onClick={() => seriesMarkAsReadMutation.mutate()}
+												disabled={seriesMarkAsReadMutation.isPending}
+											>
+												{seriesMarkAsReadMutation.isPending ? "Marking..." : "Mark as Read"}
+											</Menu.Item>
+										)}
+										{/* Show Mark as Unread if series has any read books */}
+										{series && (series.bookCount ?? 0) > (series.unreadCount ?? 0) && (
+											<Menu.Item
+												leftSection={<IconBookOff size={14} />}
+												onClick={() => seriesMarkAsUnreadMutation.mutate()}
+												disabled={seriesMarkAsUnreadMutation.isPending}
+											>
+												{seriesMarkAsUnreadMutation.isPending ? "Marking..." : "Mark as Unread"}
+											</Menu.Item>
+										)}
 										<Menu.Item
 											leftSection={<IconAnalyze size={14} />}
 											onClick={() => seriesAnalyzeMutation.mutate()}

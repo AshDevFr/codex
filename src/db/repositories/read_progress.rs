@@ -128,6 +128,66 @@ impl ReadProgressRepository {
 
         Ok(progress_list)
     }
+
+    /// Mark a book as read (completed) for a user
+    /// Sets current_page to the book's last page
+    pub async fn mark_as_read(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        book_id: Uuid,
+        page_count: i32,
+    ) -> Result<read_progress::Model> {
+        // Mark as completed with the last page (page_count - 1, since 0-indexed)
+        let last_page = if page_count > 0 { page_count - 1 } else { 0 };
+        Self::upsert(db, user_id, book_id, last_page, true).await
+    }
+
+    /// Mark a book as unread for a user
+    /// Deletes the reading progress record entirely
+    pub async fn mark_as_unread(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        book_id: Uuid,
+    ) -> Result<()> {
+        Self::delete(db, user_id, book_id).await
+    }
+
+    /// Mark all books in a series as read for a user
+    /// Returns the number of books marked as read
+    pub async fn mark_series_as_read(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        book_ids: Vec<(Uuid, i32)>, // Vec of (book_id, page_count)
+    ) -> Result<usize> {
+        let now = Utc::now();
+        let mut count = 0;
+
+        // Process each book
+        for (book_id, page_count) in book_ids {
+            let last_page = if page_count > 0 { page_count - 1 } else { 0 };
+            Self::upsert(db, user_id, book_id, last_page, true).await?;
+            count += 1;
+        }
+
+        Ok(count)
+    }
+
+    /// Mark all books in a series as unread for a user
+    /// Deletes all reading progress records for the books
+    /// Returns the number of books marked as unread
+    pub async fn mark_series_as_unread(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        book_ids: Vec<Uuid>,
+    ) -> Result<u64> {
+        let result = ReadProgress::delete_many()
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .filter(read_progress::Column::BookId.is_in(book_ids))
+            .exec(db)
+            .await?;
+
+        Ok(result.rows_affected)
+    }
 }
 
 #[cfg(test)]
@@ -346,5 +406,134 @@ mod tests {
             .unwrap();
 
         assert!(progress.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_mark_as_read() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        // Mark book as read
+        let progress = ReadProgressRepository::mark_as_read(&db, user.id, book.id, book.page_count)
+            .await
+            .unwrap();
+
+        assert_eq!(progress.user_id, user.id);
+        assert_eq!(progress.book_id, book.id);
+        assert_eq!(progress.current_page, book.page_count - 1); // 0-indexed
+        assert!(progress.completed);
+        assert!(progress.completed_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_mark_as_unread() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        // Create progress first
+        ReadProgressRepository::upsert(&db, user.id, book.id, 25, false)
+            .await
+            .unwrap();
+
+        // Mark as unread
+        ReadProgressRepository::mark_as_unread(&db, user.id, book.id)
+            .await
+            .unwrap();
+
+        // Verify progress is deleted
+        let progress = ReadProgressRepository::get_by_user_and_book(&db, user.id, book.id)
+            .await
+            .unwrap();
+
+        assert!(progress.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_mark_series_as_read() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book1 = create_test_book(&db).await;
+        let book2 = create_test_book(&db).await;
+        let book3 = create_test_book(&db).await;
+
+        // Create book data with page counts
+        let book_data = vec![
+            (book1.id, book1.page_count),
+            (book2.id, book2.page_count),
+            (book3.id, book3.page_count),
+        ];
+
+        // Mark all books as read
+        let count = ReadProgressRepository::mark_series_as_read(&db, user.id, book_data)
+            .await
+            .unwrap();
+
+        assert_eq!(count, 3);
+
+        // Verify all books are marked as read
+        let progress1 = ReadProgressRepository::get_by_user_and_book(&db, user.id, book1.id)
+            .await
+            .unwrap()
+            .unwrap();
+        let progress2 = ReadProgressRepository::get_by_user_and_book(&db, user.id, book2.id)
+            .await
+            .unwrap()
+            .unwrap();
+        let progress3 = ReadProgressRepository::get_by_user_and_book(&db, user.id, book3.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert!(progress1.completed);
+        assert!(progress2.completed);
+        assert!(progress3.completed);
+        assert_eq!(progress1.current_page, book1.page_count - 1);
+        assert_eq!(progress2.current_page, book2.page_count - 1);
+        assert_eq!(progress3.current_page, book3.page_count - 1);
+    }
+
+    #[tokio::test]
+    async fn test_mark_series_as_unread() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book1 = create_test_book(&db).await;
+        let book2 = create_test_book(&db).await;
+        let book3 = create_test_book(&db).await;
+
+        // Create progress for all books
+        ReadProgressRepository::upsert(&db, user.id, book1.id, 10, false)
+            .await
+            .unwrap();
+        ReadProgressRepository::upsert(&db, user.id, book2.id, 20, true)
+            .await
+            .unwrap();
+        ReadProgressRepository::upsert(&db, user.id, book3.id, 30, false)
+            .await
+            .unwrap();
+
+        // Mark all books as unread
+        let book_ids = vec![book1.id, book2.id, book3.id];
+        let count = ReadProgressRepository::mark_series_as_unread(&db, user.id, book_ids)
+            .await
+            .unwrap();
+
+        assert_eq!(count, 3);
+
+        // Verify all progress is deleted
+        let progress1 = ReadProgressRepository::get_by_user_and_book(&db, user.id, book1.id)
+            .await
+            .unwrap();
+        let progress2 = ReadProgressRepository::get_by_user_and_book(&db, user.id, book2.id)
+            .await
+            .unwrap();
+        let progress3 = ReadProgressRepository::get_by_user_and_book(&db, user.id, book3.id)
+            .await
+            .unwrap();
+
+        assert!(progress1.is_none());
+        assert!(progress2.is_none());
+        assert!(progress3.is_none());
     }
 }

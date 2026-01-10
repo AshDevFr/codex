@@ -186,6 +186,14 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/progress/currently-reading",
             get(handlers::get_currently_reading),
         )
+        // Mark as read/unread routes (protected)
+        .route("/books/:book_id/read", post(handlers::mark_book_as_read))
+        .route(
+            "/books/:book_id/unread",
+            post(handlers::mark_book_as_unread),
+        )
+        .route("/series/:id/read", post(handlers::mark_series_as_read))
+        .route("/series/:id/unread", post(handlers::mark_series_as_unread))
         // User routes (protected, admin only)
         .route("/users", get(handlers::list_users))
         .route("/users", post(handlers::create_user))

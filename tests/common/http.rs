@@ -179,6 +179,15 @@ pub fn get_request_with_api_key(uri: &str, api_key: &str) -> Request<String> {
         .unwrap()
 }
 
+/// Helper to create a POST request (no auth)
+pub fn post_request(uri: &str) -> Request<String> {
+    Request::builder()
+        .method("POST")
+        .uri(uri)
+        .body(String::new())
+        .unwrap()
+}
+
 /// Helper to create a POST request with JSON body
 pub fn post_json_request<T: serde::Serialize>(uri: &str, body: &T) -> Request<String> {
     let json = serde_json::to_string(body).unwrap();

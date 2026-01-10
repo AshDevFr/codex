@@ -70,4 +70,20 @@ export const seriesApi = {
 		);
 		return response.data;
 	},
+
+	// Mark all books in a series as read
+	markAsRead: async (seriesId: string): Promise<{ count: number; message: string }> => {
+		const response = await api.post<{ count: number; message: string }>(
+			`/series/${seriesId}/read`,
+		);
+		return response.data;
+	},
+
+	// Mark all books in a series as unread
+	markAsUnread: async (seriesId: string): Promise<{ count: number; message: string }> => {
+		const response = await api.post<{ count: number; message: string }>(
+			`/series/${seriesId}/unread`,
+		);
+		return response.data;
+	},
 };
