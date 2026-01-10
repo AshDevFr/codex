@@ -87,6 +87,7 @@ export function Setup() {
 	const [scannerExpanded, setScannerExpanded] = useState(true);
 	const [appExpanded, setAppExpanded] = useState(false);
 	const [taskExpanded, setTaskExpanded] = useState(false);
+	const [thumbnailExpanded, setThumbnailExpanded] = useState(false);
 	const [deduplicationExpanded, setDeduplicationExpanded] = useState(false);
 
 	// Scanner settings
@@ -102,6 +103,9 @@ export function Setup() {
 	const [cleanupIntervalSeconds, setCleanupIntervalSeconds] = useState(30);
 	const [prioritizeScansOverAnalysis, setPrioritizeScansOverAnalysis] =
 		useState(true);
+
+	// Thumbnail settings
+	const [thumbnailCacheDir, setThumbnailCacheDir] = useState("data/thumbnails");
 
 	// Deduplication settings
 	const [deduplicationEnabled, setDeduplicationEnabled] = useState(true);
@@ -170,6 +174,7 @@ export function Setup() {
 				"task.cleanup_interval_seconds": cleanupIntervalSeconds.toString(),
 				"task.prioritize_scans_over_analysis":
 					prioritizeScansOverAnalysis.toString(),
+				"thumbnail.cache_dir": thumbnailCacheDir,
 				"deduplication.enabled": deduplicationEnabled.toString(),
 			};
 
@@ -438,6 +443,41 @@ export function Setup() {
 															setPrioritizeScansOverAnalysis(
 																e.currentTarget.checked,
 															)
+														}
+													/>
+												</Stack>
+											</Collapse>
+										</Paper>
+
+										{/* Thumbnail Settings */}
+										<Paper withBorder p="md">
+											<Group justify="space-between" mb="xs">
+												<div>
+													<Text fw={500}>Thumbnail Settings</Text>
+													<Text size="xs" c="dimmed">
+														Configure thumbnail caching and storage
+													</Text>
+												</div>
+												<Button
+													variant="subtle"
+													size="xs"
+													onClick={() =>
+														setThumbnailExpanded(!thumbnailExpanded)
+													}
+												>
+													{thumbnailExpanded ? "Collapse" : "Expand"}
+												</Button>
+											</Group>
+
+											<Collapse in={thumbnailExpanded}>
+												<Stack gap="sm" mt="sm">
+													<TextInput
+														label="Thumbnail Cache Directory"
+														description="Directory path for storing generated thumbnails (relative to data directory or absolute path)"
+														placeholder="data/thumbnails"
+														value={thumbnailCacheDir}
+														onChange={(e) =>
+															setThumbnailCacheDir(e.currentTarget.value)
 														}
 													/>
 												</Stack>

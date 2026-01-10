@@ -4,13 +4,15 @@ use image::{imageops::FilterType, ImageFormat};
 use sea_orm::{ActiveModelTrait, DatabaseConnection, Set};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tokio::fs;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::config::ThumbnailConfig;
 use crate::db::entities::{books, prelude::*};
-use crate::db::repositories::{BookRepository, SettingsRepository};
+use crate::db::repositories::{BookRepository, SeriesRepository, SettingsRepository};
+use crate::events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
 
 /// Service for managing thumbnail cache
 pub struct ThumbnailService {
@@ -211,6 +213,7 @@ impl ThumbnailService {
         &self,
         db: &DatabaseConnection,
         book_ids: Vec<Uuid>,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
     ) -> Result<GenerationStats> {
         let total = book_ids.len();
         let mut generated = 0;
@@ -244,6 +247,39 @@ impl ThumbnailService {
                 Ok(_) => {
                     generated += 1;
                     debug!("Generated thumbnail for book {}", book_id);
+
+                    // Emit CoverUpdated event to notify UI
+                    if let Some(broadcaster) = event_broadcaster {
+                        // Get library_id from series
+                        if let Ok(Some(series)) =
+                            SeriesRepository::get_by_id(db, book.series_id).await
+                        {
+                            let event = EntityChangeEvent {
+                                event: EntityEvent::CoverUpdated {
+                                    entity_type: EntityType::Book,
+                                    entity_id: book_id,
+                                    library_id: Some(series.library_id),
+                                },
+                                user_id: None,
+                                timestamp: Utc::now(),
+                            };
+
+                            match broadcaster.emit(event) {
+                                Ok(count) => {
+                                    debug!(
+                                        "Emitted CoverUpdated event to {} subscribers for book thumbnail: {}",
+                                        count, book_id
+                                    );
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        "Failed to emit CoverUpdated event for book thumbnail {}: {:?}",
+                                        book_id, e
+                                    );
+                                }
+                            }
+                        }
+                    }
                 }
                 Err(e) => {
                     failed += 1;

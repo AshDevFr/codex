@@ -42,7 +42,7 @@ import { CronInput } from "./CronInput";
 
 interface LibraryModalProps {
 	opened: boolean;
-	onClose: () => void;
+	onClose: (createdLibrary?: Library) => void;
 	library?: Library | null; // If provided, we're in edit mode; otherwise, add mode
 }
 
@@ -50,11 +50,7 @@ type ScanStrategy = "manual" | "auto";
 
 const ALL_FORMATS = ["CBZ", "CBR", "EPUB", "PDF"];
 
-export function LibraryModal({
-	opened,
-	onClose,
-	library,
-}: LibraryModalProps) {
+export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 	const isEditMode = !!library;
 	const queryClient = useQueryClient();
 	const [currentPath, setCurrentPath] = useState<string | null>(null);
@@ -105,13 +101,9 @@ export function LibraryModal({
 			}
 
 			if (library.scanningConfig) {
-				setCronSchedule(
-					library.scanningConfig.cronSchedule || "0 0 * * *",
-				);
+				setCronSchedule(library.scanningConfig.cronSchedule || "0 0 * * *");
 				setScanOnStart(library.scanningConfig.scanOnStart);
-				setPurgeDeletedOnScan(
-					library.scanningConfig.purgeDeletedOnScan,
-				);
+				setPurgeDeletedOnScan(library.scanningConfig.purgeDeletedOnScan);
 			}
 
 			setAllowedFormats(
@@ -139,9 +131,8 @@ export function LibraryModal({
 
 	// Create library mutation
 	const createMutation = useMutation({
-		mutationFn: (request: CreateLibraryRequest) =>
-			librariesApi.create(request),
-		onSuccess: () => {
+		mutationFn: (request: CreateLibraryRequest) => librariesApi.create(request),
+		onSuccess: (createdLibrary) => {
 			notifications.show({
 				title: "Success",
 				message: "Library created successfully",
@@ -149,7 +140,7 @@ export function LibraryModal({
 			});
 			// Use refetchQueries to force immediate refetch, bypassing staleTime
 			queryClient.refetchQueries({ queryKey: ["libraries"] });
-			handleClose();
+			handleClose(createdLibrary);
 		},
 		onError: (error: Error) => {
 			notifications.show({
@@ -183,8 +174,8 @@ export function LibraryModal({
 		},
 	});
 
-	const handleClose = () => {
-		onClose();
+	const handleClose = (createdLibrary?: Library) => {
+		onClose(createdLibrary);
 	};
 
 	const handleDriveSelect = (entry: FileSystemEntry) => {
@@ -208,8 +199,7 @@ export function LibraryModal({
 			if (!libraryName) {
 				const pathParts = browseData.current_path.split(/[/\\]/);
 				const folderName =
-					pathParts[pathParts.length - 1] ||
-					pathParts[pathParts.length - 2];
+					pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
 				if (folderName) {
 					setLibraryName(folderName);
 				}
@@ -244,8 +234,7 @@ export function LibraryModal({
 				if (!cronSchedule.trim()) {
 					notifications.show({
 						title: "Validation Error",
-						message:
-							"Please enter a cron schedule for automatic scanning",
+						message: "Please enter a cron schedule for automatic scanning",
 						color: "red",
 					});
 					return;
@@ -254,8 +243,7 @@ export function LibraryModal({
 
 			// Build scanning config based on strategy
 			const scanningConfig: ScanningConfig = {
-				cronSchedule:
-					scanStrategy === "auto" ? cronSchedule : undefined,
+				cronSchedule: scanStrategy === "auto" ? cronSchedule : undefined,
 				scanMode: "normal", // Always use normal mode, deep scans are triggered manually
 				enabled: scanStrategy === "auto",
 				scanOnStart,
@@ -269,11 +257,8 @@ export function LibraryModal({
 						name: libraryName,
 						scanningConfig,
 						allowedFormats:
-							allowedFormats.length > 0
-								? allowedFormats
-								: undefined,
-						excludedPatterns:
-							excludedPatterns.trim() || undefined,
+							allowedFormats.length > 0 ? allowedFormats : undefined,
+						excludedPatterns: excludedPatterns.trim() || undefined,
 					},
 				});
 			}
@@ -294,8 +279,7 @@ export function LibraryModal({
 				if (!cronSchedule.trim()) {
 					notifications.show({
 						title: "Validation Error",
-						message:
-							"Please enter a cron schedule for automatic scanning",
+						message: "Please enter a cron schedule for automatic scanning",
 						color: "red",
 					});
 					return;
@@ -304,8 +288,7 @@ export function LibraryModal({
 
 			// Build scanning config based on strategy
 			const scanningConfig: ScanningConfig | undefined = {
-				cronSchedule:
-					scanStrategy === "auto" ? cronSchedule : undefined,
+				cronSchedule: scanStrategy === "auto" ? cronSchedule : undefined,
 				scanMode: "normal", // Always use normal mode, deep scans are triggered manually
 				enabled: scanStrategy === "auto",
 				scanOnStart,
@@ -317,8 +300,7 @@ export function LibraryModal({
 				path: pathToUse,
 				scanningConfig,
 				scanImmediately: autoScanOnCreate,
-				allowedFormats:
-					allowedFormats.length > 0 ? allowedFormats : undefined,
+				allowedFormats: allowedFormats.length > 0 ? allowedFormats : undefined,
 				excludedPatterns: excludedPatterns.trim() || undefined,
 			});
 		}
@@ -393,36 +375,23 @@ export function LibraryModal({
 												{drives?.map((drive) => (
 													<UnstyledButton
 														key={drive.path}
-														onClick={() =>
-															handleDriveSelect(
-																drive,
-															)
-														}
+														onClick={() => handleDriveSelect(drive)}
 														p="xs"
 														style={{
 															borderRadius: "4px",
 															border: "1px solid var(--mantine-color-gray-3)",
 															"&:hover": {
-																backgroundColor:
-																	"var(--mantine-color-gray-1)",
+																backgroundColor: "var(--mantine-color-gray-1)",
 															},
 														}}
 													>
 														<Group gap="xs">
-															<IconFolder
-																size={18}
-															/>
+															<IconFolder size={18} />
 															<div>
-																<Text
-																	size="sm"
-																	fw={500}
-																>
+																<Text size="sm" fw={500}>
 																	{drive.name}
 																</Text>
-																<Text
-																	size="xs"
-																	c="dimmed"
-																>
+																<Text size="xs" c="dimmed">
 																	{drive.path}
 																</Text>
 															</div>
@@ -437,16 +406,10 @@ export function LibraryModal({
 								// Show directory contents
 								<>
 									{/* Breadcrumbs */}
-									<Breadcrumbs
-										separator={
-											<IconChevronRight size={14} />
-										}
-									>
+									<Breadcrumbs separator={<IconChevronRight size={14} />}>
 										<Anchor
 											size="sm"
-											onClick={() =>
-												setCurrentPath(null)
-											}
+											onClick={() => setCurrentPath(null)}
 											style={{ cursor: "pointer" }}
 										>
 											<Group gap={4}>
@@ -458,11 +421,7 @@ export function LibraryModal({
 											<Anchor
 												key={crumb.path}
 												size="sm"
-												onClick={() =>
-													handleBreadcrumbClick(
-														crumb.path,
-													)
-												}
+												onClick={() => handleBreadcrumbClick(crumb.path)}
 												style={{ cursor: "pointer" }}
 											>
 												{crumb.label}
@@ -474,9 +433,7 @@ export function LibraryModal({
 										<Button
 											size="xs"
 											variant="light"
-											leftSection={
-												<IconFolder size={16} />
-											}
+											leftSection={<IconFolder size={16} />}
 											onClick={handleSelectCurrentPath}
 										>
 											Select This Folder
@@ -492,14 +449,8 @@ export function LibraryModal({
 									</Group>
 
 									{browseError && (
-										<Alert
-											icon={
-												<IconAlertCircle size={16} />
-											}
-											color="red"
-										>
-											Failed to browse directory. Please
-											check permissions.
+										<Alert icon={<IconAlertCircle size={16} />} color="red">
+											Failed to browse directory. Please check permissions.
 										</Alert>
 									)}
 
@@ -511,32 +462,20 @@ export function LibraryModal({
 										<ScrollArea h={400} type="auto">
 											<Stack gap={6}>
 												{browseData?.entries
-													.filter(
-														(entry) =>
-															entry.is_directory,
-													)
+													.filter((entry) => entry.is_directory)
 													.map((entry) => (
 														<UnstyledButton
 															key={entry.path}
-															onClick={() =>
-																handleDirectoryClick(
-																	entry,
-																)
-															}
+															onClick={() => handleDirectoryClick(entry)}
 															p="xs"
 															style={{
-																borderRadius:
-																	"4px",
+																borderRadius: "4px",
 																border: "1px solid var(--mantine-color-gray-3)",
 															}}
 														>
 															<Group gap="xs">
-																<IconFolderOpen
-																	size={18}
-																/>
-																<Text size="sm">
-																	{entry.name}
-																</Text>
+																<IconFolderOpen size={18} />
+																<Text size="sm">{entry.name}</Text>
 															</Group>
 														</UnstyledButton>
 													))}
@@ -559,9 +498,7 @@ export function LibraryModal({
 							placeholder="Enter library name"
 							required
 							value={libraryName}
-							onChange={(e) =>
-								setLibraryName(e.currentTarget.value)
-							}
+							onChange={(e) => setLibraryName(e.currentTarget.value)}
 						/>
 
 						{isEditMode ? (
@@ -584,9 +521,7 @@ export function LibraryModal({
 									<Button
 										size="xs"
 										variant="subtle"
-										onClick={() =>
-											setShowPathBrowser(true)
-										}
+										onClick={() => setShowPathBrowser(true)}
 									>
 										Browse
 									</Button>
@@ -595,11 +530,7 @@ export function LibraryModal({
 							/>
 						)}
 
-						<Divider
-							label="Format Filtering"
-							labelPosition="left"
-							mt="md"
-						/>
+						<Divider label="Format Filtering" labelPosition="left" mt="md" />
 
 						<Paper p="md" withBorder>
 							<Stack gap="md">
@@ -636,11 +567,7 @@ export function LibraryModal({
 									description="File or directory patterns to exclude (one per line). Examples: .DS_Store, Thumbs.db, @eaDir/*"
 									placeholder=".DS_Store&#10;Thumbs.db&#10;@eaDir/*"
 									value={excludedPatterns}
-									onChange={(e) =>
-										setExcludedPatterns(
-											e.currentTarget.value,
-										)
-									}
+									onChange={(e) => setExcludedPatterns(e.currentTarget.value)}
 									minRows={3}
 									autosize
 								/>
@@ -669,9 +596,7 @@ export function LibraryModal({
 										},
 									]}
 									value={scanStrategy}
-									onChange={(value) =>
-										setScanStrategy(value as ScanStrategy)
-									}
+									onChange={(value) => setScanStrategy(value as ScanStrategy)}
 									required
 									comboboxProps={{ zIndex: 1001 }}
 								/>
@@ -709,9 +634,7 @@ export function LibraryModal({
 											description="Start scanning this library as soon as it's created (normal scan)"
 											checked={autoScanOnCreate}
 											onChange={(e) =>
-												setAutoScanOnCreate(
-													e.currentTarget.checked,
-												)
+												setAutoScanOnCreate(e.currentTarget.checked)
 											}
 										/>
 									)}
@@ -720,11 +643,7 @@ export function LibraryModal({
 										label="Scan on application start"
 										description="Automatically scan this library when the server starts (normal scan)"
 										checked={scanOnStart}
-										onChange={(e) =>
-											setScanOnStart(
-												e.currentTarget.checked,
-											)
-										}
+										onChange={(e) => setScanOnStart(e.currentTarget.checked)}
 									/>
 
 									<Checkbox
@@ -732,9 +651,7 @@ export function LibraryModal({
 										description="Remove database entries for files that no longer exist on disk"
 										checked={purgeDeletedOnScan}
 										onChange={(e) =>
-											setPurgeDeletedOnScan(
-												e.currentTarget.checked,
-											)
+											setPurgeDeletedOnScan(e.currentTarget.checked)
 										}
 									/>
 								</Stack>
@@ -748,10 +665,7 @@ export function LibraryModal({
 							<Button
 								onClick={handleSubmit}
 								loading={isLoading}
-								disabled={
-									!libraryName ||
-									(!isEditMode && !currentPathValue)
-								}
+								disabled={!libraryName || (!isEditMode && !currentPathValue)}
 							>
 								{submitButtonText}
 							</Button>

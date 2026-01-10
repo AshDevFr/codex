@@ -2,18 +2,16 @@ import {
 	ActionIcon,
 	Badge,
 	Box,
+	Button,
+	Center,
 	Container,
 	Group,
 	Loader,
 	Menu,
 	Modal,
-	Select,
 	Stack,
-	Tabs,
 	Text,
 	Title,
-	Center,
-	Button,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import {
@@ -36,6 +34,7 @@ import {
 import { librariesApi } from "@/api/libraries";
 import { LibraryModal } from "@/components/forms/LibraryModal";
 import { BooksSection } from "@/components/library/BooksSection";
+import { LibraryToolbar } from "@/components/library/LibraryToolbar";
 import { RecommendedSection } from "@/components/library/RecommendedSection";
 import { SeriesSection } from "@/components/library/SeriesSection";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
@@ -59,10 +58,13 @@ export function LibraryPage() {
 
 	// Determine current tab from URL
 	const pathParts = location.pathname.split("/");
-	const currentTab = pathParts[pathParts.length - 1] || "recommended";
 
 	// Handle libraryId === "all" case
 	const isAllLibraries = libraryId === "all";
+
+	// Default tab: "recommended" for specific libraries, "series" for all libraries
+	const defaultTab = isAllLibraries ? "series" : "recommended";
+	const currentTab = pathParts[pathParts.length - 1] || defaultTab;
 
 	// State for total counts
 	const [booksCount, setBooksCount] = useState<number | null>(null);
@@ -116,9 +118,9 @@ export function LibraryPage() {
 			location.pathname === `/libraries/${libraryId}` ||
 			location.pathname === `/libraries/${libraryId}/`
 		) {
-			navigate(`/libraries/${libraryId}/recommended`, { replace: true });
+			navigate(`/libraries/${libraryId}/${defaultTab}`, { replace: true });
 		}
-	}, [location.pathname, libraryId, navigate]);
+	}, [location.pathname, libraryId, navigate, defaultTab]);
 
 	// Handle 404 - redirect to home
 	useEffect(() => {
@@ -329,31 +331,6 @@ export function LibraryPage() {
 		});
 	};
 
-	const handleSortChange = (value: string | null) => {
-		if (value && libraryId) {
-			handleFilterChange({ sort: value });
-
-			// Persist to store
-			const currentPrefs = getTabPreferences(libraryId, currentTab) || {};
-			setTabPreferences(libraryId, currentTab, {
-				...currentPrefs,
-				sort: value,
-			});
-		}
-	};
-
-	const handlePageSizeChange = (value: string | null) => {
-		if (value && libraryId) {
-			handleFilterChange({ pageSize: parseInt(value, 10) });
-
-			// Persist to store
-			const currentPrefs = getTabPreferences(libraryId, currentTab) || {};
-			setTabPreferences(libraryId, currentTab, {
-				...currentPrefs,
-				pageSize: parseInt(value, 10),
-			});
-		}
-	};
 
 	// Get current count based on tab
 	const currentCount = currentTab === "books" ? booksCount : currentTab === "series" ? seriesCount : null;
@@ -486,63 +463,58 @@ export function LibraryPage() {
 						</Group>
 					</Group>
 
-				{/* Tabs Navigation with Controls */}
-				<Tabs value={currentTab} onChange={handleTabChange}>
-					<Group justify="space-between" align="flex-start" wrap="nowrap">
-						<Tabs.List>
-							<Tabs.Tab value="recommended">Recommended</Tabs.Tab>
-							<Tabs.Tab value="series">Series</Tabs.Tab>
-							<Tabs.Tab value="books">Books</Tabs.Tab>
-						</Tabs.List>
-						{currentTab !== "recommended" && (
-							<Group gap="md" wrap="nowrap">
-								<Select
-									label="Sort"
-									value={sort}
-									onChange={handleSortChange}
-									data={sortOptions}
-									style={{ minWidth: 200 }}
-								/>
-								<Select
-									label="Page Size"
-									value={pageSize.toString()}
-									onChange={handlePageSizeChange}
-									data={[
-										{ value: "20", label: "20 per page" },
-										{ value: "50", label: "50 per page" },
-										{ value: "100", label: "100 per page" },
-										{ value: "200", label: "200 per page" },
-										{ value: "500", label: "500 per page" },
-									]}
-									style={{ minWidth: 140 }}
-								/>
-							</Group>
-						)}
-					</Group>
+				{/* Toolbar with Tabs and Controls */}
+				<LibraryToolbar
+					currentTab={currentTab}
+					onTabChange={handleTabChange}
+					showRecommended={!isAllLibraries}
+					sort={sort}
+					onSortChange={(value) => {
+						if (libraryId) {
+							handleFilterChange({ sort: value });
+							const currentPrefs = getTabPreferences(libraryId, currentTab) || {};
+							setTabPreferences(libraryId, currentTab, {
+								...currentPrefs,
+								sort: value,
+							});
+						}
+					}}
+					sortOptions={sortOptions}
+					pageSize={pageSize}
+					onPageSizeChange={(value) => {
+						if (libraryId) {
+							handleFilterChange({ pageSize: value });
+							const currentPrefs = getTabPreferences(libraryId, currentTab) || {};
+							setTabPreferences(libraryId, currentTab, {
+								...currentPrefs,
+								pageSize: value,
+							});
+						}
+					}}
+				/>
 
-					{/* Recommended Tab */}
-					<Tabs.Panel value="recommended" pt="xl">
+				{/* Tab Content */}
+				<Box pt="xl">
+					{currentTab === "recommended" && !isAllLibraries && (
 						<RecommendedSection libraryId={libraryId} />
-					</Tabs.Panel>
+					)}
 
-					{/* Series Tab */}
-					<Tabs.Panel value="series" pt="xl">
+					{currentTab === "series" && (
 						<SeriesSection
 							libraryId={libraryId}
 							searchParams={searchParams}
 							onTotalChange={setSeriesCount}
 						/>
-					</Tabs.Panel>
+					)}
 
-					{/* Books Tab */}
-					<Tabs.Panel value="books" pt="xl">
+					{currentTab === "books" && (
 						<BooksSection
 							libraryId={libraryId}
 							searchParams={searchParams}
 							onTotalChange={setBooksCount}
 						/>
-					</Tabs.Panel>
-				</Tabs>
+					)}
+				</Box>
 			</Stack>
 		</Box>
 

@@ -146,8 +146,24 @@ impl TaskRepository {
                     let task_option = if is_postgres {
                         // PostgreSQL: Use FOR UPDATE SKIP LOCKED for multi-worker safety
                         let order_by = if prioritize_scans {
-                            // Prioritize scan_library tasks over analysis tasks
-                            "ORDER BY (CASE WHEN task_type = 'scan_library' THEN 0 ELSE 1 END), priority DESC, scheduled_for ASC"
+                            // Task priority order (highest to lowest):
+                            // 1. scan_library (0)
+                            // 2. purge_deleted (1)
+                            // 3. analyze_book (2)
+                            // 4. analyze_series (3)
+                            // 5. generate_thumbnails (4)
+                            // 6. find_duplicates (5)
+                            // 7. refresh_metadata (6)
+                            "ORDER BY (CASE
+                                WHEN task_type = 'scan_library' THEN 0
+                                WHEN task_type = 'purge_deleted' THEN 1
+                                WHEN task_type = 'analyze_book' THEN 2
+                                WHEN task_type = 'analyze_series' THEN 3
+                                WHEN task_type = 'generate_thumbnails' THEN 4
+                                WHEN task_type = 'find_duplicates' THEN 5
+                                WHEN task_type = 'refresh_metadata' THEN 6
+                                ELSE 99
+                            END), priority DESC, scheduled_for ASC"
                         } else {
                             // Standard priority-based ordering
                             "ORDER BY priority DESC, scheduled_for ASC"
@@ -202,8 +218,24 @@ impl TaskRepository {
                         // SQLite: Use raw SQL query (similar to PostgreSQL but without SKIP LOCKED)
                         // SQLite serializes transactions, so we don't need SKIP LOCKED
                         let order_by = if prioritize_scans {
-                            // Prioritize scan_library tasks over analysis tasks
-                            "ORDER BY (CASE WHEN task_type = 'scan_library' THEN 0 ELSE 1 END), priority DESC, scheduled_for ASC"
+                            // Task priority order (highest to lowest):
+                            // 1. scan_library (0)
+                            // 2. purge_deleted (1)
+                            // 3. analyze_book (2)
+                            // 4. analyze_series (3)
+                            // 5. generate_thumbnails (4)
+                            // 6. find_duplicates (5)
+                            // 7. refresh_metadata (6)
+                            "ORDER BY (CASE
+                                WHEN task_type = 'scan_library' THEN 0
+                                WHEN task_type = 'purge_deleted' THEN 1
+                                WHEN task_type = 'analyze_book' THEN 2
+                                WHEN task_type = 'analyze_series' THEN 3
+                                WHEN task_type = 'generate_thumbnails' THEN 4
+                                WHEN task_type = 'find_duplicates' THEN 5
+                                WHEN task_type = 'refresh_metadata' THEN 6
+                                ELSE 99
+                            END), priority DESC, scheduled_for ASC"
                         } else {
                             // Standard priority-based ordering
                             "ORDER BY priority DESC, scheduled_for ASC"

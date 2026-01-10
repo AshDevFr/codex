@@ -1,6 +1,7 @@
 use anyhow::Result;
 use chrono::Utc;
 use sea_orm::DatabaseConnection;
+use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -10,7 +11,7 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::db::repositories::TaskRepository;
-use crate::events::{EventBroadcaster, TaskProgressEvent};
+use crate::events::{EventBroadcaster, RecordedEvent, TaskProgressEvent};
 use crate::services::{SettingsService, ThumbnailService};
 use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, FindDuplicatesHandler, GenerateThumbnailsHandler,
@@ -112,6 +113,15 @@ impl TaskWorker {
     /// Get the worker ID
     pub fn worker_id(&self) -> &str {
         &self.worker_id
+    }
+
+    /// Check if we're running in distributed mode (PostgreSQL)
+    ///
+    /// In distributed mode, workers may run in separate processes from the web server,
+    /// so events need to be recorded and replayed via the TaskListener.
+    fn is_distributed_mode(&self) -> bool {
+        // Check if database is PostgreSQL (indicates distributed deployment)
+        matches!(&self.db, DatabaseConnection::SqlxPostgresPoolConnection(_))
     }
 
     /// Get a shutdown sender to stop the worker
@@ -317,53 +327,135 @@ impl TaskWorker {
             anyhow::anyhow!("No handler registered for task type: {}", task.task_type)
         })?;
 
-        // Execute task
+        // In distributed mode, create a recording broadcaster to capture events
+        // that need to be replayed by the TaskListener on the web server
+        let (task_broadcaster, recorded_events): (
+            Option<Arc<EventBroadcaster>>,
+            Option<Vec<RecordedEvent>>,
+        ) = if self.is_distributed_mode() {
+            // Create a recording broadcaster for this task
+            let recording_broadcaster = Arc::new(EventBroadcaster::new_with_recording(1000, true));
+            let broadcaster_clone = recording_broadcaster.clone();
+
+            // Execute task with recording broadcaster
+            let result = handler
+                .handle(&task, &self.db, Some(&recording_broadcaster))
+                .await;
+
+            // Get recorded events before returning
+            let events = broadcaster_clone.take_recorded_events();
+            let events = if events.is_empty() {
+                None
+            } else {
+                Some(events)
+            };
+
+            // Return result info for later processing
+            match result {
+                Ok(task_result) => {
+                    self.complete_task(&task, task_result, started_at, events)
+                        .await?;
+                }
+                Err(e) => {
+                    self.fail_task(&task, e, started_at).await?;
+                }
+            }
+
+            return Ok(true);
+        } else {
+            // Single-process mode: use shared broadcaster directly
+            (self.event_broadcaster.clone(), None)
+        };
+
+        // Execute task with shared broadcaster (single-process mode)
         let result = handler
-            .handle(&task, &self.db, self.event_broadcaster.as_ref())
+            .handle(&task, &self.db, task_broadcaster.as_ref())
             .await;
 
         // Update task status based on result
         match result {
             Ok(task_result) => {
-                TaskRepository::mark_completed(&self.db, task.id, task_result.data).await?;
-                info!(
-                    "Task {} completed successfully: {}",
-                    task.id,
-                    task_result.message.unwrap_or_default()
-                );
-
-                // Emit task completed event
-                if let Some(ref broadcaster) = self.event_broadcaster {
-                    let _ = broadcaster.emit_task(TaskProgressEvent::completed(
-                        task.id,
-                        &task.task_type,
-                        started_at,
-                        task.library_id,
-                        task.series_id,
-                        task.book_id,
-                    ));
-                }
+                self.complete_task(&task, task_result, started_at, recorded_events)
+                    .await?;
             }
             Err(e) => {
-                error!("Task {} failed: {}", task.id, e);
-                TaskRepository::mark_failed(&self.db, task.id, e.to_string()).await?;
-
-                // Emit task failed event
-                if let Some(ref broadcaster) = self.event_broadcaster {
-                    let _ = broadcaster.emit_task(TaskProgressEvent::failed(
-                        task.id,
-                        &task.task_type,
-                        e.to_string(),
-                        started_at,
-                        task.library_id,
-                        task.series_id,
-                        task.book_id,
-                    ));
-                }
+                self.fail_task(&task, e, started_at).await?;
             }
         }
 
         Ok(true)
+    }
+
+    /// Complete a task successfully, storing result and recorded events
+    async fn complete_task(
+        &self,
+        task: &crate::db::entities::tasks::Model,
+        task_result: crate::tasks::types::TaskResult,
+        started_at: chrono::DateTime<Utc>,
+        recorded_events: Option<Vec<RecordedEvent>>,
+    ) -> Result<()> {
+        // Merge recorded events into task result data
+        let result_data = match (task_result.data, recorded_events) {
+            (Some(mut data), Some(events)) if !events.is_empty() => {
+                // Add recorded events to existing result data
+                if let Some(obj) = data.as_object_mut() {
+                    obj.insert("emitted_events".to_string(), json!(events));
+                }
+                Some(data)
+            }
+            (None, Some(events)) if !events.is_empty() => {
+                // Create result data with just the recorded events
+                Some(json!({ "emitted_events": events }))
+            }
+            (data, _) => data,
+        };
+
+        TaskRepository::mark_completed(&self.db, task.id, result_data).await?;
+        info!(
+            "Task {} completed successfully: {}",
+            task.id,
+            task_result.message.unwrap_or_default()
+        );
+
+        // Emit task completed event
+        if let Some(ref broadcaster) = self.event_broadcaster {
+            let _ = broadcaster.emit_task(TaskProgressEvent::completed(
+                task.id,
+                &task.task_type,
+                started_at,
+                task.library_id,
+                task.series_id,
+                task.book_id,
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Mark a task as failed
+    async fn fail_task(
+        &self,
+        task: &crate::db::entities::tasks::Model,
+        error: anyhow::Error,
+        started_at: chrono::DateTime<Utc>,
+    ) -> Result<()> {
+        error!("Task {} failed: {}", task.id, error);
+        TaskRepository::mark_failed(&self.db, task.id, error.to_string()).await?;
+
+        // Emit task failed event
+        if let Some(ref broadcaster) = self.event_broadcaster {
+            let _ = broadcaster.emit_task(TaskProgressEvent::failed(
+                task.id,
+                &task.task_type,
+                error.to_string(),
+                started_at,
+                task.library_id,
+                task.series_id,
+                task.book_id,
+            ));
+        }
+
+        Ok(())
     }
 
     /// Run a single iteration of task processing (useful for testing)
@@ -375,6 +467,7 @@ impl TaskWorker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
 
     #[test]
     fn test_worker_creation() {
@@ -396,5 +489,126 @@ mod tests {
     fn test_poll_interval_default() {
         let default_interval = Duration::from_secs(5);
         assert_eq!(default_interval.as_secs(), 5);
+    }
+
+    #[test]
+    fn test_event_recording_creates_recorded_events() {
+        // Test that recording broadcaster captures events
+        let broadcaster = EventBroadcaster::new_with_recording(100, true);
+
+        let book_id = Uuid::new_v4();
+        let series_id = Uuid::new_v4();
+        let library_id = Uuid::new_v4();
+
+        // Emit events
+        let _ = broadcaster.emit(EntityChangeEvent::new(
+            EntityEvent::BookCreated {
+                book_id,
+                series_id,
+                library_id,
+            },
+            None,
+        ));
+
+        let _ = broadcaster.emit(EntityChangeEvent::new(
+            EntityEvent::CoverUpdated {
+                entity_type: EntityType::Book,
+                entity_id: book_id,
+                library_id: Some(library_id),
+            },
+            None,
+        ));
+
+        // Take recorded events
+        let events = broadcaster.take_recorded_events();
+        assert_eq!(events.len(), 2);
+        assert!(matches!(events[0].event, EntityEvent::BookCreated { .. }));
+        assert!(matches!(events[1].event, EntityEvent::CoverUpdated { .. }));
+    }
+
+    #[test]
+    fn test_merge_recorded_events_into_result() {
+        // Test the logic for merging recorded events into task result
+        let book_id = Uuid::new_v4();
+        let library_id = Uuid::new_v4();
+
+        let recorded_events = vec![RecordedEvent {
+            event: EntityEvent::CoverUpdated {
+                entity_type: EntityType::Book,
+                entity_id: book_id,
+                library_id: Some(library_id),
+            },
+            timestamp: Utc::now(),
+            user_id: None,
+        }];
+
+        // Test case 1: Merge into existing result data
+        let existing_data = json!({ "generated": 5, "skipped": 2 });
+        let result_data = match (Some(existing_data.clone()), Some(recorded_events.clone())) {
+            (Some(mut data), Some(events)) if !events.is_empty() => {
+                if let Some(obj) = data.as_object_mut() {
+                    obj.insert("emitted_events".to_string(), json!(events));
+                }
+                Some(data)
+            }
+            _ => None,
+        };
+
+        let result = result_data.unwrap();
+        assert_eq!(result["generated"], 5);
+        assert_eq!(result["skipped"], 2);
+        assert!(result["emitted_events"].is_array());
+        assert_eq!(result["emitted_events"].as_array().unwrap().len(), 1);
+
+        // Test case 2: Create result data with just events (no existing data)
+        let result_data = match (None::<serde_json::Value>, Some(recorded_events.clone())) {
+            (None, Some(events)) if !events.is_empty() => Some(json!({ "emitted_events": events })),
+            _ => None,
+        };
+
+        let result = result_data.unwrap();
+        assert!(result["emitted_events"].is_array());
+
+        // Test case 3: No events, keep original data
+        let existing_data = json!({ "status": "ok" });
+        let result_data = match (Some(existing_data.clone()), None::<Vec<RecordedEvent>>) {
+            (data, _) => data,
+        };
+
+        assert_eq!(result_data.unwrap()["status"], "ok");
+    }
+
+    #[test]
+    fn test_recorded_events_serialization() {
+        // Test that recorded events can be serialized to JSON (as stored in task result)
+        let events = vec![
+            RecordedEvent {
+                event: EntityEvent::BookCreated {
+                    book_id: Uuid::new_v4(),
+                    series_id: Uuid::new_v4(),
+                    library_id: Uuid::new_v4(),
+                },
+                timestamp: Utc::now(),
+                user_id: None,
+            },
+            RecordedEvent {
+                event: EntityEvent::CoverUpdated {
+                    entity_type: EntityType::Book,
+                    entity_id: Uuid::new_v4(),
+                    library_id: Some(Uuid::new_v4()),
+                },
+                timestamp: Utc::now(),
+                user_id: Some(Uuid::new_v4()),
+            },
+        ];
+
+        // Serialize
+        let json_str = serde_json::to_string(&events).unwrap();
+        assert!(json_str.contains("book_created"));
+        assert!(json_str.contains("cover_updated"));
+
+        // Deserialize
+        let deserialized: Vec<RecordedEvent> = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(deserialized.len(), 2);
     }
 }

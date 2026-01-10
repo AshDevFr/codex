@@ -5,15 +5,16 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::db::entities::{book_metadata_records, books, pages};
 use crate::db::repositories::{
-    BookMetadataRepository, BookRepository, PageRepository, SeriesRepository,
+    BookMetadataRepository, BookRepository, PageRepository, SeriesRepository, TaskRepository,
 };
 use crate::events::EventBroadcaster;
 use crate::scanner::analyze_file;
+use crate::tasks::types::TaskType;
 
 use super::types::ScanProgress;
 
@@ -186,13 +187,12 @@ async fn analyze_single_book(
 
     BookRepository::update(db, &book, event_broadcaster).await?;
 
-    // Emit CoverUpdated event if cover became available during analysis
+    // Emit CoverUpdated event and queue thumbnail generation if cover became available
     if cover_now_available {
         if let Some(broadcaster) = event_broadcaster {
             // Get library_id from series
             if let Ok(Some(series)) = SeriesRepository::get_by_id(db, book.series_id).await {
                 use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
-                use tracing::{debug, warn};
 
                 let event = EntityChangeEvent {
                     event: EntityEvent::CoverUpdated {
@@ -215,6 +215,27 @@ async fn analyze_single_book(
                         warn!(
                             "Failed to emit CoverUpdated event for book {}: {:?}",
                             book.id, e
+                        );
+                    }
+                }
+
+                // Queue thumbnail generation task for this book's library
+                // This will batch with other books analyzed around the same time
+                let task_type = TaskType::GenerateThumbnails {
+                    library_id: Some(series.library_id),
+                };
+
+                match TaskRepository::enqueue(db, task_type, 0, None).await {
+                    Ok(task_id) => {
+                        debug!(
+                            "Queued thumbnail generation task {} for library {} after book analysis",
+                            task_id, series.library_id
+                        );
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to queue thumbnail generation task for library {}: {:?}",
+                            series.library_id, e
                         );
                     }
                 }

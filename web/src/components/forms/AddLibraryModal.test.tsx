@@ -59,17 +59,13 @@ describe("LibraryModal (Add Mode)", () => {
 	});
 
 	it("should not render when closed", () => {
-		renderWithProviders(
-			<LibraryModal opened={false} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={false} onClose={mockOnClose} />);
 
 		expect(screen.queryByText("Add New Library")).not.toBeInTheDocument();
 	});
 
 	it("should render form fields when opened", async () => {
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Wait for modal to be fully rendered - check for title
 		await waitFor(
@@ -110,9 +106,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 	it("should open path browser when Browse button is clicked", async () => {
 		const user = userEvent.setup();
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		await waitFor(() => {
 			expect(screen.getByText("Browse")).toBeInTheDocument();
@@ -129,9 +123,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 	it("should display drives in path browser", async () => {
 		const user = userEvent.setup();
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		await waitFor(() => {
 			expect(screen.getByText("Browse")).toBeInTheDocument();
@@ -148,9 +140,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 	it("should browse directory when drive is selected", async () => {
 		const user = userEvent.setup();
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Open browser
 		const browseButton = await screen.findByText("Browse");
@@ -173,9 +163,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 	it("should only show directories, not files", async () => {
 		const user = userEvent.setup();
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		const browseButton = await screen.findByText("Browse");
 		await user.click(browseButton);
@@ -197,9 +185,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 	it("should select path and auto-generate library name", async () => {
 		const user = userEvent.setup();
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Wait for modal and find form fields
 		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
@@ -258,9 +244,7 @@ describe("LibraryModal (Add Mode)", () => {
 			.mockResolvedValueOnce(mockBrowseResponse)
 			.mockResolvedValueOnce(parentBrowseResponse);
 
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Navigate to a directory
 		const browseButton = await screen.findByText("Browse");
@@ -295,9 +279,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 		vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Wait for modal and find form fields
 		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
@@ -345,10 +327,61 @@ describe("LibraryModal (Add Mode)", () => {
 		});
 	});
 
-	it("should show validation error when name is missing", async () => {
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
+	it("should call onClose with created library on successful creation", async () => {
+		const user = userEvent.setup();
+		const mockLibrary = {
+			id: "123",
+			name: "Test Library",
+			path: "/home/user/Comics",
+			isActive: true,
+			createdAt: "2024-01-01T00:00:00Z",
+			updatedAt: "2024-01-01T00:00:00Z",
+		};
+
+		vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+
+		// Wait for modal and find form fields
+		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+		const modalContent = within(modal);
+		const nameInput = await modalContent.findByPlaceholderText(
+			"Enter library name",
+			{},
+			{ timeout: 3000 },
 		);
+
+		// Fill in form
+		await user.clear(nameInput);
+		await user.type(nameInput, "Test Library");
+
+		// Set path
+		const browseButton = screen.getByText("Browse");
+		await user.click(browseButton);
+
+		const driveButton = await screen.findByText("Home Directory");
+		await user.click(driveButton);
+
+		const selectButton = await screen.findByText("Select This Folder");
+		await user.click(selectButton);
+
+		// Submit form
+		await waitFor(() => {
+			const createButton = screen.getByText("Create Library");
+			expect(createButton).not.toBeDisabled();
+		});
+
+		const createButton = screen.getByText("Create Library");
+		await user.click(createButton);
+
+		// Wait for the mutation to complete and onClose to be called with the created library
+		await waitFor(() => {
+			expect(mockOnClose).toHaveBeenCalledWith(mockLibrary);
+		});
+	});
+
+	it("should show validation error when name is missing", async () => {
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Wait for modal and verify form is rendered
 		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
@@ -369,9 +402,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 	it("should show validation error when path is missing", async () => {
 		const user = userEvent.setup();
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Wait for modal and find form fields
 		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
@@ -392,9 +423,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 	it("should close modal when Cancel is clicked", async () => {
 		const user = userEvent.setup();
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		await waitFor(() => {
 			expect(screen.getByText("Cancel")).toBeInTheDocument();
@@ -408,9 +437,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 	it("should navigate back to drives when breadcrumb is clicked", async () => {
 		const user = userEvent.setup();
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Navigate to a directory
 		const browseButton = await screen.findByText("Browse");
@@ -436,9 +463,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 	it("should show cron input when auto scan strategy is selected", async () => {
 		const user = userEvent.setup();
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Wait for modal
 		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
@@ -468,10 +493,12 @@ describe("LibraryModal (Add Mode)", () => {
 				} else {
 					// Try buttons
 					const buttons = modalContent.getAllByRole("button");
-					selectInput = buttons.find(btn =>
-						btn.textContent?.includes("Manual") ||
-						btn.closest("form")?.contains(label)
-					) || buttons[0];
+					selectInput =
+						buttons.find(
+							(btn) =>
+								btn.textContent?.includes("Manual") ||
+								btn.closest("form")?.contains(label),
+						) || buttons[0];
 				}
 			}
 		}
@@ -507,9 +534,7 @@ describe("LibraryModal (Add Mode)", () => {
 	});
 
 	it("should not show cron input when manual scan strategy is selected", async () => {
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Wait for modal
 		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
@@ -536,9 +561,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 		vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Wait for modal and find form fields
 		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
@@ -580,10 +603,12 @@ describe("LibraryModal (Add Mode)", () => {
 					selectInput = allInteractive[0];
 				} else {
 					const buttons = modalContent.getAllByRole("button");
-					selectInput = buttons.find(btn =>
-						btn.textContent?.includes("Manual") ||
-						btn.closest("form")?.contains(label)
-					) || buttons[0];
+					selectInput =
+						buttons.find(
+							(btn) =>
+								btn.textContent?.includes("Manual") ||
+								btn.closest("form")?.contains(label),
+						) || buttons[0];
 				}
 			}
 		}
@@ -641,9 +666,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 	it("should validate cron schedule is required when auto scan is enabled", async () => {
 		const user = userEvent.setup();
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Wait for modal
 		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
@@ -684,10 +707,12 @@ describe("LibraryModal (Add Mode)", () => {
 					selectInput = allInteractive[0];
 				} else {
 					const buttons = modalContent.getAllByRole("button");
-					selectInput = buttons.find(btn =>
-						btn.textContent?.includes("Manual") ||
-						btn.closest("form")?.contains(label)
-					) || buttons[0];
+					selectInput =
+						buttons.find(
+							(btn) =>
+								btn.textContent?.includes("Manual") ||
+								btn.closest("form")?.contains(label),
+						) || buttons[0];
 				}
 			}
 		}
@@ -704,17 +729,22 @@ describe("LibraryModal (Add Mode)", () => {
 		// Wait for cron input and clear it
 		// The CronInput appears after selecting auto scan
 		// Wait a bit for the state to update and component to re-render
-		await waitFor(() => {
-			// Try multiple ways to find the CronInput
-			// Check in entire document since Mantine may render in portals
-			const cronInputByLabel = screen.queryByLabelText("Cron Schedule");
-			const cronInputByPlaceholder = screen.queryByPlaceholderText("0 0 * * *");
+		await waitFor(
+			() => {
+				// Try multiple ways to find the CronInput
+				// Check in entire document since Mantine may render in portals
+				const cronInputByLabel = screen.queryByLabelText("Cron Schedule");
+				const cronInputByPlaceholder =
+					screen.queryByPlaceholderText("0 0 * * *");
 
-			expect(cronInputByLabel || cronInputByPlaceholder).toBeInTheDocument();
-		}, { timeout: 3000 });
+				expect(cronInputByLabel || cronInputByPlaceholder).toBeInTheDocument();
+			},
+			{ timeout: 3000 },
+		);
 
 		// Now get the input - search in entire document
-		let cronInput = screen.queryByLabelText("Cron Schedule") ||
+		const cronInput =
+			screen.queryByLabelText("Cron Schedule") ||
 			screen.queryByPlaceholderText("0 0 * * *");
 
 		expect(cronInput).toBeInTheDocument();
@@ -726,16 +756,17 @@ describe("LibraryModal (Add Mode)", () => {
 
 		// The form validation happens in handleSubmit and shows a notification
 		// The library should not be created because cron schedule is required
-		await waitFor(() => {
-			// Verify that the API was not called (validation prevented submission)
-			expect(librariesApi.create).not.toHaveBeenCalled();
-		}, { timeout: 1000 });
+		await waitFor(
+			() => {
+				// Verify that the API was not called (validation prevented submission)
+				expect(librariesApi.create).not.toHaveBeenCalled();
+			},
+			{ timeout: 1000 },
+		);
 	});
 
 	it("should have all formats selected by default", async () => {
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Wait for modal
 		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
@@ -756,9 +787,13 @@ describe("LibraryModal (Add Mode)", () => {
 			expect(cbzElements.length).toBeGreaterThan(0);
 		});
 		// Check other formats exist (may be multiple instances)
-		expect(screen.getAllByText("CBR (Comic Book RAR)").length).toBeGreaterThan(0);
+		expect(screen.getAllByText("CBR (Comic Book RAR)").length).toBeGreaterThan(
+			0,
+		);
 		expect(screen.getAllByText("EPUB (Ebook)").length).toBeGreaterThan(0);
-		expect(screen.getAllByText("PDF (Portable Document Format)").length).toBeGreaterThan(0);
+		expect(
+			screen.getAllByText("PDF (Portable Document Format)").length,
+		).toBeGreaterThan(0);
 	});
 
 	it("should submit with all formats by default", async () => {
@@ -774,9 +809,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 		vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Wait for modal and find form fields
 		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
@@ -834,9 +867,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 		vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Wait for modal and find form fields
 		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
@@ -899,17 +930,23 @@ describe("LibraryModal (Add Mode)", () => {
 		await user.click(pdfOption);
 
 		// Wait for state to update
-		await waitFor(() => {
-			// Give time for the click to process
-		}, { timeout: 500 });
+		await waitFor(
+			() => {
+				// Give time for the click to process
+			},
+			{ timeout: 500 },
+		);
 
 		// Close dropdown
 		await user.keyboard("{Escape}");
 
 		// Wait for state to update after deselecting formats
-		await waitFor(() => {
-			// Give time for the MultiSelect state to update
-		}, { timeout: 500 });
+		await waitFor(
+			() => {
+				// Give time for the MultiSelect state to update
+			},
+			{ timeout: 500 },
+		);
 
 		// Submit form
 		await waitFor(() => {
@@ -939,9 +976,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 	it("should reset to all formats when modal closes", async () => {
 		const user = userEvent.setup();
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Wait for modal
 		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
@@ -970,9 +1005,12 @@ describe("LibraryModal (Add Mode)", () => {
 		await user.click(cbrOption);
 
 		// Wait a bit for the click to process
-		await waitFor(() => {
-			// Verify the click was processed
-		}, { timeout: 1000 });
+		await waitFor(
+			() => {
+				// Verify the click was processed
+			},
+			{ timeout: 1000 },
+		);
 		await user.keyboard("{Escape}");
 
 		// Close modal
@@ -982,9 +1020,7 @@ describe("LibraryModal (Add Mode)", () => {
 		expect(mockOnClose).toHaveBeenCalled();
 
 		// Reopen modal - formats should be reset to all
-		renderWithProviders(
-			<LibraryModal opened={true} onClose={mockOnClose} />,
-		);
+		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		const newModal = await screen.findByRole("dialog", {}, { timeout: 3000 });
 		const newModalContent = within(newModal);
@@ -999,8 +1035,12 @@ describe("LibraryModal (Add Mode)", () => {
 			expect(cbzElements.length).toBeGreaterThan(0);
 		});
 		// Check other formats exist (may be multiple instances)
-		expect(screen.getAllByText("CBR (Comic Book RAR)").length).toBeGreaterThan(0);
+		expect(screen.getAllByText("CBR (Comic Book RAR)").length).toBeGreaterThan(
+			0,
+		);
 		expect(screen.getAllByText("EPUB (Ebook)").length).toBeGreaterThan(0);
-		expect(screen.getAllByText("PDF (Portable Document Format)").length).toBeGreaterThan(0);
+		expect(
+			screen.getAllByText("PDF (Portable Document Format)").length,
+		).toBeGreaterThan(0);
 	});
 });

@@ -65,19 +65,40 @@ describe("LibraryPage", () => {
 	});
 
 	it("should render 'All Libraries' for all libraries view", async () => {
-		renderWithRouter("/libraries/all/recommended");
+		renderWithRouter("/libraries/all/series");
 
 		await waitFor(() => {
 			expect(screen.getByText("All Libraries")).toBeInTheDocument();
 		});
 	});
 
-	it("should render recommended tab by default", async () => {
-		renderWithRouter("/libraries/all/recommended");
+	it("should render recommended tab for specific library", async () => {
+		const mockLibrary = {
+			id: "lib-123",
+			name: "Test Library",
+			path: "/test/path",
+			isActive: true,
+			createdAt: "2024-01-01",
+			updatedAt: "2024-01-01",
+		};
+
+		vi.mocked(librariesApi.getById).mockResolvedValue(mockLibrary);
+
+		renderWithRouter("/libraries/lib-123/recommended");
 
 		await waitFor(() => {
 			expect(screen.getByTestId("recommended-section")).toBeInTheDocument();
 		});
+	});
+
+	it("should NOT render recommended tab for all libraries view", async () => {
+		renderWithRouter("/libraries/all/recommended");
+
+		await waitFor(() => {
+			expect(screen.getByText("All Libraries")).toBeInTheDocument();
+		});
+
+		expect(screen.queryByTestId("recommended-section")).not.toBeInTheDocument();
 	});
 
 	it("should render series tab when navigating to series", async () => {
@@ -97,7 +118,7 @@ describe("LibraryPage", () => {
 	});
 
 	it("should not fetch library data for all libraries view", async () => {
-		renderWithRouter("/libraries/all/recommended");
+		renderWithRouter("/libraries/all/series");
 
 		await waitFor(() => {
 			expect(screen.getByText("All Libraries")).toBeInTheDocument();

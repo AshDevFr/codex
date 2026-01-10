@@ -2,8 +2,16 @@
 //!
 //! This service listens for task completion notifications from PostgreSQL
 //! and broadcasts them via the event broadcaster for SSE clients.
+//!
+//! In distributed deployments, tasks may run in separate worker processes.
+//! When those tasks emit entity events, the events are recorded in the task
+//! result. This service replays those events when tasks complete, bridging
+//! events across process boundaries.
 
-use crate::events::{EventBroadcaster, TaskProgressEvent, TaskStatus};
+use crate::db::repositories::TaskRepository;
+use crate::events::{
+    EntityChangeEvent, EventBroadcaster, RecordedEvent, TaskProgressEvent, TaskStatus,
+};
 use anyhow::{Context, Result};
 use chrono::TimeZone;
 use chrono::Utc;
@@ -32,6 +40,7 @@ struct TaskNotification {
 /// PostgreSQL LISTEN service for task notifications
 pub struct TaskListener {
     pool: PgPool,
+    db: DatabaseConnection,
     broadcaster: Arc<EventBroadcaster>,
 }
 
@@ -62,7 +71,11 @@ impl TaskListener {
             _ => anyhow::bail!("Database is not PostgreSQL"),
         };
 
-        Ok(Self { pool, broadcaster })
+        Ok(Self {
+            pool,
+            db: db.clone(),
+            broadcaster,
+        })
     }
 
     /// Start listening for task completion notifications
@@ -164,6 +177,83 @@ impl TaskListener {
                 warn!("Failed to broadcast task event: {:?}", e);
             }
         }
+
+        // Replay any recorded entity events from the task result
+        // This bridges events from worker processes to the web server
+        if status == TaskStatus::Completed {
+            if let Err(e) = self.replay_recorded_events(task_id).await {
+                warn!(
+                    "Failed to replay recorded events for task {}: {:?}",
+                    task_id, e
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Replay entity events that were recorded during task execution
+    ///
+    /// In distributed deployments, workers record events emitted during task
+    /// execution in the task result. This method retrieves those events and
+    /// replays them through the web server's broadcaster, ensuring SSE clients
+    /// receive all entity change notifications.
+    async fn replay_recorded_events(&self, task_id: Uuid) -> Result<()> {
+        // Get task result
+        let task = TaskRepository::get_by_id(&self.db, task_id)
+            .await?
+            .context("Task not found")?;
+
+        let result = match task.result {
+            Some(r) => r,
+            None => {
+                debug!("Task {} has no result data, nothing to replay", task_id);
+                return Ok(());
+            }
+        };
+
+        // Extract recorded events from the result
+        let recorded_events: Vec<RecordedEvent> = result
+            .get("emitted_events")
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or_default();
+
+        if recorded_events.is_empty() {
+            debug!("No recorded events to replay for task {}", task_id);
+            return Ok(());
+        }
+
+        info!(
+            "Replaying {} recorded events from task {}",
+            recorded_events.len(),
+            task_id
+        );
+
+        let mut replayed = 0;
+        for recorded in recorded_events {
+            let event = EntityChangeEvent {
+                event: recorded.event,
+                timestamp: recorded.timestamp,
+                user_id: recorded.user_id,
+            };
+
+            match self.broadcaster.emit(event) {
+                Ok(count) => {
+                    debug!("Replayed event to {} subscribers", count);
+                    replayed += 1;
+                }
+                Err(e) => {
+                    // No subscribers is not an error - event was still processed
+                    debug!("No subscribers for replayed event: {:?}", e);
+                    replayed += 1;
+                }
+            }
+        }
+
+        info!(
+            "Replayed {} events from task {} to broadcaster",
+            replayed, task_id
+        );
 
         Ok(())
     }

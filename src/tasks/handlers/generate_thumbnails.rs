@@ -25,7 +25,7 @@ impl TaskHandler for GenerateThumbnailsHandler {
         &'a self,
         task: &'a tasks::Model,
         db: &'a DatabaseConnection,
-        _event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
+        event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>> {
         Box::pin(async move {
             info!("Task {}: Starting thumbnail generation", task.id);
@@ -69,7 +69,7 @@ impl TaskHandler for GenerateThumbnailsHandler {
             // Generate thumbnails in batch
             let stats = self
                 .thumbnail_service
-                .generate_thumbnails_batch(db, book_ids)
+                .generate_thumbnails_batch(db, book_ids, event_broadcaster)
                 .await?;
 
             info!(

@@ -57,7 +57,7 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 	const [purgeConfirmOpened, setPurgeConfirmOpened] = useState(false);
 	const [libraryToPurge, setLibraryToPurge] = useState<Library | null>(null);
 	const [settingsOpened, setSettingsOpened] = useState(
-		currentPath.startsWith("/settings")
+		currentPath.startsWith("/settings"),
 	);
 
 	const { data: libraries } = useQuery({
@@ -188,7 +188,7 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 						/>
 						<NavLink
 							onClick={() => {
-								const lastTab = getLastTab("all");
+								const lastTab = getLastTab("all") || "series";
 								navigate(`/libraries/all/${lastTab}`);
 							}}
 							label="Libraries"
@@ -251,7 +251,7 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 									<NavLink
 										key={library.id}
 										onClick={() => {
-											const lastTab = getLastTab(library.id);
+											const lastTab = getLastTab(library.id) || "recommended";
 											navigate(`/libraries/${library.id}/${lastTab}`);
 										}}
 										label={library.name}
@@ -403,7 +403,14 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 
 			<LibraryModal
 				opened={addLibraryOpened}
-				onClose={() => setAddLibraryOpened(false)}
+				onClose={(createdLibrary) => {
+					setAddLibraryOpened(false);
+					// Navigate to the newly created library if one was created
+					if (createdLibrary) {
+						const lastTab = getLastTab(createdLibrary.id) || "series";
+						navigate(`/libraries/${createdLibrary.id}/${lastTab}`);
+					}
+				}}
 			/>
 
 			<LibraryModal
