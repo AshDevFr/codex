@@ -345,6 +345,7 @@ pub fn spawn_workers(
     worker_count: u32,
     event_broadcaster: Arc<EventBroadcaster>,
     settings_service: Arc<SettingsService>,
+    thumbnail_service: Arc<crate::services::ThumbnailService>,
 ) -> (
     Vec<tokio::task::JoinHandle<()>>,
     Vec<tokio::sync::broadcast::Sender<()>>,
@@ -364,7 +365,8 @@ pub fn spawn_workers(
         let task_worker = TaskWorker::new(db.clone())
             .with_worker_id(&worker_id)
             .with_event_broadcaster(event_broadcaster.clone())
-            .with_settings_service(settings_service.clone());
+            .with_settings_service(settings_service.clone())
+            .with_thumbnail_service(thumbnail_service.clone());
 
         let (mut task_worker, worker_shutdown_tx) = task_worker.with_shutdown();
         worker_shutdown_channels.push(worker_shutdown_tx);

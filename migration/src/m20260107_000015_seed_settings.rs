@@ -171,6 +171,29 @@ impl MigrationTrait for Migration {
                 None,
                 None,
             ),
+            // Thumbnail settings (2 settings)
+            (
+                "thumbnail.max_dimension",
+                "400",
+                "Integer",
+                "Thumbnail",
+                "Maximum width or height (in pixels) for generated thumbnails",
+                false,
+                "400",
+                Some(100),
+                Some(2000),
+            ),
+            (
+                "thumbnail.jpeg_quality",
+                "85",
+                "Integer",
+                "Thumbnail",
+                "JPEG quality for thumbnail images (1-100, higher = better quality but larger files)",
+                false,
+                "85",
+                Some(50),
+                Some(100),
+            ),
         ];
 
         for (

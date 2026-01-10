@@ -1066,6 +1066,8 @@ mod tests {
             modified_at: Utc::now(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
         };
         let book1: books::Model = BookRepository::create(db.sea_orm_connection(), &book1, None)
             .await
@@ -1089,6 +1091,8 @@ mod tests {
             modified_at: Utc::now(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
         };
         let book2: books::Model = BookRepository::create(db.sea_orm_connection(), &book2, None)
             .await
@@ -1112,6 +1116,8 @@ mod tests {
             modified_at: Utc::now(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
         };
         let book3: books::Model = BookRepository::create(db.sea_orm_connection(), &book3, None)
             .await

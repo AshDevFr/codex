@@ -57,6 +57,8 @@ async fn create_test_book(
         modified_at: Utc::now(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
+        thumbnail_path: None,
+        thumbnail_generated_at: None,
     };
 
     let created_book = BookRepository::create(db.sea_orm_connection(), &book, None).await?;
@@ -724,6 +726,8 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
         modified_at: now,
         created_at: now,
         updated_at: now,
+        thumbnail_path: None,
+        thumbnail_generated_at: None,
     };
 
     BookRepository::create(db.sea_orm_connection(), &book1, None).await?;
@@ -781,6 +785,8 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
         modified_at: now,
         created_at: now,
         updated_at: now,
+        thumbnail_path: None,
+        thumbnail_generated_at: None,
     };
 
     BookRepository::create(db.sea_orm_connection(), &book2, None).await?;

@@ -86,6 +86,15 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
         .unwrap_or(false);
 
+    // Initialize thumbnail service (needed for both workers and API handlers)
+    let thumbnail_service = Arc::new(crate::services::ThumbnailService::new(
+        config.thumbnail.clone(),
+    ));
+    info!(
+        "Thumbnail service initialized (cache: {}/{})",
+        config.thumbnail.data_dir, config.thumbnail.cache_dir
+    );
+
     // Initialize worker tracking variables
     let mut worker_handles = Vec::new();
     let mut worker_shutdown_channels = Vec::new();
@@ -114,6 +123,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             worker_count,
             event_broadcaster.clone(),
             settings_service.clone(),
+            thumbnail_service.clone(),
         );
         worker_handles = handles;
         worker_shutdown_channels = channels;
@@ -141,6 +151,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         email_service,
         event_broadcaster,
         settings_service,
+        thumbnail_service,
         scheduler: if disable_workers {
             None
         } else {

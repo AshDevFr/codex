@@ -80,6 +80,8 @@ pub fn create_test_book(
         modified_at: now,
         created_at: now,
         updated_at: now,
+        thumbnail_path: None,
+        thumbnail_generated_at: None,
     }
 }
 
@@ -175,6 +177,8 @@ pub async fn create_test_book_with_hash(
         analyzed: false,
         modified_at: Utc::now(),
         created_at: Utc::now(),
+        thumbnail_path: None,
+        thumbnail_generated_at: None,
         updated_at: Utc::now(),
     };
 

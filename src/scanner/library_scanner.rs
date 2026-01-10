@@ -706,6 +706,8 @@ async fn process_file(
             modified_at,
             created_at: now,
             updated_at: now,
+            thumbnail_path: None,         // Thumbnail not generated yet
+            thumbnail_generated_at: None, // Thumbnail not generated yet
         };
 
         BookRepository::create(db, &book_model, event_broadcaster).await?;

@@ -133,6 +133,18 @@ pub async fn get_book_thumbnail(
         return Err(ApiError::NotFound("Book has no pages".to_string()));
     }
 
+    // Try to serve cached thumbnail first
+    if let Ok(thumbnail_data) = state.thumbnail_service.read_thumbnail(book_id).await {
+        return Ok(Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "image/jpeg")
+            .header(header::CACHE_CONTROL, "public, max-age=31536000") // Cache for 1 year
+            .header(header::CONTENT_LENGTH, thumbnail_data.len())
+            .body(Body::from(thumbnail_data))
+            .unwrap());
+    }
+
+    // Cache miss - generate thumbnail on-demand
     // Extract first page
     let image_data = extract_page_image(&book.file_path, &book.format, 1)
         .await
@@ -141,6 +153,19 @@ pub async fn get_book_thumbnail(
     // Generate thumbnail (max 400px width or height)
     let thumbnail_data = generate_thumbnail(&image_data, 400)
         .map_err(|e| ApiError::Internal(format!("Failed to generate thumbnail: {}", e)))?;
+
+    // Save to cache for future requests (fire and forget)
+    let thumbnail_service = state.thumbnail_service.clone();
+    let db = state.db.clone();
+    let thumbnail_data_clone = thumbnail_data.clone();
+    tokio::spawn(async move {
+        if let Err(e) = thumbnail_service
+            .save_generated_thumbnail(&db, book_id, &thumbnail_data_clone)
+            .await
+        {
+            tracing::warn!("Failed to cache thumbnail for book {}: {}", book_id, e);
+        }
+    });
 
     // Build response with caching headers
     Ok(Response::builder()

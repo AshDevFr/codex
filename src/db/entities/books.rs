@@ -24,6 +24,8 @@ pub struct Model {
     pub modified_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub thumbnail_path: Option<String>,
+    pub thumbnail_generated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -1,10 +1,10 @@
 use axum::Router;
 use codex::api::extractors::{AppState, AuthState};
 use codex::api::routes::create_router;
-use codex::config::{ApiConfig, AuthConfig, EmailConfig};
+use codex::config::{ApiConfig, AuthConfig, EmailConfig, ThumbnailConfig};
 use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
-use codex::services::SettingsService;
+use codex::services::{SettingsService, ThumbnailService};
 use codex::utils::jwt::JwtService;
 use http_body_util::BodyExt;
 use hyper::{body::Bytes, Request, StatusCode};
@@ -28,6 +28,7 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
             .await
             .expect("Failed to initialize settings service for tests"),
     );
+    let thumbnail_service = Arc::new(ThumbnailService::new(ThumbnailConfig::default()));
 
     Arc::new(AppState {
         db,
@@ -36,6 +37,7 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
         email_service,
         event_broadcaster,
         settings_service,
+        thumbnail_service,
         scheduler: None, // Tests don't need scheduler
     })
 }
@@ -55,6 +57,7 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
             .await
             .expect("Failed to initialize settings service for tests"),
     );
+    let thumbnail_service = Arc::new(ThumbnailService::new(ThumbnailConfig::default()));
 
     Arc::new(AppState {
         db,
@@ -63,6 +66,7 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
         email_service,
         event_broadcaster,
         settings_service,
+        thumbnail_service,
         scheduler: None, // Tests don't need scheduler
     })
 }
@@ -92,6 +96,7 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
             .await
             .expect("Failed to initialize settings service for tests"),
     );
+    let thumbnail_service = Arc::new(ThumbnailService::new(ThumbnailConfig::default()));
     let app_state = Arc::new(AppState {
         db: state.db.clone(),
         jwt_service: state.jwt_service.clone(),
@@ -99,6 +104,7 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
         email_service,
         event_broadcaster,
         settings_service,
+        thumbnail_service,
         scheduler: None, // Tests don't need scheduler
     });
     let api_config = create_test_api_config();

@@ -388,7 +388,7 @@ mod tests {
         // We'll use a helper to create a minimal config
         use crate::config::{
             ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
-            LoggingConfig, SQLiteConfig,
+            LoggingConfig, SQLiteConfig, ThumbnailConfig,
         };
         let mut config = Config {
             database: DatabaseConfig {
@@ -411,6 +411,7 @@ mod tests {
             scanner: ScannerConfig {
                 max_concurrent_scans: 2,
             },
+            thumbnail: ThumbnailConfig::default(),
         };
 
         // Set env vars BEFORE applying overrides

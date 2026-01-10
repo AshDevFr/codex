@@ -167,6 +167,8 @@ mod tests {
             modified_at: Utc::now(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
         };
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
@@ -219,6 +221,8 @@ mod tests {
             modified_at: Utc::now(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
         };
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
@@ -274,6 +278,8 @@ mod tests {
             modified_at: Utc::now(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
         };
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
@@ -329,6 +335,8 @@ mod tests {
             modified_at: Utc::now(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
         };
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
@@ -386,6 +394,8 @@ mod tests {
             modified_at: Utc::now(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
         };
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
@@ -442,6 +452,8 @@ mod tests {
             modified_at: Utc::now(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
         };
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await

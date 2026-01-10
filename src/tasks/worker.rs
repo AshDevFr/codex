@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::db::repositories::TaskRepository;
 use crate::events::{EventBroadcaster, TaskProgressEvent};
-use crate::services::SettingsService;
+use crate::services::{SettingsService, ThumbnailService};
 use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, FindDuplicatesHandler, GenerateThumbnailsHandler,
     PurgeDeletedHandler, ScanLibraryHandler, TaskHandler,
@@ -25,6 +25,7 @@ pub struct TaskWorker {
     poll_interval: Duration,
     event_broadcaster: Option<Arc<EventBroadcaster>>,
     settings_service: Option<Arc<SettingsService>>,
+    thumbnail_service: Option<Arc<ThumbnailService>>,
     shutdown_tx: Option<broadcast::Sender<()>>,
 }
 
@@ -50,10 +51,7 @@ impl TaskWorker {
             "purge_deleted".to_string(),
             Arc::new(PurgeDeletedHandler::new()),
         );
-        handlers.insert(
-            "generate_thumbnails".to_string(),
-            Arc::new(GenerateThumbnailsHandler::new()),
-        );
+        // Note: generate_thumbnails handler is registered when ThumbnailService is set
         handlers.insert(
             "find_duplicates".to_string(),
             Arc::new(FindDuplicatesHandler::new()),
@@ -71,6 +69,7 @@ impl TaskWorker {
             poll_interval: Duration::from_secs(5),
             event_broadcaster: None,
             settings_service: None,
+            thumbnail_service: None,
             shutdown_tx: None,
         }
     }
@@ -96,6 +95,17 @@ impl TaskWorker {
     /// Set the settings service for runtime configuration
     pub fn with_settings_service(mut self, settings_service: Arc<SettingsService>) -> Self {
         self.settings_service = Some(settings_service);
+        self
+    }
+
+    /// Set the thumbnail service for thumbnail generation
+    pub fn with_thumbnail_service(mut self, thumbnail_service: Arc<ThumbnailService>) -> Self {
+        // Re-register the GenerateThumbnailsHandler with thumbnail service
+        self.handlers.insert(
+            "generate_thumbnails".to_string(),
+            Arc::new(GenerateThumbnailsHandler::new(thumbnail_service.clone())),
+        );
+        self.thumbnail_service = Some(thumbnail_service);
         self
     }
 

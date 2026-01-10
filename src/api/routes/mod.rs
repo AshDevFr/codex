@@ -48,9 +48,10 @@ pub fn create_router(state: Arc<AppState>, api_config: &ApiConfig) -> Router {
         ];
 
         let cors = if api_config.cors_origins.contains(&"*".to_string()) {
-            // Allow all origins with credentials for development
-            // IMPORTANT: allow_credentials(true) is required for cookie-based auth to work
-            // Cannot use permissive() with credentials, so build manually
+            // Allow all origins (wildcard)
+            // NOTE: Cannot use allow_credentials(true) with wildcard origin (*)
+            // This is a CORS security restriction. If you need credentials (cookies),
+            // you must specify explicit origins instead of using "*"
             CorsLayer::new()
                 .allow_origin(Any)
                 .allow_methods(AllowMethods::list(allowed_methods.clone()))
@@ -59,7 +60,7 @@ pub fn create_router(state: Arc<AppState>, api_config: &ApiConfig) -> Router {
                     axum::http::header::AUTHORIZATION,
                     axum::http::header::ACCEPT,
                 ]))
-                .allow_credentials(true)
+            // Cannot allow credentials with wildcard origin
         } else {
             // Allow specific origins
             let origins: Vec<_> = api_config

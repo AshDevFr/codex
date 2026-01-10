@@ -70,6 +70,7 @@ pub struct AppState {
     pub email_service: Arc<crate::services::email::EmailService>,
     pub event_broadcaster: Arc<crate::events::EventBroadcaster>,
     pub settings_service: Arc<crate::services::SettingsService>,
+    pub thumbnail_service: Arc<crate::services::ThumbnailService>,
     /// Scheduler for managing scheduled tasks (library scans, deduplication, etc.)
     /// None when workers are disabled (CODEX_DISABLE_WORKERS=true) or in test environments
     pub scheduler: Option<Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>>,

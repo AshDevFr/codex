@@ -49,12 +49,22 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     let event_broadcaster = Arc::new(crate::events::EventBroadcaster::new(1000));
     info!("Event broadcaster initialized");
 
+    // Initialize thumbnail service
+    let thumbnail_service = Arc::new(crate::services::ThumbnailService::new(
+        config.thumbnail.clone(),
+    ));
+    info!(
+        "Thumbnail service initialized (cache: {}/{})",
+        config.thumbnail.data_dir, config.thumbnail.cache_dir
+    );
+
     // Spawn multiple workers for parallel task processing
     let (worker_handles, worker_shutdown_channels) = spawn_workers(
         db.sea_orm_connection(),
         worker_count,
         event_broadcaster,
         settings_service,
+        thumbnail_service,
     );
 
     info!("All {} task workers started successfully", worker_count);

@@ -37,6 +37,8 @@ pub struct Config {
     pub task: TaskConfig,
     #[serde(default)]
     pub scanner: ScannerConfig,
+    #[serde(default)]
+    pub thumbnail: ThumbnailConfig,
 }
 
 impl Default for Config {
@@ -104,6 +106,7 @@ impl Default for Config {
             email: EmailConfig::default(),
             task: TaskConfig::default(),
             scanner: ScannerConfig::default(),
+            thumbnail: ThumbnailConfig::default(),
         }
     }
 }
@@ -361,6 +364,27 @@ impl Default for ScannerConfig {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
+pub struct ThumbnailConfig {
+    /// Base directory for thumbnail cache storage
+    /// This is a startup-time setting - changes require a restart
+    pub cache_dir: String,
+    /// Data directory for application data (contains cache_dir)
+    pub data_dir: String,
+}
+
+impl Default for ThumbnailConfig {
+    fn default() -> Self {
+        Self {
+            cache_dir: env_string_opt("CODEX_THUMBNAIL_CACHE_DIR")
+                .unwrap_or_else(|| "thumbnails".to_string()),
+            data_dir: env_string_opt("CODEX_THUMBNAIL_DATA_DIR")
+                .unwrap_or_else(|| "data".to_string()),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct EmailConfig {
     pub smtp_host: String,
     pub smtp_port: u16,
@@ -529,6 +553,7 @@ mod tests {
             email: EmailConfig::default(),
             task: TaskConfig::default(),
             scanner: ScannerConfig::default(),
+            thumbnail: ThumbnailConfig::default(),
         };
 
         // Application name moved to database settings

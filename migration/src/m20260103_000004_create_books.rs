@@ -55,6 +55,8 @@ impl MigrationTrait for Migration {
                             .timestamp_with_time_zone()
                             .not_null(),
                     )
+                    .col(ColumnDef::new(Books::ThumbnailPath).string())
+                    .col(ColumnDef::new(Books::ThumbnailGeneratedAt).timestamp_with_time_zone())
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_books_series_id")
@@ -152,6 +154,8 @@ enum Books {
     ModifiedAt,
     CreatedAt,
     UpdatedAt,
+    ThumbnailPath,
+    ThumbnailGeneratedAt,
 }
 
 #[derive(DeriveIden)]

@@ -39,6 +39,8 @@ impl BookRepository {
             modified_at: Set(book_model.modified_at),
             created_at: Set(book_model.created_at),
             updated_at: Set(book_model.updated_at),
+            thumbnail_path: Set(book_model.thumbnail_path.clone()),
+            thumbnail_generated_at: Set(book_model.thumbnail_generated_at),
         };
 
         let created_book = book.insert(db).await.context("Failed to create book")?;
@@ -323,6 +325,8 @@ impl BookRepository {
             modified_at: Set(book_model.modified_at),
             created_at: Set(book_model.created_at),
             updated_at: Set(Utc::now()),
+            thumbnail_path: Set(book_model.thumbnail_path.clone()),
+            thumbnail_generated_at: Set(book_model.thumbnail_generated_at),
         };
 
         active.update(db).await.context("Failed to update book")?;
@@ -731,6 +735,8 @@ mod tests {
             modified_at: now,
             created_at: now,
             updated_at: now,
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
         }
     }
 

@@ -1,9 +1,11 @@
 mod common;
 
 use codex::db::repositories::TaskRepository;
+use codex::services::ThumbnailService;
 use codex::tasks::types::TaskType;
 use codex::tasks::TaskWorker;
 use common::setup_test_db;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
 use uuid::Uuid;
@@ -23,8 +25,17 @@ async fn test_e2e_task_execution() {
     .await
     .expect("Failed to enqueue task");
 
-    // Start a worker
-    let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
+    // Create thumbnail service
+    let thumbnail_config = codex::config::ThumbnailConfig {
+        data_dir: "./data".to_string(),
+        cache_dir: "thumbnails".to_string(),
+    };
+    let thumbnail_service = Arc::new(ThumbnailService::new(thumbnail_config));
+
+    // Start a worker with thumbnail service
+    let worker = TaskWorker::new(db.clone())
+        .with_thumbnail_service(thumbnail_service)
+        .with_poll_interval(Duration::from_millis(100));
 
     // Process one task
     let processed = worker.process_once().await.expect("Failed to process task");
@@ -50,16 +61,11 @@ async fn test_e2e_task_execution() {
 async fn test_worker_processes_multiple_tasks() {
     let (db, _temp_dir) = setup_test_db().await;
 
-    // Create multiple tasks
+    // Create multiple tasks (using FindDuplicates which doesn't require external data)
     for _ in 0..3 {
-        TaskRepository::enqueue(
-            &db,
-            TaskType::GenerateThumbnails { library_id: None },
-            0,
-            None,
-        )
-        .await
-        .expect("Failed to enqueue task");
+        TaskRepository::enqueue(&db, TaskType::FindDuplicates, 0, None)
+            .await
+            .expect("Failed to enqueue task");
     }
 
     let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(50));
@@ -132,12 +138,21 @@ async fn test_concurrent_workers_skip_locked() {
     .await
     .expect("Failed to enqueue task");
 
+    // Create thumbnail service
+    let thumbnail_config = codex::config::ThumbnailConfig {
+        data_dir: "./data".to_string(),
+        cache_dir: "thumbnails".to_string(),
+    };
+    let thumbnail_service = Arc::new(ThumbnailService::new(thumbnail_config));
+
     // Create two workers
     let worker1 = TaskWorker::new(db.clone())
+        .with_thumbnail_service(thumbnail_service.clone())
         .with_worker_id("worker-1")
         .with_poll_interval(Duration::from_millis(50));
 
     let worker2 = TaskWorker::new(db.clone())
+        .with_thumbnail_service(thumbnail_service)
         .with_worker_id("worker-2")
         .with_poll_interval(Duration::from_millis(50));
 
@@ -164,7 +179,7 @@ async fn test_worker_respects_priority() {
     // Create low priority task first
     let low_id = TaskRepository::enqueue(
         &db,
-        TaskType::GenerateThumbnails { library_id: None },
+        TaskType::FindDuplicates,
         0, // Low priority
         None,
     )
@@ -174,7 +189,7 @@ async fn test_worker_respects_priority() {
     // Create high priority task second
     let high_id = TaskRepository::enqueue(
         &db,
-        TaskType::GenerateThumbnails { library_id: None },
+        TaskType::FindDuplicates,
         10, // High priority
         None,
     )
@@ -261,8 +276,17 @@ async fn test_stale_task_recovery() {
     // Wait for lock to expire
     sleep(Duration::from_secs(2)).await;
 
+    // Create thumbnail service
+    let thumbnail_config = codex::config::ThumbnailConfig {
+        data_dir: "./data".to_string(),
+        cache_dir: "thumbnails".to_string(),
+    };
+    let thumbnail_service = Arc::new(ThumbnailService::new(thumbnail_config));
+
     // New worker should be able to claim it
-    let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(50));
+    let worker = TaskWorker::new(db.clone())
+        .with_thumbnail_service(thumbnail_service)
+        .with_poll_interval(Duration::from_millis(50));
 
     let processed = worker.process_once().await.expect("Failed to process");
 
