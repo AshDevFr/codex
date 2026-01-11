@@ -57,10 +57,12 @@ use utoipa::OpenApi;
         handlers::list_library_in_progress_series,
         handlers::list_library_recently_added_series,
         handlers::list_library_recently_updated_series,
+        handlers::download_series,
 
         // Book endpoints
         handlers::list_books,
         handlers::get_book,
+        handlers::get_book_file,
         handlers::get_book_thumbnail,
         handlers::trigger_book_analysis,
         handlers::list_library_books,
@@ -149,7 +151,7 @@ use utoipa::OpenApi;
         handlers::events::entity_events_stream,
         handlers::events::task_progress_stream,
 
-        // OPDS catalog endpoints
+        // OPDS 1.2 catalog endpoints (XML format)
         handlers::opds::catalog::root_catalog,
         handlers::opds::catalog::opds_list_libraries,
         handlers::opds::catalog::opds_library_series,
@@ -157,6 +159,14 @@ use utoipa::OpenApi;
         handlers::opds::search::opensearch_descriptor,
         handlers::opds::search::opds_search,
         handlers::opds::pse::opds_book_pages,
+
+        // OPDS 2.0 catalog endpoints (JSON format)
+        handlers::opds2::catalog::opds2_root,
+        handlers::opds2::catalog::opds2_libraries,
+        handlers::opds2::catalog::opds2_library_series,
+        handlers::opds2::catalog::opds2_series_books,
+        handlers::opds2::catalog::opds2_recent,
+        handlers::opds2::search::opds2_search,
     ),
     components(
         schemas(
@@ -249,6 +259,20 @@ use utoipa::OpenApi;
 
             // Error responses
             ErrorResponse,
+
+            // OPDS 2.0 DTOs
+            dto::opds2::Opds2Feed,
+            dto::opds2::Opds2Link,
+            dto::opds2::LinkProperties,
+            dto::opds2::FeedMetadata,
+            dto::opds2::PublicationMetadata,
+            dto::opds2::Publication,
+            dto::opds2::ImageLink,
+            dto::opds2::Contributor,
+            dto::opds2::BelongsTo,
+            dto::opds2::SeriesInfo,
+            dto::opds2::Group,
+            dto::opds2::ReadingProgress,
         )
     ),
     tags(
@@ -268,7 +292,8 @@ use utoipa::OpenApi;
         (name = "settings", description = "Runtime configuration settings management (admin only)"),
         (name = "duplicates", description = "Duplicate book detection and management"),
         (name = "events", description = "Server-Sent Events for real-time updates"),
-        (name = "opds", description = "OPDS catalog feed for e-reader applications"),
+        (name = "opds", description = "OPDS 1.2 catalog feed (Atom XML format)"),
+        (name = "opds2", description = "OPDS 2.0 catalog feed (JSON format) - Modern JSON-based OPDS specification"),
     ),
     modifiers(&SecurityAddon),
 )]

@@ -1384,3 +1384,384 @@ async fn test_list_library_recently_updated_series() {
     assert_eq!(series_list.len(), 1);
     assert_eq!(series_list[0].id, series1.id);
 }
+
+// ============================================================================
+// Series Download Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_download_series_success() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create a library with a temp directory path
+    let library_path = temp_dir.path().join("library");
+    std::fs::create_dir_all(&library_path).unwrap();
+
+    let library = LibraryRepository::create(
+        &db,
+        "Library",
+        library_path.to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create actual CBZ files on disk
+    let book1_path = library_path.join("book1.cbz");
+    let book2_path = library_path.join("book2.cbz");
+    create_test_cbz(&book1_path, 3);
+    create_test_cbz(&book2_path, 5);
+
+    // Create books in database with actual file paths
+    let mut book1 = create_test_book(
+        series.id,
+        library.id,
+        book1_path.to_str().unwrap(),
+        "book1.cbz",
+        Some("Book 1"),
+    );
+    book1 = BookRepository::create(&db, &book1, None).await.unwrap();
+
+    let mut book2 = create_test_book(
+        series.id,
+        library.id,
+        book2_path.to_str().unwrap(),
+        "book2.cbz",
+        Some("Book 2"),
+    );
+    book2 = BookRepository::create(&db, &book2, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(&format!("/api/v1/series/{}/download", series.id), &token);
+    let (status, body) = make_raw_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    // Verify we got a valid zip file
+    let zip_data = body;
+    assert!(!zip_data.is_empty());
+
+    // Verify we can read the zip and it contains the expected files
+    use std::io::Cursor;
+    let reader = Cursor::new(&zip_data);
+    let mut archive = zip::ZipArchive::new(reader).unwrap();
+    assert_eq!(archive.len(), 2);
+
+    // Verify the files are present
+    let file_names: Vec<String> = (0..archive.len())
+        .map(|i| archive.by_index(i).unwrap().name().to_string())
+        .collect();
+    assert!(file_names.contains(&"book1.cbz".to_string()));
+    assert!(file_names.contains(&"book2.cbz".to_string()));
+}
+
+#[tokio::test]
+async fn test_download_series_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let fake_id = uuid::Uuid::new_v4();
+    let request = get_request_with_auth(&format!("/api/v1/series/{}/download", fake_id), &token);
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let error = response.unwrap();
+    assert_eq!(error.error, "NotFound");
+}
+
+#[tokio::test]
+async fn test_download_series_no_books() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Empty Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(&format!("/api/v1/series/{}/download", series.id), &token);
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let error = response.unwrap();
+    assert!(error.message.contains("no books"));
+}
+
+#[tokio::test]
+async fn test_download_series_excludes_deleted_books() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library_path = temp_dir.path().join("library");
+    std::fs::create_dir_all(&library_path).unwrap();
+
+    let library = LibraryRepository::create(
+        &db,
+        "Library",
+        library_path.to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create actual CBZ files
+    let book1_path = library_path.join("book1.cbz");
+    let book2_path = library_path.join("book2.cbz");
+    create_test_cbz(&book1_path, 3);
+    create_test_cbz(&book2_path, 3);
+
+    // Create books in database
+    let book1 = create_test_book(
+        series.id,
+        library.id,
+        book1_path.to_str().unwrap(),
+        "book1.cbz",
+        Some("Book 1"),
+    );
+    BookRepository::create(&db, &book1, None).await.unwrap();
+
+    let book2 = create_test_book(
+        series.id,
+        library.id,
+        book2_path.to_str().unwrap(),
+        "book2.cbz",
+        Some("Book 2"),
+    );
+    let book2 = BookRepository::create(&db, &book2, None).await.unwrap();
+
+    // Mark book2 as deleted
+    BookRepository::mark_deleted(&db, book2.id, true, None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(&format!("/api/v1/series/{}/download", series.id), &token);
+    let (status, body) = make_raw_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    // Verify the zip only contains the non-deleted book
+    use std::io::Cursor;
+    let reader = Cursor::new(&body);
+    let mut archive = zip::ZipArchive::new(reader).unwrap();
+    assert_eq!(archive.len(), 1);
+    assert_eq!(archive.by_index(0).unwrap().name(), "book1.cbz");
+}
+
+#[tokio::test]
+async fn test_download_series_handles_duplicate_filenames() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library_path = temp_dir.path().join("library");
+    let subdir1 = library_path.join("vol1");
+    let subdir2 = library_path.join("vol2");
+    std::fs::create_dir_all(&subdir1).unwrap();
+    std::fs::create_dir_all(&subdir2).unwrap();
+
+    let library = LibraryRepository::create(
+        &db,
+        "Library",
+        library_path.to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create CBZ files with the same filename in different directories
+    let book1_path = subdir1.join("chapter.cbz");
+    let book2_path = subdir2.join("chapter.cbz");
+    create_test_cbz(&book1_path, 3);
+    create_test_cbz(&book2_path, 3);
+
+    // Create books with duplicate filenames
+    let book1 = create_test_book(
+        series.id,
+        library.id,
+        book1_path.to_str().unwrap(),
+        "chapter.cbz",
+        Some("Chapter Vol 1"),
+    );
+    BookRepository::create(&db, &book1, None).await.unwrap();
+
+    let book2 = create_test_book(
+        series.id,
+        library.id,
+        book2_path.to_str().unwrap(),
+        "chapter.cbz",
+        Some("Chapter Vol 2"),
+    );
+    BookRepository::create(&db, &book2, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(&format!("/api/v1/series/{}/download", series.id), &token);
+    let (status, body) = make_raw_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    // Verify both files are present with unique names
+    use std::io::Cursor;
+    let reader = Cursor::new(&body);
+    let mut archive = zip::ZipArchive::new(reader).unwrap();
+    assert_eq!(archive.len(), 2);
+
+    let file_names: Vec<String> = (0..archive.len())
+        .map(|i| archive.by_index(i).unwrap().name().to_string())
+        .collect();
+
+    // One should be "chapter.cbz" and the other "chapter (1).cbz"
+    assert!(file_names.contains(&"chapter.cbz".to_string()));
+    assert!(file_names.contains(&"chapter (1).cbz".to_string()));
+}
+
+#[tokio::test]
+async fn test_download_series_without_auth() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    let fake_id = uuid::Uuid::new_v4();
+    let request = get_request(&format!("/api/v1/series/{}/download", fake_id));
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let error = response.unwrap();
+    assert_eq!(error.error, "Unauthorized");
+}
+
+#[tokio::test]
+async fn test_download_series_skips_missing_files() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library_path = temp_dir.path().join("library");
+    std::fs::create_dir_all(&library_path).unwrap();
+
+    let library = LibraryRepository::create(
+        &db,
+        "Library",
+        library_path.to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create only one CBZ file
+    let book1_path = library_path.join("book1.cbz");
+    create_test_cbz(&book1_path, 3);
+
+    // Path for a book that won't exist on disk
+    let book2_path = library_path.join("book2.cbz");
+
+    // Create both books in database (but only one exists on disk)
+    let book1 = create_test_book(
+        series.id,
+        library.id,
+        book1_path.to_str().unwrap(),
+        "book1.cbz",
+        Some("Book 1"),
+    );
+    BookRepository::create(&db, &book1, None).await.unwrap();
+
+    let book2 = create_test_book(
+        series.id,
+        library.id,
+        book2_path.to_str().unwrap(),
+        "book2.cbz",
+        Some("Book 2"),
+    );
+    BookRepository::create(&db, &book2, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(&format!("/api/v1/series/{}/download", series.id), &token);
+    let (status, body) = make_raw_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    // Verify only the existing file is in the zip
+    use std::io::Cursor;
+    let reader = Cursor::new(&body);
+    let mut archive = zip::ZipArchive::new(reader).unwrap();
+    assert_eq!(archive.len(), 1);
+    assert_eq!(archive.by_index(0).unwrap().name(), "book1.cbz");
+}
+
+/// Helper function to create a simple CBZ file for testing
+fn create_test_cbz(path: &std::path::Path, num_pages: usize) {
+    use std::fs::File;
+    use std::io::Write;
+    use zip::write::SimpleFileOptions;
+    use zip::ZipWriter;
+
+    let file = File::create(path).unwrap();
+    let mut zip = ZipWriter::new(file);
+
+    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    // Add pages
+    for i in 1..=num_pages {
+        let page_data = create_simple_png();
+        let filename = format!("page{:03}.png", i);
+        zip.start_file(&filename, options).unwrap();
+        zip.write_all(&page_data).unwrap();
+    }
+
+    zip.finish().unwrap();
+}
+
+/// Create a minimal valid PNG (1x1 pixel)
+fn create_simple_png() -> Vec<u8> {
+    vec![
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+        0x00, 0x00, 0x00, 0x0D, // IHDR chunk length
+        0x49, 0x48, 0x44, 0x52, // "IHDR"
+        0x00, 0x00, 0x00, 0x01, // width: 1
+        0x00, 0x00, 0x00, 0x01, // height: 1
+        0x08, 0x02, 0x00, 0x00, 0x00, // bit depth, color type, compression, filter, interlace
+        0x90, 0x77, 0x53, 0xDE, // CRC
+        0x00, 0x00, 0x00, 0x0C, // IDAT chunk length
+        0x49, 0x44, 0x41, 0x54, // "IDAT"
+        0x08, 0x99, 0x63, 0xF8, 0xCF, 0xC0, 0x00, 0x00, 0x03, 0x01, 0x01,
+        0x00, // compressed data
+        0x18, 0xDD, 0x8D, 0xB4, // CRC
+        0x00, 0x00, 0x00, 0x00, // IEND chunk length
+        0x49, 0x45, 0x4E, 0x44, // "IEND"
+        0xAE, 0x42, 0x60, 0x82, // CRC
+    ]
+}

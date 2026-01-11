@@ -3,7 +3,7 @@ use crate::api::{
     extractors::{AuthContext, AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
-use crate::db::repositories::{BookRepository, PageRepository};
+use crate::db::repositories::{BookRepository, PageRepository, ReadProgressRepository};
 use crate::require_permission;
 use axum::{
     body::Body,
@@ -68,6 +68,40 @@ pub async fn get_page_image(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch page: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Page not found".to_string()))?;
+
+    // Update reading progress implicitly (PSE-style tracking)
+    // Only update if this page is further than current progress
+    let user_id = auth.user_id;
+    let db = state.db.clone();
+    let total_pages = book.page_count;
+    tokio::spawn(async move {
+        // Check current progress
+        if let Ok(current_progress) =
+            ReadProgressRepository::get_by_user_and_book(&db, user_id, book_id).await
+        {
+            let should_update = match current_progress {
+                Some(progress) => {
+                    // Only update if reading a later page (forward progress)
+                    page_number > progress.current_page
+                }
+                None => true, // No existing progress, create new
+            };
+
+            if should_update {
+                let is_completed = page_number >= total_pages;
+                if let Err(e) =
+                    ReadProgressRepository::upsert(&db, user_id, book_id, page_number, is_completed)
+                        .await
+                {
+                    tracing::warn!(
+                        "Failed to update reading progress for book {}: {}",
+                        book_id,
+                        e
+                    );
+                }
+            }
+        }
+    });
 
     // Extract image from book file based on format
     let image_data = extract_page_image(&book.file_path, &book.format, page_number)

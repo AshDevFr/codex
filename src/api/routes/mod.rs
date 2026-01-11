@@ -17,13 +17,16 @@ pub fn create_router(state: Arc<AppState>, api_config: &ApiConfig) -> Router {
 
     // Clone state for OPDS routes (AuthState is an alias for AppState)
     let opds_state = state.clone();
+    let opds2_state = state.clone();
 
     let mut router = Router::new()
         // Health check (public, no auth)
         .route("/health", get(handlers::health_check))
         .with_state(db_for_health)
-        // OPDS catalog routes (protected with auth)
+        // OPDS 1.2 catalog routes (protected with auth) - XML format
         .nest("/opds", handlers::opds::opds_routes(opds_state))
+        // OPDS 2.0 catalog routes (protected with auth) - JSON format
+        .nest("/opds/v2", handlers::opds2::opds2_routes(opds2_state))
         // API v1 routes
         .nest("/api/v1", api_v1_routes(state.clone()))
         // Frontend static files (fallback route - must be last)
@@ -214,9 +217,11 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/series/:id/analyze-unanalyzed",
             post(handlers::trigger_series_unanalyzed_analysis),
         )
+        .route("/series/:id/download", get(handlers::download_series))
         // Book routes (protected)
         .route("/books", get(handlers::list_books))
         .route("/books/:id", get(handlers::get_book))
+        .route("/books/:id/file", get(handlers::get_book_file))
         .route("/books/:id/thumbnail", get(handlers::get_book_thumbnail))
         .route("/books/:id/analyze", post(handlers::trigger_book_analysis))
         .route(

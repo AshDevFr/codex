@@ -158,6 +158,12 @@ pub async fn make_json_request<T: DeserializeOwned>(
     (status, parsed)
 }
 
+/// Helper to make a request and get raw bytes response (for binary data like files)
+pub async fn make_raw_request(app: Router, request: Request<String>) -> (StatusCode, Vec<u8>) {
+    let (status, body) = make_request(app, request).await;
+    (status, body.to_vec())
+}
+
 /// Helper to create a GET request
 pub fn get_request(uri: &str) -> Request<String> {
     Request::builder()

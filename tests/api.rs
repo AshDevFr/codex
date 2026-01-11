@@ -13,6 +13,7 @@ mod api {
     mod libraries;
     mod metrics;
     mod opds;
+    mod opds2;
     mod read_progress;
     mod scan;
     mod series;

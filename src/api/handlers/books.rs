@@ -9,12 +9,16 @@ use crate::db::repositories::{
 };
 use crate::require_permission;
 use axum::{
+    body::Body,
     extract::{Path, Query, State},
+    http::{header, StatusCode},
+    response::Response,
     Json,
 };
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
 /// Query parameters for listing books
@@ -932,4 +936,82 @@ pub async fn list_library_recently_read_books(
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
     Ok(Json(dtos))
+}
+
+/// Download book file
+///
+/// Streams the original book file (CBZ, CBR, EPUB, PDF) for download.
+/// Used by OPDS clients for acquisition links.
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/{id}/file",
+    params(
+        ("id" = Uuid, Path, description = "Book ID")
+    ),
+    responses(
+        (status = 200, description = "Book file", content_type = "application/octet-stream"),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn get_book_file(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+) -> Result<Response, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Fetch book from database
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Check if file exists
+    let file_path = std::path::Path::new(&book.file_path);
+    if !file_path.exists() {
+        return Err(ApiError::NotFound(
+            "Book file not found on disk".to_string(),
+        ));
+    }
+
+    // Get file metadata for content-length
+    let metadata = tokio::fs::metadata(&book.file_path)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to read file metadata: {}", e)))?;
+
+    // Determine content type based on format
+    let content_type = match book.format.to_lowercase().as_str() {
+        "cbz" | "zip" => "application/zip",
+        "cbr" | "rar" => "application/x-rar-compressed",
+        "epub" => "application/epub+zip",
+        "pdf" => "application/pdf",
+        _ => "application/octet-stream",
+    };
+
+    // Open file for streaming
+    let file = tokio::fs::File::open(&book.file_path)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to open book file: {}", e)))?;
+
+    // Create a stream from the file
+    let stream = ReaderStream::new(file);
+    let body = Body::from_stream(stream);
+
+    // Build response with appropriate headers
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CONTENT_LENGTH, metadata.len())
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{}\"", book.file_name),
+        )
+        .body(body)
+        .unwrap())
 }

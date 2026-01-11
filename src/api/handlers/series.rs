@@ -22,11 +22,12 @@ use chrono::Utc;
 use image::{imageops::FilterType, ImageFormat};
 use sea_orm::DatabaseConnection;
 use serde::Deserialize;
-use std::io::Cursor;
+use std::io::{Cursor, Write};
 use std::sync::Arc;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
+use zip::write::SimpleFileOptions;
 
 /// Query parameters for listing books in a series
 #[derive(Debug, Deserialize)]
@@ -1177,4 +1178,175 @@ pub async fn mark_series_as_unread(
         count: count as usize,
         message: format!("Marked {} books as unread", count),
     }))
+}
+
+/// Download all books in a series as a zip file
+///
+/// Creates a zip archive containing all detected books in the series.
+/// Only includes books that were scanned and detected by the library scanner.
+#[utoipa::path(
+    get,
+    path = "/api/v1/series/{id}/download",
+    params(
+        ("id" = Uuid, Path, description = "Series ID")
+    ),
+    responses(
+        (status = 200, description = "Zip file containing all books in the series", content_type = "application/zip"),
+        (status = 404, description = "Series not found or has no books"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn download_series(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+) -> Result<Response, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Fetch series to verify it exists and get the name for the zip filename
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Fetch all non-deleted books in the series
+    let books = BookRepository::list_by_series(&state.db, series_id, false)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?;
+
+    if books.is_empty() {
+        return Err(ApiError::NotFound(
+            "Series has no books to download".to_string(),
+        ));
+    }
+
+    // Create zip archive in memory
+    let buffer = Cursor::new(Vec::new());
+    let mut zip = zip::ZipWriter::new(buffer);
+    let options = SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Stored)
+        .unix_permissions(0o644);
+
+    // Track which filenames we've used to avoid duplicates
+    let mut used_filenames = std::collections::HashSet::new();
+
+    for book in &books {
+        let file_path = std::path::Path::new(&book.file_path);
+
+        // Skip books whose files don't exist on disk
+        if !file_path.exists() {
+            tracing::warn!(
+                book_id = %book.id,
+                file_path = %book.file_path,
+                "Skipping book download - file not found on disk"
+            );
+            continue;
+        }
+
+        // Read the file contents
+        let file_contents = tokio::fs::read(&book.file_path).await.map_err(|e| {
+            ApiError::Internal(format!(
+                "Failed to read book file {}: {}",
+                book.file_name, e
+            ))
+        })?;
+
+        // Generate a unique filename if there are duplicates
+        let mut filename = book.file_name.clone();
+        let mut counter = 1;
+        while used_filenames.contains(&filename) {
+            let path = std::path::Path::new(&book.file_name);
+            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+            filename = if ext.is_empty() {
+                format!("{} ({})", stem, counter)
+            } else {
+                format!("{} ({}).{}", stem, counter, ext)
+            };
+            counter += 1;
+        }
+        used_filenames.insert(filename.clone());
+
+        // Add file to zip
+        zip.start_file(&filename, options)
+            .map_err(|e| ApiError::Internal(format!("Failed to add file to zip: {}", e)))?;
+
+        zip.write_all(&file_contents)
+            .map_err(|e| ApiError::Internal(format!("Failed to write file to zip: {}", e)))?;
+    }
+
+    // Finalize the zip and get the buffer back
+    let buffer = zip
+        .finish()
+        .map_err(|e| ApiError::Internal(format!("Failed to finalize zip: {}", e)))?;
+
+    let zip_data = buffer.into_inner();
+
+    // Sanitize series name for use as filename
+    let safe_name = sanitize_filename(&series.name);
+    let zip_filename = format!("{}.zip", safe_name);
+
+    // Build response
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/zip")
+        .header(header::CONTENT_LENGTH, zip_data.len())
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{}\"", zip_filename),
+        )
+        .body(Body::from(zip_data))
+        .unwrap())
+}
+
+/// Sanitize a string for use as a filename
+fn sanitize_filename(name: &str) -> String {
+    name.chars()
+        .map(|c| match c {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            c if c.is_control() => '_',
+            c => c,
+        })
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_filename_basic() {
+        assert_eq!(sanitize_filename("My Series"), "My Series");
+        assert_eq!(sanitize_filename("Volume 1"), "Volume 1");
+    }
+
+    #[test]
+    fn test_sanitize_filename_special_chars() {
+        assert_eq!(sanitize_filename("Series: Part 1"), "Series_ Part 1");
+        assert_eq!(sanitize_filename("What?"), "What_");
+        assert_eq!(sanitize_filename("A/B\\C"), "A_B_C");
+        assert_eq!(sanitize_filename("Test*File"), "Test_File");
+        assert_eq!(sanitize_filename("\"Quoted\""), "_Quoted_");
+        assert_eq!(sanitize_filename("<tag>"), "_tag_");
+        assert_eq!(sanitize_filename("A|B"), "A_B");
+    }
+
+    #[test]
+    fn test_sanitize_filename_trims_whitespace() {
+        assert_eq!(sanitize_filename("  My Series  "), "My Series");
+        assert_eq!(sanitize_filename("   "), "");
+    }
+
+    #[test]
+    fn test_sanitize_filename_control_chars() {
+        assert_eq!(sanitize_filename("Test\x00Name"), "Test_Name");
+        assert_eq!(sanitize_filename("Line\nBreak"), "Line_Break");
+    }
 }

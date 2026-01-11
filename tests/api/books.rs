@@ -11,6 +11,7 @@ use codex::utils::password;
 use common::*;
 use hyper::StatusCode;
 use sea_orm::prelude::Decimal;
+use tower::ServiceExt;
 
 // Helper to create admin and token
 async fn create_admin_and_token(
@@ -1691,6 +1692,146 @@ async fn test_list_recently_read_books_requires_auth() {
 
     // Request without auth token
     let request = get_request("/api/v1/books/recently-read");
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+// =============================================================================
+// Book File Download Tests
+// =============================================================================
+
+#[tokio::test]
+async fn test_get_book_file_success() {
+    use common::files::create_test_cbz;
+
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create test CBZ file
+    let cbz_path = create_test_cbz(&temp_dir, 3, false);
+
+    // Create library and series
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create book with real file path
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        cbz_path.to_str().unwrap(),
+        "test_comic.cbz",
+        Some("Test Comic".to_string()),
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request the file
+    let request = get_request_with_auth(&format!("/api/v1/books/{}/file", book.id), &token);
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Check headers
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert_eq!(content_type, "application/zip");
+
+    let content_disposition = response
+        .headers()
+        .get("content-disposition")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(content_disposition.contains("attachment"));
+    assert!(content_disposition.contains("test_comic.cbz"));
+
+    // Verify we got file content
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(!body.is_empty());
+}
+
+#[tokio::test]
+async fn test_get_book_file_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let app = create_test_router(state).await;
+
+    // Request non-existent book
+    let fake_id = uuid::Uuid::new_v4();
+    let request = get_request_with_auth(&format!("/api/v1/books/{}/file", fake_id), &token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_get_book_file_missing_on_disk() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create book with non-existent file path
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/nonexistent/path/book.cbz",
+        "book.cbz",
+        Some("Missing Book".to_string()),
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request the file
+    let request = get_request_with_auth(&format!("/api/v1/books/{}/file", book.id), &token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_get_book_file_requires_auth() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+
+    let app = create_test_router(state).await;
+
+    // Request without auth token
+    let fake_id = uuid::Uuid::new_v4();
+    let request = get_request(&format!("/api/v1/books/{}/file", fake_id));
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
