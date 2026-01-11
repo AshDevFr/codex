@@ -79,6 +79,8 @@ Codex provides OPDS catalog feeds for e-reader applications:
         handlers::list_library_recently_added_series,
         handlers::list_library_recently_updated_series,
         handlers::download_series,
+        handlers::replace_series_metadata,
+        handlers::patch_series_metadata,
 
         // Book endpoints
         handlers::list_books,
@@ -98,6 +100,8 @@ Codex provides OPDS catalog feeds for e-reader applications:
         handlers::list_books_with_errors,
         handlers::list_library_books_with_errors,
         handlers::list_series_books_with_errors,
+        handlers::replace_book_metadata,
+        handlers::patch_book_metadata,
 
         // Page endpoints
         handlers::get_page_image,
@@ -214,10 +218,16 @@ Codex provides OPDS catalog feeds for e-reader applications:
             dto::SeriesDto,
             dto::SeriesListResponse,
             dto::SearchSeriesRequest,
+            dto::ReplaceSeriesMetadataRequest,
+            dto::PatchSeriesMetadataRequest,
+            dto::SeriesMetadataResponse,
             dto::BookDto,
             dto::BookListResponse,
             dto::BookDetailResponse,
             dto::BookMetadataDto,
+            dto::ReplaceBookMetadataRequest,
+            dto::PatchBookMetadataRequest,
+            dto::BookMetadataResponse,
             dto::PageDto,
             dto::UserDto,
             dto::CreateUserRequest,

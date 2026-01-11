@@ -212,10 +212,10 @@ pub async fn create_api_key(
     ))
 }
 
-/// Update an API key
+/// Update an API key (partial update)
 /// Users can only update their own keys unless they are admin
 #[utoipa::path(
-    put,
+    patch,
     path = "/api/v1/api-keys/{id}",
     params(
         ("id" = Uuid, Path, description = "API key ID")

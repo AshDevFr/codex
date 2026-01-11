@@ -210,3 +210,110 @@ pub struct SearchSeriesRequest {
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub library_id: Option<uuid::Uuid>,
 }
+
+/// PUT request for full replacement of series metadata
+///
+/// All metadata fields will be replaced with the values in this request.
+/// Omitting a field (or setting it to null) will clear that field.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceSeriesMetadataRequest {
+    /// Custom sort name for ordering (e.g., "Batman Year One" instead of "The Batman Year One")
+    #[schema(example = "Batman Year One")]
+    pub sort_name: Option<String>,
+
+    /// Series description/summary
+    #[schema(example = "The definitive origin story of Batman.")]
+    pub summary: Option<String>,
+
+    /// Publisher name
+    #[schema(example = "DC Comics")]
+    pub publisher: Option<String>,
+
+    /// Release year
+    #[schema(example = 1987)]
+    pub year: Option<i32>,
+
+    /// Reading direction (ltr, rtl, ttb, btt, or auto)
+    #[schema(example = "ltr")]
+    pub reading_direction: Option<String>,
+
+    /// Custom JSON metadata for extensions
+    #[schema(example = "{\"myField\": \"value\"}")]
+    pub custom_metadata: Option<String>,
+}
+
+/// PATCH request for partial update of series metadata
+///
+/// Only provided fields will be updated. Absent fields are unchanged.
+/// Explicitly null fields will be cleared.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PatchSeriesMetadataRequest {
+    /// Custom sort name for ordering
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "Batman Year One", nullable = true)]
+    pub sort_name: super::patch::PatchValue<String>,
+
+    /// Series description/summary
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "The definitive origin story of Batman.", nullable = true)]
+    pub summary: super::patch::PatchValue<String>,
+
+    /// Publisher name
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "DC Comics", nullable = true)]
+    pub publisher: super::patch::PatchValue<String>,
+
+    /// Release year
+    #[serde(default)]
+    #[schema(value_type = Option<i32>, example = 1987, nullable = true)]
+    pub year: super::patch::PatchValue<i32>,
+
+    /// Reading direction (ltr, rtl, ttb, btt, or auto)
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "ltr", nullable = true)]
+    pub reading_direction: super::patch::PatchValue<String>,
+
+    /// Custom JSON metadata for extensions
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "{\"myField\": \"value\"}", nullable = true)]
+    pub custom_metadata: super::patch::PatchValue<String>,
+}
+
+/// Response containing series metadata
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesMetadataResponse {
+    /// Series ID
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]
+    pub id: uuid::Uuid,
+
+    /// Custom sort name for ordering
+    #[schema(example = "Batman Year One")]
+    pub sort_name: Option<String>,
+
+    /// Series description/summary
+    #[schema(example = "The definitive origin story of Batman.")]
+    pub summary: Option<String>,
+
+    /// Publisher name
+    #[schema(example = "DC Comics")]
+    pub publisher: Option<String>,
+
+    /// Release year
+    #[schema(example = 1987)]
+    pub year: Option<i32>,
+
+    /// Reading direction
+    #[schema(example = "ltr")]
+    pub reading_direction: Option<String>,
+
+    /// Custom JSON metadata
+    #[schema(example = "{\"myField\": \"value\"}")]
+    pub custom_metadata: Option<String>,
+
+    /// Last update timestamp
+    #[schema(example = "2024-01-15T10:30:00Z")]
+    pub updated_at: DateTime<Utc>,
+}

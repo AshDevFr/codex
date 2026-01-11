@@ -2,7 +2,7 @@ use crate::api::{extractors::AppState, handlers};
 use crate::config::ApiConfig;
 use crate::web;
 use axum::{
-    routing::{delete, get, post, put},
+    routing::{delete, get, patch, post, put},
     Router,
 };
 use std::sync::Arc;
@@ -112,7 +112,7 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/libraries", get(handlers::list_libraries))
         .route("/libraries", post(handlers::create_library))
         .route("/libraries/:id", get(handlers::get_library))
-        .route("/libraries/:id", put(handlers::update_library))
+        .route("/libraries/:id", patch(handlers::update_library))
         .route("/libraries/:id", delete(handlers::delete_library))
         .route(
             "/libraries/:id/purge-deleted",
@@ -207,7 +207,7 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/series/:id/cover", post(handlers::upload_series_cover))
         .route(
             "/series/:id/cover/source",
-            put(handlers::set_series_cover_source),
+            patch(handlers::set_series_cover_source),
         )
         .route(
             "/series/:id/analyze",
@@ -218,6 +218,15 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             post(handlers::trigger_series_unanalyzed_analysis),
         )
         .route("/series/:id/download", get(handlers::download_series))
+        // Series metadata routes (protected)
+        .route(
+            "/series/:id/metadata",
+            put(handlers::replace_series_metadata),
+        )
+        .route(
+            "/series/:id/metadata",
+            patch(handlers::patch_series_metadata),
+        )
         // Book routes (protected)
         .route("/books", get(handlers::list_books))
         .route("/books/:id", get(handlers::get_book))
@@ -228,6 +237,9 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/books/:id/analyze-unanalyzed",
             post(handlers::trigger_book_unanalyzed_analysis),
         )
+        // Book metadata routes (protected)
+        .route("/books/:id/metadata", put(handlers::replace_book_metadata))
+        .route("/books/:id/metadata", patch(handlers::patch_book_metadata))
         // Book collection routes (protected)
         .route("/books/in-progress", get(handlers::list_in_progress_books))
         .route("/books/on-deck", get(handlers::list_on_deck_books))
@@ -271,13 +283,13 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/users", get(handlers::list_users))
         .route("/users", post(handlers::create_user))
         .route("/users/:id", get(handlers::get_user))
-        .route("/users/:id", put(handlers::update_user))
+        .route("/users/:id", patch(handlers::update_user))
         .route("/users/:id", delete(handlers::delete_user))
         // API key routes (protected)
         .route("/api-keys", get(handlers::api_keys::list_api_keys))
         .route("/api-keys", post(handlers::api_keys::create_api_key))
         .route("/api-keys/:id", get(handlers::api_keys::get_api_key))
-        .route("/api-keys/:id", put(handlers::api_keys::update_api_key))
+        .route("/api-keys/:id", patch(handlers::api_keys::update_api_key))
         .route("/api-keys/:id", delete(handlers::api_keys::delete_api_key))
         // Metrics routes (protected)
         .route("/metrics", get(handlers::get_metrics))

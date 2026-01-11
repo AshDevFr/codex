@@ -1,7 +1,10 @@
 use crate::api::{
     dto::{
-        series::SeriesSortParam, BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto,
-        SeriesListResponse,
+        series::{
+            PatchSeriesMetadataRequest, ReplaceSeriesMetadataRequest, SeriesMetadataResponse,
+            SeriesSortParam,
+        },
+        BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListResponse,
     },
     error::ApiError,
     extractors::{AuthContext, AuthState, FlexibleAuthContext},
@@ -467,9 +470,9 @@ pub async fn upload_series_cover(
     Ok(StatusCode::OK)
 }
 
-/// Set which cover source to use for a series
+/// Set which cover source to use for a series (partial update)
 #[utoipa::path(
-    put,
+    patch,
     path = "/api/v1/series/{id}/cover/source",
     params(
         ("id" = Uuid, Path, description = "Series ID")
@@ -1302,6 +1305,192 @@ pub async fn download_series(
         )
         .body(Body::from(zip_data))
         .unwrap())
+}
+
+/// Replace all series metadata (PUT)
+///
+/// Replaces all metadata fields with the values in the request.
+/// Omitting a field (or setting it to null) will clear that field.
+#[utoipa::path(
+    put,
+    path = "/api/v1/series/{id}/metadata",
+    params(
+        ("id" = Uuid, Path, description = "Series ID")
+    ),
+    request_body = ReplaceSeriesMetadataRequest,
+    responses(
+        (status = 200, description = "Metadata replaced successfully", body = SeriesMetadataResponse),
+        (status = 404, description = "Series not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn replace_series_metadata(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+    Json(request): Json<ReplaceSeriesMetadataRequest>,
+) -> Result<Json<SeriesMetadataResponse>, ApiError> {
+    require_permission!(auth, Permission::SeriesWrite)?;
+
+    // Find the series
+    let existing_series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Full replacement - all fields from request become the new state
+    use sea_orm::{ActiveModelTrait, Set};
+    let mut active: series::ActiveModel = existing_series.into();
+
+    active.sort_name = Set(request.sort_name);
+    active.summary = Set(request.summary);
+    active.publisher = Set(request.publisher);
+    active.year = Set(request.year);
+    active.reading_direction = Set(request.reading_direction);
+    active.custom_metadata = Set(request.custom_metadata);
+    active.updated_at = Set(Utc::now());
+
+    let updated = active
+        .update(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to update series: {}", e)))?;
+
+    // Emit update event
+    let event = EntityChangeEvent {
+        event: EntityEvent::SeriesUpdated {
+            series_id: updated.id,
+            library_id: updated.library_id,
+            fields: Some(vec![
+                "sort_name".to_string(),
+                "summary".to_string(),
+                "publisher".to_string(),
+                "year".to_string(),
+                "reading_direction".to_string(),
+                "custom_metadata".to_string(),
+            ]),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    Ok(Json(SeriesMetadataResponse {
+        id: updated.id,
+        sort_name: updated.sort_name,
+        summary: updated.summary,
+        publisher: updated.publisher,
+        year: updated.year,
+        reading_direction: updated.reading_direction,
+        custom_metadata: updated.custom_metadata,
+        updated_at: updated.updated_at,
+    }))
+}
+
+/// Partially update series metadata (PATCH)
+///
+/// Only provided fields will be updated. Absent fields are unchanged.
+/// Explicitly null fields will be cleared.
+#[utoipa::path(
+    patch,
+    path = "/api/v1/series/{id}/metadata",
+    params(
+        ("id" = Uuid, Path, description = "Series ID")
+    ),
+    request_body = PatchSeriesMetadataRequest,
+    responses(
+        (status = 200, description = "Metadata updated successfully", body = SeriesMetadataResponse),
+        (status = 404, description = "Series not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn patch_series_metadata(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+    Json(request): Json<PatchSeriesMetadataRequest>,
+) -> Result<Json<SeriesMetadataResponse>, ApiError> {
+    require_permission!(auth, Permission::SeriesWrite)?;
+
+    // Find the series
+    let existing_series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Partial update - only set fields that were provided
+    use sea_orm::{ActiveModelTrait, Set};
+    let mut active: series::ActiveModel = existing_series.into();
+    let mut has_changes = false;
+
+    if let Some(opt) = request.sort_name.to_active_value() {
+        active.sort_name = Set(opt);
+        has_changes = true;
+    }
+    if let Some(opt) = request.summary.to_active_value() {
+        active.summary = Set(opt);
+        has_changes = true;
+    }
+    if let Some(opt) = request.publisher.to_active_value() {
+        active.publisher = Set(opt);
+        has_changes = true;
+    }
+    if let Some(opt) = request.year.to_active_value() {
+        active.year = Set(opt);
+        has_changes = true;
+    }
+    if let Some(opt) = request.reading_direction.to_active_value() {
+        active.reading_direction = Set(opt);
+        has_changes = true;
+    }
+    if let Some(opt) = request.custom_metadata.to_active_value() {
+        active.custom_metadata = Set(opt);
+        has_changes = true;
+    }
+
+    // Only update timestamp if there were actual changes
+    if has_changes {
+        active.updated_at = Set(Utc::now());
+    }
+
+    let updated = active
+        .update(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to update series: {}", e)))?;
+
+    // Emit update event
+    if has_changes {
+        let event = EntityChangeEvent {
+            event: EntityEvent::SeriesUpdated {
+                series_id: updated.id,
+                library_id: updated.library_id,
+                fields: None, // PATCH updates only changed fields, but we don't track which ones here
+            },
+            timestamp: Utc::now(),
+            user_id: Some(auth.user_id),
+        };
+        let _ = state.event_broadcaster.emit(event);
+    }
+
+    Ok(Json(SeriesMetadataResponse {
+        id: updated.id,
+        sort_name: updated.sort_name,
+        summary: updated.summary,
+        publisher: updated.publisher,
+        year: updated.year,
+        reading_direction: updated.reading_direction,
+        custom_metadata: updated.custom_metadata,
+        updated_at: updated.updated_at,
+    }))
 }
 
 /// Sanitize a string for use as a filename

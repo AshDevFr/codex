@@ -281,7 +281,7 @@ async fn test_update_library_success() {
         excluded_patterns: None,
     };
 
-    let request = put_json_request_with_auth(
+    let request = patch_json_request_with_auth(
         &format!("/api/v1/libraries/{}", library.id),
         &update_request,
         &token,
@@ -317,7 +317,7 @@ async fn test_update_library_without_permission() {
         excluded_patterns: None,
     };
 
-    let request = put_json_request_with_auth(
+    let request = patch_json_request_with_auth(
         &format!("/api/v1/libraries/{}", library.id),
         &update_request,
         &token,
@@ -721,7 +721,7 @@ async fn test_update_library_with_scheduler_succeeds_without_scheduler() {
         scanning_config: None,
     };
 
-    let request = put_json_request_with_auth(
+    let request = patch_json_request_with_auth(
         &format!("/api/v1/libraries/{}", library.id),
         &request_body,
         &token,

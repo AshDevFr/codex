@@ -1765,3 +1765,385 @@ fn create_simple_png() -> Vec<u8> {
         0xAE, 0x42, 0x60, 0x82, // CRC
     ]
 }
+
+// ============================================================================
+// Series Metadata PUT (Replace) Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_replace_series_metadata_success() {
+    use codex::api::dto::series::{ReplaceSeriesMetadataRequest, SeriesMetadataResponse};
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = ReplaceSeriesMetadataRequest {
+        sort_name: Some("Test Sort Name".to_string()),
+        summary: Some("A great series".to_string()),
+        publisher: Some("DC Comics".to_string()),
+        year: Some(2020),
+        reading_direction: Some("ltr".to_string()),
+        custom_metadata: Some(r#"{"tag": "value"}"#.to_string()),
+    };
+
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+    assert_eq!(metadata.id, series.id);
+    assert_eq!(metadata.sort_name, Some("Test Sort Name".to_string()));
+    assert_eq!(metadata.summary, Some("A great series".to_string()));
+    assert_eq!(metadata.publisher, Some("DC Comics".to_string()));
+    assert_eq!(metadata.year, Some(2020));
+    assert_eq!(metadata.reading_direction, Some("ltr".to_string()));
+    assert_eq!(
+        metadata.custom_metadata,
+        Some(r#"{"tag": "value"}"#.to_string())
+    );
+}
+
+#[tokio::test]
+async fn test_replace_series_metadata_clears_omitted_fields() {
+    use codex::api::dto::series::{ReplaceSeriesMetadataRequest, SeriesMetadataResponse};
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with initial metadata
+    let mut series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    series.summary = Some("Initial summary".to_string());
+    series.publisher = Some("Initial publisher".to_string());
+    series.year = Some(2000);
+    SeriesRepository::update(&db, &series, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // PUT with only some fields - omitted fields should be cleared
+    let request_body = ReplaceSeriesMetadataRequest {
+        sort_name: None,
+        summary: Some("New summary".to_string()),
+        publisher: None, // Should clear publisher
+        year: None,      // Should clear year
+        reading_direction: None,
+        custom_metadata: None,
+    };
+
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+    assert_eq!(metadata.summary, Some("New summary".to_string()));
+    assert_eq!(metadata.publisher, None); // Cleared
+    assert_eq!(metadata.year, None); // Cleared
+}
+
+#[tokio::test]
+async fn test_replace_series_metadata_not_found() {
+    use codex::api::dto::series::ReplaceSeriesMetadataRequest;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let fake_id = uuid::Uuid::new_v4();
+    let request_body = ReplaceSeriesMetadataRequest {
+        sort_name: None,
+        summary: Some("Summary".to_string()),
+        publisher: None,
+        year: None,
+        reading_direction: None,
+        custom_metadata: None,
+    };
+
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", fake_id),
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let error = response.unwrap();
+    assert_eq!(error.error, "NotFound");
+}
+
+#[tokio::test]
+async fn test_replace_series_metadata_without_auth() {
+    use codex::api::dto::series::ReplaceSeriesMetadataRequest;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    let request_body = ReplaceSeriesMetadataRequest {
+        sort_name: None,
+        summary: Some("Summary".to_string()),
+        publisher: None,
+        year: None,
+        reading_direction: None,
+        custom_metadata: None,
+    };
+
+    let request = put_json_request(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &request_body,
+    );
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let error = response.unwrap();
+    assert_eq!(error.error, "Unauthorized");
+}
+
+// ============================================================================
+// Series Metadata PATCH (Partial Update) Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_patch_series_metadata_partial_update() {
+    use codex::api::dto::series::SeriesMetadataResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with initial metadata
+    let mut series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    series.summary = Some("Original summary".to_string());
+    series.publisher = Some("Original publisher".to_string());
+    series.year = Some(2000);
+    SeriesRepository::update(&db, &series, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // PATCH only updates summary - other fields should be unchanged
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &serde_json::json!({
+            "summary": "Updated summary"
+        }),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+    assert_eq!(metadata.summary, Some("Updated summary".to_string()));
+    assert_eq!(metadata.publisher, Some("Original publisher".to_string())); // Unchanged
+    assert_eq!(metadata.year, Some(2000)); // Unchanged
+}
+
+#[tokio::test]
+async fn test_patch_series_metadata_explicit_null_clears_field() {
+    use codex::api::dto::series::SeriesMetadataResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with initial metadata
+    let mut series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    series.summary = Some("Original summary".to_string());
+    series.publisher = Some("Original publisher".to_string());
+    series.year = Some(2000);
+    SeriesRepository::update(&db, &series, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // PATCH with explicit null should clear the field, but omitted fields stay unchanged
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &serde_json::json!({
+            "publisher": null
+        }),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+    assert_eq!(metadata.summary, Some("Original summary".to_string())); // Unchanged
+    assert_eq!(metadata.publisher, None); // Cleared by explicit null
+    assert_eq!(metadata.year, Some(2000)); // Unchanged
+}
+
+#[tokio::test]
+async fn test_patch_series_metadata_multiple_fields() {
+    use codex::api::dto::series::SeriesMetadataResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // PATCH multiple fields at once
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &serde_json::json!({
+            "sortName": "Sort Name",
+            "summary": "A great summary",
+            "publisher": "Marvel",
+            "year": 2024,
+            "readingDirection": "rtl"
+        }),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+    assert_eq!(metadata.sort_name, Some("Sort Name".to_string()));
+    assert_eq!(metadata.summary, Some("A great summary".to_string()));
+    assert_eq!(metadata.publisher, Some("Marvel".to_string()));
+    assert_eq!(metadata.year, Some(2024));
+    assert_eq!(metadata.reading_direction, Some("rtl".to_string()));
+}
+
+#[tokio::test]
+async fn test_patch_series_metadata_empty_body_no_changes() {
+    use codex::api::dto::series::SeriesMetadataResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with initial metadata
+    let mut series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    series.summary = Some("Original summary".to_string());
+    SeriesRepository::update(&db, &series, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // PATCH with empty body - nothing should change
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &serde_json::json!({}),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+    assert_eq!(metadata.summary, Some("Original summary".to_string())); // Unchanged
+}
+
+#[tokio::test]
+async fn test_patch_series_metadata_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let fake_id = uuid::Uuid::new_v4();
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", fake_id),
+        &serde_json::json!({"summary": "Test"}),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let error = response.unwrap();
+    assert_eq!(error.error, "NotFound");
+}
+
+#[tokio::test]
+async fn test_patch_series_metadata_without_auth() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    let request = patch_json_request(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &serde_json::json!({"summary": "Test"}),
+    );
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let error = response.unwrap();
+    assert_eq!(error.error, "Unauthorized");
+}

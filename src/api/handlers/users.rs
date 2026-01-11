@@ -187,9 +187,9 @@ pub async fn create_user(
     Ok(Json(dto))
 }
 
-/// Update a user (admin only)
+/// Update a user (admin only, partial update)
 #[utoipa::path(
-    put,
+    patch,
     path = "/api/v1/users/{id}",
     params(
         ("id" = Uuid, Path, description = "User ID")

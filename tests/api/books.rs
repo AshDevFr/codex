@@ -1836,3 +1836,484 @@ async fn test_get_book_file_requires_auth() {
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
+
+// ============================================================================
+// Book Metadata Tests (PUT and PATCH)
+// ============================================================================
+
+use codex::api::dto::book::{
+    BookMetadataResponse, PatchBookMetadataRequest, ReplaceBookMetadataRequest,
+};
+
+#[tokio::test]
+async fn test_replace_book_metadata_creates_record() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/path/book.cbz",
+        "book.cbz",
+        Some("Test Book".to_string()),
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = ReplaceBookMetadataRequest {
+        summary: Some("A great book".to_string()),
+        writer: Some("Frank Miller".to_string()),
+        penciller: Some("David Mazzucchelli".to_string()),
+        inker: None,
+        colorist: None,
+        letterer: None,
+        cover_artist: None,
+        editor: None,
+        publisher: Some("DC Comics".to_string()),
+        imprint: None,
+        genre: Some("Superhero".to_string()),
+        web: None,
+        language_iso: Some("en".to_string()),
+        format_detail: None,
+        black_and_white: Some(false),
+        manga: Some(false),
+        year: Some(1987),
+        month: Some(2),
+        day: None,
+        volume: None,
+        count: None,
+        isbns: None,
+    };
+
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/books/{}/metadata", book.id),
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<BookMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+    assert_eq!(metadata.book_id, book.id);
+    assert_eq!(metadata.summary, Some("A great book".to_string()));
+    assert_eq!(metadata.writer, Some("Frank Miller".to_string()));
+    assert_eq!(metadata.publisher, Some("DC Comics".to_string()));
+    assert_eq!(metadata.year, Some(1987));
+    assert_eq!(metadata.inker, None); // Was omitted
+}
+
+#[tokio::test]
+async fn test_replace_book_metadata_clears_omitted_fields() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/path/book.cbz",
+        "book.cbz",
+        Some("Test Book".to_string()),
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    // First, create metadata with some fields
+    let request_body = ReplaceBookMetadataRequest {
+        summary: Some("Original summary".to_string()),
+        writer: Some("Original writer".to_string()),
+        penciller: None,
+        inker: None,
+        colorist: None,
+        letterer: None,
+        cover_artist: None,
+        editor: None,
+        publisher: Some("Original publisher".to_string()),
+        imprint: None,
+        genre: None,
+        web: None,
+        language_iso: None,
+        format_detail: None,
+        black_and_white: None,
+        manga: None,
+        year: Some(2020),
+        month: None,
+        day: None,
+        volume: None,
+        count: None,
+        isbns: None,
+    };
+
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/books/{}/metadata", book.id),
+        &request_body,
+        &token,
+    );
+    let (status, _): (StatusCode, Option<BookMetadataResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Now replace with fewer fields - others should be cleared
+    let app = create_test_router(state).await;
+    let request_body = ReplaceBookMetadataRequest {
+        summary: Some("New summary".to_string()),
+        writer: None, // Was set, should be cleared
+        penciller: None,
+        inker: None,
+        colorist: None,
+        letterer: None,
+        cover_artist: None,
+        editor: None,
+        publisher: None, // Was set, should be cleared
+        imprint: None,
+        genre: None,
+        web: None,
+        language_iso: None,
+        format_detail: None,
+        black_and_white: None,
+        manga: None,
+        year: None, // Was set, should be cleared
+        month: None,
+        day: None,
+        volume: None,
+        count: None,
+        isbns: None,
+    };
+
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/books/{}/metadata", book.id),
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<BookMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+    assert_eq!(metadata.summary, Some("New summary".to_string()));
+    assert_eq!(metadata.writer, None); // Cleared
+    assert_eq!(metadata.publisher, None); // Cleared
+    assert_eq!(metadata.year, None); // Cleared
+}
+
+#[tokio::test]
+async fn test_replace_book_metadata_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let fake_id = uuid::Uuid::new_v4();
+    let request_body = ReplaceBookMetadataRequest {
+        summary: Some("Test".to_string()),
+        writer: None,
+        penciller: None,
+        inker: None,
+        colorist: None,
+        letterer: None,
+        cover_artist: None,
+        editor: None,
+        publisher: None,
+        imprint: None,
+        genre: None,
+        web: None,
+        language_iso: None,
+        format_detail: None,
+        black_and_white: None,
+        manga: None,
+        year: None,
+        month: None,
+        day: None,
+        volume: None,
+        count: None,
+        isbns: None,
+    };
+
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/books/{}/metadata", fake_id),
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let error = response.unwrap();
+    assert_eq!(error.error, "NotFound");
+}
+
+#[tokio::test]
+async fn test_patch_book_metadata_partial_update() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/path/book.cbz",
+        "book.cbz",
+        Some("Test Book".to_string()),
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    // First create metadata
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/books/{}/metadata", book.id),
+        &serde_json::json!({
+            "summary": "Original summary",
+            "writer": "Original writer",
+            "publisher": "Original publisher"
+        }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<BookMetadataResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Now PATCH to update only summary
+    let app = create_test_router(state).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/books/{}/metadata", book.id),
+        &serde_json::json!({
+            "summary": "Updated summary"
+        }),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<BookMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+    assert_eq!(metadata.summary, Some("Updated summary".to_string())); // Updated
+    assert_eq!(metadata.writer, Some("Original writer".to_string())); // Unchanged
+    assert_eq!(metadata.publisher, Some("Original publisher".to_string())); // Unchanged
+}
+
+#[tokio::test]
+async fn test_patch_book_metadata_explicit_null_clears() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/path/book.cbz",
+        "book.cbz",
+        Some("Test Book".to_string()),
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    // First create metadata
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/books/{}/metadata", book.id),
+        &serde_json::json!({
+            "summary": "A summary",
+            "writer": "A writer",
+            "publisher": "A publisher"
+        }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<BookMetadataResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // PATCH with null to clear a specific field
+    let app = create_test_router(state).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/books/{}/metadata", book.id),
+        &serde_json::json!({
+            "writer": null
+        }),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<BookMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+    assert_eq!(metadata.summary, Some("A summary".to_string())); // Unchanged
+    assert_eq!(metadata.writer, None); // Cleared by null
+    assert_eq!(metadata.publisher, Some("A publisher".to_string())); // Unchanged
+}
+
+#[tokio::test]
+async fn test_patch_book_metadata_creates_record_if_missing() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/path/book.cbz",
+        "book.cbz",
+        Some("Test Book".to_string()),
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // PATCH without existing metadata record - should create one
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/books/{}/metadata", book.id),
+        &serde_json::json!({
+            "summary": "New summary",
+            "writer": "New writer"
+        }),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<BookMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+    assert_eq!(metadata.book_id, book.id);
+    assert_eq!(metadata.summary, Some("New summary".to_string()));
+    assert_eq!(metadata.writer, Some("New writer".to_string()));
+}
+
+#[tokio::test]
+async fn test_patch_book_metadata_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let fake_id = uuid::Uuid::new_v4();
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/books/{}/metadata", fake_id),
+        &serde_json::json!({"summary": "Test"}),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let error = response.unwrap();
+    assert_eq!(error.error, "NotFound");
+}
+
+#[tokio::test]
+async fn test_book_metadata_without_auth() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/path/book.cbz",
+        "book.cbz",
+        Some("Test Book".to_string()),
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    // PUT without auth
+    let request = put_json_request(
+        &format!("/api/v1/books/{}/metadata", book.id),
+        &serde_json::json!({"summary": "Test"}),
+    );
+
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let error = response.unwrap();
+    assert_eq!(error.error, "Unauthorized");
+
+    // PATCH without auth
+    let request = patch_json_request(
+        &format!("/api/v1/books/{}/metadata", book.id),
+        &serde_json::json!({"summary": "Test"}),
+    );
+
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let error = response.unwrap();
+    assert_eq!(error.error, "Unauthorized");
+}

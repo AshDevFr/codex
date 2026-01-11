@@ -1015,3 +1015,392 @@ pub async fn get_book_file(
         .body(body)
         .unwrap())
 }
+
+// ============================================================================
+// Book Metadata Endpoints
+// ============================================================================
+
+use crate::api::dto::{BookMetadataResponse, PatchBookMetadataRequest, ReplaceBookMetadataRequest};
+use crate::db::entities::book_metadata_records;
+use crate::events::{EntityChangeEvent, EntityEvent};
+use chrono::Utc;
+use sea_orm::{ActiveModelTrait, Set};
+
+/// Replace all book metadata (PUT)
+///
+/// Completely replaces all metadata fields. Omitted or null fields will be cleared.
+/// If no metadata record exists, one will be created.
+#[utoipa::path(
+    put,
+    path = "/api/v1/books/{id}/metadata",
+    params(
+        ("id" = Uuid, Path, description = "Book ID")
+    ),
+    request_body = ReplaceBookMetadataRequest,
+    responses(
+        (status = 200, description = "Metadata replaced successfully", body = BookMetadataResponse),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn replace_book_metadata(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+    Json(request): Json<ReplaceBookMetadataRequest>,
+) -> Result<Json<BookMetadataResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Check if metadata record exists
+    let existing = BookMetadataRepository::get_by_book_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+
+    let now = Utc::now();
+    let updated = if let Some(existing) = existing {
+        // Update existing record - full replacement
+        let mut active: book_metadata_records::ActiveModel = existing.into();
+
+        active.summary = Set(request.summary);
+        active.writer = Set(request.writer);
+        active.penciller = Set(request.penciller);
+        active.inker = Set(request.inker);
+        active.colorist = Set(request.colorist);
+        active.letterer = Set(request.letterer);
+        active.cover_artist = Set(request.cover_artist);
+        active.editor = Set(request.editor);
+        active.publisher = Set(request.publisher);
+        active.imprint = Set(request.imprint);
+        active.genre = Set(request.genre);
+        active.web = Set(request.web);
+        active.language_iso = Set(request.language_iso);
+        active.format_detail = Set(request.format_detail);
+        active.black_and_white = Set(request.black_and_white);
+        active.manga = Set(request.manga);
+        active.year = Set(request.year);
+        active.month = Set(request.month);
+        active.day = Set(request.day);
+        active.volume = Set(request.volume);
+        active.count = Set(request.count);
+        active.isbns = Set(request.isbns);
+        active.updated_at = Set(now);
+
+        active
+            .update(&state.db)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to update metadata: {}", e)))?
+    } else {
+        // Create new record
+        let active = book_metadata_records::ActiveModel {
+            id: Set(Uuid::new_v4()),
+            book_id: Set(book_id),
+            summary: Set(request.summary),
+            writer: Set(request.writer),
+            penciller: Set(request.penciller),
+            inker: Set(request.inker),
+            colorist: Set(request.colorist),
+            letterer: Set(request.letterer),
+            cover_artist: Set(request.cover_artist),
+            editor: Set(request.editor),
+            publisher: Set(request.publisher),
+            imprint: Set(request.imprint),
+            genre: Set(request.genre),
+            web: Set(request.web),
+            language_iso: Set(request.language_iso),
+            format_detail: Set(request.format_detail),
+            black_and_white: Set(request.black_and_white),
+            manga: Set(request.manga),
+            year: Set(request.year),
+            month: Set(request.month),
+            day: Set(request.day),
+            volume: Set(request.volume),
+            count: Set(request.count),
+            isbns: Set(request.isbns),
+            created_at: Set(now),
+            updated_at: Set(now),
+        };
+
+        active
+            .insert(&state.db)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to create metadata: {}", e)))?
+    };
+
+    // Emit update event
+    let event = EntityChangeEvent {
+        event: EntityEvent::BookUpdated {
+            book_id,
+            series_id: book.series_id,
+            library_id: book.library_id,
+            fields: Some(vec!["metadata".to_string()]),
+        },
+        timestamp: now,
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    Ok(Json(BookMetadataResponse {
+        book_id: updated.book_id,
+        summary: updated.summary,
+        writer: updated.writer,
+        penciller: updated.penciller,
+        inker: updated.inker,
+        colorist: updated.colorist,
+        letterer: updated.letterer,
+        cover_artist: updated.cover_artist,
+        editor: updated.editor,
+        publisher: updated.publisher,
+        imprint: updated.imprint,
+        genre: updated.genre,
+        web: updated.web,
+        language_iso: updated.language_iso,
+        format_detail: updated.format_detail,
+        black_and_white: updated.black_and_white,
+        manga: updated.manga,
+        year: updated.year,
+        month: updated.month,
+        day: updated.day,
+        volume: updated.volume,
+        count: updated.count,
+        isbns: updated.isbns,
+        updated_at: updated.updated_at,
+    }))
+}
+
+/// Partially update book metadata (PATCH)
+///
+/// Only provided fields will be updated. Absent fields are unchanged.
+/// Explicitly null fields will be cleared.
+/// If no metadata record exists, one will be created with the provided fields.
+#[utoipa::path(
+    patch,
+    path = "/api/v1/books/{id}/metadata",
+    params(
+        ("id" = Uuid, Path, description = "Book ID")
+    ),
+    request_body = PatchBookMetadataRequest,
+    responses(
+        (status = 200, description = "Metadata updated successfully", body = BookMetadataResponse),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn patch_book_metadata(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+    Json(request): Json<PatchBookMetadataRequest>,
+) -> Result<Json<BookMetadataResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Check if metadata record exists
+    let existing = BookMetadataRepository::get_by_book_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+
+    let now = Utc::now();
+    let mut has_changes = false;
+
+    let updated = if let Some(existing) = existing {
+        // Partial update existing record
+        let mut active: book_metadata_records::ActiveModel = existing.into();
+
+        if let Some(opt) = request.summary.to_active_value() {
+            active.summary = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.writer.to_active_value() {
+            active.writer = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.penciller.to_active_value() {
+            active.penciller = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.inker.to_active_value() {
+            active.inker = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.colorist.to_active_value() {
+            active.colorist = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.letterer.to_active_value() {
+            active.letterer = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.cover_artist.to_active_value() {
+            active.cover_artist = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.editor.to_active_value() {
+            active.editor = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.publisher.to_active_value() {
+            active.publisher = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.imprint.to_active_value() {
+            active.imprint = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.genre.to_active_value() {
+            active.genre = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.web.to_active_value() {
+            active.web = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.language_iso.to_active_value() {
+            active.language_iso = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.format_detail.to_active_value() {
+            active.format_detail = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.black_and_white.to_active_value() {
+            active.black_and_white = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.manga.to_active_value() {
+            active.manga = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.year.to_active_value() {
+            active.year = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.month.to_active_value() {
+            active.month = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.day.to_active_value() {
+            active.day = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.volume.to_active_value() {
+            active.volume = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.count.to_active_value() {
+            active.count = Set(opt);
+            has_changes = true;
+        }
+        if let Some(opt) = request.isbns.to_active_value() {
+            active.isbns = Set(opt);
+            has_changes = true;
+        }
+
+        if has_changes {
+            active.updated_at = Set(now);
+        }
+
+        active
+            .update(&state.db)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to update metadata: {}", e)))?
+    } else {
+        // Create new record with provided fields
+        has_changes = true;
+        let active = book_metadata_records::ActiveModel {
+            id: Set(Uuid::new_v4()),
+            book_id: Set(book_id),
+            summary: Set(request.summary.into_option()),
+            writer: Set(request.writer.into_option()),
+            penciller: Set(request.penciller.into_option()),
+            inker: Set(request.inker.into_option()),
+            colorist: Set(request.colorist.into_option()),
+            letterer: Set(request.letterer.into_option()),
+            cover_artist: Set(request.cover_artist.into_option()),
+            editor: Set(request.editor.into_option()),
+            publisher: Set(request.publisher.into_option()),
+            imprint: Set(request.imprint.into_option()),
+            genre: Set(request.genre.into_option()),
+            web: Set(request.web.into_option()),
+            language_iso: Set(request.language_iso.into_option()),
+            format_detail: Set(request.format_detail.into_option()),
+            black_and_white: Set(request.black_and_white.into_option()),
+            manga: Set(request.manga.into_option()),
+            year: Set(request.year.into_option()),
+            month: Set(request.month.into_option()),
+            day: Set(request.day.into_option()),
+            volume: Set(request.volume.into_option()),
+            count: Set(request.count.into_option()),
+            isbns: Set(request.isbns.into_option()),
+            created_at: Set(now),
+            updated_at: Set(now),
+        };
+
+        active
+            .insert(&state.db)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to create metadata: {}", e)))?
+    };
+
+    // Emit update event if there were changes
+    if has_changes {
+        let event = EntityChangeEvent {
+            event: EntityEvent::BookUpdated {
+                book_id,
+                series_id: book.series_id,
+                library_id: book.library_id,
+                fields: None,
+            },
+            timestamp: now,
+            user_id: Some(auth.user_id),
+        };
+        let _ = state.event_broadcaster.emit(event);
+    }
+
+    Ok(Json(BookMetadataResponse {
+        book_id: updated.book_id,
+        summary: updated.summary,
+        writer: updated.writer,
+        penciller: updated.penciller,
+        inker: updated.inker,
+        colorist: updated.colorist,
+        letterer: updated.letterer,
+        cover_artist: updated.cover_artist,
+        editor: updated.editor,
+        publisher: updated.publisher,
+        imprint: updated.imprint,
+        genre: updated.genre,
+        web: updated.web,
+        language_iso: updated.language_iso,
+        format_detail: updated.format_detail,
+        black_and_white: updated.black_and_white,
+        manga: updated.manga,
+        year: updated.year,
+        month: updated.month,
+        day: updated.day,
+        volume: updated.volume,
+        count: updated.count,
+        isbns: updated.isbns,
+        updated_at: updated.updated_at,
+    }))
+}

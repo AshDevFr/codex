@@ -202,9 +202,9 @@ pub async fn create_library(
     Ok(Json(library_to_dto(&state.db, library).await))
 }
 
-/// Update a library
+/// Update a library (partial update)
 #[utoipa::path(
-    put,
+    patch,
     path = "/api/v1/libraries/{id}",
     params(
         ("id" = Uuid, Path, description = "Library ID")

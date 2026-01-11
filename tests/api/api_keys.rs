@@ -445,7 +445,7 @@ async fn test_update_api_key() {
         expires_at: None,
     };
 
-    let request = put_json_request_with_auth(
+    let request = patch_json_request_with_auth(
         &format!("/api/v1/api-keys/{}", created.id),
         &update_request,
         &token,
@@ -482,7 +482,7 @@ async fn test_update_api_key_permissions() {
         expires_at: None,
     };
 
-    let request = put_json_request_with_auth(
+    let request = patch_json_request_with_auth(
         &format!("/api/v1/api-keys/{}", created.id),
         &update_request,
         &token,
@@ -520,7 +520,7 @@ async fn test_update_api_key_deactivate() {
         expires_at: None,
     };
 
-    let request = put_json_request_with_auth(
+    let request = patch_json_request_with_auth(
         &format!("/api/v1/api-keys/{}", created.id),
         &update_request,
         &token,
@@ -564,7 +564,7 @@ async fn test_update_api_key_other_user_forbidden() {
         expires_at: None,
     };
 
-    let request = put_json_request_with_auth(
+    let request = patch_json_request_with_auth(
         &format!("/api/v1/api-keys/{}", created.id),
         &update_request,
         &token2,

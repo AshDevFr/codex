@@ -239,6 +239,17 @@ pub fn post_json_request_with_auth<T: serde::Serialize>(
         .unwrap()
 }
 
+/// Helper to create a PUT request with JSON body (no auth)
+pub fn put_json_request<T: serde::Serialize>(uri: &str, body: &T) -> Request<String> {
+    let json = serde_json::to_string(body).unwrap();
+    Request::builder()
+        .method("PUT")
+        .uri(uri)
+        .header("Content-Type", "application/json")
+        .body(json)
+        .unwrap()
+}
+
 /// Helper to create a PUT request with JSON body and Authorization header
 pub fn put_json_request_with_auth<T: serde::Serialize>(
     uri: &str,
@@ -248,6 +259,33 @@ pub fn put_json_request_with_auth<T: serde::Serialize>(
     let json = serde_json::to_string(body).unwrap();
     Request::builder()
         .method("PUT")
+        .uri(uri)
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", token))
+        .body(json)
+        .unwrap()
+}
+
+/// Helper to create a PATCH request with JSON body (no auth)
+pub fn patch_json_request<T: serde::Serialize>(uri: &str, body: &T) -> Request<String> {
+    let json = serde_json::to_string(body).unwrap();
+    Request::builder()
+        .method("PATCH")
+        .uri(uri)
+        .header("Content-Type", "application/json")
+        .body(json)
+        .unwrap()
+}
+
+/// Helper to create a PATCH request with JSON body and Authorization header
+pub fn patch_json_request_with_auth<T: serde::Serialize>(
+    uri: &str,
+    body: &T,
+    token: &str,
+) -> Request<String> {
+    let json = serde_json::to_string(body).unwrap();
+    Request::builder()
+        .method("PATCH")
         .uri(uri)
         .header("Content-Type", "application/json")
         .header("Authorization", format!("Bearer {}", token))

@@ -98,3 +98,318 @@ pub struct BookMetadataDto {
     #[schema(example = json!(["Dennis O'Neil"]))]
     pub editors: Vec<String>,
 }
+
+/// PUT request for full replacement of book metadata
+///
+/// All metadata fields will be replaced with the values in this request.
+/// Omitting a field (or setting it to null) will clear that field.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceBookMetadataRequest {
+    /// Book summary/description
+    #[schema(example = "Bruce Wayne returns to Gotham City after years abroad.")]
+    pub summary: Option<String>,
+
+    /// Writer(s) - comma-separated if multiple
+    #[schema(example = "Frank Miller")]
+    pub writer: Option<String>,
+
+    /// Penciller(s) - comma-separated if multiple
+    #[schema(example = "David Mazzucchelli")]
+    pub penciller: Option<String>,
+
+    /// Inker(s) - comma-separated if multiple
+    #[schema(example = "David Mazzucchelli")]
+    pub inker: Option<String>,
+
+    /// Colorist(s) - comma-separated if multiple
+    #[schema(example = "Richmond Lewis")]
+    pub colorist: Option<String>,
+
+    /// Letterer(s) - comma-separated if multiple
+    #[schema(example = "Todd Klein")]
+    pub letterer: Option<String>,
+
+    /// Cover artist(s) - comma-separated if multiple
+    #[schema(example = "David Mazzucchelli")]
+    pub cover_artist: Option<String>,
+
+    /// Editor(s) - comma-separated if multiple
+    #[schema(example = "Dennis O'Neil")]
+    pub editor: Option<String>,
+
+    /// Publisher name
+    #[schema(example = "DC Comics")]
+    pub publisher: Option<String>,
+
+    /// Imprint name
+    #[schema(example = "DC Black Label")]
+    pub imprint: Option<String>,
+
+    /// Genre
+    #[schema(example = "Superhero")]
+    pub genre: Option<String>,
+
+    /// Web URL for more information
+    #[schema(example = "https://dc.com/batman-year-one")]
+    pub web: Option<String>,
+
+    /// ISO language code
+    #[schema(example = "en")]
+    pub language_iso: Option<String>,
+
+    /// Format details
+    #[schema(example = "Trade Paperback")]
+    pub format_detail: Option<String>,
+
+    /// Whether the book is black and white
+    #[schema(example = false)]
+    pub black_and_white: Option<bool>,
+
+    /// Whether the book is manga format
+    #[schema(example = false)]
+    pub manga: Option<bool>,
+
+    /// Publication year
+    #[schema(example = 1987)]
+    pub year: Option<i32>,
+
+    /// Publication month (1-12)
+    #[schema(example = 2)]
+    pub month: Option<i32>,
+
+    /// Publication day (1-31)
+    #[schema(example = 1)]
+    pub day: Option<i32>,
+
+    /// Volume number
+    #[schema(example = 1)]
+    pub volume: Option<i32>,
+
+    /// Total count in series
+    #[schema(example = 4)]
+    pub count: Option<i32>,
+
+    /// ISBN(s) - comma-separated if multiple
+    #[schema(example = "978-1401207526")]
+    pub isbns: Option<String>,
+}
+
+/// PATCH request for partial update of book metadata
+///
+/// Only provided fields will be updated. Absent fields are unchanged.
+/// Explicitly null fields will be cleared.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PatchBookMetadataRequest {
+    /// Book summary/description
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "Bruce Wayne returns to Gotham City.", nullable = true)]
+    pub summary: super::patch::PatchValue<String>,
+
+    /// Writer(s) - comma-separated if multiple
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "Frank Miller", nullable = true)]
+    pub writer: super::patch::PatchValue<String>,
+
+    /// Penciller(s) - comma-separated if multiple
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "David Mazzucchelli", nullable = true)]
+    pub penciller: super::patch::PatchValue<String>,
+
+    /// Inker(s) - comma-separated if multiple
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "David Mazzucchelli", nullable = true)]
+    pub inker: super::patch::PatchValue<String>,
+
+    /// Colorist(s) - comma-separated if multiple
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "Richmond Lewis", nullable = true)]
+    pub colorist: super::patch::PatchValue<String>,
+
+    /// Letterer(s) - comma-separated if multiple
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "Todd Klein", nullable = true)]
+    pub letterer: super::patch::PatchValue<String>,
+
+    /// Cover artist(s) - comma-separated if multiple
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "David Mazzucchelli", nullable = true)]
+    pub cover_artist: super::patch::PatchValue<String>,
+
+    /// Editor(s) - comma-separated if multiple
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "Dennis O'Neil", nullable = true)]
+    pub editor: super::patch::PatchValue<String>,
+
+    /// Publisher name
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "DC Comics", nullable = true)]
+    pub publisher: super::patch::PatchValue<String>,
+
+    /// Imprint name
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "DC Black Label", nullable = true)]
+    pub imprint: super::patch::PatchValue<String>,
+
+    /// Genre
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "Superhero", nullable = true)]
+    pub genre: super::patch::PatchValue<String>,
+
+    /// Web URL for more information
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "https://dc.com/batman-year-one", nullable = true)]
+    pub web: super::patch::PatchValue<String>,
+
+    /// ISO language code
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "en", nullable = true)]
+    pub language_iso: super::patch::PatchValue<String>,
+
+    /// Format details
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "Trade Paperback", nullable = true)]
+    pub format_detail: super::patch::PatchValue<String>,
+
+    /// Whether the book is black and white
+    #[serde(default)]
+    #[schema(value_type = Option<bool>, example = false, nullable = true)]
+    pub black_and_white: super::patch::PatchValue<bool>,
+
+    /// Whether the book is manga format
+    #[serde(default)]
+    #[schema(value_type = Option<bool>, example = false, nullable = true)]
+    pub manga: super::patch::PatchValue<bool>,
+
+    /// Publication year
+    #[serde(default)]
+    #[schema(value_type = Option<i32>, example = 1987, nullable = true)]
+    pub year: super::patch::PatchValue<i32>,
+
+    /// Publication month (1-12)
+    #[serde(default)]
+    #[schema(value_type = Option<i32>, example = 2, nullable = true)]
+    pub month: super::patch::PatchValue<i32>,
+
+    /// Publication day (1-31)
+    #[serde(default)]
+    #[schema(value_type = Option<i32>, example = 1, nullable = true)]
+    pub day: super::patch::PatchValue<i32>,
+
+    /// Volume number
+    #[serde(default)]
+    #[schema(value_type = Option<i32>, example = 1, nullable = true)]
+    pub volume: super::patch::PatchValue<i32>,
+
+    /// Total count in series
+    #[serde(default)]
+    #[schema(value_type = Option<i32>, example = 4, nullable = true)]
+    pub count: super::patch::PatchValue<i32>,
+
+    /// ISBN(s) - comma-separated if multiple
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "978-1401207526", nullable = true)]
+    pub isbns: super::patch::PatchValue<String>,
+}
+
+/// Response containing book metadata
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BookMetadataResponse {
+    /// Book ID
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440001")]
+    pub book_id: uuid::Uuid,
+
+    /// Book summary/description
+    #[schema(example = "Bruce Wayne returns to Gotham City.")]
+    pub summary: Option<String>,
+
+    /// Writer(s)
+    #[schema(example = "Frank Miller")]
+    pub writer: Option<String>,
+
+    /// Penciller(s)
+    #[schema(example = "David Mazzucchelli")]
+    pub penciller: Option<String>,
+
+    /// Inker(s)
+    #[schema(example = "David Mazzucchelli")]
+    pub inker: Option<String>,
+
+    /// Colorist(s)
+    #[schema(example = "Richmond Lewis")]
+    pub colorist: Option<String>,
+
+    /// Letterer(s)
+    #[schema(example = "Todd Klein")]
+    pub letterer: Option<String>,
+
+    /// Cover artist(s)
+    #[schema(example = "David Mazzucchelli")]
+    pub cover_artist: Option<String>,
+
+    /// Editor(s)
+    #[schema(example = "Dennis O'Neil")]
+    pub editor: Option<String>,
+
+    /// Publisher name
+    #[schema(example = "DC Comics")]
+    pub publisher: Option<String>,
+
+    /// Imprint name
+    #[schema(example = "DC Black Label")]
+    pub imprint: Option<String>,
+
+    /// Genre
+    #[schema(example = "Superhero")]
+    pub genre: Option<String>,
+
+    /// Web URL
+    #[schema(example = "https://dc.com/batman-year-one")]
+    pub web: Option<String>,
+
+    /// ISO language code
+    #[schema(example = "en")]
+    pub language_iso: Option<String>,
+
+    /// Format details
+    #[schema(example = "Trade Paperback")]
+    pub format_detail: Option<String>,
+
+    /// Whether the book is black and white
+    #[schema(example = false)]
+    pub black_and_white: Option<bool>,
+
+    /// Whether the book is manga format
+    #[schema(example = false)]
+    pub manga: Option<bool>,
+
+    /// Publication year
+    #[schema(example = 1987)]
+    pub year: Option<i32>,
+
+    /// Publication month (1-12)
+    #[schema(example = 2)]
+    pub month: Option<i32>,
+
+    /// Publication day (1-31)
+    #[schema(example = 1)]
+    pub day: Option<i32>,
+
+    /// Volume number
+    #[schema(example = 1)]
+    pub volume: Option<i32>,
+
+    /// Total count in series
+    #[schema(example = 4)]
+    pub count: Option<i32>,
+
+    /// ISBN(s)
+    #[schema(example = "978-1401207526")]
+    pub isbns: Option<String>,
+
+    /// Last update timestamp
+    #[schema(example = "2024-01-15T10:30:00Z")]
+    pub updated_at: DateTime<Utc>,
+}
