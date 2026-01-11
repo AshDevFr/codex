@@ -38,7 +38,8 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
         event_broadcaster,
         settings_service,
         thumbnail_service,
-        scheduler: None, // Tests don't need scheduler
+        task_metrics_service: None, // Tests don't need metrics service
+        scheduler: None,            // Tests don't need scheduler
     })
 }
 
@@ -67,7 +68,8 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
         event_broadcaster,
         settings_service,
         thumbnail_service,
-        scheduler: None, // Tests don't need scheduler
+        task_metrics_service: None, // Tests don't need metrics service
+        scheduler: None,            // Tests don't need scheduler
     })
 }
 
@@ -105,7 +107,8 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
         event_broadcaster,
         settings_service,
         thumbnail_service,
-        scheduler: None, // Tests don't need scheduler
+        task_metrics_service: None, // Tests don't need metrics service
+        scheduler: None,            // Tests don't need scheduler
     });
     let api_config = create_test_api_config();
     create_router(app_state, &api_config)

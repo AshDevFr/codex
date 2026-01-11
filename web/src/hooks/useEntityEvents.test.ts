@@ -5,7 +5,7 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as eventsApi from "@/api/events";
 import { useAuthStore } from "@/store/authStore";
-import type { EntityChangeEvent } from "@/types/events";
+import type { EntityChangeEvent } from "@/types";
 import { useEntityEvents } from "./useEntityEvents";
 
 // Mock the events API
@@ -110,12 +110,9 @@ describe("useEntityEvents", () => {
 
 		// Simulate receiving a CoverUpdated event
 		const event: EntityChangeEvent = {
-			event: {
-				CoverUpdated: {
-					entity_type: "series",
-					entity_id: "series-123",
-				},
-			},
+			type: "cover_updated",
+			entity_type: "series",
+			entity_id: "series-123",
 			timestamp: "2026-01-07T12:00:00Z",
 			user_id: undefined,
 		};
@@ -154,13 +151,10 @@ describe("useEntityEvents", () => {
 
 		// Simulate receiving a SeriesBulkPurged event
 		const event: EntityChangeEvent = {
-			event: {
-				SeriesBulkPurged: {
-					series_id: "series-456",
-					library_id: "lib-2",
-					count: 5,
-				},
-			},
+			type: "series_bulk_purged",
+			series_id: "series-456",
+			library_id: "lib-2",
+			count: 5,
 			timestamp: "2026-01-07T12:00:00Z",
 			user_id: "user-1",
 		};

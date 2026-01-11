@@ -4,7 +4,7 @@ import type {
 	InitializeSetupRequest,
 	InitializeSetupResponse,
 	SetupStatusResponse,
-} from "@/types/api";
+} from "@/types";
 import { api } from "./client";
 
 export const setupApi = {

@@ -1,7 +1,7 @@
 import axios, { type AxiosInstance } from "axios";
 import { navigationService } from "@/services/navigation";
 import { useAuthStore } from "@/store/authStore";
-import type { ApiError } from "@/types/api";
+import type { ApiError } from "@/types";
 
 // Create axios instance with base configuration
 export const api: AxiosInstance = axios.create({

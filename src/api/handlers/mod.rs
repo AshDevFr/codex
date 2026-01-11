@@ -15,6 +15,7 @@ pub mod scan;
 pub mod series;
 pub mod settings;
 pub mod setup;
+pub mod task_metrics;
 pub mod task_queue;
 pub mod users;
 

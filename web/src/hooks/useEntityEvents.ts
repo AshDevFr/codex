@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { notifications } from "@mantine/notifications";
 import { eventsApi } from "@/api/events";
 import { useAuthStore } from "@/store/authStore";
-import type { EntityChangeEvent } from "@/types/events";
+import type { EntityChangeEvent } from "@/types";
 
 type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
 
@@ -172,9 +172,6 @@ function handleEntityEvent(
 ) {
 	console.debug("Received entity event:", event);
 
-	// Extract event type and data
-	const eventType = event.event;
-
 	// Debounce notification display
 	const scheduleNotification = () => {
 		// Clear existing timer
@@ -189,170 +186,145 @@ function handleEntityEvent(
 		}, DEBOUNCE_DELAY);
 	};
 
-	// Handle book events
-	if (
-		"BookCreated" in eventType ||
-		"BookUpdated" in eventType ||
-		"BookDeleted" in eventType
-	) {
-		const data =
-			"BookCreated" in eventType
-				? eventType.BookCreated
-				: "BookUpdated" in eventType
-					? eventType.BookUpdated
-					: eventType.BookDeleted;
+	// Handle events using the discriminated union type field
+	switch (event.type) {
+		case "book_created":
+		case "book_updated":
+		case "book_deleted": {
+			// Track event in batch
+			if (event.type === "book_created") {
+				eventBatchRef.current.booksCreated++;
+			} else if (event.type === "book_updated") {
+				eventBatchRef.current.booksUpdated++;
+			} else {
+				eventBatchRef.current.booksDeleted++;
+			}
 
-		// Track event in batch
-		if ("BookCreated" in eventType) {
-			eventBatchRef.current.booksCreated++;
-		} else if ("BookUpdated" in eventType) {
-			eventBatchRef.current.booksUpdated++;
-		} else if ("BookDeleted" in eventType) {
-			eventBatchRef.current.booksDeleted++;
-		}
+			// Schedule batched notification
+			scheduleNotification();
 
-		// Schedule batched notification
-		scheduleNotification();
-
-		// Invalidate book queries with immediate refetch for active queries
-		queryClient.invalidateQueries({
-			queryKey: ["books"],
-			refetchType: "active",
-		});
-
-		// Invalidate specific book if it's an update
-		if ("BookUpdated" in eventType) {
-			queryClient.invalidateQueries({
-				queryKey: ["books", data.book_id],
-				refetchType: "active",
-			});
-		}
-
-		// Invalidate library queries
-		if (data.library_id) {
-			queryClient.invalidateQueries({
-				queryKey: ["libraries", data.library_id],
-				refetchType: "active",
-			});
-
-			// Invalidate series in this library
-			queryClient.invalidateQueries({
-				queryKey: ["series"],
-				refetchType: "active",
-			});
-		}
-
-		return;
-	}
-
-	// Handle series events
-	if (
-		"SeriesCreated" in eventType ||
-		"SeriesUpdated" in eventType ||
-		"SeriesDeleted" in eventType ||
-		"SeriesBulkPurged" in eventType
-	) {
-		const data =
-			"SeriesCreated" in eventType
-				? eventType.SeriesCreated
-				: "SeriesUpdated" in eventType
-					? eventType.SeriesUpdated
-					: "SeriesDeleted" in eventType
-						? eventType.SeriesDeleted
-						: eventType.SeriesBulkPurged;
-
-		// Track event in batch
-		if ("SeriesCreated" in eventType) {
-			eventBatchRef.current.seriesCreated++;
-		} else if ("SeriesUpdated" in eventType) {
-			eventBatchRef.current.seriesUpdated++;
-		} else if ("SeriesDeleted" in eventType) {
-			eventBatchRef.current.seriesDeleted++;
-		}
-
-		// Schedule batched notification
-		scheduleNotification();
-
-		// Invalidate series queries with immediate refetch for active queries
-		queryClient.invalidateQueries({
-			queryKey: ["series"],
-			refetchType: "active",
-		});
-
-		// Invalidate specific series if it's an update
-		if ("SeriesUpdated" in eventType) {
-			queryClient.invalidateQueries({
-				queryKey: ["series", data.series_id],
-				refetchType: "active",
-			});
-		}
-
-		// Invalidate library queries
-		if (data.library_id) {
-			queryClient.invalidateQueries({
-				queryKey: ["libraries", data.library_id],
-				refetchType: "active",
-			});
-		}
-
-		return;
-	}
-
-	// Handle cover update events
-	if ("CoverUpdated" in eventType) {
-		const data = eventType.CoverUpdated;
-
-		// Track event in batch
-		eventBatchRef.current.coversUpdated++;
-
-		// Schedule batched notification
-		scheduleNotification();
-
-		if (data.entity_type === "book") {
-			// Invalidate book queries with immediate refetch
-			queryClient.invalidateQueries({
-				queryKey: ["books", data.entity_id],
-				refetchType: "active",
-			});
+			// Invalidate book queries with immediate refetch for active queries
 			queryClient.invalidateQueries({
 				queryKey: ["books"],
 				refetchType: "active",
 			});
-		} else if (data.entity_type === "series") {
-			// Invalidate series queries with immediate refetch
-			queryClient.invalidateQueries({
-				queryKey: ["series", data.entity_id],
-				refetchType: "active",
-			});
+
+			// Invalidate specific book if it's an update
+			if (event.type === "book_updated") {
+				queryClient.invalidateQueries({
+					queryKey: ["books", event.book_id],
+					refetchType: "active",
+				});
+			}
+
+			// Invalidate library queries
+			if (event.library_id) {
+				queryClient.invalidateQueries({
+					queryKey: ["libraries", event.library_id],
+					refetchType: "active",
+				});
+
+				// Invalidate series in this library
+				queryClient.invalidateQueries({
+					queryKey: ["series"],
+					refetchType: "active",
+				});
+			}
+			break;
+		}
+
+		case "series_created":
+		case "series_updated":
+		case "series_deleted":
+		case "series_bulk_purged": {
+			// Track event in batch
+			if (event.type === "series_created") {
+				eventBatchRef.current.seriesCreated++;
+			} else if (event.type === "series_updated") {
+				eventBatchRef.current.seriesUpdated++;
+			} else if (event.type === "series_deleted") {
+				eventBatchRef.current.seriesDeleted++;
+			}
+
+			// Schedule batched notification
+			scheduleNotification();
+
+			// Invalidate series queries with immediate refetch for active queries
 			queryClient.invalidateQueries({
 				queryKey: ["series"],
 				refetchType: "active",
 			});
+
+			// Invalidate specific series if it's an update
+			if (event.type === "series_updated") {
+				queryClient.invalidateQueries({
+					queryKey: ["series", event.series_id],
+					refetchType: "active",
+				});
+			}
+
+			// Invalidate library queries
+			if (event.library_id) {
+				queryClient.invalidateQueries({
+					queryKey: ["libraries", event.library_id],
+					refetchType: "active",
+				});
+			}
+			break;
 		}
 
-		return;
-	}
+		case "cover_updated": {
+			// Track event in batch
+			eventBatchRef.current.coversUpdated++;
 
-	// Handle library update events
-	if ("LibraryUpdated" in eventType) {
-		const data = eventType.LibraryUpdated;
+			// Schedule batched notification
+			scheduleNotification();
 
-		// Track event in batch
-		eventBatchRef.current.librariesUpdated++;
+			if (event.entity_type === "book") {
+				// Invalidate book queries with immediate refetch
+				queryClient.invalidateQueries({
+					queryKey: ["books", event.entity_id],
+					refetchType: "active",
+				});
+				queryClient.invalidateQueries({
+					queryKey: ["books"],
+					refetchType: "active",
+				});
+			} else if (event.entity_type === "series") {
+				// Invalidate series queries with immediate refetch
+				queryClient.invalidateQueries({
+					queryKey: ["series", event.entity_id],
+					refetchType: "active",
+				});
+				queryClient.invalidateQueries({
+					queryKey: ["series"],
+					refetchType: "active",
+				});
+			}
+			break;
+		}
 
-		// Schedule batched notification
-		scheduleNotification();
+		case "library_updated":
+		case "library_deleted": {
+			// Track event in batch
+			eventBatchRef.current.librariesUpdated++;
 
-		// Invalidate library queries with immediate refetch
-		queryClient.invalidateQueries({
-			queryKey: ["libraries"],
-			refetchType: "active",
-		});
-		queryClient.invalidateQueries({
-			queryKey: ["libraries", data.library_id],
-			refetchType: "active",
-		});
+			// Schedule batched notification
+			scheduleNotification();
 
-		return;
+			// Invalidate library queries with immediate refetch
+			queryClient.invalidateQueries({
+				queryKey: ["libraries"],
+				refetchType: "active",
+			});
+			queryClient.invalidateQueries({
+				queryKey: ["libraries", event.library_id],
+				refetchType: "active",
+			});
+			break;
+		}
+
+		default:
+			console.debug("Unknown event type:", event);
 	}
 }

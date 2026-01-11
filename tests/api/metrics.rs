@@ -114,7 +114,7 @@ async fn test_get_metrics_with_auth() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    let request = get_request_with_auth("/api/v1/metrics", &token);
+    let request = get_request_with_auth("/api/v1/metrics/inventory", &token);
     let (status, response): (StatusCode, Option<MetricsDto>) =
         make_json_request(app, request).await;
 
@@ -160,7 +160,7 @@ async fn test_get_metrics_without_auth() {
     let state = create_test_auth_state(db).await;
     let app = create_test_router(state).await;
 
-    let request = get_request("/api/v1/metrics");
+    let request = get_request("/api/v1/metrics/inventory");
     let (status, response): (StatusCode, Option<ErrorResponse>) =
         make_json_request(app, request).await;
 
@@ -182,7 +182,7 @@ async fn test_get_metrics_with_readonly_user() {
     let token = create_readonly_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    let request = get_request_with_auth("/api/v1/metrics", &token);
+    let request = get_request_with_auth("/api/v1/metrics/inventory", &token);
     let (status, response): (StatusCode, Option<MetricsDto>) =
         make_json_request(app, request).await;
 
@@ -199,7 +199,7 @@ async fn test_get_metrics_empty_database() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    let request = get_request_with_auth("/api/v1/metrics", &token);
+    let request = get_request_with_auth("/api/v1/metrics/inventory", &token);
     let (status, response): (StatusCode, Option<MetricsDto>) =
         make_json_request(app, request).await;
 
@@ -264,7 +264,7 @@ async fn test_get_metrics_with_file_sizes() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    let request = get_request_with_auth("/api/v1/metrics", &token);
+    let request = get_request_with_auth("/api/v1/metrics/inventory", &token);
     let (status, response): (StatusCode, Option<MetricsDto>) =
         make_json_request(app, request).await;
 
@@ -333,7 +333,7 @@ async fn test_get_metrics_postgres() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    let request = get_request_with_auth("/api/v1/metrics", &token);
+    let request = get_request_with_auth("/api/v1/metrics/inventory", &token);
     let (status, response): (StatusCode, Option<MetricsDto>) =
         make_json_request(app, request).await;
 

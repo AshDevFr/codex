@@ -1,7 +1,7 @@
 use crate::config::{Config, DatabaseConfig, DatabaseType, EnvOverride};
 use crate::db::Database;
 use crate::events::EventBroadcaster;
-use crate::services::SettingsService;
+use crate::services::{SettingsService, TaskMetricsService};
 use crate::tasks::TaskWorker;
 use sea_orm::DatabaseConnection;
 use std::path::PathBuf;
@@ -346,6 +346,7 @@ pub fn spawn_workers(
     event_broadcaster: Arc<EventBroadcaster>,
     settings_service: Arc<SettingsService>,
     thumbnail_service: Arc<crate::services::ThumbnailService>,
+    task_metrics_service: Option<Arc<TaskMetricsService>>,
 ) -> (
     Vec<tokio::task::JoinHandle<()>>,
     Vec<tokio::sync::broadcast::Sender<()>>,
@@ -362,11 +363,16 @@ pub fn spawn_workers(
             i
         );
 
-        let task_worker = TaskWorker::new(db.clone())
+        let mut task_worker = TaskWorker::new(db.clone())
             .with_worker_id(&worker_id)
             .with_event_broadcaster(event_broadcaster.clone())
             .with_settings_service(settings_service.clone())
             .with_thumbnail_service(thumbnail_service.clone());
+
+        // Add task metrics service if available
+        if let Some(ref metrics) = task_metrics_service {
+            task_worker = task_worker.with_task_metrics_service(metrics.clone());
+        }
 
         let (mut task_worker, worker_shutdown_tx) = task_worker.with_shutdown();
         worker_shutdown_channels.push(worker_shutdown_tx);

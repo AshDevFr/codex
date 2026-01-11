@@ -4,7 +4,7 @@ import type React from "react";
 import { describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
-import type { TaskProgressEvent } from "@/types/events";
+import type { TaskProgressEvent } from "@/types";
 import { TaskNotificationBadge } from "./TaskNotificationBadge";
 
 // Mock the useTaskProgress hook
@@ -402,9 +402,7 @@ describe("TaskNotificationBadge", () => {
 
 		// Pending tasks section should show counts
 		await waitFor(() => {
-			const pendingTasksText = screen.queryByText("Pending Tasks (5)", {
-				hidden: true,
-			});
+			const pendingTasksText = screen.queryByText("Pending Tasks (5)");
 			expect(pendingTasksText).toBeInTheDocument();
 		});
 	});

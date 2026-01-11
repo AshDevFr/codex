@@ -56,6 +56,17 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         config.files.thumbnail_dir, config.files.uploads_dir
     );
 
+    // Initialize task metrics service
+    let task_metrics_service = Arc::new(crate::services::TaskMetricsService::new(
+        db.sea_orm_connection().clone(),
+        settings_service.clone(),
+    ));
+    info!("Task metrics service initialized");
+
+    // Start background jobs for metrics (flush, cleanup, rollup)
+    task_metrics_service.clone().start_background_jobs();
+    info!("Task metrics background jobs started");
+
     // Spawn multiple workers for parallel task processing
     let (worker_handles, worker_shutdown_channels) = spawn_workers(
         db.sea_orm_connection(),
@@ -63,6 +74,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         event_broadcaster,
         settings_service,
         thumbnail_service,
+        Some(task_metrics_service),
     );
 
     info!("All {} task workers started successfully", worker_count);

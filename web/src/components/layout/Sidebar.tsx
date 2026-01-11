@@ -36,7 +36,7 @@ import { LibraryModal } from "@/components/forms/LibraryModal";
 import { TaskNotificationBadge } from "@/components/TaskNotificationBadge";
 import { useAuthStore } from "@/store/authStore";
 import { useLibraryPreferencesStore } from "@/store/libraryPreferencesStore";
-import type { Library } from "@/types/api";
+import type { Library } from "@/types";
 
 interface SidebarProps {
 	currentPath?: string;

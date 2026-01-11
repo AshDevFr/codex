@@ -1,4 +1,4 @@
-import type { BrowseResponse, FileSystemEntry } from "@/types/api";
+import type { BrowseResponse, FileSystemEntry } from "@/types";
 import { api } from "./client";
 
 export const filesystemApi = {

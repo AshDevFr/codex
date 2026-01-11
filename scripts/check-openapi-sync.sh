@@ -13,14 +13,19 @@ echo "Checking OpenAPI spec synchronization..."
 
 # Regenerate OpenAPI files
 echo "Regenerating OpenAPI spec and TypeScript types..."
-make openapi-all > /dev/null 2>&1
+if ! make openapi-all > /dev/null 2>&1; then
+    echo ""
+    echo "ERROR: Failed to regenerate OpenAPI files."
+    echo "Run 'make openapi-all' manually to see the full error."
+    exit 1
+fi
 
 # Check if git detects any changes to the generated files
 if ! git diff --quiet -- "$OPENAPI_JSON" "$OPENAPI_TYPES"; then
     echo ""
     echo "ERROR: OpenAPI files are out of sync with the backend."
     echo ""
-    git diff --stat -- "$OPENAPI_JSON" "$OPENAPI_TYPES"
+    git --no-pager diff --stat -- "$OPENAPI_JSON" "$OPENAPI_TYPES"
     echo ""
     echo "Please stage the updated files:"
     echo ""

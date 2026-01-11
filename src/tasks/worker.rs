@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::db::repositories::TaskRepository;
 use crate::events::{EventBroadcaster, RecordedEvent, TaskProgressEvent};
-use crate::services::{SettingsService, ThumbnailService};
+use crate::services::{SettingsService, TaskMetricsService, ThumbnailService};
 use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, FindDuplicatesHandler, GenerateThumbnailsHandler,
     PurgeDeletedHandler, ScanLibraryHandler, TaskHandler,
@@ -27,6 +27,7 @@ pub struct TaskWorker {
     event_broadcaster: Option<Arc<EventBroadcaster>>,
     settings_service: Option<Arc<SettingsService>>,
     thumbnail_service: Option<Arc<ThumbnailService>>,
+    task_metrics_service: Option<Arc<TaskMetricsService>>,
     shutdown_tx: Option<broadcast::Sender<()>>,
 }
 
@@ -71,6 +72,7 @@ impl TaskWorker {
             event_broadcaster: None,
             settings_service: None,
             thumbnail_service: None,
+            task_metrics_service: None,
             shutdown_tx: None,
         }
     }
@@ -107,6 +109,15 @@ impl TaskWorker {
             Arc::new(GenerateThumbnailsHandler::new(thumbnail_service.clone())),
         );
         self.thumbnail_service = Some(thumbnail_service);
+        self
+    }
+
+    /// Set the task metrics service for recording task performance metrics
+    pub fn with_task_metrics_service(
+        mut self,
+        task_metrics_service: Arc<TaskMetricsService>,
+    ) -> Self {
+        self.task_metrics_service = Some(task_metrics_service);
         self
     }
 
@@ -394,8 +405,10 @@ impl TaskWorker {
         started_at: chrono::DateTime<Utc>,
         recorded_events: Option<Vec<RecordedEvent>>,
     ) -> Result<()> {
+        let completed_at = Utc::now();
+
         // Merge recorded events into task result data
-        let result_data = match (task_result.data, recorded_events) {
+        let result_data = match (task_result.data.clone(), recorded_events) {
             (Some(mut data), Some(events)) if !events.is_empty() => {
                 // Add recorded events to existing result data
                 if let Some(obj) = data.as_object_mut() {
@@ -414,8 +427,48 @@ impl TaskWorker {
         info!(
             "Task {} completed successfully: {}",
             task.id,
-            task_result.message.unwrap_or_default()
+            task_result.message.clone().unwrap_or_default()
         );
+
+        // Record metrics
+        if let Some(ref metrics_service) = self.task_metrics_service {
+            let duration_ms = (completed_at - started_at).num_milliseconds();
+            let queue_wait_ms = task
+                .started_at
+                .map(|s| (s - task.created_at).num_milliseconds())
+                .unwrap_or(0);
+
+            // Extract items_processed and bytes_processed from task result data
+            let (items_processed, bytes_processed) = task_result
+                .data
+                .as_ref()
+                .map(|d| {
+                    let items = d
+                        .get("items_processed")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(1);
+                    let bytes = d
+                        .get("bytes_processed")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0);
+                    (items, bytes)
+                })
+                .unwrap_or((1, 0));
+
+            metrics_service
+                .record(
+                    task.task_type.clone(),
+                    task.library_id,
+                    true, // success
+                    task.attempts > 1,
+                    duration_ms,
+                    queue_wait_ms,
+                    items_processed,
+                    bytes_processed,
+                    None,
+                )
+                .await;
+        }
 
         // Emit task completed event
         if let Some(ref broadcaster) = self.event_broadcaster {
@@ -439,15 +492,41 @@ impl TaskWorker {
         error: anyhow::Error,
         started_at: chrono::DateTime<Utc>,
     ) -> Result<()> {
-        error!("Task {} failed: {}", task.id, error);
-        TaskRepository::mark_failed(&self.db, task.id, error.to_string()).await?;
+        let completed_at = Utc::now();
+        let error_string = error.to_string();
+
+        error!("Task {} failed: {}", task.id, error_string);
+        TaskRepository::mark_failed(&self.db, task.id, error_string.clone()).await?;
+
+        // Record metrics
+        if let Some(ref metrics_service) = self.task_metrics_service {
+            let duration_ms = (completed_at - started_at).num_milliseconds();
+            let queue_wait_ms = task
+                .started_at
+                .map(|s| (s - task.created_at).num_milliseconds())
+                .unwrap_or(0);
+
+            metrics_service
+                .record(
+                    task.task_type.clone(),
+                    task.library_id,
+                    false, // failed
+                    task.attempts > 1,
+                    duration_ms,
+                    queue_wait_ms,
+                    0, // no items processed on failure
+                    0, // no bytes processed on failure
+                    Some(error_string.clone()),
+                )
+                .await;
+        }
 
         // Emit task failed event
         if let Some(ref broadcaster) = self.event_broadcaster {
             let _ = broadcaster.emit_task(TaskProgressEvent::failed(
                 task.id,
                 &task.task_type,
-                error.to_string(),
+                error_string,
                 started_at,
                 task.library_id,
                 task.series_id,

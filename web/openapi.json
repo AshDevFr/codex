@@ -3166,17 +3166,17 @@
         ]
       }
     },
-    "/api/v1/metrics": {
+    "/api/v1/metrics/inventory": {
       "get": {
         "tags": [
           "Metrics"
         ],
-        "summary": "Get application metrics",
-        "description": "# Permission Required\n- `libraries:read` or admin status",
-        "operationId": "get_metrics",
+        "summary": "Get inventory metrics (library/book counts)",
+        "description": "Returns counts and sizes for libraries, series, and books in the system.\nThis endpoint provides an inventory overview of your digital library.\n\n# Permission Required\n- `libraries:read` or admin status",
+        "operationId": "get_inventory_metrics",
         "responses": {
           "200": {
-            "description": "Application metrics retrieved successfully",
+            "description": "Inventory metrics retrieved successfully",
             "content": {
               "application/json": {
                 "schema": {
@@ -3187,6 +3187,190 @@
           },
           "403": {
             "description": "Permission denied"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/metrics/tasks": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Get current task metrics",
+        "description": "Returns real-time task performance statistics including:\n- Summary metrics across all task types\n- Per-task-type breakdown with timing, throughput, and error rates\n- Queue health metrics (pending, processing, stale counts)\n\n# Permission Required\n- `libraries:read` or admin status",
+        "operationId": "get_task_metrics",
+        "responses": {
+          "200": {
+            "description": "Task metrics retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskMetricsResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied"
+          },
+          "503": {
+            "description": "Task metrics service not available"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Delete all task metrics",
+        "description": "Permanently deletes all task metric records from the database\nand clears in-memory aggregates. This action cannot be undone.\n\n# Permission Required\n- Admin status required",
+        "operationId": "nuke_task_metrics",
+        "responses": {
+          "200": {
+            "description": "All metrics deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsNukeResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied - admin required"
+          },
+          "503": {
+            "description": "Task metrics service not available"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/metrics/tasks/cleanup": {
+      "post": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Trigger manual metrics cleanup",
+        "description": "Deletes metric records older than the configured retention period.\nThis operation normally runs automatically daily.\n\n# Permission Required\n- Admin status required",
+        "operationId": "trigger_metrics_cleanup",
+        "responses": {
+          "200": {
+            "description": "Cleanup completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsCleanupResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied - admin required"
+          },
+          "503": {
+            "description": "Task metrics service not available"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/metrics/tasks/history": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Get task metrics history",
+        "description": "Returns historical task performance data for trend analysis.\nData is aggregated by hour or day depending on the granularity parameter.\n\n# Permission Required\n- `libraries:read` or admin status",
+        "operationId": "get_task_metrics_history",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "description": "Number of days to retrieve (default: 7)",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int32"
+            },
+            "example": 7
+          },
+          {
+            "name": "task_type",
+            "in": "query",
+            "description": "Filter by task type",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "example": "scan_library"
+          },
+          {
+            "name": "granularity",
+            "in": "query",
+            "description": "Granularity: \"hour\" or \"day\" (default: hour)",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "example": "hour"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task metrics history retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskMetricsHistoryResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied"
+          },
+          "503": {
+            "description": "Task metrics service not available"
           }
         },
         "security": [
@@ -9624,6 +9808,36 @@
           }
         }
       },
+      "MetricsCleanupResponse": {
+        "type": "object",
+        "description": "Response for cleanup operation",
+        "required": [
+          "deleted_count",
+          "retention_days"
+        ],
+        "properties": {
+          "deleted_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of metric records deleted",
+            "example": 500,
+            "minimum": 0
+          },
+          "oldest_remaining": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Timestamp of oldest remaining record"
+          },
+          "retention_days": {
+            "type": "string",
+            "description": "Current retention setting",
+            "example": "30"
+          }
+        }
+      },
       "MetricsDto": {
         "type": "object",
         "description": "Application metrics response",
@@ -9686,6 +9900,22 @@
             "format": "int64",
             "description": "Number of registered users",
             "example": 12
+          }
+        }
+      },
+      "MetricsNukeResponse": {
+        "type": "object",
+        "description": "Response for nuke (delete all) operation",
+        "required": [
+          "deleted_count"
+        ],
+        "properties": {
+          "deleted_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of metric records deleted",
+            "example": 15000,
+            "minimum": 0
           }
         }
       },
@@ -10707,6 +10937,47 @@
             "format": "int64",
             "description": "Number of tasks deleted",
             "example": 42,
+            "minimum": 0
+          }
+        }
+      },
+      "QueueHealthMetricsDto": {
+        "type": "object",
+        "description": "Queue health metrics",
+        "required": [
+          "pending_count",
+          "processing_count",
+          "stale_count"
+        ],
+        "properties": {
+          "oldest_pending_age_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Age of oldest pending task in milliseconds",
+            "minimum": 0
+          },
+          "pending_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of tasks waiting to run",
+            "example": 25,
+            "minimum": 0
+          },
+          "processing_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of tasks currently executing",
+            "example": 4,
+            "minimum": 0
+          },
+          "stale_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of stale/stuck tasks",
+            "example": 0,
             "minimum": 0
           }
         }
@@ -11915,6 +12186,219 @@
           }
         }
       },
+      "TaskMetricsDataPointDto": {
+        "type": "object",
+        "description": "A single historical data point",
+        "required": [
+          "period_start",
+          "count",
+          "succeeded",
+          "failed",
+          "avg_duration_ms",
+          "min_duration_ms",
+          "max_duration_ms",
+          "items_processed",
+          "bytes_processed"
+        ],
+        "properties": {
+          "avg_duration_ms": {
+            "type": "number",
+            "format": "double",
+            "description": "Average duration in milliseconds",
+            "example": 1200.0
+          },
+          "bytes_processed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bytes processed in this period",
+            "example": 1073741824,
+            "minimum": 0
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of tasks in this period",
+            "example": 50,
+            "minimum": 0
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Failed tasks",
+            "example": 2,
+            "minimum": 0
+          },
+          "items_processed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Items processed in this period",
+            "example": 500,
+            "minimum": 0
+          },
+          "max_duration_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum duration",
+            "example": 5000,
+            "minimum": 0
+          },
+          "min_duration_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Minimum duration",
+            "example": 200,
+            "minimum": 0
+          },
+          "period_start": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Start of this period",
+            "example": "2026-01-11T10:00:00Z"
+          },
+          "succeeded": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Successful tasks",
+            "example": 48,
+            "minimum": 0
+          },
+          "task_type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Task type (if filtered)"
+          }
+        }
+      },
+      "TaskMetricsHistoryResponse": {
+        "type": "object",
+        "description": "Task metrics history response",
+        "required": [
+          "from",
+          "to",
+          "granularity",
+          "points"
+        ],
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Start of the time range",
+            "example": "2026-01-04T00:00:00Z"
+          },
+          "granularity": {
+            "type": "string",
+            "description": "Granularity of the data points",
+            "example": "hour"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskMetricsDataPointDto"
+            },
+            "description": "Historical data points"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time",
+            "description": "End of the time range",
+            "example": "2026-01-11T00:00:00Z"
+          }
+        }
+      },
+      "TaskMetricsResponse": {
+        "type": "object",
+        "description": "Task metrics response - current performance statistics",
+        "required": [
+          "updated_at",
+          "retention",
+          "summary",
+          "by_type",
+          "queue"
+        ],
+        "properties": {
+          "by_type": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskTypeMetricsDto"
+            },
+            "description": "Per-task-type breakdown"
+          },
+          "queue": {
+            "$ref": "#/components/schemas/QueueHealthMetricsDto",
+            "description": "Queue health metrics"
+          },
+          "retention": {
+            "type": "string",
+            "description": "Current retention setting",
+            "example": "30"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/TaskMetricsSummaryDto",
+            "description": "Overall summary statistics"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the metrics were last updated",
+            "example": "2026-01-11T12:00:00Z"
+          }
+        }
+      },
+      "TaskMetricsSummaryDto": {
+        "type": "object",
+        "description": "Summary metrics across all task types",
+        "required": [
+          "total_executed",
+          "total_succeeded",
+          "total_failed",
+          "avg_duration_ms",
+          "avg_queue_wait_ms",
+          "tasks_per_minute"
+        ],
+        "properties": {
+          "avg_duration_ms": {
+            "type": "number",
+            "format": "double",
+            "description": "Average duration in milliseconds",
+            "example": 1500.5
+          },
+          "avg_queue_wait_ms": {
+            "type": "number",
+            "format": "double",
+            "description": "Average queue wait time in milliseconds",
+            "example": 250.0
+          },
+          "tasks_per_minute": {
+            "type": "number",
+            "format": "double",
+            "description": "Tasks processed per minute (recent average)",
+            "example": 15.5
+          },
+          "total_executed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total tasks executed since last restart",
+            "example": 1250,
+            "minimum": 0
+          },
+          "total_failed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total failed tasks",
+            "example": 50,
+            "minimum": 0
+          },
+          "total_succeeded": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total successful tasks",
+            "example": 1200,
+            "minimum": 0
+          }
+        }
+      },
       "TaskProgress": {
         "type": "object",
         "description": "Progress information for a running task",
@@ -12373,6 +12857,143 @@
           }
         ],
         "description": "Task types supported by the distributed task queue"
+      },
+      "TaskTypeMetricsDto": {
+        "type": "object",
+        "description": "Metrics for a specific task type",
+        "required": [
+          "task_type",
+          "executed",
+          "succeeded",
+          "failed",
+          "retried",
+          "avg_duration_ms",
+          "min_duration_ms",
+          "max_duration_ms",
+          "p50_duration_ms",
+          "p95_duration_ms",
+          "avg_queue_wait_ms",
+          "items_processed",
+          "bytes_processed",
+          "throughput_per_sec",
+          "error_rate_pct"
+        ],
+        "properties": {
+          "avg_duration_ms": {
+            "type": "number",
+            "format": "double",
+            "description": "Average duration in milliseconds",
+            "example": 2500.0
+          },
+          "avg_queue_wait_ms": {
+            "type": "number",
+            "format": "double",
+            "description": "Average queue wait time in milliseconds",
+            "example": 150.0
+          },
+          "bytes_processed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total bytes processed",
+            "example": 1073741824,
+            "minimum": 0
+          },
+          "error_rate_pct": {
+            "type": "number",
+            "format": "double",
+            "description": "Error rate as percentage",
+            "example": 5.0
+          },
+          "executed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of executions",
+            "example": 100,
+            "minimum": 0
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Failed executions",
+            "example": 5,
+            "minimum": 0
+          },
+          "items_processed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total items processed",
+            "example": 5000,
+            "minimum": 0
+          },
+          "last_error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Most recent error message"
+          },
+          "last_error_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the last error occurred"
+          },
+          "max_duration_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum duration in milliseconds",
+            "example": 15000,
+            "minimum": 0
+          },
+          "min_duration_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Minimum duration in milliseconds",
+            "example": 500,
+            "minimum": 0
+          },
+          "p50_duration_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "50th percentile (median) duration",
+            "example": 2000,
+            "minimum": 0
+          },
+          "p95_duration_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "95th percentile duration",
+            "example": 8000,
+            "minimum": 0
+          },
+          "retried": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Retried executions",
+            "example": 10,
+            "minimum": 0
+          },
+          "succeeded": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Successful executions",
+            "example": 95,
+            "minimum": 0
+          },
+          "task_type": {
+            "type": "string",
+            "description": "Task type name",
+            "example": "scan_library"
+          },
+          "throughput_per_sec": {
+            "type": "number",
+            "format": "double",
+            "description": "Throughput rate per second",
+            "example": 25.5
+          }
+        }
       },
       "TaskTypeStats": {
         "type": "object",

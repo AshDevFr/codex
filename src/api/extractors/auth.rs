@@ -71,6 +71,9 @@ pub struct AppState {
     pub event_broadcaster: Arc<crate::events::EventBroadcaster>,
     pub settings_service: Arc<crate::services::SettingsService>,
     pub thumbnail_service: Arc<crate::services::ThumbnailService>,
+    /// Task metrics service for collecting task performance data
+    /// None in test environments or when not needed
+    pub task_metrics_service: Option<Arc<crate::services::TaskMetricsService>>,
     /// Scheduler for managing scheduled tasks (library scans, deduplication, etc.)
     /// None when workers are disabled (CODEX_DISABLE_WORKERS=true) or in test environments
     pub scheduler: Option<Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>>,

@@ -78,7 +78,7 @@ describe("Setup", () => {
 	});
 
 	it("should handle cron schedule in settings", async () => {
-		vi.mocked(setupApi.configureSettings).mockResolvedValue({});
+		vi.mocked(setupApi.configureSettings).mockResolvedValue({ message: "Settings configured", settingsConfigured: 1 });
 
 		renderWithProviders(<Setup />);
 

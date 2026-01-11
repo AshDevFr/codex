@@ -18,7 +18,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { booksApi } from "@/api/books";
 import { seriesApi } from "@/api/series";
-import type { Book, Series } from "@/types/api";
+import type { Book, Series } from "@/types";
 
 interface MediaCardProps {
 	type: "book" | "series";

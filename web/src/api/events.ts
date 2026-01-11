@@ -1,4 +1,4 @@
-import type { EntityChangeEvent } from "@/types/events";
+import type { EntityChangeEvent } from "@/types";
 
 /**
  * SSE Reconnection Manager for entity events with exponential backoff

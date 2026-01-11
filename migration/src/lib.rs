@@ -36,6 +36,10 @@ mod m20260107_000022_seed_settings;
 mod m20260108_000023_create_book_duplicates;
 mod m20260109_000024_create_task_notification_trigger;
 
+// Task metrics
+mod m20260111_000025_create_task_metrics;
+mod m20260111_000026_seed_metrics_settings;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -72,6 +76,9 @@ impl MigratorTrait for Migrator {
             // Additional features
             Box::new(m20260108_000023_create_book_duplicates::Migration),
             Box::new(m20260109_000024_create_task_notification_trigger::Migration),
+            // Task metrics
+            Box::new(m20260111_000025_create_task_metrics::Migration),
+            Box::new(m20260111_000026_seed_metrics_settings::Migration),
         ]
     }
 }

@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import type React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
-import type { TaskProgressEvent } from "@/types/events";
+import type { TaskProgressEvent } from "@/types";
 import { TaskProgressIndicator } from "./TaskProgressIndicator";
 
 // Mock the useTaskProgress hook

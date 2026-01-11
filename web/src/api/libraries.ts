@@ -1,4 +1,4 @@
-import type { CreateLibraryRequest, Library } from "@/types/api";
+import type { CreateLibraryRequest, Library, ScanningConfig } from "@/types";
 import { api } from "./client";
 
 export const librariesApi = {
@@ -27,7 +27,7 @@ export const librariesApi = {
 			| Partial<Library>
 			| {
 					name?: string;
-					scanningConfig?: import("@/types/api").ScanningConfig;
+					scanningConfig?: ScanningConfig;
 			  },
 	): Promise<Library> => {
 		const response = await api.put<Library>(`/libraries/${id}`, library);

@@ -1,0 +1,751 @@
+use anyhow::Result;
+use chrono::{DateTime, Duration, Timelike, Utc};
+use sea_orm::DatabaseConnection;
+use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tokio::time::{interval, Duration as TokioDuration};
+use tracing::{debug, error, info, warn};
+use uuid::Uuid;
+
+use crate::db::repositories::task_metrics::{
+    AggregatedTaskMetrics, TaskCompletionData, TaskMetricsRepository,
+};
+use crate::services::SettingsService;
+
+/// Number of recent completions to keep for percentile calculation
+const MAX_RECENT_COMPLETIONS: usize = 1000;
+/// Number of duration samples to keep per task type
+const MAX_SAMPLES_PER_TYPE: usize = 100;
+
+/// A single task completion record for in-memory tracking
+#[derive(Debug, Clone)]
+struct TaskCompletion {
+    task_type: String,
+    library_id: Option<Uuid>,
+    success: bool,
+    retried: bool,
+    duration_ms: i64,
+    queue_wait_ms: i64,
+    items_processed: i64,
+    bytes_processed: i64,
+    error: Option<String>,
+    completed_at: DateTime<Utc>,
+}
+
+/// Running aggregate for a specific task type
+#[derive(Debug, Clone, Default)]
+struct RunningAggregate {
+    count: u64,
+    succeeded: u64,
+    failed: u64,
+    retried: u64,
+    total_duration_ms: i64,
+    min_duration_ms: Option<i64>,
+    max_duration_ms: Option<i64>,
+    total_queue_wait_ms: i64,
+    items_processed: i64,
+    bytes_processed: i64,
+    error_count: u64,
+    last_error: Option<String>,
+    last_error_at: Option<DateTime<Utc>>,
+    duration_samples: VecDeque<i64>,
+}
+
+impl RunningAggregate {
+    fn update(&mut self, completion: &TaskCompletion) {
+        self.count += 1;
+        if completion.success {
+            self.succeeded += 1;
+        } else {
+            self.failed += 1;
+        }
+        if completion.retried {
+            self.retried += 1;
+        }
+
+        self.total_duration_ms += completion.duration_ms;
+        self.min_duration_ms = Some(
+            self.min_duration_ms
+                .map_or(completion.duration_ms, |m| m.min(completion.duration_ms)),
+        );
+        self.max_duration_ms = Some(
+            self.max_duration_ms
+                .map_or(completion.duration_ms, |m| m.max(completion.duration_ms)),
+        );
+        self.total_queue_wait_ms += completion.queue_wait_ms;
+        self.items_processed += completion.items_processed;
+        self.bytes_processed += completion.bytes_processed;
+
+        if completion.error.is_some() {
+            self.error_count += 1;
+            self.last_error = completion.error.clone();
+            self.last_error_at = Some(completion.completed_at);
+        }
+
+        // Keep recent samples for percentile calculation
+        self.duration_samples.push_back(completion.duration_ms);
+        if self.duration_samples.len() > MAX_SAMPLES_PER_TYPE {
+            self.duration_samples.pop_front();
+        }
+    }
+
+    /// Calculate percentile from samples
+    fn percentile(&self, p: f64) -> Option<i64> {
+        if self.duration_samples.is_empty() {
+            return None;
+        }
+        let mut sorted: Vec<i64> = self.duration_samples.iter().copied().collect();
+        sorted.sort();
+        let index = ((sorted.len() as f64 - 1.0) * p / 100.0).round() as usize;
+        Some(sorted[index.min(sorted.len() - 1)])
+    }
+}
+
+/// In-memory metrics collector
+struct MetricsCollector {
+    /// Rolling window of recent completions
+    recent: VecDeque<TaskCompletion>,
+    /// Running aggregates by task type
+    aggregates: HashMap<String, RunningAggregate>,
+    /// Last flush timestamp
+    last_flush: DateTime<Utc>,
+    /// Completions since last flush (to persist)
+    pending_completions: Vec<TaskCompletion>,
+}
+
+impl MetricsCollector {
+    fn new() -> Self {
+        Self {
+            recent: VecDeque::new(),
+            aggregates: HashMap::new(),
+            last_flush: Utc::now(),
+            pending_completions: Vec::new(),
+        }
+    }
+
+    fn record(&mut self, completion: TaskCompletion) {
+        // Update running aggregate
+        let aggregate = self
+            .aggregates
+            .entry(completion.task_type.clone())
+            .or_default();
+        aggregate.update(&completion);
+
+        // Keep in recent window
+        self.recent.push_back(completion.clone());
+        if self.recent.len() > MAX_RECENT_COMPLETIONS {
+            self.recent.pop_front();
+        }
+
+        // Add to pending for persistence
+        self.pending_completions.push(completion);
+    }
+
+    fn take_pending(&mut self) -> Vec<TaskCompletion> {
+        std::mem::take(&mut self.pending_completions)
+    }
+
+    fn clear(&mut self) {
+        self.recent.clear();
+        self.aggregates.clear();
+        self.pending_completions.clear();
+        self.last_flush = Utc::now();
+    }
+}
+
+/// Task metrics service for collecting and aggregating task performance data
+#[derive(Clone)]
+pub struct TaskMetricsService {
+    collector: Arc<RwLock<MetricsCollector>>,
+    db: DatabaseConnection,
+    settings: Arc<SettingsService>,
+}
+
+impl TaskMetricsService {
+    /// Create a new task metrics service
+    pub fn new(db: DatabaseConnection, settings: Arc<SettingsService>) -> Self {
+        Self {
+            collector: Arc::new(RwLock::new(MetricsCollector::new())),
+            db,
+            settings,
+        }
+    }
+
+    /// Check if metrics persistence is enabled
+    async fn is_persistence_enabled(&self) -> bool {
+        let retention = self
+            .settings
+            .get_string("metrics.task_retention_days", "30")
+            .await
+            .unwrap_or_else(|_| "30".to_string());
+        retention != "disabled"
+    }
+
+    /// Get the retention period in days
+    async fn retention_days(&self) -> Option<i64> {
+        let retention = self
+            .settings
+            .get_string("metrics.task_retention_days", "30")
+            .await
+            .unwrap_or_else(|_| "30".to_string());
+
+        match retention.as_str() {
+            "disabled" => None,
+            s => s.parse().ok(),
+        }
+    }
+
+    /// Record a task completion
+    pub async fn record(
+        &self,
+        task_type: String,
+        library_id: Option<Uuid>,
+        success: bool,
+        retried: bool,
+        duration_ms: i64,
+        queue_wait_ms: i64,
+        items_processed: i64,
+        bytes_processed: i64,
+        error: Option<String>,
+    ) {
+        let completion = TaskCompletion {
+            task_type,
+            library_id,
+            success,
+            retried,
+            duration_ms,
+            queue_wait_ms,
+            items_processed,
+            bytes_processed,
+            error,
+            completed_at: Utc::now(),
+        };
+
+        let mut collector = self.collector.write().await;
+        collector.record(completion);
+    }
+
+    /// Flush pending metrics to the database
+    pub async fn flush(&self) -> Result<u64> {
+        // Check if persistence is enabled
+        if !self.is_persistence_enabled().await {
+            // Clear pending without persisting
+            let mut collector = self.collector.write().await;
+            let count = collector.pending_completions.len();
+            collector.pending_completions.clear();
+            collector.last_flush = Utc::now();
+            return Ok(count as u64);
+        }
+
+        // Take pending completions
+        let pending = {
+            let mut collector = self.collector.write().await;
+            collector.last_flush = Utc::now();
+            collector.take_pending()
+        };
+
+        let count = pending.len();
+        if count == 0 {
+            return Ok(0);
+        }
+
+        // Persist each completion
+        for completion in pending {
+            let data = TaskCompletionData {
+                task_type: completion.task_type,
+                library_id: completion.library_id,
+                success: completion.success,
+                retried: completion.retried,
+                duration_ms: completion.duration_ms,
+                queue_wait_ms: completion.queue_wait_ms,
+                items_processed: completion.items_processed,
+                bytes_processed: completion.bytes_processed,
+                error: completion.error,
+            };
+
+            if let Err(e) = TaskMetricsRepository::record_completion(&self.db, data).await {
+                error!("Failed to persist task metrics: {}", e);
+            }
+        }
+
+        debug!("Flushed {} task metrics to database", count);
+        Ok(count as u64)
+    }
+
+    /// Run cleanup of old metrics based on retention setting
+    pub async fn cleanup(&self) -> Result<u64> {
+        match self.retention_days().await {
+            Some(days) => {
+                let deleted = TaskMetricsRepository::cleanup_old_metrics(&self.db, days).await?;
+                Ok(deleted)
+            }
+            None => Ok(0), // Disabled, nothing to clean
+        }
+    }
+
+    /// Run rollup of hourly metrics to daily
+    pub async fn rollup(&self) -> Result<u64> {
+        if !self.is_persistence_enabled().await {
+            return Ok(0);
+        }
+        TaskMetricsRepository::rollup_hourly_to_daily(&self.db).await
+    }
+
+    /// Delete all metrics data
+    pub async fn nuke_all(&self) -> Result<u64> {
+        // Clear in-memory data
+        {
+            let mut collector = self.collector.write().await;
+            collector.clear();
+        }
+
+        // Delete from database
+        TaskMetricsRepository::nuke_all_metrics(&self.db).await
+    }
+
+    /// Get current in-memory aggregates by task type
+    pub async fn get_current_aggregates(&self) -> HashMap<String, TaskTypeMetrics> {
+        let collector = self.collector.read().await;
+        let mut result = HashMap::new();
+
+        for (task_type, agg) in &collector.aggregates {
+            result.insert(
+                task_type.clone(),
+                TaskTypeMetrics {
+                    executed: agg.count,
+                    succeeded: agg.succeeded,
+                    failed: agg.failed,
+                    retried: agg.retried,
+                    avg_duration_ms: if agg.count > 0 {
+                        agg.total_duration_ms as f64 / agg.count as f64
+                    } else {
+                        0.0
+                    },
+                    min_duration_ms: agg.min_duration_ms.unwrap_or(0) as u64,
+                    max_duration_ms: agg.max_duration_ms.unwrap_or(0) as u64,
+                    p50_duration_ms: agg.percentile(50.0).unwrap_or(0) as u64,
+                    p95_duration_ms: agg.percentile(95.0).unwrap_or(0) as u64,
+                    avg_queue_wait_ms: if agg.count > 0 {
+                        agg.total_queue_wait_ms as f64 / agg.count as f64
+                    } else {
+                        0.0
+                    },
+                    items_processed: agg.items_processed as u64,
+                    bytes_processed: agg.bytes_processed as u64,
+                    throughput_per_sec: 0.0, // Calculated later with time window
+                    error_rate_pct: if agg.count > 0 {
+                        (agg.failed as f64 / agg.count as f64) * 100.0
+                    } else {
+                        0.0
+                    },
+                    last_error: agg.last_error.clone(),
+                    last_error_at: agg.last_error_at,
+                },
+            );
+        }
+
+        result
+    }
+
+    /// Get summary statistics
+    pub async fn get_summary(&self) -> TaskMetricsSummary {
+        let collector = self.collector.read().await;
+
+        let mut total_executed = 0u64;
+        let mut total_succeeded = 0u64;
+        let mut total_failed = 0u64;
+        let mut total_duration_ms = 0i64;
+        let mut total_queue_wait_ms = 0i64;
+
+        for agg in collector.aggregates.values() {
+            total_executed += agg.count;
+            total_succeeded += agg.succeeded;
+            total_failed += agg.failed;
+            total_duration_ms += agg.total_duration_ms;
+            total_queue_wait_ms += agg.total_queue_wait_ms;
+        }
+
+        // Calculate throughput based on recent completions
+        let tasks_per_minute = if !collector.recent.is_empty() {
+            let oldest = collector.recent.front().map(|c| c.completed_at);
+            let newest = collector.recent.back().map(|c| c.completed_at);
+
+            if let (Some(oldest), Some(newest)) = (oldest, newest) {
+                let duration_mins = (newest - oldest).num_seconds() as f64 / 60.0;
+                if duration_mins > 0.0 {
+                    collector.recent.len() as f64 / duration_mins
+                } else {
+                    0.0
+                }
+            } else {
+                0.0
+            }
+        } else {
+            0.0
+        };
+
+        TaskMetricsSummary {
+            total_executed,
+            total_succeeded,
+            total_failed,
+            avg_duration_ms: if total_executed > 0 {
+                total_duration_ms as f64 / total_executed as f64
+            } else {
+                0.0
+            },
+            avg_queue_wait_ms: if total_executed > 0 {
+                total_queue_wait_ms as f64 / total_executed as f64
+            } else {
+                0.0
+            },
+            tasks_per_minute,
+        }
+    }
+
+    /// Get historical metrics from database
+    pub async fn get_history(
+        &self,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+        task_type: Option<&str>,
+        granularity: &str,
+    ) -> Result<Vec<TaskMetricsDataPoint>> {
+        let records =
+            TaskMetricsRepository::get_metrics_history(&self.db, from, to, task_type, granularity)
+                .await?;
+
+        let points = records
+            .into_iter()
+            .map(|r| TaskMetricsDataPoint {
+                period_start: r.period_start,
+                task_type: Some(r.task_type),
+                count: r.count as u64,
+                succeeded: r.succeeded as u64,
+                failed: r.failed as u64,
+                avg_duration_ms: if r.count > 0 {
+                    r.total_duration_ms as f64 / r.count as f64
+                } else {
+                    0.0
+                },
+                min_duration_ms: r.min_duration_ms.unwrap_or(0) as u64,
+                max_duration_ms: r.max_duration_ms.unwrap_or(0) as u64,
+                items_processed: r.items_processed as u64,
+                bytes_processed: r.bytes_processed as u64,
+            })
+            .collect();
+
+        Ok(points)
+    }
+
+    /// Get retention setting value
+    pub async fn get_retention_setting(&self) -> String {
+        self.settings
+            .get_string("metrics.task_retention_days", "30")
+            .await
+            .unwrap_or_else(|_| "30".to_string())
+    }
+
+    /// Get oldest metric timestamp
+    pub async fn get_oldest_metric(&self) -> Result<Option<DateTime<Utc>>> {
+        TaskMetricsRepository::get_oldest_metric(&self.db).await
+    }
+
+    /// Start background jobs for flushing, cleanup, and rollup
+    pub fn start_background_jobs(self: Arc<Self>) {
+        let service = self.clone();
+
+        // Flush job - every 1 minute
+        tokio::spawn(async move {
+            let mut flush_interval = interval(TokioDuration::from_secs(60));
+
+            loop {
+                flush_interval.tick().await;
+
+                if let Err(e) = service.flush().await {
+                    error!("Failed to flush task metrics: {}", e);
+                }
+            }
+        });
+
+        let service = self.clone();
+        // Cleanup job - every hour
+        tokio::spawn(async move {
+            let mut cleanup_interval = interval(TokioDuration::from_secs(3600));
+
+            loop {
+                cleanup_interval.tick().await;
+
+                if let Err(e) = service.cleanup().await {
+                    error!("Failed to cleanup task metrics: {}", e);
+                }
+            }
+        });
+
+        // Rollup job - every day at midnight (check hourly)
+        let service = self;
+        tokio::spawn(async move {
+            let mut rollup_interval = interval(TokioDuration::from_secs(3600));
+
+            loop {
+                rollup_interval.tick().await;
+
+                // Only run rollup at midnight (hour 0)
+                let now = Utc::now();
+                if now.time().hour() == 0 {
+                    if let Err(e) = service.rollup().await {
+                        error!("Failed to rollup task metrics: {}", e);
+                    }
+                }
+            }
+        });
+    }
+}
+
+/// Summary metrics for all task types
+#[derive(Debug, Clone)]
+pub struct TaskMetricsSummary {
+    pub total_executed: u64,
+    pub total_succeeded: u64,
+    pub total_failed: u64,
+    pub avg_duration_ms: f64,
+    pub avg_queue_wait_ms: f64,
+    pub tasks_per_minute: f64,
+}
+
+/// Metrics for a specific task type
+#[derive(Debug, Clone)]
+pub struct TaskTypeMetrics {
+    pub executed: u64,
+    pub succeeded: u64,
+    pub failed: u64,
+    pub retried: u64,
+    pub avg_duration_ms: f64,
+    pub min_duration_ms: u64,
+    pub max_duration_ms: u64,
+    pub p50_duration_ms: u64,
+    pub p95_duration_ms: u64,
+    pub avg_queue_wait_ms: f64,
+    pub items_processed: u64,
+    pub bytes_processed: u64,
+    pub throughput_per_sec: f64,
+    pub error_rate_pct: f64,
+    pub last_error: Option<String>,
+    pub last_error_at: Option<DateTime<Utc>>,
+}
+
+/// Historical data point
+#[derive(Debug, Clone)]
+pub struct TaskMetricsDataPoint {
+    pub period_start: DateTime<Utc>,
+    pub task_type: Option<String>,
+    pub count: u64,
+    pub succeeded: u64,
+    pub failed: u64,
+    pub avg_duration_ms: f64,
+    pub min_duration_ms: u64,
+    pub max_duration_ms: u64,
+    pub items_processed: u64,
+    pub bytes_processed: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::test_helpers::setup_test_db;
+
+    async fn create_test_service() -> TaskMetricsService {
+        let db = setup_test_db().await;
+        let settings = Arc::new(SettingsService::new(db.clone()).await.unwrap());
+        TaskMetricsService::new(db, settings)
+    }
+
+    #[tokio::test]
+    async fn test_record_completion() {
+        let service = create_test_service().await;
+
+        service
+            .record(
+                "scan_library".to_string(),
+                None,
+                true,
+                false,
+                1000,
+                50,
+                10,
+                1024,
+                None,
+            )
+            .await;
+
+        let aggregates = service.get_current_aggregates().await;
+        assert!(aggregates.contains_key("scan_library"));
+
+        let scan_metrics = &aggregates["scan_library"];
+        assert_eq!(scan_metrics.executed, 1);
+        assert_eq!(scan_metrics.succeeded, 1);
+        assert_eq!(scan_metrics.failed, 0);
+    }
+
+    #[tokio::test]
+    async fn test_record_multiple_completions() {
+        let service = create_test_service().await;
+
+        // Record successful completion
+        service
+            .record(
+                "analyze_book".to_string(),
+                None,
+                true,
+                false,
+                500,
+                25,
+                1,
+                512,
+                None,
+            )
+            .await;
+
+        // Record failed completion
+        service
+            .record(
+                "analyze_book".to_string(),
+                None,
+                false,
+                true,
+                1500,
+                100,
+                0,
+                0,
+                Some("Test error".to_string()),
+            )
+            .await;
+
+        let aggregates = service.get_current_aggregates().await;
+        let metrics = &aggregates["analyze_book"];
+
+        assert_eq!(metrics.executed, 2);
+        assert_eq!(metrics.succeeded, 1);
+        assert_eq!(metrics.failed, 1);
+        assert_eq!(metrics.retried, 1);
+        assert!(metrics.last_error.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_summary() {
+        let service = create_test_service().await;
+
+        for i in 0..5 {
+            service
+                .record(
+                    format!("task_{}", i % 2),
+                    None,
+                    i % 3 != 0,
+                    false,
+                    100 * (i + 1) as i64,
+                    10,
+                    1,
+                    100,
+                    None,
+                )
+                .await;
+        }
+
+        let summary = service.get_summary().await;
+        assert_eq!(summary.total_executed, 5);
+        assert!(summary.total_succeeded > 0);
+        assert!(summary.avg_duration_ms > 0.0);
+    }
+
+    #[tokio::test]
+    async fn test_flush() {
+        let service = create_test_service().await;
+
+        service
+            .record(
+                "test_task".to_string(),
+                None,
+                true,
+                false,
+                100,
+                10,
+                1,
+                100,
+                None,
+            )
+            .await;
+
+        let flushed = service.flush().await.expect("Flush failed");
+        assert_eq!(flushed, 1);
+
+        // Second flush should return 0 (nothing pending)
+        let flushed = service.flush().await.expect("Flush failed");
+        assert_eq!(flushed, 0);
+    }
+
+    #[tokio::test]
+    async fn test_nuke_all() {
+        let service = create_test_service().await;
+
+        // Record some data
+        for i in 0..3 {
+            service
+                .record(
+                    format!("task_{}", i),
+                    None,
+                    true,
+                    false,
+                    100,
+                    10,
+                    1,
+                    100,
+                    None,
+                )
+                .await;
+        }
+
+        // Flush to database
+        service.flush().await.expect("Flush failed");
+
+        // Nuke all
+        service.nuke_all().await.expect("Nuke failed");
+
+        // Verify in-memory is cleared
+        let aggregates = service.get_current_aggregates().await;
+        assert!(aggregates.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_percentile_calculation() {
+        let service = create_test_service().await;
+
+        // Record completions with varying durations
+        let durations = vec![100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
+        for d in durations {
+            service
+                .record(
+                    "percentile_test".to_string(),
+                    None,
+                    true,
+                    false,
+                    d,
+                    10,
+                    1,
+                    100,
+                    None,
+                )
+                .await;
+        }
+
+        let aggregates = service.get_current_aggregates().await;
+        let metrics = &aggregates["percentile_test"];
+
+        // P50 should be around 500-600
+        assert!(metrics.p50_duration_ms >= 500);
+        assert!(metrics.p50_duration_ms <= 600);
+
+        // P95 should be around 900-1000
+        assert!(metrics.p95_duration_ms >= 900);
+        assert!(metrics.p95_duration_ms <= 1000);
+    }
+}

@@ -179,7 +179,11 @@ Codex provides OPDS catalog feeds for e-reader applications:
         handlers::api_keys::delete_api_key,
 
         // Metrics endpoints
-        handlers::get_metrics,
+        handlers::get_inventory_metrics,
+        handlers::task_metrics::get_task_metrics,
+        handlers::task_metrics::get_task_metrics_history,
+        handlers::task_metrics::trigger_metrics_cleanup,
+        handlers::task_metrics::nuke_task_metrics,
 
         // Scan endpoints
         handlers::trigger_scan,
@@ -333,6 +337,16 @@ Codex provides OPDS catalog feeds for e-reader applications:
             // Metrics DTOs
             dto::MetricsDto,
             dto::LibraryMetricsDto,
+
+            // Task Metrics DTOs
+            dto::TaskMetricsResponse,
+            dto::TaskMetricsSummaryDto,
+            dto::TaskTypeMetricsDto,
+            dto::QueueHealthMetricsDto,
+            dto::TaskMetricsHistoryResponse,
+            dto::TaskMetricsDataPointDto,
+            dto::MetricsCleanupResponse,
+            dto::MetricsNukeResponse,
 
             // Scan DTOs
             dto::ScanStatusDto,

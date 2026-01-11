@@ -1086,7 +1086,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/metrics": {
+    "/api/v1/metrics/inventory": {
         parameters: {
             query?: never;
             header?: never;
@@ -1094,11 +1094,96 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get application metrics
-         * @description # Permission Required
+         * Get inventory metrics (library/book counts)
+         * @description Returns counts and sizes for libraries, series, and books in the system.
+         *     This endpoint provides an inventory overview of your digital library.
+         *
+         *     # Permission Required
          *     - `libraries:read` or admin status
          */
-        get: operations["get_metrics"];
+        get: operations["get_inventory_metrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/metrics/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get current task metrics
+         * @description Returns real-time task performance statistics including:
+         *     - Summary metrics across all task types
+         *     - Per-task-type breakdown with timing, throughput, and error rates
+         *     - Queue health metrics (pending, processing, stale counts)
+         *
+         *     # Permission Required
+         *     - `libraries:read` or admin status
+         */
+        get: operations["get_task_metrics"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete all task metrics
+         * @description Permanently deletes all task metric records from the database
+         *     and clears in-memory aggregates. This action cannot be undone.
+         *
+         *     # Permission Required
+         *     - Admin status required
+         */
+        delete: operations["nuke_task_metrics"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/metrics/tasks/cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger manual metrics cleanup
+         * @description Deletes metric records older than the configured retention period.
+         *     This operation normally runs automatically daily.
+         *
+         *     # Permission Required
+         *     - Admin status required
+         */
+        post: operations["trigger_metrics_cleanup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/metrics/tasks/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get task metrics history
+         * @description Returns historical task performance data for trend analysis.
+         *     Data is aggregated by hour or day depending on the granularity parameter.
+         *
+         *     # Permission Required
+         *     - `libraries:read` or admin status
+         */
+        get: operations["get_task_metrics_history"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3818,6 +3903,25 @@ export interface components {
              */
             year: boolean;
         };
+        /** @description Response for cleanup operation */
+        MetricsCleanupResponse: {
+            /**
+             * Format: int64
+             * @description Number of metric records deleted
+             * @example 500
+             */
+            deleted_count: number;
+            /**
+             * Format: date-time
+             * @description Timestamp of oldest remaining record
+             */
+            oldest_remaining?: string | null;
+            /**
+             * @description Current retention setting
+             * @example 30
+             */
+            retention_days: string;
+        };
         /** @description Application metrics response */
         MetricsDto: {
             /**
@@ -3864,6 +3968,15 @@ export interface components {
              * @example 12
              */
             user_count: number;
+        };
+        /** @description Response for nuke (delete all) operation */
+        MetricsNukeResponse: {
+            /**
+             * Format: int64
+             * @description Number of metric records deleted
+             * @example 15000
+             */
+            deleted_count: number;
         };
         /**
          * @description OPDS 2.0 Feed
@@ -4437,6 +4550,32 @@ export interface components {
              * @example 42
              */
             deleted: number;
+        };
+        /** @description Queue health metrics */
+        QueueHealthMetricsDto: {
+            /**
+             * Format: int64
+             * @description Age of oldest pending task in milliseconds
+             */
+            oldest_pending_age_ms?: number | null;
+            /**
+             * Format: int64
+             * @description Number of tasks waiting to run
+             * @example 25
+             */
+            pending_count: number;
+            /**
+             * Format: int64
+             * @description Number of tasks currently executing
+             * @example 4
+             */
+            processing_count: number;
+            /**
+             * Format: int64
+             * @description Number of stale/stuck tasks
+             * @example 0
+             */
+            stale_count: number;
         };
         /** @description Response containing a list of reading progress records */
         ReadProgressListResponse: {
@@ -5218,6 +5357,146 @@ export interface components {
             /** @description List of tags */
             tags: components["schemas"]["TagDto"][];
         };
+        /** @description A single historical data point */
+        TaskMetricsDataPointDto: {
+            /**
+             * Format: double
+             * @description Average duration in milliseconds
+             * @example 1200
+             */
+            avg_duration_ms: number;
+            /**
+             * Format: int64
+             * @description Bytes processed in this period
+             * @example 1073741824
+             */
+            bytes_processed: number;
+            /**
+             * Format: int64
+             * @description Number of tasks in this period
+             * @example 50
+             */
+            count: number;
+            /**
+             * Format: int64
+             * @description Failed tasks
+             * @example 2
+             */
+            failed: number;
+            /**
+             * Format: int64
+             * @description Items processed in this period
+             * @example 500
+             */
+            items_processed: number;
+            /**
+             * Format: int64
+             * @description Maximum duration
+             * @example 5000
+             */
+            max_duration_ms: number;
+            /**
+             * Format: int64
+             * @description Minimum duration
+             * @example 200
+             */
+            min_duration_ms: number;
+            /**
+             * Format: date-time
+             * @description Start of this period
+             * @example 2026-01-11T10:00:00Z
+             */
+            period_start: string;
+            /**
+             * Format: int64
+             * @description Successful tasks
+             * @example 48
+             */
+            succeeded: number;
+            /** @description Task type (if filtered) */
+            task_type?: string | null;
+        };
+        /** @description Task metrics history response */
+        TaskMetricsHistoryResponse: {
+            /**
+             * Format: date-time
+             * @description Start of the time range
+             * @example 2026-01-04T00:00:00Z
+             */
+            from: string;
+            /**
+             * @description Granularity of the data points
+             * @example hour
+             */
+            granularity: string;
+            /** @description Historical data points */
+            points: components["schemas"]["TaskMetricsDataPointDto"][];
+            /**
+             * Format: date-time
+             * @description End of the time range
+             * @example 2026-01-11T00:00:00Z
+             */
+            to: string;
+        };
+        /** @description Task metrics response - current performance statistics */
+        TaskMetricsResponse: {
+            /** @description Per-task-type breakdown */
+            by_type: components["schemas"]["TaskTypeMetricsDto"][];
+            /** @description Queue health metrics */
+            queue: components["schemas"]["QueueHealthMetricsDto"];
+            /**
+             * @description Current retention setting
+             * @example 30
+             */
+            retention: string;
+            /** @description Overall summary statistics */
+            summary: components["schemas"]["TaskMetricsSummaryDto"];
+            /**
+             * Format: date-time
+             * @description When the metrics were last updated
+             * @example 2026-01-11T12:00:00Z
+             */
+            updated_at: string;
+        };
+        /** @description Summary metrics across all task types */
+        TaskMetricsSummaryDto: {
+            /**
+             * Format: double
+             * @description Average duration in milliseconds
+             * @example 1500.5
+             */
+            avg_duration_ms: number;
+            /**
+             * Format: double
+             * @description Average queue wait time in milliseconds
+             * @example 250
+             */
+            avg_queue_wait_ms: number;
+            /**
+             * Format: double
+             * @description Tasks processed per minute (recent average)
+             * @example 15.5
+             */
+            tasks_per_minute: number;
+            /**
+             * Format: int64
+             * @description Total tasks executed since last restart
+             * @example 1250
+             */
+            total_executed: number;
+            /**
+             * Format: int64
+             * @description Total failed tasks
+             * @example 50
+             */
+            total_failed: number;
+            /**
+             * Format: int64
+             * @description Total successful tasks
+             * @example 1200
+             */
+            total_succeeded: number;
+        };
         /** @description Progress information for a running task */
         TaskProgress: {
             /**
@@ -5430,6 +5709,105 @@ export interface components {
         } | {
             /** @enum {string} */
             type: "find_duplicates";
+        };
+        /** @description Metrics for a specific task type */
+        TaskTypeMetricsDto: {
+            /**
+             * Format: double
+             * @description Average duration in milliseconds
+             * @example 2500
+             */
+            avg_duration_ms: number;
+            /**
+             * Format: double
+             * @description Average queue wait time in milliseconds
+             * @example 150
+             */
+            avg_queue_wait_ms: number;
+            /**
+             * Format: int64
+             * @description Total bytes processed
+             * @example 1073741824
+             */
+            bytes_processed: number;
+            /**
+             * Format: double
+             * @description Error rate as percentage
+             * @example 5
+             */
+            error_rate_pct: number;
+            /**
+             * Format: int64
+             * @description Number of executions
+             * @example 100
+             */
+            executed: number;
+            /**
+             * Format: int64
+             * @description Failed executions
+             * @example 5
+             */
+            failed: number;
+            /**
+             * Format: int64
+             * @description Total items processed
+             * @example 5000
+             */
+            items_processed: number;
+            /** @description Most recent error message */
+            last_error?: string | null;
+            /**
+             * Format: date-time
+             * @description When the last error occurred
+             */
+            last_error_at?: string | null;
+            /**
+             * Format: int64
+             * @description Maximum duration in milliseconds
+             * @example 15000
+             */
+            max_duration_ms: number;
+            /**
+             * Format: int64
+             * @description Minimum duration in milliseconds
+             * @example 500
+             */
+            min_duration_ms: number;
+            /**
+             * Format: int64
+             * @description 50th percentile (median) duration
+             * @example 2000
+             */
+            p50_duration_ms: number;
+            /**
+             * Format: int64
+             * @description 95th percentile duration
+             * @example 8000
+             */
+            p95_duration_ms: number;
+            /**
+             * Format: int64
+             * @description Retried executions
+             * @example 10
+             */
+            retried: number;
+            /**
+             * Format: int64
+             * @description Successful executions
+             * @example 95
+             */
+            succeeded: number;
+            /**
+             * @description Task type name
+             * @example scan_library
+             */
+            task_type: string;
+            /**
+             * Format: double
+             * @description Throughput rate per second
+             * @example 25.5
+             */
+            throughput_per_sec: number;
         };
         /** @description Statistics for a specific task type */
         TaskTypeStats: {
@@ -8135,7 +8513,7 @@ export interface operations {
             };
         };
     };
-    get_metrics: {
+    get_inventory_metrics: {
         parameters: {
             query?: never;
             header?: never;
@@ -8144,7 +8522,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Application metrics retrieved successfully */
+            /** @description Inventory metrics retrieved successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -8155,6 +8533,158 @@ export interface operations {
             };
             /** @description Permission denied */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_task_metrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Task metrics retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskMetricsResponse"];
+                };
+            };
+            /** @description Permission denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Task metrics service not available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    nuke_task_metrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All metrics deleted successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricsNukeResponse"];
+                };
+            };
+            /** @description Permission denied - admin required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Task metrics service not available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    trigger_metrics_cleanup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleanup completed successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricsCleanupResponse"];
+                };
+            };
+            /** @description Permission denied - admin required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Task metrics service not available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_task_metrics_history: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Number of days to retrieve (default: 7)
+                 * @example 7
+                 */
+                days?: number | null;
+                /**
+                 * @description Filter by task type
+                 * @example scan_library
+                 */
+                task_type?: string | null;
+                /**
+                 * @description Granularity: "hour" or "day" (default: hour)
+                 * @example hour
+                 */
+                granularity?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Task metrics history retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskMetricsHistoryResponse"];
+                };
+            };
+            /** @description Permission denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Task metrics service not available */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

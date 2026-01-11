@@ -10,6 +10,7 @@ pub use super::read_progress::Entity as ReadProgress;
 pub use super::series::Entity as Series;
 pub use super::settings::Entity as Settings;
 pub use super::settings_history::Entity as SettingsHistory;
+pub use super::task_metrics::Entity as TaskMetrics;
 pub use super::tasks::Entity as Tasks;
 pub use super::users::Entity as Users;
 

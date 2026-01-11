@@ -1,4 +1,4 @@
-import type { Book, PaginatedResponse } from "@/types/api";
+import type { Book, PaginatedResponse } from "@/types";
 import { api } from "./client";
 
 export interface BookFilters {

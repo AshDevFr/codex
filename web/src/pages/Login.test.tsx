@@ -2,7 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { authApi } from "@/api/auth";
 import { renderWithProviders, userEvent } from "@/test/utils";
-import type { LoginResponse } from "@/types/api";
+import type { LoginResponse } from "@/types";
 import { Login } from "./Login";
 
 vi.mock("@/api/auth");

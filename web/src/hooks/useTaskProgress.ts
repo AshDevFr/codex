@@ -6,7 +6,7 @@ import {
 	subscribeToTaskProgress,
 } from "@/api/tasks";
 import { useAuthStore } from "@/store/authStore";
-import type { TaskProgressEvent, TaskStatus } from "@/types/events";
+import type { TaskProgressEvent, TaskStatus } from "@/types";
 
 type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
 
@@ -44,10 +44,10 @@ export function useTaskProgress() {
 			id: string;
 			task_type: string;
 			status: string;
-			library_id?: string;
-			series_id?: string;
-			book_id?: string;
-			started_at?: string;
+			library_id?: string | null;
+			series_id?: string | null;
+			book_id?: string | null;
+			started_at?: string | null;
 		}): TaskProgressEvent => {
 			// Map "processing" status to "running" for UI consistency
 			const status: TaskStatus =
@@ -59,11 +59,11 @@ export function useTaskProgress() {
 				status,
 				progress: undefined,
 				error: undefined,
-				started_at: task.started_at || new Date().toISOString(),
+				started_at: task.started_at ?? new Date().toISOString(),
 				completed_at: undefined,
-				library_id: task.library_id,
-				series_id: task.series_id,
-				book_id: task.book_id,
+				library_id: task.library_id ?? undefined,
+				series_id: task.series_id ?? undefined,
+				book_id: task.book_id ?? undefined,
 			};
 		};
 

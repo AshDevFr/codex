@@ -1,7 +1,7 @@
 import { Box, Group, Paper, Progress, Stack, Text } from "@mantine/core";
 import { IconCircleCheck, IconCircleX, IconLoader2 } from "@tabler/icons-react";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
-import type { TaskProgressEvent } from "@/types/events";
+import type { TaskProgressEvent } from "@/types";
 
 interface TaskProgressItemProps {
 	task: TaskProgressEvent;

@@ -37,7 +37,7 @@ import type {
 	FileSystemEntry,
 	Library,
 	ScanningConfig,
-} from "@/types/api";
+} from "@/types";
 import { CronInput } from "./CronInput";
 
 interface LibraryModalProps {
@@ -102,8 +102,8 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 
 			if (library.scanningConfig) {
 				setCronSchedule(library.scanningConfig.cronSchedule || "0 0 * * *");
-				setScanOnStart(library.scanningConfig.scanOnStart);
-				setPurgeDeletedOnScan(library.scanningConfig.purgeDeletedOnScan);
+				setScanOnStart(library.scanningConfig.scanOnStart ?? false);
+				setPurgeDeletedOnScan(library.scanningConfig.purgeDeletedOnScan ?? false);
 			}
 
 			setAllowedFormats(

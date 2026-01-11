@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { librariesApi } from "@/api/libraries";
 import { useAuthStore } from "@/store/authStore";
 import { renderWithProviders, userEvent } from "@/test/utils";
-import type { User } from "@/types/api";
+import type { User } from "@/types";
 import { AppLayout } from "./AppLayout";
 
 vi.mock("@/api/libraries");

@@ -387,7 +387,23 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/api-keys/:id", patch(handlers::api_keys::update_api_key))
         .route("/api-keys/:id", delete(handlers::api_keys::delete_api_key))
         // Metrics routes (protected)
-        .route("/metrics", get(handlers::get_metrics))
+        .route("/metrics/inventory", get(handlers::get_inventory_metrics))
+        .route(
+            "/metrics/tasks",
+            get(handlers::task_metrics::get_task_metrics),
+        )
+        .route(
+            "/metrics/tasks",
+            delete(handlers::task_metrics::nuke_task_metrics),
+        )
+        .route(
+            "/metrics/tasks/history",
+            get(handlers::task_metrics::get_task_metrics_history),
+        )
+        .route(
+            "/metrics/tasks/cleanup",
+            post(handlers::task_metrics::trigger_metrics_cleanup),
+        )
         // Task Queue routes (protected) - distributed task queue
         .route("/tasks", get(handlers::task_queue::list_tasks))
         .route("/tasks", post(handlers::task_queue::create_task))

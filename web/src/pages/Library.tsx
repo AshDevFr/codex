@@ -39,7 +39,7 @@ import { RecommendedSection } from "@/components/library/RecommendedSection";
 import { SeriesSection } from "@/components/library/SeriesSection";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { useLibraryPreferencesStore } from "@/store/libraryPreferencesStore";
-import type { Library } from "@/types/api";
+import type { Library } from "@/types";
 
 export function LibraryPage() {
 	const { libraryId } = useParams<{ libraryId: string }>();

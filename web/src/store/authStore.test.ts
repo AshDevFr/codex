@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { User } from "@/types/api";
+import type { User } from "@/types";
 import { useAuthStore } from "./authStore";
 
 describe("authStore", () => {

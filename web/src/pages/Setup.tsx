@@ -26,7 +26,7 @@ import type {
 	ConfigureSettingsRequest,
 	InitializeSetupRequest,
 	SetupStatusResponse,
-} from "@/types/api";
+} from "@/types";
 
 // Password validation utilities
 const validatePassword = (password: string) => {

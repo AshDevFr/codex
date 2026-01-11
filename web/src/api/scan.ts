@@ -1,4 +1,4 @@
-import type { ScanProgress } from "@/types/api";
+import type { ScanProgress } from "@/types";
 import { api } from "./client";
 
 /**

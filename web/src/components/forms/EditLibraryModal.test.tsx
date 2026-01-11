@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { filesystemApi } from "@/api/filesystem";
 import { librariesApi } from "@/api/libraries";
 import { renderWithProviders, userEvent } from "@/test/utils";
-import type { Library } from "@/types/api";
+import type { Library } from "@/types";
 import { LibraryModal } from "./LibraryModal";
 
 vi.mock("@/api/filesystem");
@@ -301,7 +301,7 @@ describe("LibraryModal (Edit Mode)", () => {
 		await user.click(autoOption);
 
 		// Wait for cron input and change it
-		let cronInput;
+		let cronInput: HTMLElement | null = null;
 		await waitFor(() => {
 			// Try multiple ways to find the CronInput
 			try {
@@ -317,8 +317,8 @@ describe("LibraryModal (Edit Mode)", () => {
 			expect(cronInput).toBeInTheDocument();
 		});
 
-		await user.clear(cronInput);
-		await user.type(cronInput, "0 2 * * *");
+		await user.clear(cronInput!);
+		await user.type(cronInput!, "0 2 * * *");
 
 		// Submit form
 		const saveButton = screen.getByText("Save Changes");
@@ -478,7 +478,7 @@ describe("LibraryModal (Edit Mode)", () => {
 		await user.click(autoOption);
 
 		// Wait for cron input and enter invalid value
-		let cronInput;
+		let cronInput: HTMLElement | null = null;
 		await waitFor(() => {
 			// Try multiple ways to find the CronInput
 			try {
@@ -494,12 +494,12 @@ describe("LibraryModal (Edit Mode)", () => {
 			expect(cronInput).toBeInTheDocument();
 		});
 
-		await user.clear(cronInput);
-		await user.type(cronInput, "invalid cron");
+		await user.clear(cronInput!);
+		await user.type(cronInput!, "invalid cron");
 
 		// Input should show validation error
 		await waitFor(() => {
-			expect(cronInput).toHaveAttribute("aria-invalid", "true");
+			expect(cronInput!).toHaveAttribute("aria-invalid", "true");
 		});
 	});
 
@@ -701,7 +701,8 @@ describe("LibraryModal (Edit Mode)", () => {
 
 		// Verify CBR is not in the submitted formats
 		const updateCall = vi.mocked(librariesApi.update).mock.calls[0];
-		const submittedFormats = updateCall[1].allowedFormats;
+		const payload = updateCall[1] as { allowedFormats?: string[] };
+		const submittedFormats = payload.allowedFormats;
 		expect(submittedFormats).not.toContain("CBR");
 	});
 });

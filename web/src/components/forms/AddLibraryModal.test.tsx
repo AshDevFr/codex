@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { filesystemApi } from "@/api/filesystem";
 import { librariesApi } from "@/api/libraries";
 import { renderWithProviders, userEvent } from "@/test/utils";
-import type { BrowseResponse, FileSystemEntry } from "@/types/api";
+import type { BrowseResponse, FileSystemEntry } from "@/types";
 import { LibraryModal } from "./LibraryModal";
 
 vi.mock("@/api/filesystem");

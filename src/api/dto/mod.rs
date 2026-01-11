@@ -14,6 +14,7 @@ pub mod scan;
 pub mod series;
 pub mod settings;
 pub mod setup;
+pub mod task_metrics;
 pub mod user;
 
 pub use api_key::*;
@@ -32,4 +33,5 @@ pub use scan::*;
 pub use series::*;
 pub use settings::*;
 pub use setup::*;
+pub use task_metrics::*;
 pub use user::*;

@@ -11,15 +11,18 @@ use crate::db::repositories::MetricsRepository;
 
 use super::AppState;
 
-/// Get application metrics
+/// Get inventory metrics (library/book counts)
+///
+/// Returns counts and sizes for libraries, series, and books in the system.
+/// This endpoint provides an inventory overview of your digital library.
 ///
 /// # Permission Required
 /// - `libraries:read` or admin status
 #[utoipa::path(
     get,
-    path = "/api/v1/metrics",
+    path = "/api/v1/metrics/inventory",
     responses(
-        (status = 200, description = "Application metrics retrieved successfully", body = MetricsDto),
+        (status = 200, description = "Inventory metrics retrieved successfully", body = MetricsDto),
         (status = 403, description = "Permission denied"),
     ),
     security(
@@ -28,7 +31,7 @@ use super::AppState;
     ),
     tag = "Metrics"
 )]
-pub async fn get_metrics(
+pub async fn get_inventory_metrics(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
 ) -> Result<Json<MetricsDto>, ApiError> {

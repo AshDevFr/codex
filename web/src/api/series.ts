@@ -1,4 +1,4 @@
-import type { PaginatedResponse, Series } from "@/types/api";
+import type { PaginatedResponse, Series } from "@/types";
 import { api } from "./client";
 
 export interface SeriesFilters {

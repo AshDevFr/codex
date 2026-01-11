@@ -4,7 +4,7 @@ import type {
 	RegisterRequest,
 	RegisterResponse,
 	User,
-} from "@/types/api";
+} from "@/types";
 import { api } from "./client";
 
 export const authApi = {

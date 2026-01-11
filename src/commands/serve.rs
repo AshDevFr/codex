@@ -93,6 +93,17 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         config.files.thumbnail_dir, config.files.uploads_dir
     );
 
+    // Initialize task metrics service
+    let task_metrics_service = Arc::new(crate::services::TaskMetricsService::new(
+        db.sea_orm_connection().clone(),
+        settings_service.clone(),
+    ));
+    info!("Task metrics service initialized");
+
+    // Start background jobs for metrics (flush, cleanup, rollup)
+    task_metrics_service.clone().start_background_jobs();
+    info!("Task metrics background jobs started");
+
     // Initialize worker tracking variables
     let mut worker_handles = Vec::new();
     let mut worker_shutdown_channels = Vec::new();
@@ -122,6 +133,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             event_broadcaster.clone(),
             settings_service.clone(),
             thumbnail_service.clone(),
+            Some(task_metrics_service.clone()),
         );
         worker_handles = handles;
         worker_shutdown_channels = channels;
@@ -150,6 +162,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         event_broadcaster,
         settings_service,
         thumbnail_service,
+        task_metrics_service: Some(task_metrics_service),
         scheduler: if disable_workers {
             None
         } else {

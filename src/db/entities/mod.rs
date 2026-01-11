@@ -15,6 +15,7 @@ pub mod read_progress;
 pub mod series;
 pub mod settings;
 pub mod settings_history;
+pub mod task_metrics;
 pub mod tasks;
 pub mod users;
 

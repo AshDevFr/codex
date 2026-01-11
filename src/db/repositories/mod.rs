@@ -17,6 +17,7 @@ pub mod series_metadata;
 pub mod settings;
 pub mod tag;
 pub mod task;
+pub mod task_metrics;
 pub mod user;
 pub mod user_series_rating;
 
@@ -40,5 +41,6 @@ pub use series_metadata::SeriesMetadataRepository;
 pub use settings::SettingsRepository;
 pub use tag::TagRepository;
 pub use task::TaskRepository;
+pub use task_metrics::TaskMetricsRepository;
 pub use user::UserRepository;
 pub use user_series_rating::UserSeriesRatingRepository;

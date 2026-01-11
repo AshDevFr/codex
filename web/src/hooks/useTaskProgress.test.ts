@@ -2,8 +2,23 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as tasksApi from "@/api/tasks";
 import { useAuthStore } from "@/store/authStore";
-import type { TaskProgressEvent } from "@/types/events";
+import type { TaskProgressEvent, TaskResponse } from "@/types";
 import { useTaskProgress } from "./useTaskProgress";
+
+// Helper to create a complete TaskResponse with defaults
+function createMockTask(overrides: { id: string; task_type: string; status: string; library_id?: string }): TaskResponse {
+	return {
+		id: overrides.id,
+		task_type: overrides.task_type,
+		status: overrides.status,
+		priority: 0,
+		attempts: 0,
+		max_attempts: 3,
+		scheduled_for: "2026-01-07T12:00:00Z",
+		created_at: "2026-01-07T12:00:00Z",
+		library_id: overrides.library_id,
+	};
+}
 
 // Mock the tasks API
 vi.mock("@/api/tasks", async (importOriginal) => {
@@ -445,18 +460,18 @@ describe("useTaskProgress", () => {
 
 	it("should fetch initial processing tasks", async () => {
 		const initialTasks = [
-			{
+			createMockTask({
 				id: "task-1",
 				task_type: "analyze_book",
 				status: "processing",
 				library_id: "lib-1",
-			},
-			{
+			}),
+			createMockTask({
 				id: "task-2",
 				task_type: "generate_thumbnails",
 				status: "processing",
 				library_id: "lib-2",
-			},
+			}),
 		];
 
 		vi.mocked(tasksApi.fetchTasksByStatus).mockResolvedValue(initialTasks);
@@ -506,24 +521,24 @@ describe("useTaskProgress", () => {
 	it("should remove tasks that are no longer processing when polling", async () => {
 		// Start with 3 processing tasks
 		const initialTasks = [
-			{
+			createMockTask({
 				id: "task-1",
 				task_type: "analyze_book",
 				status: "processing",
 				library_id: "lib-1",
-			},
-			{
+			}),
+			createMockTask({
 				id: "task-2",
 				task_type: "analyze_book",
 				status: "processing",
 				library_id: "lib-2",
-			},
-			{
+			}),
+			createMockTask({
 				id: "task-3",
 				task_type: "analyze_book",
 				status: "processing",
 				library_id: "lib-3",
-			},
+			}),
 		];
 
 		vi.mocked(tasksApi.fetchTasksByStatus).mockResolvedValue(initialTasks);
@@ -541,12 +556,12 @@ describe("useTaskProgress", () => {
 
 		// Simulate polling - only 1 task is still processing
 		const polledTasks = [
-			{
+			createMockTask({
 				id: "task-1",
 				task_type: "analyze_book",
 				status: "processing",
 				library_id: "lib-1",
-			},
+			}),
 		];
 
 		vi.mocked(tasksApi.fetchTasksByStatus).mockResolvedValue(polledTasks);
@@ -575,12 +590,12 @@ describe("useTaskProgress", () => {
 
 		// Initial processing tasks
 		const initialTasks = [
-			{
+			createMockTask({
 				id: "task-1",
 				task_type: "analyze_book",
 				status: "processing",
 				library_id: "lib-1",
-			},
+			}),
 		];
 
 		vi.mocked(tasksApi.fetchTasksByStatus).mockResolvedValue(initialTasks);
@@ -662,12 +677,12 @@ describe("useTaskProgress", () => {
 
 		// Initial processing task
 		const initialTasks = [
-			{
+			createMockTask({
 				id: "task-1",
 				task_type: "analyze_book",
 				status: "processing",
 				library_id: "lib-1",
-			},
+			}),
 		];
 
 		vi.mocked(tasksApi.fetchTasksByStatus).mockResolvedValue(initialTasks);
@@ -698,12 +713,12 @@ describe("useTaskProgress", () => {
 
 		// Simulate polling - task is still processing
 		const polledTasks = [
-			{
+			createMockTask({
 				id: "task-1",
 				task_type: "analyze_book",
 				status: "processing",
 				library_id: "lib-1",
-			},
+			}),
 		];
 
 		vi.mocked(tasksApi.fetchTasksByStatus).mockResolvedValue(polledTasks);

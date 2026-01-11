@@ -16,7 +16,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { authApi } from "@/api/auth";
 import { useAuthStore } from "@/store/authStore";
-import type { ApiError, RegisterRequest } from "@/types/api";
+import type { ApiError, RegisterRequest } from "@/types";
 
 export function Register() {
 	const navigate = useNavigate();

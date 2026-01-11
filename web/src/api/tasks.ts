@@ -1,4 +1,7 @@
-import type { TaskProgressEvent } from "@/types/events";
+import type { TaskProgressEvent, TaskResponse } from "@/types";
+
+// Re-export TaskResponse for consumers
+export type { TaskResponse };
 
 interface TaskProgressReconnectionManager {
 	connect: () => Promise<() => void>;
@@ -26,30 +29,6 @@ export interface TaskStats {
 
 export interface PendingTaskCounts {
 	[taskType: string]: number;
-}
-
-/**
- * Task response from the API
- */
-export interface TaskResponse {
-	id: string;
-	task_type: string;
-	status: string;
-	priority: number;
-	library_id?: string;
-	series_id?: string;
-	book_id?: string;
-	params?: unknown;
-	locked_by?: string;
-	locked_until?: string;
-	attempts: number;
-	max_attempts: number;
-	last_error?: string;
-	result?: unknown;
-	scheduled_for: string;
-	created_at: string;
-	started_at?: string;
-	completed_at?: string;
 }
 
 /**
