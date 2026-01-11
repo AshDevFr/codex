@@ -66,6 +66,18 @@ pub struct SeriesListQuery {
     /// Sort parameter (format: "field,direction" e.g. "name,asc")
     #[serde(default)]
     pub sort: Option<String>,
+
+    /// Filter by genres (comma-separated, AND logic - series must have ALL specified genres)
+    #[serde(default)]
+    pub genres: Option<String>,
+
+    /// Filter by tags (comma-separated, AND logic - series must have ALL specified tags)
+    #[serde(default)]
+    pub tags: Option<String>,
+
+    /// Filter by library ID
+    #[serde(default)]
+    pub library_id: Option<Uuid>,
 }
 
 fn default_page_size() -> u64 {
@@ -128,7 +140,9 @@ async fn series_to_dto(
         ("library_id" = Option<Uuid>, Query, description = "Filter by library ID"),
         ("page" = Option<u64>, Query, description = "Page number (0-indexed)"),
         ("page_size" = Option<u64>, Query, description = "Number of items per page (max 100)"),
-        ("sort" = Option<String>, Query, description = "Sort parameter (format: 'field,direction')")
+        ("sort" = Option<String>, Query, description = "Sort parameter (format: 'field,direction')"),
+        ("genres" = Option<String>, Query, description = "Filter by genres (comma-separated, AND logic)"),
+        ("tags" = Option<String>, Query, description = "Filter by tags (comma-separated, AND logic)")
     ),
     responses(
         (status = 200, description = "Paginated list of series", body = SeriesListResponse),
@@ -154,10 +168,54 @@ pub async fn list_series(
         query.page_size.min(100)
     };
 
-    // Fetch series based on filter (all libraries)
-    let mut series_list = SeriesRepository::list_all(&state.db)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
+    // Fetch series based on filter (all libraries or specific library)
+    let mut series_list = if let Some(library_id) = query.library_id {
+        SeriesRepository::list_by_library(&state.db, library_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+    } else {
+        SeriesRepository::list_all(&state.db)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+    };
+
+    // Apply genre filter if specified
+    if let Some(genres_param) = &query.genres {
+        let genre_names: Vec<String> = genres_param
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        if !genre_names.is_empty() {
+            let matching_series_ids =
+                GenreRepository::get_series_ids_by_genre_names(&state.db, &genre_names)
+                    .await
+                    .map_err(|e| {
+                        ApiError::Internal(format!("Failed to filter by genres: {}", e))
+                    })?;
+
+            series_list.retain(|s| matching_series_ids.contains(&s.id));
+        }
+    }
+
+    // Apply tag filter if specified
+    if let Some(tags_param) = &query.tags {
+        let tag_names: Vec<String> = tags_param
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        if !tag_names.is_empty() {
+            let matching_series_ids =
+                TagRepository::get_series_ids_by_tag_names(&state.db, &tag_names)
+                    .await
+                    .map_err(|e| ApiError::Internal(format!("Failed to filter by tags: {}", e)))?;
+
+            series_list.retain(|s| matching_series_ids.contains(&s.id));
+        }
+    }
 
     // Apply sorting if specified
     if let Some(sort_param) = &query.sort {
@@ -446,9 +504,9 @@ pub async fn upload_series_cover(
     image::load_from_memory(&image_data)
         .map_err(|e| ApiError::BadRequest(format!("Invalid image file: {}", e)))?;
 
-    // Create covers directory if it doesn't exist
-    let covers_dir = std::path::Path::new("data/covers");
-    fs::create_dir_all(covers_dir)
+    // Create covers directory within uploads dir if it doesn't exist
+    let covers_dir = state.thumbnail_service.get_uploads_dir().join("covers");
+    fs::create_dir_all(&covers_dir)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to create covers directory: {}", e)))?;
 

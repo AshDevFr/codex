@@ -1,7 +1,7 @@
 use axum::Router;
 use codex::api::extractors::{AppState, AuthState};
 use codex::api::routes::create_router;
-use codex::config::{ApiConfig, AuthConfig, EmailConfig, ThumbnailConfig};
+use codex::config::{ApiConfig, AuthConfig, EmailConfig, FilesConfig};
 use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
 use codex::services::{SettingsService, ThumbnailService};
@@ -28,7 +28,7 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
             .await
             .expect("Failed to initialize settings service for tests"),
     );
-    let thumbnail_service = Arc::new(ThumbnailService::new(ThumbnailConfig::default()));
+    let thumbnail_service = Arc::new(ThumbnailService::new(FilesConfig::default()));
 
     Arc::new(AppState {
         db,
@@ -57,7 +57,7 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
             .await
             .expect("Failed to initialize settings service for tests"),
     );
-    let thumbnail_service = Arc::new(ThumbnailService::new(ThumbnailConfig::default()));
+    let thumbnail_service = Arc::new(ThumbnailService::new(FilesConfig::default()));
 
     Arc::new(AppState {
         db,
@@ -96,7 +96,7 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
             .await
             .expect("Failed to initialize settings service for tests"),
     );
-    let thumbnail_service = Arc::new(ThumbnailService::new(ThumbnailConfig::default()));
+    let thumbnail_service = Arc::new(ThumbnailService::new(FilesConfig::default()));
     let app_state = Arc::new(AppState {
         db: state.db.clone(),
         jwt_service: state.jwt_service.clone(),
@@ -366,5 +366,40 @@ pub fn put_request_with_auth(uri: &str, body: &str, token: &str) -> Request<Stri
         .header("Content-Type", "application/json")
         .header("Authorization", format!("Bearer {}", token))
         .body(body.to_string())
+        .unwrap()
+}
+
+/// Helper to create a POST multipart request with file upload and Authorization header
+pub fn post_multipart_request_with_auth(
+    uri: &str,
+    field_name: &str,
+    file_data: &[u8],
+    filename: &str,
+    token: &str,
+) -> Request<String> {
+    let boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+
+    // Build multipart body
+    let mut body = String::new();
+    body.push_str(&format!("--{}\r\n", boundary));
+    body.push_str(&format!(
+        "Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\n",
+        field_name, filename
+    ));
+    body.push_str("Content-Type: application/octet-stream\r\n\r\n");
+    // For binary data, we'll base64 encode it in the test and decode in handler
+    // Actually, for our tests we'll use text-based approach
+    body.push_str(&String::from_utf8_lossy(file_data));
+    body.push_str(&format!("\r\n--{}--\r\n", boundary));
+
+    Request::builder()
+        .method("POST")
+        .uri(uri)
+        .header(
+            "Content-Type",
+            format!("multipart/form-data; boundary={}", boundary),
+        )
+        .header("Authorization", format!("Bearer {}", token))
+        .body(body)
         .unwrap()
 }

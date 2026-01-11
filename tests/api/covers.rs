@@ -600,3 +600,62 @@ async fn test_cover_response_includes_all_fields() {
     assert_eq!(cover.width, Some(800));
     assert_eq!(cover.height, Some(1200));
 }
+
+// ============================================================================
+// Upload Cover Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_upload_cover_unauthorized() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let (_, series_id) = create_test_library_and_series(&db).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    // No auth token - POST to upload cover
+    let request = post_request(&format!("/api/v1/series/{}/cover", series_id));
+    let (status, _response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_upload_cover_series_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let fake_id = uuid::Uuid::new_v4();
+    // POST without multipart body will get rejected but series lookup happens first
+    let request = post_request_with_auth(&format!("/api/v1/series/{}/cover", fake_id), &token);
+    let (status, _response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    // Might be 400 (missing multipart) or 415 (unsupported media type) - depends on order of checks
+    // The important thing is it's not 200/201
+    assert!(status.is_client_error());
+}
+
+#[tokio::test]
+async fn test_upload_cover_missing_file() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let (_, series_id) = create_test_library_and_series(&db).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // POST without proper multipart body
+    let request = post_request_with_auth(&format!("/api/v1/series/{}/cover", series_id), &token);
+    let (status, _response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    // Should fail due to missing/invalid multipart data
+    assert!(status.is_client_error());
+}

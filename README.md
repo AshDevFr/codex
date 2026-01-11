@@ -26,6 +26,16 @@ codex serve --config codex.yaml
 
 See [codex-sample.yaml](codex-sample.yaml) for configuration options.
 
+## Development Setup
+
+After cloning, install pre-commit hooks to ensure OpenAPI files stay in sync:
+
+```bash
+make setup-hooks
+```
+
+This requires Python and will install [pre-commit](https://pre-commit.com/) if not already installed.
+
 ## CBR Support and Licensing
 
 CBR (Comic Book RAR) archive support requires the UnRAR library, which uses a **proprietary license** (not standard open source). The UnRAR license allows free use for extraction but prohibits creating RAR compression software.

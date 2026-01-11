@@ -169,6 +169,15 @@ openapi-types: ## Generate TypeScript types from OpenAPI spec
 openapi-all: openapi openapi-types ## Generate OpenAPI spec and TypeScript types
 
 # =============================================================================
+# Setup
+# =============================================================================
+
+setup-hooks: ## Install pre-commit hooks
+	@command -v pre-commit >/dev/null 2>&1 || { echo "$(YELLOW)Installing pre-commit...$(NC)"; pip install pre-commit; }
+	pre-commit install
+	@echo "$(GREEN)Pre-commit hooks installed!$(NC)"
+
+# =============================================================================
 # Code Quality
 # =============================================================================
 

@@ -38,7 +38,7 @@ pub struct Config {
     #[serde(default)]
     pub scanner: ScannerConfig,
     #[serde(default)]
-    pub thumbnail: ThumbnailConfig,
+    pub files: FilesConfig,
 }
 
 impl Default for Config {
@@ -106,7 +106,7 @@ impl Default for Config {
             email: EmailConfig::default(),
             task: TaskConfig::default(),
             scanner: ScannerConfig::default(),
-            thumbnail: ThumbnailConfig::default(),
+            files: FilesConfig::default(),
         }
     }
 }
@@ -364,17 +364,23 @@ impl Default for ScannerConfig {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
-pub struct ThumbnailConfig {
+pub struct FilesConfig {
     /// Full path to thumbnail cache directory
     /// This is a startup-time setting - changes require a restart
-    pub cache_dir: String,
+    pub thumbnail_dir: String,
+
+    /// Full path to uploads directory for user-uploaded files (covers, etc.)
+    /// This is a startup-time setting - changes require a restart
+    pub uploads_dir: String,
 }
 
-impl Default for ThumbnailConfig {
+impl Default for FilesConfig {
     fn default() -> Self {
         Self {
-            cache_dir: env_string_opt("CODEX_THUMBNAIL_CACHE_DIR")
+            thumbnail_dir: env_string_opt("CODEX_FILES_THUMBNAIL_DIR")
                 .unwrap_or_else(|| "data/thumbnails".to_string()),
+            uploads_dir: env_string_opt("CODEX_FILES_UPLOADS_DIR")
+                .unwrap_or_else(|| "data/uploads".to_string()),
         }
     }
 }
@@ -549,12 +555,19 @@ mod tests {
             email: EmailConfig::default(),
             task: TaskConfig::default(),
             scanner: ScannerConfig::default(),
-            thumbnail: ThumbnailConfig::default(),
+            files: FilesConfig::default(),
         };
 
         // Application name moved to database settings
         assert_eq!(config.application.port, 3000);
         assert!(matches!(config.database.db_type, DatabaseType::SQLite));
+    }
+
+    #[test]
+    fn test_files_config_default() {
+        let config = FilesConfig::default();
+        assert_eq!(config.thumbnail_dir, "data/thumbnails");
+        assert_eq!(config.uploads_dir, "data/uploads");
     }
 
     #[test]

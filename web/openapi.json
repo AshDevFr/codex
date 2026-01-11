@@ -436,11 +436,49 @@
           }
         ]
       },
-      "put": {
+      "delete": {
         "tags": [
           "api-keys"
         ],
-        "summary": "Update an API key\nUsers can only update their own keys unless they are admin",
+        "summary": "Delete an API key\nUsers can only delete their own keys unless they are admin",
+        "operationId": "delete_api_key",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "API key ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "API key deleted"
+          },
+          "403": {
+            "description": "Forbidden - Missing permission or not owner"
+          },
+          "404": {
+            "description": "API key not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "api-keys"
+        ],
+        "summary": "Update an API key (partial update)\nUsers can only update their own keys unless they are admin",
         "operationId": "update_api_key",
         "parameters": [
           {
@@ -474,44 +512,6 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Forbidden - Missing permission or not owner"
-          },
-          "404": {
-            "description": "API key not found"
-          }
-        },
-        "security": [
-          {
-            "jwt_bearer": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "api-keys"
-        ],
-        "summary": "Delete an API key\nUsers can only delete their own keys unless they are admin",
-        "operationId": "delete_api_key",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "API key ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "API key deleted"
           },
           "403": {
             "description": "Forbidden - Missing permission or not owner"
@@ -1526,6 +1526,120 @@
         ]
       }
     },
+    "/api/v1/books/{id}/metadata": {
+      "put": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Replace all book metadata (PUT)",
+        "description": "Completely replaces all metadata fields. Omitted or null fields will be cleared.\nIf no metadata record exists, one will be created.",
+        "operationId": "replace_book_metadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceBookMetadataRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Metadata replaced successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookMetadataResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Partially update book metadata (PATCH)",
+        "description": "Only provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared.\nIf no metadata record exists, one will be created with the provided fields.",
+        "operationId": "patch_book_metadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchBookMetadataRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Metadata updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookMetadataResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/{id}/thumbnail": {
       "get": {
         "tags": [
@@ -1819,6 +1933,110 @@
         ]
       }
     },
+    "/api/v1/genres": {
+      "get": {
+        "tags": [
+          "genres"
+        ],
+        "summary": "List all genres",
+        "operationId": "list_genres",
+        "responses": {
+          "200": {
+            "description": "List of all genres",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenreListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/genres/cleanup": {
+      "post": {
+        "tags": [
+          "genres"
+        ],
+        "summary": "Delete all unused genres (genres with no series linked)",
+        "operationId": "cleanup_genres",
+        "responses": {
+          "200": {
+            "description": "Cleanup completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyCleanupResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/genres/{id}": {
+      "delete": {
+        "tags": [
+          "genres"
+        ],
+        "summary": "Delete a genre from the taxonomy (admin only)",
+        "operationId": "delete_genre",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Genre ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Genre deleted"
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          },
+          "404": {
+            "description": "Genre not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/libraries": {
       "get": {
         "tags": [
@@ -1940,11 +2158,49 @@
           }
         ]
       },
-      "put": {
+      "delete": {
         "tags": [
           "libraries"
         ],
-        "summary": "Update a library",
+        "summary": "Delete a library",
+        "operationId": "delete_library",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Library deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Library not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "libraries"
+        ],
+        "summary": "Update a library (partial update)",
         "operationId": "update_library",
         "parameters": [
           {
@@ -1978,44 +2234,6 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Library not found"
-          }
-        },
-        "security": [
-          {
-            "jwt_bearer": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "libraries"
-        ],
-        "summary": "Delete a library",
-        "operationId": "delete_library",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Library ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Library deleted"
           },
           "403": {
             "description": "Forbidden"
@@ -3126,6 +3344,24 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "genres",
+            "in": "query",
+            "description": "Filter by genres (comma-separated, AND logic)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "description": "Filter by tags (comma-separated, AND logic)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3361,6 +3597,223 @@
           },
           "404": {
             "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/alternate-titles": {
+      "get": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Get alternate titles for a series",
+        "operationId": "get_series_alternate_titles",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of alternate titles for the series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlternateTitleListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Add an alternate title to a series",
+        "operationId": "create_alternate_title",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAlternateTitleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Alternate title created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlternateTitleDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/alternate-titles/{title_id}": {
+      "delete": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Delete an alternate title",
+        "operationId": "delete_alternate_title",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "title_id",
+            "in": "path",
+            "description": "Alternate title ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Alternate title deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series or title not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Update an alternate title",
+        "operationId": "update_alternate_title",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "title_id",
+            "in": "path",
+            "description": "Alternate title ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAlternateTitleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Alternate title updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlternateTitleDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series or title not found"
           }
         },
         "security": [
@@ -3649,11 +4102,11 @@
       }
     },
     "/api/v1/series/{id}/cover/source": {
-      "put": {
+      "patch": {
         "tags": [
           "series"
         ],
-        "summary": "Set which cover source to use for a series",
+        "summary": "Set which cover source to use for a series (partial update)",
         "operationId": "set_series_cover_source",
         "parameters": [
           {
@@ -3698,6 +4151,163 @@
         ]
       }
     },
+    "/api/v1/series/{id}/covers": {
+      "get": {
+        "tags": [
+          "series"
+        ],
+        "summary": "List all covers for a series",
+        "operationId": "list_series_covers",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of series covers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesCoverListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/covers/{cover_id}": {
+      "delete": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Delete a cover from a series",
+        "operationId": "delete_series_cover",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cover_id",
+            "in": "path",
+            "description": "Cover ID to delete",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Cover deleted successfully"
+          },
+          "400": {
+            "description": "Cannot delete the only selected cover"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series or cover not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/covers/{cover_id}/select": {
+      "put": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Select a cover as the primary cover for a series",
+        "operationId": "select_series_cover",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cover_id",
+            "in": "path",
+            "description": "Cover ID to select",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cover selected successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesCoverDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series or cover not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/{id}/download": {
       "get": {
         "tags": [
@@ -3730,6 +4340,780 @@
           },
           "404": {
             "description": "Series not found or has no books"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/external-links": {
+      "get": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Get external links for a series",
+        "operationId": "get_series_external_links",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of external links for the series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalLinkListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Add or update an external link for a series",
+        "operationId": "create_external_link",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExternalLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "External link created or updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalLinkDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/external-links/{source}": {
+      "delete": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Delete an external link by source name",
+        "operationId": "delete_external_link",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "source",
+            "in": "path",
+            "description": "Source name (e.g., 'myanimelist', 'mangadex')",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "External link deleted"
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          },
+          "404": {
+            "description": "Series or link not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/external-ratings": {
+      "get": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Get external ratings for a series",
+        "operationId": "get_series_external_ratings",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of external ratings for the series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalRatingListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Add or update an external rating for a series",
+        "operationId": "create_external_rating",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExternalRatingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "External rating created or updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalRatingDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/external-ratings/{source}": {
+      "delete": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Delete an external rating by source name",
+        "operationId": "delete_external_rating",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "source",
+            "in": "path",
+            "description": "Source name (e.g., 'myanimelist', 'anilist')",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "External rating deleted"
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          },
+          "404": {
+            "description": "Series or rating not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/genres": {
+      "get": {
+        "tags": [
+          "genres"
+        ],
+        "summary": "Get genres for a series",
+        "operationId": "get_series_genres",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of genres for the series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenreListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "genres"
+        ],
+        "summary": "Set genres for a series (replaces existing)",
+        "operationId": "set_series_genres",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSeriesGenresRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Genres updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenreListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "genres"
+        ],
+        "summary": "Add a single genre to a series",
+        "operationId": "add_series_genre",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddSeriesGenreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Genre added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenreDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/genres/{genre_id}": {
+      "delete": {
+        "tags": [
+          "genres"
+        ],
+        "summary": "Remove a genre from a series",
+        "operationId": "remove_series_genre",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "genre_id",
+            "in": "path",
+            "description": "Genre ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Genre removed from series"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series or genre link not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/metadata": {
+      "put": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Replace all series metadata (PUT)",
+        "description": "Replaces all metadata fields with the values in the request.\nOmitting a field (or setting it to null) will clear that field.",
+        "operationId": "replace_series_metadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceSeriesMetadataRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Metadata replaced successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesMetadataResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Partially update series metadata (PATCH)",
+        "description": "Only provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared.",
+        "operationId": "patch_series_metadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchSeriesMetadataRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Metadata updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesMetadataResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/metadata/full": {
+      "get": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Get full series metadata including all related data",
+        "description": "Returns comprehensive metadata with lock states, genres, tags, alternate titles,\nexternal ratings, and external links.",
+        "operationId": "get_full_series_metadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full series metadata with all related data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FullSeriesMetadataResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/metadata/locks": {
+      "get": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Get metadata lock states",
+        "operationId": "get_metadata_locks",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current lock states",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataLocks"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Update metadata lock states",
+        "description": "Sets which metadata fields are locked. Locked fields will not be overwritten\nby automatic metadata refresh from book analysis or external sources.",
+        "operationId": "update_metadata_locks",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMetadataLocksRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Lock states updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataLocks"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
           }
         },
         "security": [
@@ -3791,6 +5175,149 @@
         ]
       }
     },
+    "/api/v1/series/{id}/rating": {
+      "get": {
+        "tags": [
+          "ratings"
+        ],
+        "summary": "Get the current user's rating for a series",
+        "operationId": "get_series_rating",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User's rating for the series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSeriesRatingDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series or rating not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "ratings"
+        ],
+        "summary": "Set (create or update) the current user's rating for a series",
+        "operationId": "set_series_rating",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetUserRatingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Rating saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSeriesRatingDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid rating value"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "ratings"
+        ],
+        "summary": "Delete the current user's rating for a series",
+        "operationId": "delete_series_rating",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Rating deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series or rating not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/{id}/read": {
       "post": {
         "tags": [
@@ -3826,6 +5353,213 @@
           },
           "404": {
             "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/tags": {
+      "get": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "Get tags for a series",
+        "operationId": "get_series_tags",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of tags for the series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "Set tags for a series (replaces existing)",
+        "operationId": "set_series_tags",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSeriesTagsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tags updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "Add a single tag to a series",
+        "operationId": "add_series_tag",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddSeriesTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tag added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/tags/{tag_id}": {
+      "delete": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "Remove a tag from a series",
+        "operationId": "remove_series_tag",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tag_id",
+            "in": "path",
+            "description": "Tag ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Tag removed from series"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series or tag link not found"
           }
         },
         "security": [
@@ -4026,6 +5760,110 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/tags": {
+      "get": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "List all tags",
+        "operationId": "list_tags",
+        "responses": {
+          "200": {
+            "description": "List of all tags",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tags/cleanup": {
+      "post": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "Delete all unused tags (tags with no series linked)",
+        "operationId": "cleanup_tags",
+        "responses": {
+          "200": {
+            "description": "Cleanup completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyCleanupResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tags/{id}": {
+      "delete": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "Delete a tag from the taxonomy (admin only)",
+        "operationId": "delete_tag",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tag ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Tag deleted"
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          },
+          "404": {
+            "description": "Tag not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
       }
     },
     "/api/v1/tasks": {
@@ -4480,6 +6318,38 @@
         ]
       }
     },
+    "/api/v1/user/ratings": {
+      "get": {
+        "tags": [
+          "ratings"
+        ],
+        "summary": "List all of the current user's ratings",
+        "operationId": "list_user_ratings",
+        "responses": {
+          "200": {
+            "description": "List of user's ratings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRatingsListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/users": {
       "get": {
         "tags": [
@@ -4604,11 +6474,49 @@
           }
         ]
       },
-      "put": {
+      "delete": {
         "tags": [
           "users"
         ],
-        "summary": "Update a user (admin only)",
+        "summary": "Delete a user (admin only)",
+        "operationId": "delete_user",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "User deleted"
+          },
+          "403": {
+            "description": "Forbidden - Admin only"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Update a user (admin only, partial update)",
         "operationId": "update_user",
         "parameters": [
           {
@@ -4642,44 +6550,6 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Forbidden - Admin only"
-          },
-          "404": {
-            "description": "User not found"
-          }
-        },
-        "security": [
-          {
-            "jwt_bearer": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "users"
-        ],
-        "summary": "Delete a user (admin only)",
-        "operationId": "delete_user",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "User ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "User deleted"
           },
           "403": {
             "description": "Forbidden - Admin only"
@@ -5279,6 +7149,98 @@
   },
   "components": {
     "schemas": {
+      "AddSeriesGenreRequest": {
+        "type": "object",
+        "description": "Request to add a single genre to a series",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the genre to add\nThe genre will be created if it doesn't exist",
+            "example": "Action"
+          }
+        }
+      },
+      "AddSeriesTagRequest": {
+        "type": "object",
+        "description": "Request to add a single tag to a series",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the tag to add\nThe tag will be created if it doesn't exist",
+            "example": "Favorite"
+          }
+        }
+      },
+      "AlternateTitleDto": {
+        "type": "object",
+        "description": "Alternate title data transfer object",
+        "required": [
+          "id",
+          "seriesId",
+          "label",
+          "title",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the title was created",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Alternate title ID",
+            "example": "550e8400-e29b-41d4-a716-446655440040"
+          },
+          "label": {
+            "type": "string",
+            "description": "Label for this title (e.g., \"Japanese\", \"Romaji\", \"English\", \"Korean\")",
+            "example": "Japanese"
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Series ID",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "title": {
+            "type": "string",
+            "description": "The alternate title",
+            "example": "進撃の巨人"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the title was last updated",
+            "example": "2024-01-15T10:30:00Z"
+          }
+        }
+      },
+      "AlternateTitleListResponse": {
+        "type": "object",
+        "description": "Response containing a list of alternate titles",
+        "required": [
+          "titles"
+        ],
+        "properties": {
+          "titles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlternateTitleDto"
+            },
+            "description": "List of alternate titles"
+          }
+        }
+      },
       "AnalysisResult": {
         "type": "object",
         "description": "Analysis result response",
@@ -5680,6 +7642,209 @@
           }
         }
       },
+      "BookMetadataResponse": {
+        "type": "object",
+        "description": "Response containing book metadata",
+        "required": [
+          "bookId",
+          "updatedAt"
+        ],
+        "properties": {
+          "blackAndWhite": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the book is black and white",
+            "example": false
+          },
+          "bookId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Book ID",
+            "example": "550e8400-e29b-41d4-a716-446655440001"
+          },
+          "colorist": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Colorist(s)",
+            "example": "Richmond Lewis"
+          },
+          "count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Total count in series",
+            "example": 4
+          },
+          "coverArtist": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Cover artist(s)",
+            "example": "David Mazzucchelli"
+          },
+          "day": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Publication day (1-31)",
+            "example": 1
+          },
+          "editor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Editor(s)",
+            "example": "Dennis O'Neil"
+          },
+          "formatDetail": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Format details",
+            "example": "Trade Paperback"
+          },
+          "genre": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Genre",
+            "example": "Superhero"
+          },
+          "imprint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Imprint name",
+            "example": "DC Black Label"
+          },
+          "inker": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Inker(s)",
+            "example": "David Mazzucchelli"
+          },
+          "isbns": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISBN(s)",
+            "example": "978-1401207526"
+          },
+          "languageIso": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISO language code",
+            "example": "en"
+          },
+          "letterer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Letterer(s)",
+            "example": "Todd Klein"
+          },
+          "manga": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the book is manga format",
+            "example": false
+          },
+          "month": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Publication month (1-12)",
+            "example": 2
+          },
+          "penciller": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Penciller(s)",
+            "example": "David Mazzucchelli"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Publisher name",
+            "example": "DC Comics"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Book summary/description",
+            "example": "Bruce Wayne returns to Gotham City."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update timestamp",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "volume": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Volume number",
+            "example": 1
+          },
+          "web": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Web URL",
+            "example": "https://dc.com/batman-year-one"
+          },
+          "writer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Writer(s)",
+            "example": "Frank Miller"
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Publication year",
+            "example": 1987
+          }
+        }
+      },
       "BrowseResponse": {
         "type": "object",
         "required": [
@@ -5832,6 +7997,26 @@
           }
         }
       },
+      "CreateAlternateTitleRequest": {
+        "type": "object",
+        "description": "Request to create an alternate title for a series",
+        "required": [
+          "label",
+          "title"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Label for this title (e.g., \"Japanese\", \"Romaji\", \"English\")",
+            "example": "Japanese"
+          },
+          "title": {
+            "type": "string",
+            "description": "The alternate title",
+            "example": "進撃の巨人"
+          }
+        }
+      },
       "CreateApiKeyRequest": {
         "type": "object",
         "description": "Create API key request",
@@ -5885,6 +8070,64 @@
           }
         ],
         "description": "API key creation response (includes plaintext key only on creation)"
+      },
+      "CreateExternalLinkRequest": {
+        "type": "object",
+        "description": "Request to create or update an external link for a series",
+        "required": [
+          "sourceName",
+          "url"
+        ],
+        "properties": {
+          "externalId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ID on the external source (if available)",
+            "example": "12345"
+          },
+          "sourceName": {
+            "type": "string",
+            "description": "Source name (e.g., \"myanimelist\", \"anilist\", \"mangadex\")\nWill be normalized to lowercase",
+            "example": "myanimelist"
+          },
+          "url": {
+            "type": "string",
+            "description": "URL to the external source",
+            "example": "https://myanimelist.net/manga/12345"
+          }
+        }
+      },
+      "CreateExternalRatingRequest": {
+        "type": "object",
+        "description": "Request to create or update an external rating for a series",
+        "required": [
+          "sourceName",
+          "rating"
+        ],
+        "properties": {
+          "rating": {
+            "type": "number",
+            "format": "double",
+            "description": "Rating value (0-100)",
+            "example": 85.5
+          },
+          "sourceName": {
+            "type": "string",
+            "description": "Source name (e.g., \"myanimelist\", \"anilist\", \"mangabaka\")\nWill be normalized to lowercase",
+            "example": "myanimelist"
+          },
+          "voteCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Number of votes (if available)",
+            "example": 12500
+          }
+        }
       },
       "CreateLibraryRequest": {
         "type": "object",
@@ -6422,6 +8665,159 @@
           }
         }
       },
+      "ExternalLinkDto": {
+        "type": "object",
+        "description": "External link data transfer object",
+        "required": [
+          "id",
+          "seriesId",
+          "sourceName",
+          "url",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the link was created",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "externalId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ID on the external source (if available)",
+            "example": "12345"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "External link ID",
+            "example": "550e8400-e29b-41d4-a716-446655440060"
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Series ID",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "sourceName": {
+            "type": "string",
+            "description": "Source name (e.g., \"myanimelist\", \"anilist\", \"mangadex\")",
+            "example": "myanimelist"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the link was last updated",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "url": {
+            "type": "string",
+            "description": "URL to the external source",
+            "example": "https://myanimelist.net/manga/12345"
+          }
+        }
+      },
+      "ExternalLinkListResponse": {
+        "type": "object",
+        "description": "Response containing a list of external links",
+        "required": [
+          "links"
+        ],
+        "properties": {
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalLinkDto"
+            },
+            "description": "List of external links"
+          }
+        }
+      },
+      "ExternalRatingDto": {
+        "type": "object",
+        "description": "External rating data transfer object",
+        "required": [
+          "id",
+          "seriesId",
+          "sourceName",
+          "rating",
+          "fetchedAt",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the rating record was created",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the rating was last fetched from the source",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "External rating ID",
+            "example": "550e8400-e29b-41d4-a716-446655440050"
+          },
+          "rating": {
+            "type": "number",
+            "format": "double",
+            "description": "Rating value (0-100)",
+            "example": 85.5
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Series ID",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "sourceName": {
+            "type": "string",
+            "description": "Source name (e.g., \"myanimelist\", \"anilist\", \"mangabaka\")",
+            "example": "myanimelist"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the rating record was last updated",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "voteCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Number of votes (if available)",
+            "example": 12500
+          }
+        }
+      },
+      "ExternalRatingListResponse": {
+        "type": "object",
+        "description": "Response containing a list of external ratings",
+        "required": [
+          "ratings"
+        ],
+        "properties": {
+          "ratings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalRatingDto"
+            },
+            "description": "List of external ratings"
+          }
+        }
+      },
       "FeedMetadata": {
         "type": "object",
         "description": "OPDS 2.0 Feed Metadata\n\nMetadata for navigation and publication feeds.",
@@ -6505,6 +8901,230 @@
           "is_readable": true,
           "name": "Documents",
           "path": "/home/user/Documents"
+        }
+      },
+      "FullSeriesMetadataResponse": {
+        "type": "object",
+        "description": "Full series metadata response including all related data",
+        "required": [
+          "seriesId",
+          "title",
+          "locks",
+          "genres",
+          "tags",
+          "alternateTitles",
+          "externalRatings",
+          "externalLinks",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "ageRating": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Age rating (e.g., 13, 16, 18)",
+            "example": 16
+          },
+          "alternateTitles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlternateTitleDto"
+            },
+            "description": "Alternate titles for this series"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamps",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "customMetadata": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Custom JSON metadata",
+            "example": "{\"myField\": \"value\"}"
+          },
+          "externalLinks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalLinkDto"
+            },
+            "description": "External links to other sites"
+          },
+          "externalRatings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalRatingDto"
+            },
+            "description": "External ratings from various sources"
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenreDto"
+            },
+            "description": "Genres assigned to this series"
+          },
+          "imprint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Imprint (sub-publisher)",
+            "example": "Vertigo"
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Language (BCP47 format: \"en\", \"ja\", \"ko\")",
+            "example": "en"
+          },
+          "locks": {
+            "$ref": "#/components/schemas/MetadataLocks",
+            "description": "Lock states for all metadata fields"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Publisher name",
+            "example": "DC Comics"
+          },
+          "readingDirection": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reading direction (ltr, rtl, ttb, btt)",
+            "example": "ltr"
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Series ID",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Series status (ongoing, ended, hiatus, abandoned, unknown)",
+            "example": "ended"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Series description/summary",
+            "example": "The definitive origin story of Batman."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TagDto"
+            },
+            "description": "Tags assigned to this series"
+          },
+          "title": {
+            "type": "string",
+            "description": "Series title (usually same as series name)",
+            "example": "Batman: Year One"
+          },
+          "titleSort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Custom sort name for ordering",
+            "example": "Batman Year One"
+          },
+          "totalBookCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Expected total book count (for ongoing series)",
+            "example": 4
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Release year",
+            "example": 1987
+          }
+        }
+      },
+      "GenreDto": {
+        "type": "object",
+        "description": "Genre data transfer object",
+        "required": [
+          "id",
+          "name",
+          "createdAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the genre was created",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Genre ID",
+            "example": "550e8400-e29b-41d4-a716-446655440010"
+          },
+          "name": {
+            "type": "string",
+            "description": "Genre name",
+            "example": "Action"
+          },
+          "seriesCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Number of series with this genre",
+            "example": 42,
+            "minimum": 0
+          }
+        }
+      },
+      "GenreListResponse": {
+        "type": "object",
+        "description": "Response containing a list of genres",
+        "required": [
+          "genres"
+        ],
+        "properties": {
+          "genres": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenreDto"
+            },
+            "description": "List of genres"
+          }
         }
       },
       "Group": {
@@ -6921,6 +9541,86 @@
             "type": "string",
             "description": "Response message",
             "example": "Task 550e8400-e29b-41d4-a716-446655440000 cancelled"
+          }
+        }
+      },
+      "MetadataLocks": {
+        "type": "object",
+        "description": "Lock states for all lockable metadata fields",
+        "required": [
+          "title",
+          "titleSort",
+          "summary",
+          "publisher",
+          "imprint",
+          "status",
+          "ageRating",
+          "language",
+          "readingDirection",
+          "year",
+          "genres",
+          "tags"
+        ],
+        "properties": {
+          "ageRating": {
+            "type": "boolean",
+            "description": "Whether the age_rating field is locked",
+            "example": false
+          },
+          "genres": {
+            "type": "boolean",
+            "description": "Whether the genres are locked",
+            "example": false
+          },
+          "imprint": {
+            "type": "boolean",
+            "description": "Whether the imprint field is locked",
+            "example": false
+          },
+          "language": {
+            "type": "boolean",
+            "description": "Whether the language field is locked",
+            "example": false
+          },
+          "publisher": {
+            "type": "boolean",
+            "description": "Whether the publisher field is locked",
+            "example": false
+          },
+          "readingDirection": {
+            "type": "boolean",
+            "description": "Whether the reading_direction field is locked",
+            "example": false
+          },
+          "status": {
+            "type": "boolean",
+            "description": "Whether the status field is locked",
+            "example": false
+          },
+          "summary": {
+            "type": "boolean",
+            "description": "Whether the summary field is locked",
+            "example": true
+          },
+          "tags": {
+            "type": "boolean",
+            "description": "Whether the tags are locked",
+            "example": false
+          },
+          "title": {
+            "type": "boolean",
+            "description": "Whether the title field is locked",
+            "example": false
+          },
+          "titleSort": {
+            "type": "boolean",
+            "description": "Whether the title_sort field is locked",
+            "example": false
+          },
+          "year": {
+            "type": "boolean",
+            "description": "Whether the year field is locked",
+            "example": false
           }
         }
       },
@@ -7605,6 +10305,248 @@
           }
         }
       },
+      "PatchBookMetadataRequest": {
+        "type": "object",
+        "description": "PATCH request for partial update of book metadata\n\nOnly provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared.",
+        "properties": {
+          "blackAndWhite": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the book is black and white",
+            "example": false
+          },
+          "colorist": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Colorist(s) - comma-separated if multiple",
+            "example": "Richmond Lewis"
+          },
+          "count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Total count in series",
+            "example": 4
+          },
+          "coverArtist": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Cover artist(s) - comma-separated if multiple",
+            "example": "David Mazzucchelli"
+          },
+          "day": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Publication day (1-31)",
+            "example": 1
+          },
+          "editor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Editor(s) - comma-separated if multiple",
+            "example": "Dennis O'Neil"
+          },
+          "formatDetail": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Format details",
+            "example": "Trade Paperback"
+          },
+          "genre": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Genre",
+            "example": "Superhero"
+          },
+          "imprint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Imprint name",
+            "example": "DC Black Label"
+          },
+          "inker": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Inker(s) - comma-separated if multiple",
+            "example": "David Mazzucchelli"
+          },
+          "isbns": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISBN(s) - comma-separated if multiple",
+            "example": "978-1401207526"
+          },
+          "languageIso": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISO language code",
+            "example": "en"
+          },
+          "letterer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Letterer(s) - comma-separated if multiple",
+            "example": "Todd Klein"
+          },
+          "manga": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the book is manga format",
+            "example": false
+          },
+          "month": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Publication month (1-12)",
+            "example": 2
+          },
+          "penciller": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Penciller(s) - comma-separated if multiple",
+            "example": "David Mazzucchelli"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Publisher name",
+            "example": "DC Comics"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Book summary/description",
+            "example": "Bruce Wayne returns to Gotham City."
+          },
+          "volume": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Volume number",
+            "example": 1
+          },
+          "web": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Web URL for more information",
+            "example": "https://dc.com/batman-year-one"
+          },
+          "writer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Writer(s) - comma-separated if multiple",
+            "example": "Frank Miller"
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Publication year",
+            "example": 1987
+          }
+        }
+      },
+      "PatchSeriesMetadataRequest": {
+        "type": "object",
+        "description": "PATCH request for partial update of series metadata\n\nOnly provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared.",
+        "properties": {
+          "customMetadata": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Custom JSON metadata for extensions",
+            "example": "{\"myField\": \"value\"}"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Publisher name",
+            "example": "DC Comics"
+          },
+          "readingDirection": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reading direction (ltr, rtl, ttb, btt, or auto)",
+            "example": "ltr"
+          },
+          "sortName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Custom sort name for ordering",
+            "example": "Batman Year One"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Series description/summary",
+            "example": "The definitive origin story of Batman."
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Release year",
+            "example": 1987
+          }
+        }
+      },
       "Publication": {
         "type": "object",
         "description": "OPDS 2.0 Publication Entry\n\nRepresents a single publication (book) in an OPDS 2.0 feed.",
@@ -7969,6 +10911,248 @@
           }
         }
       },
+      "ReplaceBookMetadataRequest": {
+        "type": "object",
+        "description": "PUT request for full replacement of book metadata\n\nAll metadata fields will be replaced with the values in this request.\nOmitting a field (or setting it to null) will clear that field.",
+        "properties": {
+          "blackAndWhite": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the book is black and white",
+            "example": false
+          },
+          "colorist": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Colorist(s) - comma-separated if multiple",
+            "example": "Richmond Lewis"
+          },
+          "count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Total count in series",
+            "example": 4
+          },
+          "coverArtist": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Cover artist(s) - comma-separated if multiple",
+            "example": "David Mazzucchelli"
+          },
+          "day": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Publication day (1-31)",
+            "example": 1
+          },
+          "editor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Editor(s) - comma-separated if multiple",
+            "example": "Dennis O'Neil"
+          },
+          "formatDetail": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Format details",
+            "example": "Trade Paperback"
+          },
+          "genre": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Genre",
+            "example": "Superhero"
+          },
+          "imprint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Imprint name",
+            "example": "DC Black Label"
+          },
+          "inker": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Inker(s) - comma-separated if multiple",
+            "example": "David Mazzucchelli"
+          },
+          "isbns": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISBN(s) - comma-separated if multiple",
+            "example": "978-1401207526"
+          },
+          "languageIso": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISO language code",
+            "example": "en"
+          },
+          "letterer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Letterer(s) - comma-separated if multiple",
+            "example": "Todd Klein"
+          },
+          "manga": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the book is manga format",
+            "example": false
+          },
+          "month": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Publication month (1-12)",
+            "example": 2
+          },
+          "penciller": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Penciller(s) - comma-separated if multiple",
+            "example": "David Mazzucchelli"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Publisher name",
+            "example": "DC Comics"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Book summary/description",
+            "example": "Bruce Wayne returns to Gotham City after years abroad."
+          },
+          "volume": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Volume number",
+            "example": 1
+          },
+          "web": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Web URL for more information",
+            "example": "https://dc.com/batman-year-one"
+          },
+          "writer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Writer(s) - comma-separated if multiple",
+            "example": "Frank Miller"
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Publication year",
+            "example": 1987
+          }
+        }
+      },
+      "ReplaceSeriesMetadataRequest": {
+        "type": "object",
+        "description": "PUT request for full replacement of series metadata\n\nAll metadata fields will be replaced with the values in this request.\nOmitting a field (or setting it to null) will clear that field.",
+        "properties": {
+          "customMetadata": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Custom JSON metadata for extensions",
+            "example": "{\"myField\": \"value\"}"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Publisher name",
+            "example": "DC Comics"
+          },
+          "readingDirection": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reading direction (ltr, rtl, ttb, btt, or auto)",
+            "example": "ltr"
+          },
+          "sortName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Custom sort name for ordering (e.g., \"Batman Year One\" instead of \"The Batman Year One\")",
+            "example": "Batman Year One"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Series description/summary",
+            "example": "The definitive origin story of Batman."
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Release year",
+            "example": 1987
+          }
+        }
+      },
       "ResendVerificationRequest": {
         "type": "object",
         "description": "Resend verification email request",
@@ -8144,6 +11328,94 @@
           }
         }
       },
+      "SeriesCoverDto": {
+        "type": "object",
+        "description": "Series cover data transfer object",
+        "required": [
+          "id",
+          "seriesId",
+          "source",
+          "path",
+          "isSelected",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the cover was created",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "height": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Image height in pixels (if known)",
+            "example": 1200
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Cover ID",
+            "example": "550e8400-e29b-41d4-a716-446655440070"
+          },
+          "isSelected": {
+            "type": "boolean",
+            "description": "Whether this cover is currently selected as the primary cover",
+            "example": true
+          },
+          "path": {
+            "type": "string",
+            "description": "Path to the cover image",
+            "example": "data/covers/550e8400-e29b-41d4-a716-446655440002.jpg"
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Series ID",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "source": {
+            "type": "string",
+            "description": "Cover source (e.g., \"custom\", \"book:uuid\", \"mangabaka\")",
+            "example": "custom"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the cover was last updated",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "width": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Image width in pixels (if known)",
+            "example": 800
+          }
+        }
+      },
+      "SeriesCoverListResponse": {
+        "type": "object",
+        "description": "Response containing a list of series covers",
+        "required": [
+          "covers"
+        ],
+        "properties": {
+          "covers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeriesCoverDto"
+            },
+            "description": "List of covers"
+          }
+        }
+      },
       "SeriesDto": {
         "type": "object",
         "description": "Series data transfer object",
@@ -8263,6 +11535,144 @@
             ],
             "format": "double",
             "description": "Position within the series (volume/issue number)"
+          }
+        }
+      },
+      "SeriesMetadataResponse": {
+        "type": "object",
+        "description": "Response containing series metadata",
+        "required": [
+          "id",
+          "updatedAt"
+        ],
+        "properties": {
+          "customMetadata": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Custom JSON metadata",
+            "example": "{\"myField\": \"value\"}"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Series ID",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Publisher name",
+            "example": "DC Comics"
+          },
+          "readingDirection": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reading direction",
+            "example": "ltr"
+          },
+          "sortName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Custom sort name for ordering",
+            "example": "Batman Year One"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Series description/summary",
+            "example": "The definitive origin story of Batman."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update timestamp",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Release year",
+            "example": 1987
+          }
+        }
+      },
+      "SetSeriesGenresRequest": {
+        "type": "object",
+        "description": "Request to set genres for a series",
+        "required": [
+          "genres"
+        ],
+        "properties": {
+          "genres": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of genre names to set for the series\nGenres that don't exist will be created automatically",
+            "example": [
+              "Action",
+              "Comedy",
+              "Drama"
+            ]
+          }
+        }
+      },
+      "SetSeriesTagsRequest": {
+        "type": "object",
+        "description": "Request to set tags for a series",
+        "required": [
+          "tags"
+        ],
+        "properties": {
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of tag names to set for the series\nTags that don't exist will be created automatically",
+            "example": [
+              "Completed",
+              "Favorite",
+              "Reading"
+            ]
+          }
+        }
+      },
+      "SetUserRatingRequest": {
+        "type": "object",
+        "description": "Request to create or update a user's rating for a series",
+        "required": [
+          "rating"
+        ],
+        "properties": {
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional notes/review for this series",
+            "example": "Great series, loved the art style!"
+          },
+          "rating": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Rating value (1-100, typically set via 1-10 slider multiplied by 10)\n\nIn the UI, display as 1-10 with 0.5 step increments.\nMultiply UI value by 10 before sending (e.g., 7.5 → 75).",
+            "example": 85,
+            "maximum": 100,
+            "minimum": 1
           }
         }
       },
@@ -8448,6 +11858,60 @@
           "setupRequired": {
             "type": "boolean",
             "description": "Whether initial setup is required"
+          }
+        }
+      },
+      "TagDto": {
+        "type": "object",
+        "description": "Tag data transfer object",
+        "required": [
+          "id",
+          "name",
+          "createdAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the tag was created",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Tag ID",
+            "example": "550e8400-e29b-41d4-a716-446655440020"
+          },
+          "name": {
+            "type": "string",
+            "description": "Tag name",
+            "example": "Completed"
+          },
+          "seriesCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Number of series with this tag",
+            "example": 15,
+            "minimum": 0
+          }
+        }
+      },
+      "TagListResponse": {
+        "type": "object",
+        "description": "Response containing a list of tags",
+        "required": [
+          "tags"
+        ],
+        "properties": {
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TagDto"
+            },
+            "description": "List of tags"
           }
         }
       },
@@ -8954,6 +12418,34 @@
           }
         }
       },
+      "TaxonomyCleanupResponse": {
+        "type": "object",
+        "description": "Response for taxonomy cleanup operations (genres/tags)",
+        "required": [
+          "deletedCount",
+          "deletedNames"
+        ],
+        "properties": {
+          "deletedCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of unused items deleted",
+            "example": 5,
+            "minimum": 0
+          },
+          "deletedNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Names of deleted items",
+            "example": [
+              "OldGenre",
+              "UnusedGenre"
+            ]
+          }
+        }
+      },
       "TokenResponse": {
         "type": "object",
         "description": "Token response (for refresh tokens in future)",
@@ -9011,6 +12503,28 @@
             "type": "string",
             "description": "Scan mode: \"normal\" or \"deep\" (defaults to \"normal\")",
             "example": "normal"
+          }
+        }
+      },
+      "UpdateAlternateTitleRequest": {
+        "type": "object",
+        "description": "Request to update an alternate title",
+        "properties": {
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "New label for this title",
+            "example": "Romaji"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "New title text",
+            "example": "Shingeki no Kyojin"
           }
         }
       },
@@ -9123,6 +12637,108 @@
                 "description": "Scanning configuration"
               }
             ]
+          }
+        }
+      },
+      "UpdateMetadataLocksRequest": {
+        "type": "object",
+        "description": "Request to update metadata lock states",
+        "properties": {
+          "ageRating": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the age_rating field",
+            "example": false
+          },
+          "genres": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the genres",
+            "example": false
+          },
+          "imprint": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the imprint field",
+            "example": false
+          },
+          "language": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the language field",
+            "example": false
+          },
+          "publisher": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the publisher field",
+            "example": false
+          },
+          "readingDirection": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the reading_direction field",
+            "example": false
+          },
+          "status": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the status field",
+            "example": false
+          },
+          "summary": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the summary field",
+            "example": true
+          },
+          "tags": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the tags",
+            "example": false
+          },
+          "title": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the title field",
+            "example": false
+          },
+          "titleSort": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the title_sort field",
+            "example": false
+          },
+          "year": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the year field",
+            "example": false
           }
         }
       },
@@ -9310,6 +12926,73 @@
           }
         }
       },
+      "UserRatingsListResponse": {
+        "type": "object",
+        "description": "Response containing a list of user ratings",
+        "required": [
+          "ratings"
+        ],
+        "properties": {
+          "ratings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserSeriesRatingDto"
+            },
+            "description": "List of user ratings"
+          }
+        }
+      },
+      "UserSeriesRatingDto": {
+        "type": "object",
+        "description": "User series rating data transfer object",
+        "required": [
+          "id",
+          "seriesId",
+          "rating",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the rating was created",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Rating ID",
+            "example": "550e8400-e29b-41d4-a716-446655440030"
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional notes/review",
+            "example": "Great series, loved the art style!"
+          },
+          "rating": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Rating value (1-100, displayed as 1-10 in UI with 0.1 precision)",
+            "example": 85
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Series ID",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the rating was last updated",
+            "example": "2024-01-15T10:30:00Z"
+          }
+        }
+      },
       "VerifyEmailRequest": {
         "type": "object",
         "description": "Verify email request",
@@ -9394,6 +13077,18 @@
     {
       "name": "series",
       "description": "Series browsing and search endpoints"
+    },
+    {
+      "name": "genres",
+      "description": "Genre taxonomy endpoints for categorizing series"
+    },
+    {
+      "name": "tags",
+      "description": "Tag taxonomy endpoints for labeling series"
+    },
+    {
+      "name": "ratings",
+      "description": "User series rating endpoints"
     },
     {
       "name": "books",

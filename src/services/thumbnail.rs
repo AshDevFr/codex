@@ -9,14 +9,14 @@ use tokio::fs;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::config::ThumbnailConfig;
+use crate::config::FilesConfig;
 use crate::db::entities::{books, prelude::*};
 use crate::db::repositories::{BookRepository, SeriesRepository, SettingsRepository};
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
 
 /// Service for managing thumbnail cache
 pub struct ThumbnailService {
-    config: ThumbnailConfig,
+    config: FilesConfig,
 }
 
 /// Settings loaded from database for thumbnail generation
@@ -47,7 +47,7 @@ pub struct GenerationStats {
 
 impl ThumbnailService {
     /// Create a new thumbnail service
-    pub fn new(config: ThumbnailConfig) -> Self {
+    pub fn new(config: FilesConfig) -> Self {
         Self { config }
     }
 
@@ -69,7 +69,12 @@ impl ThumbnailService {
 
     /// Get the full path to thumbnail cache directory
     fn get_cache_base_dir(&self) -> PathBuf {
-        PathBuf::from(&self.config.cache_dir)
+        PathBuf::from(&self.config.thumbnail_dir)
+    }
+
+    /// Get the uploads directory path
+    pub fn get_uploads_dir(&self) -> PathBuf {
+        PathBuf::from(&self.config.uploads_dir)
     }
 
     /// Get the subdirectory path for a book's thumbnail (based on first 2 chars of UUID)
@@ -367,12 +372,16 @@ impl ThumbnailService {
 mod tests {
     use super::*;
 
+    fn test_files_config() -> FilesConfig {
+        FilesConfig {
+            thumbnail_dir: "data/thumbnails".to_string(),
+            uploads_dir: "data/uploads".to_string(),
+        }
+    }
+
     #[test]
     fn test_thumbnail_path_generation() {
-        let config = ThumbnailConfig {
-            cache_dir: "data/thumbnails".to_string(),
-        };
-        let service = ThumbnailService::new(config);
+        let service = ThumbnailService::new(test_files_config());
 
         let book_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
         let path = service.get_thumbnail_path(book_id);
@@ -385,10 +394,7 @@ mod tests {
 
     #[test]
     fn test_thumbnail_subdirectory_bucketing() {
-        let config = ThumbnailConfig {
-            cache_dir: "data/thumbnails".to_string(),
-        };
-        let service = ThumbnailService::new(config);
+        let service = ThumbnailService::new(test_files_config());
 
         let book_id1 = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
         let book_id2 = Uuid::parse_str("55ffffff-e29b-41d4-a716-446655440000").unwrap();
@@ -412,5 +418,12 @@ mod tests {
         let settings = ThumbnailSettings::default();
         assert_eq!(settings.max_dimension, 400);
         assert_eq!(settings.jpeg_quality, 85);
+    }
+
+    #[test]
+    fn test_uploads_dir() {
+        let service = ThumbnailService::new(test_files_config());
+        let uploads_dir = service.get_uploads_dir();
+        assert_eq!(uploads_dir.to_string_lossy(), "data/uploads");
     }
 }

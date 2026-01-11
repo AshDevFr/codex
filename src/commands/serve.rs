@@ -87,12 +87,10 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         .unwrap_or(false);
 
     // Initialize thumbnail service (needed for both workers and API handlers)
-    let thumbnail_service = Arc::new(crate::services::ThumbnailService::new(
-        config.thumbnail.clone(),
-    ));
+    let thumbnail_service = Arc::new(crate::services::ThumbnailService::new(config.files.clone()));
     info!(
-        "Thumbnail service initialized (cache: {})",
-        config.thumbnail.cache_dir
+        "Files service initialized (thumbnails: {}, uploads: {})",
+        config.files.thumbnail_dir, config.files.uploads_dir
     );
 
     // Initialize worker tracking variables

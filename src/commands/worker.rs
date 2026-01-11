@@ -50,12 +50,10 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Event broadcaster initialized");
 
     // Initialize thumbnail service
-    let thumbnail_service = Arc::new(crate::services::ThumbnailService::new(
-        config.thumbnail.clone(),
-    ));
+    let thumbnail_service = Arc::new(crate::services::ThumbnailService::new(config.files.clone()));
     info!(
-        "Thumbnail service initialized (cache: {})",
-        config.thumbnail.cache_dir
+        "Files service initialized (thumbnails: {}, uploads: {})",
+        config.files.thumbnail_dir, config.files.uploads_dir
     );
 
     // Spawn multiple workers for parallel task processing

@@ -22,7 +22,7 @@ mod tests {
     use super::*;
     use crate::config::{
         ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
-        LoggingConfig, SQLiteConfig, ScannerConfig, TaskConfig, ThumbnailConfig,
+        FilesConfig, LoggingConfig, SQLiteConfig, ScannerConfig, TaskConfig,
     };
     use tempfile::NamedTempFile;
 
@@ -70,7 +70,7 @@ application:
             email: EmailConfig::default(),
             task: TaskConfig::default(),
             scanner: ScannerConfig::default(),
-            thumbnail: ThumbnailConfig::default(),
+            files: FilesConfig::default(),
         };
 
         let temp_file = NamedTempFile::new().unwrap();
@@ -148,7 +148,7 @@ scanner:
             scanner: ScannerConfig {
                 max_concurrent_scans: 4,
             },
-            thumbnail: ThumbnailConfig::default(),
+            files: FilesConfig::default(),
         };
 
         let temp_file = NamedTempFile::new().unwrap();

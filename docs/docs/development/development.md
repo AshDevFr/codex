@@ -50,6 +50,16 @@ git clone https://github.com/AshDevFr/codex.git
 cd codex
 ```
 
+### Install Pre-commit Hooks
+
+After cloning, install pre-commit hooks to ensure generated files stay in sync:
+
+```bash
+make setup-hooks
+```
+
+This requires Python and will install [pre-commit](https://pre-commit.com/) if not already available. The hooks ensure that `web/openapi.json` and `web/src/types/api.generated.ts` are regenerated when backend API changes are committed.
+
 ### Standard Build (with CBR support)
 
 By default, Codex includes CBR support:

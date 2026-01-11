@@ -193,6 +193,63 @@ impl GenreRepository {
         Ok(count)
     }
 
+    /// Get all series IDs that have a specific genre (by normalized name)
+    pub async fn get_series_ids_by_genre_name(
+        db: &DatabaseConnection,
+        genre_name: &str,
+    ) -> Result<Vec<Uuid>> {
+        use crate::db::entities::series_genres::Entity as SeriesGenres;
+
+        let normalized = genre_name.to_lowercase().trim().to_string();
+
+        // First find the genre
+        let genre = Genres::find()
+            .filter(genres::Column::NormalizedName.eq(&normalized))
+            .one(db)
+            .await?;
+
+        match genre {
+            Some(g) => {
+                let series_ids: Vec<Uuid> = SeriesGenres::find()
+                    .filter(series_genres::Column::GenreId.eq(g.id))
+                    .all(db)
+                    .await?
+                    .into_iter()
+                    .map(|sg| sg.series_id)
+                    .collect();
+
+                Ok(series_ids)
+            }
+            None => Ok(vec![]),
+        }
+    }
+
+    /// Get all series IDs that have ALL of the specified genres (AND logic)
+    pub async fn get_series_ids_by_genre_names(
+        db: &DatabaseConnection,
+        genre_names: &[String],
+    ) -> Result<Vec<Uuid>> {
+        if genre_names.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get series IDs for the first genre
+        let mut result_ids = Self::get_series_ids_by_genre_name(db, &genre_names[0]).await?;
+
+        // Intersect with series IDs for remaining genres
+        for name in &genre_names[1..] {
+            let ids = Self::get_series_ids_by_genre_name(db, name).await?;
+            result_ids.retain(|id| ids.contains(id));
+
+            // Early exit if no matches
+            if result_ids.is_empty() {
+                break;
+            }
+        }
+
+        Ok(result_ids)
+    }
+
     /// Delete all unused genres (genres with no series linked)
     /// Returns the names of deleted genres
     pub async fn delete_unused(db: &DatabaseConnection) -> Result<Vec<String>> {

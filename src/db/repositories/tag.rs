@@ -193,6 +193,63 @@ impl TagRepository {
         Ok(count)
     }
 
+    /// Get all series IDs that have a specific tag (by normalized name)
+    pub async fn get_series_ids_by_tag_name(
+        db: &DatabaseConnection,
+        tag_name: &str,
+    ) -> Result<Vec<Uuid>> {
+        use crate::db::entities::series_tags::Entity as SeriesTags;
+
+        let normalized = tag_name.to_lowercase().trim().to_string();
+
+        // First find the tag
+        let tag = Tags::find()
+            .filter(tags::Column::NormalizedName.eq(&normalized))
+            .one(db)
+            .await?;
+
+        match tag {
+            Some(t) => {
+                let series_ids: Vec<Uuid> = SeriesTags::find()
+                    .filter(series_tags::Column::TagId.eq(t.id))
+                    .all(db)
+                    .await?
+                    .into_iter()
+                    .map(|st| st.series_id)
+                    .collect();
+
+                Ok(series_ids)
+            }
+            None => Ok(vec![]),
+        }
+    }
+
+    /// Get all series IDs that have ALL of the specified tags (AND logic)
+    pub async fn get_series_ids_by_tag_names(
+        db: &DatabaseConnection,
+        tag_names: &[String],
+    ) -> Result<Vec<Uuid>> {
+        if tag_names.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get series IDs for the first tag
+        let mut result_ids = Self::get_series_ids_by_tag_name(db, &tag_names[0]).await?;
+
+        // Intersect with series IDs for remaining tags
+        for name in &tag_names[1..] {
+            let ids = Self::get_series_ids_by_tag_name(db, name).await?;
+            result_ids.retain(|id| ids.contains(id));
+
+            // Early exit if no matches
+            if result_ids.is_empty() {
+                break;
+            }
+        }
+
+        Ok(result_ids)
+    }
+
     /// Delete all unused tags (tags with no series linked)
     /// Returns the names of deleted tags
     pub async fn delete_unused(db: &DatabaseConnection) -> Result<Vec<String>> {

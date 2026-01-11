@@ -2181,3 +2181,475 @@ async fn test_patch_series_metadata_without_auth() {
     let error = response.unwrap();
     assert_eq!(error.error, "Unauthorized");
 }
+
+// ============================================================================
+// Series Filtering by Genres/Tags Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_series_filter_by_single_genre() {
+    use codex::db::repositories::GenreRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with different genres
+    let series1 = SeriesRepository::create(&db, library.id, "Action Series", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "Comedy Series", None)
+        .await
+        .unwrap();
+    let series3 = SeriesRepository::create(&db, library.id, "Action Comedy Series", None)
+        .await
+        .unwrap();
+
+    // Assign genres
+    GenreRepository::set_genres_for_series(&db, series1.id, vec!["Action".to_string()])
+        .await
+        .unwrap();
+    GenreRepository::set_genres_for_series(&db, series2.id, vec!["Comedy".to_string()])
+        .await
+        .unwrap();
+    GenreRepository::set_genres_for_series(
+        &db,
+        series3.id,
+        vec!["Action".to_string(), "Comedy".to_string()],
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Filter by Action genre
+    let request = get_request_with_auth("/api/v1/series?genres=Action", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 2);
+    assert_eq!(series_list.total, 2);
+
+    let series_ids: Vec<_> = series_list.data.iter().map(|s| s.id).collect();
+    assert!(series_ids.contains(&series1.id));
+    assert!(series_ids.contains(&series3.id));
+    assert!(!series_ids.contains(&series2.id));
+}
+
+#[tokio::test]
+async fn test_list_series_filter_by_multiple_genres_and_logic() {
+    use codex::db::repositories::GenreRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with different genre combinations
+    let series1 = SeriesRepository::create(&db, library.id, "Action Only", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "Comedy Only", None)
+        .await
+        .unwrap();
+    let series3 = SeriesRepository::create(&db, library.id, "Action and Comedy", None)
+        .await
+        .unwrap();
+    let series4 = SeriesRepository::create(&db, library.id, "Action and Drama", None)
+        .await
+        .unwrap();
+
+    // Assign genres
+    GenreRepository::set_genres_for_series(&db, series1.id, vec!["Action".to_string()])
+        .await
+        .unwrap();
+    GenreRepository::set_genres_for_series(&db, series2.id, vec!["Comedy".to_string()])
+        .await
+        .unwrap();
+    GenreRepository::set_genres_for_series(
+        &db,
+        series3.id,
+        vec!["Action".to_string(), "Comedy".to_string()],
+    )
+    .await
+    .unwrap();
+    GenreRepository::set_genres_for_series(
+        &db,
+        series4.id,
+        vec!["Action".to_string(), "Drama".to_string()],
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Filter by Action AND Comedy (series must have BOTH)
+    let request = get_request_with_auth("/api/v1/series?genres=Action,Comedy", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].id, series3.id);
+}
+
+#[tokio::test]
+async fn test_list_series_filter_by_single_tag() {
+    use codex::db::repositories::TagRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series
+    let series1 = SeriesRepository::create(&db, library.id, "Completed Series", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "Ongoing Series", None)
+        .await
+        .unwrap();
+    let series3 = SeriesRepository::create(&db, library.id, "Favorite Completed", None)
+        .await
+        .unwrap();
+
+    // Assign tags
+    TagRepository::set_tags_for_series(&db, series1.id, vec!["Completed".to_string()])
+        .await
+        .unwrap();
+    TagRepository::set_tags_for_series(&db, series2.id, vec!["Ongoing".to_string()])
+        .await
+        .unwrap();
+    TagRepository::set_tags_for_series(
+        &db,
+        series3.id,
+        vec!["Completed".to_string(), "Favorite".to_string()],
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Filter by Completed tag
+    let request = get_request_with_auth("/api/v1/series?tags=Completed", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 2);
+    assert_eq!(series_list.total, 2);
+
+    let series_ids: Vec<_> = series_list.data.iter().map(|s| s.id).collect();
+    assert!(series_ids.contains(&series1.id));
+    assert!(series_ids.contains(&series3.id));
+    assert!(!series_ids.contains(&series2.id));
+}
+
+#[tokio::test]
+async fn test_list_series_filter_by_multiple_tags_and_logic() {
+    use codex::db::repositories::TagRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(&db, library.id, "Just Completed", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "Just Favorite", None)
+        .await
+        .unwrap();
+    let series3 = SeriesRepository::create(&db, library.id, "Completed and Favorite", None)
+        .await
+        .unwrap();
+
+    TagRepository::set_tags_for_series(&db, series1.id, vec!["Completed".to_string()])
+        .await
+        .unwrap();
+    TagRepository::set_tags_for_series(&db, series2.id, vec!["Favorite".to_string()])
+        .await
+        .unwrap();
+    TagRepository::set_tags_for_series(
+        &db,
+        series3.id,
+        vec!["Completed".to_string(), "Favorite".to_string()],
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Filter by Completed AND Favorite (series must have BOTH)
+    let request = get_request_with_auth("/api/v1/series?tags=Completed,Favorite", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].id, series3.id);
+}
+
+#[tokio::test]
+async fn test_list_series_filter_by_genre_and_tag_combined() {
+    use codex::db::repositories::{GenreRepository, TagRepository};
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(&db, library.id, "Action Completed", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "Action Ongoing", None)
+        .await
+        .unwrap();
+    let series3 = SeriesRepository::create(&db, library.id, "Comedy Completed", None)
+        .await
+        .unwrap();
+
+    // Assign genres and tags
+    GenreRepository::set_genres_for_series(&db, series1.id, vec!["Action".to_string()])
+        .await
+        .unwrap();
+    TagRepository::set_tags_for_series(&db, series1.id, vec!["Completed".to_string()])
+        .await
+        .unwrap();
+
+    GenreRepository::set_genres_for_series(&db, series2.id, vec!["Action".to_string()])
+        .await
+        .unwrap();
+    TagRepository::set_tags_for_series(&db, series2.id, vec!["Ongoing".to_string()])
+        .await
+        .unwrap();
+
+    GenreRepository::set_genres_for_series(&db, series3.id, vec!["Comedy".to_string()])
+        .await
+        .unwrap();
+    TagRepository::set_tags_for_series(&db, series3.id, vec!["Completed".to_string()])
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Filter by Action genre AND Completed tag
+    let request = get_request_with_auth("/api/v1/series?genres=Action&tags=Completed", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].id, series1.id);
+}
+
+#[tokio::test]
+async fn test_list_series_filter_by_nonexistent_genre() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Filter by a genre that doesn't exist
+    let request = get_request_with_auth("/api/v1/series?genres=NonExistent", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 0);
+    assert_eq!(series_list.total, 0);
+}
+
+#[tokio::test]
+async fn test_list_series_filter_with_library_id() {
+    use codex::db::repositories::GenreRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library1 = LibraryRepository::create(&db, "Library 1", "/lib1", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let library2 = LibraryRepository::create(&db, "Library 2", "/lib2", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(&db, library1.id, "Lib1 Action", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library2.id, "Lib2 Action", None)
+        .await
+        .unwrap();
+
+    // Both series have Action genre
+    GenreRepository::set_genres_for_series(&db, series1.id, vec!["Action".to_string()])
+        .await
+        .unwrap();
+    GenreRepository::set_genres_for_series(&db, series2.id, vec!["Action".to_string()])
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Filter by Action genre AND library 1
+    let request = get_request_with_auth(
+        &format!("/api/v1/series?genres=Action&library_id={}", library1.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].id, series1.id);
+}
+
+#[tokio::test]
+async fn test_list_series_filter_with_pagination() {
+    use codex::db::repositories::GenreRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create 5 series with Action genre
+    for i in 1..=5 {
+        let series = SeriesRepository::create(&db, library.id, &format!("Action {}", i), None)
+            .await
+            .unwrap();
+        GenreRepository::set_genres_for_series(&db, series.id, vec!["Action".to_string()])
+            .await
+            .unwrap();
+    }
+
+    // Create 2 series without Action genre
+    for i in 1..=2 {
+        SeriesRepository::create(&db, library.id, &format!("Comedy {}", i), None)
+            .await
+            .unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Filter by Action with pagination
+    let request = get_request_with_auth("/api/v1/series?genres=Action&page=0&page_size=2", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page1 = response.unwrap();
+    assert_eq!(page1.data.len(), 2);
+    assert_eq!(page1.total, 5);
+    assert_eq!(page1.page, 0);
+
+    // Get second page
+    let request = get_request_with_auth("/api/v1/series?genres=Action&page=1&page_size=2", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page2 = response.unwrap();
+    assert_eq!(page2.data.len(), 2);
+    assert_eq!(page2.total, 5);
+    assert_eq!(page2.page, 1);
+}
+
+#[tokio::test]
+async fn test_list_series_filter_case_insensitive() {
+    use codex::db::repositories::GenreRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    GenreRepository::set_genres_for_series(&db, series.id, vec!["Action".to_string()])
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Filter by "action" (lowercase) should match "Action"
+    let request = get_request_with_auth("/api/v1/series?genres=action", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].id, series.id);
+}
+
+#[tokio::test]
+async fn test_list_series_filter_empty_string_ignored() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series without any genres
+    SeriesRepository::create(&db, library.id, "Series 1", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Series 2", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Empty genre filter should return all series (no filtering)
+    let request = get_request_with_auth("/api/v1/series?genres=", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 2);
+}

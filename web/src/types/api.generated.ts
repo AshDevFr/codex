@@ -126,11 +126,7 @@ export interface paths {
          *     Users can only get their own keys unless they are admin
          */
         get: operations["get_api_key"];
-        /**
-         * Update an API key
-         *     Users can only update their own keys unless they are admin
-         */
-        put: operations["update_api_key"];
+        put?: never;
         post?: never;
         /**
          * Delete an API key
@@ -139,7 +135,11 @@ export interface paths {
         delete: operations["delete_api_key"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update an API key (partial update)
+         *     Users can only update their own keys unless they are admin
+         */
+        patch: operations["update_api_key"];
         trace?: never;
     };
     "/api/v1/auth/login": {
@@ -506,6 +506,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{id}/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace all book metadata (PUT)
+         * @description Completely replaces all metadata fields. Omitted or null fields will be cleared.
+         *     If no metadata record exists, one will be created.
+         */
+        put: operations["replace_book_metadata"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Partially update book metadata (PATCH)
+         * @description Only provided fields will be updated. Absent fields are unchanged.
+         *     Explicitly null fields will be cleared.
+         *     If no metadata record exists, one will be created with the provided fields.
+         */
+        patch: operations["patch_book_metadata"];
+        trace?: never;
+    };
     "/api/v1/books/{id}/thumbnail": {
         parameters: {
             query?: never;
@@ -669,6 +696,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/genres": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all genres */
+        get: operations["list_genres"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/genres/cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete all unused genres (genres with no series linked) */
+        post: operations["cleanup_genres"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/genres/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a genre from the taxonomy (admin only) */
+        delete: operations["delete_genre"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/libraries": {
         parameters: {
             query?: never;
@@ -696,14 +774,14 @@ export interface paths {
         };
         /** Get library by ID */
         get: operations["get_library"];
-        /** Update a library */
-        put: operations["update_library"];
+        put?: never;
         post?: never;
         /** Delete a library */
         delete: operations["delete_library"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update a library (partial update) */
+        patch: operations["update_library"];
         trace?: never;
     };
     "/api/v1/libraries/{id}/analyze": {
@@ -1194,6 +1272,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/{id}/alternate-titles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get alternate titles for a series */
+        get: operations["get_series_alternate_titles"];
+        put?: never;
+        /** Add an alternate title to a series */
+        post: operations["create_alternate_title"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/alternate-titles/{title_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an alternate title */
+        delete: operations["delete_alternate_title"];
+        options?: never;
+        head?: never;
+        /** Update an alternate title */
+        patch: operations["update_alternate_title"];
+        trace?: never;
+    };
     "/api/v1/series/{id}/analyze": {
         parameters: {
             query?: never;
@@ -1305,8 +1419,59 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Set which cover source to use for a series */
-        put: operations["set_series_cover_source"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set which cover source to use for a series (partial update) */
+        patch: operations["set_series_cover_source"];
+        trace?: never;
+    };
+    "/api/v1/series/{id}/covers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all covers for a series */
+        get: operations["list_series_covers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/covers/{cover_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a cover from a series */
+        delete: operations["delete_series_cover"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/covers/{cover_id}/select": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Select a cover as the primary cover for a series */
+        put: operations["select_series_cover"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1335,6 +1500,181 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/{id}/external-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get external links for a series */
+        get: operations["get_series_external_links"];
+        put?: never;
+        /** Add or update an external link for a series */
+        post: operations["create_external_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/external-links/{source}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an external link by source name */
+        delete: operations["delete_external_link"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/external-ratings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get external ratings for a series */
+        get: operations["get_series_external_ratings"];
+        put?: never;
+        /** Add or update an external rating for a series */
+        post: operations["create_external_rating"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/external-ratings/{source}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an external rating by source name */
+        delete: operations["delete_external_rating"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/genres": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get genres for a series */
+        get: operations["get_series_genres"];
+        /** Set genres for a series (replaces existing) */
+        put: operations["set_series_genres"];
+        /** Add a single genre to a series */
+        post: operations["add_series_genre"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/genres/{genre_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a genre from a series */
+        delete: operations["remove_series_genre"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace all series metadata (PUT)
+         * @description Replaces all metadata fields with the values in the request.
+         *     Omitting a field (or setting it to null) will clear that field.
+         */
+        put: operations["replace_series_metadata"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Partially update series metadata (PATCH)
+         * @description Only provided fields will be updated. Absent fields are unchanged.
+         *     Explicitly null fields will be cleared.
+         */
+        patch: operations["patch_series_metadata"];
+        trace?: never;
+    };
+    "/api/v1/series/{id}/metadata/full": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get full series metadata including all related data
+         * @description Returns comprehensive metadata with lock states, genres, tags, alternate titles,
+         *     external ratings, and external links.
+         */
+        get: operations["get_full_series_metadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/metadata/locks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get metadata lock states */
+        get: operations["get_metadata_locks"];
+        /**
+         * Update metadata lock states
+         * @description Sets which metadata fields are locked. Locked fields will not be overwritten
+         *     by automatic metadata refresh from book analysis or external sources.
+         */
+        put: operations["update_metadata_locks"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/{id}/purge-deleted": {
         parameters: {
             query?: never;
@@ -1352,6 +1692,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/{id}/rating": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the current user's rating for a series */
+        get: operations["get_series_rating"];
+        /** Set (create or update) the current user's rating for a series */
+        put: operations["set_series_rating"];
+        post?: never;
+        /** Delete the current user's rating for a series */
+        delete: operations["delete_series_rating"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/{id}/read": {
         parameters: {
             query?: never;
@@ -1364,6 +1723,42 @@ export interface paths {
         /** Mark all books in a series as read */
         post: operations["mark_series_as_read"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get tags for a series */
+        get: operations["get_series_tags"];
+        /** Set tags for a series (replaces existing) */
+        put: operations["set_series_tags"];
+        /** Add a single tag to a series */
+        post: operations["add_series_tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a tag from a series */
+        delete: operations["remove_series_tag"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1458,6 +1853,57 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all tags */
+        get: operations["list_tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tags/cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete all unused tags (tags with no series linked) */
+        post: operations["cleanup_tags"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tags/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a tag from the taxonomy (admin only) */
+        delete: operations["delete_tag"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1680,6 +2126,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user/ratings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all of the current user's ratings */
+        get: operations["list_user_ratings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users": {
         parameters: {
             query?: never;
@@ -1707,14 +2170,14 @@ export interface paths {
         };
         /** Get user by ID (admin only) */
         get: operations["get_user"];
-        /** Update a user (admin only) */
-        put: operations["update_user"];
+        put?: never;
         post?: never;
         /** Delete a user (admin only) */
         delete: operations["delete_user"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update a user (admin only, partial update) */
+        patch: operations["update_user"];
         trace?: never;
     };
     "/health": {
@@ -2009,6 +2472,66 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description Request to add a single genre to a series */
+        AddSeriesGenreRequest: {
+            /**
+             * @description Name of the genre to add
+             *     The genre will be created if it doesn't exist
+             * @example Action
+             */
+            name: string;
+        };
+        /** @description Request to add a single tag to a series */
+        AddSeriesTagRequest: {
+            /**
+             * @description Name of the tag to add
+             *     The tag will be created if it doesn't exist
+             * @example Favorite
+             */
+            name: string;
+        };
+        /** @description Alternate title data transfer object */
+        AlternateTitleDto: {
+            /**
+             * Format: date-time
+             * @description When the title was created
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Alternate title ID
+             * @example 550e8400-e29b-41d4-a716-446655440040
+             */
+            id: string;
+            /**
+             * @description Label for this title (e.g., "Japanese", "Romaji", "English", "Korean")
+             * @example Japanese
+             */
+            label: string;
+            /**
+             * Format: uuid
+             * @description Series ID
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            seriesId: string;
+            /**
+             * @description The alternate title
+             * @example 進撃の巨人
+             */
+            title: string;
+            /**
+             * Format: date-time
+             * @description When the title was last updated
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+        };
+        /** @description Response containing a list of alternate titles */
+        AlternateTitleListResponse: {
+            /** @description List of alternate titles */
+            titles: components["schemas"]["AlternateTitleDto"][];
+        };
         /** @description Analysis result response */
         AnalysisResult: {
             /**
@@ -2218,6 +2741,136 @@ export interface components {
              */
             writers: string[];
         };
+        /** @description Response containing book metadata */
+        BookMetadataResponse: {
+            /**
+             * @description Whether the book is black and white
+             * @example false
+             */
+            blackAndWhite?: boolean | null;
+            /**
+             * Format: uuid
+             * @description Book ID
+             * @example 550e8400-e29b-41d4-a716-446655440001
+             */
+            bookId: string;
+            /**
+             * @description Colorist(s)
+             * @example Richmond Lewis
+             */
+            colorist?: string | null;
+            /**
+             * Format: int32
+             * @description Total count in series
+             * @example 4
+             */
+            count?: number | null;
+            /**
+             * @description Cover artist(s)
+             * @example David Mazzucchelli
+             */
+            coverArtist?: string | null;
+            /**
+             * Format: int32
+             * @description Publication day (1-31)
+             * @example 1
+             */
+            day?: number | null;
+            /**
+             * @description Editor(s)
+             * @example Dennis O'Neil
+             */
+            editor?: string | null;
+            /**
+             * @description Format details
+             * @example Trade Paperback
+             */
+            formatDetail?: string | null;
+            /**
+             * @description Genre
+             * @example Superhero
+             */
+            genre?: string | null;
+            /**
+             * @description Imprint name
+             * @example DC Black Label
+             */
+            imprint?: string | null;
+            /**
+             * @description Inker(s)
+             * @example David Mazzucchelli
+             */
+            inker?: string | null;
+            /**
+             * @description ISBN(s)
+             * @example 978-1401207526
+             */
+            isbns?: string | null;
+            /**
+             * @description ISO language code
+             * @example en
+             */
+            languageIso?: string | null;
+            /**
+             * @description Letterer(s)
+             * @example Todd Klein
+             */
+            letterer?: string | null;
+            /**
+             * @description Whether the book is manga format
+             * @example false
+             */
+            manga?: boolean | null;
+            /**
+             * Format: int32
+             * @description Publication month (1-12)
+             * @example 2
+             */
+            month?: number | null;
+            /**
+             * @description Penciller(s)
+             * @example David Mazzucchelli
+             */
+            penciller?: string | null;
+            /**
+             * @description Publisher name
+             * @example DC Comics
+             */
+            publisher?: string | null;
+            /**
+             * @description Book summary/description
+             * @example Bruce Wayne returns to Gotham City.
+             */
+            summary?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+            /**
+             * Format: int32
+             * @description Volume number
+             * @example 1
+             */
+            volume?: number | null;
+            /**
+             * @description Web URL
+             * @example https://dc.com/batman-year-one
+             */
+            web?: string | null;
+            /**
+             * @description Writer(s)
+             * @example Frank Miller
+             */
+            writer?: string | null;
+            /**
+             * Format: int32
+             * @description Publication year
+             * @example 1987
+             */
+            year?: number | null;
+        };
         /**
          * @example {
          *       "current_path": "/home/user/Documents",
@@ -2292,6 +2945,19 @@ export interface components {
             /** @description Sort-friendly version of the name */
             sortAs?: string | null;
         };
+        /** @description Request to create an alternate title for a series */
+        CreateAlternateTitleRequest: {
+            /**
+             * @description Label for this title (e.g., "Japanese", "Romaji", "English")
+             * @example Japanese
+             */
+            label: string;
+            /**
+             * @description The alternate title
+             * @example 進撃の巨人
+             */
+            title: string;
+        };
         /** @description Create API key request */
         CreateApiKeyRequest: {
             /**
@@ -2318,6 +2984,46 @@ export interface components {
              * @example cdx_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
              */
             key: string;
+        };
+        /** @description Request to create or update an external link for a series */
+        CreateExternalLinkRequest: {
+            /**
+             * @description ID on the external source (if available)
+             * @example 12345
+             */
+            externalId?: string | null;
+            /**
+             * @description Source name (e.g., "myanimelist", "anilist", "mangadex")
+             *     Will be normalized to lowercase
+             * @example myanimelist
+             */
+            sourceName: string;
+            /**
+             * @description URL to the external source
+             * @example https://myanimelist.net/manga/12345
+             */
+            url: string;
+        };
+        /** @description Request to create or update an external rating for a series */
+        CreateExternalRatingRequest: {
+            /**
+             * Format: double
+             * @description Rating value (0-100)
+             * @example 85.5
+             */
+            rating: number;
+            /**
+             * @description Source name (e.g., "myanimelist", "anilist", "mangabaka")
+             *     Will be normalized to lowercase
+             * @example myanimelist
+             */
+            sourceName: string;
+            /**
+             * Format: int32
+             * @description Number of votes (if available)
+             * @example 12500
+             */
+            voteCount?: number | null;
         };
         /** @description Create library request */
         CreateLibraryRequest: {
@@ -2539,6 +3245,108 @@ export interface components {
             error: string;
             message: string;
         };
+        /** @description External link data transfer object */
+        ExternalLinkDto: {
+            /**
+             * Format: date-time
+             * @description When the link was created
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * @description ID on the external source (if available)
+             * @example 12345
+             */
+            externalId?: string | null;
+            /**
+             * Format: uuid
+             * @description External link ID
+             * @example 550e8400-e29b-41d4-a716-446655440060
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Series ID
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            seriesId: string;
+            /**
+             * @description Source name (e.g., "myanimelist", "anilist", "mangadex")
+             * @example myanimelist
+             */
+            sourceName: string;
+            /**
+             * Format: date-time
+             * @description When the link was last updated
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+            /**
+             * @description URL to the external source
+             * @example https://myanimelist.net/manga/12345
+             */
+            url: string;
+        };
+        /** @description Response containing a list of external links */
+        ExternalLinkListResponse: {
+            /** @description List of external links */
+            links: components["schemas"]["ExternalLinkDto"][];
+        };
+        /** @description External rating data transfer object */
+        ExternalRatingDto: {
+            /**
+             * Format: date-time
+             * @description When the rating record was created
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description When the rating was last fetched from the source
+             * @example 2024-01-15T10:30:00Z
+             */
+            fetchedAt: string;
+            /**
+             * Format: uuid
+             * @description External rating ID
+             * @example 550e8400-e29b-41d4-a716-446655440050
+             */
+            id: string;
+            /**
+             * Format: double
+             * @description Rating value (0-100)
+             * @example 85.5
+             */
+            rating: number;
+            /**
+             * Format: uuid
+             * @description Series ID
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            seriesId: string;
+            /**
+             * @description Source name (e.g., "myanimelist", "anilist", "mangabaka")
+             * @example myanimelist
+             */
+            sourceName: string;
+            /**
+             * Format: date-time
+             * @description When the rating record was last updated
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+            /**
+             * Format: int32
+             * @description Number of votes (if available)
+             * @example 12500
+             */
+            voteCount?: number | null;
+        };
+        /** @description Response containing a list of external ratings */
+        ExternalRatingListResponse: {
+            /** @description List of external ratings */
+            ratings: components["schemas"]["ExternalRatingDto"][];
+        };
         /**
          * @description OPDS 2.0 Feed Metadata
          *
@@ -2587,6 +3395,132 @@ export interface components {
             name: string;
             /** @description Full path to the entry */
             path: string;
+        };
+        /** @description Full series metadata response including all related data */
+        FullSeriesMetadataResponse: {
+            /**
+             * Format: int32
+             * @description Age rating (e.g., 13, 16, 18)
+             * @example 16
+             */
+            ageRating?: number | null;
+            /** @description Alternate titles for this series */
+            alternateTitles: components["schemas"]["AlternateTitleDto"][];
+            /**
+             * Format: date-time
+             * @description Timestamps
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * @description Custom JSON metadata
+             * @example {"myField": "value"}
+             */
+            customMetadata?: string | null;
+            /** @description External links to other sites */
+            externalLinks: components["schemas"]["ExternalLinkDto"][];
+            /** @description External ratings from various sources */
+            externalRatings: components["schemas"]["ExternalRatingDto"][];
+            /** @description Genres assigned to this series */
+            genres: components["schemas"]["GenreDto"][];
+            /**
+             * @description Imprint (sub-publisher)
+             * @example Vertigo
+             */
+            imprint?: string | null;
+            /**
+             * @description Language (BCP47 format: "en", "ja", "ko")
+             * @example en
+             */
+            language?: string | null;
+            /** @description Lock states for all metadata fields */
+            locks: components["schemas"]["MetadataLocks"];
+            /**
+             * @description Publisher name
+             * @example DC Comics
+             */
+            publisher?: string | null;
+            /**
+             * @description Reading direction (ltr, rtl, ttb, btt)
+             * @example ltr
+             */
+            readingDirection?: string | null;
+            /**
+             * Format: uuid
+             * @description Series ID
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            seriesId: string;
+            /**
+             * @description Series status (ongoing, ended, hiatus, abandoned, unknown)
+             * @example ended
+             */
+            status?: string | null;
+            /**
+             * @description Series description/summary
+             * @example The definitive origin story of Batman.
+             */
+            summary?: string | null;
+            /** @description Tags assigned to this series */
+            tags: components["schemas"]["TagDto"][];
+            /**
+             * @description Series title (usually same as series name)
+             * @example Batman: Year One
+             */
+            title: string;
+            /**
+             * @description Custom sort name for ordering
+             * @example Batman Year One
+             */
+            titleSort?: string | null;
+            /**
+             * Format: int32
+             * @description Expected total book count (for ongoing series)
+             * @example 4
+             */
+            totalBookCount?: number | null;
+            /**
+             * Format: date-time
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+            /**
+             * Format: int32
+             * @description Release year
+             * @example 1987
+             */
+            year?: number | null;
+        };
+        /** @description Genre data transfer object */
+        GenreDto: {
+            /**
+             * Format: date-time
+             * @description When the genre was created
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Genre ID
+             * @example 550e8400-e29b-41d4-a716-446655440010
+             */
+            id: string;
+            /**
+             * @description Genre name
+             * @example Action
+             */
+            name: string;
+            /**
+             * Format: int64
+             * @description Number of series with this genre
+             * @example 42
+             */
+            seriesCount?: number | null;
+        };
+        /** @description Response containing a list of genres */
+        GenreListResponse: {
+            /** @description List of genres */
+            genres: components["schemas"]["GenreDto"][];
         };
         /**
          * @description A group containing navigation or publications
@@ -2820,6 +3754,69 @@ export interface components {
              * @example Task 550e8400-e29b-41d4-a716-446655440000 cancelled
              */
             message: string;
+        };
+        /** @description Lock states for all lockable metadata fields */
+        MetadataLocks: {
+            /**
+             * @description Whether the age_rating field is locked
+             * @example false
+             */
+            ageRating: boolean;
+            /**
+             * @description Whether the genres are locked
+             * @example false
+             */
+            genres: boolean;
+            /**
+             * @description Whether the imprint field is locked
+             * @example false
+             */
+            imprint: boolean;
+            /**
+             * @description Whether the language field is locked
+             * @example false
+             */
+            language: boolean;
+            /**
+             * @description Whether the publisher field is locked
+             * @example false
+             */
+            publisher: boolean;
+            /**
+             * @description Whether the reading_direction field is locked
+             * @example false
+             */
+            readingDirection: boolean;
+            /**
+             * @description Whether the status field is locked
+             * @example false
+             */
+            status: boolean;
+            /**
+             * @description Whether the summary field is locked
+             * @example true
+             */
+            summary: boolean;
+            /**
+             * @description Whether the tags are locked
+             * @example false
+             */
+            tags: boolean;
+            /**
+             * @description Whether the title field is locked
+             * @example false
+             */
+            title: boolean;
+            /**
+             * @description Whether the title_sort field is locked
+             * @example false
+             */
+            titleSort: boolean;
+            /**
+             * @description Whether the year field is locked
+             * @example false
+             */
+            year: boolean;
         };
         /** @description Application metrics response */
         MetricsDto: {
@@ -3217,6 +4214,168 @@ export interface components {
             totalPages: number;
         };
         /**
+         * @description PATCH request for partial update of book metadata
+         *
+         *     Only provided fields will be updated. Absent fields are unchanged.
+         *     Explicitly null fields will be cleared.
+         */
+        PatchBookMetadataRequest: {
+            /**
+             * @description Whether the book is black and white
+             * @example false
+             */
+            blackAndWhite?: boolean | null;
+            /**
+             * @description Colorist(s) - comma-separated if multiple
+             * @example Richmond Lewis
+             */
+            colorist?: string | null;
+            /**
+             * Format: int32
+             * @description Total count in series
+             * @example 4
+             */
+            count?: number | null;
+            /**
+             * @description Cover artist(s) - comma-separated if multiple
+             * @example David Mazzucchelli
+             */
+            coverArtist?: string | null;
+            /**
+             * Format: int32
+             * @description Publication day (1-31)
+             * @example 1
+             */
+            day?: number | null;
+            /**
+             * @description Editor(s) - comma-separated if multiple
+             * @example Dennis O'Neil
+             */
+            editor?: string | null;
+            /**
+             * @description Format details
+             * @example Trade Paperback
+             */
+            formatDetail?: string | null;
+            /**
+             * @description Genre
+             * @example Superhero
+             */
+            genre?: string | null;
+            /**
+             * @description Imprint name
+             * @example DC Black Label
+             */
+            imprint?: string | null;
+            /**
+             * @description Inker(s) - comma-separated if multiple
+             * @example David Mazzucchelli
+             */
+            inker?: string | null;
+            /**
+             * @description ISBN(s) - comma-separated if multiple
+             * @example 978-1401207526
+             */
+            isbns?: string | null;
+            /**
+             * @description ISO language code
+             * @example en
+             */
+            languageIso?: string | null;
+            /**
+             * @description Letterer(s) - comma-separated if multiple
+             * @example Todd Klein
+             */
+            letterer?: string | null;
+            /**
+             * @description Whether the book is manga format
+             * @example false
+             */
+            manga?: boolean | null;
+            /**
+             * Format: int32
+             * @description Publication month (1-12)
+             * @example 2
+             */
+            month?: number | null;
+            /**
+             * @description Penciller(s) - comma-separated if multiple
+             * @example David Mazzucchelli
+             */
+            penciller?: string | null;
+            /**
+             * @description Publisher name
+             * @example DC Comics
+             */
+            publisher?: string | null;
+            /**
+             * @description Book summary/description
+             * @example Bruce Wayne returns to Gotham City.
+             */
+            summary?: string | null;
+            /**
+             * Format: int32
+             * @description Volume number
+             * @example 1
+             */
+            volume?: number | null;
+            /**
+             * @description Web URL for more information
+             * @example https://dc.com/batman-year-one
+             */
+            web?: string | null;
+            /**
+             * @description Writer(s) - comma-separated if multiple
+             * @example Frank Miller
+             */
+            writer?: string | null;
+            /**
+             * Format: int32
+             * @description Publication year
+             * @example 1987
+             */
+            year?: number | null;
+        };
+        /**
+         * @description PATCH request for partial update of series metadata
+         *
+         *     Only provided fields will be updated. Absent fields are unchanged.
+         *     Explicitly null fields will be cleared.
+         */
+        PatchSeriesMetadataRequest: {
+            /**
+             * @description Custom JSON metadata for extensions
+             * @example {"myField": "value"}
+             */
+            customMetadata?: string | null;
+            /**
+             * @description Publisher name
+             * @example DC Comics
+             */
+            publisher?: string | null;
+            /**
+             * @description Reading direction (ltr, rtl, ttb, btt, or auto)
+             * @example ltr
+             */
+            readingDirection?: string | null;
+            /**
+             * @description Custom sort name for ordering
+             * @example Batman Year One
+             */
+            sortName?: string | null;
+            /**
+             * @description Series description/summary
+             * @example The definitive origin story of Batman.
+             */
+            summary?: string | null;
+            /**
+             * Format: int32
+             * @description Release year
+             * @example 1987
+             */
+            year?: number | null;
+        };
+        /**
          * @description OPDS 2.0 Publication Entry
          *
          *     Represents a single publication (book) in an OPDS 2.0 feed.
@@ -3413,6 +4572,168 @@ export interface components {
             /** @description User information */
             user: components["schemas"]["UserInfo"];
         };
+        /**
+         * @description PUT request for full replacement of book metadata
+         *
+         *     All metadata fields will be replaced with the values in this request.
+         *     Omitting a field (or setting it to null) will clear that field.
+         */
+        ReplaceBookMetadataRequest: {
+            /**
+             * @description Whether the book is black and white
+             * @example false
+             */
+            blackAndWhite?: boolean | null;
+            /**
+             * @description Colorist(s) - comma-separated if multiple
+             * @example Richmond Lewis
+             */
+            colorist?: string | null;
+            /**
+             * Format: int32
+             * @description Total count in series
+             * @example 4
+             */
+            count?: number | null;
+            /**
+             * @description Cover artist(s) - comma-separated if multiple
+             * @example David Mazzucchelli
+             */
+            coverArtist?: string | null;
+            /**
+             * Format: int32
+             * @description Publication day (1-31)
+             * @example 1
+             */
+            day?: number | null;
+            /**
+             * @description Editor(s) - comma-separated if multiple
+             * @example Dennis O'Neil
+             */
+            editor?: string | null;
+            /**
+             * @description Format details
+             * @example Trade Paperback
+             */
+            formatDetail?: string | null;
+            /**
+             * @description Genre
+             * @example Superhero
+             */
+            genre?: string | null;
+            /**
+             * @description Imprint name
+             * @example DC Black Label
+             */
+            imprint?: string | null;
+            /**
+             * @description Inker(s) - comma-separated if multiple
+             * @example David Mazzucchelli
+             */
+            inker?: string | null;
+            /**
+             * @description ISBN(s) - comma-separated if multiple
+             * @example 978-1401207526
+             */
+            isbns?: string | null;
+            /**
+             * @description ISO language code
+             * @example en
+             */
+            languageIso?: string | null;
+            /**
+             * @description Letterer(s) - comma-separated if multiple
+             * @example Todd Klein
+             */
+            letterer?: string | null;
+            /**
+             * @description Whether the book is manga format
+             * @example false
+             */
+            manga?: boolean | null;
+            /**
+             * Format: int32
+             * @description Publication month (1-12)
+             * @example 2
+             */
+            month?: number | null;
+            /**
+             * @description Penciller(s) - comma-separated if multiple
+             * @example David Mazzucchelli
+             */
+            penciller?: string | null;
+            /**
+             * @description Publisher name
+             * @example DC Comics
+             */
+            publisher?: string | null;
+            /**
+             * @description Book summary/description
+             * @example Bruce Wayne returns to Gotham City after years abroad.
+             */
+            summary?: string | null;
+            /**
+             * Format: int32
+             * @description Volume number
+             * @example 1
+             */
+            volume?: number | null;
+            /**
+             * @description Web URL for more information
+             * @example https://dc.com/batman-year-one
+             */
+            web?: string | null;
+            /**
+             * @description Writer(s) - comma-separated if multiple
+             * @example Frank Miller
+             */
+            writer?: string | null;
+            /**
+             * Format: int32
+             * @description Publication year
+             * @example 1987
+             */
+            year?: number | null;
+        };
+        /**
+         * @description PUT request for full replacement of series metadata
+         *
+         *     All metadata fields will be replaced with the values in this request.
+         *     Omitting a field (or setting it to null) will clear that field.
+         */
+        ReplaceSeriesMetadataRequest: {
+            /**
+             * @description Custom JSON metadata for extensions
+             * @example {"myField": "value"}
+             */
+            customMetadata?: string | null;
+            /**
+             * @description Publisher name
+             * @example DC Comics
+             */
+            publisher?: string | null;
+            /**
+             * @description Reading direction (ltr, rtl, ttb, btt, or auto)
+             * @example ltr
+             */
+            readingDirection?: string | null;
+            /**
+             * @description Custom sort name for ordering (e.g., "Batman Year One" instead of "The Batman Year One")
+             * @example Batman Year One
+             */
+            sortName?: string | null;
+            /**
+             * @description Series description/summary
+             * @example The definitive origin story of Batman.
+             */
+            summary?: string | null;
+            /**
+             * Format: int32
+             * @description Release year
+             * @example 1987
+             */
+            year?: number | null;
+        };
         /** @description Resend verification email request */
         ResendVerificationRequest: {
             /**
@@ -3524,6 +4845,65 @@ export interface components {
             /** @description Cover source: "default" (first book cover) or "custom" (uploaded cover) */
             source: string;
         };
+        /** @description Series cover data transfer object */
+        SeriesCoverDto: {
+            /**
+             * Format: date-time
+             * @description When the cover was created
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * Format: int32
+             * @description Image height in pixels (if known)
+             * @example 1200
+             */
+            height?: number | null;
+            /**
+             * Format: uuid
+             * @description Cover ID
+             * @example 550e8400-e29b-41d4-a716-446655440070
+             */
+            id: string;
+            /**
+             * @description Whether this cover is currently selected as the primary cover
+             * @example true
+             */
+            isSelected: boolean;
+            /**
+             * @description Path to the cover image
+             * @example data/covers/550e8400-e29b-41d4-a716-446655440002.jpg
+             */
+            path: string;
+            /**
+             * Format: uuid
+             * @description Series ID
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            seriesId: string;
+            /**
+             * @description Cover source (e.g., "custom", "book:uuid", "mangabaka")
+             * @example custom
+             */
+            source: string;
+            /**
+             * Format: date-time
+             * @description When the cover was last updated
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+            /**
+             * Format: int32
+             * @description Image width in pixels (if known)
+             * @example 800
+             */
+            width?: number | null;
+        };
+        /** @description Response containing a list of series covers */
+        SeriesCoverListResponse: {
+            /** @description List of covers */
+            covers: components["schemas"]["SeriesCoverDto"][];
+        };
         /** @description Series data transfer object */
         SeriesDto: {
             /**
@@ -3585,6 +4965,95 @@ export interface components {
              * @description Position within the series (volume/issue number)
              */
             position?: number | null;
+        };
+        /** @description Response containing series metadata */
+        SeriesMetadataResponse: {
+            /**
+             * @description Custom JSON metadata
+             * @example {"myField": "value"}
+             */
+            customMetadata?: string | null;
+            /**
+             * Format: uuid
+             * @description Series ID
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            id: string;
+            /**
+             * @description Publisher name
+             * @example DC Comics
+             */
+            publisher?: string | null;
+            /**
+             * @description Reading direction
+             * @example ltr
+             */
+            readingDirection?: string | null;
+            /**
+             * @description Custom sort name for ordering
+             * @example Batman Year One
+             */
+            sortName?: string | null;
+            /**
+             * @description Series description/summary
+             * @example The definitive origin story of Batman.
+             */
+            summary?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+            /**
+             * Format: int32
+             * @description Release year
+             * @example 1987
+             */
+            year?: number | null;
+        };
+        /** @description Request to set genres for a series */
+        SetSeriesGenresRequest: {
+            /**
+             * @description List of genre names to set for the series
+             *     Genres that don't exist will be created automatically
+             * @example [
+             *       "Action",
+             *       "Comedy",
+             *       "Drama"
+             *     ]
+             */
+            genres: string[];
+        };
+        /** @description Request to set tags for a series */
+        SetSeriesTagsRequest: {
+            /**
+             * @description List of tag names to set for the series
+             *     Tags that don't exist will be created automatically
+             * @example [
+             *       "Completed",
+             *       "Favorite",
+             *       "Reading"
+             *     ]
+             */
+            tags: string[];
+        };
+        /** @description Request to create or update a user's rating for a series */
+        SetUserRatingRequest: {
+            /**
+             * @description Optional notes/review for this series
+             * @example Great series, loved the art style!
+             */
+            notes?: string | null;
+            /**
+             * Format: int32
+             * @description Rating value (1-100, typically set via 1-10 slider multiplied by 10)
+             *
+             *     In the UI, display as 1-10 with 0.5 step increments.
+             *     Multiply UI value by 10 before sending (e.g., 7.5 → 75).
+             * @example 85
+             */
+            rating: number;
         };
         /** @description Setting response DTO */
         SettingDto: {
@@ -3717,6 +5186,37 @@ export interface components {
             hasUsers: boolean;
             /** @description Whether initial setup is required */
             setupRequired: boolean;
+        };
+        /** @description Tag data transfer object */
+        TagDto: {
+            /**
+             * Format: date-time
+             * @description When the tag was created
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Tag ID
+             * @example 550e8400-e29b-41d4-a716-446655440020
+             */
+            id: string;
+            /**
+             * @description Tag name
+             * @example Completed
+             */
+            name: string;
+            /**
+             * Format: int64
+             * @description Number of series with this tag
+             * @example 15
+             */
+            seriesCount?: number | null;
+        };
+        /** @description Response containing a list of tags */
+        TagListResponse: {
+            /** @description List of tags */
+            tags: components["schemas"]["TagDto"][];
         };
         /** @description Progress information for a running task */
         TaskProgress: {
@@ -3946,6 +5446,23 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
+        /** @description Response for taxonomy cleanup operations (genres/tags) */
+        TaxonomyCleanupResponse: {
+            /**
+             * Format: int64
+             * @description Number of unused items deleted
+             * @example 5
+             */
+            deletedCount: number;
+            /**
+             * @description Names of deleted items
+             * @example [
+             *       "OldGenre",
+             *       "UnusedGenre"
+             *     ]
+             */
+            deletedNames: string[];
+        };
         /** @description Token response (for refresh tokens in future) */
         TokenResponse: {
             /**
@@ -3986,6 +5503,19 @@ export interface components {
              * @example normal
              */
             mode?: string;
+        };
+        /** @description Request to update an alternate title */
+        UpdateAlternateTitleRequest: {
+            /**
+             * @description New label for this title
+             * @example Romaji
+             */
+            label?: string | null;
+            /**
+             * @description New title text
+             * @example Shingeki no Kyojin
+             */
+            title?: string | null;
         };
         /** @description Update API key request */
         UpdateApiKeyRequest: {
@@ -4044,6 +5574,69 @@ export interface components {
              */
             path?: string | null;
             scanningConfig?: null | components["schemas"]["ScanningConfigDto"];
+        };
+        /** @description Request to update metadata lock states */
+        UpdateMetadataLocksRequest: {
+            /**
+             * @description Whether to lock the age_rating field
+             * @example false
+             */
+            ageRating?: boolean | null;
+            /**
+             * @description Whether to lock the genres
+             * @example false
+             */
+            genres?: boolean | null;
+            /**
+             * @description Whether to lock the imprint field
+             * @example false
+             */
+            imprint?: boolean | null;
+            /**
+             * @description Whether to lock the language field
+             * @example false
+             */
+            language?: boolean | null;
+            /**
+             * @description Whether to lock the publisher field
+             * @example false
+             */
+            publisher?: boolean | null;
+            /**
+             * @description Whether to lock the reading_direction field
+             * @example false
+             */
+            readingDirection?: boolean | null;
+            /**
+             * @description Whether to lock the status field
+             * @example false
+             */
+            status?: boolean | null;
+            /**
+             * @description Whether to lock the summary field
+             * @example true
+             */
+            summary?: boolean | null;
+            /**
+             * @description Whether to lock the tags
+             * @example false
+             */
+            tags?: boolean | null;
+            /**
+             * @description Whether to lock the title field
+             * @example false
+             */
+            title?: boolean | null;
+            /**
+             * @description Whether to lock the title_sort field
+             * @example false
+             */
+            titleSort?: boolean | null;
+            /**
+             * @description Whether to lock the year field
+             * @example false
+             */
+            year?: boolean | null;
         };
         /** @description Request to update reading progress for a book */
         UpdateProgressRequest: {
@@ -4162,6 +5755,49 @@ export interface components {
             isAdmin: boolean;
             /** @example admin */
             username: string;
+        };
+        /** @description Response containing a list of user ratings */
+        UserRatingsListResponse: {
+            /** @description List of user ratings */
+            ratings: components["schemas"]["UserSeriesRatingDto"][];
+        };
+        /** @description User series rating data transfer object */
+        UserSeriesRatingDto: {
+            /**
+             * Format: date-time
+             * @description When the rating was created
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Rating ID
+             * @example 550e8400-e29b-41d4-a716-446655440030
+             */
+            id: string;
+            /**
+             * @description Optional notes/review
+             * @example Great series, loved the art style!
+             */
+            notes?: string | null;
+            /**
+             * Format: int32
+             * @description Rating value (1-100, displayed as 1-10 in UI with 0.1 precision)
+             * @example 85
+             */
+            rating: number;
+            /**
+             * Format: uuid
+             * @description Series ID
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            seriesId: string;
+            /**
+             * Format: date-time
+             * @description When the rating was last updated
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
         };
         /** @description Verify email request */
         VerifyEmailRequest: {
@@ -4538,6 +6174,41 @@ export interface operations {
             };
         };
     };
+    delete_api_key: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description API key ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description API key deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - Missing permission or not owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API key not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     update_api_key: {
         parameters: {
             query?: never;
@@ -4562,41 +6233,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ApiKeyDto"];
                 };
-            };
-            /** @description Forbidden - Missing permission or not owner */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description API key not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    delete_api_key: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description API key ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description API key deleted */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Forbidden - Missing permission or not owner */
             403: {
@@ -5348,6 +6984,88 @@ export interface operations {
             };
         };
     };
+    replace_book_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceBookMetadataRequest"];
+            };
+        };
+        responses: {
+            /** @description Metadata replaced successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookMetadataResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    patch_book_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchBookMetadataRequest"];
+            };
+        };
+        responses: {
+            /** @description Metadata updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookMetadataResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_book_thumbnail: {
         parameters: {
             query?: never;
@@ -5585,6 +7303,95 @@ export interface operations {
             };
         };
     };
+    list_genres: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of all genres */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenreListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cleanup_genres: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleanup completed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyCleanupResponse"];
+                };
+            };
+            /** @description Forbidden - admin only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_genre: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Genre ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Genre deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - admin only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Genre not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_libraries: {
         parameters: {
             query?: never;
@@ -5680,6 +7487,41 @@ export interface operations {
             };
         };
     };
+    delete_library: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Library ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Library deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Library not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     update_library: {
         parameters: {
             query?: never;
@@ -5704,41 +7546,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LibraryDto"];
                 };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Library not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    delete_library: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Library ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Library deleted */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Forbidden */
             403: {
@@ -6452,6 +8259,10 @@ export interface operations {
                 page_size?: number;
                 /** @description Sort parameter (format: 'field,direction') */
                 sort?: string;
+                /** @description Filter by genres (comma-separated, AND logic) */
+                genres?: string;
+                /** @description Filter by tags (comma-separated, AND logic) */
+                tags?: string;
             };
             header?: never;
             path?: never;
@@ -6617,6 +8428,164 @@ export interface operations {
                 };
             };
             /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_series_alternate_titles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of alternate titles for the series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlternateTitleListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_alternate_title: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAlternateTitleRequest"];
+            };
+        };
+        responses: {
+            /** @description Alternate title created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlternateTitleDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_alternate_title: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+                /** @description Alternate title ID */
+                title_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Alternate title deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or title not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_alternate_title: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+                /** @description Alternate title ID */
+                title_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAlternateTitleRequest"];
+            };
+        };
+        responses: {
+            /** @description Alternate title updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlternateTitleDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or title not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6860,6 +8829,126 @@ export interface operations {
             };
         };
     };
+    list_series_covers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of series covers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesCoverListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_series_cover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+                /** @description Cover ID to delete */
+                cover_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cover deleted successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cannot delete the only selected cover */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or cover not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    select_series_cover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+                /** @description Cover ID to select */
+                cover_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cover selected successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesCoverDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or cover not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     download_series: {
         parameters: {
             query?: never;
@@ -6889,6 +8978,589 @@ export interface operations {
                 content?: never;
             };
             /** @description Series not found or has no books */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_series_external_links: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of external links for the series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalLinkListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_external_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExternalLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description External link created or updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalLinkDto"];
+                };
+            };
+            /** @description Forbidden - admin only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_external_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+                /** @description Source name (e.g., 'myanimelist', 'mangadex') */
+                source: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description External link deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - admin only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or link not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_series_external_ratings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of external ratings for the series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalRatingListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_external_rating: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExternalRatingRequest"];
+            };
+        };
+        responses: {
+            /** @description External rating created or updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalRatingDto"];
+                };
+            };
+            /** @description Forbidden - admin only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_external_rating: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+                /** @description Source name (e.g., 'myanimelist', 'anilist') */
+                source: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description External rating deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - admin only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or rating not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_series_genres: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of genres for the series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenreListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_series_genres: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSeriesGenresRequest"];
+            };
+        };
+        responses: {
+            /** @description Genres updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenreListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_series_genre: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddSeriesGenreRequest"];
+            };
+        };
+        responses: {
+            /** @description Genre added */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenreDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_series_genre: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+                /** @description Genre ID */
+                genre_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Genre removed from series */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or genre link not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    replace_series_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceSeriesMetadataRequest"];
+            };
+        };
+        responses: {
+            /** @description Metadata replaced successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesMetadataResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    patch_series_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchSeriesMetadataRequest"];
+            };
+        };
+        responses: {
+            /** @description Metadata updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesMetadataResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_full_series_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Full series metadata with all related data */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FullSeriesMetadataResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_metadata_locks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current lock states */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataLocks"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_metadata_locks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMetadataLocksRequest"];
+            };
+        };
+        responses: {
+            /** @description Lock states updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataLocks"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6934,6 +9606,126 @@ export interface operations {
             };
         };
     };
+    get_series_rating: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User's rating for the series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSeriesRatingDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or rating not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_series_rating: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetUserRatingRequest"];
+            };
+        };
+        responses: {
+            /** @description Rating saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSeriesRatingDto"];
+                };
+            };
+            /** @description Invalid rating value */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_series_rating: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rating deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or rating not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mark_series_as_read: {
         parameters: {
             query?: never;
@@ -6963,6 +9755,162 @@ export interface operations {
                 content?: never;
             };
             /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_series_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of tags for the series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_series_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSeriesTagsRequest"];
+            };
+        };
+        responses: {
+            /** @description Tags updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_series_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddSeriesTagRequest"];
+            };
+        };
+        responses: {
+            /** @description Tag added */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_series_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+                /** @description Tag ID */
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tag removed from series */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or tag link not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -7131,6 +10079,95 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SetupStatusResponse"];
                 };
+            };
+        };
+    };
+    list_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of all tags */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cleanup_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleanup completed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyCleanupResponse"];
+                };
+            };
+            /** @description Forbidden - admin only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Tag ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tag deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - admin only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tag not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -7486,6 +10523,33 @@ export interface operations {
             };
         };
     };
+    list_user_ratings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of user's ratings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRatingsListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_users: {
         parameters: {
             query?: never;
@@ -7588,6 +10652,41 @@ export interface operations {
             };
         };
     };
+    delete_user: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - Admin only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description User not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     update_user: {
         parameters: {
             query?: never;
@@ -7612,41 +10711,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["UserDto"];
                 };
-            };
-            /** @description Forbidden - Admin only */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description User not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    delete_user: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description User ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description User deleted */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Forbidden - Admin only */
             403: {

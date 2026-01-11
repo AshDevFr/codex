@@ -192,16 +192,20 @@ scanner:
 |---------|---------|-------------|
 | `max_concurrent_scans` | `2` | Maximum concurrent library scans |
 
-## Thumbnail Configuration
+## Files Configuration
+
+Configuration for file storage directories (thumbnails and uploads).
 
 ```yaml
-thumbnail:
-  cache_dir: data/thumbnails
+files:
+  thumbnail_dir: data/thumbnails
+  uploads_dir: data/uploads
 ```
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `cache_dir` | `data/thumbnails` | Thumbnail cache directory |
+| `thumbnail_dir` | `data/thumbnails` | Directory for thumbnail cache |
+| `uploads_dir` | `data/uploads` | Directory for user-uploaded files (covers, etc.) |
 
 Additional thumbnail settings are stored in the database and can be changed via the Settings API without restart:
 - `thumbnail_max_dimension` - Maximum width/height (default: 400px)
@@ -273,8 +277,9 @@ CODEX_TASK_WORKER_COUNT=4
 # Scanner
 CODEX_SCANNER_MAX_CONCURRENT_SCANS=2
 
-# Thumbnails
-CODEX_THUMBNAIL_CACHE_DIR=data/thumbnails
+# Files (thumbnails and uploads)
+CODEX_FILES_THUMBNAIL_DIR=data/thumbnails
+CODEX_FILES_UPLOADS_DIR=data/uploads
 ```
 
 ## Runtime vs Startup Settings
@@ -355,8 +360,9 @@ task:
 scanner:
   max_concurrent_scans: 4
 
-thumbnail:
-  cache_dir: /var/lib/codex/thumbnails
+files:
+  thumbnail_dir: /var/lib/codex/thumbnails
+  uploads_dir: /var/lib/codex/uploads
 ```
 
 ### Kubernetes Configuration
@@ -371,8 +377,9 @@ task:
 scanner:
   max_concurrent_scans: 2
 
-thumbnail:
-  cache_dir: data/thumbnails
+files:
+  thumbnail_dir: data/thumbnails
+  uploads_dir: data/uploads
 ```
 
 Set these via Kubernetes ConfigMaps and Secrets:

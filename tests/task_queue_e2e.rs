@@ -26,10 +26,11 @@ async fn test_e2e_task_execution() {
     .expect("Failed to enqueue task");
 
     // Create thumbnail service
-    let thumbnail_config = codex::config::ThumbnailConfig {
-        cache_dir: "data/thumbnails".to_string(),
+    let files_config = codex::config::FilesConfig {
+        thumbnail_dir: "data/thumbnails".to_string(),
+        uploads_dir: "data/uploads".to_string(),
     };
-    let thumbnail_service = Arc::new(ThumbnailService::new(thumbnail_config));
+    let thumbnail_service = Arc::new(ThumbnailService::new(files_config));
 
     // Start a worker with thumbnail service
     let worker = TaskWorker::new(db.clone())
@@ -138,10 +139,11 @@ async fn test_concurrent_workers_skip_locked() {
     .expect("Failed to enqueue task");
 
     // Create thumbnail service
-    let thumbnail_config = codex::config::ThumbnailConfig {
-        cache_dir: "data/thumbnails".to_string(),
+    let files_config = codex::config::FilesConfig {
+        thumbnail_dir: "data/thumbnails".to_string(),
+        uploads_dir: "data/uploads".to_string(),
     };
-    let thumbnail_service = Arc::new(ThumbnailService::new(thumbnail_config));
+    let thumbnail_service = Arc::new(ThumbnailService::new(files_config));
 
     // Create two workers
     let worker1 = TaskWorker::new(db.clone())
@@ -275,10 +277,11 @@ async fn test_stale_task_recovery() {
     sleep(Duration::from_secs(2)).await;
 
     // Create thumbnail service
-    let thumbnail_config = codex::config::ThumbnailConfig {
-        cache_dir: "data/thumbnails".to_string(),
+    let files_config = codex::config::FilesConfig {
+        thumbnail_dir: "data/thumbnails".to_string(),
+        uploads_dir: "data/uploads".to_string(),
     };
-    let thumbnail_service = Arc::new(ThumbnailService::new(thumbnail_config));
+    let thumbnail_service = Arc::new(ThumbnailService::new(files_config));
 
     // New worker should be able to claim it
     let worker = TaskWorker::new(db.clone())
