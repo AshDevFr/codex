@@ -132,6 +132,10 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/libraries/:library_id/books/on-deck",
             get(handlers::list_library_on_deck_books),
         )
+        .route(
+            "/libraries/:library_id/books/with-errors",
+            get(handlers::list_library_books_with_errors),
+        )
         // Library-specific series routes (protected)
         .route(
             "/libraries/:library_id/series",
@@ -140,6 +144,18 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route(
             "/libraries/:library_id/series/in-progress",
             get(handlers::list_library_in_progress_series),
+        )
+        .route(
+            "/libraries/:library_id/series/recently-added",
+            get(handlers::list_library_recently_added_series),
+        )
+        .route(
+            "/libraries/:library_id/series/recently-updated",
+            get(handlers::list_library_recently_updated_series),
+        )
+        .route(
+            "/libraries/:library_id/books/recently-read",
+            get(handlers::list_library_recently_read_books),
         )
         // Scan routes (protected)
         .route("/libraries/:id/scan", post(handlers::trigger_scan))
@@ -163,8 +179,23 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/series/search", post(handlers::search_series))
         .route("/series/:id", get(handlers::get_series))
         .route("/series/:id/books", get(handlers::get_series_books))
+        .route(
+            "/series/:id/books/with-errors",
+            get(handlers::list_series_books_with_errors),
+        )
         // Series collection routes (protected)
-        .route("/series/in-progress", get(handlers::list_in_progress_series))
+        .route(
+            "/series/in-progress",
+            get(handlers::list_in_progress_series),
+        )
+        .route(
+            "/series/recently-added",
+            get(handlers::list_recently_added_series),
+        )
+        .route(
+            "/series/recently-updated",
+            get(handlers::list_recently_updated_series),
+        )
         .route(
             "/series/:id/purge-deleted",
             delete(handlers::purge_series_deleted_books),
@@ -199,6 +230,11 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/books/recently-added",
             get(handlers::list_recently_added_books),
         )
+        .route(
+            "/books/recently-read",
+            get(handlers::list_recently_read_books),
+        )
+        .route("/books/with-errors", get(handlers::list_books_with_errors))
         // Page routes (protected)
         .route(
             "/books/:book_id/pages/:page_number",

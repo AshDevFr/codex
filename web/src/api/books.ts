@@ -105,4 +105,15 @@ export const booksApi = {
 		const response = await api.post(`/books/${bookId}/unread`);
 		return response.data;
 	},
+
+	// Get recently read books (ordered by last read activity)
+	getRecentlyRead: async (libraryId: string, limit = 50): Promise<Book[]> => {
+		const url =
+			libraryId === "all"
+				? `/books/recently-read?limit=${limit}`
+				: `/libraries/${libraryId}/books/recently-read?limit=${limit}`;
+
+		const response = await api.get<Book[]>(url);
+		return response.data;
+	},
 };

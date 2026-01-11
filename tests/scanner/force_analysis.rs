@@ -39,6 +39,7 @@ async fn create_analyzed_book(
         page_count: 10,
         modified_at: Utc::now(),
         analyzed: true, // Already analyzed
+        analysis_error: None,
         deleted: false,
         created_at: Utc::now(),
         updated_at: Utc::now(),

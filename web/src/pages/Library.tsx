@@ -349,10 +349,19 @@ export function LibraryPage() {
 		: [
 				{ value: "name,asc", label: "Name (A-Z)" },
 				{ value: "name,desc", label: "Name (Z-A)" },
-				{ value: "created_at,desc", label: "Recently Added" },
-				{ value: "book_count,desc", label: "Most Books" },
-				{ value: "year,desc", label: "Year (Newest)" },
-				{ value: "year,asc", label: "Year (Oldest)" },
+				{ value: "date_added,desc", label: "Date Added (Newest)" },
+				{ value: "date_added,asc", label: "Date Added (Oldest)" },
+				{ value: "date_updated,desc", label: "Date Updated (Newest)" },
+				{ value: "date_updated,asc", label: "Date Updated (Oldest)" },
+				{ value: "release_date,desc", label: "Release Date (Newest)" },
+				{ value: "release_date,asc", label: "Release Date (Oldest)" },
+				{ value: "date_read,desc", label: "Recently Read" },
+				{ value: "file_size,desc", label: "File Size (Largest)" },
+				{ value: "file_size,asc", label: "File Size (Smallest)" },
+				{ value: "page_count,desc", label: "Page Count (Most)" },
+				{ value: "page_count,asc", label: "Page Count (Least)" },
+				{ value: "filename,asc", label: "Filename (A-Z)" },
+				{ value: "filename,desc", label: "Filename (Z-A)" },
 			];
 
 	if (!libraryId) {

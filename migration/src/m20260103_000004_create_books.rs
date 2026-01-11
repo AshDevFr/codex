@@ -40,6 +40,7 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .default(false),
                     )
+                    .col(ColumnDef::new(Books::AnalysisError).string())
                     .col(
                         ColumnDef::new(Books::ModifiedAt)
                             .timestamp_with_time_zone()
@@ -151,6 +152,7 @@ enum Books {
     PageCount,
     Deleted,
     Analyzed,
+    AnalysisError,
     ModifiedAt,
     CreatedAt,
     UpdatedAt,

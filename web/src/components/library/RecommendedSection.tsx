@@ -6,6 +6,7 @@ import {
 } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { booksApi } from "@/api/books";
+import { seriesApi } from "@/api/series";
 import { MediaCard } from "@/components/library/MediaCard";
 
 interface RecommendedSectionProps {
@@ -20,7 +21,7 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 	});
 
 	// Fetch recently added books
-	const { data: recentlyAddedBooks, isLoading: loadingRecent } = useQuery({
+	const { data: recentlyAddedBooks, isLoading: loadingRecentBooks } = useQuery({
 		queryKey: ["books", "recently-added", libraryId],
 		queryFn: () => booksApi.getRecentlyAdded(libraryId, 50),
 	});
@@ -31,7 +32,35 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 		queryFn: () => booksApi.getOnDeck(libraryId),
 	});
 
+	// Fetch recently added series
+	const { data: recentlyAddedSeries, isLoading: loadingRecentSeries } = useQuery({
+		queryKey: ["series", "recently-added", libraryId],
+		queryFn: () => seriesApi.getRecentlyAdded(libraryId, 50),
+	});
+
+	// Fetch recently updated series
+	const { data: recentlyUpdatedSeries, isLoading: loadingUpdatedSeries } = useQuery({
+		queryKey: ["series", "recently-updated", libraryId],
+		queryFn: () => seriesApi.getRecentlyUpdated(libraryId, 50),
+	});
+
+	// Fetch recently read books
+	const { data: recentlyReadBooks, isLoading: loadingRecentlyRead } = useQuery({
+		queryKey: ["books", "recently-read", libraryId],
+		queryFn: () => booksApi.getRecentlyRead(libraryId, 50),
+	});
+
 	const onDeckBooks = onDeckResponse?.data ?? [];
+
+	const isLoading = loadingInProgress || loadingRecentBooks || loadingOnDeck ||
+		loadingRecentSeries || loadingUpdatedSeries || loadingRecentlyRead;
+
+	const hasContent = (inProgressBooks?.length ?? 0) > 0 ||
+		(recentlyAddedBooks?.length ?? 0) > 0 ||
+		onDeckBooks.length > 0 ||
+		(recentlyAddedSeries?.length ?? 0) > 0 ||
+		(recentlyUpdatedSeries?.length ?? 0) > 0 ||
+		(recentlyReadBooks?.length ?? 0) > 0;
 
 	return (
 		<Stack gap="xl">
@@ -79,7 +108,7 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 			{/* Recently Added Books */}
 			{recentlyAddedBooks && recentlyAddedBooks.length > 0 && (
 				<Stack gap="md">
-					<Title order={2}>Recently Added</Title>
+					<Title order={2}>Recently Added Books</Title>
 					<div
 						style={{
 							display: "grid",
@@ -95,25 +124,82 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 				</Stack>
 			)}
 
+			{/* Recently Added Series */}
+			{recentlyAddedSeries && recentlyAddedSeries.length > 0 && (
+				<Stack gap="md">
+					<Title order={2}>Recently Added Series</Title>
+					<div
+						style={{
+							display: "grid",
+							gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+							gap: "var(--mantine-spacing-md)",
+							width: "100%",
+						}}
+					>
+						{recentlyAddedSeries.map((series) => (
+							<MediaCard key={series.id} type="series" data={series} />
+						))}
+					</div>
+				</Stack>
+			)}
+
+			{/* Recently Updated Series */}
+			{recentlyUpdatedSeries && recentlyUpdatedSeries.length > 0 && (
+				<Stack gap="md">
+					<Title order={2}>Recently Updated Series</Title>
+					<Text size="sm" c="dimmed">
+						Series with new or updated content
+					</Text>
+					<div
+						style={{
+							display: "grid",
+							gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+							gap: "var(--mantine-spacing-md)",
+							width: "100%",
+						}}
+					>
+						{recentlyUpdatedSeries.map((series) => (
+							<MediaCard key={series.id} type="series" data={series} />
+						))}
+					</div>
+				</Stack>
+			)}
+
+			{/* Recently Read Books */}
+			{recentlyReadBooks && recentlyReadBooks.length > 0 && (
+				<Stack gap="md">
+					<Title order={2}>Recently Read Books</Title>
+					<Text size="sm" c="dimmed">
+						Books you've read recently
+					</Text>
+					<div
+						style={{
+							display: "grid",
+							gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+							gap: "var(--mantine-spacing-md)",
+							width: "100%",
+						}}
+					>
+						{recentlyReadBooks.map((book) => (
+							<MediaCard key={book.id} type="book" data={book} showProgress />
+						))}
+					</div>
+				</Stack>
+			)}
+
 			{/* Empty state */}
-			{!loadingInProgress &&
-				!loadingRecent &&
-				!loadingOnDeck &&
-				!inProgressBooks?.length &&
-				!recentlyAddedBooks?.length &&
-				!onDeckBooks.length && (
-					<Card p="xl" withBorder>
-						<Stack align="center" gap="sm">
-							<Text size="lg" fw={600}>
-								No content available
-							</Text>
-							<Text size="sm" c="dimmed">
-								Start scanning your library to see recommendations
-							</Text>
-						</Stack>
-					</Card>
-				)}
+			{!isLoading && !hasContent && (
+				<Card p="xl" withBorder>
+					<Stack align="center" gap="sm">
+						<Text size="lg" fw={600}>
+							No content available
+						</Text>
+						<Text size="sm" c="dimmed">
+							Start scanning your library to see recommendations
+						</Text>
+					</Stack>
+				</Card>
+			)}
 		</Stack>
 	);
 }
-

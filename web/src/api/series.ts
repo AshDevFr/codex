@@ -86,4 +86,26 @@ export const seriesApi = {
 		);
 		return response.data;
 	},
+
+	// Get recently added series
+	getRecentlyAdded: async (libraryId: string, limit = 50): Promise<Series[]> => {
+		const url =
+			libraryId === "all"
+				? `/series/recently-added?limit=${limit}`
+				: `/libraries/${libraryId}/series/recently-added?limit=${limit}`;
+
+		const response = await api.get<Series[]>(url);
+		return response.data;
+	},
+
+	// Get recently updated series
+	getRecentlyUpdated: async (libraryId: string, limit = 50): Promise<Series[]> => {
+		const url =
+			libraryId === "all"
+				? `/series/recently-updated?limit=${limit}`
+				: `/libraries/${libraryId}/series/recently-updated?limit=${limit}`;
+
+		const response = await api.get<Series[]>(url);
+		return response.data;
+	},
 };

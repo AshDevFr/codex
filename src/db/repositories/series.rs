@@ -1,14 +1,76 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, RelationTrait, Set,
+    entity::prelude::Decimal, sea_query::Alias, ActiveModelTrait, ColumnTrait, DatabaseConnection,
+    EntityTrait, FromQueryResult, JoinType, Order, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, RelationTrait, Set,
 };
 use uuid::Uuid;
 
-use crate::db::entities::{prelude::*, series};
+use crate::api::dto::series::{SeriesSortField, SeriesSortParam, SortDirection};
+use crate::db::entities::{books, prelude::*, read_progress, series};
 use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 use std::sync::Arc;
+
+/// Result type for series with aggregated data
+#[derive(Debug, FromQueryResult)]
+pub struct SeriesWithAggregates {
+    pub id: Uuid,
+    pub library_id: Uuid,
+    pub name: String,
+    pub normalized_name: String,
+    pub sort_name: Option<String>,
+    pub summary: Option<String>,
+    pub publisher: Option<String>,
+    pub year: Option<i32>,
+    pub book_count: i32,
+    pub user_rating: Option<Decimal>,
+    pub external_rating: Option<Decimal>,
+    pub external_rating_count: Option<i32>,
+    pub external_rating_source: Option<String>,
+    pub custom_metadata: Option<String>,
+    pub fingerprint: Option<String>,
+    pub path: Option<String>,
+    pub reading_direction: Option<String>,
+    pub custom_cover_path: Option<String>,
+    pub selected_cover_source: Option<String>,
+    pub metadata_populated_from_book: bool,
+    pub created_at: chrono::DateTime<Utc>,
+    pub updated_at: chrono::DateTime<Utc>,
+    // Aggregated fields (optional, depending on sort)
+    pub total_file_size: Option<i64>,
+    pub total_page_count: Option<i64>,
+    pub last_read_at: Option<chrono::DateTime<Utc>>,
+}
+
+impl From<SeriesWithAggregates> for series::Model {
+    fn from(s: SeriesWithAggregates) -> Self {
+        series::Model {
+            id: s.id,
+            library_id: s.library_id,
+            name: s.name,
+            normalized_name: s.normalized_name,
+            sort_name: s.sort_name,
+            summary: s.summary,
+            publisher: s.publisher,
+            year: s.year,
+            book_count: s.book_count,
+            user_rating: s.user_rating,
+            external_rating: s.external_rating,
+            external_rating_count: s.external_rating_count,
+            external_rating_source: s.external_rating_source,
+            custom_metadata: s.custom_metadata,
+            fingerprint: s.fingerprint,
+            path: s.path,
+            reading_direction: s.reading_direction,
+            custom_cover_path: s.custom_cover_path,
+            selected_cover_source: s.selected_cover_source,
+            metadata_populated_from_book: s.metadata_populated_from_book,
+            created_at: s.created_at,
+            updated_at: s.updated_at,
+        }
+    }
+}
 
 /// Repository for Series operations
 pub struct SeriesRepository;
@@ -133,6 +195,213 @@ impl SeriesRepository {
             .all(db)
             .await
             .context("Failed to list all series")
+    }
+
+    /// List recently added series (ordered by created_at descending)
+    pub async fn list_recently_added(
+        db: &DatabaseConnection,
+        library_id: Option<Uuid>,
+        limit: u64,
+    ) -> Result<Vec<series::Model>> {
+        let mut query = Series::find();
+
+        if let Some(lib_id) = library_id {
+            query = query.filter(series::Column::LibraryId.eq(lib_id));
+        }
+
+        query
+            .order_by_desc(series::Column::CreatedAt)
+            .limit(limit)
+            .all(db)
+            .await
+            .context("Failed to list recently added series")
+    }
+
+    /// List recently updated series (ordered by updated_at descending)
+    pub async fn list_recently_updated(
+        db: &DatabaseConnection,
+        library_id: Option<Uuid>,
+        limit: u64,
+    ) -> Result<Vec<series::Model>> {
+        let mut query = Series::find();
+
+        if let Some(lib_id) = library_id {
+            query = query.filter(series::Column::LibraryId.eq(lib_id));
+        }
+
+        query
+            .order_by_desc(series::Column::UpdatedAt)
+            .limit(limit)
+            .all(db)
+            .await
+            .context("Failed to list recently updated series")
+    }
+
+    /// Get series in a library with sorting, pagination, and optional user context
+    ///
+    /// This method handles all sort strategies including:
+    /// - Simple sorts: name, date_added, date_updated, release_date, filename
+    /// - Aggregate sorts: file_size, page_count (requires JOIN with books)
+    /// - User-specific sorts: date_read (requires user_id and JOIN with read_progress)
+    pub async fn list_by_library_sorted(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        sort: &SeriesSortParam,
+        user_id: Option<Uuid>,
+        offset: u64,
+        limit: u64,
+    ) -> Result<Vec<series::Model>> {
+        let order = match sort.direction {
+            SortDirection::Asc => Order::Asc,
+            SortDirection::Desc => Order::Desc,
+        };
+
+        // For aggregate sorts, we need to use a different approach
+        match sort.field {
+            SeriesSortField::FileSize | SeriesSortField::PageCount => {
+                Self::list_with_aggregate_sort(db, library_id, sort, offset, limit).await
+            }
+            SeriesSortField::DateRead => {
+                Self::list_with_date_read_sort(db, library_id, sort, user_id, offset, limit).await
+            }
+            _ => {
+                // Simple sorts that don't require JOINs
+                let mut query = Series::find().filter(series::Column::LibraryId.eq(library_id));
+
+                // Apply sort
+                query = match sort.field {
+                    SeriesSortField::Name => {
+                        // Sort by sort_name first (if set), then name
+                        if order == Order::Asc {
+                            query
+                                .order_by_asc(series::Column::SortName)
+                                .order_by_asc(series::Column::Name)
+                        } else {
+                            query
+                                .order_by_desc(series::Column::SortName)
+                                .order_by_desc(series::Column::Name)
+                        }
+                    }
+                    SeriesSortField::DateAdded => query.order_by(series::Column::CreatedAt, order),
+                    SeriesSortField::DateUpdated => {
+                        query.order_by(series::Column::UpdatedAt, order)
+                    }
+                    SeriesSortField::ReleaseDate => query.order_by(series::Column::Year, order),
+                    SeriesSortField::Filename => query.order_by(series::Column::Path, order),
+                    _ => query, // Handled above
+                };
+
+                query
+                    .offset(offset)
+                    .limit(limit)
+                    .all(db)
+                    .await
+                    .context("Failed to list series with sort")
+            }
+        }
+    }
+
+    /// List series sorted by aggregated file size or page count
+    async fn list_with_aggregate_sort(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        sort: &SeriesSortParam,
+        offset: u64,
+        limit: u64,
+    ) -> Result<Vec<series::Model>> {
+        use sea_orm::sea_query::Expr;
+
+        let aggregate_column = match sort.field {
+            SeriesSortField::FileSize => "total_file_size",
+            SeriesSortField::PageCount => "total_page_count",
+            _ => unreachable!(),
+        };
+
+        let aggregate_expr = match sort.field {
+            SeriesSortField::FileSize => {
+                Expr::col((Alias::new("books"), books::Column::FileSize)).sum()
+            }
+            SeriesSortField::PageCount => {
+                Expr::col((Alias::new("books"), books::Column::PageCount)).sum()
+            }
+            _ => unreachable!(),
+        };
+
+        let order = match sort.direction {
+            SortDirection::Asc => Order::Asc,
+            SortDirection::Desc => Order::Desc,
+        };
+
+        let results = Series::find()
+            .filter(series::Column::LibraryId.eq(library_id))
+            .join(JoinType::LeftJoin, series::Relation::Books.def())
+            .filter(
+                books::Column::Deleted
+                    .eq(false)
+                    .or(books::Column::Deleted.is_null()),
+            )
+            .column_as(aggregate_expr, aggregate_column)
+            .group_by(series::Column::Id)
+            .order_by(Expr::col(Alias::new(aggregate_column)), order)
+            .offset(offset)
+            .limit(limit)
+            .into_model::<SeriesWithAggregates>()
+            .all(db)
+            .await
+            .context("Failed to list series with aggregate sort")?;
+
+        Ok(results.into_iter().map(Into::into).collect())
+    }
+
+    /// List series sorted by last read date (user-specific)
+    async fn list_with_date_read_sort(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        sort: &SeriesSortParam,
+        user_id: Option<Uuid>,
+        offset: u64,
+        limit: u64,
+    ) -> Result<Vec<series::Model>> {
+        use sea_orm::sea_query::Expr;
+
+        let order = match sort.direction {
+            SortDirection::Asc => Order::Asc,
+            SortDirection::Desc => Order::Desc,
+        };
+
+        let mut query = Series::find()
+            .filter(series::Column::LibraryId.eq(library_id))
+            .join(JoinType::LeftJoin, series::Relation::Books.def())
+            .join(JoinType::LeftJoin, books::Relation::ReadProgress.def());
+
+        // Filter by user if provided
+        if let Some(uid) = user_id {
+            query = query.filter(
+                read_progress::Column::UserId
+                    .eq(uid)
+                    .or(read_progress::Column::UserId.is_null()),
+            );
+        }
+
+        let results = query
+            .column_as(
+                Expr::col((
+                    Alias::new("read_progress"),
+                    read_progress::Column::UpdatedAt,
+                ))
+                .max(),
+                "last_read_at",
+            )
+            .group_by(series::Column::Id)
+            .order_by(Expr::col(Alias::new("last_read_at")), order)
+            .offset(offset)
+            .limit(limit)
+            .into_model::<SeriesWithAggregates>()
+            .all(db)
+            .await
+            .context("Failed to list series with date read sort")?;
+
+        Ok(results.into_iter().map(Into::into).collect())
     }
 
     /// Get series with in-progress books (series that have at least one book with reading progress that is not completed)
@@ -1063,6 +1332,7 @@ mod tests {
             page_count: 10,
             deleted: false,
             analyzed: false,
+            analysis_error: None,
             modified_at: Utc::now(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
@@ -1088,6 +1358,7 @@ mod tests {
             page_count: 10,
             deleted: false,
             analyzed: false,
+            analysis_error: None,
             modified_at: Utc::now(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
@@ -1113,6 +1384,7 @@ mod tests {
             page_count: 10,
             deleted: false,
             analyzed: false,
+            analysis_error: None,
             modified_at: Utc::now(),
             created_at: Utc::now(),
             updated_at: Utc::now(),

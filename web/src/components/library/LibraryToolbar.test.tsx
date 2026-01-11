@@ -2,6 +2,25 @@ import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import { describe, expect, it, vi } from "vitest";
 import { LibraryToolbar } from "./LibraryToolbar";
 
+// All series sort options as defined in Library.tsx
+const seriesSortOptions = [
+	{ value: "name,asc", label: "Name (A-Z)" },
+	{ value: "name,desc", label: "Name (Z-A)" },
+	{ value: "date_added,desc", label: "Date Added (Newest)" },
+	{ value: "date_added,asc", label: "Date Added (Oldest)" },
+	{ value: "date_updated,desc", label: "Date Updated (Newest)" },
+	{ value: "date_updated,asc", label: "Date Updated (Oldest)" },
+	{ value: "release_date,desc", label: "Release Date (Newest)" },
+	{ value: "release_date,asc", label: "Release Date (Oldest)" },
+	{ value: "date_read,desc", label: "Recently Read" },
+	{ value: "file_size,desc", label: "File Size (Largest)" },
+	{ value: "file_size,asc", label: "File Size (Smallest)" },
+	{ value: "page_count,desc", label: "Page Count (Most)" },
+	{ value: "page_count,asc", label: "Page Count (Least)" },
+	{ value: "filename,asc", label: "Filename (A-Z)" },
+	{ value: "filename,desc", label: "Filename (Z-A)" },
+];
+
 describe("LibraryToolbar", () => {
 	const defaultProps = {
 		currentTab: "series",
@@ -213,5 +232,149 @@ describe("LibraryToolbar", () => {
 		expect(await screen.findByText("100")).toBeInTheDocument();
 		expect(await screen.findByText("200")).toBeInTheDocument();
 		expect(await screen.findByText("500")).toBeInTheDocument();
+	});
+});
+
+describe("LibraryToolbar - Series Sort Options", () => {
+	const defaultProps = {
+		currentTab: "series",
+		onTabChange: vi.fn(),
+	};
+
+	it("should render all series sort options", async () => {
+		const user = userEvent.setup();
+
+		renderWithProviders(
+			<LibraryToolbar
+				{...defaultProps}
+				currentTab="series"
+				sortOptions={seriesSortOptions}
+				sort="name,asc"
+				onSortChange={vi.fn()}
+			/>,
+		);
+
+		// Click sort button to open menu
+		await user.click(screen.getByLabelText("Sort options"));
+
+		// Check all series sort options are present
+		for (const option of seriesSortOptions) {
+			expect(await screen.findByText(option.label)).toBeInTheDocument();
+		}
+	});
+
+	it("should call onSortChange with correct value for date_added sort", async () => {
+		const user = userEvent.setup();
+		const onSortChange = vi.fn();
+
+		renderWithProviders(
+			<LibraryToolbar
+				{...defaultProps}
+				sortOptions={seriesSortOptions}
+				sort="name,asc"
+				onSortChange={onSortChange}
+			/>,
+		);
+
+		await user.click(screen.getByLabelText("Sort options"));
+		await user.click(await screen.findByText("Date Added (Newest)"));
+
+		expect(onSortChange).toHaveBeenCalledWith("date_added,desc");
+	});
+
+	it("should call onSortChange with correct value for file_size sort", async () => {
+		const user = userEvent.setup();
+		const onSortChange = vi.fn();
+
+		renderWithProviders(
+			<LibraryToolbar
+				{...defaultProps}
+				sortOptions={seriesSortOptions}
+				sort="name,asc"
+				onSortChange={onSortChange}
+			/>,
+		);
+
+		await user.click(screen.getByLabelText("Sort options"));
+		await user.click(await screen.findByText("File Size (Largest)"));
+
+		expect(onSortChange).toHaveBeenCalledWith("file_size,desc");
+	});
+
+	it("should call onSortChange with correct value for page_count sort", async () => {
+		const user = userEvent.setup();
+		const onSortChange = vi.fn();
+
+		renderWithProviders(
+			<LibraryToolbar
+				{...defaultProps}
+				sortOptions={seriesSortOptions}
+				sort="name,asc"
+				onSortChange={onSortChange}
+			/>,
+		);
+
+		await user.click(screen.getByLabelText("Sort options"));
+		await user.click(await screen.findByText("Page Count (Most)"));
+
+		expect(onSortChange).toHaveBeenCalledWith("page_count,desc");
+	});
+
+	it("should call onSortChange with correct value for date_read sort", async () => {
+		const user = userEvent.setup();
+		const onSortChange = vi.fn();
+
+		renderWithProviders(
+			<LibraryToolbar
+				{...defaultProps}
+				sortOptions={seriesSortOptions}
+				sort="name,asc"
+				onSortChange={onSortChange}
+			/>,
+		);
+
+		await user.click(screen.getByLabelText("Sort options"));
+		await user.click(await screen.findByText("Recently Read"));
+
+		expect(onSortChange).toHaveBeenCalledWith("date_read,desc");
+	});
+
+	it("should call onSortChange with correct value for filename sort", async () => {
+		const user = userEvent.setup();
+		const onSortChange = vi.fn();
+
+		renderWithProviders(
+			<LibraryToolbar
+				{...defaultProps}
+				sortOptions={seriesSortOptions}
+				sort="name,asc"
+				onSortChange={onSortChange}
+			/>,
+		);
+
+		await user.click(screen.getByLabelText("Sort options"));
+		await user.click(await screen.findByText("Filename (A-Z)"));
+
+		expect(onSortChange).toHaveBeenCalledWith("filename,asc");
+	});
+
+	it("should highlight selected sort option for new sort types", async () => {
+		const user = userEvent.setup();
+
+		renderWithProviders(
+			<LibraryToolbar
+				{...defaultProps}
+				sortOptions={seriesSortOptions}
+				sort="file_size,desc"
+				onSortChange={vi.fn()}
+			/>,
+		);
+
+		await user.click(screen.getByLabelText("Sort options"));
+
+		const selectedOption = await screen.findByText("File Size (Largest)");
+		expect(selectedOption.parentElement).toHaveStyle({
+			background: "var(--mantine-color-blue-light)",
+		});
 	});
 });

@@ -1,5 +1,8 @@
 use crate::api::{
-    dto::{BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListResponse},
+    dto::{
+        series::SeriesSortParam, BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto,
+        SeriesListResponse,
+    },
     error::ApiError,
     extractors::{AuthContext, AuthState, FlexibleAuthContext},
     permissions::Permission,
@@ -621,6 +624,198 @@ pub async fn list_in_progress_series(
     Ok(Json(dtos))
 }
 
+/// Query parameters for recently added/updated series
+#[derive(Debug, Deserialize)]
+pub struct RecentSeriesQuery {
+    /// Maximum number of series to return (default: 50)
+    #[serde(default = "default_recent_limit")]
+    pub limit: u64,
+}
+
+fn default_recent_limit() -> u64 {
+    50
+}
+
+/// List recently added series
+#[utoipa::path(
+    get,
+    path = "/api/v1/series/recently-added",
+    params(
+        ("limit" = Option<u64>, Query, description = "Maximum number of series to return (default: 50)")
+    ),
+    responses(
+        (status = 200, description = "List of recently added series", body = Vec<SeriesDto>),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn list_recently_added_series(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Query(query): Query<RecentSeriesQuery>,
+) -> Result<Json<Vec<SeriesDto>>, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    let series_list = SeriesRepository::list_recently_added(&state.db, None, query.limit)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch recently added series: {}", e)))?;
+
+    let user_id = Some(auth.user_id);
+    let dtos: Vec<SeriesDto> = futures::future::join_all(
+        series_list
+            .into_iter()
+            .map(|series| series_to_dto(&state.db, series, user_id)),
+    )
+    .await
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+
+    Ok(Json(dtos))
+}
+
+/// List recently added series in a specific library
+#[utoipa::path(
+    get,
+    path = "/api/v1/libraries/{library_id}/series/recently-added",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID"),
+        ("limit" = Option<u64>, Query, description = "Maximum number of series to return (default: 50)")
+    ),
+    responses(
+        (status = 200, description = "List of recently added series in library", body = Vec<SeriesDto>),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn list_library_recently_added_series(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(library_id): Path<Uuid>,
+    Query(query): Query<RecentSeriesQuery>,
+) -> Result<Json<Vec<SeriesDto>>, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    let series_list =
+        SeriesRepository::list_recently_added(&state.db, Some(library_id), query.limit)
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to fetch recently added series: {}", e))
+            })?;
+
+    let user_id = Some(auth.user_id);
+    let dtos: Vec<SeriesDto> = futures::future::join_all(
+        series_list
+            .into_iter()
+            .map(|series| series_to_dto(&state.db, series, user_id)),
+    )
+    .await
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+
+    Ok(Json(dtos))
+}
+
+/// List recently updated series
+#[utoipa::path(
+    get,
+    path = "/api/v1/series/recently-updated",
+    params(
+        ("limit" = Option<u64>, Query, description = "Maximum number of series to return (default: 50)")
+    ),
+    responses(
+        (status = 200, description = "List of recently updated series", body = Vec<SeriesDto>),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn list_recently_updated_series(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Query(query): Query<RecentSeriesQuery>,
+) -> Result<Json<Vec<SeriesDto>>, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    let series_list = SeriesRepository::list_recently_updated(&state.db, None, query.limit)
+        .await
+        .map_err(|e| {
+            ApiError::Internal(format!("Failed to fetch recently updated series: {}", e))
+        })?;
+
+    let user_id = Some(auth.user_id);
+    let dtos: Vec<SeriesDto> = futures::future::join_all(
+        series_list
+            .into_iter()
+            .map(|series| series_to_dto(&state.db, series, user_id)),
+    )
+    .await
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+
+    Ok(Json(dtos))
+}
+
+/// List recently updated series in a specific library
+#[utoipa::path(
+    get,
+    path = "/api/v1/libraries/{library_id}/series/recently-updated",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID"),
+        ("limit" = Option<u64>, Query, description = "Maximum number of series to return (default: 50)")
+    ),
+    responses(
+        (status = 200, description = "List of recently updated series in library", body = Vec<SeriesDto>),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn list_library_recently_updated_series(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(library_id): Path<Uuid>,
+    Query(query): Query<RecentSeriesQuery>,
+) -> Result<Json<Vec<SeriesDto>>, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    let series_list =
+        SeriesRepository::list_recently_updated(&state.db, Some(library_id), query.limit)
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to fetch recently updated series: {}", e))
+            })?;
+
+    let user_id = Some(auth.user_id);
+    let dtos: Vec<SeriesDto> = futures::future::join_all(
+        series_list
+            .into_iter()
+            .map(|series| series_to_dto(&state.db, series, user_id)),
+    )
+    .await
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+
+    Ok(Json(dtos))
+}
+
 /// List series in a specific library with pagination
 #[utoipa::path(
     get,
@@ -655,38 +850,31 @@ pub async fn list_library_series(
         query.page_size.min(100)
     };
 
-    // Fetch series for this library
-    let mut series_list = SeriesRepository::list_by_library(&state.db, library_id)
+    // Parse sort parameter
+    let sort = query
+        .sort
+        .as_ref()
+        .map(|s| SeriesSortParam::parse(s))
+        .unwrap_or_default();
+
+    // Get total count for pagination
+    let total = SeriesRepository::count_by_library(&state.db, library_id)
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
+        .map_err(|e| ApiError::Internal(format!("Failed to count series: {}", e)))?
+        as u64;
 
-    // Apply sorting if specified
-    if let Some(sort_param) = &query.sort {
-        apply_series_sorting(&mut series_list, sort_param);
-    }
-
-    let total = series_list.len() as u64;
-
-    // Apply pagination manually
+    // Fetch sorted and paginated series
     let offset = query.page * page_size;
-    let start = offset as usize;
-
-    // If start is beyond the list, return empty results
-    if start >= series_list.len() {
-        return Ok(Json(SeriesListResponse::new(
-            vec![],
-            query.page,
-            page_size,
-            total,
-        )));
-    }
-
-    let end = (start + page_size as usize).min(series_list.len());
-    let paginated = series_list[start..end].to_vec();
-
     let user_id = Some(auth.user_id);
+
+    let series_list = SeriesRepository::list_by_library_sorted(
+        &state.db, library_id, &sort, user_id, offset, page_size,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
+
     let dtos: Vec<SeriesDto> = futures::future::join_all(
-        paginated
+        series_list
             .into_iter()
             .map(|series| series_to_dto(&state.db, series, user_id)),
     )

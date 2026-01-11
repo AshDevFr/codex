@@ -703,6 +703,7 @@ async fn process_file(
             page_count: 0, // Will be filled during analysis phase
             deleted: false,
             analyzed: false, // Mark as not analyzed
+            analysis_error: None,
             modified_at,
             created_at: now,
             updated_at: now,

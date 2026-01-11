@@ -21,6 +21,7 @@ pub struct Model {
     pub page_count: i32,
     pub deleted: bool,
     pub analyzed: bool,
+    pub analysis_error: Option<String>,
     pub modified_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

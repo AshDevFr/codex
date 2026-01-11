@@ -158,6 +158,272 @@ async fn test_list_series_pagination() {
 }
 
 // ============================================================================
+// Sort Series Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_library_series_sort_by_name_asc() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with different names (out of alphabetical order)
+    SeriesRepository::create(&db, library.id, "Zebra", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Apple", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Mango", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(
+        &format!("/api/v1/libraries/{}/series?sort=name,asc", library.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 3);
+    assert_eq!(series_list.data[0].name, "Apple");
+    assert_eq!(series_list.data[1].name, "Mango");
+    assert_eq!(series_list.data[2].name, "Zebra");
+}
+
+#[tokio::test]
+async fn test_list_library_series_sort_by_name_desc() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    SeriesRepository::create(&db, library.id, "Apple", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Mango", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Zebra", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(
+        &format!("/api/v1/libraries/{}/series?sort=name,desc", library.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 3);
+    assert_eq!(series_list.data[0].name, "Zebra");
+    assert_eq!(series_list.data[1].name, "Mango");
+    assert_eq!(series_list.data[2].name, "Apple");
+}
+
+#[tokio::test]
+async fn test_list_library_series_sort_by_date_added() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series (they will have sequential created_at timestamps)
+    let series1 = SeriesRepository::create(&db, library.id, "First", None)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+    let series2 = SeriesRepository::create(&db, library.id, "Second", None)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+    let series3 = SeriesRepository::create(&db, library.id, "Third", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Sort by date added descending (newest first)
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/libraries/{}/series?sort=date_added,desc",
+            library.id
+        ),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 3);
+    assert_eq!(series_list.data[0].id, series3.id); // Newest
+    assert_eq!(series_list.data[1].id, series2.id);
+    assert_eq!(series_list.data[2].id, series1.id); // Oldest
+}
+
+#[tokio::test]
+async fn test_list_library_series_sort_by_release_date() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series and update their years
+    let mut series1 = SeriesRepository::create(&db, library.id, "Old Series", None)
+        .await
+        .unwrap();
+    series1.year = Some(1990);
+    SeriesRepository::update(&db, &series1, None).await.unwrap();
+
+    let mut series2 = SeriesRepository::create(&db, library.id, "New Series", None)
+        .await
+        .unwrap();
+    series2.year = Some(2024);
+    SeriesRepository::update(&db, &series2, None).await.unwrap();
+
+    let mut series3 = SeriesRepository::create(&db, library.id, "Mid Series", None)
+        .await
+        .unwrap();
+    series3.year = Some(2010);
+    SeriesRepository::update(&db, &series3, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Sort by release date descending (newest first)
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/libraries/{}/series?sort=release_date,desc",
+            library.id
+        ),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 3);
+    assert_eq!(series_list.data[0].year, Some(2024)); // Newest
+    assert_eq!(series_list.data[1].year, Some(2010));
+    assert_eq!(series_list.data[2].year, Some(1990)); // Oldest
+}
+
+#[tokio::test]
+async fn test_list_library_series_sort_with_pagination() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create 5 series alphabetically
+    for name in ["Alpha", "Beta", "Charlie", "Delta", "Echo"] {
+        SeriesRepository::create(&db, library.id, name, None)
+            .await
+            .unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Get first page (2 items) sorted by name ascending
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/libraries/{}/series?sort=name,asc&page=0&page_size=2",
+            library.id
+        ),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page1 = response.unwrap();
+    assert_eq!(page1.data.len(), 2);
+    assert_eq!(page1.total, 5);
+    assert_eq!(page1.data[0].name, "Alpha");
+    assert_eq!(page1.data[1].name, "Beta");
+
+    // Get second page
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/libraries/{}/series?sort=name,asc&page=1&page_size=2",
+            library.id
+        ),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page2 = response.unwrap();
+    assert_eq!(page2.data.len(), 2);
+    assert_eq!(page2.data[0].name, "Charlie");
+    assert_eq!(page2.data[1].name, "Delta");
+}
+
+#[tokio::test]
+async fn test_list_library_series_sort_invalid_field_uses_default() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    SeriesRepository::create(&db, library.id, "Series A", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Series B", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Invalid sort field should fall back to default (name,asc)
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/libraries/{}/series?sort=invalid_field,asc",
+            library.id
+        ),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 2);
+    // Should be sorted by name (default)
+    assert_eq!(series_list.data[0].name, "Series A");
+    assert_eq!(series_list.data[1].name, "Series B");
+}
+
+// ============================================================================
 // Get Series by ID Tests
 // ============================================================================
 
@@ -907,10 +1173,214 @@ fn create_test_book(
         page_count: 10,
         deleted: false,
         analyzed: false,
+        analysis_error: None,
         modified_at: Utc::now(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
         thumbnail_path: None,
         thumbnail_generated_at: None,
     }
+}
+
+// ============================================================================
+// Recently Added Series Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_recently_added_series() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with delays to ensure different created_at timestamps
+    let series1 = SeriesRepository::create(&db, library.id, "First Series", None)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+    let series2 = SeriesRepository::create(&db, library.id, "Second Series", None)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+    let series3 = SeriesRepository::create(&db, library.id, "Third Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth("/api/v1/series/recently-added?limit=50", &token);
+    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.len(), 3);
+    // Should be ordered by created_at descending (newest first)
+    assert_eq!(series_list[0].id, series3.id);
+    assert_eq!(series_list[1].id, series2.id);
+    assert_eq!(series_list[2].id, series1.id);
+}
+
+#[tokio::test]
+async fn test_list_recently_added_series_with_limit() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create 5 series
+    for i in 1..=5 {
+        SeriesRepository::create(&db, library.id, &format!("Series {}", i), None)
+            .await
+            .unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request with limit=2
+    let request = get_request_with_auth("/api/v1/series/recently-added?limit=2", &token);
+    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.len(), 2);
+}
+
+#[tokio::test]
+async fn test_list_library_recently_added_series() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library1 = LibraryRepository::create(&db, "Library 1", "/lib1", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let library2 = LibraryRepository::create(&db, "Library 2", "/lib2", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series in each library
+    SeriesRepository::create(&db, library1.id, "Lib1 Series 1", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library1.id, "Lib1 Series 2", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library2.id, "Lib2 Series 1", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request recently added series from library 1
+    let request = get_request_with_auth(
+        &format!("/api/v1/libraries/{}/series/recently-added", library1.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.len(), 2);
+    assert!(series_list.iter().all(|s| s.name.starts_with("Lib1")));
+}
+
+// ============================================================================
+// Recently Updated Series Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_recently_updated_series() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series
+    let mut series1 = SeriesRepository::create(&db, library.id, "First Series", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "Second Series", None)
+        .await
+        .unwrap();
+    let mut series3 = SeriesRepository::create(&db, library.id, "Third Series", None)
+        .await
+        .unwrap();
+
+    // Update series1 and series3 to change their updated_at
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+    series3.summary = Some("Updated summary".to_string());
+    SeriesRepository::update(&db, &series3, None).await.unwrap();
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+    series1.summary = Some("Another update".to_string());
+    SeriesRepository::update(&db, &series1, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth("/api/v1/series/recently-updated?limit=50", &token);
+    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.len(), 3);
+    // Should be ordered by updated_at descending (most recently updated first)
+    assert_eq!(series_list[0].id, series1.id);
+    assert_eq!(series_list[1].id, series3.id);
+    assert_eq!(series_list[2].id, series2.id);
+}
+
+#[tokio::test]
+async fn test_list_library_recently_updated_series() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library1 = LibraryRepository::create(&db, "Library 1", "/lib1", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let library2 = LibraryRepository::create(&db, "Library 2", "/lib2", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create and update series in library 1
+    let mut series1 = SeriesRepository::create(&db, library1.id, "Lib1 Series", None)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+    series1.summary = Some("Updated".to_string());
+    SeriesRepository::update(&db, &series1, None).await.unwrap();
+
+    // Create series in library 2 (not updated)
+    SeriesRepository::create(&db, library2.id, "Lib2 Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request recently updated series from library 1
+    let request = get_request_with_auth(
+        &format!("/api/v1/libraries/{}/series/recently-updated", library1.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.len(), 1);
+    assert_eq!(series_list[0].id, series1.id);
 }

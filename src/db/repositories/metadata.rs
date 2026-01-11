@@ -172,6 +172,7 @@ mod tests {
             page_count: 10,
             deleted: false,
             analyzed: false,
+            analysis_error: None,
             modified_at: Utc::now(),
             created_at: Utc::now(),
             updated_at: Utc::now(),

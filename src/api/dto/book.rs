@@ -37,6 +37,9 @@ pub struct BookDto {
     pub updated_at: DateTime<Utc>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub read_progress: Option<ReadProgressResponse>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Failed to parse CBZ: invalid archive")]
+    pub analysis_error: Option<String>,
 }
 
 /// Book list response

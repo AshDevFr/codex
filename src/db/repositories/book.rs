@@ -36,6 +36,7 @@ impl BookRepository {
             page_count: Set(book_model.page_count),
             deleted: Set(book_model.deleted),
             analyzed: Set(book_model.analyzed),
+            analysis_error: Set(book_model.analysis_error.clone()),
             modified_at: Set(book_model.modified_at),
             created_at: Set(book_model.created_at),
             updated_at: Set(book_model.updated_at),
@@ -231,6 +232,37 @@ impl BookRepository {
             .context("Failed to list recently added books")?;
 
         Ok((books, total))
+    }
+
+    /// List recently read books (ordered by read_progress updated_at descending)
+    /// This returns books that have been read recently, regardless of completion status
+    pub async fn list_recently_read(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        library_id: Option<Uuid>,
+        limit: u64,
+    ) -> Result<Vec<books::Model>> {
+        use crate::db::entities::{read_progress, series};
+        use sea_orm::JoinType;
+
+        let mut query = Books::find()
+            .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .filter(books::Column::Deleted.eq(false));
+
+        // Filter by library if specified
+        if let Some(lib_id) = library_id {
+            query = query
+                .join(JoinType::InnerJoin, books::Relation::Series.def())
+                .filter(series::Column::LibraryId.eq(lib_id));
+        }
+
+        query
+            .order_by_desc(read_progress::Column::UpdatedAt)
+            .limit(limit)
+            .all(db)
+            .await
+            .context("Failed to list recently read books")
     }
 
     /// Get books with reading progress for a user (in-progress books)
@@ -444,6 +476,7 @@ impl BookRepository {
             page_count: Set(book_model.page_count),
             deleted: Set(book_model.deleted),
             analyzed: Set(book_model.analyzed),
+            analysis_error: Set(book_model.analysis_error.clone()),
             modified_at: Set(book_model.modified_at),
             created_at: Set(book_model.created_at),
             updated_at: Set(Utc::now()),
@@ -821,6 +854,70 @@ impl BookRepository {
 
         Ok(())
     }
+
+    /// Set or clear analysis error for a book
+    pub async fn set_analysis_error(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        error: Option<String>,
+    ) -> Result<()> {
+        let book = Books::find_by_id(book_id)
+            .one(db)
+            .await
+            .context("Failed to find book")?
+            .ok_or_else(|| anyhow::anyhow!("Book not found"))?;
+
+        let mut active: books::ActiveModel = book.into();
+        active.analysis_error = Set(error);
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to set analysis error")?;
+
+        Ok(())
+    }
+
+    /// List books with analysis errors
+    /// Optional filters by library_id or series_id
+    pub async fn list_with_errors(
+        db: &DatabaseConnection,
+        library_id: Option<Uuid>,
+        series_id: Option<Uuid>,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        let mut query = Books::find()
+            .filter(books::Column::AnalysisError.is_not_null())
+            .filter(books::Column::Deleted.eq(false));
+
+        if let Some(lib_id) = library_id {
+            query = query.filter(books::Column::LibraryId.eq(lib_id));
+        }
+
+        if let Some(ser_id) = series_id {
+            query = query.filter(books::Column::SeriesId.eq(ser_id));
+        }
+
+        // Get total count
+        let total = query
+            .clone()
+            .count(db)
+            .await
+            .context("Failed to count books with errors")?;
+
+        // Get paginated results
+        let books = query
+            .order_by_desc(books::Column::UpdatedAt)
+            .offset(page * page_size)
+            .limit(page_size)
+            .all(db)
+            .await
+            .context("Failed to list books with errors")?;
+
+        Ok((books, total))
+    }
 }
 
 #[cfg(test)]
@@ -854,6 +951,7 @@ mod tests {
             page_count: 10,
             deleted: false,
             analyzed: false,
+            analysis_error: None,
             modified_at: now,
             created_at: now,
             updated_at: now,
@@ -1556,5 +1654,154 @@ mod tests {
 
         assert_eq!(books.len(), 5);
         assert_eq!(total, 5);
+    }
+
+    #[tokio::test]
+    async fn test_set_analysis_error() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
+        BookRepository::create(db.sea_orm_connection(), &book, None)
+            .await
+            .unwrap();
+
+        // Verify initial state has no error
+        let retrieved = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(retrieved.analysis_error, None);
+
+        // Set an analysis error
+        BookRepository::set_analysis_error(
+            db.sea_orm_connection(),
+            book.id,
+            Some("Test error: invalid archive".to_string()),
+        )
+        .await
+        .unwrap();
+
+        let retrieved = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            retrieved.analysis_error,
+            Some("Test error: invalid archive".to_string())
+        );
+
+        // Clear the analysis error
+        BookRepository::set_analysis_error(db.sea_orm_connection(), book.id, None)
+            .await
+            .unwrap();
+
+        let retrieved = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(retrieved.analysis_error, None);
+    }
+
+    #[tokio::test]
+    async fn test_list_with_errors() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create a book without error
+        let book1 = create_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz");
+        BookRepository::create(db.sea_orm_connection(), &book1, None)
+            .await
+            .unwrap();
+
+        // Create a book with error
+        let mut book2 = create_book_model(series.id, library.id, "/test/book2.cbz", "book2.cbz");
+        book2.analysis_error = Some("Failed to parse: invalid archive".to_string());
+        BookRepository::create(db.sea_orm_connection(), &book2, None)
+            .await
+            .unwrap();
+
+        // Create another book with error
+        let mut book3 = create_book_model(series.id, library.id, "/test/book3.cbz", "book3.cbz");
+        book3.analysis_error = Some("Unsupported format".to_string());
+        BookRepository::create(db.sea_orm_connection(), &book3, None)
+            .await
+            .unwrap();
+
+        // List all books with errors (no filter)
+        let (books, total) =
+            BookRepository::list_with_errors(db.sea_orm_connection(), None, None, 0, 10)
+                .await
+                .unwrap();
+
+        assert_eq!(total, 2);
+        assert_eq!(books.len(), 2);
+        assert!(books.iter().all(|b| b.analysis_error.is_some()));
+
+        // List with library filter
+        let (books, total) = BookRepository::list_with_errors(
+            db.sea_orm_connection(),
+            Some(library.id),
+            None,
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(total, 2);
+        assert_eq!(books.len(), 2);
+
+        // List with series filter
+        let (books, total) =
+            BookRepository::list_with_errors(db.sea_orm_connection(), None, Some(series.id), 0, 10)
+                .await
+                .unwrap();
+
+        assert_eq!(total, 2);
+        assert_eq!(books.len(), 2);
+
+        // Test pagination
+        let (books, total) =
+            BookRepository::list_with_errors(db.sea_orm_connection(), None, None, 0, 1)
+                .await
+                .unwrap();
+
+        assert_eq!(total, 2);
+        assert_eq!(books.len(), 1);
+
+        let (books, total) =
+            BookRepository::list_with_errors(db.sea_orm_connection(), None, None, 1, 1)
+                .await
+                .unwrap();
+
+        assert_eq!(total, 2);
+        assert_eq!(books.len(), 1);
     }
 }

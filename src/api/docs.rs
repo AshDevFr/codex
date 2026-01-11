@@ -51,8 +51,12 @@ use utoipa::OpenApi;
         handlers::set_series_cover_source,
         handlers::trigger_series_analysis,
         handlers::list_in_progress_series,
+        handlers::list_recently_added_series,
+        handlers::list_recently_updated_series,
         handlers::list_library_series,
         handlers::list_library_in_progress_series,
+        handlers::list_library_recently_added_series,
+        handlers::list_library_recently_updated_series,
 
         // Book endpoints
         handlers::list_books,
@@ -66,6 +70,11 @@ use utoipa::OpenApi;
         handlers::list_library_on_deck_books,
         handlers::list_recently_added_books,
         handlers::list_library_recently_added_books,
+        handlers::list_recently_read_books,
+        handlers::list_library_recently_read_books,
+        handlers::list_books_with_errors,
+        handlers::list_library_books_with_errors,
+        handlers::list_series_books_with_errors,
 
         // Page endpoints
         handlers::get_page_image,

@@ -66,7 +66,7 @@ export const seriesHandlers = [
     );
   }),
 
-  // Get series by ID (must come AFTER specific routes like /started, /search)
+  // Get series by ID (must come AFTER specific routes like /in-progress)
   http.get("/api/v1/series/:id", async ({ params }) => {
     await delay(100);
     const seriesItem = mockSeries.find((s) => s.id === params.id);

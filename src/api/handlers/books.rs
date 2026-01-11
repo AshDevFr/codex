@@ -37,6 +37,26 @@ pub struct BookListQuery {
     pub sort: Option<String>,
 }
 
+/// Query parameters for listing books with analysis errors
+#[derive(Debug, Deserialize)]
+pub struct BooksWithErrorsQuery {
+    /// Optional library filter
+    #[serde(default)]
+    pub library_id: Option<Uuid>,
+
+    /// Optional series filter
+    #[serde(default)]
+    pub series_id: Option<Uuid>,
+
+    /// Page number (0-indexed)
+    #[serde(default)]
+    pub page: u64,
+
+    /// Number of items per page (max 100)
+    #[serde(default = "default_page_size")]
+    pub page_size: u64,
+}
+
 fn default_page_size() -> u64 {
     20
 }
@@ -112,6 +132,7 @@ pub async fn books_to_dtos(
                 created_at: book.created_at,
                 updated_at: book.updated_at,
                 read_progress,
+                analysis_error: book.analysis_error,
             }
         })
         .collect();
@@ -181,6 +202,152 @@ pub async fn list_books(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
     };
+
+    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
+
+    let response = BookListResponse::new(dtos, query.page, page_size, total);
+
+    Ok(Json(response))
+}
+
+/// List books with analysis errors
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/with-errors",
+    params(
+        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID"),
+        ("series_id" = Option<Uuid>, Query, description = "Filter by series ID"),
+        ("page" = Option<u64>, Query, description = "Page number (0-indexed)"),
+        ("page_size" = Option<u64>, Query, description = "Number of items per page (max 100)")
+    ),
+    responses(
+        (status = 200, description = "Paginated list of books with analysis errors", body = BookListResponse),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn list_books_with_errors(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Query(query): Query<BooksWithErrorsQuery>,
+) -> Result<Json<BookListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Validate and normalize pagination params
+    let page_size = if query.page_size == 0 {
+        default_page_size()
+    } else {
+        query.page_size.min(100)
+    };
+
+    // Fetch books with errors
+    let (books_list, total) = BookRepository::list_with_errors(
+        &state.db,
+        query.library_id,
+        query.series_id,
+        query.page,
+        page_size,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch books with errors: {}", e)))?;
+
+    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
+
+    let response = BookListResponse::new(dtos, query.page, page_size, total);
+
+    Ok(Json(response))
+}
+
+/// List books with analysis errors in a specific library
+#[utoipa::path(
+    get,
+    path = "/api/v1/libraries/{library_id}/books/with-errors",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID"),
+        ("page" = Option<u64>, Query, description = "Page number (0-indexed)"),
+        ("page_size" = Option<u64>, Query, description = "Number of items per page (max 100)")
+    ),
+    responses(
+        (status = 200, description = "Paginated list of books with analysis errors in library", body = BookListResponse),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn list_library_books_with_errors(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(library_id): Path<Uuid>,
+    Query(query): Query<BooksWithErrorsQuery>,
+) -> Result<Json<BookListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    let page_size = if query.page_size == 0 {
+        default_page_size()
+    } else {
+        query.page_size.min(100)
+    };
+
+    let (books_list, total) =
+        BookRepository::list_with_errors(&state.db, Some(library_id), None, query.page, page_size)
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to fetch library books with errors: {}", e))
+            })?;
+
+    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
+
+    let response = BookListResponse::new(dtos, query.page, page_size, total);
+
+    Ok(Json(response))
+}
+
+/// List books with analysis errors in a specific series
+#[utoipa::path(
+    get,
+    path = "/api/v1/series/{id}/books/with-errors",
+    params(
+        ("id" = Uuid, Path, description = "Series ID"),
+        ("page" = Option<u64>, Query, description = "Page number (0-indexed)"),
+        ("page_size" = Option<u64>, Query, description = "Number of items per page (max 100)")
+    ),
+    responses(
+        (status = 200, description = "Paginated list of books with analysis errors in series", body = BookListResponse),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn list_series_books_with_errors(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+    Query(query): Query<BooksWithErrorsQuery>,
+) -> Result<Json<BookListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    let page_size = if query.page_size == 0 {
+        default_page_size()
+    } else {
+        query.page_size.min(100)
+    };
+
+    let (books_list, total) =
+        BookRepository::list_with_errors(&state.db, None, Some(series_id), query.page, page_size)
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to fetch series books with errors: {}", e))
+            })?;
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
@@ -682,4 +849,87 @@ pub async fn list_library_recently_added_books(
     let response = BookListResponse::new(dtos, query.page, page_size, total);
 
     Ok(Json(response))
+}
+
+/// Query parameters for recently read books
+#[derive(Debug, Deserialize)]
+pub struct RecentBooksQuery {
+    /// Maximum number of books to return (default: 50)
+    #[serde(default = "default_recent_limit")]
+    pub limit: u64,
+}
+
+fn default_recent_limit() -> u64 {
+    50
+}
+
+/// List recently read books (ordered by last read activity)
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/recently-read",
+    params(
+        ("limit" = Option<u64>, Query, description = "Maximum number of books to return (default: 50)")
+    ),
+    responses(
+        (status = 200, description = "List of recently read books", body = Vec<BookDto>),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn list_recently_read_books(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Query(query): Query<RecentBooksQuery>,
+) -> Result<Json<Vec<BookDto>>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    let books_list = BookRepository::list_recently_read(&state.db, auth.user_id, None, query.limit)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch recently read books: {}", e)))?;
+
+    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
+
+    Ok(Json(dtos))
+}
+
+/// List recently read books in a specific library
+#[utoipa::path(
+    get,
+    path = "/api/v1/libraries/{library_id}/books/recently-read",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID"),
+        ("limit" = Option<u64>, Query, description = "Maximum number of books to return (default: 50)")
+    ),
+    responses(
+        (status = 200, description = "List of recently read books in library", body = Vec<BookDto>),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn list_library_recently_read_books(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(library_id): Path<Uuid>,
+    Query(query): Query<RecentBooksQuery>,
+) -> Result<Json<Vec<BookDto>>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    let books_list =
+        BookRepository::list_recently_read(&state.db, auth.user_id, Some(library_id), query.limit)
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to fetch recently read books: {}", e))
+            })?;
+
+    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
+
+    Ok(Json(dtos))
 }

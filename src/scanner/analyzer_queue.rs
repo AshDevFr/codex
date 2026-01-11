@@ -49,6 +49,10 @@ pub async fn analyze_book(
     match analyze_single_book(db, book, None, force, event_broadcaster).await {
         Ok(_) => {
             result.books_analyzed = 1;
+            // Clear any previous analysis error on success
+            if let Err(e) = BookRepository::set_analysis_error(db, book_id, None).await {
+                warn!("Failed to clear analysis error for book {}: {}", book_id, e);
+            }
             info!(
                 "Analysis completed for book {} in {:?}",
                 book_id,
@@ -58,6 +62,15 @@ pub async fn analyze_book(
         Err(e) => {
             let error_msg = format!("Failed to analyze book {}: {}", book_id, e);
             error!("{}", error_msg);
+            // Store the analysis error for UI display
+            if let Err(set_err) =
+                BookRepository::set_analysis_error(db, book_id, Some(error_msg.clone())).await
+            {
+                warn!(
+                    "Failed to set analysis error for book {}: {}",
+                    book_id, set_err
+                );
+            }
             result.errors.push(error_msg);
         }
     }
@@ -183,6 +196,7 @@ async fn analyze_single_book(
     book.page_count = metadata.page_count as i32;
     book.modified_at = metadata.modified_at;
     book.analyzed = true; // Mark as analyzed
+    book.analysis_error = None; // Clear any previous error on successful analysis
     book.updated_at = now;
 
     BookRepository::update(db, &book, event_broadcaster).await?;
