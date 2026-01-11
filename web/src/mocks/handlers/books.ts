@@ -3,31 +3,40 @@
  */
 
 import { http, HttpResponse, delay } from "msw";
-import {
-  createBook,
-  createList,
-  createPaginatedResponse,
-  createReadProgress,
-  type MockBook,
-} from "../data/factories";
-
-// In-memory mock data store
-let books: MockBook[] = createList(
-  (i) =>
-    createBook({
-      seriesName: [
-        "Batman: Year One",
-        "Spider-Man",
-        "Saga",
-        "The Walking Dead",
-        "One Piece",
-      ][i % 5],
-      number: (i % 20) + 1,
-    }),
-  100
-);
+import { createPaginatedResponse } from "../data/factories";
+import { mockBooks, getBooksByLibrary, getBooksBySeries } from "../data/store";
 
 export const bookHandlers = [
+  // IMPORTANT: Specific routes MUST come before parameterized routes
+  // Otherwise /api/v1/books/:id will match "in-progress" as an ID
+
+  // List in-progress books (global - all libraries)
+  // Returns plain array (not paginated) - matches API expectation
+  http.get("/api/v1/books/in-progress", async () => {
+    await delay(200);
+
+    // Return books that have read progress
+    const inProgressBooks = mockBooks.filter((b) => b.readProgress !== null);
+
+    return HttpResponse.json(inProgressBooks);
+  }),
+
+  // List recently added books (global - all libraries)
+  // Returns plain array (not paginated) - matches API expectation
+  http.get("/api/v1/books/recently-added", async ({ request }) => {
+    await delay(200);
+    const url = new URL(request.url);
+    const limit = Number.parseInt(url.searchParams.get("limit") || "50");
+
+    // Sort by created date (newest first)
+    const sortedBooks = [...mockBooks].sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    return HttpResponse.json(sortedBooks.slice(0, limit));
+  }),
+
   // List books with pagination
   http.get("/api/v1/books", async ({ request }) => {
     await delay(200);
@@ -36,10 +45,7 @@ export const bookHandlers = [
     const pageSize = Number.parseInt(url.searchParams.get("pageSize") || "20");
     const seriesId = url.searchParams.get("seriesId");
 
-    let filteredBooks = books;
-    if (seriesId) {
-      filteredBooks = books.filter((b) => b.seriesId === seriesId);
-    }
+    const filteredBooks = seriesId ? getBooksBySeries(seriesId) : mockBooks;
 
     const start = page * pageSize;
     const end = start + pageSize;
@@ -54,10 +60,10 @@ export const bookHandlers = [
     );
   }),
 
-  // Get book by ID
+  // Get book by ID (must come AFTER specific routes like /in-progress, /recently-added)
   http.get("/api/v1/books/:id", async ({ params }) => {
     await delay(100);
-    const book = books.find((b) => b.id === params.id);
+    const book = mockBooks.find((b) => b.id === params.id);
 
     if (!book) {
       return HttpResponse.json({ error: "Book not found" }, { status: 404 });
@@ -120,7 +126,7 @@ export const bookHandlers = [
     const page = Number.parseInt(url.searchParams.get("page") || "0");
     const pageSize = Number.parseInt(url.searchParams.get("pageSize") || "20");
 
-    const filteredBooks = books.filter((b) => b.seriesId === params.seriesId);
+    const filteredBooks = getBooksBySeries(params.seriesId as string);
     const start = page * pageSize;
     const end = start + pageSize;
     const items = filteredBooks.slice(start, end);
@@ -135,98 +141,63 @@ export const bookHandlers = [
   }),
 
   // List books by library
-  http.get("/api/v1/libraries/:libraryId/books", async ({ request }) => {
+  http.get("/api/v1/libraries/:libraryId/books", async ({ params, request }) => {
     await delay(200);
     const url = new URL(request.url);
     const page = Number.parseInt(url.searchParams.get("page") || "0");
     const pageSize = Number.parseInt(url.searchParams.get("pageSize") || "20");
 
+    const libraryBooks = getBooksByLibrary(params.libraryId as string);
     const start = page * pageSize;
     const end = start + pageSize;
-    const items = books.slice(start, end);
+    const items = libraryBooks.slice(start, end);
 
     return HttpResponse.json(
       createPaginatedResponse(items, {
         page,
         pageSize,
-        total: books.length,
+        total: libraryBooks.length,
       })
     );
   }),
 
-  // List in-progress books
-  http.get("/api/v1/books/in-progress", async ({ request }) => {
-    await delay(200);
-    const url = new URL(request.url);
-    const page = Number.parseInt(url.searchParams.get("page") || "0");
-    const pageSize = Number.parseInt(url.searchParams.get("pageSize") || "20");
+  // Library-scoped: List in-progress books
+  // Returns plain array (not paginated) - matches API expectation
+  http.get(
+    "/api/v1/libraries/:libraryId/books/in-progress",
+    async ({ params }) => {
+      await delay(200);
 
-    // Return some books with read progress
-    const inProgressBooks = books.slice(0, 10).map((book) => ({
-      ...book,
-      readProgress: createReadProgress({
-        bookId: book.id,
-        totalPages: book.pageCount,
-      }),
-    }));
+      // Get books for this library that have read progress
+      const libraryBooks = getBooksByLibrary(params.libraryId as string);
+      const inProgressBooks = libraryBooks.filter(
+        (b) => b.readProgress !== null
+      );
 
-    const start = page * pageSize;
-    const end = start + pageSize;
-    const items = inProgressBooks.slice(start, end);
+      return HttpResponse.json(inProgressBooks);
+    }
+  ),
 
-    return HttpResponse.json(
-      createPaginatedResponse(items, {
-        page,
-        pageSize,
-        total: inProgressBooks.length,
-      })
-    );
-  }),
+  // Library-scoped: List recently added books
+  // Returns plain array (not paginated) - matches API expectation
+  http.get(
+    "/api/v1/libraries/:libraryId/books/recently-added",
+    async ({ params, request }) => {
+      await delay(200);
+      const url = new URL(request.url);
+      const limit = Number.parseInt(url.searchParams.get("limit") || "50");
 
-  // List recently added books
-  http.get("/api/v1/books/recently-added", async ({ request }) => {
-    await delay(200);
-    const url = new URL(request.url);
-    const page = Number.parseInt(url.searchParams.get("page") || "0");
-    const pageSize = Number.parseInt(url.searchParams.get("pageSize") || "20");
+      // Get books for this library, sorted by created date
+      const libraryBooks = getBooksByLibrary(params.libraryId as string);
+      const sortedBooks = [...libraryBooks].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
 
-    // Sort by created date (newest first)
-    const sortedBooks = [...books].sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-
-    const start = page * pageSize;
-    const end = start + pageSize;
-    const items = sortedBooks.slice(start, end);
-
-    return HttpResponse.json(
-      createPaginatedResponse(items, {
-        page,
-        pageSize,
-        total: sortedBooks.length,
-      })
-    );
-  }),
+      return HttpResponse.json(sortedBooks.slice(0, limit));
+    }
+  ),
 ];
 
-// Helper to reset mock data (for testing)
-export const resetMockBooks = () => {
-  books = createList(
-    (i) =>
-      createBook({
-        seriesName: [
-          "Batman: Year One",
-          "Spider-Man",
-          "Saga",
-          "The Walking Dead",
-          "One Piece",
-        ][i % 5],
-        number: (i % 20) + 1,
-      }),
-    100
-  );
-};
-
 // Helper to get current mock books (for testing)
-export const getMockBooks = () => [...books];
+export const getMockBooks = () => [...mockBooks];

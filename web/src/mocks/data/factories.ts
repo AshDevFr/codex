@@ -229,35 +229,32 @@ export interface MockReadProgress {
 
 /**
  * Paginated response factory
+ * Matches the server's PaginatedResponse format
  */
 export const createPaginatedResponse = <T>(
-  items: T[],
+  data: T[],
   options: { page?: number; pageSize?: number; total?: number } = {}
 ): PaginatedResponse<T> => {
   const page = options.page ?? 0;
   const pageSize = options.pageSize ?? 20;
-  const total = options.total ?? items.length;
+  const total = options.total ?? data.length;
   const totalPages = Math.ceil(total / pageSize);
 
   return {
-    items,
+    data,
     page,
     pageSize,
     total,
     totalPages,
-    hasNextPage: page < totalPages - 1,
-    hasPreviousPage: page > 0,
   };
 };
 
 export interface PaginatedResponse<T> {
-  items: T[];
+  data: T[];
   page: number;
   pageSize: number;
   total: number;
   totalPages: number;
-  hasNextPage: boolean;
-  hasPreviousPage: boolean;
 }
 
 /**

@@ -12,8 +12,9 @@ export default defineConfig({
 		},
 	},
 	server: {
-		// Proxy API requests to the backend during development
-		proxy: {
+		host: true,
+		// Disable proxy when using mock API (MSW handles all requests)
+		proxy: process.env.VITE_MOCK_API === "true" ? undefined : {
 			"/api": {
 				target: process.env.VITE_API_URL || "http://localhost:8080",
 				changeOrigin: true,

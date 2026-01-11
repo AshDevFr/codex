@@ -96,7 +96,7 @@ jobs:
       - name: Setup Node.js
         run: |
           apt-get remove -y nodejs npm || true
-          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
           apt-get install -y nodejs
           node --version
 
@@ -176,7 +176,7 @@ jobs:
       - name: Setup Node.js
         run: |
           apt-get remove -y nodejs npm || true
-          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
           apt-get install -y nodejs
           node --version
 

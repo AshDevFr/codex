@@ -3,24 +3,20 @@
  */
 
 import { http, HttpResponse, delay } from "msw";
-import { createLibrary, createList, type MockLibrary } from "../data/factories";
-
-// In-memory mock data store
-let libraries: MockLibrary[] = createList((i) => createLibrary({
-  name: ["Comics", "Manga", "Ebooks", "Graphic Novels"][i % 4],
-}), 4);
+import { createLibrary, type MockLibrary } from "../data/factories";
+import { mockLibraries } from "../data/store";
 
 export const libraryHandlers = [
   // List libraries
   http.get("/api/v1/libraries", async () => {
     await delay(200);
-    return HttpResponse.json(libraries);
+    return HttpResponse.json(mockLibraries);
   }),
 
   // Get library by ID
   http.get("/api/v1/libraries/:id", async ({ params }) => {
     await delay(100);
-    const library = libraries.find((l) => l.id === params.id);
+    const library = mockLibraries.find((l) => l.id === params.id);
 
     if (!library) {
       return HttpResponse.json({ error: "Library not found" }, { status: 404 });
@@ -40,7 +36,9 @@ export const libraryHandlers = [
       description: body.description,
     });
 
-    libraries.push(newLibrary);
+    // Note: This won't persist across page reloads since mockLibraries
+    // is re-initialized on module load
+    mockLibraries.push(newLibrary);
     return HttpResponse.json(newLibrary, { status: 201 });
   }),
 
@@ -48,38 +46,38 @@ export const libraryHandlers = [
   http.put("/api/v1/libraries/:id", async ({ params, request }) => {
     await delay(200);
     const body = (await request.json()) as Partial<MockLibrary>;
-    const index = libraries.findIndex((l) => l.id === params.id);
+    const index = mockLibraries.findIndex((l) => l.id === params.id);
 
     if (index === -1) {
       return HttpResponse.json({ error: "Library not found" }, { status: 404 });
     }
 
-    libraries[index] = {
-      ...libraries[index],
+    mockLibraries[index] = {
+      ...mockLibraries[index],
       ...body,
       updatedAt: new Date().toISOString(),
     };
 
-    return HttpResponse.json(libraries[index]);
+    return HttpResponse.json(mockLibraries[index]);
   }),
 
   // Delete library
   http.delete("/api/v1/libraries/:id", async ({ params }) => {
     await delay(200);
-    const index = libraries.findIndex((l) => l.id === params.id);
+    const index = mockLibraries.findIndex((l) => l.id === params.id);
 
     if (index === -1) {
       return HttpResponse.json({ error: "Library not found" }, { status: 404 });
     }
 
-    libraries.splice(index, 1);
+    mockLibraries.splice(index, 1);
     return new HttpResponse(null, { status: 204 });
   }),
 
   // Purge deleted books
   http.post("/api/v1/libraries/:id/purge", async ({ params }) => {
     await delay(500);
-    const library = libraries.find((l) => l.id === params.id);
+    const library = mockLibraries.find((l) => l.id === params.id);
 
     if (!library) {
       return HttpResponse.json({ error: "Library not found" }, { status: 404 });
@@ -89,12 +87,5 @@ export const libraryHandlers = [
   }),
 ];
 
-// Helper to reset mock data (for testing)
-export const resetMockLibraries = () => {
-  libraries = createList((i) => createLibrary({
-    name: ["Comics", "Manga", "Ebooks", "Graphic Novels"][i % 4],
-  }), 4);
-};
-
 // Helper to get current mock libraries (for testing)
-export const getMockLibraries = () => [...libraries];
+export const getMockLibraries = () => [...mockLibraries];

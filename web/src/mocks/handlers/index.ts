@@ -8,6 +8,7 @@ import { authHandlers } from "./auth";
 import { libraryHandlers } from "./libraries";
 import { seriesHandlers } from "./series";
 import { bookHandlers } from "./books";
+import { eventHandlers } from "./events";
 import { http, HttpResponse, delay } from "msw";
 
 // Additional utility handlers
@@ -75,11 +76,13 @@ export const handlers = [
   ...libraryHandlers,
   ...seriesHandlers,
   ...bookHandlers,
+  ...eventHandlers,
   ...utilityHandlers,
 ];
 
 // Re-export individual handlers for selective use
 export { authHandlers } from "./auth";
+export { bookHandlers } from "./books";
+export { eventHandlers } from "./events";
 export { libraryHandlers } from "./libraries";
 export { seriesHandlers } from "./series";
-export { bookHandlers } from "./books";
