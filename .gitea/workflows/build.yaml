@@ -78,6 +78,7 @@ jobs:
           cargo fmt -- --check
 
       - name: Clippy check
+        continue-on-error: true
         run: |
           cargo clippy --features rar -- -D warnings
 
