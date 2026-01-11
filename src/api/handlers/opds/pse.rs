@@ -38,9 +38,9 @@ impl IntoResponse for OpdsPseResponse {
 /// This allows OPDS clients to read books page-by-page without downloading the entire file.
 #[utoipa::path(
     get,
-    path = "/opds/books/{id}/pages",
+    path = "/opds/books/{book_id}/pages",
     params(
-        ("id" = Uuid, Path, description = "Book ID"),
+        ("book_id" = Uuid, Path, description = "Book ID"),
     ),
     responses(
         (status = 200, description = "OPDS-PSE page feed", content_type = "application/atom+xml"),

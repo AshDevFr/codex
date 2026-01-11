@@ -127,9 +127,9 @@ pub async fn trigger_duplicate_scan(
 /// - `books:write`
 #[utoipa::path(
     delete,
-    path = "/api/v1/duplicates/{id}",
+    path = "/api/v1/duplicates/{duplicate_id}",
     params(
-        ("id" = Uuid, Path, description = "Duplicate group ID")
+        ("duplicate_id" = Uuid, Path, description = "Duplicate group ID")
     ),
     responses(
         (status = 204, description = "Duplicate group deleted"),
@@ -144,7 +144,7 @@ pub async fn trigger_duplicate_scan(
 )]
 pub async fn delete_duplicate_group(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<Uuid>,
+    Path(duplicate_id): Path<Uuid>,
     auth: AuthContext,
 ) -> Result<StatusCode, ApiError> {
     // Check permission
@@ -154,7 +154,7 @@ pub async fn delete_duplicate_group(
     use crate::db::entities::book_duplicates::Entity as BookDuplicates;
     use sea_orm::EntityTrait;
 
-    let exists = BookDuplicates::find_by_id(id)
+    let exists = BookDuplicates::find_by_id(duplicate_id)
         .one(&state.db)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to check duplicate group: {}", e)))?;
@@ -162,11 +162,11 @@ pub async fn delete_duplicate_group(
     if exists.is_none() {
         return Err(ApiError::NotFound(format!(
             "Duplicate group {} not found",
-            id
+            duplicate_id
         )));
     }
 
-    BookDuplicatesRepository::delete_group(&state.db, id)
+    BookDuplicatesRepository::delete_group(&state.db, duplicate_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to delete duplicate group: {}", e)))?;
 

@@ -5,7 +5,8 @@ export interface SeriesFilters {
 	page?: number;
 	pageSize?: number;
 	sort?: string;
-	genre?: string;
+	genres?: string; // Comma-separated genre names (AND logic)
+	tags?: string; // Comma-separated tag names (AND logic)
 	status?: string;
 	publisher?: string;
 	year?: number;
@@ -19,20 +20,23 @@ export const seriesApi = {
 	): Promise<PaginatedResponse<Series>> => {
 		const params = new URLSearchParams();
 
+		// Add library filter if not "all"
+		if (libraryId !== "all") {
+			params.set("library_id", libraryId);
+		}
+
 		if (filters?.page) params.set("page", filters.page.toString());
 		if (filters?.pageSize)
 			params.set("page_size", filters.pageSize.toString());
 		if (filters?.sort) params.set("sort", filters.sort);
-		if (filters?.genre) params.set("genre", filters.genre);
+		if (filters?.genres) params.set("genres", filters.genres);
+		if (filters?.tags) params.set("tags", filters.tags);
 		if (filters?.status) params.set("status", filters.status);
 		if (filters?.publisher) params.set("publisher", filters.publisher);
 		if (filters?.year) params.set("year", filters.year.toString());
 
 		const queryString = params.toString();
-		const url =
-			libraryId === "all"
-				? `/series${queryString ? `?${queryString}` : ""}`
-				: `/libraries/${libraryId}/series${queryString ? `?${queryString}` : ""}`;
+		const url = `/series${queryString ? `?${queryString}` : ""}`;
 
 		const response = await api.get<PaginatedResponse<Series>>(url);
 		return response.data;
@@ -46,10 +50,12 @@ export const seriesApi = {
 
 	// Get series with in-progress books
 	getInProgress: async (libraryId: string): Promise<Series[]> => {
-		const url =
-			libraryId === "all"
-				? "/series/in-progress"
-				: `/libraries/${libraryId}/series/in-progress`;
+		const params = new URLSearchParams();
+		if (libraryId !== "all") {
+			params.set("library_id", libraryId);
+		}
+		const queryString = params.toString();
+		const url = `/series/in-progress${queryString ? `?${queryString}` : ""}`;
 
 		const response = await api.get<Series[]>(url);
 		return response.data;
@@ -89,10 +95,13 @@ export const seriesApi = {
 
 	// Get recently added series
 	getRecentlyAdded: async (libraryId: string, limit = 50): Promise<Series[]> => {
-		const url =
-			libraryId === "all"
-				? `/series/recently-added?limit=${limit}`
-				: `/libraries/${libraryId}/series/recently-added?limit=${limit}`;
+		const params = new URLSearchParams();
+		if (libraryId !== "all") {
+			params.set("library_id", libraryId);
+		}
+		params.set("limit", limit.toString());
+		const queryString = params.toString();
+		const url = `/series/recently-added?${queryString}`;
 
 		const response = await api.get<Series[]>(url);
 		return response.data;
@@ -100,10 +109,13 @@ export const seriesApi = {
 
 	// Get recently updated series
 	getRecentlyUpdated: async (libraryId: string, limit = 50): Promise<Series[]> => {
-		const url =
-			libraryId === "all"
-				? `/series/recently-updated?limit=${limit}`
-				: `/libraries/${libraryId}/series/recently-updated?limit=${limit}`;
+		const params = new URLSearchParams();
+		if (libraryId !== "all") {
+			params.set("library_id", libraryId);
+		}
+		params.set("limit", limit.toString());
+		const queryString = params.toString();
+		const url = `/series/recently-updated?${queryString}`;
 
 		const response = await api.get<Series[]>(url);
 		return response.data;

@@ -73,9 +73,9 @@ pub async fn list_settings(
 /// Get single setting by key (admin only)
 #[utoipa::path(
     get,
-    path = "/api/v1/admin/settings/{key}",
+    path = "/api/v1/admin/settings/{setting_key}",
     params(
-        ("key" = String, Path, description = "Setting key (e.g., scanner.max_concurrent_scans)")
+        ("setting_key" = String, Path, description = "Setting key (e.g., scanner.max_concurrent_scans)")
     ),
     responses(
         (status = 200, description = "Setting details", body = SettingDto),
@@ -91,14 +91,14 @@ pub async fn list_settings(
 pub async fn get_setting(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Path(key): Path<String>,
+    Path(setting_key): Path<String>,
 ) -> Result<Json<SettingDto>, ApiError> {
     require_admin!(auth)?;
 
-    let setting = SettingsRepository::get(&state.db, &key)
+    let setting = SettingsRepository::get(&state.db, &setting_key)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch setting: {}", e)))?
-        .ok_or_else(|| ApiError::NotFound(format!("Setting '{}' not found", key)))?;
+        .ok_or_else(|| ApiError::NotFound(format!("Setting '{}' not found", setting_key)))?;
 
     let dto = SettingDto {
         id: setting.id,
@@ -122,9 +122,9 @@ pub async fn get_setting(
 /// Update setting (admin only)
 #[utoipa::path(
     put,
-    path = "/api/v1/admin/settings/{key}",
+    path = "/api/v1/admin/settings/{setting_key}",
     params(
-        ("key" = String, Path, description = "Setting key (e.g., scanner.max_concurrent_scans)")
+        ("setting_key" = String, Path, description = "Setting key (e.g., scanner.max_concurrent_scans)")
     ),
     request_body = UpdateSettingRequest,
     responses(
@@ -143,7 +143,7 @@ pub async fn update_setting(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     client_info: crate::api::extractors::ClientInfo,
-    Path(key): Path<String>,
+    Path(setting_key): Path<String>,
     Json(request): Json<UpdateSettingRequest>,
 ) -> Result<Json<SettingDto>, ApiError> {
     require_admin!(auth)?;
@@ -152,7 +152,7 @@ pub async fn update_setting(
 
     let setting = SettingsRepository::set(
         &state.db,
-        &key,
+        &setting_key,
         request.value,
         auth.user_id,
         request.change_reason,
@@ -173,7 +173,7 @@ pub async fn update_setting(
     })?;
 
     // Reload scheduler when deduplication settings are updated
-    if key.starts_with("deduplication.") {
+    if setting_key.starts_with("deduplication.") {
         if let Some(scheduler) = &state.scheduler {
             if let Err(e) = scheduler.lock().await.reload_schedules().await {
                 tracing::warn!(
@@ -282,9 +282,9 @@ pub async fn bulk_update_settings(
 /// Reset setting to default value (admin only)
 #[utoipa::path(
     post,
-    path = "/api/v1/admin/settings/{key}/reset",
+    path = "/api/v1/admin/settings/{setting_key}/reset",
     params(
-        ("key" = String, Path, description = "Setting key (e.g., scanner.max_concurrent_scans)")
+        ("setting_key" = String, Path, description = "Setting key (e.g., scanner.max_concurrent_scans)")
     ),
     responses(
         (status = 200, description = "Setting reset to default", body = SettingDto),
@@ -301,7 +301,7 @@ pub async fn reset_setting(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     client_info: crate::api::extractors::ClientInfo,
-    Path(key): Path<String>,
+    Path(setting_key): Path<String>,
 ) -> Result<Json<SettingDto>, ApiError> {
     require_admin!(auth)?;
 
@@ -309,7 +309,7 @@ pub async fn reset_setting(
 
     let setting = SettingsRepository::reset_to_default(
         &state.db,
-        &key,
+        &setting_key,
         auth.user_id,
         Some("Reset to default via admin API".to_string()),
         ip_address,
@@ -339,9 +339,9 @@ pub async fn reset_setting(
 /// Get setting history (admin only)
 #[utoipa::path(
     get,
-    path = "/api/v1/admin/settings/{key}/history",
+    path = "/api/v1/admin/settings/{setting_key}/history",
     params(
-        ("key" = String, Path, description = "Setting key (e.g., scanner.max_concurrent_scans)"),
+        ("setting_key" = String, Path, description = "Setting key (e.g., scanner.max_concurrent_scans)"),
         ("limit" = Option<i64>, Query, description = "Maximum number of history entries to return")
     ),
     responses(
@@ -358,12 +358,12 @@ pub async fn reset_setting(
 pub async fn get_setting_history(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Path(key): Path<String>,
+    Path(setting_key): Path<String>,
     Query(query): Query<HistoryQuery>,
 ) -> Result<Json<Vec<SettingHistoryDto>>, ApiError> {
     require_admin!(auth)?;
 
-    let history = SettingsRepository::get_history(&state.db, &key, query.limit)
+    let history = SettingsRepository::get_history(&state.db, &setting_key, query.limit)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch setting history: {}", e)))?;
 

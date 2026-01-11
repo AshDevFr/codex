@@ -134,9 +134,9 @@ pub async fn get_page_image(
 /// Extracts the first page and resizes it to a thumbnail (max 400px width/height)
 #[utoipa::path(
     get,
-    path = "/api/v1/books/{id}/thumbnail",
+    path = "/api/v1/books/{book_id}/thumbnail",
     params(
-        ("id" = Uuid, Path, description = "Book ID"),
+        ("book_id" = Uuid, Path, description = "Book ID"),
     ),
     responses(
         (status = 200, description = "Thumbnail image", content_type = "image/jpeg"),

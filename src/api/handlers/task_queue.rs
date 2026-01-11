@@ -215,9 +215,9 @@ pub async fn list_tasks(
 /// - `tasks:read`
 #[utoipa::path(
     get,
-    path = "/api/v1/tasks/{id}",
+    path = "/api/v1/tasks/{task_id}",
     params(
-        ("id" = Uuid, Path, description = "Task ID")
+        ("task_id" = Uuid, Path, description = "Task ID")
     ),
     responses(
         (status = 200, description = "Task retrieved successfully", body = TaskResponse),
@@ -291,9 +291,9 @@ pub async fn create_task(
 /// - `tasks:write`
 #[utoipa::path(
     post,
-    path = "/api/v1/tasks/{id}/cancel",
+    path = "/api/v1/tasks/{task_id}/cancel",
     params(
-        ("id" = Uuid, Path, description = "Task ID")
+        ("task_id" = Uuid, Path, description = "Task ID")
     ),
     responses(
         (status = 200, description = "Task cancelled successfully", body = MessageResponse),
@@ -338,9 +338,9 @@ pub async fn cancel_task(
 /// - `tasks:write`
 #[utoipa::path(
     post,
-    path = "/api/v1/tasks/{id}/unlock",
+    path = "/api/v1/tasks/{task_id}/unlock",
     params(
-        ("id" = Uuid, Path, description = "Task ID")
+        ("task_id" = Uuid, Path, description = "Task ID")
     ),
     responses(
         (status = 200, description = "Task unlocked successfully", body = MessageResponse),
@@ -382,9 +382,9 @@ pub async fn unlock_task(
 /// - `tasks:write`
 #[utoipa::path(
     post,
-    path = "/api/v1/tasks/{id}/retry",
+    path = "/api/v1/tasks/{task_id}/retry",
     params(
-        ("id" = Uuid, Path, description = "Task ID")
+        ("task_id" = Uuid, Path, description = "Task ID")
     ),
     responses(
         (status = 200, description = "Task queued for retry", body = MessageResponse),

@@ -1054,6 +1054,51 @@
         ]
       }
     },
+    "/api/v1/books/{book_id}/adjacent": {
+      "get": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Get adjacent books in the same series",
+        "description": "Returns the previous and next books relative to the requested book,\nordered by book number within the series.",
+        "operationId": "get_adjacent_books",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Adjacent books",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdjacentBooksResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/{book_id}/pages/{page_number}": {
       "get": {
         "tags": [
@@ -7358,6 +7403,34 @@
             "type": "string",
             "description": "Name of the tag to add\nThe tag will be created if it doesn't exist",
             "example": "Favorite"
+          }
+        }
+      },
+      "AdjacentBooksResponse": {
+        "type": "object",
+        "description": "Response containing adjacent books in the same series\n\nReturns the previous and next books relative to the requested book,\nordered by book number within the series.",
+        "properties": {
+          "next": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BookDto",
+                "description": "The next book in the series (higher number), if any"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BookDto",
+                "description": "The previous book in the series (lower number), if any"
+              }
+            ]
           }
         }
       },

@@ -16,6 +16,7 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { booksApi } from "@/api/books";
 import { seriesApi } from "@/api/series";
 import type { Book, Series } from "@/types";
@@ -28,6 +29,20 @@ interface MediaCardProps {
 
 export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 	const queryClient = useQueryClient();
+	const navigate = useNavigate();
+
+	// Handle card click navigation
+	const handleCardClick = (e: React.MouseEvent) => {
+		// Don't navigate if clicking the menu button or dropdown
+		if ((e.target as HTMLElement).closest("[data-menu]")) return;
+
+		if (type === "series") {
+			navigate(`/series/${(data as Series).id}`);
+		} else {
+			navigate(`/books/${(data as Book).id}`);
+		}
+	};
+
 	// Use API endpoint directly - browser will send auth cookie automatically
 	const coverUrl =
 		type === "book"
@@ -233,6 +248,7 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 			padding={0}
 			radius="md"
 			withBorder
+			onClick={handleCardClick}
 			style={{
 				height: "100%",
 				display: "flex",
@@ -242,6 +258,7 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 				boxSizing: "border-box", // Include border in width calculation
 				animation: isNew ? "fadeIn 0.5s ease-in" : undefined,
 				border: isNew ? "2px solid var(--mantine-color-blue-6)" : undefined,
+				cursor: "pointer",
 			}}
 		>
 			<Stack gap={0} style={{ height: "100%", minHeight: 0 }}>
@@ -308,6 +325,7 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 					)}
 					{/* Menu overlay */}
 					<div
+						data-menu
 						style={{
 							position: "absolute",
 							bottom: 8,

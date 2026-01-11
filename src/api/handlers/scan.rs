@@ -31,9 +31,9 @@ use super::AppState;
 /// - `libraries:write`
 #[utoipa::path(
     post,
-    path = "/api/v1/libraries/{id}/scan",
+    path = "/api/v1/libraries/{library_id}/scan",
     params(
-        ("id" = Uuid, Path, description = "Library ID"),
+        ("library_id" = Uuid, Path, description = "Library ID"),
         ("mode" = Option<String>, Query, description = "Scan mode: 'normal' or 'deep' (default: 'normal')")
     ),
     responses(
@@ -120,9 +120,9 @@ pub async fn trigger_scan(
 /// - `libraries:read`
 #[utoipa::path(
     get,
-    path = "/api/v1/libraries/{id}/scan-status",
+    path = "/api/v1/libraries/{library_id}/scan-status",
     params(
-        ("id" = Uuid, Path, description = "Library ID")
+        ("library_id" = Uuid, Path, description = "Library ID")
     ),
     responses(
         (status = 200, description = "Scan status retrieved", body = ScanStatusDto),
@@ -180,9 +180,9 @@ pub async fn get_scan_status(
 /// - `libraries:write`
 #[utoipa::path(
     post,
-    path = "/api/v1/libraries/{id}/scan/cancel",
+    path = "/api/v1/libraries/{library_id}/scan/cancel",
     params(
-        ("id" = Uuid, Path, description = "Library ID")
+        ("library_id" = Uuid, Path, description = "Library ID")
     ),
     responses(
         (status = 204, description = "Scan cancelled successfully"),
@@ -405,9 +405,9 @@ pub async fn scan_progress_stream(
 /// Returns immediately with a task_id to track progress.
 #[utoipa::path(
     post,
-    path = "/api/v1/series/{id}/analyze",
+    path = "/api/v1/series/{series_id}/analyze",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
         (status = 200, description = "Analysis task enqueued successfully", body = CreateTaskResponse),
@@ -454,9 +454,9 @@ pub async fn trigger_series_analysis(
 /// Returns immediately with a task_id to track progress.
 #[utoipa::path(
     post,
-    path = "/api/v1/books/{id}/analyze",
+    path = "/api/v1/books/{book_id}/analyze",
     params(
-        ("id" = Uuid, Path, description = "Book ID")
+        ("book_id" = Uuid, Path, description = "Book ID")
     ),
     responses(
         (status = 200, description = "Analysis task enqueued successfully", body = CreateTaskResponse),
@@ -507,9 +507,9 @@ pub async fn trigger_book_analysis(
 /// Returns immediately with a task_id to track progress.
 #[utoipa::path(
     post,
-    path = "/api/v1/libraries/{id}/analyze",
+    path = "/api/v1/libraries/{library_id}/analyze",
     params(
-        ("id" = Uuid, Path, description = "Library ID")
+        ("library_id" = Uuid, Path, description = "Library ID")
     ),
     responses(
         (status = 200, description = "Analysis tasks enqueued successfully", body = CreateTaskResponse),
@@ -610,9 +610,9 @@ pub async fn trigger_library_analysis(
 /// Returns immediately with a task_id to track progress.
 #[utoipa::path(
     post,
-    path = "/api/v1/libraries/{id}/analyze-unanalyzed",
+    path = "/api/v1/libraries/{library_id}/analyze-unanalyzed",
     params(
-        ("id" = Uuid, Path, description = "Library ID")
+        ("library_id" = Uuid, Path, description = "Library ID")
     ),
     responses(
         (status = 200, description = "Analysis tasks enqueued successfully", body = CreateTaskResponse),
@@ -708,9 +708,9 @@ pub async fn trigger_library_unanalyzed_analysis(
 /// Returns immediately with a task_id to track progress.
 #[utoipa::path(
     post,
-    path = "/api/v1/series/{id}/analyze-unanalyzed",
+    path = "/api/v1/series/{series_id}/analyze-unanalyzed",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
         (status = 200, description = "Analysis tasks enqueued successfully", body = CreateTaskResponse),
@@ -805,9 +805,9 @@ pub async fn trigger_series_unanalyzed_analysis(
 /// Returns immediately with a task_id to track progress.
 #[utoipa::path(
     post,
-    path = "/api/v1/books/{id}/analyze-unanalyzed",
+    path = "/api/v1/books/{book_id}/analyze-unanalyzed",
     params(
-        ("id" = Uuid, Path, description = "Book ID")
+        ("book_id" = Uuid, Path, description = "Book ID")
     ),
     responses(
         (status = 200, description = "Analysis task enqueued successfully", body = CreateTaskResponse),

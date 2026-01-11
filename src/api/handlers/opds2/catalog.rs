@@ -135,9 +135,9 @@ pub async fn opds2_libraries(
 /// Returns a navigation feed with all series in the specified library
 #[utoipa::path(
     get,
-    path = "/opds/v2/libraries/{id}",
+    path = "/opds/v2/libraries/{library_id}",
     params(
-        ("id" = Uuid, Path, description = "Library ID"),
+        ("library_id" = Uuid, Path, description = "Library ID"),
         OpdsPaginationParams
     ),
     responses(
@@ -240,9 +240,9 @@ pub async fn opds2_library_series(
 /// Returns a publications feed with all books in the specified series
 #[utoipa::path(
     get,
-    path = "/opds/v2/series/{id}",
+    path = "/opds/v2/series/{series_id}",
     params(
-        ("id" = Uuid, Path, description = "Series ID"),
+        ("series_id" = Uuid, Path, description = "Series ID"),
     ),
     responses(
         (status = 200, description = "OPDS 2.0 series books feed", content_type = "application/opds+json", body = Opds2Feed),

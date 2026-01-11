@@ -344,6 +344,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/adjacent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get adjacent books in the same series
+         * @description Returns the previous and next books relative to the requested book,
+         *     ordered by book number within the series.
+         */
+        get: operations["get_adjacent_books"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/pages/{page_number}": {
         parameters: {
             query?: never;
@@ -2574,6 +2595,16 @@ export interface components {
              * @example Favorite
              */
             name: string;
+        };
+        /**
+         * @description Response containing adjacent books in the same series
+         *
+         *     Returns the previous and next books relative to the requested book,
+         *     ordered by book number within the series.
+         */
+        AdjacentBooksResponse: {
+            next?: null | components["schemas"]["BookDto"];
+            prev?: null | components["schemas"]["BookDto"];
         };
         /** @description Alternate title data transfer object */
         AlternateTitleDto: {
@@ -6967,6 +6998,36 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_adjacent_books: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Adjacent books */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdjacentBooksResponse"];
+                };
+            };
+            /** @description Book not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

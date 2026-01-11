@@ -76,9 +76,9 @@ pub async fn list_api_keys(
 /// Users can only get their own keys unless they are admin
 #[utoipa::path(
     get,
-    path = "/api/v1/api-keys/{id}",
+    path = "/api/v1/api-keys/{api_key_id}",
     params(
-        ("id" = Uuid, Path, description = "API key ID")
+        ("api_key_id" = Uuid, Path, description = "API key ID")
     ),
     responses(
         (status = 200, description = "API key details", body = ApiKeyDto),
@@ -94,11 +94,11 @@ pub async fn list_api_keys(
 pub async fn get_api_key(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Path(id): Path<Uuid>,
+    Path(api_key_id): Path<Uuid>,
 ) -> Result<Json<ApiKeyDto>, ApiError> {
     auth.require_permission(&Permission::ApiKeysRead)?;
 
-    let key = ApiKeyRepository::get_by_id(&state.db, id)
+    let key = ApiKeyRepository::get_by_id(&state.db, api_key_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch API key: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("API key not found".to_string()))?;
@@ -216,9 +216,9 @@ pub async fn create_api_key(
 /// Users can only update their own keys unless they are admin
 #[utoipa::path(
     patch,
-    path = "/api/v1/api-keys/{id}",
+    path = "/api/v1/api-keys/{api_key_id}",
     params(
-        ("id" = Uuid, Path, description = "API key ID")
+        ("api_key_id" = Uuid, Path, description = "API key ID")
     ),
     request_body = UpdateApiKeyRequest,
     responses(
@@ -235,13 +235,13 @@ pub async fn create_api_key(
 pub async fn update_api_key(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Path(id): Path<Uuid>,
+    Path(api_key_id): Path<Uuid>,
     Json(request): Json<UpdateApiKeyRequest>,
 ) -> Result<Json<ApiKeyDto>, ApiError> {
     auth.require_permission(&Permission::ApiKeysWrite)?;
 
     // Fetch existing API key
-    let key = ApiKeyRepository::get_by_id(&state.db, id)
+    let key = ApiKeyRepository::get_by_id(&state.db, api_key_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch API key: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("API key not found".to_string()))?;
@@ -322,9 +322,9 @@ pub async fn update_api_key(
 /// Users can only delete their own keys unless they are admin
 #[utoipa::path(
     delete,
-    path = "/api/v1/api-keys/{id}",
+    path = "/api/v1/api-keys/{api_key_id}",
     params(
-        ("id" = Uuid, Path, description = "API key ID")
+        ("api_key_id" = Uuid, Path, description = "API key ID")
     ),
     responses(
         (status = 204, description = "API key deleted"),
@@ -340,12 +340,12 @@ pub async fn update_api_key(
 pub async fn delete_api_key(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Path(id): Path<Uuid>,
+    Path(api_key_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     auth.require_permission(&Permission::ApiKeysDelete)?;
 
     // Fetch existing API key to check ownership
-    let key = ApiKeyRepository::get_by_id(&state.db, id)
+    let key = ApiKeyRepository::get_by_id(&state.db, api_key_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch API key: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("API key not found".to_string()))?;
@@ -357,7 +357,7 @@ pub async fn delete_api_key(
         ));
     }
 
-    ApiKeyRepository::delete(&state.db, id)
+    ApiKeyRepository::delete(&state.db, api_key_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to delete API key: {}", e)))?;
 

@@ -413,3 +413,18 @@ pub struct BookMetadataResponse {
     #[schema(example = "2024-01-15T10:30:00Z")]
     pub updated_at: DateTime<Utc>,
 }
+
+/// Response containing adjacent books in the same series
+///
+/// Returns the previous and next books relative to the requested book,
+/// ordered by book number within the series.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AdjacentBooksResponse {
+    /// The previous book in the series (lower number), if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prev: Option<BookDto>,
+    /// The next book in the series (higher number), if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next: Option<BookDto>,
+}

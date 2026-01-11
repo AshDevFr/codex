@@ -193,9 +193,9 @@ pub async fn opds_list_libraries(
 /// Returns an acquisition feed with all series in the specified library
 #[utoipa::path(
     get,
-    path = "/opds/libraries/{id}",
+    path = "/opds/libraries/{library_id}",
     params(
-        ("id" = Uuid, Path, description = "Library ID"),
+        ("library_id" = Uuid, Path, description = "Library ID"),
         OpdsPaginationParams
     ),
     responses(
@@ -318,9 +318,9 @@ pub async fn opds_library_series(
 /// Returns an acquisition feed with all books in the specified series
 #[utoipa::path(
     get,
-    path = "/opds/series/{id}",
+    path = "/opds/series/{series_id}",
     params(
-        ("id" = Uuid, Path, description = "Series ID"),
+        ("series_id" = Uuid, Path, description = "Series ID"),
     ),
     responses(
         (status = 200, description = "OPDS series books feed", content_type = "application/atom+xml"),

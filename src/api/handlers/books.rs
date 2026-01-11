@@ -1,5 +1,8 @@
 use crate::api::{
-    dto::{BookDetailResponse, BookDto, BookListResponse, BookMetadataDto, PaginationParams},
+    dto::{
+        AdjacentBooksResponse, BookDetailResponse, BookDto, BookListRequest, BookListResponse,
+        BookMetadataDto, PaginationParams,
+    },
     error::ApiError,
     extractors::{AuthContext, AuthState},
     permissions::Permission,
@@ -8,6 +11,7 @@ use crate::db::repositories::{
     BookMetadataRepository, BookRepository, ReadProgressRepository, SeriesRepository,
 };
 use crate::require_permission;
+use crate::services::FilterService;
 use axum::{
     body::Body,
     extract::{Path, Query, State},
@@ -16,7 +20,7 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;
@@ -24,6 +28,10 @@ use uuid::Uuid;
 /// Query parameters for listing books
 #[derive(Debug, Deserialize)]
 pub struct BookListQuery {
+    /// Optional library filter
+    #[serde(default)]
+    pub library_id: Option<Uuid>,
+
     /// Optional series filter
     #[serde(default)]
     pub series_id: Option<Uuid>,
@@ -214,6 +222,74 @@ pub async fn list_books(
     Ok(Json(response))
 }
 
+/// List books with advanced filtering
+///
+/// Supports complex filter conditions including nested AllOf/AnyOf logic,
+/// genre/tag filtering with include/exclude, and more.
+#[utoipa::path(
+    post,
+    path = "/api/v1/books/list",
+    request_body = BookListRequest,
+    responses(
+        (status = 200, description = "Paginated list of filtered books", body = BookListResponse),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn list_books_filtered(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Json(request): Json<BookListRequest>,
+) -> Result<Json<BookListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Validate and normalize pagination params
+    let page_size = if request.page_size == 0 {
+        default_page_size()
+    } else {
+        request.page_size.min(100)
+    };
+
+    // If there's a condition, evaluate it to get matching book IDs
+    let filtered_ids: Option<HashSet<Uuid>> = if let Some(ref condition) = request.condition {
+        let matching = FilterService::get_matching_books(&state.db, condition, None)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to evaluate filter: {}", e)))?;
+        Some(matching)
+    } else {
+        None
+    };
+
+    // Fetch books based on filter results
+    let (books_list, total) = if let Some(ref ids) = filtered_ids {
+        if ids.is_empty() {
+            // No matches, return empty response
+            (vec![], 0)
+        } else {
+            // Fetch books by IDs with pagination
+            let id_vec: Vec<Uuid> = ids.iter().cloned().collect();
+            BookRepository::list_by_ids(&state.db, &id_vec, request.page, page_size)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
+        }
+    } else {
+        // No filter, fetch all books
+        BookRepository::list_all(&state.db, false, request.page, page_size)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
+    };
+
+    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
+
+    let response = BookListResponse::new(dtos, request.page, page_size, total);
+
+    Ok(Json(response))
+}
+
 /// List books with analysis errors
 #[utoipa::path(
     get,
@@ -316,9 +392,9 @@ pub async fn list_library_books_with_errors(
 /// List books with analysis errors in a specific series
 #[utoipa::path(
     get,
-    path = "/api/v1/series/{id}/books/with-errors",
+    path = "/api/v1/series/{series_id}/books/with-errors",
     params(
-        ("id" = Uuid, Path, description = "Series ID"),
+        ("series_id" = Uuid, Path, description = "Series ID"),
         ("page" = Option<u64>, Query, description = "Page number (0-indexed)"),
         ("page_size" = Option<u64>, Query, description = "Number of items per page (max 100)")
     ),
@@ -438,9 +514,9 @@ fn apply_book_sorting(books_list: &mut [crate::db::entities::books::Model], sort
 /// Get book by ID
 #[utoipa::path(
     get,
-    path = "/api/v1/books/{id}",
+    path = "/api/v1/books/{book_id}",
     params(
-        ("id" = Uuid, Path, description = "Book ID")
+        ("book_id" = Uuid, Path, description = "Book ID")
     ),
     responses(
         (status = 200, description = "Book details", body = BookDetailResponse),
@@ -455,17 +531,17 @@ fn apply_book_sorting(books_list: &mut [crate::db::entities::books::Model], sort
 pub async fn get_book(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Path(id): Path<Uuid>,
+    Path(book_id): Path<Uuid>,
 ) -> Result<Json<BookDetailResponse>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    let book = BookRepository::get_by_id(&state.db, id)
+    let book = BookRepository::get_by_id(&state.db, book_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
 
     // Try to fetch metadata
-    let metadata = BookMetadataRepository::get_by_book_id(&state.db, id)
+    let metadata = BookMetadataRepository::get_by_book_id(&state.db, book_id)
         .await
         .ok()
         .flatten()
@@ -500,6 +576,64 @@ pub async fn get_book(
     };
 
     Ok(Json(response))
+}
+
+/// Get adjacent books in the same series
+///
+/// Returns the previous and next books relative to the requested book,
+/// ordered by book number within the series.
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/{book_id}/adjacent",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID"),
+    ),
+    responses(
+        (status = 200, description = "Adjacent books", body = AdjacentBooksResponse),
+        (status = 404, description = "Book not found"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn get_adjacent_books(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+) -> Result<Json<AdjacentBooksResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    let (prev, next) = BookRepository::get_adjacent_in_series(&state.db, book_id)
+        .await
+        .map_err(|e| {
+            if e.to_string().contains("not found") {
+                ApiError::NotFound("Book not found".to_string())
+            } else {
+                ApiError::Internal(format!("Failed to get adjacent books: {}", e))
+            }
+        })?;
+
+    // Convert to DTOs
+    let prev_dto = if let Some(book) = prev {
+        let mut dtos = books_to_dtos(&state.db, auth.user_id, vec![book]).await?;
+        dtos.pop()
+    } else {
+        None
+    };
+
+    let next_dto = if let Some(book) = next {
+        let mut dtos = books_to_dtos(&state.db, auth.user_id, vec![book]).await?;
+        dtos.pop()
+    } else {
+        None
+    };
+
+    Ok(Json(AdjacentBooksResponse {
+        prev: prev_dto,
+        next: next_dto,
+    }))
 }
 
 /// List books in a specific library
@@ -560,6 +694,7 @@ pub async fn list_library_books(
     get,
     path = "/api/v1/books/in-progress",
     params(
+        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID"),
         PaginationParams,
     ),
     responses(
@@ -590,7 +725,7 @@ pub async fn list_in_progress_books(
     let (books_list, total) = BookRepository::list_with_progress(
         &state.db,
         auth.user_id,
-        None,        // all libraries
+        query.library_id,
         Some(false), // only in-progress (not completed)
         query.page,
         page_size,
@@ -662,6 +797,7 @@ pub async fn list_library_in_progress_books(
     get,
     path = "/api/v1/books/on-deck",
     params(
+        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID"),
         PaginationParams,
     ),
     responses(
@@ -692,7 +828,7 @@ pub async fn list_on_deck_books(
     let (books_list, total) = BookRepository::list_on_deck(
         &state.db,
         auth.user_id,
-        None, // all libraries
+        query.library_id,
         query.page,
         page_size,
     )
@@ -762,6 +898,7 @@ pub async fn list_library_on_deck_books(
     get,
     path = "/api/v1/books/recently-added",
     params(
+        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID"),
         PaginationParams,
     ),
     responses(
@@ -790,9 +927,11 @@ pub async fn list_recently_added_books(
 
     // Fetch recently added books
     let (books_list, total) = BookRepository::list_recently_added(
-        &state.db, None,  // all libraries
+        &state.db,
+        query.library_id,
         false, // exclude deleted
-        query.page, page_size,
+        query.page,
+        page_size,
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch recently added books: {}", e)))?;
@@ -861,6 +1000,10 @@ pub struct RecentBooksQuery {
     /// Maximum number of books to return (default: 50)
     #[serde(default = "default_recent_limit")]
     pub limit: u64,
+
+    /// Filter by library ID (optional)
+    #[serde(default)]
+    pub library_id: Option<Uuid>,
 }
 
 fn default_recent_limit() -> u64 {
@@ -872,7 +1015,8 @@ fn default_recent_limit() -> u64 {
     get,
     path = "/api/v1/books/recently-read",
     params(
-        ("limit" = Option<u64>, Query, description = "Maximum number of books to return (default: 50)")
+        ("limit" = Option<u64>, Query, description = "Maximum number of books to return (default: 50)"),
+        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID")
     ),
     responses(
         (status = 200, description = "List of recently read books", body = Vec<BookDto>),
@@ -891,7 +1035,7 @@ pub async fn list_recently_read_books(
 ) -> Result<Json<Vec<BookDto>>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    let books_list = BookRepository::list_recently_read(&state.db, auth.user_id, None, query.limit)
+    let books_list = BookRepository::list_recently_read(&state.db, auth.user_id, query.library_id, query.limit)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch recently read books: {}", e)))?;
 
@@ -944,9 +1088,9 @@ pub async fn list_library_recently_read_books(
 /// Used by OPDS clients for acquisition links.
 #[utoipa::path(
     get,
-    path = "/api/v1/books/{id}/file",
+    path = "/api/v1/books/{book_id}/file",
     params(
-        ("id" = Uuid, Path, description = "Book ID")
+        ("book_id" = Uuid, Path, description = "Book ID")
     ),
     responses(
         (status = 200, description = "Book file", content_type = "application/octet-stream"),
@@ -1032,9 +1176,9 @@ use sea_orm::{ActiveModelTrait, Set};
 /// If no metadata record exists, one will be created.
 #[utoipa::path(
     put,
-    path = "/api/v1/books/{id}/metadata",
+    path = "/api/v1/books/{book_id}/metadata",
     params(
-        ("id" = Uuid, Path, description = "Book ID")
+        ("book_id" = Uuid, Path, description = "Book ID")
     ),
     request_body = ReplaceBookMetadataRequest,
     responses(
@@ -1185,9 +1329,9 @@ pub async fn replace_book_metadata(
 /// If no metadata record exists, one will be created with the provided fields.
 #[utoipa::path(
     patch,
-    path = "/api/v1/books/{id}/metadata",
+    path = "/api/v1/books/{book_id}/metadata",
     params(
-        ("id" = Uuid, Path, description = "Book ID")
+        ("book_id" = Uuid, Path, description = "Book ID")
     ),
     request_body = PatchBookMetadataRequest,
     responses(

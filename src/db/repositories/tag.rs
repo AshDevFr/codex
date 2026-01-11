@@ -250,6 +250,122 @@ impl TagRepository {
         Ok(result_ids)
     }
 
+    /// Get all series IDs that have a specific tag (alias for get_series_ids_by_tag_name)
+    pub async fn get_series_with_tag(db: &DatabaseConnection, tag_name: &str) -> Result<Vec<Uuid>> {
+        Self::get_series_ids_by_tag_name(db, tag_name).await
+    }
+
+    /// Get all series IDs that have any tag containing the given substring (case-insensitive)
+    pub async fn get_series_with_tag_containing(
+        db: &DatabaseConnection,
+        substring: &str,
+    ) -> Result<Vec<Uuid>> {
+        use crate::db::entities::series_tags::Entity as SeriesTags;
+
+        let normalized = substring.to_lowercase();
+
+        let matching_tags: Vec<tags::Model> = Tags::find()
+            .filter(tags::Column::NormalizedName.contains(&normalized))
+            .all(db)
+            .await?;
+
+        if matching_tags.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let tag_ids: Vec<Uuid> = matching_tags.iter().map(|t| t.id).collect();
+
+        let series_ids: Vec<Uuid> = SeriesTags::find()
+            .filter(series_tags::Column::TagId.is_in(tag_ids))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|st| st.series_id)
+            .collect();
+
+        let unique: std::collections::HashSet<Uuid> = series_ids.into_iter().collect();
+        Ok(unique.into_iter().collect())
+    }
+
+    /// Get all series IDs that have any tag starting with the given prefix (case-insensitive)
+    pub async fn get_series_with_tag_starting_with(
+        db: &DatabaseConnection,
+        prefix: &str,
+    ) -> Result<Vec<Uuid>> {
+        use crate::db::entities::series_tags::Entity as SeriesTags;
+
+        let normalized = prefix.to_lowercase();
+
+        let matching_tags: Vec<tags::Model> = Tags::find()
+            .filter(tags::Column::NormalizedName.starts_with(&normalized))
+            .all(db)
+            .await?;
+
+        if matching_tags.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let tag_ids: Vec<Uuid> = matching_tags.iter().map(|t| t.id).collect();
+
+        let series_ids: Vec<Uuid> = SeriesTags::find()
+            .filter(series_tags::Column::TagId.is_in(tag_ids))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|st| st.series_id)
+            .collect();
+
+        let unique: std::collections::HashSet<Uuid> = series_ids.into_iter().collect();
+        Ok(unique.into_iter().collect())
+    }
+
+    /// Get all series IDs that have any tag ending with the given suffix (case-insensitive)
+    pub async fn get_series_with_tag_ending_with(
+        db: &DatabaseConnection,
+        suffix: &str,
+    ) -> Result<Vec<Uuid>> {
+        use crate::db::entities::series_tags::Entity as SeriesTags;
+
+        let normalized = suffix.to_lowercase();
+
+        let matching_tags: Vec<tags::Model> = Tags::find()
+            .filter(tags::Column::NormalizedName.ends_with(&normalized))
+            .all(db)
+            .await?;
+
+        if matching_tags.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let tag_ids: Vec<Uuid> = matching_tags.iter().map(|t| t.id).collect();
+
+        let series_ids: Vec<Uuid> = SeriesTags::find()
+            .filter(series_tags::Column::TagId.is_in(tag_ids))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|st| st.series_id)
+            .collect();
+
+        let unique: std::collections::HashSet<Uuid> = series_ids.into_iter().collect();
+        Ok(unique.into_iter().collect())
+    }
+
+    /// Get all series IDs that have at least one tag
+    pub async fn get_all_series_with_tags(db: &DatabaseConnection) -> Result<Vec<Uuid>> {
+        use crate::db::entities::series_tags::Entity as SeriesTags;
+
+        let series_ids: Vec<Uuid> = SeriesTags::find()
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|st| st.series_id)
+            .collect();
+
+        let unique: std::collections::HashSet<Uuid> = series_ids.into_iter().collect();
+        Ok(unique.into_iter().collect())
+    }
+
     /// Delete all unused tags (tags with no series linked)
     /// Returns the names of deleted tags
     pub async fn delete_unused(db: &DatabaseConnection) -> Result<Vec<String>> {

@@ -250,6 +250,126 @@ impl GenreRepository {
         Ok(result_ids)
     }
 
+    /// Get all series IDs that have a specific genre (alias for get_series_ids_by_genre_name)
+    pub async fn get_series_with_genre(db: &DatabaseConnection, genre_name: &str) -> Result<Vec<Uuid>> {
+        Self::get_series_ids_by_genre_name(db, genre_name).await
+    }
+
+    /// Get all series IDs that have any genre containing the given substring (case-insensitive)
+    pub async fn get_series_with_genre_containing(
+        db: &DatabaseConnection,
+        substring: &str,
+    ) -> Result<Vec<Uuid>> {
+        use crate::db::entities::series_genres::Entity as SeriesGenres;
+
+        let normalized = substring.to_lowercase();
+
+        // Find all genres containing the substring
+        let matching_genres: Vec<genres::Model> = Genres::find()
+            .filter(genres::Column::NormalizedName.contains(&normalized))
+            .all(db)
+            .await?;
+
+        if matching_genres.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let genre_ids: Vec<Uuid> = matching_genres.iter().map(|g| g.id).collect();
+
+        // Get all series with any of these genres
+        let series_ids: Vec<Uuid> = SeriesGenres::find()
+            .filter(series_genres::Column::GenreId.is_in(genre_ids))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|sg| sg.series_id)
+            .collect();
+
+        // Deduplicate
+        let unique: std::collections::HashSet<Uuid> = series_ids.into_iter().collect();
+        Ok(unique.into_iter().collect())
+    }
+
+    /// Get all series IDs that have any genre starting with the given prefix (case-insensitive)
+    pub async fn get_series_with_genre_starting_with(
+        db: &DatabaseConnection,
+        prefix: &str,
+    ) -> Result<Vec<Uuid>> {
+        use crate::db::entities::series_genres::Entity as SeriesGenres;
+
+        let normalized = prefix.to_lowercase();
+
+        let matching_genres: Vec<genres::Model> = Genres::find()
+            .filter(genres::Column::NormalizedName.starts_with(&normalized))
+            .all(db)
+            .await?;
+
+        if matching_genres.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let genre_ids: Vec<Uuid> = matching_genres.iter().map(|g| g.id).collect();
+
+        let series_ids: Vec<Uuid> = SeriesGenres::find()
+            .filter(series_genres::Column::GenreId.is_in(genre_ids))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|sg| sg.series_id)
+            .collect();
+
+        let unique: std::collections::HashSet<Uuid> = series_ids.into_iter().collect();
+        Ok(unique.into_iter().collect())
+    }
+
+    /// Get all series IDs that have any genre ending with the given suffix (case-insensitive)
+    pub async fn get_series_with_genre_ending_with(
+        db: &DatabaseConnection,
+        suffix: &str,
+    ) -> Result<Vec<Uuid>> {
+        use crate::db::entities::series_genres::Entity as SeriesGenres;
+
+        let normalized = suffix.to_lowercase();
+
+        let matching_genres: Vec<genres::Model> = Genres::find()
+            .filter(genres::Column::NormalizedName.ends_with(&normalized))
+            .all(db)
+            .await?;
+
+        if matching_genres.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let genre_ids: Vec<Uuid> = matching_genres.iter().map(|g| g.id).collect();
+
+        let series_ids: Vec<Uuid> = SeriesGenres::find()
+            .filter(series_genres::Column::GenreId.is_in(genre_ids))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|sg| sg.series_id)
+            .collect();
+
+        let unique: std::collections::HashSet<Uuid> = series_ids.into_iter().collect();
+        Ok(unique.into_iter().collect())
+    }
+
+    /// Get all series IDs that have at least one genre
+    pub async fn get_all_series_with_genres(db: &DatabaseConnection) -> Result<Vec<Uuid>> {
+        use crate::db::entities::series_genres::Entity as SeriesGenres;
+
+        let series_ids: Vec<Uuid> = SeriesGenres::find()
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|sg| sg.series_id)
+            .collect();
+
+        // Deduplicate
+        let unique: std::collections::HashSet<Uuid> = series_ids.into_iter().collect();
+        Ok(unique.into_iter().collect())
+    }
+
     /// Delete all unused genres (genres with no series linked)
     /// Returns the names of deleted genres
     pub async fn delete_unused(db: &DatabaseConnection) -> Result<Vec<String>> {

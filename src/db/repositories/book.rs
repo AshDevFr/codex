@@ -120,6 +120,47 @@ impl BookRepository {
             .context("Failed to list books by series")
     }
 
+    /// Get the adjacent (previous and next) books in the same series
+    ///
+    /// Returns books ordered by number, then title, then filename.
+    /// Previous is the book that comes before the given book, next is after.
+    pub async fn get_adjacent_in_series(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+    ) -> Result<(Option<books::Model>, Option<books::Model>)> {
+        // First get the target book
+        let book = Self::get_by_id(db, book_id)
+            .await?
+            .context("Book not found")?;
+
+        // Get all non-deleted books in the series, ordered
+        let all_books = Books::find()
+            .filter(books::Column::SeriesId.eq(book.series_id))
+            .filter(books::Column::Deleted.eq(false))
+            .order_by_asc(books::Column::Number)
+            .order_by_asc(books::Column::Title)
+            .order_by_asc(books::Column::FileName)
+            .all(db)
+            .await
+            .context("Failed to list books in series")?;
+
+        // Find the position of the target book
+        let position = all_books.iter().position(|b| b.id == book_id);
+
+        match position {
+            Some(pos) => {
+                let prev = if pos > 0 {
+                    all_books.get(pos - 1).cloned()
+                } else {
+                    None
+                };
+                let next = all_books.get(pos + 1).cloned();
+                Ok((prev, next))
+            }
+            None => Ok((None, None)),
+        }
+    }
+
     /// List all books with pagination
     pub async fn list_all(
         db: &DatabaseConnection,
@@ -150,6 +191,35 @@ impl BookRepository {
             .all(db)
             .await
             .context("Failed to list all books")?;
+
+        Ok((books, total))
+    }
+
+    /// List books by their IDs with pagination
+    pub async fn list_by_ids(
+        db: &DatabaseConnection,
+        ids: &[Uuid],
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        if ids.is_empty() {
+            return Ok((vec![], 0));
+        }
+
+        // Total count is the number of IDs
+        let total = ids.len() as u64;
+
+        // Get paginated results
+        let books = Books::find()
+            .filter(books::Column::Id.is_in(ids.to_vec()))
+            .filter(books::Column::Deleted.eq(false))
+            .order_by_asc(books::Column::Title)
+            .order_by_asc(books::Column::FileName)
+            .offset(page * page_size)
+            .limit(page_size)
+            .all(db)
+            .await
+            .context("Failed to list books by IDs")?;
 
         Ok((books, total))
     }

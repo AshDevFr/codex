@@ -85,9 +85,9 @@ pub async fn list_libraries(
 /// Get library by ID
 #[utoipa::path(
     get,
-    path = "/api/v1/libraries/{id}",
+    path = "/api/v1/libraries/{library_id}",
     params(
-        ("id" = Uuid, Path, description = "Library ID")
+        ("library_id" = Uuid, Path, description = "Library ID")
     ),
     responses(
         (status = 200, description = "Library details", body = LibraryDto),
@@ -102,11 +102,11 @@ pub async fn list_libraries(
 pub async fn get_library(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Path(id): Path<Uuid>,
+    Path(library_id): Path<Uuid>,
 ) -> Result<Json<LibraryDto>, ApiError> {
     require_permission!(auth, Permission::LibrariesRead)?;
 
-    let library = LibraryRepository::get_by_id(&state.db, id)
+    let library = LibraryRepository::get_by_id(&state.db, library_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch library: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
@@ -205,9 +205,9 @@ pub async fn create_library(
 /// Update a library (partial update)
 #[utoipa::path(
     patch,
-    path = "/api/v1/libraries/{id}",
+    path = "/api/v1/libraries/{library_id}",
     params(
-        ("id" = Uuid, Path, description = "Library ID")
+        ("library_id" = Uuid, Path, description = "Library ID")
     ),
     request_body = UpdateLibraryRequest,
     responses(
@@ -224,13 +224,13 @@ pub async fn create_library(
 pub async fn update_library(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Path(id): Path<Uuid>,
+    Path(library_id): Path<Uuid>,
     Json(request): Json<UpdateLibraryRequest>,
 ) -> Result<Json<LibraryDto>, ApiError> {
     require_permission!(auth, Permission::LibrariesWrite)?;
 
     // Fetch existing library
-    let mut library = LibraryRepository::get_by_id(&state.db, id)
+    let mut library = LibraryRepository::get_by_id(&state.db, library_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch library: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
@@ -279,7 +279,9 @@ pub async fn update_library(
         use crate::events::{EntityChangeEvent, EntityEvent};
 
         let event = EntityChangeEvent {
-            event: EntityEvent::LibraryUpdated { library_id: id },
+            event: EntityEvent::LibraryUpdated {
+                library_id,
+            },
             user_id: Some(auth.user_id),
             timestamp: Utc::now(),
         };
@@ -287,14 +289,14 @@ pub async fn update_library(
         if let Err(e) = state.event_broadcaster.emit(event) {
             tracing::warn!(
                 "Failed to emit LibraryUpdated event for library {}: {:?}",
-                id,
+                library_id,
                 e
             );
         }
     }
 
     // Fetch the updated library since update returns ()
-    let updated = LibraryRepository::get_by_id(&state.db, id)
+    let updated = LibraryRepository::get_by_id(&state.db, library_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch updated library: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Library not found after update".to_string()))?;
@@ -313,9 +315,9 @@ pub async fn update_library(
 /// Delete a library
 #[utoipa::path(
     delete,
-    path = "/api/v1/libraries/{id}",
+    path = "/api/v1/libraries/{library_id}",
     params(
-        ("id" = Uuid, Path, description = "Library ID")
+        ("library_id" = Uuid, Path, description = "Library ID")
     ),
     responses(
         (status = 204, description = "Library deleted"),
@@ -331,11 +333,11 @@ pub async fn update_library(
 pub async fn delete_library(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Path(id): Path<Uuid>,
+    Path(library_id): Path<Uuid>,
 ) -> Result<(), ApiError> {
     require_permission!(auth, Permission::LibrariesDelete)?;
 
-    LibraryRepository::delete(&state.db, id)
+    LibraryRepository::delete(&state.db, library_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to delete library: {}", e)))?;
 
@@ -344,7 +346,7 @@ pub async fn delete_library(
         use crate::events::{EntityChangeEvent, EntityEvent};
 
         let event = EntityChangeEvent {
-            event: EntityEvent::LibraryDeleted { library_id: id },
+            event: EntityEvent::LibraryDeleted { library_id },
             user_id: Some(auth.user_id),
             timestamp: Utc::now(),
         };
@@ -352,7 +354,7 @@ pub async fn delete_library(
         if let Err(e) = state.event_broadcaster.emit(event) {
             tracing::warn!(
                 "Failed to emit LibraryDeleted event for library {}: {:?}",
-                id,
+                library_id,
                 e
             );
         }
@@ -372,9 +374,9 @@ pub async fn delete_library(
 /// Purge deleted books from a library
 #[utoipa::path(
     delete,
-    path = "/api/v1/libraries/{id}/purge-deleted",
+    path = "/api/v1/libraries/{library_id}/purge-deleted",
     params(
-        ("id" = Uuid, Path, description = "Library ID")
+        ("library_id" = Uuid, Path, description = "Library ID")
     ),
     responses(
         (status = 200, description = "Number of books purged", body = u64),

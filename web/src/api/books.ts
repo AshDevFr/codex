@@ -1,5 +1,10 @@
-import type { Book, PaginatedResponse } from "@/types";
+import type { Book, PaginatedResponse, components } from "@/types";
 import { api } from "./client";
+
+export type BookDetailResponse = components["schemas"]["BookDetailResponse"];
+export type BookMetadata = components["schemas"]["BookMetadataDto"];
+export type AdjacentBooksResponse =
+	components["schemas"]["AdjacentBooksResponse"];
 
 export interface BookFilters {
 	page?: number;
@@ -18,6 +23,11 @@ export const booksApi = {
 	): Promise<PaginatedResponse<Book>> => {
 		const params = new URLSearchParams();
 
+		// Add library filter if not "all"
+		if (libraryId !== "all") {
+			params.set("library_id", libraryId);
+		}
+
 		if (filters?.page) params.set("page", filters.page.toString());
 		if (filters?.pageSize)
 			params.set("page_size", filters.pageSize.toString());
@@ -27,27 +37,32 @@ export const booksApi = {
 		if (filters?.status) params.set("status", filters.status);
 
 		const queryString = params.toString();
-		const url =
-			libraryId === "all"
-				? `/books${queryString ? `?${queryString}` : ""}`
-				: `/libraries/${libraryId}/books${queryString ? `?${queryString}` : ""}`;
+		const url = `/books${queryString ? `?${queryString}` : ""}`;
 
 		const response = await api.get<PaginatedResponse<Book>>(url);
 		return response.data;
 	},
 
-	// Get a single book by ID
+	// Get a single book by ID (basic info only)
 	getById: async (id: string): Promise<Book> => {
-		const response = await api.get<Book>(`/books/${id}`);
+		const response = await api.get<BookDetailResponse>(`/books/${id}`);
+		return response.data.book;
+	},
+
+	// Get a single book with full details including metadata
+	getDetail: async (id: string): Promise<BookDetailResponse> => {
+		const response = await api.get<BookDetailResponse>(`/books/${id}`);
 		return response.data;
 	},
 
 	// Get books with reading progress (incomplete reads)
 	getInProgress: async (libraryId: string): Promise<Book[]> => {
-		const url =
-			libraryId === "all"
-				? "/books/in-progress"
-				: `/libraries/${libraryId}/books/in-progress`;
+		const params = new URLSearchParams();
+		if (libraryId !== "all") {
+			params.set("library_id", libraryId);
+		}
+		const queryString = params.toString();
+		const url = `/books/in-progress${queryString ? `?${queryString}` : ""}`;
 
 		const response = await api.get<Book[]>(url);
 		return response.data;
@@ -55,10 +70,12 @@ export const booksApi = {
 
 	// Get on-deck books (next unread book in series where user has completed at least one book)
 	getOnDeck: async (libraryId: string): Promise<PaginatedResponse<Book>> => {
-		const url =
-			libraryId === "all"
-				? "/books/on-deck"
-				: `/libraries/${libraryId}/books/on-deck`;
+		const params = new URLSearchParams();
+		if (libraryId !== "all") {
+			params.set("library_id", libraryId);
+		}
+		const queryString = params.toString();
+		const url = `/books/on-deck${queryString ? `?${queryString}` : ""}`;
 
 		const response = await api.get<PaginatedResponse<Book>>(url);
 		return response.data;
@@ -69,10 +86,13 @@ export const booksApi = {
 		libraryId: string,
 		limit = 50,
 	): Promise<Book[]> => {
-		const url =
-			libraryId === "all"
-				? `/books/recently-added?limit=${limit}`
-				: `/libraries/${libraryId}/books/recently-added?limit=${limit}`;
+		const params = new URLSearchParams();
+		if (libraryId !== "all") {
+			params.set("library_id", libraryId);
+		}
+		params.set("limit", limit.toString());
+		const queryString = params.toString();
+		const url = `/books/recently-added?${queryString}`;
 
 		const response = await api.get<Book[]>(url);
 		return response.data;
@@ -108,12 +128,23 @@ export const booksApi = {
 
 	// Get recently read books (ordered by last read activity)
 	getRecentlyRead: async (libraryId: string, limit = 50): Promise<Book[]> => {
-		const url =
-			libraryId === "all"
-				? `/books/recently-read?limit=${limit}`
-				: `/libraries/${libraryId}/books/recently-read?limit=${limit}`;
+		const params = new URLSearchParams();
+		if (libraryId !== "all") {
+			params.set("library_id", libraryId);
+		}
+		params.set("limit", limit.toString());
+		const queryString = params.toString();
+		const url = `/books/recently-read?${queryString}`;
 
 		const response = await api.get<Book[]>(url);
+		return response.data;
+	},
+
+	// Get adjacent books (previous and next) in the same series
+	getAdjacent: async (bookId: string): Promise<AdjacentBooksResponse> => {
+		const response = await api.get<AdjacentBooksResponse>(
+			`/books/${bookId}/adjacent`,
+		);
 		return response.data;
 	},
 };

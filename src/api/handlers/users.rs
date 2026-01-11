@@ -59,9 +59,9 @@ pub async fn list_users(
 /// Get user by ID (admin only)
 #[utoipa::path(
     get,
-    path = "/api/v1/users/{id}",
+    path = "/api/v1/users/{user_id}",
     params(
-        ("id" = Uuid, Path, description = "User ID")
+        ("user_id" = Uuid, Path, description = "User ID")
     ),
     responses(
         (status = 200, description = "User details", body = UserDto),
@@ -77,11 +77,11 @@ pub async fn list_users(
 pub async fn get_user(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Path(id): Path<Uuid>,
+    Path(user_id): Path<Uuid>,
 ) -> Result<Json<UserDto>, ApiError> {
     require_admin!(auth)?;
 
-    let user = UserRepository::get_by_id(&state.db, id)
+    let user = UserRepository::get_by_id(&state.db, user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch user: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("User not found".to_string()))?;
@@ -190,9 +190,9 @@ pub async fn create_user(
 /// Update a user (admin only, partial update)
 #[utoipa::path(
     patch,
-    path = "/api/v1/users/{id}",
+    path = "/api/v1/users/{user_id}",
     params(
-        ("id" = Uuid, Path, description = "User ID")
+        ("user_id" = Uuid, Path, description = "User ID")
     ),
     request_body = UpdateUserRequest,
     responses(
@@ -209,13 +209,13 @@ pub async fn create_user(
 pub async fn update_user(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Path(id): Path<Uuid>,
+    Path(user_id): Path<Uuid>,
     Json(request): Json<UpdateUserRequest>,
 ) -> Result<Json<UserDto>, ApiError> {
     require_admin!(auth)?;
 
     // Fetch existing user
-    let mut user = UserRepository::get_by_id(&state.db, id)
+    let mut user = UserRepository::get_by_id(&state.db, user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch user: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("User not found".to_string()))?;
@@ -224,7 +224,7 @@ pub async fn update_user(
     if let Some(username) = request.username {
         // Check username is not taken by another user
         if let Ok(Some(existing)) = UserRepository::get_by_username(&state.db, &username).await {
-            if existing.id != id {
+            if existing.id != user_id {
                 return Err(ApiError::BadRequest("Username already exists".to_string()));
             }
         }
@@ -234,7 +234,7 @@ pub async fn update_user(
     if let Some(email) = request.email {
         // Check email is not taken by another user
         if let Ok(Some(existing)) = UserRepository::get_by_email(&state.db, &email).await {
-            if existing.id != id {
+            if existing.id != user_id {
                 return Err(ApiError::BadRequest("Email already exists".to_string()));
             }
         }
@@ -298,9 +298,9 @@ pub async fn update_user(
 /// Delete a user (admin only)
 #[utoipa::path(
     delete,
-    path = "/api/v1/users/{id}",
+    path = "/api/v1/users/{user_id}",
     params(
-        ("id" = Uuid, Path, description = "User ID")
+        ("user_id" = Uuid, Path, description = "User ID")
     ),
     responses(
         (status = 204, description = "User deleted"),
@@ -316,18 +316,18 @@ pub async fn update_user(
 pub async fn delete_user(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Path(id): Path<Uuid>,
+    Path(user_id): Path<Uuid>,
 ) -> Result<(), ApiError> {
     require_admin!(auth)?;
 
     // Prevent self-deletion
-    if auth.user_id == id {
+    if auth.user_id == user_id {
         return Err(ApiError::BadRequest(
             "Cannot delete your own account".to_string(),
         ));
     }
 
-    UserRepository::delete(&state.db, id)
+    UserRepository::delete(&state.db, user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to delete user: {}", e)))?;
 

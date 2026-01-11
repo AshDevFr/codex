@@ -111,11 +111,11 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         // Library routes (protected)
         .route("/libraries", get(handlers::list_libraries))
         .route("/libraries", post(handlers::create_library))
-        .route("/libraries/:id", get(handlers::get_library))
-        .route("/libraries/:id", patch(handlers::update_library))
-        .route("/libraries/:id", delete(handlers::delete_library))
+        .route("/libraries/:library_id", get(handlers::get_library))
+        .route("/libraries/:library_id", patch(handlers::update_library))
+        .route("/libraries/:library_id", delete(handlers::delete_library))
         .route(
-            "/libraries/:id/purge-deleted",
+            "/libraries/:library_id/purge-deleted",
             delete(handlers::purge_deleted_books),
         )
         // Library-specific book routes (protected)
@@ -161,15 +161,24 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             get(handlers::list_library_recently_read_books),
         )
         // Scan routes (protected)
-        .route("/libraries/:id/scan", post(handlers::trigger_scan))
-        .route("/libraries/:id/scan-status", get(handlers::get_scan_status))
-        .route("/libraries/:id/scan/cancel", post(handlers::cancel_scan))
         .route(
-            "/libraries/:id/analyze",
+            "/libraries/:library_id/scan",
+            post(handlers::trigger_scan),
+        )
+        .route(
+            "/libraries/:library_id/scan-status",
+            get(handlers::get_scan_status),
+        )
+        .route(
+            "/libraries/:library_id/scan/cancel",
+            post(handlers::cancel_scan),
+        )
+        .route(
+            "/libraries/:library_id/analyze",
             post(handlers::trigger_library_analysis),
         )
         .route(
-            "/libraries/:id/analyze-unanalyzed",
+            "/libraries/:library_id/analyze-unanalyzed",
             post(handlers::trigger_library_unanalyzed_analysis),
         )
         .route("/scans/active", get(handlers::list_active_scans))
@@ -180,10 +189,11 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         // Series routes (protected)
         .route("/series", get(handlers::list_series))
         .route("/series/search", post(handlers::search_series))
-        .route("/series/:id", get(handlers::get_series))
-        .route("/series/:id/books", get(handlers::get_series_books))
+        .route("/series/list", post(handlers::list_series_filtered))
+        .route("/series/:series_id", get(handlers::get_series))
+        .route("/series/:series_id/books", get(handlers::get_series_books))
         .route(
-            "/series/:id/books/with-errors",
+            "/series/:series_id/books/with-errors",
             get(handlers::list_series_books_with_errors),
         )
         // Series collection routes (protected)
@@ -200,141 +210,185 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             get(handlers::list_recently_updated_series),
         )
         .route(
-            "/series/:id/purge-deleted",
+            "/series/:series_id/purge-deleted",
             delete(handlers::purge_series_deleted_books),
         )
-        .route("/series/:id/thumbnail", get(handlers::get_series_thumbnail))
-        .route("/series/:id/cover", post(handlers::upload_series_cover))
         .route(
-            "/series/:id/cover/source",
+            "/series/:series_id/thumbnail",
+            get(handlers::get_series_thumbnail),
+        )
+        .route(
+            "/series/:series_id/cover",
+            post(handlers::upload_series_cover),
+        )
+        .route(
+            "/series/:series_id/cover/source",
             patch(handlers::set_series_cover_source),
         )
         // Series covers routes (multi-cover management)
-        .route("/series/:id/covers", get(handlers::list_series_covers))
         .route(
-            "/series/:id/covers/:cover_id/select",
+            "/series/:series_id/covers",
+            get(handlers::list_series_covers),
+        )
+        .route(
+            "/series/:series_id/covers/:cover_id/select",
             put(handlers::select_series_cover),
         )
         .route(
-            "/series/:id/covers/:cover_id",
+            "/series/:series_id/covers/:cover_id",
             delete(handlers::delete_series_cover),
         )
         .route(
-            "/series/:id/analyze",
+            "/series/:series_id/analyze",
             post(handlers::trigger_series_analysis),
         )
         .route(
-            "/series/:id/analyze-unanalyzed",
+            "/series/:series_id/analyze-unanalyzed",
             post(handlers::trigger_series_unanalyzed_analysis),
         )
-        .route("/series/:id/download", get(handlers::download_series))
+        .route(
+            "/series/:series_id/download",
+            get(handlers::download_series),
+        )
         // Series metadata routes (protected)
         .route(
-            "/series/:id/metadata",
+            "/series/:series_id/metadata",
             put(handlers::replace_series_metadata),
         )
         .route(
-            "/series/:id/metadata",
+            "/series/:series_id/metadata",
             patch(handlers::patch_series_metadata),
         )
         .route(
-            "/series/:id/metadata/full",
+            "/series/:series_id/metadata/full",
             get(handlers::get_full_series_metadata),
         )
         .route(
-            "/series/:id/metadata/locks",
+            "/series/:series_id/metadata/locks",
             get(handlers::get_metadata_locks),
         )
         .route(
-            "/series/:id/metadata/locks",
+            "/series/:series_id/metadata/locks",
             put(handlers::update_metadata_locks),
         )
         // Series genres routes (protected)
-        .route("/series/:id/genres", get(handlers::get_series_genres))
-        .route("/series/:id/genres", put(handlers::set_series_genres))
-        .route("/series/:id/genres", post(handlers::add_series_genre))
         .route(
-            "/series/:id/genres/:genre_id",
+            "/series/:series_id/genres",
+            get(handlers::get_series_genres),
+        )
+        .route(
+            "/series/:series_id/genres",
+            put(handlers::set_series_genres),
+        )
+        .route(
+            "/series/:series_id/genres",
+            post(handlers::add_series_genre),
+        )
+        .route(
+            "/series/:series_id/genres/:genre_id",
             delete(handlers::remove_series_genre),
         )
         // Series tags routes (protected)
-        .route("/series/:id/tags", get(handlers::get_series_tags))
-        .route("/series/:id/tags", put(handlers::set_series_tags))
-        .route("/series/:id/tags", post(handlers::add_series_tag))
+        .route("/series/:series_id/tags", get(handlers::get_series_tags))
+        .route("/series/:series_id/tags", put(handlers::set_series_tags))
+        .route("/series/:series_id/tags", post(handlers::add_series_tag))
         .route(
-            "/series/:id/tags/:tag_id",
+            "/series/:series_id/tags/:tag_id",
             delete(handlers::remove_series_tag),
         )
         // Series user rating routes (protected)
-        .route("/series/:id/rating", get(handlers::get_series_rating))
-        .route("/series/:id/rating", put(handlers::set_series_rating))
-        .route("/series/:id/rating", delete(handlers::delete_series_rating))
+        .route(
+            "/series/:series_id/rating",
+            get(handlers::get_series_rating),
+        )
+        .route(
+            "/series/:series_id/rating",
+            put(handlers::set_series_rating),
+        )
+        .route(
+            "/series/:series_id/rating",
+            delete(handlers::delete_series_rating),
+        )
         // Series alternate titles routes (protected)
         .route(
-            "/series/:id/alternate-titles",
+            "/series/:series_id/alternate-titles",
             get(handlers::get_series_alternate_titles),
         )
         .route(
-            "/series/:id/alternate-titles",
+            "/series/:series_id/alternate-titles",
             post(handlers::create_alternate_title),
         )
         .route(
-            "/series/:id/alternate-titles/:title_id",
+            "/series/:series_id/alternate-titles/:title_id",
             patch(handlers::update_alternate_title),
         )
         .route(
-            "/series/:id/alternate-titles/:title_id",
+            "/series/:series_id/alternate-titles/:title_id",
             delete(handlers::delete_alternate_title),
         )
         // Series external ratings routes (protected)
         .route(
-            "/series/:id/external-ratings",
+            "/series/:series_id/external-ratings",
             get(handlers::get_series_external_ratings),
         )
         .route(
-            "/series/:id/external-ratings",
+            "/series/:series_id/external-ratings",
             post(handlers::create_external_rating),
         )
         .route(
-            "/series/:id/external-ratings/:source",
+            "/series/:series_id/external-ratings/:source",
             delete(handlers::delete_external_rating),
         )
         // Series external links routes (protected)
         .route(
-            "/series/:id/external-links",
+            "/series/:series_id/external-links",
             get(handlers::get_series_external_links),
         )
         .route(
-            "/series/:id/external-links",
+            "/series/:series_id/external-links",
             post(handlers::create_external_link),
         )
         .route(
-            "/series/:id/external-links/:source",
+            "/series/:series_id/external-links/:source",
             delete(handlers::delete_external_link),
         )
         // Global genre routes (protected, cleanup/delete require admin)
         .route("/genres", get(handlers::list_genres))
         .route("/genres/cleanup", post(handlers::cleanup_genres))
-        .route("/genres/:id", delete(handlers::delete_genre))
+        .route("/genres/:genre_id", delete(handlers::delete_genre))
         // Global tag routes (protected, cleanup/delete require admin)
         .route("/tags", get(handlers::list_tags))
         .route("/tags/cleanup", post(handlers::cleanup_tags))
-        .route("/tags/:id", delete(handlers::delete_tag))
+        .route("/tags/:tag_id", delete(handlers::delete_tag))
         // User ratings routes (protected)
         .route("/user/ratings", get(handlers::list_user_ratings))
         // Book routes (protected)
         .route("/books", get(handlers::list_books))
-        .route("/books/:id", get(handlers::get_book))
-        .route("/books/:id/file", get(handlers::get_book_file))
-        .route("/books/:id/thumbnail", get(handlers::get_book_thumbnail))
-        .route("/books/:id/analyze", post(handlers::trigger_book_analysis))
+        .route("/books/list", post(handlers::list_books_filtered))
+        .route("/books/:book_id", get(handlers::get_book))
+        .route("/books/:book_id/adjacent", get(handlers::get_adjacent_books))
+        .route("/books/:book_id/file", get(handlers::get_book_file))
         .route(
-            "/books/:id/analyze-unanalyzed",
+            "/books/:book_id/thumbnail",
+            get(handlers::get_book_thumbnail),
+        )
+        .route(
+            "/books/:book_id/analyze",
+            post(handlers::trigger_book_analysis),
+        )
+        .route(
+            "/books/:book_id/analyze-unanalyzed",
             post(handlers::trigger_book_unanalyzed_analysis),
         )
         // Book metadata routes (protected)
-        .route("/books/:id/metadata", put(handlers::replace_book_metadata))
-        .route("/books/:id/metadata", patch(handlers::patch_book_metadata))
+        .route(
+            "/books/:book_id/metadata",
+            put(handlers::replace_book_metadata),
+        )
+        .route(
+            "/books/:book_id/metadata",
+            patch(handlers::patch_book_metadata),
+        )
         // Book collection routes (protected)
         .route("/books/in-progress", get(handlers::list_in_progress_books))
         .route("/books/on-deck", get(handlers::list_on_deck_books))
@@ -372,20 +426,35 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/books/:book_id/unread",
             post(handlers::mark_book_as_unread),
         )
-        .route("/series/:id/read", post(handlers::mark_series_as_read))
-        .route("/series/:id/unread", post(handlers::mark_series_as_unread))
+        .route(
+            "/series/:series_id/read",
+            post(handlers::mark_series_as_read),
+        )
+        .route(
+            "/series/:series_id/unread",
+            post(handlers::mark_series_as_unread),
+        )
         // User routes (protected, admin only)
         .route("/users", get(handlers::list_users))
         .route("/users", post(handlers::create_user))
-        .route("/users/:id", get(handlers::get_user))
-        .route("/users/:id", patch(handlers::update_user))
-        .route("/users/:id", delete(handlers::delete_user))
+        .route("/users/:user_id", get(handlers::get_user))
+        .route("/users/:user_id", patch(handlers::update_user))
+        .route("/users/:user_id", delete(handlers::delete_user))
         // API key routes (protected)
         .route("/api-keys", get(handlers::api_keys::list_api_keys))
         .route("/api-keys", post(handlers::api_keys::create_api_key))
-        .route("/api-keys/:id", get(handlers::api_keys::get_api_key))
-        .route("/api-keys/:id", patch(handlers::api_keys::update_api_key))
-        .route("/api-keys/:id", delete(handlers::api_keys::delete_api_key))
+        .route(
+            "/api-keys/:api_key_id",
+            get(handlers::api_keys::get_api_key),
+        )
+        .route(
+            "/api-keys/:api_key_id",
+            patch(handlers::api_keys::update_api_key),
+        )
+        .route(
+            "/api-keys/:api_key_id",
+            delete(handlers::api_keys::delete_api_key),
+        )
         // Metrics routes (protected)
         .route("/metrics/inventory", get(handlers::get_inventory_metrics))
         .route(
@@ -407,10 +476,19 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         // Task Queue routes (protected) - distributed task queue
         .route("/tasks", get(handlers::task_queue::list_tasks))
         .route("/tasks", post(handlers::task_queue::create_task))
-        .route("/tasks/:id", get(handlers::task_queue::get_task))
-        .route("/tasks/:id/cancel", post(handlers::task_queue::cancel_task))
-        .route("/tasks/:id/unlock", post(handlers::task_queue::unlock_task))
-        .route("/tasks/:id/retry", post(handlers::task_queue::retry_task))
+        .route("/tasks/:task_id", get(handlers::task_queue::get_task))
+        .route(
+            "/tasks/:task_id/cancel",
+            post(handlers::task_queue::cancel_task),
+        )
+        .route(
+            "/tasks/:task_id/unlock",
+            post(handlers::task_queue::unlock_task),
+        )
+        .route(
+            "/tasks/:task_id/retry",
+            post(handlers::task_queue::retry_task),
+        )
         .route("/tasks/stats", get(handlers::task_queue::get_task_stats))
         .route(
             "/tasks/purge",
@@ -420,15 +498,21 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         // Duplicate detection routes (protected)
         .route("/duplicates", get(handlers::list_duplicates))
         .route("/duplicates/scan", post(handlers::trigger_duplicate_scan))
-        .route("/duplicates/:id", delete(handlers::delete_duplicate_group))
+        .route(
+            "/duplicates/:duplicate_id",
+            delete(handlers::delete_duplicate_group),
+        )
         // Filesystem routes (protected, admin only)
         .route("/filesystem/browse", get(handlers::browse_filesystem))
         .route("/filesystem/drives", get(handlers::list_drives))
         // Settings routes (protected, admin only)
         .route("/admin/settings", get(handlers::settings::list_settings))
-        .route("/admin/settings/:key", get(handlers::settings::get_setting))
         .route(
-            "/admin/settings/:key",
+            "/admin/settings/:setting_key",
+            get(handlers::settings::get_setting),
+        )
+        .route(
+            "/admin/settings/:setting_key",
             put(handlers::settings::update_setting),
         )
         .route(
@@ -436,11 +520,11 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             post(handlers::settings::bulk_update_settings),
         )
         .route(
-            "/admin/settings/:key/reset",
+            "/admin/settings/:setting_key/reset",
             post(handlers::settings::reset_setting),
         )
         .route(
-            "/admin/settings/:key/history",
+            "/admin/settings/:setting_key/history",
             get(handlers::settings::get_setting_history),
         )
         // Add state to all routes

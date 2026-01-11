@@ -12,7 +12,7 @@ use crate::api::{
             UpdateAlternateTitleRequest, UpdateMetadataLocksRequest, UserRatingsListResponse,
             UserSeriesRatingDto,
         },
-        BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListResponse,
+        BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListRequest, SeriesListResponse,
     },
     error::ApiError,
     extractors::{AuthContext, AuthState, FlexibleAuthContext},
@@ -260,9 +260,9 @@ pub async fn list_series(
 /// Get series by ID
 #[utoipa::path(
     get,
-    path = "/api/v1/series/{id}",
+    path = "/api/v1/series/{series_id}",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
         (status = 200, description = "Series details", body = SeriesDto),
@@ -277,11 +277,11 @@ pub async fn list_series(
 pub async fn get_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Path(id): Path<Uuid>,
+    Path(series_id): Path<Uuid>,
 ) -> Result<Json<SeriesDto>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    let series = SeriesRepository::get_by_id(&state.db, id)
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
@@ -342,12 +342,109 @@ pub async fn search_series(
     Ok(Json(dtos))
 }
 
+/// List series with advanced filtering
+///
+/// Supports complex filter conditions including nested AllOf/AnyOf logic,
+/// genre/tag filtering with include/exclude, and more.
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/list",
+    request_body = SeriesListRequest,
+    responses(
+        (status = 200, description = "Paginated list of filtered series", body = SeriesListResponse),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn list_series_filtered(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Json(request): Json<SeriesListRequest>,
+) -> Result<Json<SeriesListResponse>, ApiError> {
+    use crate::services::FilterService;
+    use std::collections::HashSet;
+
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    // Validate and normalize pagination params
+    let page_size = if request.page_size == 0 {
+        default_page_size()
+    } else {
+        request.page_size.min(100)
+    };
+
+    // Get all series IDs first (we'll filter from this)
+    let all_series = SeriesRepository::list_all(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
+
+    let all_series_ids: HashSet<Uuid> = all_series.iter().map(|s| s.id).collect();
+
+    // Apply filter condition if provided
+    let matching_ids = if let Some(ref condition) = request.condition {
+        FilterService::get_matching_series(&state.db, condition, Some(&all_series_ids))
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to apply filter: {}", e)))?
+    } else {
+        all_series_ids.clone()
+    };
+
+    // Filter series list to only matching ones
+    let mut filtered_series: Vec<_> = all_series
+        .into_iter()
+        .filter(|s| matching_ids.contains(&s.id))
+        .collect();
+
+    // Apply sorting if specified
+    if let Some(ref sort_param) = request.sort {
+        apply_series_sorting(&mut filtered_series, sort_param);
+    }
+
+    let total = filtered_series.len() as u64;
+
+    // Apply pagination
+    let offset = request.page * page_size;
+    let start = offset as usize;
+
+    if start >= filtered_series.len() {
+        return Ok(Json(SeriesListResponse::new(
+            vec![],
+            request.page,
+            page_size,
+            total,
+        )));
+    }
+
+    let end = (start + page_size as usize).min(filtered_series.len());
+    let paginated = filtered_series[start..end].to_vec();
+
+    // Convert to DTOs
+    let user_id = Some(auth.user_id);
+    let dtos: Vec<SeriesDto> = futures::future::join_all(
+        paginated
+            .into_iter()
+            .map(|series| series_to_dto(&state.db, series, user_id)),
+    )
+    .await
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+
+    let response = SeriesListResponse::new(dtos, request.page, page_size, total);
+
+    Ok(Json(response))
+}
+
 /// Get books in a series
 #[utoipa::path(
     get,
-    path = "/api/v1/series/{id}/books",
+    path = "/api/v1/series/{series_id}/books",
     params(
-        ("id" = Uuid, Path, description = "Series ID"),
+        ("series_id" = Uuid, Path, description = "Series ID"),
         ("include_deleted" = Option<bool>, Query, description = "Include deleted books (default: false)")
     ),
     responses(
@@ -389,9 +486,9 @@ pub async fn get_series_books(
 /// Purge deleted books from a series
 #[utoipa::path(
     delete,
-    path = "/api/v1/series/{id}/purge-deleted",
+    path = "/api/v1/series/{series_id}/purge-deleted",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
         (status = 200, description = "Number of books purged", body = u64),
@@ -446,9 +543,9 @@ pub async fn purge_series_deleted_books(
 /// Upload a custom cover/poster for a series
 #[utoipa::path(
     post,
-    path = "/api/v1/series/{id}/cover",
+    path = "/api/v1/series/{series_id}/cover",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     request_body(content = inline(Object), description = "Multipart form with image file", content_type = "multipart/form-data"),
     responses(
@@ -570,9 +667,9 @@ pub async fn upload_series_cover(
 /// Set which cover source to use for a series (partial update)
 #[utoipa::path(
     patch,
-    path = "/api/v1/series/{id}/cover/source",
+    path = "/api/v1/series/{series_id}/cover/source",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     request_body = SelectCoverSourceRequest,
     responses(
@@ -632,9 +729,9 @@ pub async fn set_series_cover_source(
 /// Get thumbnail/cover image for a series
 #[utoipa::path(
     get,
-    path = "/api/v1/series/{id}/thumbnail",
+    path = "/api/v1/series/{series_id}/thumbnail",
     params(
-        ("id" = Uuid, Path, description = "Series ID"),
+        ("series_id" = Uuid, Path, description = "Series ID"),
     ),
     responses(
         (status = 200, description = "Thumbnail image", content_type = "image/jpeg"),
@@ -690,10 +787,21 @@ pub async fn get_series_thumbnail(
         .unwrap())
 }
 
+/// Query parameters for in-progress series
+#[derive(Debug, Deserialize)]
+pub struct InProgressSeriesQuery {
+    /// Filter by library ID (optional)
+    #[serde(default)]
+    pub library_id: Option<Uuid>,
+}
+
 /// List series with in-progress books (series that have at least one book with reading progress that is not completed)
 #[utoipa::path(
     get,
     path = "/api/v1/series/in-progress",
+    params(
+        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID")
+    ),
     responses(
         (status = 200, description = "List of in-progress series", body = Vec<SeriesDto>),
         (status = 403, description = "Forbidden"),
@@ -707,11 +815,12 @@ pub async fn get_series_thumbnail(
 pub async fn list_in_progress_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
+    Query(query): Query<InProgressSeriesQuery>,
 ) -> Result<Json<Vec<SeriesDto>>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
     // Fetch in-progress series for the current user
-    let series_list = SeriesRepository::list_in_progress(&state.db, auth.user_id, None)
+    let series_list = SeriesRepository::list_in_progress(&state.db, auth.user_id, query.library_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress series: {}", e)))?;
 
@@ -735,6 +844,10 @@ pub struct RecentSeriesQuery {
     /// Maximum number of series to return (default: 50)
     #[serde(default = "default_recent_limit")]
     pub limit: u64,
+
+    /// Filter by library ID (optional)
+    #[serde(default)]
+    pub library_id: Option<Uuid>,
 }
 
 fn default_recent_limit() -> u64 {
@@ -746,7 +859,8 @@ fn default_recent_limit() -> u64 {
     get,
     path = "/api/v1/series/recently-added",
     params(
-        ("limit" = Option<u64>, Query, description = "Maximum number of series to return (default: 50)")
+        ("limit" = Option<u64>, Query, description = "Maximum number of series to return (default: 50)"),
+        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID")
     ),
     responses(
         (status = 200, description = "List of recently added series", body = Vec<SeriesDto>),
@@ -765,7 +879,7 @@ pub async fn list_recently_added_series(
 ) -> Result<Json<Vec<SeriesDto>>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    let series_list = SeriesRepository::list_recently_added(&state.db, None, query.limit)
+    let series_list = SeriesRepository::list_recently_added(&state.db, query.library_id, query.limit)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch recently added series: {}", e)))?;
 
@@ -835,7 +949,8 @@ pub async fn list_library_recently_added_series(
     get,
     path = "/api/v1/series/recently-updated",
     params(
-        ("limit" = Option<u64>, Query, description = "Maximum number of series to return (default: 50)")
+        ("limit" = Option<u64>, Query, description = "Maximum number of series to return (default: 50)"),
+        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID")
     ),
     responses(
         (status = 200, description = "List of recently updated series", body = Vec<SeriesDto>),
@@ -854,7 +969,7 @@ pub async fn list_recently_updated_series(
 ) -> Result<Json<Vec<SeriesDto>>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    let series_list = SeriesRepository::list_recently_updated(&state.db, None, query.limit)
+    let series_list = SeriesRepository::list_recently_updated(&state.db, query.library_id, query.limit)
         .await
         .map_err(|e| {
             ApiError::Internal(format!("Failed to fetch recently updated series: {}", e))
@@ -1163,9 +1278,9 @@ pub struct SelectCoverSourceRequest {
 /// Mark all books in a series as read
 #[utoipa::path(
     post,
-    path = "/api/v1/series/{id}/read",
+    path = "/api/v1/series/{series_id}/read",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
         (status = 200, description = "Series marked as read", body = MarkReadResponse),
@@ -1223,9 +1338,9 @@ pub async fn mark_series_as_read(
 /// Mark all books in a series as unread
 #[utoipa::path(
     post,
-    path = "/api/v1/series/{id}/unread",
+    path = "/api/v1/series/{series_id}/unread",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
         (status = 200, description = "Series marked as unread", body = MarkReadResponse),
@@ -1282,9 +1397,9 @@ pub async fn mark_series_as_unread(
 /// Only includes books that were scanned and detected by the library scanner.
 #[utoipa::path(
     get,
-    path = "/api/v1/series/{id}/download",
+    path = "/api/v1/series/{series_id}/download",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
         (status = 200, description = "Zip file containing all books in the series", content_type = "application/zip"),
@@ -1406,9 +1521,9 @@ pub async fn download_series(
 /// Omitting a field (or setting it to null) will clear that field.
 #[utoipa::path(
     put,
-    path = "/api/v1/series/{id}/metadata",
+    path = "/api/v1/series/{series_id}/metadata",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     request_body = ReplaceSeriesMetadataRequest,
     responses(
@@ -1511,9 +1626,9 @@ pub async fn replace_series_metadata(
 /// Explicitly null fields will be cleared.
 #[utoipa::path(
     patch,
-    path = "/api/v1/series/{id}/metadata",
+    path = "/api/v1/series/{series_id}/metadata",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     request_body = PatchSeriesMetadataRequest,
     responses(
@@ -1638,9 +1753,9 @@ pub async fn patch_series_metadata(
 /// external ratings, and external links.
 #[utoipa::path(
     get,
-    path = "/api/v1/series/{id}/metadata/full",
+    path = "/api/v1/series/{series_id}/metadata/full",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
         (status = 200, description = "Full series metadata with all related data", body = FullSeriesMetadataResponse),
@@ -1799,9 +1914,9 @@ pub async fn get_full_series_metadata(
 /// by automatic metadata refresh from book analysis or external sources.
 #[utoipa::path(
     put,
-    path = "/api/v1/series/{id}/metadata/locks",
+    path = "/api/v1/series/{series_id}/metadata/locks",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     request_body = UpdateMetadataLocksRequest,
     responses(
@@ -1922,9 +2037,9 @@ pub async fn update_metadata_locks(
 /// Get metadata lock states
 #[utoipa::path(
     get,
-    path = "/api/v1/series/{id}/metadata/locks",
+    path = "/api/v1/series/{series_id}/metadata/locks",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
         (status = 200, description = "Current lock states", body = MetadataLocks),
@@ -2032,9 +2147,9 @@ pub async fn list_genres(
 /// Get genres for a series
 #[utoipa::path(
     get,
-    path = "/api/v1/series/{id}/genres",
+    path = "/api/v1/series/{series_id}/genres",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
         (status = 200, description = "List of genres for the series", body = GenreListResponse),
@@ -2080,9 +2195,9 @@ pub async fn get_series_genres(
 /// Set genres for a series (replaces existing)
 #[utoipa::path(
     put,
-    path = "/api/v1/series/{id}/genres",
+    path = "/api/v1/series/{series_id}/genres",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     request_body = SetSeriesGenresRequest,
     responses(
@@ -2186,9 +2301,9 @@ pub async fn list_tags(
 /// Get tags for a series
 #[utoipa::path(
     get,
-    path = "/api/v1/series/{id}/tags",
+    path = "/api/v1/series/{series_id}/tags",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
         (status = 200, description = "List of tags for the series", body = TagListResponse),
@@ -2234,9 +2349,9 @@ pub async fn get_series_tags(
 /// Set tags for a series (replaces existing)
 #[utoipa::path(
     put,
-    path = "/api/v1/series/{id}/tags",
+    path = "/api/v1/series/{series_id}/tags",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     request_body = SetSeriesTagsRequest,
     responses(
@@ -2296,9 +2411,9 @@ pub async fn set_series_tags(
 /// Add a single genre to a series
 #[utoipa::path(
     post,
-    path = "/api/v1/series/{id}/genres",
+    path = "/api/v1/series/{series_id}/genres",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     request_body = AddSeriesGenreRequest,
     responses(
@@ -2353,9 +2468,9 @@ pub async fn add_series_genre(
 /// Remove a genre from a series
 #[utoipa::path(
     delete,
-    path = "/api/v1/series/{id}/genres/{genre_id}",
+    path = "/api/v1/series/{series_id}/genres/{genre_id}",
     params(
-        ("id" = Uuid, Path, description = "Series ID"),
+        ("series_id" = Uuid, Path, description = "Series ID"),
         ("genre_id" = Uuid, Path, description = "Genre ID")
     ),
     responses(
@@ -2410,9 +2525,9 @@ pub async fn remove_series_genre(
 /// Delete a genre from the taxonomy (admin only)
 #[utoipa::path(
     delete,
-    path = "/api/v1/genres/{id}",
+    path = "/api/v1/genres/{genre_id}",
     params(
-        ("id" = Uuid, Path, description = "Genre ID")
+        ("genre_id" = Uuid, Path, description = "Genre ID")
     ),
     responses(
         (status = 204, description = "Genre deleted"),
@@ -2484,9 +2599,9 @@ pub async fn cleanup_genres(
 /// Add a single tag to a series
 #[utoipa::path(
     post,
-    path = "/api/v1/series/{id}/tags",
+    path = "/api/v1/series/{series_id}/tags",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     request_body = AddSeriesTagRequest,
     responses(
@@ -2541,9 +2656,9 @@ pub async fn add_series_tag(
 /// Remove a tag from a series
 #[utoipa::path(
     delete,
-    path = "/api/v1/series/{id}/tags/{tag_id}",
+    path = "/api/v1/series/{series_id}/tags/{tag_id}",
     params(
-        ("id" = Uuid, Path, description = "Series ID"),
+        ("series_id" = Uuid, Path, description = "Series ID"),
         ("tag_id" = Uuid, Path, description = "Tag ID")
     ),
     responses(
@@ -2598,9 +2713,9 @@ pub async fn remove_series_tag(
 /// Delete a tag from the taxonomy (admin only)
 #[utoipa::path(
     delete,
-    path = "/api/v1/tags/{id}",
+    path = "/api/v1/tags/{tag_id}",
     params(
-        ("id" = Uuid, Path, description = "Tag ID")
+        ("tag_id" = Uuid, Path, description = "Tag ID")
     ),
     responses(
         (status = 204, description = "Tag deleted"),
@@ -2676,9 +2791,9 @@ pub async fn cleanup_tags(
 /// Get the current user's rating for a series
 #[utoipa::path(
     get,
-    path = "/api/v1/series/{id}/rating",
+    path = "/api/v1/series/{series_id}/rating",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
         (status = 200, description = "User's rating for the series", body = UserSeriesRatingDto),
@@ -2723,9 +2838,9 @@ pub async fn get_series_rating(
 /// Set (create or update) the current user's rating for a series
 #[utoipa::path(
     put,
-    path = "/api/v1/series/{id}/rating",
+    path = "/api/v1/series/{series_id}/rating",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     request_body = SetUserRatingRequest,
     responses(
@@ -2784,9 +2899,9 @@ pub async fn set_series_rating(
 /// Delete the current user's rating for a series
 #[utoipa::path(
     delete,
-    path = "/api/v1/series/{id}/rating",
+    path = "/api/v1/series/{series_id}/rating",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
         (status = 204, description = "Rating deleted"),
@@ -2872,9 +2987,9 @@ pub async fn list_user_ratings(
 /// Get alternate titles for a series
 #[utoipa::path(
     get,
-    path = "/api/v1/series/{id}/alternate-titles",
+    path = "/api/v1/series/{series_id}/alternate-titles",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
         (status = 200, description = "List of alternate titles for the series", body = AlternateTitleListResponse),
@@ -2922,9 +3037,9 @@ pub async fn get_series_alternate_titles(
 /// Add an alternate title to a series
 #[utoipa::path(
     post,
-    path = "/api/v1/series/{id}/alternate-titles",
+    path = "/api/v1/series/{series_id}/alternate-titles",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     request_body = CreateAlternateTitleRequest,
     responses(
@@ -2985,9 +3100,9 @@ pub async fn create_alternate_title(
 /// Update an alternate title
 #[utoipa::path(
     patch,
-    path = "/api/v1/series/{id}/alternate-titles/{title_id}",
+    path = "/api/v1/series/{series_id}/alternate-titles/{title_id}",
     params(
-        ("id" = Uuid, Path, description = "Series ID"),
+        ("series_id" = Uuid, Path, description = "Series ID"),
         ("title_id" = Uuid, Path, description = "Alternate title ID")
     ),
     request_body = UpdateAlternateTitleRequest,
@@ -3059,9 +3174,9 @@ pub async fn update_alternate_title(
 /// Delete an alternate title
 #[utoipa::path(
     delete,
-    path = "/api/v1/series/{id}/alternate-titles/{title_id}",
+    path = "/api/v1/series/{series_id}/alternate-titles/{title_id}",
     params(
-        ("id" = Uuid, Path, description = "Series ID"),
+        ("series_id" = Uuid, Path, description = "Series ID"),
         ("title_id" = Uuid, Path, description = "Alternate title ID")
     ),
     responses(
@@ -3126,9 +3241,9 @@ pub async fn delete_alternate_title(
 /// Get external ratings for a series
 #[utoipa::path(
     get,
-    path = "/api/v1/series/{id}/external-ratings",
+    path = "/api/v1/series/{series_id}/external-ratings",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
         (status = 200, description = "List of external ratings for the series", body = ExternalRatingListResponse),
@@ -3178,9 +3293,9 @@ pub async fn get_series_external_ratings(
 /// Add or update an external rating for a series
 #[utoipa::path(
     post,
-    path = "/api/v1/series/{id}/external-ratings",
+    path = "/api/v1/series/{series_id}/external-ratings",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     request_body = CreateExternalRatingRequest,
     responses(
@@ -3249,9 +3364,9 @@ pub async fn create_external_rating(
 /// Delete an external rating by source name
 #[utoipa::path(
     delete,
-    path = "/api/v1/series/{id}/external-ratings/{source}",
+    path = "/api/v1/series/{series_id}/external-ratings/{source}",
     params(
-        ("id" = Uuid, Path, description = "Series ID"),
+        ("series_id" = Uuid, Path, description = "Series ID"),
         ("source" = String, Path, description = "Source name (e.g., 'myanimelist', 'anilist')")
     ),
     responses(
@@ -3308,9 +3423,9 @@ pub async fn delete_external_rating(
 /// Get external links for a series
 #[utoipa::path(
     get,
-    path = "/api/v1/series/{id}/external-links",
+    path = "/api/v1/series/{series_id}/external-links",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
         (status = 200, description = "List of external links for the series", body = ExternalLinkListResponse),
@@ -3359,9 +3474,9 @@ pub async fn get_series_external_links(
 /// Add or update an external link for a series
 #[utoipa::path(
     post,
-    path = "/api/v1/series/{id}/external-links",
+    path = "/api/v1/series/{series_id}/external-links",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     request_body = CreateExternalLinkRequest,
     responses(
@@ -3425,9 +3540,9 @@ pub async fn create_external_link(
 /// Delete an external link by source name
 #[utoipa::path(
     delete,
-    path = "/api/v1/series/{id}/external-links/{source}",
+    path = "/api/v1/series/{series_id}/external-links/{source}",
     params(
-        ("id" = Uuid, Path, description = "Series ID"),
+        ("series_id" = Uuid, Path, description = "Series ID"),
         ("source" = String, Path, description = "Source name (e.g., 'myanimelist', 'mangadex')")
     ),
     responses(
@@ -3484,9 +3599,9 @@ pub async fn delete_external_link(
 /// List all covers for a series
 #[utoipa::path(
     get,
-    path = "/api/v1/series/{id}/covers",
+    path = "/api/v1/series/{series_id}/covers",
     params(
-        ("id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
         (status = 200, description = "List of series covers", body = SeriesCoverListResponse),
@@ -3538,9 +3653,9 @@ pub async fn list_series_covers(
 /// Select a cover as the primary cover for a series
 #[utoipa::path(
     put,
-    path = "/api/v1/series/{id}/covers/{cover_id}/select",
+    path = "/api/v1/series/{series_id}/covers/{cover_id}/select",
     params(
-        ("id" = Uuid, Path, description = "Series ID"),
+        ("series_id" = Uuid, Path, description = "Series ID"),
         ("cover_id" = Uuid, Path, description = "Cover ID to select")
     ),
     responses(
@@ -3606,9 +3721,9 @@ pub async fn select_series_cover(
 /// Delete a cover from a series
 #[utoipa::path(
     delete,
-    path = "/api/v1/series/{id}/covers/{cover_id}",
+    path = "/api/v1/series/{series_id}/covers/{cover_id}",
     params(
-        ("id" = Uuid, Path, description = "Series ID"),
+        ("series_id" = Uuid, Path, description = "Series ID"),
         ("cover_id" = Uuid, Path, description = "Cover ID to delete")
     ),
     responses(

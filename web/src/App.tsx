@@ -11,10 +11,12 @@ import {
 import { setupApi } from "@/api/setup";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useEntityEvents } from "@/hooks/useEntityEvents";
+import { BookDetail } from "@/pages/BookDetail";
 import { Home } from "@/pages/Home";
 import { LibraryPage } from "@/pages/Library";
 import { Login } from "@/pages/Login";
 import { Register } from "@/pages/Register";
+import { SeriesDetail } from "@/pages/SeriesDetail";
 import { Setup } from "@/pages/Setup";
 import { navigationService } from "@/services/navigation";
 import { useAuthStore } from "@/store/authStore";
@@ -122,6 +124,30 @@ function App() {
 						<ProtectedRoute>
 							<AppLayout currentPath="/libraries/:libraryId">
 								<LibraryPage />
+							</AppLayout>
+						</ProtectedRoute>
+					}
+				/>
+
+				{/* Series detail page */}
+				<Route
+					path="/series/:seriesId"
+					element={
+						<ProtectedRoute>
+							<AppLayout currentPath="/series/:seriesId">
+								<SeriesDetail />
+							</AppLayout>
+						</ProtectedRoute>
+					}
+				/>
+
+				{/* Book detail page */}
+				<Route
+					path="/books/:bookId"
+					element={
+						<ProtectedRoute>
+							<AppLayout currentPath="/books/:bookId">
+								<BookDetail />
 							</AppLayout>
 						</ProtectedRoute>
 					}
