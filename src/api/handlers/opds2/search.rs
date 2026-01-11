@@ -65,11 +65,11 @@ pub async fn opds2_search(
         .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
 
     // For series results, we create publications with links to browse the series
+    // Note: Summary is now in series_metadata table - skipping for OPDS2 search
     for series in series_list.iter().take(20) {
         let metadata = PublicationMetadata::new(format!("Series: {}", series.name))
             .with_identifier(format!("urn:uuid:series-{}", series.id))
-            .with_modified(series.updated_at)
-            .with_description(series.summary.clone().unwrap_or_default());
+            .with_modified(series.updated_at);
 
         let pub_entry = Publication::new(metadata)
             .add_link(

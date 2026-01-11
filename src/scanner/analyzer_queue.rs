@@ -10,7 +10,8 @@ use uuid::Uuid;
 
 use crate::db::entities::{book_metadata_records, books, pages};
 use crate::db::repositories::{
-    BookMetadataRepository, BookRepository, PageRepository, SeriesRepository, TaskRepository,
+    BookMetadataRepository, BookRepository, PageRepository, SeriesMetadataRepository,
+    SeriesRepository, TaskRepository,
 };
 use crate::events::EventBroadcaster;
 use crate::scanner::analyze_file;
@@ -330,20 +331,43 @@ async fn analyze_single_book(
         );
 
         // Populate series metadata from the first book if not already populated
-        if let Ok(Some(mut series)) = SeriesRepository::get_by_id(db, book.series_id).await {
-            if !series.metadata_populated_from_book {
-                // Only populate if series doesn't have metadata yet
-                let should_populate =
-                    series.summary.is_none() && series.publisher.is_none() && series.year.is_none();
+        if let Ok(Some(series)) = SeriesRepository::get_by_id(db, book.series_id).await {
+            // Get series metadata to check if it needs population
+            if let Ok(Some(metadata)) =
+                SeriesMetadataRepository::get_by_series_id(db, book.series_id).await
+            {
+                // Only populate if series metadata doesn't have summary, publisher, or year yet
+                // and the fields are not locked
+                let should_populate = metadata.summary.is_none()
+                    && metadata.publisher.is_none()
+                    && metadata.year.is_none()
+                    && !metadata.summary_lock
+                    && !metadata.publisher_lock
+                    && !metadata.year_lock;
 
-                if should_populate {
+                if should_populate
+                    && (comic_info.summary.is_some()
+                        || comic_info.publisher.is_some()
+                        || comic_info.year.is_some())
+                {
                     // Populate series metadata from book's ComicInfo
-                    series.summary = comic_info.summary.clone();
-                    series.publisher = comic_info.publisher.clone();
-                    series.year = comic_info.year;
-                    series.metadata_populated_from_book = true;
+                    use crate::db::entities::series_metadata;
+                    use sea_orm::{ActiveModelTrait, Set};
 
-                    SeriesRepository::update(db, &series, event_broadcaster).await?;
+                    let mut metadata_active: series_metadata::ActiveModel = metadata.into();
+
+                    if let Some(ref summary) = comic_info.summary {
+                        metadata_active.summary = Set(Some(summary.clone()));
+                    }
+                    if let Some(ref publisher) = comic_info.publisher {
+                        metadata_active.publisher = Set(Some(publisher.clone()));
+                    }
+                    if let Some(year) = comic_info.year {
+                        metadata_active.year = Set(Some(year));
+                    }
+                    metadata_active.updated_at = Set(Utc::now());
+
+                    metadata_active.update(db).await?;
                     info!(
                         "Populated series '{}' metadata from book: {}",
                         series.name, book.file_path

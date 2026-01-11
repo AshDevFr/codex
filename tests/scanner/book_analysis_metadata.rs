@@ -3,7 +3,8 @@ use anyhow::Result;
 use chrono::Utc;
 use codex::db::entities::{books, series};
 use codex::db::repositories::{
-    BookMetadataRepository, BookRepository, LibraryRepository, PageRepository, SeriesRepository,
+    BookMetadataRepository, BookRepository, LibraryRepository, PageRepository,
+    SeriesMetadataRepository, SeriesRepository,
 };
 use codex::db::ScanningStrategy;
 use codex::scanner::analyze_book;
@@ -677,11 +678,13 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
     let series =
         SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None).await?;
 
-    // Verify series has no metadata initially
-    assert_eq!(series.summary, None);
-    assert_eq!(series.publisher, None);
-    assert_eq!(series.year, None);
-    assert_eq!(series.metadata_populated_from_book, false);
+    // Verify series metadata has no values initially (just the title)
+    let metadata = SeriesMetadataRepository::get_by_series_id(db.sea_orm_connection(), series.id)
+        .await?
+        .expect("Metadata should exist");
+    assert_eq!(metadata.summary, None);
+    assert_eq!(metadata.publisher, None);
+    assert_eq!(metadata.year, None);
 
     // Create first book with ComicInfo metadata
     let file_path = temp_dir.path().join("book1.cbz");
@@ -736,14 +739,13 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
     analyze_book(db.sea_orm_connection(), book1.id, false, None).await?;
 
     // Verify series metadata was populated from the first book
-    let series = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
+    let metadata = SeriesMetadataRepository::get_by_series_id(db.sea_orm_connection(), series.id)
         .await?
-        .expect("Series should exist");
+        .expect("Metadata should exist");
 
-    assert_eq!(series.summary, Some("Test Series Summary".to_string()));
-    assert_eq!(series.publisher, Some("Marvel Comics".to_string()));
-    assert_eq!(series.year, Some(2024));
-    assert_eq!(series.metadata_populated_from_book, true);
+    assert_eq!(metadata.summary, Some("Test Series Summary".to_string()));
+    assert_eq!(metadata.publisher, Some("Marvel Comics".to_string()));
+    assert_eq!(metadata.year, Some(2024));
 
     // Create second book with different metadata
     let file_path2 = temp_dir.path().join("book2.cbz");
@@ -796,14 +798,13 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
     analyze_book(db.sea_orm_connection(), book2.id, false, None).await?;
 
     // Verify series metadata was NOT overwritten by the second book
-    let series = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
+    let metadata = SeriesMetadataRepository::get_by_series_id(db.sea_orm_connection(), series.id)
         .await?
-        .expect("Series should exist");
+        .expect("Metadata should exist");
 
-    assert_eq!(series.summary, Some("Test Series Summary".to_string()));
-    assert_eq!(series.publisher, Some("Marvel Comics".to_string()));
-    assert_eq!(series.year, Some(2024));
-    assert_eq!(series.metadata_populated_from_book, true);
+    assert_eq!(metadata.summary, Some("Test Series Summary".to_string()));
+    assert_eq!(metadata.publisher, Some("Marvel Comics".to_string()));
+    assert_eq!(metadata.year, Some(2024));
 
     Ok(())
 }
@@ -824,14 +825,29 @@ async fn test_series_metadata_respects_manual_changes() -> Result<()> {
     .await?;
 
     // Create a series with manually set metadata
-    let mut series =
+    let series =
         SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None).await?;
 
-    // Manually set series metadata (simulating user edit)
-    series.summary = Some("Manually Set Summary".to_string());
-    series.publisher = Some("Custom Publisher".to_string());
-    series.year = Some(2020);
-    SeriesRepository::update(db.sea_orm_connection(), &series, None).await?;
+    // Manually set series metadata (simulating user edit) and lock the fields
+    SeriesMetadataRepository::update_summary(
+        db.sea_orm_connection(),
+        series.id,
+        Some("Manually Set Summary".to_string()),
+    )
+    .await?;
+    SeriesMetadataRepository::update_publisher(
+        db.sea_orm_connection(),
+        series.id,
+        Some("Custom Publisher".to_string()),
+        None,
+    )
+    .await?;
+    SeriesMetadataRepository::update_year(db.sea_orm_connection(), series.id, Some(2020)).await?;
+    // Lock the fields to prevent auto-refresh from overwriting
+    SeriesMetadataRepository::set_lock(db.sea_orm_connection(), series.id, "summary", true).await?;
+    SeriesMetadataRepository::set_lock(db.sea_orm_connection(), series.id, "publisher", true)
+        .await?;
+    SeriesMetadataRepository::set_lock(db.sea_orm_connection(), series.id, "year", true).await?;
 
     // Create a book with different metadata
     let file_path = temp_dir.path().join("book1.cbz");
@@ -859,15 +875,14 @@ async fn test_series_metadata_respects_manual_changes() -> Result<()> {
     let (book, _) = create_test_book(&db, file_path.to_str().unwrap()).await?;
     analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
 
-    // Verify series metadata was NOT overwritten (manual data preserved)
-    let series = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
+    // Verify series metadata was NOT overwritten (locked fields preserved)
+    let metadata = SeriesMetadataRepository::get_by_series_id(db.sea_orm_connection(), series.id)
         .await?
-        .expect("Series should exist");
+        .expect("Metadata should exist");
 
-    assert_eq!(series.summary, Some("Manually Set Summary".to_string()));
-    assert_eq!(series.publisher, Some("Custom Publisher".to_string()));
-    assert_eq!(series.year, Some(2020));
-    assert_eq!(series.metadata_populated_from_book, false);
+    assert_eq!(metadata.summary, Some("Manually Set Summary".to_string()));
+    assert_eq!(metadata.publisher, Some("Custom Publisher".to_string()));
+    assert_eq!(metadata.year, Some(2020));
 
     Ok(())
 }

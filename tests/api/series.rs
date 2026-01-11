@@ -5,7 +5,7 @@ use codex::api::dto::book::BookDto;
 use codex::api::dto::series::{SearchSeriesRequest, SeriesDto, SeriesListResponse};
 use codex::api::error::ErrorResponse;
 use codex::db::repositories::{
-    BookRepository, LibraryRepository, SeriesRepository, UserRepository,
+    BookRepository, LibraryRepository, SeriesMetadataRepository, SeriesRepository, UserRepository,
 };
 use codex::db::ScanningStrategy;
 use codex::utils::password;
@@ -288,24 +288,27 @@ async fn test_list_library_series_sort_by_release_date() {
         .await
         .unwrap();
 
-    // Create series and update their years
-    let mut series1 = SeriesRepository::create(&db, library.id, "Old Series", None)
+    // Create series and update their years via metadata repository
+    let series1 = SeriesRepository::create(&db, library.id, "Old Series", None)
         .await
         .unwrap();
-    series1.year = Some(1990);
-    SeriesRepository::update(&db, &series1, None).await.unwrap();
+    SeriesMetadataRepository::update_year(&db, series1.id, Some(1990))
+        .await
+        .unwrap();
 
-    let mut series2 = SeriesRepository::create(&db, library.id, "New Series", None)
+    let series2 = SeriesRepository::create(&db, library.id, "New Series", None)
         .await
         .unwrap();
-    series2.year = Some(2024);
-    SeriesRepository::update(&db, &series2, None).await.unwrap();
+    SeriesMetadataRepository::update_year(&db, series2.id, Some(2024))
+        .await
+        .unwrap();
 
-    let mut series3 = SeriesRepository::create(&db, library.id, "Mid Series", None)
+    let series3 = SeriesRepository::create(&db, library.id, "Mid Series", None)
         .await
         .unwrap();
-    series3.year = Some(2010);
-    SeriesRepository::update(&db, &series3, None).await.unwrap();
+    SeriesMetadataRepository::update_year(&db, series3.id, Some(2010))
+        .await
+        .unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -1317,13 +1320,13 @@ async fn test_list_recently_updated_series() {
         .await
         .unwrap();
 
-    // Update series1 and series3 to change their updated_at
+    // Update series1 and series3 to change their updated_at (update custom_metadata field which is on series model)
     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-    series3.summary = Some("Updated summary".to_string());
+    series3.custom_metadata = Some(r#"{"note": "updated"}"#.to_string());
     SeriesRepository::update(&db, &series3, None).await.unwrap();
 
     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-    series1.summary = Some("Another update".to_string());
+    series1.custom_metadata = Some(r#"{"note": "another update"}"#.to_string());
     SeriesRepository::update(&db, &series1, None).await.unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
@@ -1359,7 +1362,7 @@ async fn test_list_library_recently_updated_series() {
         .await
         .unwrap();
     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-    series1.summary = Some("Updated".to_string());
+    series1.custom_metadata = Some(r#"{"note": "updated"}"#.to_string());
     SeriesRepository::update(&db, &series1, None).await.unwrap();
 
     // Create series in library 2 (not updated)
@@ -1830,13 +1833,23 @@ async fn test_replace_series_metadata_clears_omitted_fields() {
         .unwrap();
 
     // Create series with initial metadata
-    let mut series = SeriesRepository::create(&db, library.id, "Test Series", None)
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
-    series.summary = Some("Initial summary".to_string());
-    series.publisher = Some("Initial publisher".to_string());
-    series.year = Some(2000);
-    SeriesRepository::update(&db, &series, None).await.unwrap();
+    SeriesMetadataRepository::update_summary(&db, series.id, Some("Initial summary".to_string()))
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_publisher(
+        &db,
+        series.id,
+        Some("Initial publisher".to_string()),
+        None,
+    )
+    .await
+    .unwrap();
+    SeriesMetadataRepository::update_year(&db, series.id, Some(2000))
+        .await
+        .unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -1952,13 +1965,23 @@ async fn test_patch_series_metadata_partial_update() {
         .unwrap();
 
     // Create series with initial metadata
-    let mut series = SeriesRepository::create(&db, library.id, "Test Series", None)
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
-    series.summary = Some("Original summary".to_string());
-    series.publisher = Some("Original publisher".to_string());
-    series.year = Some(2000);
-    SeriesRepository::update(&db, &series, None).await.unwrap();
+    SeriesMetadataRepository::update_summary(&db, series.id, Some("Original summary".to_string()))
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_publisher(
+        &db,
+        series.id,
+        Some("Original publisher".to_string()),
+        None,
+    )
+    .await
+    .unwrap();
+    SeriesMetadataRepository::update_year(&db, series.id, Some(2000))
+        .await
+        .unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -1993,13 +2016,23 @@ async fn test_patch_series_metadata_explicit_null_clears_field() {
         .unwrap();
 
     // Create series with initial metadata
-    let mut series = SeriesRepository::create(&db, library.id, "Test Series", None)
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
-    series.summary = Some("Original summary".to_string());
-    series.publisher = Some("Original publisher".to_string());
-    series.year = Some(2000);
-    SeriesRepository::update(&db, &series, None).await.unwrap();
+    SeriesMetadataRepository::update_summary(&db, series.id, Some("Original summary".to_string()))
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_publisher(
+        &db,
+        series.id,
+        Some("Original publisher".to_string()),
+        None,
+    )
+    .await
+    .unwrap();
+    SeriesMetadataRepository::update_year(&db, series.id, Some(2000))
+        .await
+        .unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -2076,11 +2109,12 @@ async fn test_patch_series_metadata_empty_body_no_changes() {
         .unwrap();
 
     // Create series with initial metadata
-    let mut series = SeriesRepository::create(&db, library.id, "Test Series", None)
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
         .await
         .unwrap();
-    series.summary = Some("Original summary".to_string());
-    SeriesRepository::update(&db, &series, None).await.unwrap();
+    SeriesMetadataRepository::update_summary(&db, series.id, Some("Original summary".to_string()))
+        .await
+        .unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;

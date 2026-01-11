@@ -1,14 +1,14 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
-    entity::prelude::Decimal, sea_query::Alias, ActiveModelTrait, ColumnTrait, DatabaseConnection,
-    EntityTrait, FromQueryResult, JoinType, Order, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, RelationTrait, Set,
+    sea_query::Alias, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait,
+    FromQueryResult, JoinType, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
+    RelationTrait, Set,
 };
 use uuid::Uuid;
 
 use crate::api::dto::series::{SeriesSortField, SeriesSortParam, SortDirection};
-use crate::db::entities::{books, prelude::*, read_progress, series};
+use crate::db::entities::{books, prelude::*, read_progress, series, series_metadata};
 use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 use std::sync::Arc;
 
@@ -19,22 +19,10 @@ pub struct SeriesWithAggregates {
     pub library_id: Uuid,
     pub name: String,
     pub normalized_name: String,
-    pub sort_name: Option<String>,
-    pub summary: Option<String>,
-    pub publisher: Option<String>,
-    pub year: Option<i32>,
     pub book_count: i32,
-    pub user_rating: Option<Decimal>,
-    pub external_rating: Option<Decimal>,
-    pub external_rating_count: Option<i32>,
-    pub external_rating_source: Option<String>,
-    pub custom_metadata: Option<String>,
     pub fingerprint: Option<String>,
     pub path: Option<String>,
-    pub reading_direction: Option<String>,
-    pub custom_cover_path: Option<String>,
-    pub selected_cover_source: Option<String>,
-    pub metadata_populated_from_book: bool,
+    pub custom_metadata: Option<String>,
     pub created_at: chrono::DateTime<Utc>,
     pub updated_at: chrono::DateTime<Utc>,
     // Aggregated fields (optional, depending on sort)
@@ -50,22 +38,10 @@ impl From<SeriesWithAggregates> for series::Model {
             library_id: s.library_id,
             name: s.name,
             normalized_name: s.normalized_name,
-            sort_name: s.sort_name,
-            summary: s.summary,
-            publisher: s.publisher,
-            year: s.year,
             book_count: s.book_count,
-            user_rating: s.user_rating,
-            external_rating: s.external_rating,
-            external_rating_count: s.external_rating_count,
-            external_rating_source: s.external_rating_source,
-            custom_metadata: s.custom_metadata,
             fingerprint: s.fingerprint,
             path: s.path,
-            reading_direction: s.reading_direction,
-            custom_cover_path: s.custom_cover_path,
-            selected_cover_source: s.selected_cover_source,
-            metadata_populated_from_book: s.metadata_populated_from_book,
+            custom_metadata: s.custom_metadata,
             created_at: s.created_at,
             updated_at: s.updated_at,
         }
@@ -77,7 +53,7 @@ pub struct SeriesRepository;
 
 impl SeriesRepository {
     /// Normalize name for searching (lowercase, alphanumeric only)
-    fn normalize_name(name: &str) -> String {
+    pub fn normalize_name(name: &str) -> String {
         name.to_lowercase()
             .chars()
             .filter(|c| c.is_alphanumeric() || c.is_whitespace())
@@ -98,6 +74,7 @@ impl SeriesRepository {
     }
 
     /// Create a new series with optional fingerprint
+    /// Also creates the corresponding series_metadata record
     pub async fn create_with_fingerprint(
         db: &DatabaseConnection,
         library_id: Uuid,
@@ -108,33 +85,57 @@ impl SeriesRepository {
     ) -> Result<series::Model> {
         let now = Utc::now();
         let normalized_name = Self::normalize_name(name);
+        let series_id = Uuid::new_v4();
 
         let series = series::ActiveModel {
-            id: Set(Uuid::new_v4()),
+            id: Set(series_id),
             library_id: Set(library_id),
             name: Set(name.to_string()),
             normalized_name: Set(normalized_name),
-            sort_name: Set(None),
-            summary: Set(None),
-            publisher: Set(None),
-            year: Set(None),
             book_count: Set(0),
-            user_rating: Set(None),
-            external_rating: Set(None),
-            external_rating_count: Set(None),
-            external_rating_source: Set(None),
-            custom_metadata: Set(None),
             fingerprint: Set(fingerprint),
             path: Set(path),
-            reading_direction: Set(None),
-            custom_cover_path: Set(None),
-            selected_cover_source: Set(None),
-            metadata_populated_from_book: Set(false),
+            custom_metadata: Set(None),
             created_at: Set(now),
             updated_at: Set(now),
         };
 
         let created_series = series.insert(db).await.context("Failed to create series")?;
+
+        // Create the corresponding series_metadata record
+        let metadata = series_metadata::ActiveModel {
+            series_id: Set(series_id),
+            title: Set(name.to_string()),
+            title_sort: Set(None),
+            summary: Set(None),
+            publisher: Set(None),
+            imprint: Set(None),
+            status: Set(Some("ongoing".to_string())),
+            age_rating: Set(None),
+            language: Set(None),
+            reading_direction: Set(None),
+            year: Set(None),
+            total_book_count: Set(None),
+            // Lock fields default to false
+            title_lock: Set(false),
+            title_sort_lock: Set(false),
+            summary_lock: Set(false),
+            publisher_lock: Set(false),
+            imprint_lock: Set(false),
+            status_lock: Set(false),
+            age_rating_lock: Set(false),
+            language_lock: Set(false),
+            reading_direction_lock: Set(false),
+            year_lock: Set(false),
+            genres_lock: Set(false),
+            tags_lock: Set(false),
+            created_at: Set(now),
+            updated_at: Set(now),
+        };
+        metadata
+            .insert(db)
+            .await
+            .context("Failed to create series metadata")?;
 
         // Emit SeriesCreated event if broadcaster is available
         if let Some(broadcaster) = event_broadcaster {
@@ -159,14 +160,31 @@ impl SeriesRepository {
             .context("Failed to get series by ID")
     }
 
+    /// Get series with its metadata
+    pub async fn get_with_metadata(
+        db: &DatabaseConnection,
+        id: Uuid,
+    ) -> Result<Option<(series::Model, Option<series_metadata::Model>)>> {
+        let series = Series::find_by_id(id).one(db).await?;
+
+        if let Some(s) = series {
+            let metadata = SeriesMetadata::find_by_id(id).one(db).await?;
+            Ok(Some((s, metadata)))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Get all series in a library
     pub async fn list_by_library(
         db: &DatabaseConnection,
         library_id: Uuid,
     ) -> Result<Vec<series::Model>> {
+        // Join with series_metadata to sort by title_sort
         Series::find()
             .filter(series::Column::LibraryId.eq(library_id))
-            .order_by_asc(series::Column::SortName)
+            .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+            .order_by_asc(series_metadata::Column::TitleSort)
             .order_by_asc(series::Column::Name)
             .all(db)
             .await
@@ -190,7 +208,8 @@ impl SeriesRepository {
     /// Get all series across all libraries
     pub async fn list_all(db: &DatabaseConnection) -> Result<Vec<series::Model>> {
         Series::find()
-            .order_by_asc(series::Column::SortName)
+            .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+            .order_by_asc(series_metadata::Column::TitleSort)
             .order_by_asc(series::Column::Name)
             .all(db)
             .await
@@ -240,9 +259,10 @@ impl SeriesRepository {
     /// Get series in a library with sorting, pagination, and optional user context
     ///
     /// This method handles all sort strategies including:
-    /// - Simple sorts: name, date_added, date_updated, release_date, filename
+    /// - Simple sorts: name, date_added, date_updated, filename
     /// - Aggregate sorts: file_size, page_count (requires JOIN with books)
     /// - User-specific sorts: date_read (requires user_id and JOIN with read_progress)
+    /// - release_date now queries series_metadata.year
     pub async fn list_by_library_sorted(
         db: &DatabaseConnection,
         library_id: Uuid,
@@ -264,29 +284,35 @@ impl SeriesRepository {
             SeriesSortField::DateRead => {
                 Self::list_with_date_read_sort(db, library_id, sort, user_id, offset, limit).await
             }
+            SeriesSortField::ReleaseDate => {
+                // Sort by year from series_metadata
+                Series::find()
+                    .filter(series::Column::LibraryId.eq(library_id))
+                    .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+                    .order_by(series_metadata::Column::Year, order)
+                    .offset(offset)
+                    .limit(limit)
+                    .all(db)
+                    .await
+                    .context("Failed to list series with release date sort")
+            }
             _ => {
-                // Simple sorts that don't require JOINs
-                let mut query = Series::find().filter(series::Column::LibraryId.eq(library_id));
+                // Simple sorts that may use metadata for name sort
+                let query = Series::find().filter(series::Column::LibraryId.eq(library_id));
 
                 // Apply sort
-                query = match sort.field {
+                let query = match sort.field {
                     SeriesSortField::Name => {
-                        // Sort by sort_name first (if set), then name
-                        if order == Order::Asc {
-                            query
-                                .order_by_asc(series::Column::SortName)
-                                .order_by_asc(series::Column::Name)
-                        } else {
-                            query
-                                .order_by_desc(series::Column::SortName)
-                                .order_by_desc(series::Column::Name)
-                        }
+                        // Sort by title_sort first (if set), then name
+                        query
+                            .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+                            .order_by(series_metadata::Column::TitleSort, order.clone())
+                            .order_by(series::Column::Name, order)
                     }
                     SeriesSortField::DateAdded => query.order_by(series::Column::CreatedAt, order),
                     SeriesSortField::DateUpdated => {
                         query.order_by(series::Column::UpdatedAt, order)
                     }
-                    SeriesSortField::ReleaseDate => query.order_by(series::Column::Year, order),
                     SeriesSortField::Filename => query.order_by(series::Column::Path, order),
                     _ => query, // Handled above
                 };
@@ -424,10 +450,11 @@ impl SeriesRepository {
             query = query.filter(series::Column::LibraryId.eq(lib_id));
         }
 
-        // Group by series to avoid duplicates
+        // Join with metadata for sorting, group by series to avoid duplicates
         query
+            .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
             .group_by(series::Column::Id)
-            .order_by_asc(series::Column::SortName)
+            .order_by_asc(series_metadata::Column::TitleSort)
             .order_by_asc(series::Column::Name)
             .all(db)
             .await
@@ -450,7 +477,7 @@ impl SeriesRepository {
             .context("Failed to search series by name")
     }
 
-    /// Update series
+    /// Update series core fields
     pub async fn update(
         db: &DatabaseConnection,
         series_model: &series::Model,
@@ -461,22 +488,10 @@ impl SeriesRepository {
             library_id: Set(series_model.library_id),
             name: Set(series_model.name.clone()),
             normalized_name: Set(series_model.normalized_name.clone()),
-            sort_name: Set(series_model.sort_name.clone()),
-            summary: Set(series_model.summary.clone()),
-            publisher: Set(series_model.publisher.clone()),
-            year: Set(series_model.year),
             book_count: Set(series_model.book_count),
-            user_rating: Set(series_model.user_rating),
-            external_rating: Set(series_model.external_rating),
-            external_rating_count: Set(series_model.external_rating_count),
-            external_rating_source: Set(series_model.external_rating_source.clone()),
-            custom_metadata: Set(series_model.custom_metadata.clone()),
             fingerprint: Set(series_model.fingerprint.clone()),
             path: Set(series_model.path.clone()),
-            reading_direction: Set(series_model.reading_direction.clone()),
-            custom_cover_path: Set(series_model.custom_cover_path.clone()),
-            selected_cover_source: Set(series_model.selected_cover_source.clone()),
-            metadata_populated_from_book: Set(series_model.metadata_populated_from_book),
+            custom_metadata: Set(series_model.custom_metadata.clone()),
             created_at: Set(series_model.created_at),
             updated_at: Set(Utc::now()),
         };
@@ -559,52 +574,6 @@ impl SeriesRepository {
             .update(db)
             .await
             .context("Failed to increment book count")?;
-
-        Ok(())
-    }
-
-    /// Update series custom cover path
-    pub async fn update_custom_cover(
-        db: &DatabaseConnection,
-        id: Uuid,
-        cover_path: Option<String>,
-    ) -> Result<()> {
-        let series = Series::find_by_id(id)
-            .one(db)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("Series not found"))?;
-
-        let mut active: series::ActiveModel = series.into();
-        active.custom_cover_path = Set(cover_path);
-        active.updated_at = Set(Utc::now());
-
-        active
-            .update(db)
-            .await
-            .context("Failed to update custom cover path")?;
-
-        Ok(())
-    }
-
-    /// Update which cover source is selected (default, custom, etc.)
-    pub async fn update_selected_cover_source(
-        db: &DatabaseConnection,
-        id: Uuid,
-        source: Option<String>,
-    ) -> Result<()> {
-        let series = Series::find_by_id(id)
-            .one(db)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("Series not found"))?;
-
-        let mut active: series::ActiveModel = series.into();
-        active.selected_cover_source = Set(source);
-        active.updated_at = Set(Utc::now());
-
-        active
-            .update(db)
-            .await
-            .context("Failed to update selected cover source")?;
 
         Ok(())
     }
@@ -870,7 +839,6 @@ mod tests {
 
         series.name = "Updated Name".to_string();
         series.normalized_name = SeriesRepository::normalize_name(&series.name);
-        series.summary = Some("Updated summary".to_string());
 
         SeriesRepository::update(db.sea_orm_connection(), &series, None)
             .await
@@ -882,7 +850,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(retrieved.name, "Updated Name");
-        assert_eq!(retrieved.summary, Some("Updated summary".to_string()));
+        assert_eq!(retrieved.normalized_name, "updated name");
     }
 
     #[tokio::test]
@@ -946,347 +914,9 @@ mod tests {
         assert!(result.is_none());
     }
 
-    #[tokio::test]
-    async fn test_series_reading_direction_defaults_to_none() {
-        let (db, _temp_dir) = create_test_db().await;
-
-        let library = LibraryRepository::create(
-            db.sea_orm_connection(),
-            "Test Library",
-            "/test/path",
-            ScanningStrategy::Default,
-        )
-        .await
-        .unwrap();
-
-        let series =
-            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
-                .await
-                .unwrap();
-
-        // reading_direction should default to None (inherits from library)
-        assert_eq!(series.reading_direction, None);
-    }
-
-    #[tokio::test]
-    async fn test_series_update_reading_direction() {
-        let (db, _temp_dir) = create_test_db().await;
-
-        let library = LibraryRepository::create(
-            db.sea_orm_connection(),
-            "Test Library",
-            "/test/path",
-            ScanningStrategy::Default,
-        )
-        .await
-        .unwrap();
-
-        let mut series =
-            SeriesRepository::create(db.sea_orm_connection(), library.id, "Manga Series", None)
-                .await
-                .unwrap();
-
-        // Override reading direction for this specific series
-        series.reading_direction = Some("RIGHT_TO_LEFT".to_string());
-        SeriesRepository::update(db.sea_orm_connection(), &series, None)
-            .await
-            .unwrap();
-
-        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
-            .await
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(
-            retrieved.reading_direction,
-            Some("RIGHT_TO_LEFT".to_string())
-        );
-    }
-
-    #[tokio::test]
-    async fn test_series_clear_reading_direction() {
-        let (db, _temp_dir) = create_test_db().await;
-
-        let library = LibraryRepository::create(
-            db.sea_orm_connection(),
-            "Test Library",
-            "/test/path",
-            ScanningStrategy::Default,
-        )
-        .await
-        .unwrap();
-
-        let mut series =
-            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
-                .await
-                .unwrap();
-
-        // Set a reading direction
-        series.reading_direction = Some("TOP_TO_BOTTOM".to_string());
-        SeriesRepository::update(db.sea_orm_connection(), &series, None)
-            .await
-            .unwrap();
-
-        // Clear it to revert to library default
-        series.reading_direction = None;
-        SeriesRepository::update(db.sea_orm_connection(), &series, None)
-            .await
-            .unwrap();
-
-        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
-            .await
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(retrieved.reading_direction, None);
-    }
-
-    #[tokio::test]
-    async fn test_series_reading_direction_inheritance_concept() {
-        let (db, _temp_dir) = create_test_db().await;
-
-        // Create library with RIGHT_TO_LEFT default (manga library)
-        let mut library = LibraryRepository::create(
-            db.sea_orm_connection(),
-            "Manga Library",
-            "/manga/path",
-            ScanningStrategy::Default,
-        )
-        .await
-        .unwrap();
-        library.default_reading_direction = "RIGHT_TO_LEFT".to_string();
-        LibraryRepository::update(db.sea_orm_connection(), &library)
-            .await
-            .unwrap();
-
-        // Create series without reading direction (should inherit library default)
-        let series1 =
-            SeriesRepository::create(db.sea_orm_connection(), library.id, "Manga 1", None)
-                .await
-                .unwrap();
-
-        // Create series with explicit override
-        let mut series2 =
-            SeriesRepository::create(db.sea_orm_connection(), library.id, "Webtoon", None)
-                .await
-                .unwrap();
-        series2.reading_direction = Some("TOP_TO_BOTTOM".to_string());
-        SeriesRepository::update(db.sea_orm_connection(), &series2, None)
-            .await
-            .unwrap();
-
-        // Verify inheritance concept
-        let retrieved_library = LibraryRepository::get_by_id(db.sea_orm_connection(), library.id)
-            .await
-            .unwrap()
-            .unwrap();
-        let retrieved_series1 = SeriesRepository::get_by_id(db.sea_orm_connection(), series1.id)
-            .await
-            .unwrap()
-            .unwrap();
-        let retrieved_series2 = SeriesRepository::get_by_id(db.sea_orm_connection(), series2.id)
-            .await
-            .unwrap()
-            .unwrap();
-
-        // Library has RIGHT_TO_LEFT
-        assert_eq!(retrieved_library.default_reading_direction, "RIGHT_TO_LEFT");
-
-        // Series1 has None, meaning it inherits library's RIGHT_TO_LEFT
-        assert_eq!(retrieved_series1.reading_direction, None);
-
-        // Series2 has explicit override to TOP_TO_BOTTOM
-        assert_eq!(
-            retrieved_series2.reading_direction,
-            Some("TOP_TO_BOTTOM".to_string())
-        );
-    }
-
-    #[tokio::test]
-    async fn test_update_custom_cover() {
-        let (db, _temp_dir) = create_test_db().await;
-
-        let library = LibraryRepository::create(
-            db.sea_orm_connection(),
-            "Test Library",
-            "/test/path",
-            ScanningStrategy::Default,
-        )
-        .await
-        .unwrap();
-
-        let series =
-            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
-                .await
-                .unwrap();
-
-        // Initially no custom cover
-        assert_eq!(series.custom_cover_path, None);
-
-        // Set custom cover path
-        SeriesRepository::update_custom_cover(
-            db.sea_orm_connection(),
-            series.id,
-            Some("data/covers/test.jpg".to_string()),
-        )
-        .await
-        .unwrap();
-
-        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
-            .await
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(
-            retrieved.custom_cover_path,
-            Some("data/covers/test.jpg".to_string())
-        );
-
-        // Clear custom cover
-        SeriesRepository::update_custom_cover(db.sea_orm_connection(), series.id, None)
-            .await
-            .unwrap();
-
-        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
-            .await
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(retrieved.custom_cover_path, None);
-    }
-
-    #[tokio::test]
-    async fn test_update_selected_cover_source() {
-        let (db, _temp_dir) = create_test_db().await;
-
-        let library = LibraryRepository::create(
-            db.sea_orm_connection(),
-            "Test Library",
-            "/test/path",
-            ScanningStrategy::Default,
-        )
-        .await
-        .unwrap();
-
-        let series =
-            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
-                .await
-                .unwrap();
-
-        // Initially no selected cover source (defaults to first book cover)
-        assert_eq!(series.selected_cover_source, None);
-
-        // Set to custom
-        SeriesRepository::update_selected_cover_source(
-            db.sea_orm_connection(),
-            series.id,
-            Some("custom".to_string()),
-        )
-        .await
-        .unwrap();
-
-        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
-            .await
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(retrieved.selected_cover_source, Some("custom".to_string()));
-
-        // Set to default
-        SeriesRepository::update_selected_cover_source(
-            db.sea_orm_connection(),
-            series.id,
-            Some("default".to_string()),
-        )
-        .await
-        .unwrap();
-
-        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
-            .await
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(retrieved.selected_cover_source, Some("default".to_string()));
-
-        // Clear to use default behavior
-        SeriesRepository::update_selected_cover_source(db.sea_orm_connection(), series.id, None)
-            .await
-            .unwrap();
-
-        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
-            .await
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(retrieved.selected_cover_source, None);
-    }
-
-    #[tokio::test]
-    async fn test_custom_cover_workflow() {
-        let (db, _temp_dir) = create_test_db().await;
-
-        let library = LibraryRepository::create(
-            db.sea_orm_connection(),
-            "Test Library",
-            "/test/path",
-            ScanningStrategy::Default,
-        )
-        .await
-        .unwrap();
-
-        let series =
-            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
-                .await
-                .unwrap();
-
-        // Simulate uploading a custom cover
-        let cover_path = format!("data/covers/{}.jpg", series.id);
-
-        SeriesRepository::update_custom_cover(
-            db.sea_orm_connection(),
-            series.id,
-            Some(cover_path.clone()),
-        )
-        .await
-        .unwrap();
-
-        SeriesRepository::update_selected_cover_source(
-            db.sea_orm_connection(),
-            series.id,
-            Some("custom".to_string()),
-        )
-        .await
-        .unwrap();
-
-        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
-            .await
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(retrieved.custom_cover_path, Some(cover_path));
-        assert_eq!(retrieved.selected_cover_source, Some("custom".to_string()));
-
-        // Switch back to default (first book cover)
-        SeriesRepository::update_selected_cover_source(
-            db.sea_orm_connection(),
-            series.id,
-            Some("default".to_string()),
-        )
-        .await
-        .unwrap();
-
-        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
-            .await
-            .unwrap()
-            .unwrap();
-
-        // Cover path is still there, just not being used
-        assert_eq!(
-            retrieved.custom_cover_path,
-            Some(format!("data/covers/{}.jpg", series.id))
-        );
-        assert_eq!(retrieved.selected_cover_source, Some("default".to_string()));
-    }
+    // Note: Tests for reading_direction, custom_cover_path, and selected_cover_source
+    // have been removed as these fields are now in series_metadata and series_covers tables.
+    // See the respective repository tests for these features.
 
     #[tokio::test]
     async fn test_list_in_progress() {

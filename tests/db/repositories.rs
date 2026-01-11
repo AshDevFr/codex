@@ -5,7 +5,7 @@ use chrono::Utc;
 use codex::config::{DatabaseConfig, DatabaseType, SQLiteConfig};
 use codex::db::entities::{books, libraries, read_progress, series, users};
 use codex::db::repositories::{
-    BookRepository, LibraryRepository, PageRepository, SeriesRepository,
+    BookRepository, LibraryRepository, PageRepository, SeriesMetadataRepository, SeriesRepository,
 };
 use codex::db::Database;
 use codex::models::ScanningStrategy;
@@ -1043,34 +1043,41 @@ async fn test_series_reading_direction_override() {
     library.default_reading_direction = "RIGHT_TO_LEFT".to_string();
     LibraryRepository::update(conn, &library).await.unwrap();
 
-    // Create series that inherits library default (reading_direction = None)
+    // Create series that inherits library default (reading_direction = None in metadata)
     let series1 = SeriesRepository::create(conn, library.id, "Regular Manga", None)
         .await
         .unwrap();
-    assert_eq!(series1.reading_direction, None);
+    let metadata1 = SeriesMetadataRepository::get_by_series_id(conn, series1.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(metadata1.reading_direction, None);
 
     // Create series with explicit override for webtoon
-    let mut series2 = SeriesRepository::create(conn, library.id, "Webtoon", None)
+    let series2 = SeriesRepository::create(conn, library.id, "Webtoon", None)
         .await
         .unwrap();
-    series2.reading_direction = Some("TOP_TO_BOTTOM".to_string());
-    SeriesRepository::update(conn, &series2, None)
-        .await
-        .unwrap();
+    SeriesMetadataRepository::update_reading_direction(
+        conn,
+        series2.id,
+        Some("TOP_TO_BOTTOM".to_string()),
+    )
+    .await
+    .unwrap();
 
     // Verify both series persisted correctly
-    let retrieved1 = SeriesRepository::get_by_id(conn, series1.id)
+    let retrieved_metadata1 = SeriesMetadataRepository::get_by_series_id(conn, series1.id)
         .await
         .unwrap()
         .unwrap();
-    let retrieved2 = SeriesRepository::get_by_id(conn, series2.id)
+    let retrieved_metadata2 = SeriesMetadataRepository::get_by_series_id(conn, series2.id)
         .await
         .unwrap()
         .unwrap();
 
-    assert_eq!(retrieved1.reading_direction, None); // Inherits library's RTL
+    assert_eq!(retrieved_metadata1.reading_direction, None); // Inherits library's RTL
     assert_eq!(
-        retrieved2.reading_direction,
+        retrieved_metadata2.reading_direction,
         Some("TOP_TO_BOTTOM".to_string())
     );
 
@@ -1088,22 +1095,28 @@ async fn test_series_reading_direction_clear() {
             .unwrap();
 
     // Create series with explicit direction
-    let mut series = SeriesRepository::create(conn, library.id, "Test Series", None)
+    let series = SeriesRepository::create(conn, library.id, "Test Series", None)
         .await
         .unwrap();
-    series.reading_direction = Some("TOP_TO_BOTTOM".to_string());
-    SeriesRepository::update(conn, &series, None).await.unwrap();
+    SeriesMetadataRepository::update_reading_direction(
+        conn,
+        series.id,
+        Some("TOP_TO_BOTTOM".to_string()),
+    )
+    .await
+    .unwrap();
 
     // Clear it to revert to library default
-    series.reading_direction = None;
-    SeriesRepository::update(conn, &series, None).await.unwrap();
+    SeriesMetadataRepository::update_reading_direction(conn, series.id, None)
+        .await
+        .unwrap();
 
     // Verify it's cleared
-    let retrieved = SeriesRepository::get_by_id(conn, series.id)
+    let retrieved_metadata = SeriesMetadataRepository::get_by_series_id(conn, series.id)
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(retrieved.reading_direction, None);
+    assert_eq!(retrieved_metadata.reading_direction, None);
 
     db.close().await;
 }

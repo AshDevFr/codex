@@ -1,4 +1,4 @@
-use sea_orm_migration::{prelude::*, schema::*};
+use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -6,6 +6,8 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        // Create slim series table - core identity only
+        // Rich metadata is in series_metadata table (1:1 relationship)
         manager
             .create_table(
                 Table::create()
@@ -13,29 +15,21 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(ColumnDef::new(Series::Id).uuid().not_null().primary_key())
                     .col(ColumnDef::new(Series::LibraryId).uuid().not_null())
-                    .col(ColumnDef::new(Series::Name).string().not_null())
-                    .col(ColumnDef::new(Series::NormalizedName).string().not_null())
-                    .col(ColumnDef::new(Series::SortName).string())
-                    .col(ColumnDef::new(Series::Summary).text())
-                    .col(ColumnDef::new(Series::Publisher).string())
-                    .col(ColumnDef::new(Series::Year).integer())
-                    .col(ColumnDef::new(Series::BookCount).integer().not_null())
-                    .col(ColumnDef::new(Series::UserRating).decimal())
-                    .col(ColumnDef::new(Series::ExternalRating).decimal())
-                    .col(ColumnDef::new(Series::ExternalRatingCount).integer())
-                    .col(ColumnDef::new(Series::ExternalRatingSource).string())
-                    .col(ColumnDef::new(Series::CustomMetadata).text())
-                    .col(ColumnDef::new(Series::Fingerprint).string())
-                    .col(ColumnDef::new(Series::Path).string())
-                    .col(ColumnDef::new(Series::ReadingDirection).string())
-                    .col(ColumnDef::new(Series::CustomCoverPath).string())
-                    .col(ColumnDef::new(Series::SelectedCoverSource).string())
+                    .col(ColumnDef::new(Series::Name).string_len(500).not_null())
                     .col(
-                        ColumnDef::new(Series::MetadataPopulatedFromBook)
-                            .boolean()
-                            .not_null()
-                            .default(false),
+                        ColumnDef::new(Series::NormalizedName)
+                            .string_len(500)
+                            .not_null(),
                     )
+                    .col(
+                        ColumnDef::new(Series::BookCount)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .col(ColumnDef::new(Series::Fingerprint).string_len(64))
+                    .col(ColumnDef::new(Series::Path).text())
+                    .col(ColumnDef::new(Series::CustomMetadata).text()) // JSON escape hatch for user-defined fields
                     .col(
                         ColumnDef::new(Series::CreatedAt)
                             .timestamp_with_time_zone()
@@ -58,13 +52,24 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        // Add index on normalized_name for search performance
+        // Index on normalized_name for search performance
         manager
             .create_index(
                 Index::create()
                     .name("idx_series_normalized_name")
                     .table(Series::Table)
                     .col(Series::NormalizedName)
+                    .to_owned(),
+            )
+            .await?;
+
+        // Index on library_id for filtering
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_series_library_id")
+                    .table(Series::Table)
+                    .col(Series::LibraryId)
                     .to_owned(),
             )
             .await?;
@@ -80,28 +85,16 @@ impl MigrationTrait for Migration {
 }
 
 #[derive(DeriveIden)]
-enum Series {
+pub enum Series {
     Table,
     Id,
     LibraryId,
     Name,
     NormalizedName,
-    SortName,
-    Summary,
-    Publisher,
-    Year,
     BookCount,
-    UserRating,
-    ExternalRating,
-    ExternalRatingCount,
-    ExternalRatingSource,
-    CustomMetadata,
     Fingerprint,
     Path,
-    ReadingDirection,
-    CustomCoverPath,
-    SelectedCoverSource,
-    MetadataPopulatedFromBook,
+    CustomMetadata,
     CreatedAt,
     UpdatedAt,
 }

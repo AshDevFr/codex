@@ -279,13 +279,13 @@ pub async fn opds_library_series(
     }
 
     // Add series entries
+    // Note: Summary is now in series_metadata table - using empty for now in OPDS
     for series in series_list {
         let mut entry = OpdsEntry::new(
             format!("urn:uuid:series-{}", series.id),
             series.name.clone(),
             series.updated_at,
         )
-        .with_summary("text", series.summary.unwrap_or_default())
         .add_link(OpdsLink::subsection_link(
             format!("{}/series/{}", base_url, series.id),
             series.name.clone(),

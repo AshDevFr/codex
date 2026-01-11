@@ -142,13 +142,13 @@ pub async fn opds_search(
         .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
 
     // Add series entries (navigation to series books)
+    // Note: Summary is now in series_metadata table - skipping for OPDS search results
     for series in series_list.iter().take(20) {
         let entry = OpdsEntry::new(
             format!("urn:uuid:series-{}", series.id),
             series.name.clone(),
             series.updated_at,
         )
-        .with_summary("text", series.summary.clone().unwrap_or_default())
         .add_link(OpdsLink::subsection_link(
             format!("{}/series/{}", base_url, series.id),
             series.name.clone(),

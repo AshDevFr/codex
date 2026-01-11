@@ -1,3 +1,8 @@
+//! `SeaORM` Entity for series table
+//!
+//! This table contains core series identity fields only.
+//! Rich metadata is stored in series_metadata table (1:1 relationship).
+
 use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -11,22 +16,10 @@ pub struct Model {
     pub library_id: Uuid,
     pub name: String,
     pub normalized_name: String,
-    pub sort_name: Option<String>,
-    pub summary: Option<String>,
-    pub publisher: Option<String>,
-    pub year: Option<i32>,
     pub book_count: i32,
-    pub user_rating: Option<Decimal>,
-    pub external_rating: Option<Decimal>,
-    pub external_rating_count: Option<i32>,
-    pub external_rating_source: Option<String>,
-    pub custom_metadata: Option<String>,
     pub fingerprint: Option<String>,
     pub path: Option<String>,
-    pub reading_direction: Option<String>,
-    pub custom_cover_path: Option<String>,
-    pub selected_cover_source: Option<String>,
-    pub metadata_populated_from_book: bool,
+    pub custom_metadata: Option<String>, // JSON escape hatch for user-defined fields
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -45,6 +38,23 @@ pub enum Relation {
     Libraries,
     #[sea_orm(has_many = "super::metadata_sources::Entity")]
     MetadataSources,
+    // Series metadata enhancement relations
+    #[sea_orm(has_one = "super::series_metadata::Entity")]
+    SeriesMetadata,
+    #[sea_orm(has_many = "super::series_genres::Entity")]
+    SeriesGenres,
+    #[sea_orm(has_many = "super::series_tags::Entity")]
+    SeriesTags,
+    #[sea_orm(has_many = "super::series_alternate_titles::Entity")]
+    SeriesAlternateTitles,
+    #[sea_orm(has_many = "super::series_external_ratings::Entity")]
+    SeriesExternalRatings,
+    #[sea_orm(has_many = "super::series_external_links::Entity")]
+    SeriesExternalLinks,
+    #[sea_orm(has_many = "super::series_covers::Entity")]
+    SeriesCovers,
+    #[sea_orm(has_many = "super::user_series_ratings::Entity")]
+    UserSeriesRatings,
 }
 
 impl Related<super::books::Entity> for Entity {
@@ -62,6 +72,73 @@ impl Related<super::libraries::Entity> for Entity {
 impl Related<super::metadata_sources::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::MetadataSources.def()
+    }
+}
+
+impl Related<super::series_metadata::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::SeriesMetadata.def()
+    }
+}
+
+impl Related<super::series_genres::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::SeriesGenres.def()
+    }
+}
+
+impl Related<super::series_tags::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::SeriesTags.def()
+    }
+}
+
+impl Related<super::series_alternate_titles::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::SeriesAlternateTitles.def()
+    }
+}
+
+impl Related<super::series_external_ratings::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::SeriesExternalRatings.def()
+    }
+}
+
+impl Related<super::series_external_links::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::SeriesExternalLinks.def()
+    }
+}
+
+impl Related<super::series_covers::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::SeriesCovers.def()
+    }
+}
+
+impl Related<super::user_series_ratings::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::UserSeriesRatings.def()
+    }
+}
+
+// Many-to-many relationships via junction tables
+impl Related<super::genres::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::series_genres::Relation::Genre.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(super::series_genres::Relation::Series.def().rev())
+    }
+}
+
+impl Related<super::tags::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::series_tags::Relation::Tag.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(super::series_tags::Relation::Series.def().rev())
     }
 }
 

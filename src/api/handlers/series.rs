@@ -10,8 +10,11 @@ use crate::api::{
     extractors::{AuthContext, AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
-use crate::db::entities::series;
-use crate::db::repositories::{BookRepository, ReadProgressRepository, SeriesRepository};
+use crate::db::entities::{series, series_metadata};
+use crate::db::repositories::{
+    BookRepository, ReadProgressRepository, SeriesCoversRepository, SeriesMetadataRepository,
+    SeriesRepository,
+};
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
 use crate::require_permission;
 use axum::{
@@ -61,6 +64,7 @@ fn default_page_size() -> u64 {
 }
 
 /// Helper function to convert series model to DTO with unread count
+/// Fetches metadata and cover info from related tables
 async fn series_to_dto(
     db: &DatabaseConnection,
     series: series::Model,
@@ -75,18 +79,32 @@ async fn series_to_dto(
         None
     };
 
+    // Fetch metadata from series_metadata table
+    let metadata = SeriesMetadataRepository::get_by_series_id(db, series.id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series metadata: {:?}", e)))?;
+
+    // Fetch cover info from series_covers table
+    let selected_cover = SeriesCoversRepository::get_selected(db, series.id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series cover: {:?}", e)))?;
+
+    let has_custom_cover = SeriesCoversRepository::has_custom_cover(db, series.id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check custom cover: {:?}", e)))?;
+
     Ok(SeriesDto {
         id: series.id,
         library_id: series.library_id,
         name: series.name,
-        sort_name: series.sort_name,
-        description: series.summary,
-        publisher: series.publisher,
-        year: series.year,
+        sort_name: metadata.as_ref().and_then(|m| m.title_sort.clone()),
+        description: metadata.as_ref().and_then(|m| m.summary.clone()),
+        publisher: metadata.as_ref().and_then(|m| m.publisher.clone()),
+        year: metadata.as_ref().and_then(|m| m.year),
         book_count: series.book_count as i64,
         path: series.path,
-        selected_cover_source: series.selected_cover_source.clone(),
-        has_custom_cover: Some(series.custom_cover_path.is_some()),
+        selected_cover_source: selected_cover.map(|c| c.source),
+        has_custom_cover: Some(has_custom_cover),
         unread_count,
         created_at: series.created_at,
         updated_at: series.updated_at,
@@ -437,23 +455,35 @@ pub async fn upload_series_cover(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to write cover file: {}", e)))?;
 
-    // Update series with custom cover path
-    SeriesRepository::update_custom_cover(
-        &state.db,
-        series_id,
-        Some(filepath.to_string_lossy().to_string()),
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to update series cover: {}", e)))?;
+    // Check if a custom cover already exists and update or create accordingly
+    let existing_custom = SeriesCoversRepository::get_by_source(&state.db, series_id, "custom")
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check existing cover: {}", e)))?;
 
-    // Set the selected cover source to "custom"
-    SeriesRepository::update_selected_cover_source(
-        &state.db,
-        series_id,
-        Some("custom".to_string()),
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to update selected cover source: {}", e)))?;
+    if let Some(existing) = existing_custom {
+        // Update existing custom cover
+        SeriesCoversRepository::update_path(&state.db, existing.id, &filepath.to_string_lossy())
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to update cover path: {}", e)))?;
+
+        // Select this cover
+        SeriesCoversRepository::select_cover(&state.db, series_id, existing.id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to select cover: {}", e)))?;
+    } else {
+        // Create new custom cover and select it
+        SeriesCoversRepository::create(
+            &state.db,
+            series_id,
+            "custom",
+            &filepath.to_string_lossy(),
+            true, // is_selected
+            None,
+            None,
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to create cover: {}", e)))?;
+    }
 
     // Emit cover updated event
     let event = EntityChangeEvent {
@@ -503,12 +533,19 @@ pub async fn set_series_cover_source(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
 
-    // Update the selected cover source
-    SeriesRepository::update_selected_cover_source(&state.db, series_id, Some(request.source))
+    // Select the cover by source (e.g., "custom", "book:uuid")
+    let selected = SeriesCoversRepository::select_by_source(&state.db, series_id, &request.source)
         .await
         .map_err(|e| {
             ApiError::Internal(format!("Failed to update selected cover source: {}", e))
         })?;
+
+    if selected.is_none() {
+        return Err(ApiError::NotFound(format!(
+            "Cover source '{}' not found for this series",
+            request.source
+        )));
+    }
 
     // Emit cover updated event
     let event = EntityChangeEvent {
@@ -550,29 +587,26 @@ pub async fn get_series_thumbnail(
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    // Fetch series
-    let series = SeriesRepository::get_by_id(&state.db, series_id)
+    // Verify series exists
+    let _series = SeriesRepository::get_by_id(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
 
-    // Determine which cover to use based on selected_cover_source
-    let image_data = match series.selected_cover_source.as_deref() {
-        Some("custom") => {
-            // Use custom uploaded cover
-            if let Some(cover_path) = series.custom_cover_path {
-                fs::read(&cover_path).await.map_err(|e| {
-                    ApiError::Internal(format!("Failed to read custom cover: {}", e))
-                })?
-            } else {
-                // Fall back to default if custom cover path is missing
-                get_default_series_cover(&state, series_id).await?
-            }
-        }
-        _ => {
-            // Use default (first book's cover)
-            get_default_series_cover(&state, series_id).await?
-        }
+    // Get the selected cover from series_covers table
+    let selected_cover = SeriesCoversRepository::get_selected(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch cover: {}", e)))?;
+
+    // Determine which cover to use based on the selected cover
+    let image_data = if let Some(cover) = selected_cover {
+        // Use the selected cover's path
+        fs::read(&cover.path).await.map_err(|e| {
+            ApiError::Internal(format!("Failed to read cover from {}: {}", cover.path, e))
+        })?
+    } else {
+        // No selected cover, use default (first book's cover)
+        get_default_series_cover(&state, series_id).await?
     };
 
     // Generate thumbnail (max 400px width or height)
@@ -977,16 +1011,8 @@ fn apply_series_sorting(series_list: &mut [crate::db::entities::series::Model], 
                 }
             });
         }
-        "year" => {
-            series_list.sort_by(|a, b| {
-                let cmp = a.year.cmp(&b.year);
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
+        // Note: "year" sorting requires metadata table join - use repository-level sorting
+        // "year" => { ... }
         _ => {} // Unknown field, skip sorting
     }
 }
@@ -1343,28 +1369,49 @@ pub async fn replace_series_metadata(
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
 
+    // Get existing metadata
+    let existing_metadata = SeriesMetadataRepository::get_by_series_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::Internal("Series metadata not found".to_string()))?;
+
     // Full replacement - all fields from request become the new state
     use sea_orm::{ActiveModelTrait, Set};
-    let mut active: series::ActiveModel = existing_series.into();
+    let mut active: series_metadata::ActiveModel = existing_metadata.into();
 
-    active.sort_name = Set(request.sort_name);
+    active.title_sort = Set(request.sort_name);
     active.summary = Set(request.summary);
     active.publisher = Set(request.publisher);
     active.year = Set(request.year);
     active.reading_direction = Set(request.reading_direction);
-    active.custom_metadata = Set(request.custom_metadata);
     active.updated_at = Set(Utc::now());
 
-    let updated = active
+    let updated_metadata = active
         .update(&state.db)
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to update series: {}", e)))?;
+        .map_err(|e| ApiError::Internal(format!("Failed to update series metadata: {}", e)))?;
+
+    // Update custom_metadata on series table if provided
+    if request.custom_metadata.is_some() || request.custom_metadata.is_none() {
+        let mut series_active: series::ActiveModel = existing_series.into();
+        series_active.custom_metadata = Set(request.custom_metadata.clone());
+        series_active.updated_at = Set(Utc::now());
+        series_active
+            .update(&state.db)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to update series: {}", e)))?;
+    }
 
     // Emit update event
     let event = EntityChangeEvent {
         event: EntityEvent::SeriesUpdated {
-            series_id: updated.id,
-            library_id: updated.library_id,
+            series_id,
+            library_id: SeriesRepository::get_by_id(&state.db, series_id)
+                .await
+                .ok()
+                .flatten()
+                .map(|s| s.library_id)
+                .unwrap_or_default(),
             fields: Some(vec![
                 "sort_name".to_string(),
                 "summary".to_string(),
@@ -1380,14 +1427,14 @@ pub async fn replace_series_metadata(
     let _ = state.event_broadcaster.emit(event);
 
     Ok(Json(SeriesMetadataResponse {
-        id: updated.id,
-        sort_name: updated.sort_name,
-        summary: updated.summary,
-        publisher: updated.publisher,
-        year: updated.year,
-        reading_direction: updated.reading_direction,
-        custom_metadata: updated.custom_metadata,
-        updated_at: updated.updated_at,
+        id: series_id,
+        sort_name: updated_metadata.title_sort,
+        summary: updated_metadata.summary,
+        publisher: updated_metadata.publisher,
+        year: updated_metadata.year,
+        reading_direction: updated_metadata.reading_direction,
+        custom_metadata: request.custom_metadata,
+        updated_at: updated_metadata.updated_at,
     }))
 }
 
@@ -1427,53 +1474,78 @@ pub async fn patch_series_metadata(
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
 
+    // Get existing metadata
+    let existing_metadata = SeriesMetadataRepository::get_by_series_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::Internal("Series metadata not found".to_string()))?;
+
     // Partial update - only set fields that were provided
     use sea_orm::{ActiveModelTrait, Set};
-    let mut active: series::ActiveModel = existing_series.into();
-    let mut has_changes = false;
+    let mut metadata_active: series_metadata::ActiveModel = existing_metadata.clone().into();
+    let mut has_metadata_changes = false;
+    let mut has_series_changes = false;
+    let mut custom_metadata_value: Option<String> = existing_series.custom_metadata.clone();
 
     if let Some(opt) = request.sort_name.to_active_value() {
-        active.sort_name = Set(opt);
-        has_changes = true;
+        metadata_active.title_sort = Set(opt);
+        has_metadata_changes = true;
     }
     if let Some(opt) = request.summary.to_active_value() {
-        active.summary = Set(opt);
-        has_changes = true;
+        metadata_active.summary = Set(opt);
+        has_metadata_changes = true;
     }
     if let Some(opt) = request.publisher.to_active_value() {
-        active.publisher = Set(opt);
-        has_changes = true;
+        metadata_active.publisher = Set(opt);
+        has_metadata_changes = true;
     }
     if let Some(opt) = request.year.to_active_value() {
-        active.year = Set(opt);
-        has_changes = true;
+        metadata_active.year = Set(opt);
+        has_metadata_changes = true;
     }
     if let Some(opt) = request.reading_direction.to_active_value() {
-        active.reading_direction = Set(opt);
-        has_changes = true;
+        metadata_active.reading_direction = Set(opt);
+        has_metadata_changes = true;
     }
     if let Some(opt) = request.custom_metadata.to_active_value() {
-        active.custom_metadata = Set(opt);
-        has_changes = true;
+        custom_metadata_value = opt.clone();
+        has_series_changes = true;
     }
 
-    // Only update timestamp if there were actual changes
-    if has_changes {
-        active.updated_at = Set(Utc::now());
-    }
+    // Update metadata table if needed
+    let updated_metadata = if has_metadata_changes {
+        metadata_active.updated_at = Set(Utc::now());
+        metadata_active
+            .update(&state.db)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to update series metadata: {}", e)))?
+    } else {
+        existing_metadata
+    };
 
-    let updated = active
-        .update(&state.db)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to update series: {}", e)))?;
+    // Update series table for custom_metadata if needed
+    if has_series_changes {
+        let mut series_active: series::ActiveModel = existing_series.into();
+        series_active.custom_metadata = Set(custom_metadata_value.clone());
+        series_active.updated_at = Set(Utc::now());
+        series_active
+            .update(&state.db)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to update series: {}", e)))?;
+    }
 
     // Emit update event
-    if has_changes {
+    if has_metadata_changes || has_series_changes {
         let event = EntityChangeEvent {
             event: EntityEvent::SeriesUpdated {
-                series_id: updated.id,
-                library_id: updated.library_id,
-                fields: None, // PATCH updates only changed fields, but we don't track which ones here
+                series_id,
+                library_id: SeriesRepository::get_by_id(&state.db, series_id)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|s| s.library_id)
+                    .unwrap_or_default(),
+                fields: None, // PATCH updates only changed fields
             },
             timestamp: Utc::now(),
             user_id: Some(auth.user_id),
@@ -1482,14 +1554,14 @@ pub async fn patch_series_metadata(
     }
 
     Ok(Json(SeriesMetadataResponse {
-        id: updated.id,
-        sort_name: updated.sort_name,
-        summary: updated.summary,
-        publisher: updated.publisher,
-        year: updated.year,
-        reading_direction: updated.reading_direction,
-        custom_metadata: updated.custom_metadata,
-        updated_at: updated.updated_at,
+        id: series_id,
+        sort_name: updated_metadata.title_sort,
+        summary: updated_metadata.summary,
+        publisher: updated_metadata.publisher,
+        year: updated_metadata.year,
+        reading_direction: updated_metadata.reading_direction,
+        custom_metadata: custom_metadata_value,
+        updated_at: updated_metadata.updated_at,
     }))
 }
 
