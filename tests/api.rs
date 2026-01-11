@@ -4,13 +4,19 @@
 // request/response handling, and error responses.
 
 mod api {
+    mod alternate_titles;
     mod analyze;
     mod api_keys;
     mod auth;
     mod books;
+    mod covers;
     mod duplicates;
+    mod external_links;
+    mod external_ratings;
     mod filesystem;
+    mod genres;
     mod libraries;
+    mod metadata_locks;
     mod metrics;
     mod opds;
     mod opds2;
@@ -20,4 +26,6 @@ mod api {
     mod settings;
     mod setup;
     mod sse;
+    mod tags;
+    mod user_ratings;
 }

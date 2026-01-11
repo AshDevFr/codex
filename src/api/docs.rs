@@ -81,6 +81,54 @@ Codex provides OPDS catalog feeds for e-reader applications:
         handlers::download_series,
         handlers::replace_series_metadata,
         handlers::patch_series_metadata,
+        handlers::get_full_series_metadata,
+        handlers::get_metadata_locks,
+        handlers::update_metadata_locks,
+
+        // Genre endpoints
+        handlers::list_genres,
+        handlers::get_series_genres,
+        handlers::set_series_genres,
+        handlers::add_series_genre,
+        handlers::remove_series_genre,
+        handlers::delete_genre,
+        handlers::cleanup_genres,
+
+        // Tag endpoints
+        handlers::list_tags,
+        handlers::get_series_tags,
+        handlers::set_series_tags,
+        handlers::add_series_tag,
+        handlers::remove_series_tag,
+        handlers::delete_tag,
+        handlers::cleanup_tags,
+
+        // User rating endpoints
+        handlers::get_series_rating,
+        handlers::set_series_rating,
+        handlers::delete_series_rating,
+        handlers::list_user_ratings,
+
+        // Alternate title endpoints
+        handlers::get_series_alternate_titles,
+        handlers::create_alternate_title,
+        handlers::update_alternate_title,
+        handlers::delete_alternate_title,
+
+        // External rating endpoints
+        handlers::get_series_external_ratings,
+        handlers::create_external_rating,
+        handlers::delete_external_rating,
+
+        // External link endpoints
+        handlers::get_series_external_links,
+        handlers::create_external_link,
+        handlers::delete_external_link,
+
+        // Cover management endpoints
+        handlers::list_series_covers,
+        handlers::select_series_cover,
+        handlers::delete_series_cover,
 
         // Book endpoints
         handlers::list_books,
@@ -221,6 +269,48 @@ Codex provides OPDS catalog feeds for e-reader applications:
             dto::ReplaceSeriesMetadataRequest,
             dto::PatchSeriesMetadataRequest,
             dto::SeriesMetadataResponse,
+            dto::FullSeriesMetadataResponse,
+            dto::MetadataLocks,
+            dto::UpdateMetadataLocksRequest,
+
+            // Genre DTOs
+            dto::GenreDto,
+            dto::GenreListResponse,
+            dto::SetSeriesGenresRequest,
+            dto::AddSeriesGenreRequest,
+            dto::TaxonomyCleanupResponse,
+
+            // Tag DTOs
+            dto::TagDto,
+            dto::TagListResponse,
+            dto::SetSeriesTagsRequest,
+            dto::AddSeriesTagRequest,
+
+            // User Rating DTOs
+            dto::UserSeriesRatingDto,
+            dto::UserRatingsListResponse,
+            dto::SetUserRatingRequest,
+
+            // Alternate Title DTOs
+            dto::AlternateTitleDto,
+            dto::AlternateTitleListResponse,
+            dto::CreateAlternateTitleRequest,
+            dto::UpdateAlternateTitleRequest,
+
+            // External Rating DTOs
+            dto::ExternalRatingDto,
+            dto::ExternalRatingListResponse,
+            dto::CreateExternalRatingRequest,
+
+            // External Link DTOs
+            dto::ExternalLinkDto,
+            dto::ExternalLinkListResponse,
+            dto::CreateExternalLinkRequest,
+
+            // Cover DTOs
+            dto::SeriesCoverDto,
+            dto::SeriesCoverListResponse,
+
             dto::BookDto,
             dto::BookListResponse,
             dto::BookDetailResponse,
@@ -311,6 +401,9 @@ Codex provides OPDS catalog feeds for e-reader applications:
         (name = "auth", description = "Authentication endpoints"),
         (name = "libraries", description = "Library management endpoints"),
         (name = "series", description = "Series browsing and search endpoints"),
+        (name = "genres", description = "Genre taxonomy endpoints for categorizing series"),
+        (name = "tags", description = "Tag taxonomy endpoints for labeling series"),
+        (name = "ratings", description = "User series rating endpoints"),
         (name = "books", description = "Book details and metadata endpoints"),
         (name = "pages", description = "Page image serving endpoints"),
         (name = "Reading Progress", description = "Reading progress tracking endpoints"),

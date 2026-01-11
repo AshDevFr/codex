@@ -338,3 +338,33 @@ pub fn delete_request_with_auth(uri: &str, token: &str) -> Request<String> {
         .body(String::new())
         .unwrap()
 }
+
+/// Helper to create a DELETE request without Authorization header
+pub fn delete_request(uri: &str) -> Request<String> {
+    Request::builder()
+        .method("DELETE")
+        .uri(uri)
+        .body(String::new())
+        .unwrap()
+}
+
+/// Helper to create a PUT request with JSON body
+pub fn put_request(uri: &str) -> Request<String> {
+    Request::builder()
+        .method("PUT")
+        .uri(uri)
+        .header("Content-Type", "application/json")
+        .body(String::new())
+        .unwrap()
+}
+
+/// Helper to create a PUT request with JSON body and Authorization header
+pub fn put_request_with_auth(uri: &str, body: &str, token: &str) -> Request<String> {
+    Request::builder()
+        .method("PUT")
+        .uri(uri)
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", token))
+        .body(body.to_string())
+        .unwrap()
+}

@@ -209,6 +209,16 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/series/:id/cover/source",
             patch(handlers::set_series_cover_source),
         )
+        // Series covers routes (multi-cover management)
+        .route("/series/:id/covers", get(handlers::list_series_covers))
+        .route(
+            "/series/:id/covers/:cover_id/select",
+            put(handlers::select_series_cover),
+        )
+        .route(
+            "/series/:id/covers/:cover_id",
+            delete(handlers::delete_series_cover),
+        )
         .route(
             "/series/:id/analyze",
             post(handlers::trigger_series_analysis),
@@ -227,6 +237,91 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/series/:id/metadata",
             patch(handlers::patch_series_metadata),
         )
+        .route(
+            "/series/:id/metadata/full",
+            get(handlers::get_full_series_metadata),
+        )
+        .route(
+            "/series/:id/metadata/locks",
+            get(handlers::get_metadata_locks),
+        )
+        .route(
+            "/series/:id/metadata/locks",
+            put(handlers::update_metadata_locks),
+        )
+        // Series genres routes (protected)
+        .route("/series/:id/genres", get(handlers::get_series_genres))
+        .route("/series/:id/genres", put(handlers::set_series_genres))
+        .route("/series/:id/genres", post(handlers::add_series_genre))
+        .route(
+            "/series/:id/genres/:genre_id",
+            delete(handlers::remove_series_genre),
+        )
+        // Series tags routes (protected)
+        .route("/series/:id/tags", get(handlers::get_series_tags))
+        .route("/series/:id/tags", put(handlers::set_series_tags))
+        .route("/series/:id/tags", post(handlers::add_series_tag))
+        .route(
+            "/series/:id/tags/:tag_id",
+            delete(handlers::remove_series_tag),
+        )
+        // Series user rating routes (protected)
+        .route("/series/:id/rating", get(handlers::get_series_rating))
+        .route("/series/:id/rating", put(handlers::set_series_rating))
+        .route("/series/:id/rating", delete(handlers::delete_series_rating))
+        // Series alternate titles routes (protected)
+        .route(
+            "/series/:id/alternate-titles",
+            get(handlers::get_series_alternate_titles),
+        )
+        .route(
+            "/series/:id/alternate-titles",
+            post(handlers::create_alternate_title),
+        )
+        .route(
+            "/series/:id/alternate-titles/:title_id",
+            patch(handlers::update_alternate_title),
+        )
+        .route(
+            "/series/:id/alternate-titles/:title_id",
+            delete(handlers::delete_alternate_title),
+        )
+        // Series external ratings routes (protected)
+        .route(
+            "/series/:id/external-ratings",
+            get(handlers::get_series_external_ratings),
+        )
+        .route(
+            "/series/:id/external-ratings",
+            post(handlers::create_external_rating),
+        )
+        .route(
+            "/series/:id/external-ratings/:source",
+            delete(handlers::delete_external_rating),
+        )
+        // Series external links routes (protected)
+        .route(
+            "/series/:id/external-links",
+            get(handlers::get_series_external_links),
+        )
+        .route(
+            "/series/:id/external-links",
+            post(handlers::create_external_link),
+        )
+        .route(
+            "/series/:id/external-links/:source",
+            delete(handlers::delete_external_link),
+        )
+        // Global genre routes (protected, cleanup/delete require admin)
+        .route("/genres", get(handlers::list_genres))
+        .route("/genres/cleanup", post(handlers::cleanup_genres))
+        .route("/genres/:id", delete(handlers::delete_genre))
+        // Global tag routes (protected, cleanup/delete require admin)
+        .route("/tags", get(handlers::list_tags))
+        .route("/tags/cleanup", post(handlers::cleanup_tags))
+        .route("/tags/:id", delete(handlers::delete_tag))
+        // User ratings routes (protected)
+        .route("/user/ratings", get(handlers::list_user_ratings))
         // Book routes (protected)
         .route("/books", get(handlers::list_books))
         .route("/books/:id", get(handlers::get_book))
