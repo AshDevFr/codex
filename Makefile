@@ -107,19 +107,26 @@ test-clean: ## Stop test database and remove volumes
 # =============================================================================
 
 docs-install: ## Install documentation dependencies
-	cd docs && yarn install
+	cd docs && npm install
 
 docs-start: ## Start documentation dev server
-	cd docs && yarn start
+	cd docs && npm start
 
 docs-build: ## Build documentation for production
-	cd docs && yarn build
+	cd docs && npm run build
 
 docs-serve: ## Serve built documentation locally
-	cd docs && yarn serve
+	cd docs && npm run serve
 
 docs-clear: ## Clear documentation cache
-	cd docs && yarn clear
+	cd docs && npm run clear
+
+docs-gen-api-docs: ## Generate API docs
+	@$(MAKE) openapi
+	cd docs && npm run gen-api-docs
+
+docs-clean-api-docs: ## Clean API docs
+	cd docs && npm run clean-api-docs
 
 # =============================================================================
 # Local Development (without Docker)

@@ -1,4 +1,5 @@
 import type { SidebarsConfig } from "@docusaurus/plugin-content-docs";
+import apiSidebar from "./apiSidebar";
 
 const sidebars: SidebarsConfig = {
   tutorialSidebar: [
@@ -22,11 +23,6 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: "category",
-      label: "Reference",
-      items: ["api"],
-    },
-    {
-      type: "category",
       label: "Development",
       items: [
         "development/development",
@@ -35,6 +31,7 @@ const sidebars: SidebarsConfig = {
       ],
     },
   ],
+  apiSidebar,
 };
 
 export default sidebars;

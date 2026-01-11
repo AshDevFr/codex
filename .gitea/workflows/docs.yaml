@@ -6,11 +6,13 @@ on:
       - main
     paths:
       - 'docs/**'
+      - 'web/openapi.json'
   pull_request:
     branches:
       - main
     paths:
       - 'docs/**'
+      - 'web/openapi.json'
   workflow_dispatch: # Allow manual trigger
 
 concurrency:
@@ -35,6 +37,10 @@ jobs:
       - name: Install dependencies
         working-directory: docs
         run: npm ci
+
+      - name: Generate API docs from OpenAPI spec
+        working-directory: docs
+        run: npm run gen-api-docs
 
       - name: Build docs
         working-directory: docs

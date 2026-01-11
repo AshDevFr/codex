@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Codex API",
-    "description": "REST API for Codex digital library server",
+    "description": "REST API for Codex, a digital library server for comics, manga, and ebooks.\n\n## Interactive API Documentation\n\nYou can explore and test this API interactively:\n\n- **Hosted Documentation**: Visit [codex.4sh.dev/docs/api](https://codex.4sh.dev/docs/api) for the full API reference\n- **Your Instance**: If you have Scalar UI enabled, access `/api/docs` on your Codex server\n\n## Authentication\n\nMost endpoints require authentication. Codex supports two authentication methods:\n\n1. **JWT Bearer Token**: Obtain a token via `POST /api/v1/auth/login`, then include it as `Authorization: Bearer <token>`\n2. **API Key**: Generate an API key in the web UI or via the API, then include it as `X-API-Key: <key>` header\n\n## OPDS Support\n\nCodex provides OPDS catalog feeds for e-reader applications:\n\n- **OPDS 1.2** (Atom XML): `/opds/v1/catalog` - Compatible with most e-readers\n- **OPDS 2.0** (JSON): `/opds/v2` - Modern JSON-based format with enhanced features",
     "license": {
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
@@ -818,6 +818,62 @@
         ]
       }
     },
+    "/api/v1/books/on-deck": {
+      "get": {
+        "tags": [
+          "books"
+        ],
+        "summary": "List on-deck books (next unread book in series where user has completed at least one book)",
+        "operationId": "list_on_deck_books",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (0-indexed)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "path",
+            "description": "Number of items per page (max 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of on-deck books",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/recently-added": {
       "get": {
         "tags": [
@@ -852,6 +908,130 @@
         "responses": {
           "200": {
             "description": "Paginated list of recently added books",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/recently-read": {
+      "get": {
+        "tags": [
+          "books"
+        ],
+        "summary": "List recently read books (ordered by last read activity)",
+        "operationId": "list_recently_read_books",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of books to return (default: 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of recently read books",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BookDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/with-errors": {
+      "get": {
+        "tags": [
+          "books"
+        ],
+        "summary": "List books with analysis errors",
+        "operationId": "list_books_with_errors",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "series_id",
+            "in": "query",
+            "description": "Filter by series ID",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-indexed)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Number of items per page (max 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of books with analysis errors",
             "content": {
               "application/json": {
                 "schema": {
@@ -1295,6 +1475,50 @@
         "security": [
           {
             "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/{id}/file": {
+      "get": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Download book file",
+        "description": "Streams the original book file (CBZ, CBR, EPUB, PDF) for download.\nUsed by OPDS clients for acquisition links.",
+        "operationId": "get_book_file",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Book file",
+            "content": {
+              "application/octet-stream": {}
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -2239,6 +2463,72 @@
         ]
       }
     },
+    "/api/v1/libraries/{library_id}/books/on-deck": {
+      "get": {
+        "tags": [
+          "books"
+        ],
+        "summary": "List on-deck books in a specific library",
+        "operationId": "list_library_on_deck_books",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (0-indexed)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "path",
+            "description": "Number of items per page (max 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of on-deck books in library",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/libraries/{library_id}/books/recently-added": {
       "get": {
         "tags": [
@@ -2283,6 +2573,130 @@
         "responses": {
           "200": {
             "description": "Paginated list of recently added books in library",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/libraries/{library_id}/books/recently-read": {
+      "get": {
+        "tags": [
+          "books"
+        ],
+        "summary": "List recently read books in a specific library",
+        "operationId": "list_library_recently_read_books",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of books to return (default: 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of recently read books in library",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BookDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/libraries/{library_id}/books/with-errors": {
+      "get": {
+        "tags": [
+          "books"
+        ],
+        "summary": "List books with analysis errors in a specific library",
+        "operationId": "list_library_books_with_errors",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-indexed)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Number of items per page (max 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of books with analysis errors in library",
             "content": {
               "application/json": {
                 "schema": {
@@ -2371,13 +2785,13 @@
         ]
       }
     },
-    "/api/v1/libraries/{library_id}/series/started": {
+    "/api/v1/libraries/{library_id}/series/in-progress": {
       "get": {
         "tags": [
           "series"
         ],
-        "summary": "List started series in a specific library",
-        "operationId": "list_library_started_series",
+        "summary": "List in-progress series in a specific library",
+        "operationId": "list_library_in_progress_series",
         "parameters": [
           {
             "name": "library_id",
@@ -2392,7 +2806,123 @@
         ],
         "responses": {
           "200": {
-            "description": "List of started series in library",
+            "description": "List of in-progress series in library",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SeriesDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/libraries/{library_id}/series/recently-added": {
+      "get": {
+        "tags": [
+          "series"
+        ],
+        "summary": "List recently added series in a specific library",
+        "operationId": "list_library_recently_added_series",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of series to return (default: 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of recently added series in library",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SeriesDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/libraries/{library_id}/series/recently-updated": {
+      "get": {
+        "tags": [
+          "series"
+        ],
+        "summary": "List recently updated series in a specific library",
+        "operationId": "list_library_recently_updated_series",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of series to return (default: 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of recently updated series in library",
             "content": {
               "application/json": {
                 "schema": {
@@ -2461,41 +2991,6 @@
         "responses": {
           "200": {
             "description": "User reading progress retrieved",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadProgressListResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      }
-    },
-    "/api/v1/progress/currently-reading": {
-      "get": {
-        "tags": [
-          "Reading Progress"
-        ],
-        "summary": "Get currently reading books for the authenticated user",
-        "operationId": "get_currently_reading",
-        "responses": {
-          "200": {
-            "description": "Currently reading books retrieved",
             "content": {
               "application/json": {
                 "schema": {
@@ -2658,26 +3153,16 @@
         ]
       }
     },
-    "/api/v1/series/search": {
-      "post": {
+    "/api/v1/series/in-progress": {
+      "get": {
         "tags": [
           "series"
         ],
-        "summary": "Search series by name",
-        "operationId": "search_series",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SearchSeriesRequest"
-              }
-            }
-          },
-          "required": true
-        },
+        "summary": "List series with in-progress books (series that have at least one book with reading progress that is not completed)",
+        "operationId": "list_in_progress_series",
         "responses": {
           "200": {
-            "description": "Search results",
+            "description": "List of in-progress series",
             "content": {
               "application/json": {
                 "schema": {
@@ -2703,16 +3188,122 @@
         ]
       }
     },
-    "/api/v1/series/started": {
+    "/api/v1/series/recently-added": {
       "get": {
         "tags": [
           "series"
         ],
-        "summary": "List series with started books (series that have at least one book with reading progress)",
-        "operationId": "list_started_series",
+        "summary": "List recently added series",
+        "operationId": "list_recently_added_series",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of series to return (default: 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "List of started series",
+            "description": "List of recently added series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SeriesDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/recently-updated": {
+      "get": {
+        "tags": [
+          "series"
+        ],
+        "summary": "List recently updated series",
+        "operationId": "list_recently_updated_series",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of series to return (default: 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of recently updated series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SeriesDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/search": {
+      "post": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Search series by name",
+        "operationId": "search_series",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchSeriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Search results",
             "content": {
               "application/json": {
                 "schema": {
@@ -2937,6 +3528,72 @@
         ]
       }
     },
+    "/api/v1/series/{id}/books/with-errors": {
+      "get": {
+        "tags": [
+          "books"
+        ],
+        "summary": "List books with analysis errors in a specific series",
+        "operationId": "list_series_books_with_errors",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-indexed)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Number of items per page (max 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of books with analysis errors in series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/{id}/cover": {
       "post": {
         "tags": [
@@ -3029,6 +3686,50 @@
           },
           "404": {
             "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/download": {
+      "get": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Download all books in a series as a zip file",
+        "description": "Creates a zip archive containing all detected books in the series.\nOnly includes books that were scanned and detected by the library scanner.",
+        "operationId": "download_series",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Zip file containing all books in the series",
+            "content": {
+              "application/zip": {}
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found or has no books"
           }
         },
         "security": [
@@ -4290,6 +4991,290 @@
           }
         ]
       }
+    },
+    "/opds/v2": {
+      "get": {
+        "tags": [
+          "opds2"
+        ],
+        "summary": "Root OPDS 2.0 catalog",
+        "description": "Returns the main navigation feed with links to:\n- All libraries\n- Search\n- Recent additions",
+        "operationId": "opds2_root",
+        "responses": {
+          "200": {
+            "description": "OPDS 2.0 root catalog",
+            "content": {
+              "application/opds+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Opds2Feed"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/opds/v2/libraries": {
+      "get": {
+        "tags": [
+          "opds2"
+        ],
+        "summary": "List all libraries (OPDS 2.0)",
+        "description": "Returns a navigation feed with all available libraries",
+        "operationId": "opds2_libraries",
+        "responses": {
+          "200": {
+            "description": "OPDS 2.0 libraries feed",
+            "content": {
+              "application/opds+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Opds2Feed"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/opds/v2/libraries/{id}": {
+      "get": {
+        "tags": [
+          "opds2"
+        ],
+        "summary": "List series in a library (OPDS 2.0)",
+        "description": "Returns a navigation feed with all series in the specified library",
+        "operationId": "opds2_library_series",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OPDS 2.0 library series feed",
+            "content": {
+              "application/opds+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Opds2Feed"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Library not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/opds/v2/recent": {
+      "get": {
+        "tags": [
+          "opds2"
+        ],
+        "summary": "List recent additions (OPDS 2.0)",
+        "description": "Returns a publications feed with recently added books",
+        "operationId": "opds2_recent",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OPDS 2.0 recent additions feed",
+            "content": {
+              "application/opds+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Opds2Feed"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/opds/v2/search": {
+      "get": {
+        "tags": [
+          "opds2"
+        ],
+        "summary": "OPDS 2.0 search endpoint",
+        "description": "Searches books and series by title and returns an OPDS 2.0 publications feed",
+        "operationId": "opds2_search",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Search query string",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OPDS 2.0 search results",
+            "content": {
+              "application/opds+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Opds2Feed"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - empty query"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/opds/v2/series/{id}": {
+      "get": {
+        "tags": [
+          "opds2"
+        ],
+        "summary": "List books in a series (OPDS 2.0)",
+        "description": "Returns a publications feed with all books in the specified series",
+        "operationId": "opds2_series_books",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OPDS 2.0 series books feed",
+            "content": {
+              "application/opds+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Opds2Feed"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -4393,6 +5378,23 @@
           }
         }
       },
+      "BelongsTo": {
+        "type": "object",
+        "description": "Series membership information",
+        "properties": {
+          "series": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SeriesInfo",
+                "description": "Series information"
+              }
+            ]
+          }
+        }
+      },
       "BookDetailResponse": {
         "type": "object",
         "description": "Detailed book response with metadata",
@@ -4432,6 +5434,13 @@
           "updatedAt"
         ],
         "properties": {
+          "analysisError": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "Failed to parse CBZ: invalid archive"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -4800,6 +5809,26 @@
             "type": "integer",
             "description": "Number of settings configured",
             "minimum": 0
+          }
+        }
+      },
+      "Contributor": {
+        "type": "object",
+        "description": "Contributor information (author, artist, etc.)",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the contributor"
+          },
+          "sortAs": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Sort-friendly version of the name"
           }
         }
       },
@@ -5393,6 +6422,58 @@
           }
         }
       },
+      "FeedMetadata": {
+        "type": "object",
+        "description": "OPDS 2.0 Feed Metadata\n\nMetadata for navigation and publication feeds.",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "currentPage": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Current page number (for pagination)"
+          },
+          "itemsPerPage": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Items per page (for pagination)"
+          },
+          "modified": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Last modification date"
+          },
+          "numberOfItems": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Total number of items in the collection (for pagination)"
+          },
+          "subtitle": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional subtitle"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the feed"
+          }
+        }
+      },
       "FileSystemEntry": {
         "type": "object",
         "required": [
@@ -5424,6 +6505,73 @@
           "is_readable": true,
           "name": "Documents",
           "path": "/home/user/Documents"
+        }
+      },
+      "Group": {
+        "type": "object",
+        "description": "A group containing navigation or publications\n\nGroups allow organizing multiple collections within a single feed.",
+        "required": [
+          "metadata"
+        ],
+        "properties": {
+          "metadata": {
+            "$ref": "#/components/schemas/FeedMetadata",
+            "description": "Group metadata (title required)"
+          },
+          "navigation": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Opds2Link"
+            },
+            "description": "Navigation links within this group"
+          },
+          "publications": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Publication"
+            },
+            "description": "Publications within this group"
+          }
+        }
+      },
+      "ImageLink": {
+        "type": "object",
+        "description": "Image link with optional dimensions\n\nUsed for cover images and thumbnails in publications.",
+        "required": [
+          "href",
+          "type"
+        ],
+        "properties": {
+          "height": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Height in pixels"
+          },
+          "href": {
+            "type": "string",
+            "description": "URL to the image"
+          },
+          "type": {
+            "type": "string",
+            "description": "Media type of the image"
+          },
+          "width": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Width in pixels"
+          }
         }
       },
       "InitializeSetupRequest": {
@@ -5631,6 +6779,20 @@
           }
         }
       },
+      "LinkProperties": {
+        "type": "object",
+        "description": "Additional properties that can be attached to links",
+        "properties": {
+          "numberOfItems": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Number of items in the linked collection"
+          }
+        }
+      },
       "ListDuplicatesResponse": {
         "type": "object",
         "description": "Response for listing duplicates",
@@ -5827,6 +6989,109 @@
           }
         }
       },
+      "Opds2Feed": {
+        "type": "object",
+        "description": "OPDS 2.0 Feed\n\nThe main container for OPDS 2.0 data. A feed contains metadata,\nlinks, and one of: navigation, publications, or groups.",
+        "required": [
+          "metadata",
+          "links"
+        ],
+        "properties": {
+          "groups": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Group"
+            },
+            "description": "Groups containing multiple collections"
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Opds2Link"
+            },
+            "description": "Feed-level links (self, search, start, etc.)"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/FeedMetadata",
+            "description": "Feed metadata (title, pagination, etc.)"
+          },
+          "navigation": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Opds2Link"
+            },
+            "description": "Navigation links (for navigation feeds)"
+          },
+          "publications": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Publication"
+            },
+            "description": "Publication entries (for acquisition feeds)"
+          }
+        }
+      },
+      "Opds2Link": {
+        "type": "object",
+        "description": "OPDS 2.0 Link Object\n\nRepresents a link in an OPDS 2.0 feed, based on the Web Publication Manifest model.\nLinks can be templated using URI templates (RFC 6570).",
+        "required": [
+          "href"
+        ],
+        "properties": {
+          "href": {
+            "type": "string",
+            "description": "The URI or URI template for the link"
+          },
+          "properties": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkProperties",
+                "description": "Additional properties for the link"
+              }
+            ]
+          },
+          "rel": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Relation type (e.g., \"self\", \"search\", \"http://opds-spec.org/acquisition\")"
+          },
+          "templated": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the href is a URI template"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Human-readable title for the link"
+          },
+          "type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Media type of the linked resource"
+          }
+        }
+      },
       "PageDto": {
         "type": "object",
         "description": "Page data transfer object",
@@ -5971,6 +7236,13 @@
                 "updatedAt"
               ],
               "properties": {
+                "analysisError": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "example": "Failed to parse CBZ: invalid archive"
+                },
                 "createdAt": {
                   "type": "string",
                   "format": "date-time",
@@ -6333,6 +7605,155 @@
           }
         }
       },
+      "Publication": {
+        "type": "object",
+        "description": "OPDS 2.0 Publication Entry\n\nRepresents a single publication (book) in an OPDS 2.0 feed.",
+        "required": [
+          "metadata",
+          "links"
+        ],
+        "properties": {
+          "images": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageLink"
+            },
+            "description": "Cover images for the publication"
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Opds2Link"
+            },
+            "description": "Links for the publication (acquisition, streaming, etc.)"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/PublicationMetadata",
+            "description": "Publication metadata (title, author, etc.)"
+          },
+          "readingProgress": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReadingProgress",
+                "description": "Reading progress extension (Codex-specific)\nThis follows a similar pattern to other reading apps that extend OPDS 2.0"
+              }
+            ]
+          }
+        }
+      },
+      "PublicationMetadata": {
+        "type": "object",
+        "description": "OPDS 2.0 Publication Metadata (schema.org based)\n\nMetadata for a publication entry, based on schema.org vocabulary.",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "@type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Schema.org type (e.g., \"http://schema.org/Book\")"
+          },
+          "artist": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Contributor"
+            },
+            "description": "Artists/illustrators"
+          },
+          "author": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Contributor"
+            },
+            "description": "Authors"
+          },
+          "belongsTo": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BelongsTo",
+                "description": "Series membership information"
+              }
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Description/summary"
+          },
+          "identifier": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Unique identifier (e.g., \"urn:uuid:...\")"
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Language code (e.g., \"en\", \"ja\")"
+          },
+          "modified": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Last modification date"
+          },
+          "numberOfPages": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Number of pages"
+          },
+          "published": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Publication date"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Publisher name"
+          },
+          "subtitle": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Subtitle"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the publication"
+          }
+        }
+      },
       "PurgeTasksResponse": {
         "type": "object",
         "required": [
@@ -6433,6 +7854,45 @@
             "format": "uuid",
             "description": "User ID",
             "example": "550e8400-e29b-41d4-a716-446655440001"
+          }
+        }
+      },
+      "ReadingProgress": {
+        "type": "object",
+        "description": "Reading progress information for a publication\n\nCustom extension for tracking reading progress in OPDS 2.0.\nCompatible with reading apps that support progress sync.",
+        "required": [
+          "currentPage",
+          "totalPages",
+          "progressPercent",
+          "isCompleted"
+        ],
+        "properties": {
+          "currentPage": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Current page (1-indexed)"
+          },
+          "isCompleted": {
+            "type": "boolean",
+            "description": "Whether the book has been completed"
+          },
+          "lastReadAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Last time progress was updated"
+          },
+          "progressPercent": {
+            "type": "number",
+            "format": "double",
+            "description": "Progress as a percentage (0.0 - 100.0)"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total number of pages in the book"
           }
         }
       },
@@ -6782,6 +8242,27 @@
             ],
             "format": "int32",
             "example": 1987
+          }
+        }
+      },
+      "SeriesInfo": {
+        "type": "object",
+        "description": "Series information for a publication",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the series"
+          },
+          "position": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Position within the series (volume/issue number)"
           }
         }
       },
@@ -7964,7 +9445,11 @@
     },
     {
       "name": "opds",
-      "description": "OPDS catalog feed for e-reader applications"
+      "description": "OPDS 1.2 catalog feed (Atom XML format)"
+    },
+    {
+      "name": "opds2",
+      "description": "OPDS 2.0 catalog feed (JSON format) - Modern JSON-based OPDS specification"
     }
   ]
 }

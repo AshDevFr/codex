@@ -276,6 +276,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/on-deck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List on-deck books (next unread book in series where user has completed at least one book) */
+        get: operations["list_on_deck_books"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/recently-added": {
         parameters: {
             query?: never;
@@ -285,6 +302,40 @@ export interface paths {
         };
         /** List recently added books */
         get: operations["list_recently_added_books"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/recently-read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recently read books (ordered by last read activity) */
+        get: operations["list_recently_read_books"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/with-errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List books with analysis errors */
+        get: operations["list_books_with_errors"];
         put?: never;
         post?: never;
         delete?: never;
@@ -428,6 +479,27 @@ export interface paths {
          *     Returns immediately with a task_id to track progress.
          */
         post: operations["trigger_book_unanalyzed_analysis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download book file
+         * @description Streams the original book file (CBZ, CBR, EPUB, PDF) for download.
+         *     Used by OPDS clients for acquisition links.
+         */
+        get: operations["get_book_file"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -800,6 +872,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/libraries/{library_id}/books/on-deck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List on-deck books in a specific library */
+        get: operations["list_library_on_deck_books"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/libraries/{library_id}/books/recently-added": {
         parameters: {
             query?: never;
@@ -809,6 +898,40 @@ export interface paths {
         };
         /** List recently added books in a specific library */
         get: operations["list_library_recently_added_books"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{library_id}/books/recently-read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recently read books in a specific library */
+        get: operations["list_library_recently_read_books"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{library_id}/books/with-errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List books with analysis errors in a specific library */
+        get: operations["list_library_books_with_errors"];
         put?: never;
         post?: never;
         delete?: never;
@@ -834,15 +957,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/libraries/{library_id}/series/started": {
+    "/api/v1/libraries/{library_id}/series/in-progress": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List started series in a specific library */
-        get: operations["list_library_started_series"];
+        /** List in-progress series in a specific library */
+        get: operations["list_library_in_progress_series"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{library_id}/series/recently-added": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recently added series in a specific library */
+        get: operations["list_library_recently_added_series"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{library_id}/series/recently-updated": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recently updated series in a specific library */
+        get: operations["list_library_recently_updated_series"];
         put?: never;
         post?: never;
         delete?: never;
@@ -881,23 +1038,6 @@ export interface paths {
         };
         /** Get all reading progress for the authenticated user */
         get: operations["get_user_progress"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/progress/currently-reading": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get currently reading books for the authenticated user */
-        get: operations["get_currently_reading"];
         put?: never;
         post?: never;
         delete?: never;
@@ -969,6 +1109,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/in-progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List series with in-progress books (series that have at least one book with reading progress that is not completed) */
+        get: operations["list_in_progress_series"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/recently-added": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recently added series */
+        get: operations["list_recently_added_series"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/recently-updated": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recently updated series */
+        get: operations["list_recently_updated_series"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/search": {
         parameters: {
             query?: never;
@@ -980,23 +1171,6 @@ export interface paths {
         put?: never;
         /** Search series by name */
         post: operations["search_series"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/series/started": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List series with started books (series that have at least one book with reading progress) */
-        get: operations["list_started_series"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1089,6 +1263,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/{id}/books/with-errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List books with analysis errors in a specific series */
+        get: operations["list_series_books_with_errors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/{id}/cover": {
         parameters: {
             query?: never;
@@ -1116,6 +1307,27 @@ export interface paths {
         get?: never;
         /** Set which cover source to use for a series */
         put: operations["set_series_cover_source"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download all books in a series as a zip file
+         * @description Creates a zip archive containing all detected books in the series.
+         *     Only includes books that were scanned and detected by the library scanner.
+         */
+        get: operations["download_series"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1670,6 +1882,129 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/opds/v2": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Root OPDS 2.0 catalog
+         * @description Returns the main navigation feed with links to:
+         *     - All libraries
+         *     - Search
+         *     - Recent additions
+         */
+        get: operations["opds2_root"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opds/v2/libraries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all libraries (OPDS 2.0)
+         * @description Returns a navigation feed with all available libraries
+         */
+        get: operations["opds2_libraries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opds/v2/libraries/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List series in a library (OPDS 2.0)
+         * @description Returns a navigation feed with all series in the specified library
+         */
+        get: operations["opds2_library_series"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opds/v2/recent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List recent additions (OPDS 2.0)
+         * @description Returns a publications feed with recently added books
+         */
+        get: operations["opds2_recent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opds/v2/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * OPDS 2.0 search endpoint
+         * @description Searches books and series by title and returns an OPDS 2.0 publications feed
+         */
+        get: operations["opds2_search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/opds/v2/series/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List books in a series (OPDS 2.0)
+         * @description Returns a publications feed with all books in the specified series
+         */
+        get: operations["opds2_series_books"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1740,6 +2075,10 @@ export interface components {
              */
             userId: string;
         };
+        /** @description Series membership information */
+        BelongsTo: {
+            series?: null | components["schemas"]["SeriesInfo"];
+        };
         /** @description Detailed book response with metadata */
         BookDetailResponse: {
             book: components["schemas"]["BookDto"];
@@ -1747,6 +2086,8 @@ export interface components {
         };
         /** @description Book data transfer object */
         BookDto: {
+            /** @example Failed to parse CBZ: invalid archive */
+            analysisError?: string | null;
             /**
              * Format: date-time
              * @example 2024-01-01T00:00:00Z
@@ -1943,6 +2284,13 @@ export interface components {
             message: string;
             /** @description Number of settings configured */
             settingsConfigured: number;
+        };
+        /** @description Contributor information (author, artist, etc.) */
+        Contributor: {
+            /** @description Name of the contributor */
+            name: string;
+            /** @description Sort-friendly version of the name */
+            sortAs?: string | null;
         };
         /** @description Create API key request */
         CreateApiKeyRequest: {
@@ -2192,6 +2540,37 @@ export interface components {
             message: string;
         };
         /**
+         * @description OPDS 2.0 Feed Metadata
+         *
+         *     Metadata for navigation and publication feeds.
+         */
+        FeedMetadata: {
+            /**
+             * Format: int32
+             * @description Current page number (for pagination)
+             */
+            currentPage?: number | null;
+            /**
+             * Format: int32
+             * @description Items per page (for pagination)
+             */
+            itemsPerPage?: number | null;
+            /**
+             * Format: date-time
+             * @description Last modification date
+             */
+            modified?: string | null;
+            /**
+             * Format: int64
+             * @description Total number of items in the collection (for pagination)
+             */
+            numberOfItems?: number | null;
+            /** @description Optional subtitle */
+            subtitle?: string | null;
+            /** @description Title of the feed */
+            title: string;
+        };
+        /**
          * @example {
          *       "is_directory": true,
          *       "is_readable": true,
@@ -2208,6 +2587,40 @@ export interface components {
             name: string;
             /** @description Full path to the entry */
             path: string;
+        };
+        /**
+         * @description A group containing navigation or publications
+         *
+         *     Groups allow organizing multiple collections within a single feed.
+         */
+        Group: {
+            /** @description Group metadata (title required) */
+            metadata: components["schemas"]["FeedMetadata"];
+            /** @description Navigation links within this group */
+            navigation?: components["schemas"]["Opds2Link"][] | null;
+            /** @description Publications within this group */
+            publications?: components["schemas"]["Publication"][] | null;
+        };
+        /**
+         * @description Image link with optional dimensions
+         *
+         *     Used for cover images and thumbnails in publications.
+         */
+        ImageLink: {
+            /**
+             * Format: int32
+             * @description Height in pixels
+             */
+            height?: number | null;
+            /** @description URL to the image */
+            href: string;
+            /** @description Media type of the image */
+            type: string;
+            /**
+             * Format: int32
+             * @description Width in pixels
+             */
+            width?: number | null;
         };
         /** @description Initialize setup request - creates first admin user */
         InitializeSetupRequest: {
@@ -2322,6 +2735,14 @@ export interface components {
              * @example 15728640000
              */
             total_size: number;
+        };
+        /** @description Additional properties that can be attached to links */
+        LinkProperties: {
+            /**
+             * Format: int64
+             * @description Number of items in the linked collection
+             */
+            numberOfItems?: number | null;
         };
         /** @description Response for listing duplicates */
         ListDuplicatesResponse: {
@@ -2447,6 +2868,43 @@ export interface components {
              */
             user_count: number;
         };
+        /**
+         * @description OPDS 2.0 Feed
+         *
+         *     The main container for OPDS 2.0 data. A feed contains metadata,
+         *     links, and one of: navigation, publications, or groups.
+         */
+        Opds2Feed: {
+            /** @description Groups containing multiple collections */
+            groups?: components["schemas"]["Group"][] | null;
+            /** @description Feed-level links (self, search, start, etc.) */
+            links: components["schemas"]["Opds2Link"][];
+            /** @description Feed metadata (title, pagination, etc.) */
+            metadata: components["schemas"]["FeedMetadata"];
+            /** @description Navigation links (for navigation feeds) */
+            navigation?: components["schemas"]["Opds2Link"][] | null;
+            /** @description Publication entries (for acquisition feeds) */
+            publications?: components["schemas"]["Publication"][] | null;
+        };
+        /**
+         * @description OPDS 2.0 Link Object
+         *
+         *     Represents a link in an OPDS 2.0 feed, based on the Web Publication Manifest model.
+         *     Links can be templated using URI templates (RFC 6570).
+         */
+        Opds2Link: {
+            /** @description The URI or URI template for the link */
+            href: string;
+            properties?: null | components["schemas"]["LinkProperties"];
+            /** @description Relation type (e.g., "self", "search", "http://opds-spec.org/acquisition") */
+            rel?: string | null;
+            /** @description Whether the href is a URI template */
+            templated?: boolean | null;
+            /** @description Human-readable title for the link */
+            title?: string | null;
+            /** @description Media type of the linked resource */
+            type?: string | null;
+        };
         /** @description Page data transfer object */
         PageDto: {
             /**
@@ -2529,6 +2987,8 @@ export interface components {
         PaginatedResponse_BookDto: {
             /** @description The data items for this page */
             data: {
+                /** @example Failed to parse CBZ: invalid archive */
+                analysisError?: string | null;
                 /**
                  * Format: date-time
                  * @example 2024-01-01T00:00:00Z
@@ -2756,6 +3216,61 @@ export interface components {
              */
             totalPages: number;
         };
+        /**
+         * @description OPDS 2.0 Publication Entry
+         *
+         *     Represents a single publication (book) in an OPDS 2.0 feed.
+         */
+        Publication: {
+            /** @description Cover images for the publication */
+            images?: components["schemas"]["ImageLink"][];
+            /** @description Links for the publication (acquisition, streaming, etc.) */
+            links: components["schemas"]["Opds2Link"][];
+            /** @description Publication metadata (title, author, etc.) */
+            metadata: components["schemas"]["PublicationMetadata"];
+            readingProgress?: null | components["schemas"]["ReadingProgress"];
+        };
+        /**
+         * @description OPDS 2.0 Publication Metadata (schema.org based)
+         *
+         *     Metadata for a publication entry, based on schema.org vocabulary.
+         */
+        PublicationMetadata: {
+            /** @description Schema.org type (e.g., "http://schema.org/Book") */
+            "@type"?: string | null;
+            /** @description Artists/illustrators */
+            artist?: components["schemas"]["Contributor"][] | null;
+            /** @description Authors */
+            author?: components["schemas"]["Contributor"][] | null;
+            belongsTo?: null | components["schemas"]["BelongsTo"];
+            /** @description Description/summary */
+            description?: string | null;
+            /** @description Unique identifier (e.g., "urn:uuid:...") */
+            identifier?: string | null;
+            /** @description Language code (e.g., "en", "ja") */
+            language?: string | null;
+            /**
+             * Format: date-time
+             * @description Last modification date
+             */
+            modified?: string | null;
+            /**
+             * Format: int32
+             * @description Number of pages
+             */
+            numberOfPages?: number | null;
+            /**
+             * Format: date-time
+             * @description Publication date
+             */
+            published?: string | null;
+            /** @description Publisher name */
+            publisher?: string | null;
+            /** @description Subtitle */
+            subtitle?: string | null;
+            /** @description Title of the publication */
+            title: string;
+        };
         PurgeTasksResponse: {
             /**
              * Format: int64
@@ -2823,6 +3338,36 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440001
              */
             user_id: string;
+        };
+        /**
+         * @description Reading progress information for a publication
+         *
+         *     Custom extension for tracking reading progress in OPDS 2.0.
+         *     Compatible with reading apps that support progress sync.
+         */
+        ReadingProgress: {
+            /**
+             * Format: int32
+             * @description Current page (1-indexed)
+             */
+            currentPage: number;
+            /** @description Whether the book has been completed */
+            isCompleted: boolean;
+            /**
+             * Format: date-time
+             * @description Last time progress was updated
+             */
+            lastReadAt?: string | null;
+            /**
+             * Format: double
+             * @description Progress as a percentage (0.0 - 100.0)
+             */
+            progressPercent: number;
+            /**
+             * Format: int32
+             * @description Total number of pages in the book
+             */
+            totalPages: number;
         };
         /** @description Register request */
         RegisterRequest: {
@@ -3030,6 +3575,16 @@ export interface components {
              * @example 1987
              */
             year?: number | null;
+        };
+        /** @description Series information for a publication */
+        SeriesInfo: {
+            /** @description Name of the series */
+            name: string;
+            /**
+             * Format: double
+             * @description Position within the series (volume/issue number)
+             */
+            position?: number | null;
         };
         /** @description Setting response DTO */
         SettingDto: {
@@ -4275,6 +4830,38 @@ export interface operations {
             };
         };
     };
+    list_on_deck_books: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Page number (0-indexed) */
+                page: number;
+                /** @description Number of items per page (max 100) */
+                pageSize: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated list of on-deck books */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_recently_added_books: {
         parameters: {
             query?: never;
@@ -4290,6 +4877,72 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Paginated list of recently added books */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_recently_read_books: {
+        parameters: {
+            query?: {
+                /** @description Maximum number of books to return (default: 50) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of recently read books */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookDto"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_books_with_errors: {
+        parameters: {
+            query?: {
+                /** @description Filter by library ID */
+                library_id?: string;
+                /** @description Filter by series ID */
+                series_id?: string;
+                /** @description Page number (0-indexed) */
+                page?: number;
+                /** @description Number of items per page (max 100) */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated list of books with analysis errors */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4643,6 +5296,43 @@ export interface operations {
                 content?: never;
             };
             /** @description Permission denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_book_file: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Book file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": unknown;
+                };
+            };
+            /** @description Forbidden */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5371,6 +6061,40 @@ export interface operations {
             };
         };
     };
+    list_library_on_deck_books: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+                /** @description Page number (0-indexed) */
+                page: number;
+                /** @description Number of items per page (max 100) */
+                pageSize: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated list of on-deck books in library */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_library_recently_added_books: {
         parameters: {
             query?: never;
@@ -5388,6 +6112,74 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Paginated list of recently added books in library */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_library_recently_read_books: {
+        parameters: {
+            query?: {
+                /** @description Maximum number of books to return (default: 50) */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of recently read books in library */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookDto"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_library_books_with_errors: {
+        parameters: {
+            query?: {
+                /** @description Page number (0-indexed) */
+                page?: number;
+                /** @description Number of items per page (max 100) */
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated list of books with analysis errors in library */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5440,7 +6232,7 @@ export interface operations {
             };
         };
     };
-    list_library_started_series: {
+    list_library_in_progress_series: {
         parameters: {
             query?: never;
             header?: never;
@@ -5452,7 +6244,73 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description List of started series in library */
+            /** @description List of in-progress series in library */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesDto"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_library_recently_added_series: {
+        parameters: {
+            query?: {
+                /** @description Maximum number of series to return (default: 50) */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of recently added series in library */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesDto"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_library_recently_updated_series: {
+        parameters: {
+            query?: {
+                /** @description Maximum number of series to return (default: 50) */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of recently updated series in library */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5507,40 +6365,6 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description User reading progress retrieved */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadProgressListResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_currently_reading: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Currently reading books retrieved */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5653,20 +6477,16 @@ export interface operations {
             };
         };
     };
-    search_series: {
+    list_in_progress_series: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SearchSeriesRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description Search results */
+            /** @description List of in-progress series */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5684,16 +6504,80 @@ export interface operations {
             };
         };
     };
-    list_started_series: {
+    list_recently_added_series: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Maximum number of series to return (default: 50) */
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description List of started series */
+            /** @description List of recently added series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesDto"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_recently_updated_series: {
+        parameters: {
+            query?: {
+                /** @description Maximum number of series to return (default: 50) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of recently updated series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesDto"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    search_series: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SearchSeriesRequest"];
+            };
+        };
+        responses: {
+            /** @description Search results */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5855,6 +6739,41 @@ export interface operations {
             };
         };
     };
+    list_series_books_with_errors: {
+        parameters: {
+            query?: {
+                /** @description Page number (0-indexed) */
+                page?: number;
+                /** @description Number of items per page (max 100) */
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated list of books with analysis errors in series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     upload_series_cover: {
         parameters: {
             query?: never;
@@ -5933,6 +6852,43 @@ export interface operations {
                 content?: never;
             };
             /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    download_series: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Zip file containing all books in the series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": unknown;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found or has no books */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6933,6 +7889,204 @@ export interface operations {
                 };
                 content: {
                     "application/atom+xml": unknown;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    opds2_root: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OPDS 2.0 root catalog */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/opds+json": components["schemas"]["Opds2Feed"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    opds2_libraries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OPDS 2.0 libraries feed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/opds+json": components["schemas"]["Opds2Feed"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    opds2_library_series: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Library ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OPDS 2.0 library series feed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/opds+json": components["schemas"]["Opds2Feed"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Library not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    opds2_recent: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OPDS 2.0 recent additions feed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/opds+json": components["schemas"]["Opds2Feed"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    opds2_search: {
+        parameters: {
+            query: {
+                /** @description Search query string */
+                query: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OPDS 2.0 search results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/opds+json": components["schemas"]["Opds2Feed"];
+                };
+            };
+            /** @description Bad request - empty query */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    opds2_series_books: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OPDS 2.0 series books feed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/opds+json": components["schemas"]["Opds2Feed"];
                 };
             };
             /** @description Forbidden */

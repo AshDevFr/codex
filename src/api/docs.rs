@@ -10,7 +10,28 @@ use utoipa::OpenApi;
     info(
         title = "Codex API",
         version = "1.0.0",
-        description = "REST API for Codex digital library server",
+        description = r#"REST API for Codex, a digital library server for comics, manga, and ebooks.
+
+## Interactive API Documentation
+
+You can explore and test this API interactively:
+
+- **Hosted Documentation**: Visit [codex.4sh.dev/docs/api](https://codex.4sh.dev/docs/api) for the full API reference
+- **Your Instance**: If you have Scalar UI enabled, access `/api/docs` on your Codex server
+
+## Authentication
+
+Most endpoints require authentication. Codex supports two authentication methods:
+
+1. **JWT Bearer Token**: Obtain a token via `POST /api/v1/auth/login`, then include it as `Authorization: Bearer <token>`
+2. **API Key**: Generate an API key in the web UI or via the API, then include it as `X-API-Key: <key>` header
+
+## OPDS Support
+
+Codex provides OPDS catalog feeds for e-reader applications:
+
+- **OPDS 1.2** (Atom XML): `/opds/v1/catalog` - Compatible with most e-readers
+- **OPDS 2.0** (JSON): `/opds/v2` - Modern JSON-based format with enhanced features"#,
         license(
             name = "MIT",
             url = "https://opensource.org/licenses/MIT"
