@@ -560,6 +560,186 @@ async fn test_list_in_progress_books() {
 }
 
 // ============================================================================
+// On-Deck Books Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_on_deck_books() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create books in the series (numbered 1-5)
+    let mut book_ids = Vec::new();
+    for i in 1..=5 {
+        let mut book = create_test_book_model(
+            series.id,
+            library.id,
+            &format!("/test/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            Some(format!("Book {}", i)),
+        );
+        book.number = Some(sea_orm::prelude::Decimal::from(i));
+        let created = BookRepository::create(&db, &book, None).await.unwrap();
+        book_ids.push(created.id);
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+
+    // Create admin user and get token
+    let password_hash = password::hash_password("admin123").unwrap();
+    let admin = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let admin_user = UserRepository::create(&db, &admin).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(admin_user.id, admin_user.username, admin_user.is_admin)
+        .unwrap();
+
+    use codex::db::repositories::ReadProgressRepository;
+
+    // Mark first 2 books as completed
+    ReadProgressRepository::upsert(&db, admin_user.id, book_ids[0], 10, true)
+        .await
+        .unwrap();
+    ReadProgressRepository::upsert(&db, admin_user.id, book_ids[1], 10, true)
+        .await
+        .unwrap();
+
+    let app = create_test_router(state).await;
+
+    // Request on-deck books - should return book 3 (first unread book in series with completed books)
+    let request = get_request_with_auth("/api/v1/books/on-deck", &token);
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let book_list = response.unwrap();
+    assert_eq!(book_list.data.len(), 1); // Only 1 on-deck book (first unread in series)
+    assert_eq!(book_list.total, 1);
+    assert_eq!(book_list.data[0].id, book_ids[2]); // Book 3 (0-indexed as 2)
+}
+
+#[tokio::test]
+async fn test_list_on_deck_excludes_series_with_in_progress() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create books in the series (numbered 1-5)
+    let mut book_ids = Vec::new();
+    for i in 1..=5 {
+        let mut book = create_test_book_model(
+            series.id,
+            library.id,
+            &format!("/test/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            Some(format!("Book {}", i)),
+        );
+        book.number = Some(sea_orm::prelude::Decimal::from(i));
+        let created = BookRepository::create(&db, &book, None).await.unwrap();
+        book_ids.push(created.id);
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+
+    // Create admin user and get token
+    let password_hash = password::hash_password("admin123").unwrap();
+    let admin = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let admin_user = UserRepository::create(&db, &admin).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(admin_user.id, admin_user.username, admin_user.is_admin)
+        .unwrap();
+
+    use codex::db::repositories::ReadProgressRepository;
+
+    // Mark first book as completed
+    ReadProgressRepository::upsert(&db, admin_user.id, book_ids[0], 10, true)
+        .await
+        .unwrap();
+
+    // Mark second book as in-progress (not completed)
+    ReadProgressRepository::upsert(&db, admin_user.id, book_ids[1], 5, false)
+        .await
+        .unwrap();
+
+    let app = create_test_router(state).await;
+
+    // Request on-deck books - should be empty because series has in-progress book
+    let request = get_request_with_auth("/api/v1/books/on-deck", &token);
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let book_list = response.unwrap();
+    assert_eq!(book_list.data.len(), 0); // No on-deck books - series has in-progress book
+    assert_eq!(book_list.total, 0);
+}
+
+#[tokio::test]
+async fn test_list_on_deck_empty_when_no_completed_books() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create books in the series
+    for i in 1..=5 {
+        let book = create_test_book_model(
+            series.id,
+            library.id,
+            &format!("/test/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            Some(format!("Book {}", i)),
+        );
+        BookRepository::create(&db, &book, None).await.unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+
+    // Create admin user and get token
+    let password_hash = password::hash_password("admin123").unwrap();
+    let admin = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let admin_user = UserRepository::create(&db, &admin).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(admin_user.id, admin_user.username, admin_user.is_admin)
+        .unwrap();
+
+    let app = create_test_router(state).await;
+
+    // Request on-deck books - should be empty because no books are completed
+    let request = get_request_with_auth("/api/v1/books/on-deck", &token);
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let book_list = response.unwrap();
+    assert_eq!(book_list.data.len(), 0); // No on-deck books - no completed books
+    assert_eq!(book_list.total, 0);
+}
+
+// ============================================================================
 // Recently Added Books Tests
 // ============================================================================
 

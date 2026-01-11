@@ -486,6 +486,106 @@ pub async fn list_library_in_progress_books(
     Ok(Json(response))
 }
 
+/// List on-deck books (next unread book in series where user has completed at least one book)
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/on-deck",
+    params(
+        PaginationParams,
+    ),
+    responses(
+        (status = 200, description = "Paginated list of on-deck books", body = BookListResponse),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn list_on_deck_books(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Query(query): Query<BookListQuery>,
+) -> Result<Json<BookListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Validate and normalize pagination params
+    let page_size = if query.page_size == 0 {
+        default_page_size()
+    } else {
+        query.page_size.min(100)
+    };
+
+    // Fetch on-deck books
+    let (books_list, total) = BookRepository::list_on_deck(
+        &state.db,
+        auth.user_id,
+        None, // all libraries
+        query.page,
+        page_size,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch on-deck books: {}", e)))?;
+
+    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
+
+    let response = BookListResponse::new(dtos, query.page, page_size, total);
+
+    Ok(Json(response))
+}
+
+/// List on-deck books in a specific library
+#[utoipa::path(
+    get,
+    path = "/api/v1/libraries/{library_id}/books/on-deck",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID"),
+        PaginationParams,
+    ),
+    responses(
+        (status = 200, description = "Paginated list of on-deck books in library", body = BookListResponse),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn list_library_on_deck_books(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(library_id): Path<Uuid>,
+    Query(query): Query<BookListQuery>,
+) -> Result<Json<BookListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Validate and normalize pagination params
+    let page_size = if query.page_size == 0 {
+        default_page_size()
+    } else {
+        query.page_size.min(100)
+    };
+
+    // Fetch on-deck books in this library
+    let (books_list, total) = BookRepository::list_on_deck(
+        &state.db,
+        auth.user_id,
+        Some(library_id),
+        query.page,
+        page_size,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch on-deck books: {}", e)))?;
+
+    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
+
+    let response = BookListResponse::new(dtos, query.page, page_size, total);
+
+    Ok(Json(response))
+}
+
 /// List recently added books
 #[utoipa::path(
     get,

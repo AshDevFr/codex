@@ -711,7 +711,7 @@ async fn test_list_library_series_empty() {
 // ============================================================================
 
 #[tokio::test]
-async fn test_list_started_series() {
+async fn test_list_in_progress_series() {
     let (db, _temp_dir) = setup_test_db().await;
 
     // Create library
@@ -777,12 +777,12 @@ async fn test_list_started_series() {
         .await
         .unwrap();
 
-    // Mark series3's book as completed (should not be in started series)
+    // Mark series3's book as completed (should not be in in-progress series)
     // Note: The endpoint filters for non-completed books only
     let app = create_test_router(state).await;
 
-    // Request started series (should return series1 and series2)
-    let request = get_request_with_auth("/api/v1/series/started", &token);
+    // Request in-progress series (should return series1 and series2)
+    let request = get_request_with_auth("/api/v1/series/in-progress", &token);
     let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
         make_json_request(app, request).await;
 
@@ -798,7 +798,7 @@ async fn test_list_started_series() {
 }
 
 #[tokio::test]
-async fn test_list_library_started_series() {
+async fn test_list_library_in_progress_series() {
     let (db, _temp_dir) = setup_test_db().await;
 
     // Create two libraries
@@ -856,9 +856,9 @@ async fn test_list_library_started_series() {
         .unwrap();
     let app = create_test_router(state).await;
 
-    // Request started series from library 1
+    // Request in-progress series from library 1
     let request = get_request_with_auth(
-        &format!("/api/v1/libraries/{}/series/started", library1.id),
+        &format!("/api/v1/libraries/{}/series/in-progress", library1.id),
         &token,
     );
     let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =
@@ -869,9 +869,9 @@ async fn test_list_library_started_series() {
     assert_eq!(series_list.len(), 1);
     assert_eq!(series_list[0].id, series1.id);
 
-    // Request started series from library 2
+    // Request in-progress series from library 2
     let request = get_request_with_auth(
-        &format!("/api/v1/libraries/{}/series/started", library2.id),
+        &format!("/api/v1/libraries/{}/series/in-progress", library2.id),
         &token,
     );
     let (status, response): (StatusCode, Option<Vec<SeriesDto>>) =

@@ -128,14 +128,18 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/libraries/:library_id/books/recently-added",
             get(handlers::list_library_recently_added_books),
         )
+        .route(
+            "/libraries/:library_id/books/on-deck",
+            get(handlers::list_library_on_deck_books),
+        )
         // Library-specific series routes (protected)
         .route(
             "/libraries/:library_id/series",
             get(handlers::list_library_series),
         )
         .route(
-            "/libraries/:library_id/series/started",
-            get(handlers::list_library_started_series),
+            "/libraries/:library_id/series/in-progress",
+            get(handlers::list_library_in_progress_series),
         )
         // Scan routes (protected)
         .route("/libraries/:id/scan", post(handlers::trigger_scan))
@@ -160,7 +164,7 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/series/:id", get(handlers::get_series))
         .route("/series/:id/books", get(handlers::get_series_books))
         // Series collection routes (protected)
-        .route("/series/started", get(handlers::list_started_series))
+        .route("/series/in-progress", get(handlers::list_in_progress_series))
         .route(
             "/series/:id/purge-deleted",
             delete(handlers::purge_series_deleted_books),
@@ -190,6 +194,7 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         )
         // Book collection routes (protected)
         .route("/books/in-progress", get(handlers::list_in_progress_books))
+        .route("/books/on-deck", get(handlers::list_on_deck_books))
         .route(
             "/books/recently-added",
             get(handlers::list_recently_added_books),
@@ -213,10 +218,6 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             delete(handlers::delete_reading_progress),
         )
         .route("/progress", get(handlers::get_user_progress))
-        .route(
-            "/progress/currently-reading",
-            get(handlers::get_currently_reading),
-        )
         // Mark as read/unread routes (protected)
         .route("/books/:book_id/read", post(handlers::mark_book_as_read))
         .route(

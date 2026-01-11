@@ -21,6 +21,22 @@ export const bookHandlers = [
     return HttpResponse.json(inProgressBooks);
   }),
 
+  // List on-deck books (global - all libraries)
+  // Returns paginated response with next book in series where user has completed books
+  http.get("/api/v1/books/on-deck", async () => {
+    await delay(200);
+
+    // Return books that don't have progress (simulating "next to read")
+    // In reality this would be first unread book from series with completed books
+    const onDeckBooks = mockBooks.filter((b) => b.readProgress === null).slice(0, 10);
+
+    return HttpResponse.json(
+      createPaginatedResponse(onDeckBooks, {
+        total: onDeckBooks.length,
+      })
+    );
+  }),
+
   // List recently added books (global - all libraries)
   // Returns plain array (not paginated) - matches API expectation
   http.get("/api/v1/books/recently-added", async ({ request }) => {
@@ -195,6 +211,27 @@ export const bookHandlers = [
       );
 
       return HttpResponse.json(sortedBooks.slice(0, limit));
+    }
+  ),
+
+  // Library-scoped: List on-deck books
+  // Returns paginated response
+  http.get(
+    "/api/v1/libraries/:libraryId/books/on-deck",
+    async ({ params }) => {
+      await delay(200);
+
+      // Get books for this library that don't have progress
+      const libraryBooks = getBooksByLibrary(params.libraryId as string);
+      const onDeckBooks = libraryBooks.filter(
+        (b) => b.readProgress === null
+      ).slice(0, 10);
+
+      return HttpResponse.json(
+        createPaginatedResponse(onDeckBooks, {
+          total: onDeckBooks.length,
+        })
+      );
     }
   ),
 ];

@@ -6,16 +6,14 @@ import {
 } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { booksApi } from "@/api/books";
-import { seriesApi } from "@/api/series";
 import { MediaCard } from "@/components/library/MediaCard";
-import type { Book, Series } from "@/types/api";
 
 interface RecommendedSectionProps {
 	libraryId: string;
 }
 
 export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
-	// Fetch books with reading progress
+	// Fetch books with reading progress (Keep Reading)
 	const { data: inProgressBooks, isLoading: loadingInProgress } = useQuery({
 		queryKey: ["books", "in-progress", libraryId],
 		queryFn: () => booksApi.getInProgress(libraryId),
@@ -27,11 +25,13 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 		queryFn: () => booksApi.getRecentlyAdded(libraryId, 50),
 	});
 
-	// Fetch started series for "On Deck"
-	const { data: startedSeries, isLoading: loadingStarted } = useQuery({
-		queryKey: ["series", "started", libraryId],
-		queryFn: () => seriesApi.getStarted(libraryId),
+	// Fetch on-deck books (next unread book in series where user has completed books)
+	const { data: onDeckResponse, isLoading: loadingOnDeck } = useQuery({
+		queryKey: ["books", "on-deck", libraryId],
+		queryFn: () => booksApi.getOnDeck(libraryId),
 	});
+
+	const onDeckBooks = onDeckResponse?.data ?? [];
 
 	return (
 		<Stack gap="xl">
@@ -55,11 +55,11 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 			)}
 
 			{/* On Deck Section */}
-			{startedSeries && startedSeries.length > 0 && (
+			{onDeckBooks.length > 0 && (
 				<Stack gap="md">
 					<Title order={2}>On Deck</Title>
 					<Text size="sm" c="dimmed">
-						Continue reading these series
+						Next book in series you've been reading
 					</Text>
 					<div
 						style={{
@@ -69,8 +69,8 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 							width: "100%",
 						}}
 					>
-						{startedSeries.map((series) => (
-							<MediaCard key={series.id} type="series" data={series} />
+						{onDeckBooks.map((book) => (
+							<MediaCard key={book.id} type="book" data={book} />
 						))}
 					</div>
 				</Stack>
@@ -98,10 +98,10 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 			{/* Empty state */}
 			{!loadingInProgress &&
 				!loadingRecent &&
-				!loadingStarted &&
+				!loadingOnDeck &&
 				!inProgressBooks?.length &&
 				!recentlyAddedBooks?.length &&
-				!startedSeries?.length && (
+				!onDeckBooks.length && (
 					<Card p="xl" withBorder>
 						<Stack align="center" gap="sm">
 							<Text size="lg" fw={600}>

@@ -24,7 +24,6 @@ use uuid::Uuid;
         get_reading_progress,
         delete_reading_progress,
         get_user_progress,
-        get_currently_reading,
         mark_book_as_read,
         mark_book_as_unread,
     ),
@@ -170,39 +169,6 @@ pub async fn get_user_progress(
     let progress_list = ReadProgressRepository::get_by_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to get user progress: {}", e)))?;
-
-    let total = progress_list.len();
-    let progress: Vec<ReadProgressResponse> = progress_list.into_iter().map(Into::into).collect();
-
-    Ok(Json(ReadProgressListResponse { progress, total }))
-}
-
-/// Get currently reading books for the authenticated user
-#[utoipa::path(
-    get,
-    path = "/api/v1/progress/currently-reading",
-    responses(
-        (status = 200, description = "Currently reading books retrieved", body = ReadProgressListResponse),
-        (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Forbidden"),
-    ),
-    security(
-        ("bearer_auth" = []),
-        ("api_key" = [])
-    ),
-    tag = "Reading Progress"
-)]
-pub async fn get_currently_reading(
-    State(state): State<Arc<AppState>>,
-    auth: AuthContext,
-) -> Result<Json<ReadProgressListResponse>, ApiError> {
-    // Check permission
-    auth.require_permission(&Permission::BooksRead)?;
-
-    // Get currently reading books (limit to 50)
-    let progress_list = ReadProgressRepository::get_currently_reading(&state.db, auth.user_id, 50)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to get currently reading: {}", e)))?;
 
     let total = progress_list.len();
     let progress: Vec<ReadProgressResponse> = progress_list.into_iter().map(Into::into).collect();

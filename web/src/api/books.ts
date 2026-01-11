@@ -53,6 +53,17 @@ export const booksApi = {
 		return response.data;
 	},
 
+	// Get on-deck books (next unread book in series where user has completed at least one book)
+	getOnDeck: async (libraryId: string): Promise<PaginatedResponse<Book>> => {
+		const url =
+			libraryId === "all"
+				? "/books/on-deck"
+				: `/libraries/${libraryId}/books/on-deck`;
+
+		const response = await api.get<PaginatedResponse<Book>>(url);
+		return response.data;
+	},
+
 	// Get recently added books
 	getRecentlyAdded: async (
 		libraryId: string,

@@ -284,6 +284,128 @@ impl BookRepository {
         Ok((books, total))
     }
 
+    /// Get "on deck" books - next unread book in series where user has completed at least one book
+    /// and has no books currently in-progress in that series.
+    ///
+    /// Logic:
+    /// 1. Find series where user has completed at least one book
+    /// 2. Exclude series that have any book with in-progress reading (completed=false)
+    /// 3. For each qualifying series, find the first unread book (by sort order)
+    pub async fn list_on_deck(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        library_id: Option<Uuid>,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::db::entities::{read_progress, series};
+        use sea_orm::JoinType;
+
+        // Step 1: Get series IDs where user has completed at least one book
+        let completed_series_query = Books::find()
+            .select_only()
+            .column(books::Column::SeriesId)
+            .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .filter(read_progress::Column::Completed.eq(true))
+            .group_by(books::Column::SeriesId);
+
+        let completed_series: Vec<Uuid> = completed_series_query
+            .into_tuple::<Uuid>()
+            .all(db)
+            .await
+            .context("Failed to get completed series")?;
+
+        if completed_series.is_empty() {
+            return Ok((vec![], 0));
+        }
+
+        // Step 2: Get series IDs where user has in-progress books (to exclude)
+        let in_progress_series_query = Books::find()
+            .select_only()
+            .column(books::Column::SeriesId)
+            .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .filter(read_progress::Column::Completed.eq(false))
+            .group_by(books::Column::SeriesId);
+
+        let in_progress_series: Vec<Uuid> = in_progress_series_query
+            .into_tuple::<Uuid>()
+            .all(db)
+            .await
+            .context("Failed to get in-progress series")?;
+
+        // Step 3: Calculate eligible series (completed - in_progress)
+        let eligible_series: Vec<Uuid> = completed_series
+            .into_iter()
+            .filter(|s| !in_progress_series.contains(s))
+            .collect();
+
+        if eligible_series.is_empty() {
+            return Ok((vec![], 0));
+        }
+
+        // Step 4: Get all book IDs that have progress for this user (to exclude from unread)
+        let books_with_progress: Vec<Uuid> = read_progress::Entity::find()
+            .select_only()
+            .column(read_progress::Column::BookId)
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .into_tuple::<Uuid>()
+            .all(db)
+            .await
+            .context("Failed to get books with progress")?;
+
+        // Step 5: Get all books in eligible series that are unread
+        let mut unread_query = Books::find()
+            .filter(books::Column::SeriesId.is_in(eligible_series.clone()))
+            .filter(books::Column::Deleted.eq(false));
+
+        // Exclude books that have progress
+        if !books_with_progress.is_empty() {
+            unread_query = unread_query.filter(books::Column::Id.is_not_in(books_with_progress));
+        }
+
+        // Filter by library if specified
+        if let Some(lib_id) = library_id {
+            unread_query = unread_query
+                .join(JoinType::InnerJoin, books::Relation::Series.def())
+                .filter(series::Column::LibraryId.eq(lib_id));
+        }
+
+        // Order by series, then by book number/title/filename
+        let all_unread_books = unread_query
+            .order_by_asc(books::Column::SeriesId)
+            .order_by_asc(books::Column::Number)
+            .order_by_asc(books::Column::Title)
+            .order_by_asc(books::Column::FileName)
+            .all(db)
+            .await
+            .context("Failed to get unread books")?;
+
+        // Step 6: Pick the first book from each series
+        let mut seen_series: std::collections::HashSet<Uuid> = std::collections::HashSet::new();
+        let mut on_deck_books: Vec<books::Model> = Vec::new();
+
+        for book in all_unread_books {
+            if !seen_series.contains(&book.series_id) {
+                seen_series.insert(book.series_id);
+                on_deck_books.push(book);
+            }
+        }
+
+        let total = on_deck_books.len() as u64;
+
+        // Apply pagination
+        let start = (page * page_size) as usize;
+        if start >= on_deck_books.len() {
+            return Ok((vec![], total));
+        }
+        let end = (start + page_size as usize).min(on_deck_books.len());
+        let paginated_books = on_deck_books[start..end].to_vec();
+
+        Ok((paginated_books, total))
+    }
+
     /// Search books by title (case-insensitive)
     pub async fn search_by_title(
         db: &DatabaseConnection,

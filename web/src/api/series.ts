@@ -44,12 +44,12 @@ export const seriesApi = {
 		return response.data;
 	},
 
-	// Get series with started books (for "On Deck" section)
-	getStarted: async (libraryId: string): Promise<Series[]> => {
+	// Get series with in-progress books
+	getInProgress: async (libraryId: string): Promise<Series[]> => {
 		const url =
 			libraryId === "all"
-				? "/series/started"
-				: `/libraries/${libraryId}/series/started`;
+				? "/series/in-progress"
+				: `/libraries/${libraryId}/series/in-progress`;
 
 		const response = await api.get<Series[]>(url);
 		return response.data;

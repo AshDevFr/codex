@@ -582,12 +582,12 @@ pub async fn get_series_thumbnail(
         .unwrap())
 }
 
-/// List series with started books (series that have at least one book with reading progress)
+/// List series with in-progress books (series that have at least one book with reading progress that is not completed)
 #[utoipa::path(
     get,
-    path = "/api/v1/series/started",
+    path = "/api/v1/series/in-progress",
     responses(
-        (status = 200, description = "List of started series", body = Vec<SeriesDto>),
+        (status = 200, description = "List of in-progress series", body = Vec<SeriesDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -596,16 +596,16 @@ pub async fn get_series_thumbnail(
     ),
     tag = "series"
 )]
-pub async fn list_started_series(
+pub async fn list_in_progress_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
 ) -> Result<Json<Vec<SeriesDto>>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    // Fetch started series for the current user
-    let series_list = SeriesRepository::list_started(&state.db, auth.user_id, None)
+    // Fetch in-progress series for the current user
+    let series_list = SeriesRepository::list_in_progress(&state.db, auth.user_id, None)
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch started series: {}", e)))?;
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress series: {}", e)))?;
 
     let user_id = Some(auth.user_id);
     let dtos: Vec<SeriesDto> = futures::future::join_all(
@@ -700,15 +700,15 @@ pub async fn list_library_series(
     Ok(Json(response))
 }
 
-/// List started series in a specific library
+/// List in-progress series in a specific library
 #[utoipa::path(
     get,
-    path = "/api/v1/libraries/{library_id}/series/started",
+    path = "/api/v1/libraries/{library_id}/series/in-progress",
     params(
         ("library_id" = Uuid, Path, description = "Library ID")
     ),
     responses(
-        (status = 200, description = "List of started series in library", body = Vec<SeriesDto>),
+        (status = 200, description = "List of in-progress series in library", body = Vec<SeriesDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -717,17 +717,17 @@ pub async fn list_library_series(
     ),
     tag = "series"
 )]
-pub async fn list_library_started_series(
+pub async fn list_library_in_progress_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Path(library_id): Path<Uuid>,
 ) -> Result<Json<Vec<SeriesDto>>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    // Fetch started series for the current user in this library
-    let series_list = SeriesRepository::list_started(&state.db, auth.user_id, Some(library_id))
+    // Fetch in-progress series for the current user in this library
+    let series_list = SeriesRepository::list_in_progress(&state.db, auth.user_id, Some(library_id))
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch started series: {}", e)))?;
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress series: {}", e)))?;
 
     let user_id = Some(auth.user_id);
     let dtos: Vec<SeriesDto> = futures::future::join_all(

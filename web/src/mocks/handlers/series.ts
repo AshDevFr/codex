@@ -30,15 +30,15 @@ export const seriesHandlers = [
     );
   }),
 
-  // List started series (global - all libraries)
+  // List in-progress series (global - all libraries)
   // Returns plain array (not paginated) - matches API expectation
-  http.get("/api/v1/series/started", async () => {
+  http.get("/api/v1/series/in-progress", async () => {
     await delay(200);
 
-    // Return a subset as "started" series (those with reading progress)
-    const startedSeries = mockSeries.slice(0, 5);
+    // Return a subset as "in-progress" series (those with reading progress)
+    const inProgressSeries = mockSeries.slice(0, 5);
 
-    return HttpResponse.json(startedSeries);
+    return HttpResponse.json(inProgressSeries);
   }),
 
   // List series with pagination
@@ -114,15 +114,15 @@ export const seriesHandlers = [
     }
   ),
 
-  // Library-scoped: List started series
-  http.get("/api/v1/libraries/:libraryId/series/started", async ({ params }) => {
+  // Library-scoped: List in-progress series
+  http.get("/api/v1/libraries/:libraryId/series/in-progress", async ({ params }) => {
     await delay(200);
 
-    // Return a subset of started series for this library
+    // Return a subset of in-progress series for this library
     const librarySeries = getSeriesByLibrary(params.libraryId as string);
-    const startedSeries = librarySeries.slice(0, 5);
+    const inProgressSeries = librarySeries.slice(0, 5);
 
-    return HttpResponse.json(startedSeries);
+    return HttpResponse.json(inProgressSeries);
   }),
 ];
 

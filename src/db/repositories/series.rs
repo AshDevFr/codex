@@ -135,8 +135,8 @@ impl SeriesRepository {
             .context("Failed to list all series")
     }
 
-    /// Get series with started books (series that have at least one book with reading progress)
-    pub async fn list_started(
+    /// Get series with in-progress books (series that have at least one book with reading progress that is not completed)
+    pub async fn list_in_progress(
         db: &DatabaseConnection,
         user_id: Uuid,
         library_id: Option<Uuid>,
@@ -162,7 +162,7 @@ impl SeriesRepository {
             .order_by_asc(series::Column::Name)
             .all(db)
             .await
-            .context("Failed to list started series")
+            .context("Failed to list in-progress series")
     }
 
     /// Search series by normalized name
@@ -1020,7 +1020,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_list_started() {
+    async fn test_list_in_progress() {
         let (db, _temp_dir) = create_test_db().await;
 
         // Create library
@@ -1181,7 +1181,7 @@ mod tests {
 
         // Test getting started series (only in-progress, not completed)
         let started =
-            SeriesRepository::list_started(db.sea_orm_connection(), created_user.id, None)
+            SeriesRepository::list_in_progress(db.sea_orm_connection(), created_user.id, None)
                 .await
                 .unwrap();
 
@@ -1192,7 +1192,7 @@ mod tests {
         assert!(!series_ids.contains(&series3.id)); // Completed books not included
 
         // Test filtering by library
-        let started = SeriesRepository::list_started(
+        let started = SeriesRepository::list_in_progress(
             db.sea_orm_connection(),
             created_user.id,
             Some(library.id),
