@@ -18,6 +18,14 @@ import { Login } from "@/pages/Login";
 import { Register } from "@/pages/Register";
 import { SeriesDetail } from "@/pages/SeriesDetail";
 import { Setup } from "@/pages/Setup";
+import {
+	DuplicatesSettings,
+	MetricsSettings,
+	ProfileSettings,
+	ServerSettings,
+	TasksSettings,
+	UsersSettings,
+} from "@/pages/settings";
 import { navigationService } from "@/services/navigation";
 import { useAuthStore } from "@/store/authStore";
 
@@ -148,6 +156,73 @@ function App() {
 						<ProtectedRoute>
 							<AppLayout currentPath="/books/:bookId">
 								<BookDetail />
+							</AppLayout>
+						</ProtectedRoute>
+					}
+				/>
+
+				{/* Settings routes */}
+				<Route
+					path="/settings/profile"
+					element={
+						<ProtectedRoute>
+							<AppLayout currentPath="/settings/profile">
+								<ProfileSettings />
+							</AppLayout>
+						</ProtectedRoute>
+					}
+				/>
+
+				<Route
+					path="/settings/server"
+					element={
+						<ProtectedRoute>
+							<AppLayout currentPath="/settings/server">
+								<ServerSettings />
+							</AppLayout>
+						</ProtectedRoute>
+					}
+				/>
+
+				<Route
+					path="/settings/users"
+					element={
+						<ProtectedRoute>
+							<AppLayout currentPath="/settings/users">
+								<UsersSettings />
+							</AppLayout>
+						</ProtectedRoute>
+					}
+				/>
+
+				<Route
+					path="/settings/tasks"
+					element={
+						<ProtectedRoute>
+							<AppLayout currentPath="/settings/tasks">
+								<TasksSettings />
+							</AppLayout>
+						</ProtectedRoute>
+					}
+				/>
+
+				<Route
+					path="/settings/duplicates"
+					element={
+						<ProtectedRoute>
+							<AppLayout currentPath="/settings/duplicates">
+								<DuplicatesSettings />
+							</AppLayout>
+						</ProtectedRoute>
+					}
+				/>
+
+				<Route
+					path="/settings/metrics"
+					element={
+						<ProtectedRoute>
+							<AppLayout currentPath="/settings/metrics">
+								<MetricsSettings />
 							</AppLayout>
 						</ProtectedRoute>
 					}

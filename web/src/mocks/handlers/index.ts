@@ -10,6 +10,11 @@ import { seriesHandlers } from "./series";
 import { bookHandlers } from "./books";
 import { eventHandlers } from "./events";
 import { metadataHandlers } from "./metadata";
+import { settingsHandlers } from "./settings";
+import { usersHandlers } from "./users";
+import { metricsHandlers } from "./metrics";
+import { tasksHandlers } from "./tasks";
+import { duplicatesHandlers } from "./duplicates";
 import { http, HttpResponse, delay } from "msw";
 
 // Additional utility handlers
@@ -27,22 +32,6 @@ const utilityHandlers = [
       isSetupComplete: true,
       hasAdmin: true,
       hasLibraries: true,
-    });
-  }),
-
-  // Metrics
-  http.get("/api/v1/metrics", async () => {
-    await delay(100);
-    return HttpResponse.json({
-      totalLibraries: 4,
-      totalSeries: 25,
-      totalBooks: 100,
-      totalUsers: 2,
-      totalReadProgress: 15,
-      diskUsage: {
-        thumbnails: 52428800,
-        total: 1073741824,
-      },
     });
   }),
 
@@ -79,13 +68,23 @@ export const handlers = [
   ...bookHandlers,
   ...eventHandlers,
   ...metadataHandlers,
+  ...settingsHandlers,
+  ...usersHandlers,
+  ...metricsHandlers,
+  ...tasksHandlers,
+  ...duplicatesHandlers,
   ...utilityHandlers,
 ];
 
 // Re-export individual handlers for selective use
 export { authHandlers } from "./auth";
 export { bookHandlers } from "./books";
+export { duplicatesHandlers } from "./duplicates";
 export { eventHandlers } from "./events";
 export { libraryHandlers } from "./libraries";
 export { metadataHandlers } from "./metadata";
+export { metricsHandlers } from "./metrics";
 export { seriesHandlers } from "./series";
+export { settingsHandlers } from "./settings";
+export { tasksHandlers } from "./tasks";
+export { usersHandlers } from "./users";

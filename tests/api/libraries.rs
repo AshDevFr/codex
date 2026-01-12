@@ -205,6 +205,7 @@ async fn test_create_library_success() {
         scan_immediately: false,
         allowed_formats: None,
         excluded_patterns: None,
+        default_reading_direction: None,
     };
 
     let request = post_json_request_with_auth("/api/v1/libraries", &create_request, &token);
@@ -233,6 +234,7 @@ async fn test_create_library_without_permission() {
         scanning_config: None,
         allowed_formats: None,
         excluded_patterns: None,
+        default_reading_direction: None,
     };
 
     let request = post_json_request_with_auth("/api/v1/libraries", &create_request, &token);
@@ -279,6 +281,7 @@ async fn test_update_library_success() {
         scanning_config: None,
         allowed_formats: None,
         excluded_patterns: None,
+        default_reading_direction: None,
     };
 
     let request = patch_json_request_with_auth(
@@ -315,6 +318,7 @@ async fn test_update_library_without_permission() {
         scanning_config: None,
         allowed_formats: None,
         excluded_patterns: None,
+        default_reading_direction: None,
     };
 
     let request = patch_json_request_with_auth(
@@ -676,6 +680,7 @@ async fn test_create_library_with_scheduler_succeeds_without_scheduler() {
         excluded_patterns: None,
         scanning_config: None,
         scan_immediately: false,
+        default_reading_direction: None,
     };
 
     let request = post_json_request_with_auth("/api/v1/libraries", &request_body, &token);
@@ -719,6 +724,7 @@ async fn test_update_library_with_scheduler_succeeds_without_scheduler() {
         allowed_formats: None,
         excluded_patterns: None,
         scanning_config: None,
+        default_reading_direction: None,
     };
 
     let request = patch_json_request_with_auth(

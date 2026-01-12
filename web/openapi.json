@@ -10,6 +10,389 @@
     "version": "1.0.0"
   },
   "paths": {
+    "/api/v1/admin/integrations": {
+      "get": {
+        "tags": [
+          "System Integrations"
+        ],
+        "summary": "List all system integrations",
+        "operationId": "list_system_integrations",
+        "responses": {
+          "200": {
+            "description": "System integrations retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemIntegrationsListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "System Integrations"
+        ],
+        "summary": "Create a new system integration",
+        "operationId": "create_system_integration",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSystemIntegrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Integration created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemIntegrationDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          },
+          "409": {
+            "description": "Integration with this name already exists"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/integrations/{id}": {
+      "get": {
+        "tags": [
+          "System Integrations"
+        ],
+        "summary": "Get a system integration by ID",
+        "operationId": "get_system_integration",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Integration ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Integration retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemIntegrationDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          },
+          "404": {
+            "description": "Integration not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "System Integrations"
+        ],
+        "summary": "Delete a system integration",
+        "operationId": "delete_system_integration",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Integration ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Integration deleted"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          },
+          "404": {
+            "description": "Integration not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "System Integrations"
+        ],
+        "summary": "Update a system integration",
+        "operationId": "update_system_integration",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Integration ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSystemIntegrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Integration updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemIntegrationDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          },
+          "404": {
+            "description": "Integration not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/integrations/{id}/disable": {
+      "post": {
+        "tags": [
+          "System Integrations"
+        ],
+        "summary": "Disable a system integration",
+        "operationId": "disable_system_integration",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Integration ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Integration disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          },
+          "404": {
+            "description": "Integration not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/integrations/{id}/enable": {
+      "post": {
+        "tags": [
+          "System Integrations"
+        ],
+        "summary": "Enable a system integration",
+        "operationId": "enable_system_integration",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Integration ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Integration enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          },
+          "404": {
+            "description": "Integration not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/integrations/{id}/test": {
+      "post": {
+        "tags": [
+          "System Integrations"
+        ],
+        "summary": "Test a system integration connection",
+        "operationId": "test_system_integration",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Integration ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationTestResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          },
+          "404": {
+            "description": "Integration not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/settings": {
       "get": {
         "tags": [
@@ -6922,6 +7305,524 @@
         ]
       }
     },
+    "/api/v1/user/integrations": {
+      "get": {
+        "tags": [
+          "User Integrations"
+        ],
+        "summary": "List all integrations for the current user",
+        "operationId": "list_user_integrations",
+        "responses": {
+          "200": {
+            "description": "List of user integrations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserIntegrationsListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "User Integrations"
+        ],
+        "summary": "Initiate connection to an integration",
+        "operationId": "connect_integration",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectIntegrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Connection initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectIntegrationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "409": {
+            "description": "Integration already connected"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/user/integrations/{name}": {
+      "get": {
+        "tags": [
+          "User Integrations"
+        ],
+        "summary": "Get a specific integration by name",
+        "operationId": "get_user_integration",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Integration name (e.g., anilist)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Integration details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserIntegrationDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Integration not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "User Integrations"
+        ],
+        "summary": "Disconnect an integration",
+        "operationId": "disconnect_integration",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Integration name (e.g., anilist)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Integration disconnected"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Integration not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "User Integrations"
+        ],
+        "summary": "Update integration settings",
+        "operationId": "update_integration_settings",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Integration name (e.g., anilist)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateIntegrationSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Integration updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserIntegrationDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Integration not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/user/integrations/{name}/callback": {
+      "post": {
+        "tags": [
+          "User Integrations"
+        ],
+        "summary": "Handle OAuth callback",
+        "operationId": "oauth_callback",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Integration name (e.g., anilist)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthCallbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Integration connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserIntegrationDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid callback"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/user/integrations/{name}/sync": {
+      "post": {
+        "tags": [
+          "User Integrations"
+        ],
+        "summary": "Trigger a sync for an integration",
+        "operationId": "trigger_sync",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Integration name (e.g., anilist)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sync triggered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncTriggerResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Integration not found"
+          },
+          "409": {
+            "description": "Sync already in progress"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/user/preferences": {
+      "get": {
+        "tags": [
+          "User Preferences"
+        ],
+        "summary": "Get all preferences for the authenticated user",
+        "operationId": "get_all_preferences",
+        "responses": {
+          "200": {
+            "description": "User preferences retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "User Preferences"
+        ],
+        "summary": "Set multiple preferences at once",
+        "operationId": "set_bulk_preferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkSetPreferencesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Preferences updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetPreferencesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid preference key or value"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/user/preferences/{key}": {
+      "get": {
+        "tags": [
+          "User Preferences"
+        ],
+        "summary": "Get a single preference by key",
+        "operationId": "get_preference",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "description": "Preference key (e.g., 'ui.theme')",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Preference retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferenceDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Preference not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "User Preferences"
+        ],
+        "summary": "Set a single preference value",
+        "operationId": "set_preference",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "description": "Preference key (e.g., 'ui.theme')",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPreferenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Preference set successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferenceDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid preference value"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "User Preferences"
+        ],
+        "summary": "Delete (reset) a preference to its default",
+        "operationId": "delete_preference",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "description": "Preference key to delete",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Preference deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletePreferenceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/user/ratings": {
       "get": {
         "tags": [
@@ -7972,6 +8873,57 @@
           }
         }
       },
+      "AvailableIntegrationDto": {
+        "type": "object",
+        "description": "An available integration that can be connected",
+        "required": [
+          "name",
+          "displayName",
+          "description",
+          "authType",
+          "features",
+          "connected"
+        ],
+        "properties": {
+          "authType": {
+            "type": "string",
+            "description": "Authentication type: oauth2, api_key, none",
+            "example": "oauth2"
+          },
+          "connected": {
+            "type": "boolean",
+            "description": "Whether this integration is already connected by the user",
+            "example": false
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the integration",
+            "example": "Sync your reading progress and ratings with AniList"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Human-readable display name",
+            "example": "AniList"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Features supported by this integration",
+            "example": [
+              "sync_progress",
+              "sync_ratings",
+              "import_lists"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "Integration name (e.g., \"anilist\", \"myanimelist\")",
+            "example": "anilist"
+          }
+        }
+      },
       "BelongsTo": {
         "type": "object",
         "description": "Series membership information",
@@ -8717,6 +9669,27 @@
           "parent_path": "/home/user"
         }
       },
+      "BulkSetPreferencesRequest": {
+        "type": "object",
+        "description": "Request to set multiple preferences at once",
+        "required": [
+          "preferences"
+        ],
+        "properties": {
+          "preferences": {
+            "type": "object",
+            "description": "Map of preference keys to values",
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            },
+            "example": {
+              "reader.zoom": 150,
+              "ui.theme": "dark"
+            }
+          }
+        }
+      },
       "BulkSettingUpdate": {
         "type": "object",
         "description": "Single setting update in a bulk operation",
@@ -8801,6 +9774,68 @@
             "type": "integer",
             "description": "Number of settings configured",
             "minimum": 0
+          }
+        }
+      },
+      "ConnectIntegrationRequest": {
+        "type": "object",
+        "description": "Request to initiate connection to an integration",
+        "required": [
+          "integrationName"
+        ],
+        "properties": {
+          "apiKey": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "API key (for api_key auth type integrations)"
+          },
+          "integrationName": {
+            "type": "string",
+            "description": "Integration name to connect",
+            "example": "anilist"
+          },
+          "redirectUri": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Redirect URI for OAuth callback (required for OAuth integrations)",
+            "example": "https://app.example.com/integrations/callback"
+          }
+        }
+      },
+      "ConnectIntegrationResponse": {
+        "type": "object",
+        "description": "Response from initiating integration connection",
+        "required": [
+          "connected"
+        ],
+        "properties": {
+          "authUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "OAuth authorization URL (redirect user here)",
+            "example": "https://anilist.co/api/v2/oauth/authorize?client_id=..."
+          },
+          "connected": {
+            "type": "boolean",
+            "description": "Whether the integration is now connected (true for api_key auth)",
+            "example": false
+          },
+          "integration": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserIntegrationDto",
+                "description": "The integration details (if connected immediately)"
+              }
+            ]
           }
         }
       },
@@ -8979,6 +10014,14 @@
               "EPUB"
             ]
           },
+          "defaultReadingDirection": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Default reading direction for books in this library (ltr, rtl, ttb, btt)",
+            "example": "ltr"
+          },
           "description": {
             "type": [
               "string",
@@ -9020,6 +10063,43 @@
                 "description": "Scanning configuration"
               }
             ]
+          }
+        }
+      },
+      "CreateSystemIntegrationRequest": {
+        "type": "object",
+        "description": "Request to create a new system integration",
+        "required": [
+          "name",
+          "displayName",
+          "integrationType"
+        ],
+        "properties": {
+          "config": {
+            "description": "Non-sensitive configuration"
+          },
+          "credentials": {
+            "description": "Credentials (will be encrypted before storage)"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Human-readable display name",
+            "example": "MangaUpdates"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether to enable immediately",
+            "example": false
+          },
+          "integrationType": {
+            "type": "string",
+            "description": "Integration type",
+            "example": "metadata_provider"
+          },
+          "name": {
+            "type": "string",
+            "description": "Unique integration name (alphanumeric with underscores)",
+            "example": "mangaupdates"
           }
         }
       },
@@ -9095,6 +10175,26 @@
             "type": "string",
             "description": "Username for the new account",
             "example": "newuser"
+          }
+        }
+      },
+      "DeletePreferenceResponse": {
+        "type": "object",
+        "description": "Response after deleting a preference",
+        "required": [
+          "deleted",
+          "message"
+        ],
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "description": "Whether a preference was deleted",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "description": "Message describing the result",
+            "example": "Preference 'ui.theme' was reset to default"
           }
         }
       },
@@ -10266,6 +11366,55 @@
           }
         }
       },
+      "IntegrationStatusResponse": {
+        "type": "object",
+        "description": "Response after enabling or disabling an integration",
+        "required": [
+          "integration",
+          "message"
+        ],
+        "properties": {
+          "integration": {
+            "$ref": "#/components/schemas/SystemIntegrationDto",
+            "description": "The updated integration"
+          },
+          "message": {
+            "type": "string",
+            "description": "Status change message",
+            "example": "Integration enabled successfully"
+          }
+        }
+      },
+      "IntegrationTestResult": {
+        "type": "object",
+        "description": "Response from testing an integration connection",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "latencyMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Response latency in milliseconds (if applicable)",
+            "example": 150,
+            "minimum": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "Test result message",
+            "example": "Successfully connected to MangaUpdates API"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Whether the test was successful",
+            "example": true
+          }
+        }
+      },
       "LibraryDto": {
         "type": "object",
         "description": "Library data transfer object",
@@ -10275,7 +11424,8 @@
           "path",
           "isActive",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "defaultReadingDirection"
         ],
         "properties": {
           "allowedFormats": {
@@ -10305,6 +11455,11 @@
             "type": "string",
             "format": "date-time",
             "example": "2024-01-01T00:00:00Z"
+          },
+          "defaultReadingDirection": {
+            "type": "string",
+            "description": "Default reading direction for books in this library (ltr, rtl, ttb, btt)",
+            "example": "ltr"
           },
           "description": {
             "type": [
@@ -10746,6 +11901,32 @@
             "description": "Number of metric records deleted",
             "example": 15000,
             "minimum": 0
+          }
+        }
+      },
+      "OAuthCallbackRequest": {
+        "type": "object",
+        "description": "OAuth callback request",
+        "required": [
+          "code",
+          "state",
+          "redirectUri"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "OAuth authorization code",
+            "example": "abc123"
+          },
+          "redirectUri": {
+            "type": "string",
+            "description": "Redirect URI used in the authorization request",
+            "example": "https://app.example.com/integrations/callback"
+          },
+          "state": {
+            "type": "string",
+            "description": "State parameter for CSRF protection",
+            "example": "random-state-string"
           }
         }
       },
@@ -12884,6 +14065,41 @@
           }
         }
       },
+      "SetPreferenceRequest": {
+        "type": "object",
+        "description": "Request to set a single preference value",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "description": "The value to set"
+          }
+        }
+      },
+      "SetPreferencesResponse": {
+        "type": "object",
+        "description": "Response after setting preferences",
+        "required": [
+          "updated",
+          "preferences"
+        ],
+        "properties": {
+          "preferences": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserPreferenceDto"
+            },
+            "description": "The updated preferences"
+          },
+          "updated": {
+            "type": "integer",
+            "description": "Number of preferences that were updated",
+            "example": 3,
+            "minimum": 0
+          }
+        }
+      },
       "SetSeriesGenresRequest": {
         "type": "object",
         "description": "Request to set genres for a series",
@@ -13133,6 +14349,145 @@
           "setupRequired": {
             "type": "boolean",
             "description": "Whether initial setup is required"
+          }
+        }
+      },
+      "SyncTriggerResponse": {
+        "type": "object",
+        "description": "Response from triggering a sync",
+        "required": [
+          "started",
+          "message",
+          "integration"
+        ],
+        "properties": {
+          "integration": {
+            "$ref": "#/components/schemas/UserIntegrationDto",
+            "description": "Updated integration state"
+          },
+          "message": {
+            "type": "string",
+            "description": "Status message",
+            "example": "Sync started"
+          },
+          "started": {
+            "type": "boolean",
+            "description": "Whether the sync was started",
+            "example": true
+          }
+        }
+      },
+      "SystemIntegrationDto": {
+        "type": "object",
+        "description": "A system integration (credentials are never exposed)",
+        "required": [
+          "id",
+          "name",
+          "displayName",
+          "integrationType",
+          "config",
+          "hasCredentials",
+          "enabled",
+          "healthStatus",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "config": {
+            "description": "Non-sensitive configuration"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the integration was created"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Human-readable display name",
+            "example": "MangaUpdates"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the integration is enabled",
+            "example": true
+          },
+          "errorMessage": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Error message if health check failed"
+          },
+          "hasCredentials": {
+            "type": "boolean",
+            "description": "Whether credentials have been set (actual credentials are never returned)",
+            "example": true
+          },
+          "healthStatus": {
+            "type": "string",
+            "description": "Health status: unknown, healthy, degraded, unhealthy, disabled",
+            "example": "healthy"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Integration ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "integrationType": {
+            "type": "string",
+            "description": "Integration type: metadata_provider, notification, storage, sync",
+            "example": "metadata_provider"
+          },
+          "lastHealthCheckAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the last health check was performed",
+            "example": "2024-01-15T18:45:00Z"
+          },
+          "lastSyncAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the integration last synced data",
+            "example": "2024-01-15T18:00:00Z"
+          },
+          "name": {
+            "type": "string",
+            "description": "Unique integration name (e.g., \"mangaupdates\", \"anilist\")",
+            "example": "mangaupdates"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the integration was last updated"
+          }
+        }
+      },
+      "SystemIntegrationsListResponse": {
+        "type": "object",
+        "description": "Response containing a list of system integrations",
+        "required": [
+          "integrations",
+          "total"
+        ],
+        "properties": {
+          "integrations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SystemIntegrationDto"
+            },
+            "description": "List of system integrations"
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total count",
+            "minimum": 0
           }
         }
       },
@@ -14227,6 +15582,30 @@
           }
         }
       },
+      "UpdateIntegrationSettingsRequest": {
+        "type": "object",
+        "description": "Request to update integration settings",
+        "properties": {
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Updated display name",
+            "example": "My AniList"
+          },
+          "enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Enable or disable the integration"
+          },
+          "settings": {
+            "description": "Updated settings"
+          }
+        }
+      },
       "UpdateLibraryRequest": {
         "type": "object",
         "description": "Update library request",
@@ -14244,6 +15623,14 @@
               "CBZ",
               "CBR"
             ]
+          },
+          "defaultReadingDirection": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Default reading direction for books in this library (ltr, rtl, ttb, btt)",
+            "example": "rtl"
           },
           "description": {
             "type": [
@@ -14442,6 +15829,26 @@
           }
         }
       },
+      "UpdateSystemIntegrationRequest": {
+        "type": "object",
+        "description": "Request to update a system integration",
+        "properties": {
+          "config": {
+            "description": "Updated configuration"
+          },
+          "credentials": {
+            "description": "Updated credentials (will be encrypted before storage)\nSet to null to clear credentials, omit to keep unchanged"
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Updated display name",
+            "example": "MangaUpdates API"
+          }
+        }
+      },
       "UpdateUserRequest": {
         "type": "object",
         "description": "Update user request",
@@ -14581,6 +15988,180 @@
           "username": {
             "type": "string",
             "example": "admin"
+          }
+        }
+      },
+      "UserIntegrationDto": {
+        "type": "object",
+        "description": "A user integration (credentials are never exposed)",
+        "required": [
+          "id",
+          "integrationName",
+          "connected",
+          "enabled",
+          "settings",
+          "syncStatus",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "description": "Whether the integration is connected (has credentials)",
+            "example": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the integration was connected"
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "User-defined display name",
+            "example": "My AniList Account"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the integration is enabled",
+            "example": true
+          },
+          "externalUserId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "External user ID from the provider",
+            "example": "123456"
+          },
+          "externalUsername": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "External username from the provider",
+            "example": "myusername"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Integration ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "integrationName": {
+            "type": "string",
+            "description": "Integration name (e.g., \"anilist\", \"myanimelist\")",
+            "example": "anilist"
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Error message if sync failed"
+          },
+          "lastSyncAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the integration last synced",
+            "example": "2024-01-15T18:00:00Z"
+          },
+          "settings": {
+            "description": "User preferences for this integration"
+          },
+          "syncStatus": {
+            "type": "string",
+            "description": "Current sync status: idle, syncing, error, rate_limited",
+            "example": "idle"
+          },
+          "tokenExpiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the OAuth token expires"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the integration was last updated"
+          }
+        }
+      },
+      "UserIntegrationsListResponse": {
+        "type": "object",
+        "description": "Response containing a list of user integrations",
+        "required": [
+          "integrations",
+          "available"
+        ],
+        "properties": {
+          "available": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AvailableIntegrationDto"
+            },
+            "description": "Available integrations that user can connect"
+          },
+          "integrations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserIntegrationDto"
+            },
+            "description": "Connected integrations"
+          }
+        }
+      },
+      "UserPreferenceDto": {
+        "type": "object",
+        "description": "A single user preference",
+        "required": [
+          "key",
+          "value",
+          "valueType",
+          "updatedAt"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "The preference key (e.g., \"ui.theme\", \"reader.zoom\")",
+            "example": "ui.theme"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the preference was last updated",
+            "example": "2024-01-15T18:45:00Z"
+          },
+          "value": {
+            "description": "The preference value"
+          },
+          "valueType": {
+            "type": "string",
+            "description": "The value type: string, integer, float, boolean, or json",
+            "example": "string"
+          }
+        }
+      },
+      "UserPreferencesResponse": {
+        "type": "object",
+        "description": "Response containing all user preferences",
+        "required": [
+          "preferences"
+        ],
+        "properties": {
+          "preferences": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserPreferenceDto"
+            },
+            "description": "List of all user preferences"
           }
         }
       },
@@ -14794,6 +16375,10 @@
       "description": "User series rating endpoints"
     },
     {
+      "name": "User Preferences",
+      "description": "Per-user settings and preferences"
+    },
+    {
       "name": "books",
       "description": "Book details and metadata endpoints"
     },
@@ -14836,6 +16421,10 @@
     {
       "name": "settings",
       "description": "Runtime configuration settings management (admin only)"
+    },
+    {
+      "name": "System Integrations",
+      "description": "Admin-managed external service integrations"
     },
     {
       "name": "duplicates",

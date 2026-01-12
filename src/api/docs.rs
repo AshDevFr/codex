@@ -110,6 +110,22 @@ Codex provides OPDS catalog feeds for e-reader applications:
         handlers::delete_series_rating,
         handlers::list_user_ratings,
 
+        // User preferences endpoints
+        handlers::user_preferences::get_all_preferences,
+        handlers::user_preferences::get_preference,
+        handlers::user_preferences::set_preference,
+        handlers::user_preferences::set_bulk_preferences,
+        handlers::user_preferences::delete_preference,
+
+        // User integrations endpoints
+        handlers::user_integrations::list_user_integrations,
+        handlers::user_integrations::get_user_integration,
+        handlers::user_integrations::connect_integration,
+        handlers::user_integrations::oauth_callback,
+        handlers::user_integrations::update_integration_settings,
+        handlers::user_integrations::disconnect_integration,
+        handlers::user_integrations::trigger_sync,
+
         // Alternate title endpoints
         handlers::get_series_alternate_titles,
         handlers::create_alternate_title,
@@ -226,6 +242,16 @@ Codex provides OPDS catalog feeds for e-reader applications:
         handlers::settings::reset_setting,
         handlers::settings::get_setting_history,
 
+        // System integrations endpoints
+        handlers::system_integrations::list_system_integrations,
+        handlers::system_integrations::create_system_integration,
+        handlers::system_integrations::get_system_integration,
+        handlers::system_integrations::update_system_integration,
+        handlers::system_integrations::delete_system_integration,
+        handlers::system_integrations::enable_system_integration,
+        handlers::system_integrations::disable_system_integration,
+        handlers::system_integrations::test_system_integration,
+
         // Duplicates endpoints
         handlers::duplicates::list_duplicates,
         handlers::duplicates::trigger_duplicate_scan,
@@ -309,6 +335,14 @@ Codex provides OPDS catalog feeds for e-reader applications:
             dto::UserRatingsListResponse,
             dto::SetUserRatingRequest,
 
+            // User Preferences DTOs
+            dto::UserPreferenceDto,
+            dto::UserPreferencesResponse,
+            dto::SetPreferenceRequest,
+            dto::BulkSetPreferencesRequest,
+            dto::SetPreferencesResponse,
+            dto::DeletePreferenceResponse,
+
             // Alternate Title DTOs
             dto::AlternateTitleDto,
             dto::AlternateTitleListResponse,
@@ -387,6 +421,14 @@ Codex provides OPDS catalog feeds for e-reader applications:
             dto::SettingHistoryDto,
             dto::ListSettingsQuery,
 
+            // System Integrations DTOs
+            dto::SystemIntegrationDto,
+            dto::SystemIntegrationsListResponse,
+            dto::CreateSystemIntegrationRequest,
+            dto::UpdateSystemIntegrationRequest,
+            dto::IntegrationTestResult,
+            dto::IntegrationStatusResponse,
+
             // Task Queue DTOs
             handlers::task_queue::CreateTaskRequest,
             handlers::task_queue::CreateTaskResponse,
@@ -435,6 +477,7 @@ Codex provides OPDS catalog feeds for e-reader applications:
         (name = "genres", description = "Genre taxonomy endpoints for categorizing series"),
         (name = "tags", description = "Tag taxonomy endpoints for labeling series"),
         (name = "ratings", description = "User series rating endpoints"),
+        (name = "User Preferences", description = "Per-user settings and preferences"),
         (name = "books", description = "Book details and metadata endpoints"),
         (name = "pages", description = "Page image serving endpoints"),
         (name = "Reading Progress", description = "Reading progress tracking endpoints"),
@@ -446,6 +489,7 @@ Codex provides OPDS catalog feeds for e-reader applications:
         (name = "Thumbnails", description = "Thumbnail generation and management"),
         (name = "filesystem", description = "Filesystem browsing for library path selection"),
         (name = "settings", description = "Runtime configuration settings management (admin only)"),
+        (name = "System Integrations", description = "Admin-managed external service integrations"),
         (name = "duplicates", description = "Duplicate book detection and management"),
         (name = "events", description = "Server-Sent Events for real-time updates"),
         (name = "opds", description = "OPDS 1.2 catalog feed (Atom XML format)"),

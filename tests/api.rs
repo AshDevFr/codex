@@ -26,8 +26,11 @@ mod api {
     mod settings;
     mod setup;
     mod sse;
+    mod system_integrations;
     mod tags;
     mod task_metrics;
     mod thumbnails;
+    mod user_integrations;
+    mod user_preferences;
     mod user_ratings;
 }

@@ -152,9 +152,10 @@ describe("Sidebar Component (via AppLayout)", () => {
 
 		// Admin settings options should be visible inside Settings
 		expect(screen.getByText("Server")).toBeInTheDocument();
-		expect(screen.getByText("Tasks")).toBeInTheDocument();
-		expect(screen.getByText("Logs")).toBeInTheDocument();
 		expect(screen.getByText("Users")).toBeInTheDocument();
+		expect(screen.getByText("Tasks")).toBeInTheDocument();
+		expect(screen.getByText("Duplicates")).toBeInTheDocument();
+		expect(screen.getByText("Metrics")).toBeInTheDocument();
 	});
 
 	it("should not show admin settings options for regular users", () => {
@@ -181,7 +182,8 @@ describe("Sidebar Component (via AppLayout)", () => {
 		// Admin options should not be visible
 		expect(screen.queryByText("Server")).not.toBeInTheDocument();
 		expect(screen.queryByText("Tasks")).not.toBeInTheDocument();
-		expect(screen.queryByText("Logs")).not.toBeInTheDocument();
+		expect(screen.queryByText("Duplicates")).not.toBeInTheDocument();
+		expect(screen.queryByText("Metrics")).not.toBeInTheDocument();
 		// Profile should still be visible
 		expect(screen.getByText("Profile")).toBeInTheDocument();
 	});

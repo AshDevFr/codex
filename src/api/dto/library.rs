@@ -39,6 +39,9 @@ pub struct LibraryDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = ".DS_Store\nThumbs.db")]
     pub excluded_patterns: Option<String>,
+    /// Default reading direction for books in this library (ltr, rtl, ttb, btt)
+    #[schema(example = "ltr")]
+    pub default_reading_direction: String,
 }
 
 /// Create library request
@@ -74,6 +77,11 @@ pub struct CreateLibraryRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = ".DS_Store\nThumbs.db")]
     pub excluded_patterns: Option<String>,
+
+    /// Default reading direction for books in this library (ltr, rtl, ttb, btt)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "ltr")]
+    pub default_reading_direction: Option<String>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -112,4 +120,9 @@ pub struct UpdateLibraryRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = ".DS_Store")]
     pub excluded_patterns: Option<String>,
+
+    /// Default reading direction for books in this library (ltr, rtl, ttb, btt)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "rtl")]
+    pub default_reading_direction: Option<String>,
 }

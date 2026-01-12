@@ -47,6 +47,7 @@ async fn library_to_dto(db: &DatabaseConnection, library: libraries::Model) -> L
         series_count,
         allowed_formats,
         excluded_patterns: library.excluded_patterns,
+        default_reading_direction: library.default_reading_direction,
     }
 }
 
@@ -155,25 +156,41 @@ pub async fn create_library(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to create library: {}", e)))?;
 
+    // Track if we need to update after creation
+    let mut needs_update = false;
+
     // Handle allowed_formats if provided
-    if let Some(formats) = request.allowed_formats {
-        let formats_json = serde_json::to_string(&formats)
+    if let Some(formats) = &request.allowed_formats {
+        let formats_json = serde_json::to_string(formats)
             .map_err(|e| ApiError::BadRequest(format!("Invalid allowed formats: {}", e)))?;
         library.allowed_formats = Some(formats_json);
+        needs_update = true;
     }
 
     // Handle excluded_patterns if provided
-    if let Some(patterns) = request.excluded_patterns {
-        library.excluded_patterns = Some(patterns);
+    if let Some(patterns) = &request.excluded_patterns {
+        library.excluded_patterns = Some(patterns.clone());
+        needs_update = true;
+    }
+
+    // Handle default_reading_direction if provided
+    if let Some(direction) = &request.default_reading_direction {
+        library.default_reading_direction = direction.clone();
+        needs_update = true;
     }
 
     // Handle scanning_config if provided
-    if let Some(config_dto) = request.scanning_config {
+    if let Some(config_dto) = &request.scanning_config {
         // Serialize the config to JSON string for database storage
-        let config_json = serde_json::to_string(&config_dto)
+        let config_json = serde_json::to_string(config_dto)
             .map_err(|e| ApiError::BadRequest(format!("Invalid scanning config: {}", e)))?;
 
         library.scanning_config = Some(config_json);
+        needs_update = true;
+    }
+
+    // Save all optional fields if any were provided
+    if needs_update {
         LibraryRepository::update(&state.db, &library)
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to update library config: {}", e)))?;
@@ -258,6 +275,10 @@ pub async fn update_library(
     // Handle excluded_patterns if provided
     if let Some(patterns) = request.excluded_patterns {
         library.excluded_patterns = Some(patterns);
+    }
+    // Handle default_reading_direction if provided
+    if let Some(direction) = request.default_reading_direction {
+        library.default_reading_direction = direction;
     }
     // Handle scanning_config if provided
     if let Some(config_dto) = request.scanning_config {

@@ -4,6 +4,94 @@
  */
 
 export interface paths {
+    "/api/v1/admin/integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all system integrations */
+        get: operations["list_system_integrations"];
+        put?: never;
+        /** Create a new system integration */
+        post: operations["create_system_integration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/integrations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a system integration by ID */
+        get: operations["get_system_integration"];
+        put?: never;
+        post?: never;
+        /** Delete a system integration */
+        delete: operations["delete_system_integration"];
+        options?: never;
+        head?: never;
+        /** Update a system integration */
+        patch: operations["update_system_integration"];
+        trace?: never;
+    };
+    "/api/v1/admin/integrations/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable a system integration */
+        post: operations["disable_system_integration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/integrations/{id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable a system integration */
+        post: operations["enable_system_integration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/integrations/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test a system integration connection */
+        post: operations["test_system_integration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings": {
         parameters: {
             query?: never;
@@ -2375,6 +2463,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user/integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all integrations for the current user */
+        get: operations["list_user_integrations"];
+        put?: never;
+        /** Initiate connection to an integration */
+        post: operations["connect_integration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/integrations/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a specific integration by name */
+        get: operations["get_user_integration"];
+        put?: never;
+        post?: never;
+        /** Disconnect an integration */
+        delete: operations["disconnect_integration"];
+        options?: never;
+        head?: never;
+        /** Update integration settings */
+        patch: operations["update_integration_settings"];
+        trace?: never;
+    };
+    "/api/v1/user/integrations/{name}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Handle OAuth callback */
+        post: operations["oauth_callback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/integrations/{name}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Trigger a sync for an integration */
+        post: operations["trigger_sync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get all preferences for the authenticated user */
+        get: operations["get_all_preferences"];
+        /** Set multiple preferences at once */
+        put: operations["set_bulk_preferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/preferences/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a single preference by key */
+        get: operations["get_preference"];
+        /** Set a single preference value */
+        put: operations["set_preference"];
+        post?: never;
+        /** Delete (reset) a preference to its default */
+        delete: operations["delete_preference"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/user/ratings": {
         parameters: {
             query?: never;
@@ -2857,6 +3053,43 @@ export interface components {
              */
             userId: string;
         };
+        /** @description An available integration that can be connected */
+        AvailableIntegrationDto: {
+            /**
+             * @description Authentication type: oauth2, api_key, none
+             * @example oauth2
+             */
+            authType: string;
+            /**
+             * @description Whether this integration is already connected by the user
+             * @example false
+             */
+            connected: boolean;
+            /**
+             * @description Description of the integration
+             * @example Sync your reading progress and ratings with AniList
+             */
+            description: string;
+            /**
+             * @description Human-readable display name
+             * @example AniList
+             */
+            displayName: string;
+            /**
+             * @description Features supported by this integration
+             * @example [
+             *       "sync_progress",
+             *       "sync_ratings",
+             *       "import_lists"
+             *     ]
+             */
+            features: string[];
+            /**
+             * @description Integration name (e.g., "anilist", "myanimelist")
+             * @example anilist
+             */
+            name: string;
+        };
         /** @description Series membership information */
         BelongsTo: {
             series?: null | components["schemas"]["SeriesInfo"];
@@ -3204,6 +3437,19 @@ export interface components {
             /** @description Parent directory path (None if at root) */
             parent_path?: string | null;
         };
+        /** @description Request to set multiple preferences at once */
+        BulkSetPreferencesRequest: {
+            /**
+             * @description Map of preference keys to values
+             * @example {
+             *       "reader.zoom": 150,
+             *       "ui.theme": "dark"
+             *     }
+             */
+            preferences: {
+                [key: string]: unknown;
+            };
+        };
         /** @description Single setting update in a bulk operation */
         BulkSettingUpdate: {
             /**
@@ -3242,6 +3488,35 @@ export interface components {
             message: string;
             /** @description Number of settings configured */
             settingsConfigured: number;
+        };
+        /** @description Request to initiate connection to an integration */
+        ConnectIntegrationRequest: {
+            /** @description API key (for api_key auth type integrations) */
+            apiKey?: string | null;
+            /**
+             * @description Integration name to connect
+             * @example anilist
+             */
+            integrationName: string;
+            /**
+             * @description Redirect URI for OAuth callback (required for OAuth integrations)
+             * @example https://app.example.com/integrations/callback
+             */
+            redirectUri?: string | null;
+        };
+        /** @description Response from initiating integration connection */
+        ConnectIntegrationResponse: {
+            /**
+             * @description OAuth authorization URL (redirect user here)
+             * @example https://anilist.co/api/v2/oauth/authorize?client_id=...
+             */
+            authUrl?: string | null;
+            /**
+             * @description Whether the integration is now connected (true for api_key auth)
+             * @example false
+             */
+            connected: boolean;
+            integration?: null | components["schemas"]["UserIntegrationDto"];
         };
         /** @description Contributor information (author, artist, etc.) */
         Contributor: {
@@ -3342,6 +3617,11 @@ export interface components {
              */
             allowedFormats?: string[] | null;
             /**
+             * @description Default reading direction for books in this library (ltr, rtl, ttb, btt)
+             * @example ltr
+             */
+            defaultReadingDirection?: string | null;
+            /**
              * @description Optional description
              * @example My comic book collection
              */
@@ -3368,6 +3648,33 @@ export interface components {
              */
             scanImmediately?: boolean;
             scanningConfig?: null | components["schemas"]["ScanningConfigDto"];
+        };
+        /** @description Request to create a new system integration */
+        CreateSystemIntegrationRequest: {
+            /** @description Non-sensitive configuration */
+            config?: unknown;
+            /** @description Credentials (will be encrypted before storage) */
+            credentials?: unknown;
+            /**
+             * @description Human-readable display name
+             * @example MangaUpdates
+             */
+            displayName: string;
+            /**
+             * @description Whether to enable immediately
+             * @example false
+             */
+            enabled?: boolean;
+            /**
+             * @description Integration type
+             * @example metadata_provider
+             */
+            integrationType: string;
+            /**
+             * @description Unique integration name (alphanumeric with underscores)
+             * @example mangaupdates
+             */
+            name: string;
         };
         CreateTaskRequest: {
             /**
@@ -3415,6 +3722,19 @@ export interface components {
              * @example newuser
              */
             username: string;
+        };
+        /** @description Response after deleting a preference */
+        DeletePreferenceResponse: {
+            /**
+             * @description Whether a preference was deleted
+             * @example true
+             */
+            deleted: boolean;
+            /**
+             * @description Message describing the result
+             * @example Preference 'ui.theme' was reset to default
+             */
+            message: string;
         };
         /** @description A group of duplicate books */
         DuplicateGroup: {
@@ -3944,6 +4264,35 @@ export interface components {
             /** @description Created user information */
             user: components["schemas"]["UserInfo"];
         };
+        /** @description Response after enabling or disabling an integration */
+        IntegrationStatusResponse: {
+            /** @description The updated integration */
+            integration: components["schemas"]["SystemIntegrationDto"];
+            /**
+             * @description Status change message
+             * @example Integration enabled successfully
+             */
+            message: string;
+        };
+        /** @description Response from testing an integration connection */
+        IntegrationTestResult: {
+            /**
+             * Format: int64
+             * @description Response latency in milliseconds (if applicable)
+             * @example 150
+             */
+            latencyMs?: number | null;
+            /**
+             * @description Test result message
+             * @example Successfully connected to MangaUpdates API
+             */
+            message: string;
+            /**
+             * @description Whether the test was successful
+             * @example true
+             */
+            success: boolean;
+        };
         /** @description Library data transfer object */
         LibraryDto: {
             /**
@@ -3965,6 +4314,11 @@ export interface components {
              * @example 2024-01-01T00:00:00Z
              */
             createdAt: string;
+            /**
+             * @description Default reading direction for books in this library (ltr, rtl, ttb, btt)
+             * @example ltr
+             */
+            defaultReadingDirection: string;
             /** @example My comic book collection */
             description?: string | null;
             /**
@@ -4255,6 +4609,24 @@ export interface components {
              * @example 15000
              */
             deleted_count: number;
+        };
+        /** @description OAuth callback request */
+        OAuthCallbackRequest: {
+            /**
+             * @description OAuth authorization code
+             * @example abc123
+             */
+            code: string;
+            /**
+             * @description Redirect URI used in the authorization request
+             * @example https://app.example.com/integrations/callback
+             */
+            redirectUri: string;
+            /**
+             * @description State parameter for CSRF protection
+             * @example random-state-string
+             */
+            state: string;
         };
         /**
          * @description OPDS 2.0 Feed
@@ -5474,6 +5846,21 @@ export interface components {
              */
             year?: number | null;
         };
+        /** @description Request to set a single preference value */
+        SetPreferenceRequest: {
+            /** @description The value to set */
+            value: unknown;
+        };
+        /** @description Response after setting preferences */
+        SetPreferencesResponse: {
+            /** @description The updated preferences */
+            preferences: components["schemas"]["UserPreferenceDto"][];
+            /**
+             * @description Number of preferences that were updated
+             * @example 3
+             */
+            updated: number;
+        };
         /** @description Request to set genres for a series */
         SetSeriesGenresRequest: {
             /**
@@ -5648,6 +6035,93 @@ export interface components {
             hasUsers: boolean;
             /** @description Whether initial setup is required */
             setupRequired: boolean;
+        };
+        /** @description Response from triggering a sync */
+        SyncTriggerResponse: {
+            /** @description Updated integration state */
+            integration: components["schemas"]["UserIntegrationDto"];
+            /**
+             * @description Status message
+             * @example Sync started
+             */
+            message: string;
+            /**
+             * @description Whether the sync was started
+             * @example true
+             */
+            started: boolean;
+        };
+        /** @description A system integration (credentials are never exposed) */
+        SystemIntegrationDto: {
+            /** @description Non-sensitive configuration */
+            config: unknown;
+            /**
+             * Format: date-time
+             * @description When the integration was created
+             */
+            createdAt: string;
+            /**
+             * @description Human-readable display name
+             * @example MangaUpdates
+             */
+            displayName: string;
+            /**
+             * @description Whether the integration is enabled
+             * @example true
+             */
+            enabled: boolean;
+            /** @description Error message if health check failed */
+            errorMessage?: string | null;
+            /**
+             * @description Whether credentials have been set (actual credentials are never returned)
+             * @example true
+             */
+            hasCredentials: boolean;
+            /**
+             * @description Health status: unknown, healthy, degraded, unhealthy, disabled
+             * @example healthy
+             */
+            healthStatus: string;
+            /**
+             * Format: uuid
+             * @description Integration ID
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /**
+             * @description Integration type: metadata_provider, notification, storage, sync
+             * @example metadata_provider
+             */
+            integrationType: string;
+            /**
+             * Format: date-time
+             * @description When the last health check was performed
+             * @example 2024-01-15T18:45:00Z
+             */
+            lastHealthCheckAt?: string | null;
+            /**
+             * Format: date-time
+             * @description When the integration last synced data
+             * @example 2024-01-15T18:00:00Z
+             */
+            lastSyncAt?: string | null;
+            /**
+             * @description Unique integration name (e.g., "mangaupdates", "anilist")
+             * @example mangaupdates
+             */
+            name: string;
+            /**
+             * Format: date-time
+             * @description When the integration was last updated
+             */
+            updatedAt: string;
+        };
+        /** @description Response containing a list of system integrations */
+        SystemIntegrationsListResponse: {
+            /** @description List of system integrations */
+            integrations: components["schemas"]["SystemIntegrationDto"][];
+            /** @description Total count */
+            total: number;
         };
         /** @description Tag data transfer object */
         TagDto: {
@@ -6248,6 +6722,18 @@ export interface components {
             /** @description Permissions for the API key (array of permission strings) */
             permissions?: string[] | null;
         };
+        /** @description Request to update integration settings */
+        UpdateIntegrationSettingsRequest: {
+            /**
+             * @description Updated display name
+             * @example My AniList
+             */
+            displayName?: string | null;
+            /** @description Enable or disable the integration */
+            enabled?: boolean | null;
+            /** @description Updated settings */
+            settings?: unknown;
+        };
         /** @description Update library request */
         UpdateLibraryRequest: {
             /**
@@ -6258,6 +6744,11 @@ export interface components {
              *     ]
              */
             allowedFormats?: string[] | null;
+            /**
+             * @description Default reading direction for books in this library (ltr, rtl, ttb, btt)
+             * @example rtl
+             */
+            defaultReadingDirection?: string | null;
             /**
              * @description Optional description
              * @example Updated comic book collection
@@ -6375,6 +6866,21 @@ export interface components {
              */
             value: string;
         };
+        /** @description Request to update a system integration */
+        UpdateSystemIntegrationRequest: {
+            /** @description Updated configuration */
+            config?: unknown;
+            /**
+             * @description Updated credentials (will be encrypted before storage)
+             *     Set to null to clear credentials, omit to keep unchanged
+             */
+            credentials?: unknown;
+            /**
+             * @description Updated display name
+             * @example MangaUpdates API
+             */
+            displayName?: string | null;
+        };
         /** @description Update user request */
         UpdateUserRequest: {
             /**
@@ -6465,6 +6971,108 @@ export interface components {
             isAdmin: boolean;
             /** @example admin */
             username: string;
+        };
+        /** @description A user integration (credentials are never exposed) */
+        UserIntegrationDto: {
+            /**
+             * @description Whether the integration is connected (has credentials)
+             * @example true
+             */
+            connected: boolean;
+            /**
+             * Format: date-time
+             * @description When the integration was connected
+             */
+            createdAt: string;
+            /**
+             * @description User-defined display name
+             * @example My AniList Account
+             */
+            displayName?: string | null;
+            /**
+             * @description Whether the integration is enabled
+             * @example true
+             */
+            enabled: boolean;
+            /**
+             * @description External user ID from the provider
+             * @example 123456
+             */
+            externalUserId?: string | null;
+            /**
+             * @description External username from the provider
+             * @example myusername
+             */
+            externalUsername?: string | null;
+            /**
+             * Format: uuid
+             * @description Integration ID
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /**
+             * @description Integration name (e.g., "anilist", "myanimelist")
+             * @example anilist
+             */
+            integrationName: string;
+            /** @description Error message if sync failed */
+            lastError?: string | null;
+            /**
+             * Format: date-time
+             * @description When the integration last synced
+             * @example 2024-01-15T18:00:00Z
+             */
+            lastSyncAt?: string | null;
+            /** @description User preferences for this integration */
+            settings: unknown;
+            /**
+             * @description Current sync status: idle, syncing, error, rate_limited
+             * @example idle
+             */
+            syncStatus: string;
+            /**
+             * Format: date-time
+             * @description When the OAuth token expires
+             */
+            tokenExpiresAt?: string | null;
+            /**
+             * Format: date-time
+             * @description When the integration was last updated
+             */
+            updatedAt: string;
+        };
+        /** @description Response containing a list of user integrations */
+        UserIntegrationsListResponse: {
+            /** @description Available integrations that user can connect */
+            available: components["schemas"]["AvailableIntegrationDto"][];
+            /** @description Connected integrations */
+            integrations: components["schemas"]["UserIntegrationDto"][];
+        };
+        /** @description A single user preference */
+        UserPreferenceDto: {
+            /**
+             * @description The preference key (e.g., "ui.theme", "reader.zoom")
+             * @example ui.theme
+             */
+            key: string;
+            /**
+             * Format: date-time
+             * @description When the preference was last updated
+             * @example 2024-01-15T18:45:00Z
+             */
+            updatedAt: string;
+            /** @description The preference value */
+            value: unknown;
+            /**
+             * @description The value type: string, integer, float, boolean, or json
+             * @example string
+             */
+            valueType: string;
+        };
+        /** @description Response containing all user preferences */
+        UserPreferencesResponse: {
+            /** @description List of all user preferences */
+            preferences: components["schemas"]["UserPreferenceDto"][];
         };
         /** @description Response containing a list of user ratings */
         UserRatingsListResponse: {
@@ -6564,6 +7172,358 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_system_integrations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description System integrations retrieved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemIntegrationsListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_system_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSystemIntegrationRequest"];
+            };
+        };
+        responses: {
+            /** @description Integration created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemIntegrationDto"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Integration with this name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_system_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Integration ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Integration retrieved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemIntegrationDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Integration not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_system_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Integration ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Integration deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Integration not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_system_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Integration ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSystemIntegrationRequest"];
+            };
+        };
+        responses: {
+            /** @description Integration updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemIntegrationDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Integration not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    disable_system_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Integration ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Integration disabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationStatusResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Integration not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    enable_system_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Integration ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Integration enabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationStatusResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Integration not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    test_system_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Integration ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Test completed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationTestResult"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Integration not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_settings: {
         parameters: {
             query?: {
@@ -11654,6 +12614,456 @@ export interface operations {
             };
             /** @description Permission denied */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_user_integrations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of user integrations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserIntegrationsListResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    connect_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectIntegrationRequest"];
+            };
+        };
+        responses: {
+            /** @description Connection initiated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectIntegrationResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Integration already connected */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_user_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Integration name (e.g., anilist) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Integration details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserIntegrationDto"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Integration not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    disconnect_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Integration name (e.g., anilist) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Integration disconnected */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Integration not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_integration_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Integration name (e.g., anilist) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateIntegrationSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Integration updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserIntegrationDto"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Integration not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    oauth_callback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Integration name (e.g., anilist) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OAuthCallbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Integration connected */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserIntegrationDto"];
+                };
+            };
+            /** @description Invalid callback */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    trigger_sync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Integration name (e.g., anilist) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sync triggered */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncTriggerResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Integration not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sync already in progress */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_all_preferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User preferences retrieved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPreferencesResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_bulk_preferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkSetPreferencesRequest"];
+            };
+        };
+        responses: {
+            /** @description Preferences updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetPreferencesResponse"];
+                };
+            };
+            /** @description Invalid preference key or value */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_preference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Preference key (e.g., 'ui.theme') */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preference retrieved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPreferenceDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Preference not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_preference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Preference key (e.g., 'ui.theme') */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPreferenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Preference set successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPreferenceDto"];
+                };
+            };
+            /** @description Invalid preference value */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_preference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Preference key to delete */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preference deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletePreferenceResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

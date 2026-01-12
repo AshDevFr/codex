@@ -359,6 +359,56 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/tags/:tag_id", delete(handlers::delete_tag))
         // User ratings routes (protected)
         .route("/user/ratings", get(handlers::list_user_ratings))
+        // User preferences routes (protected)
+        .route(
+            "/user/preferences",
+            get(handlers::user_preferences::get_all_preferences),
+        )
+        .route(
+            "/user/preferences",
+            put(handlers::user_preferences::set_bulk_preferences),
+        )
+        .route(
+            "/user/preferences/:key",
+            get(handlers::user_preferences::get_preference),
+        )
+        .route(
+            "/user/preferences/:key",
+            put(handlers::user_preferences::set_preference),
+        )
+        .route(
+            "/user/preferences/:key",
+            delete(handlers::user_preferences::delete_preference),
+        )
+        // User integrations routes (protected)
+        .route(
+            "/user/integrations",
+            get(handlers::user_integrations::list_user_integrations),
+        )
+        .route(
+            "/user/integrations",
+            post(handlers::user_integrations::connect_integration),
+        )
+        .route(
+            "/user/integrations/:name",
+            get(handlers::user_integrations::get_user_integration),
+        )
+        .route(
+            "/user/integrations/:name",
+            patch(handlers::user_integrations::update_integration_settings),
+        )
+        .route(
+            "/user/integrations/:name",
+            delete(handlers::user_integrations::disconnect_integration),
+        )
+        .route(
+            "/user/integrations/:name/callback",
+            post(handlers::user_integrations::oauth_callback),
+        )
+        .route(
+            "/user/integrations/:name/sync",
+            post(handlers::user_integrations::trigger_sync),
+        )
         // Book routes (protected)
         .route("/books", get(handlers::list_books))
         .route("/books/list", post(handlers::list_books_filtered))
@@ -543,6 +593,39 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route(
             "/admin/settings/:setting_key/history",
             get(handlers::settings::get_setting_history),
+        )
+        // System integrations routes (protected, admin only)
+        .route(
+            "/admin/integrations",
+            get(handlers::system_integrations::list_system_integrations),
+        )
+        .route(
+            "/admin/integrations",
+            post(handlers::system_integrations::create_system_integration),
+        )
+        .route(
+            "/admin/integrations/:id",
+            get(handlers::system_integrations::get_system_integration),
+        )
+        .route(
+            "/admin/integrations/:id",
+            patch(handlers::system_integrations::update_system_integration),
+        )
+        .route(
+            "/admin/integrations/:id",
+            delete(handlers::system_integrations::delete_system_integration),
+        )
+        .route(
+            "/admin/integrations/:id/enable",
+            post(handlers::system_integrations::enable_system_integration),
+        )
+        .route(
+            "/admin/integrations/:id/disable",
+            post(handlers::system_integrations::disable_system_integration),
+        )
+        .route(
+            "/admin/integrations/:id/test",
+            post(handlers::system_integrations::test_system_integration),
         )
         // Add state to all routes
         .with_state(state)

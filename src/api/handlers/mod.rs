@@ -15,8 +15,11 @@ pub mod scan;
 pub mod series;
 pub mod settings;
 pub mod setup;
+pub mod system_integrations;
 pub mod task_metrics;
 pub mod task_queue;
+pub mod user_integrations;
+pub mod user_preferences;
 pub mod users;
 
 pub use api_keys::*;

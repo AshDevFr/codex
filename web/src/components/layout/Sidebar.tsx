@@ -12,10 +12,11 @@ import {
 import { notifications } from "@mantine/notifications";
 import {
 	IconBooks,
+	IconChartBar,
 	IconClipboardList,
+	IconCopy,
 	IconDotsVertical,
 	IconEdit,
-	IconFileText,
 	IconHome,
 	IconLogout,
 	IconPlus,
@@ -369,10 +370,16 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 										active={currentPath.startsWith("/settings/tasks")}
 									/>
 									<NavLink
-										onClick={() => navigate("/settings/logs")}
-										label="Logs"
-										leftSection={<IconFileText size={16} />}
-										active={currentPath.startsWith("/settings/logs")}
+										onClick={() => navigate("/settings/duplicates")}
+										label="Duplicates"
+										leftSection={<IconCopy size={16} />}
+										active={currentPath.startsWith("/settings/duplicates")}
+									/>
+									<NavLink
+										onClick={() => navigate("/settings/metrics")}
+										label="Metrics"
+										leftSection={<IconChartBar size={16} />}
+										active={currentPath.startsWith("/settings/metrics")}
 									/>
 								</>
 							)}
