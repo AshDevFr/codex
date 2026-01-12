@@ -45,6 +45,8 @@ jobs:
       - name: Build docs
         working-directory: docs
         run: npm run build
+        env:
+          NODE_OPTIONS: '--max-old-space-size=1536'
 
       - name: Upload docs artifact
         uses: actions/upload-artifact@v3
