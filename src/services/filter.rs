@@ -11,14 +11,31 @@ use uuid::Uuid;
 pub struct FilterService;
 
 impl FilterService {
-    /// Get series IDs matching a condition
+    /// Get series IDs matching a condition (without user context)
     ///
     /// Returns the set of series IDs that match the given condition.
     /// If candidate_ids is provided, only those series are considered.
+    ///
+    /// Note: ReadStatus filtering requires user context. Use `get_matching_series_for_user`
+    /// if you need ReadStatus filtering support.
     pub fn get_matching_series<'a>(
         db: &'a DatabaseConnection,
         condition: &'a SeriesCondition,
         candidate_ids: Option<&'a HashSet<Uuid>>,
+    ) -> Pin<Box<dyn Future<Output = Result<HashSet<Uuid>>> + Send + 'a>> {
+        Self::get_matching_series_for_user(db, condition, candidate_ids, None)
+    }
+
+    /// Get series IDs matching a condition with user context for ReadStatus filtering
+    ///
+    /// Returns the set of series IDs that match the given condition.
+    /// If candidate_ids is provided, only those series are considered.
+    /// If user_id is provided, ReadStatus filtering will work correctly.
+    pub fn get_matching_series_for_user<'a>(
+        db: &'a DatabaseConnection,
+        condition: &'a SeriesCondition,
+        candidate_ids: Option<&'a HashSet<Uuid>>,
+        user_id: Option<Uuid>,
     ) -> Pin<Box<dyn Future<Output = Result<HashSet<Uuid>>> + Send + 'a>> {
         Box::pin(async move {
             match condition {
@@ -30,14 +47,17 @@ impl FilterService {
 
                     // Start with first condition's result
                     let mut result =
-                        Self::get_matching_series(db, &all_of[0], candidate_ids).await?;
+                        Self::get_matching_series_for_user(db, &all_of[0], candidate_ids, user_id)
+                            .await?;
 
                     // Intersect with remaining conditions
                     for cond in &all_of[1..] {
                         if result.is_empty() {
                             break; // Short-circuit
                         }
-                        let matching = Self::get_matching_series(db, cond, Some(&result)).await?;
+                        let matching =
+                            Self::get_matching_series_for_user(db, cond, Some(&result), user_id)
+                                .await?;
                         result = result.intersection(&matching).cloned().collect();
                     }
 
@@ -52,7 +72,9 @@ impl FilterService {
 
                     let mut result = HashSet::new();
                     for cond in any_of {
-                        let matching = Self::get_matching_series(db, cond, candidate_ids).await?;
+                        let matching =
+                            Self::get_matching_series_for_user(db, cond, candidate_ids, user_id)
+                                .await?;
                         result.extend(matching);
                     }
 
@@ -86,7 +108,7 @@ impl FilterService {
                 }
 
                 SeriesCondition::ReadStatus { read_status } => {
-                    Self::filter_by_read_status(db, read_status, candidate_ids).await
+                    Self::filter_by_read_status(db, read_status, candidate_ids, user_id).await
                 }
             }
         })
@@ -661,26 +683,152 @@ impl FilterService {
         Ok(result)
     }
 
+    /// Filter series by read status
+    ///
+    /// Read status values:
+    /// - "unread": Series where all books have no read_progress OR all books have completed=false and current_page=0
+    /// - "in_progress": Series where at least one book has read_progress with completed=false and current_page > 0
+    /// - "read": Series where all books have read_progress with completed=true
     async fn filter_by_read_status(
-        _db: &DatabaseConnection,
-        _operator: &FieldOperator,
-        _candidate_ids: Option<&HashSet<Uuid>>,
+        db: &DatabaseConnection,
+        operator: &FieldOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+        user_id: Option<Uuid>,
     ) -> Result<HashSet<Uuid>> {
-        // TODO: Implement read status filtering using read_progress
-        Ok(HashSet::new())
+        use crate::db::entities::{books, read_progress, series};
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        // If no user_id provided, we can't filter by read status
+        let user_id = match user_id {
+            Some(id) => id,
+            None => return Ok(candidate_ids.cloned().unwrap_or_default()),
+        };
+
+        let status_value = match operator {
+            FieldOperator::Is { value } => value.to_lowercase(),
+            FieldOperator::IsNot { value } => value.to_lowercase(),
+            // IsNull/IsNotNull don't make sense for read status
+            _ => return Ok(candidate_ids.cloned().unwrap_or_default()),
+        };
+
+        let is_negated = matches!(operator, FieldOperator::IsNot { .. });
+
+        // Get all series (or candidates)
+        let series_ids: Vec<Uuid> = if let Some(candidates) = candidate_ids {
+            candidates.iter().cloned().collect()
+        } else {
+            series::Entity::find()
+                .select_only()
+                .column(series::Column::Id)
+                .into_tuple()
+                .all(db)
+                .await?
+        };
+
+        // For each series, determine its read status based on its books
+        let mut matching_series = HashSet::new();
+
+        for series_id in &series_ids {
+            // Get all book IDs for this series
+            let book_ids: Vec<Uuid> = books::Entity::find()
+                .filter(books::Column::SeriesId.eq(*series_id))
+                .filter(books::Column::Deleted.eq(false))
+                .select_only()
+                .column(books::Column::Id)
+                .into_tuple()
+                .all(db)
+                .await?;
+
+            if book_ids.is_empty() {
+                // Series with no books is considered "unread"
+                if (status_value == "unread") != is_negated {
+                    matching_series.insert(*series_id);
+                }
+                continue;
+            }
+
+            // Get read progress for all books in this series for this user
+            let progress_records: Vec<read_progress::Model> = read_progress::Entity::find()
+                .filter(read_progress::Column::UserId.eq(user_id))
+                .filter(read_progress::Column::BookId.is_in(book_ids.clone()))
+                .all(db)
+                .await?;
+
+            // Build a map of book_id -> progress
+            let progress_map: std::collections::HashMap<Uuid, &read_progress::Model> =
+                progress_records.iter().map(|p| (p.book_id, p)).collect();
+
+            // Determine series read status
+            let total_books = book_ids.len();
+            let mut read_count = 0;
+            let mut in_progress_count = 0;
+            let mut unread_count = 0;
+
+            for book_id in &book_ids {
+                match progress_map.get(book_id) {
+                    Some(progress) => {
+                        if progress.completed {
+                            read_count += 1;
+                        } else if progress.current_page > 0 {
+                            in_progress_count += 1;
+                        } else {
+                            // Has progress record but current_page=0 and not completed
+                            unread_count += 1;
+                        }
+                    }
+                    None => {
+                        // No progress record means unread
+                        unread_count += 1;
+                    }
+                }
+            }
+
+            let series_status = if read_count == total_books {
+                "read"
+            } else if in_progress_count > 0 || (read_count > 0 && read_count < total_books) {
+                // In progress if any book is being read, OR if some books are read but not all
+                "in_progress"
+            } else {
+                "unread"
+            };
+
+            let matches = (series_status == status_value) != is_negated;
+            if matches {
+                matching_series.insert(*series_id);
+            }
+        }
+
+        Ok(matching_series)
     }
 }
 
 // Book condition evaluation
 impl FilterService {
-    /// Get book IDs matching a condition
+    /// Get book IDs matching a condition (without user context)
     ///
     /// Returns the set of book IDs that match the given condition.
     /// If candidate_ids is provided, only those books are considered.
+    ///
+    /// Note: ReadStatus filtering requires user context. Use `get_matching_books_for_user`
+    /// if you need ReadStatus filtering support.
     pub fn get_matching_books<'a>(
         db: &'a DatabaseConnection,
         condition: &'a BookCondition,
         candidate_ids: Option<&'a HashSet<Uuid>>,
+    ) -> Pin<Box<dyn Future<Output = Result<HashSet<Uuid>>> + Send + 'a>> {
+        Self::get_matching_books_for_user(db, condition, candidate_ids, None)
+    }
+
+    /// Get book IDs matching a condition with user context for ReadStatus filtering
+    ///
+    /// Returns the set of book IDs that match the given condition.
+    /// If candidate_ids is provided, only those books are considered.
+    /// If user_id is provided, ReadStatus filtering will work correctly.
+    pub fn get_matching_books_for_user<'a>(
+        db: &'a DatabaseConnection,
+        condition: &'a BookCondition,
+        candidate_ids: Option<&'a HashSet<Uuid>>,
+        user_id: Option<Uuid>,
     ) -> Pin<Box<dyn Future<Output = Result<HashSet<Uuid>>> + Send + 'a>> {
         Box::pin(async move {
             match condition {
@@ -690,13 +838,16 @@ impl FilterService {
                     }
 
                     let mut result =
-                        Self::get_matching_books(db, &all_of[0], candidate_ids).await?;
+                        Self::get_matching_books_for_user(db, &all_of[0], candidate_ids, user_id)
+                            .await?;
 
                     for cond in &all_of[1..] {
                         if result.is_empty() {
                             break;
                         }
-                        let matching = Self::get_matching_books(db, cond, Some(&result)).await?;
+                        let matching =
+                            Self::get_matching_books_for_user(db, cond, Some(&result), user_id)
+                                .await?;
                         result = result.intersection(&matching).cloned().collect();
                     }
 
@@ -710,7 +861,9 @@ impl FilterService {
 
                     let mut result = HashSet::new();
                     for cond in any_of {
-                        let matching = Self::get_matching_books(db, cond, candidate_ids).await?;
+                        let matching =
+                            Self::get_matching_books_for_user(db, cond, candidate_ids, user_id)
+                                .await?;
                         result.extend(matching);
                     }
 
@@ -738,7 +891,7 @@ impl FilterService {
                 }
 
                 BookCondition::ReadStatus { read_status } => {
-                    Self::filter_books_by_read_status(db, read_status, candidate_ids).await
+                    Self::filter_books_by_read_status(db, read_status, candidate_ids, user_id).await
                 }
 
                 BookCondition::HasError { has_error } => {
@@ -1020,14 +1173,87 @@ impl FilterService {
         Ok(result)
     }
 
+    /// Filter books by read status
+    ///
+    /// Read status values:
+    /// - "unread": Books with no read_progress OR completed=false and current_page=0
+    /// - "in_progress": Books with read_progress where completed=false and current_page > 0
+    /// - "read": Books with read_progress where completed=true
     async fn filter_books_by_read_status(
-        _db: &DatabaseConnection,
-        _operator: &FieldOperator,
-        _candidate_ids: Option<&HashSet<Uuid>>,
+        db: &DatabaseConnection,
+        operator: &FieldOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+        user_id: Option<Uuid>,
     ) -> Result<HashSet<Uuid>> {
-        // TODO: Implement read status filtering using read_progress table
-        // Would need user_id context to filter by their read status
-        Ok(HashSet::new())
+        use crate::db::entities::{books, read_progress};
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        // If no user_id provided, we can't filter by read status
+        let user_id = match user_id {
+            Some(id) => id,
+            None => return Ok(candidate_ids.cloned().unwrap_or_default()),
+        };
+
+        let status_value = match operator {
+            FieldOperator::Is { value } => value.to_lowercase(),
+            FieldOperator::IsNot { value } => value.to_lowercase(),
+            // IsNull/IsNotNull don't make sense for read status
+            _ => return Ok(candidate_ids.cloned().unwrap_or_default()),
+        };
+
+        let is_negated = matches!(operator, FieldOperator::IsNot { .. });
+
+        // Get all books (or candidates)
+        let book_ids: Vec<Uuid> = if let Some(candidates) = candidate_ids {
+            candidates.iter().cloned().collect()
+        } else {
+            books::Entity::find()
+                .filter(books::Column::Deleted.eq(false))
+                .select_only()
+                .column(books::Column::Id)
+                .into_tuple()
+                .all(db)
+                .await?
+        };
+
+        if book_ids.is_empty() {
+            return Ok(HashSet::new());
+        }
+
+        // Get read progress for all candidate books for this user
+        let progress_records: Vec<read_progress::Model> = read_progress::Entity::find()
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .filter(read_progress::Column::BookId.is_in(book_ids.clone()))
+            .all(db)
+            .await?;
+
+        // Build a map of book_id -> progress
+        let progress_map: std::collections::HashMap<Uuid, &read_progress::Model> =
+            progress_records.iter().map(|p| (p.book_id, p)).collect();
+
+        let mut matching_books = HashSet::new();
+
+        for book_id in &book_ids {
+            let book_status = match progress_map.get(book_id) {
+                Some(progress) => {
+                    if progress.completed {
+                        "read"
+                    } else if progress.current_page > 0 {
+                        "in_progress"
+                    } else {
+                        "unread"
+                    }
+                }
+                None => "unread",
+            };
+
+            let matches = (book_status == status_value) != is_negated;
+            if matches {
+                matching_books.insert(*book_id);
+            }
+        }
+
+        Ok(matching_books)
     }
 
     async fn filter_books_by_error(

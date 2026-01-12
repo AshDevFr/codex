@@ -1,10 +1,11 @@
 import { ActionIcon, Group, Menu, Tabs } from "@mantine/core";
-import { IconGridDots, IconSortAscending } from "@tabler/icons-react";
+import { IconChevronDown, IconChevronUp, IconGridDots, IconSortAscending, IconSortDescending } from "@tabler/icons-react";
 import { FilterPanel } from "./FilterPanel";
 
-interface SortOption {
-	value: string;
+export interface SortOption {
+	field: string;
 	label: string;
+	defaultDirection: "asc" | "desc";
 }
 
 interface LibraryToolbarProps {
@@ -59,20 +60,50 @@ export function LibraryToolbar({
 								title="Sort"
 								aria-label="Sort options"
 							>
-								<IconSortAscending size={20} />
+								{sort?.endsWith(",desc") ? (
+									<IconSortDescending size={20} />
+								) : (
+									<IconSortAscending size={20} />
+								)}
 							</ActionIcon>
 						</Menu.Target>
 						<Menu.Dropdown>
 							<Menu.Label>Sort by</Menu.Label>
-							{sortOptions.map((option) => (
-								<Menu.Item
-									key={option.value}
-									onClick={() => onSortChange?.(option.value)}
-									bg={sort === option.value ? "var(--mantine-color-blue-light)" : undefined}
-								>
-									{option.label}
-								</Menu.Item>
-							))}
+							{sortOptions.map((option) => {
+								const currentField = sort?.split(",")[0];
+								const currentDirection = sort?.split(",")[1] as "asc" | "desc" | undefined;
+								const isSelected = currentField === option.field;
+
+								const handleClick = () => {
+									if (isSelected) {
+										// Toggle direction
+										const newDirection = currentDirection === "asc" ? "desc" : "asc";
+										onSortChange?.(`${option.field},${newDirection}`);
+									} else {
+										// Use default direction for new field
+										onSortChange?.(`${option.field},${option.defaultDirection}`);
+									}
+								};
+
+								return (
+									<Menu.Item
+										key={option.field}
+										onClick={handleClick}
+										bg={isSelected ? "var(--mantine-color-blue-light)" : undefined}
+										rightSection={
+											isSelected ? (
+												currentDirection === "desc" ? (
+													<IconChevronDown size={14} />
+												) : (
+													<IconChevronUp size={14} />
+												)
+											) : null
+										}
+									>
+										{option.label}
+									</Menu.Item>
+								);
+							})}
 						</Menu.Dropdown>
 					</Menu>
 

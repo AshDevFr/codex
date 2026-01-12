@@ -1,7 +1,9 @@
 import {
+	Box,
 	Card,
 	Group,
 	Pagination,
+	Skeleton,
 	Stack,
 	Text,
 } from "@mantine/core";
@@ -10,6 +12,31 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { booksApi } from "@/api/books";
 import { MediaCard } from "@/components/library/MediaCard";
+
+/** Fixed skeleton IDs to avoid array index keys */
+const SKELETON_IDS = ["b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9", "b10", "b11", "b12"];
+
+/** Skeleton placeholder for loading state */
+function BooksGridSkeleton({ count = 12 }: { count?: number }) {
+	const ids = SKELETON_IDS.slice(0, count);
+	return (
+		<div
+			style={{
+				display: "grid",
+				gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+				gap: "var(--mantine-spacing-md)",
+				width: "100%",
+			}}
+		>
+			{ids.map((id) => (
+				<Box key={id}>
+					<Skeleton height={225} radius="md" mb="xs" />
+					<Skeleton height={16} width="80%" radius="sm" />
+				</Box>
+			))}
+		</div>
+	);
+}
 
 interface BooksSectionProps {
 	libraryId: string;
@@ -90,9 +117,9 @@ export function BooksSection({ libraryId, searchParams, onTotalChange }: BooksSe
 	return (
 		<Stack gap="md">
 			{/* Books Grid */}
-	{isLoading ? (
-		<Text c="dimmed">Loading books...</Text>
-	) : booksData?.data && booksData.data.length > 0 ? (
+			{isLoading ? (
+				<BooksGridSkeleton count={pageSize > 12 ? 12 : pageSize} />
+			) : booksData?.data && booksData.data.length > 0 ? (
 				<>
 					{/* Top Pagination */}
 					{showPagination && (

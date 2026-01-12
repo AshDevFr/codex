@@ -1,6 +1,7 @@
 .container {
 	flex-wrap: wrap;
 	padding: var(--mantine-spacing-xs) 0;
+	gap: var(--mantine-spacing-xs);
 }
 
 .chip {
@@ -19,4 +20,18 @@
 /* Dark mode */
 :global([data-mantine-color-scheme="dark"]) .clearButton:hover {
 	background-color: var(--mantine-color-dark-5);
+}
+
+/* Mobile-first responsive adjustments */
+@media (max-width: 480px) {
+	.container {
+		overflow-x: auto;
+		flex-wrap: nowrap;
+		padding-bottom: var(--mantine-spacing-sm);
+		scrollbar-width: thin;
+	}
+
+	.chip {
+		flex-shrink: 0;
+	}
 }

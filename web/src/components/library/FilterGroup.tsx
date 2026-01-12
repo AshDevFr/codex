@@ -1,4 +1,5 @@
-import { Box, Group, SegmentedControl, Stack, Text } from "@mantine/core";
+import { ActionIcon, Box, Group, SegmentedControl, Stack, Text, Tooltip } from "@mantine/core";
+import { IconX } from "@tabler/icons-react";
 import { TriStateChip } from "./TriStateChip";
 import type { FilterGroupState, FilterMode, TriState } from "@/types";
 import classes from "./FilterGroup.module.css";
@@ -20,6 +21,8 @@ interface FilterGroupProps {
 	onValueChange: (value: string, state: TriState) => void;
 	/** Callback when mode changes */
 	onModeChange: (mode: FilterMode) => void;
+	/** Callback to clear all values in this group */
+	onClear?: () => void;
 	/** Whether to show the mode toggle (default: true) */
 	showModeToggle?: boolean;
 	/** Whether the group is disabled */
@@ -41,6 +44,7 @@ export function FilterGroup({
 	state,
 	onValueChange,
 	onModeChange,
+	onClear,
 	showModeToggle = true,
 	disabled = false,
 }: FilterGroupProps) {
@@ -49,12 +53,31 @@ export function FilterGroup({
 		return state.values.get(value) || "neutral";
 	};
 
+	// Check if this group has any active filters
+	const hasActiveFilters = state.values.size > 0;
+
 	return (
 		<Stack gap="xs" className={classes.container}>
 			<Group justify="space-between" align="center">
-				<Text size="sm" fw={600} c="dimmed">
-					{title}
-				</Text>
+				<Group gap="xs">
+					<Text size="sm" fw={600} c="dimmed">
+						{title}
+					</Text>
+					{hasActiveFilters && onClear && (
+						<Tooltip label={`Clear ${title.toLowerCase()}`} position="right">
+							<ActionIcon
+								size="xs"
+								variant="subtle"
+								color="gray"
+								onClick={onClear}
+								disabled={disabled}
+								aria-label={`Clear ${title.toLowerCase()} filters`}
+							>
+								<IconX size={12} />
+							</ActionIcon>
+						</Tooltip>
+					)}
+				</Group>
 				{showModeToggle && (
 					<SegmentedControl
 						size="xs"

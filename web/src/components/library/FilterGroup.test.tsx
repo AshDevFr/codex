@@ -176,4 +176,74 @@ describe("FilterGroup", () => {
 		const comedyBadge = screen.getByText("Comedy").closest("[data-state]");
 		expect(comedyBadge).toHaveAttribute("data-state", "exclude");
 	});
+
+	describe("clear button", () => {
+		it("should not show clear button when no active filters", () => {
+			const onClear = vi.fn();
+
+			renderWithProviders(
+				<FilterGroup
+					title="Genres"
+					options={defaultOptions}
+					state={createState()}
+					onValueChange={vi.fn()}
+					onModeChange={vi.fn()}
+					onClear={onClear}
+				/>,
+			);
+
+			expect(screen.queryByRole("button", { name: /clear genres/i })).not.toBeInTheDocument();
+		});
+
+		it("should show clear button when there are active filters", () => {
+			const onClear = vi.fn();
+
+			renderWithProviders(
+				<FilterGroup
+					title="Genres"
+					options={defaultOptions}
+					state={createState({ action: "include" })}
+					onValueChange={vi.fn()}
+					onModeChange={vi.fn()}
+					onClear={onClear}
+				/>,
+			);
+
+			expect(screen.getByRole("button", { name: /clear genres/i })).toBeInTheDocument();
+		});
+
+		it("should call onClear when clear button is clicked", async () => {
+			const user = userEvent.setup();
+			const onClear = vi.fn();
+
+			renderWithProviders(
+				<FilterGroup
+					title="Genres"
+					options={defaultOptions}
+					state={createState({ action: "include", comedy: "exclude" })}
+					onValueChange={vi.fn()}
+					onModeChange={vi.fn()}
+					onClear={onClear}
+				/>,
+			);
+
+			await user.click(screen.getByRole("button", { name: /clear genres/i }));
+
+			expect(onClear).toHaveBeenCalledTimes(1);
+		});
+
+		it("should not show clear button when onClear is not provided", () => {
+			renderWithProviders(
+				<FilterGroup
+					title="Genres"
+					options={defaultOptions}
+					state={createState({ action: "include" })}
+					onValueChange={vi.fn()}
+					onModeChange={vi.fn()}
+				/>,
+			);
+
+			expect(screen.queryByRole("button", { name: /clear genres/i })).not.toBeInTheDocument();
+		});
+	});
 });

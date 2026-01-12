@@ -1,9 +1,116 @@
+use std::fmt;
+use std::str::FromStr;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::common::PaginatedResponse;
 use super::read_progress::ReadProgressResponse;
+use super::series::SortDirection;
+
+/// Sort field options for book list queries
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BookSortField {
+    /// Compound sort: series name alphabetically, then books by number within series
+    /// This is the "reading order" sort
+    Series,
+    /// Sort by book title
+    #[default]
+    Title,
+    /// Sort by date added to library
+    DateAdded,
+    /// Sort by release date
+    ReleaseDate,
+    /// Sort by chapter/book number
+    ChapterNumber,
+    /// Sort by file size
+    FileSize,
+    /// Sort by filename
+    Filename,
+    /// Sort by page count
+    PageCount,
+}
+
+impl fmt::Display for BookSortField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BookSortField::Series => write!(f, "series"),
+            BookSortField::Title => write!(f, "title"),
+            BookSortField::DateAdded => write!(f, "created_at"),
+            BookSortField::ReleaseDate => write!(f, "release_date"),
+            BookSortField::ChapterNumber => write!(f, "chapter_number"),
+            BookSortField::FileSize => write!(f, "file_size"),
+            BookSortField::Filename => write!(f, "filename"),
+            BookSortField::PageCount => write!(f, "page_count"),
+        }
+    }
+}
+
+impl FromStr for BookSortField {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "series" => Ok(BookSortField::Series),
+            "title" => Ok(BookSortField::Title),
+            "created_at" | "date_added" => Ok(BookSortField::DateAdded),
+            "release_date" => Ok(BookSortField::ReleaseDate),
+            "chapter_number" | "number" => Ok(BookSortField::ChapterNumber),
+            "file_size" => Ok(BookSortField::FileSize),
+            "filename" => Ok(BookSortField::Filename),
+            "page_count" => Ok(BookSortField::PageCount),
+            _ => Err(format!("Invalid sort field: {}", s)),
+        }
+    }
+}
+
+/// Parsed sort parameter for book queries
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BookSortParam {
+    pub field: BookSortField,
+    pub direction: SortDirection,
+}
+
+impl Default for BookSortParam {
+    fn default() -> Self {
+        Self {
+            field: BookSortField::Title,
+            direction: SortDirection::Asc,
+        }
+    }
+}
+
+impl BookSortParam {
+    pub fn new(field: BookSortField, direction: SortDirection) -> Self {
+        Self { field, direction }
+    }
+
+    /// Parse from "field,direction" format (e.g., "title,asc")
+    pub fn parse(s: &str) -> Self {
+        let parts: Vec<&str> = s.split(',').collect();
+        if parts.len() != 2 {
+            return Self::default();
+        }
+
+        let field = BookSortField::from_str(parts[0]).unwrap_or_default();
+        let direction = SortDirection::from_str(parts[1]).unwrap_or_default();
+
+        Self { field, direction }
+    }
+
+    /// Check if this sort requires database-level JOIN (series compound sort)
+    pub fn requires_join(&self) -> bool {
+        matches!(self.field, BookSortField::Series)
+    }
+}
+
+impl fmt::Display for BookSortParam {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{},{}", self.field, self.direction)
+    }
+}
 
 /// Book data transfer object
 #[derive(Debug, Serialize, Deserialize, ToSchema)]

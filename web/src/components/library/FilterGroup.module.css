@@ -32,3 +32,14 @@
 .chipsContainer::-webkit-scrollbar-thumb:hover {
 	background: var(--mantine-color-dark-3);
 }
+
+/* Mobile-first responsive adjustments */
+@media (max-width: 768px) {
+	.container {
+		padding: var(--mantine-spacing-xs);
+	}
+
+	.chipsContainer {
+		max-height: 150px;
+	}
+}

@@ -52,12 +52,8 @@ pub enum SeriesSortField {
     ReleaseDate,
     /// Sort by last read time (user-specific)
     DateRead,
-    /// Sort by total file size of all books in series
-    FileSize,
-    /// Sort by series path/filename
-    Filename,
-    /// Sort by total page count of all books in series
-    PageCount,
+    /// Sort by number of books in the series
+    BookCount,
 }
 
 impl fmt::Display for SeriesSortField {
@@ -68,9 +64,7 @@ impl fmt::Display for SeriesSortField {
             SeriesSortField::DateUpdated => write!(f, "date_updated"),
             SeriesSortField::ReleaseDate => write!(f, "release_date"),
             SeriesSortField::DateRead => write!(f, "date_read"),
-            SeriesSortField::FileSize => write!(f, "file_size"),
-            SeriesSortField::Filename => write!(f, "filename"),
-            SeriesSortField::PageCount => write!(f, "page_count"),
+            SeriesSortField::BookCount => write!(f, "book_count"),
         }
     }
 }
@@ -85,9 +79,7 @@ impl FromStr for SeriesSortField {
             "date_updated" | "updated_at" => Ok(SeriesSortField::DateUpdated),
             "release_date" | "year" => Ok(SeriesSortField::ReleaseDate),
             "date_read" => Ok(SeriesSortField::DateRead),
-            "file_size" => Ok(SeriesSortField::FileSize),
-            "filename" => Ok(SeriesSortField::Filename),
-            "page_count" => Ok(SeriesSortField::PageCount),
+            "book_count" => Ok(SeriesSortField::BookCount),
             _ => Err(format!("Invalid sort field: {}", s)),
         }
     }
@@ -134,10 +126,7 @@ impl SeriesSortParam {
 
     /// Check if this sort requires aggregation from books table
     pub fn requires_aggregation(&self) -> bool {
-        matches!(
-            self.field,
-            SeriesSortField::FileSize | SeriesSortField::PageCount
-        )
+        false
     }
 }
 

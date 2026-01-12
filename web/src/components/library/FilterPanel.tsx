@@ -1,5 +1,5 @@
 import { ActionIcon, Badge, Button, Drawer, Group, Loader, ScrollArea, Stack, Text, Title } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
+import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { IconAdjustments, IconX } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { FilterGroup } from "./FilterGroup";
@@ -20,6 +20,7 @@ import classes from "./FilterPanel.module.css";
 export function FilterPanel() {
 	const [opened, { open, close }] = useDisclosure(false);
 	const filterState = useFilterState();
+	const isMobile = useMediaQuery("(max-width: 768px)");
 
 	// Fetch available genres (global, not library-specific)
 	const { data: genres = [], isLoading: genresLoading } = useQuery({
@@ -94,7 +95,7 @@ export function FilterPanel() {
 					</Group>
 				}
 				position="right"
-				size="md"
+				size={isMobile ? "100%" : "md"}
 				padding="md"
 				classNames={{
 					body: classes.drawerBody,
@@ -119,6 +120,7 @@ export function FilterPanel() {
 										state={filterState.filters.genres}
 										onValueChange={filterState.setGenreState}
 										onModeChange={filterState.setGenreMode}
+										onClear={() => filterState.clearGroup("genres")}
 									/>
 								)}
 
@@ -130,6 +132,7 @@ export function FilterPanel() {
 										state={filterState.filters.tags}
 										onValueChange={filterState.setTagState}
 										onModeChange={filterState.setTagMode}
+										onClear={() => filterState.clearGroup("tags")}
 									/>
 								)}
 
@@ -140,6 +143,7 @@ export function FilterPanel() {
 									state={filterState.filters.status}
 									onValueChange={filterState.setStatusState}
 									onModeChange={filterState.setStatusMode}
+									onClear={() => filterState.clearGroup("status")}
 									showModeToggle={false}
 								/>
 							</Stack>

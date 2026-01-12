@@ -12,7 +12,7 @@ use crate::db::entities::{books, prelude::*, read_progress, series, series_metad
 use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 use std::sync::Arc;
 
-/// Result type for series with aggregated data
+/// Result type for series with aggregated data (used for date_read sorting)
 #[derive(Debug, FromQueryResult)]
 pub struct SeriesWithAggregates {
     pub id: Uuid,
@@ -25,9 +25,7 @@ pub struct SeriesWithAggregates {
     pub custom_metadata: Option<String>,
     pub created_at: chrono::DateTime<Utc>,
     pub updated_at: chrono::DateTime<Utc>,
-    // Aggregated fields (optional, depending on sort)
-    pub total_file_size: Option<i64>,
-    pub total_page_count: Option<i64>,
+    // Aggregated field for date_read sort
     pub last_read_at: Option<chrono::DateTime<Utc>>,
 }
 
@@ -259,10 +257,9 @@ impl SeriesRepository {
     /// Get series in a library with sorting, pagination, and optional user context
     ///
     /// This method handles all sort strategies including:
-    /// - Simple sorts: name, date_added, date_updated, filename
-    /// - Aggregate sorts: file_size, page_count (requires JOIN with books)
+    /// - Simple sorts: name, date_added, date_updated, book_count
     /// - User-specific sorts: date_read (requires user_id and JOIN with read_progress)
-    /// - release_date now queries series_metadata.year
+    /// - release_date queries series_metadata.year
     pub async fn list_by_library_sorted(
         db: &DatabaseConnection,
         library_id: Uuid,
@@ -276,11 +273,7 @@ impl SeriesRepository {
             SortDirection::Desc => Order::Desc,
         };
 
-        // For aggregate sorts, we need to use a different approach
         match sort.field {
-            SeriesSortField::FileSize | SeriesSortField::PageCount => {
-                Self::list_with_aggregate_sort(db, library_id, sort, offset, limit).await
-            }
             SeriesSortField::DateRead => {
                 Self::list_with_date_read_sort(db, library_id, sort, user_id, offset, limit).await
             }
@@ -313,8 +306,8 @@ impl SeriesRepository {
                     SeriesSortField::DateUpdated => {
                         query.order_by(series::Column::UpdatedAt, order)
                     }
-                    SeriesSortField::Filename => query.order_by(series::Column::Path, order),
-                    _ => query, // Handled above
+                    SeriesSortField::BookCount => query.order_by(series::Column::BookCount, order),
+                    _ => query, // Handled above (DateRead, ReleaseDate)
                 };
 
                 query
@@ -325,58 +318,6 @@ impl SeriesRepository {
                     .context("Failed to list series with sort")
             }
         }
-    }
-
-    /// List series sorted by aggregated file size or page count
-    async fn list_with_aggregate_sort(
-        db: &DatabaseConnection,
-        library_id: Uuid,
-        sort: &SeriesSortParam,
-        offset: u64,
-        limit: u64,
-    ) -> Result<Vec<series::Model>> {
-        use sea_orm::sea_query::Expr;
-
-        let aggregate_column = match sort.field {
-            SeriesSortField::FileSize => "total_file_size",
-            SeriesSortField::PageCount => "total_page_count",
-            _ => unreachable!(),
-        };
-
-        let aggregate_expr = match sort.field {
-            SeriesSortField::FileSize => {
-                Expr::col((Alias::new("books"), books::Column::FileSize)).sum()
-            }
-            SeriesSortField::PageCount => {
-                Expr::col((Alias::new("books"), books::Column::PageCount)).sum()
-            }
-            _ => unreachable!(),
-        };
-
-        let order = match sort.direction {
-            SortDirection::Asc => Order::Asc,
-            SortDirection::Desc => Order::Desc,
-        };
-
-        let results = Series::find()
-            .filter(series::Column::LibraryId.eq(library_id))
-            .join(JoinType::LeftJoin, series::Relation::Books.def())
-            .filter(
-                books::Column::Deleted
-                    .eq(false)
-                    .or(books::Column::Deleted.is_null()),
-            )
-            .column_as(aggregate_expr, aggregate_column)
-            .group_by(series::Column::Id)
-            .order_by(Expr::col(Alias::new(aggregate_column)), order)
-            .offset(offset)
-            .limit(limit)
-            .into_model::<SeriesWithAggregates>()
-            .all(db)
-            .await
-            .context("Failed to list series with aggregate sort")?;
-
-        Ok(results.into_iter().map(Into::into).collect())
     }
 
     /// List series sorted by last read date (user-specific)

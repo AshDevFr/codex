@@ -385,11 +385,16 @@ pub async fn list_series_filtered(
 
     let all_series_ids: HashSet<Uuid> = all_series.iter().map(|s| s.id).collect();
 
-    // Apply filter condition if provided
+    // Apply filter condition if provided (with user context for ReadStatus filtering)
     let matching_ids = if let Some(ref condition) = request.condition {
-        FilterService::get_matching_series(&state.db, condition, Some(&all_series_ids))
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to apply filter: {}", e)))?
+        FilterService::get_matching_series_for_user(
+            &state.db,
+            condition,
+            Some(&all_series_ids),
+            Some(auth.user_id),
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to apply filter: {}", e)))?
     } else {
         all_series_ids.clone()
     };

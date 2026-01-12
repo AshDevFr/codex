@@ -339,29 +339,22 @@ export function LibraryPage() {
 	// Sort options based on tab
 	const sortOptions = currentTab === "books"
 		? [
-				{ value: "title,asc", label: "Title (A-Z)" },
-				{ value: "title,desc", label: "Title (Z-A)" },
-				{ value: "created_at,desc", label: "Recently Added" },
-				{ value: "release_date,desc", label: "Release Date (Newest)" },
-				{ value: "release_date,asc", label: "Release Date (Oldest)" },
-				{ value: "chapter_number,asc", label: "Chapter Number" },
+				{ field: "series", label: "Series", defaultDirection: "asc" as const },
+				{ field: "title", label: "Title", defaultDirection: "asc" as const },
+				{ field: "created_at", label: "Date Added", defaultDirection: "desc" as const },
+				{ field: "release_date", label: "Release Date", defaultDirection: "desc" as const },
+				{ field: "chapter_number", label: "Chapter Number", defaultDirection: "asc" as const },
+				{ field: "file_size", label: "File Size", defaultDirection: "desc" as const },
+				{ field: "filename", label: "Filename", defaultDirection: "asc" as const },
+				{ field: "page_count", label: "Page Count", defaultDirection: "desc" as const },
 			]
 		: [
-				{ value: "name,asc", label: "Name (A-Z)" },
-				{ value: "name,desc", label: "Name (Z-A)" },
-				{ value: "date_added,desc", label: "Date Added (Newest)" },
-				{ value: "date_added,asc", label: "Date Added (Oldest)" },
-				{ value: "date_updated,desc", label: "Date Updated (Newest)" },
-				{ value: "date_updated,asc", label: "Date Updated (Oldest)" },
-				{ value: "release_date,desc", label: "Release Date (Newest)" },
-				{ value: "release_date,asc", label: "Release Date (Oldest)" },
-				{ value: "date_read,desc", label: "Recently Read" },
-				{ value: "file_size,desc", label: "File Size (Largest)" },
-				{ value: "file_size,asc", label: "File Size (Smallest)" },
-				{ value: "page_count,desc", label: "Page Count (Most)" },
-				{ value: "page_count,asc", label: "Page Count (Least)" },
-				{ value: "filename,asc", label: "Filename (A-Z)" },
-				{ value: "filename,desc", label: "Filename (Z-A)" },
+				{ field: "name", label: "Name", defaultDirection: "asc" as const },
+				{ field: "date_added", label: "Date Added", defaultDirection: "desc" as const },
+				{ field: "date_updated", label: "Date Updated", defaultDirection: "desc" as const },
+				{ field: "release_date", label: "Release Date", defaultDirection: "desc" as const },
+				{ field: "date_read", label: "Recently Read", defaultDirection: "desc" as const },
+				{ field: "book_count", label: "Book Count", defaultDirection: "desc" as const },
 			];
 
 	if (!libraryId) {

@@ -1,10 +1,13 @@
 import {
+	Box,
 	Card,
 	Group,
 	Pagination,
+	Skeleton,
 	Stack,
 	Text,
 } from "@mantine/core";
+import { useDebouncedValue } from "@mantine/hooks";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -12,6 +15,31 @@ import { seriesApi } from "@/api/series";
 import { ActiveFilters } from "@/components/library/ActiveFilters";
 import { MediaCard } from "@/components/library/MediaCard";
 import { useFilterState } from "@/hooks/useFilterState";
+
+/** Fixed skeleton IDs to avoid array index keys */
+const SKELETON_IDS = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "s12"];
+
+/** Skeleton placeholder for loading state */
+function SeriesGridSkeleton({ count = 12 }: { count?: number }) {
+	const ids = SKELETON_IDS.slice(0, count);
+	return (
+		<div
+			style={{
+				display: "grid",
+				gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+				gap: "var(--mantine-spacing-md)",
+				width: "100%",
+			}}
+		>
+			{ids.map((id) => (
+				<Box key={id}>
+					<Skeleton height={225} radius="md" mb="xs" />
+					<Skeleton height={16} width="80%" radius="sm" />
+				</Box>
+			))}
+		</div>
+	);
+}
 
 interface SeriesSectionProps {
 	libraryId: string;
@@ -29,6 +57,9 @@ export function SeriesSection({
 	// Get filter state from URL (uses the advanced filtering system)
 	const { condition, hasActiveFilters } = useFilterState();
 
+	// Debounce the condition to avoid rapid API calls when clicking multiple filters
+	const [debouncedCondition] = useDebouncedValue(condition, 150);
+
 	// Read query parameters (URL uses 1-indexed pages for user-friendly URLs)
 	const page = parseInt(searchParams.get("page") || "1", 10);
 	const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
@@ -36,8 +67,8 @@ export function SeriesSection({
 
 	// Serialize condition for use in query key (stable reference)
 	const conditionKey = useMemo(
-		() => (condition ? JSON.stringify(condition) : "none"),
-		[condition],
+		() => (debouncedCondition ? JSON.stringify(debouncedCondition) : "none"),
+		[debouncedCondition],
 	);
 
 	// Fetch series data using the new POST search endpoint
@@ -53,7 +84,7 @@ export function SeriesSection({
 		],
 		queryFn: () =>
 			seriesApi.search(libraryId, {
-				condition,
+				condition: debouncedCondition,
 				page: page - 1, // Convert to 0-indexed for backend
 				pageSize,
 				sort,
@@ -106,7 +137,7 @@ export function SeriesSection({
 
 			{/* Series Grid */}
 			{isLoading ? (
-				<Text c="dimmed">Loading series...</Text>
+				<SeriesGridSkeleton count={pageSize > 12 ? 12 : pageSize} />
 			) : seriesData?.data && seriesData.data.length > 0 ? (
 				<>
 					{/* Top Pagination */}

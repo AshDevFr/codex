@@ -1,7 +1,8 @@
 use crate::api::{
     dto::{
+        book::{BookSortField, BookSortParam},
         AdjacentBooksResponse, BookDetailResponse, BookDto, BookListRequest, BookListResponse,
-        BookMetadataDto, PaginationParams,
+        BookMetadataDto, PaginationParams, SortDirection,
     },
     error::ApiError,
     extractors::{AuthContext, AuthState},
@@ -254,11 +255,16 @@ pub async fn list_books_filtered(
         request.page_size.min(100)
     };
 
-    // If there's a condition, evaluate it to get matching book IDs
+    // If there's a condition, evaluate it to get matching book IDs (with user context for ReadStatus filtering)
     let filtered_ids: Option<HashSet<Uuid>> = if let Some(ref condition) = request.condition {
-        let matching = FilterService::get_matching_books(&state.db, condition, None)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to evaluate filter: {}", e)))?;
+        let matching = FilterService::get_matching_books_for_user(
+            &state.db,
+            condition,
+            None,
+            Some(auth.user_id),
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to evaluate filter: {}", e)))?;
         Some(matching)
     } else {
         None
@@ -436,19 +442,15 @@ pub async fn list_series_books_with_errors(
     Ok(Json(response))
 }
 
-/// Apply sorting to books list
-fn apply_book_sorting(books_list: &mut [crate::db::entities::books::Model], sort_param: &str) {
-    let parts: Vec<&str> = sort_param.split(',').collect();
-    if parts.len() != 2 {
-        return; // Invalid format, skip sorting
-    }
+/// Apply in-memory sorting to books list using BookSortParam
+fn apply_book_sorting_with_param(
+    books_list: &mut [crate::db::entities::books::Model],
+    sort: &BookSortParam,
+) {
+    let ascending = sort.direction == SortDirection::Asc;
 
-    let field = parts[0];
-    let direction = parts[1];
-    let ascending = direction == "asc";
-
-    match field {
-        "title" => {
+    match sort.field {
+        BookSortField::Title => {
             books_list.sort_by(|a, b| {
                 let a_title = a.title.as_deref().unwrap_or(&a.file_name);
                 let b_title = b.title.as_deref().unwrap_or(&b.file_name);
@@ -460,7 +462,7 @@ fn apply_book_sorting(books_list: &mut [crate::db::entities::books::Model], sort
                 }
             });
         }
-        "created_at" => {
+        BookSortField::DateAdded => {
             books_list.sort_by(|a, b| {
                 let cmp = a.created_at.cmp(&b.created_at);
                 if ascending {
@@ -470,7 +472,7 @@ fn apply_book_sorting(books_list: &mut [crate::db::entities::books::Model], sort
                 }
             });
         }
-        "release_date" => {
+        BookSortField::ReleaseDate => {
             books_list.sort_by(|a, b| {
                 // Handle None values - put them at the end
                 match (&a.number, &b.number) {
@@ -490,7 +492,7 @@ fn apply_book_sorting(books_list: &mut [crate::db::entities::books::Model], sort
                 }
             });
         }
-        "chapter_number" => {
+        BookSortField::ChapterNumber => {
             books_list.sort_by(|a, b| match (&a.number, &b.number) {
                 (Some(a_num), Some(b_num)) => {
                     let cmp = a_num
@@ -507,7 +509,50 @@ fn apply_book_sorting(books_list: &mut [crate::db::entities::books::Model], sort
                 (None, None) => std::cmp::Ordering::Equal,
             });
         }
-        _ => {} // Unknown field, skip sorting
+        BookSortField::Series => {
+            // Series sort requires database-level JOIN, should not reach here
+            // If it does, fall back to title sort
+            books_list.sort_by(|a, b| {
+                let a_title = a.title.as_deref().unwrap_or(&a.file_name);
+                let b_title = b.title.as_deref().unwrap_or(&b.file_name);
+                let cmp = a_title.cmp(b_title);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        BookSortField::FileSize => {
+            books_list.sort_by(|a, b| {
+                let cmp = a.file_size.cmp(&b.file_size);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        BookSortField::Filename => {
+            books_list.sort_by(|a, b| {
+                let cmp = a.file_name.cmp(&b.file_name);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        BookSortField::PageCount => {
+            books_list.sort_by(|a, b| {
+                let cmp = a.page_count.cmp(&b.page_count);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
     }
 }
 
@@ -669,18 +714,34 @@ pub async fn list_library_books(
         query.page_size.min(100)
     };
 
-    // Fetch books by library
-    let (mut books_list, total) = BookRepository::list_by_library(
-        &state.db, library_id, false, // exclude deleted
-        query.page, page_size,
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to fetch library books: {}", e)))?;
+    // Parse sort parameter
+    let sort = query
+        .sort
+        .as_ref()
+        .map(|s| BookSortParam::parse(s))
+        .unwrap_or_default();
 
-    // Apply sorting if specified (Note: pagination already applied by repository, so this only sorts the current page)
-    if let Some(sort_param) = &query.sort {
-        apply_book_sorting(&mut books_list, sort_param);
-    }
+    // Check if sort requires database-level JOIN (series compound sort)
+    let (books_list, total) = if sort.requires_join() {
+        let ascending = sort.direction == SortDirection::Asc;
+        BookRepository::list_by_library_series_sorted(
+            &state.db, library_id, false, // exclude deleted
+            ascending, query.page, page_size,
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch library books: {}", e)))?
+    } else {
+        // Use standard fetch and apply in-memory sorting
+        let (mut books, total) = BookRepository::list_by_library(
+            &state.db, library_id, false, // exclude deleted
+            query.page, page_size,
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch library books: {}", e)))?;
+
+        apply_book_sorting_with_param(&mut books, &sort);
+        (books, total)
+    };
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 

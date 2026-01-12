@@ -3390,3 +3390,390 @@ async fn test_list_series_filtered_combined_metadata() {
     assert_eq!(series_list.data.len(), 1);
     assert_eq!(series_list.data[0].name, "My Hero Academia");
 }
+
+// ============================================================================
+// ReadStatus Filtering Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_series_filtered_by_read_status_unread() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    use codex::db::repositories::ReadProgressRepository;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create 3 series with books
+    let series1 = SeriesRepository::create(&db, library.id, "Unread Series", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "In Progress Series", None)
+        .await
+        .unwrap();
+    let series3 = SeriesRepository::create(&db, library.id, "Read Series", None)
+        .await
+        .unwrap();
+
+    // Create books for each series
+    let book1_model = create_test_book(
+        series1.id,
+        library.id,
+        "/book1.cbz",
+        "book1.cbz",
+        Some("Book 1"),
+    );
+    let _book1 = BookRepository::create(&db, &book1_model, None)
+        .await
+        .unwrap();
+    let book2_model = create_test_book(
+        series2.id,
+        library.id,
+        "/book2.cbz",
+        "book2.cbz",
+        Some("Book 2"),
+    );
+    let book2 = BookRepository::create(&db, &book2_model, None)
+        .await
+        .unwrap();
+    let book3_model = create_test_book(
+        series3.id,
+        library.id,
+        "/book3.cbz",
+        "book3.cbz",
+        Some("Book 3"),
+    );
+    let book3 = BookRepository::create(&db, &book3_model, None)
+        .await
+        .unwrap();
+
+    // Create admin user
+    let state = create_test_auth_state(db.clone()).await;
+    let password_hash = password::hash_password("admin123").unwrap();
+    let admin = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let admin_user = UserRepository::create(&db, &admin).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(
+            admin_user.id,
+            admin_user.username.clone(),
+            admin_user.is_admin,
+        )
+        .unwrap();
+
+    // Set read progress:
+    // - series1: No progress (unread)
+    // - series2: In progress (not completed, page > 0)
+    ReadProgressRepository::upsert(&db, admin_user.id, book2.id, 5, false)
+        .await
+        .unwrap();
+    // - series3: Completed (read)
+    ReadProgressRepository::upsert(&db, admin_user.id, book3.id, 10, true)
+        .await
+        .unwrap();
+
+    let app = create_test_router(state).await;
+
+    // Filter for unread series
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::ReadStatus {
+            read_status: FieldOperator::Is {
+                value: "unread".to_string(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].name, "Unread Series");
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_by_read_status_in_progress() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    use codex::db::repositories::ReadProgressRepository;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(&db, library.id, "Unread Series", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "In Progress Series", None)
+        .await
+        .unwrap();
+    let series3 = SeriesRepository::create(&db, library.id, "Read Series", None)
+        .await
+        .unwrap();
+
+    let book1_model = create_test_book(
+        series1.id,
+        library.id,
+        "/book1.cbz",
+        "book1.cbz",
+        Some("Book 1"),
+    );
+    let _book1 = BookRepository::create(&db, &book1_model, None)
+        .await
+        .unwrap();
+    let book2_model = create_test_book(
+        series2.id,
+        library.id,
+        "/book2.cbz",
+        "book2.cbz",
+        Some("Book 2"),
+    );
+    let book2 = BookRepository::create(&db, &book2_model, None)
+        .await
+        .unwrap();
+    let book3_model = create_test_book(
+        series3.id,
+        library.id,
+        "/book3.cbz",
+        "book3.cbz",
+        Some("Book 3"),
+    );
+    let book3 = BookRepository::create(&db, &book3_model, None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let password_hash = password::hash_password("admin123").unwrap();
+    let admin = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let admin_user = UserRepository::create(&db, &admin).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(
+            admin_user.id,
+            admin_user.username.clone(),
+            admin_user.is_admin,
+        )
+        .unwrap();
+
+    // series2: In progress
+    ReadProgressRepository::upsert(&db, admin_user.id, book2.id, 5, false)
+        .await
+        .unwrap();
+    // series3: Completed
+    ReadProgressRepository::upsert(&db, admin_user.id, book3.id, 10, true)
+        .await
+        .unwrap();
+
+    let app = create_test_router(state).await;
+
+    // Filter for in_progress series
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::ReadStatus {
+            read_status: FieldOperator::Is {
+                value: "in_progress".to_string(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].name, "In Progress Series");
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_by_read_status_read() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    use codex::db::repositories::ReadProgressRepository;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(&db, library.id, "Unread Series", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "In Progress Series", None)
+        .await
+        .unwrap();
+    let series3 = SeriesRepository::create(&db, library.id, "Read Series", None)
+        .await
+        .unwrap();
+
+    let book1_model = create_test_book(
+        series1.id,
+        library.id,
+        "/book1.cbz",
+        "book1.cbz",
+        Some("Book 1"),
+    );
+    let _book1 = BookRepository::create(&db, &book1_model, None)
+        .await
+        .unwrap();
+    let book2_model = create_test_book(
+        series2.id,
+        library.id,
+        "/book2.cbz",
+        "book2.cbz",
+        Some("Book 2"),
+    );
+    let book2 = BookRepository::create(&db, &book2_model, None)
+        .await
+        .unwrap();
+    let book3_model = create_test_book(
+        series3.id,
+        library.id,
+        "/book3.cbz",
+        "book3.cbz",
+        Some("Book 3"),
+    );
+    let book3 = BookRepository::create(&db, &book3_model, None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let password_hash = password::hash_password("admin123").unwrap();
+    let admin = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let admin_user = UserRepository::create(&db, &admin).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(
+            admin_user.id,
+            admin_user.username.clone(),
+            admin_user.is_admin,
+        )
+        .unwrap();
+
+    // series2: In progress
+    ReadProgressRepository::upsert(&db, admin_user.id, book2.id, 5, false)
+        .await
+        .unwrap();
+    // series3: Completed
+    ReadProgressRepository::upsert(&db, admin_user.id, book3.id, 10, true)
+        .await
+        .unwrap();
+
+    let app = create_test_router(state).await;
+
+    // Filter for read series
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::ReadStatus {
+            read_status: FieldOperator::Is {
+                value: "read".to_string(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].name, "Read Series");
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_by_read_status_not_read() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    use codex::db::repositories::ReadProgressRepository;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(&db, library.id, "Unread Series", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "In Progress Series", None)
+        .await
+        .unwrap();
+    let series3 = SeriesRepository::create(&db, library.id, "Read Series", None)
+        .await
+        .unwrap();
+
+    let book1_model = create_test_book(
+        series1.id,
+        library.id,
+        "/book1.cbz",
+        "book1.cbz",
+        Some("Book 1"),
+    );
+    let _book1 = BookRepository::create(&db, &book1_model, None)
+        .await
+        .unwrap();
+    let book2_model = create_test_book(
+        series2.id,
+        library.id,
+        "/book2.cbz",
+        "book2.cbz",
+        Some("Book 2"),
+    );
+    let book2 = BookRepository::create(&db, &book2_model, None)
+        .await
+        .unwrap();
+    let book3_model = create_test_book(
+        series3.id,
+        library.id,
+        "/book3.cbz",
+        "book3.cbz",
+        Some("Book 3"),
+    );
+    let book3 = BookRepository::create(&db, &book3_model, None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let password_hash = password::hash_password("admin123").unwrap();
+    let admin = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let admin_user = UserRepository::create(&db, &admin).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(
+            admin_user.id,
+            admin_user.username.clone(),
+            admin_user.is_admin,
+        )
+        .unwrap();
+
+    // series2: In progress
+    ReadProgressRepository::upsert(&db, admin_user.id, book2.id, 5, false)
+        .await
+        .unwrap();
+    // series3: Completed
+    ReadProgressRepository::upsert(&db, admin_user.id, book3.id, 10, true)
+        .await
+        .unwrap();
+
+    let app = create_test_router(state).await;
+
+    // Filter for NOT read series (should include unread and in_progress)
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::ReadStatus {
+            read_status: FieldOperator::IsNot {
+                value: "read".to_string(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 2);
+    let names: Vec<_> = series_list.data.iter().map(|s| s.name.as_str()).collect();
+    assert!(names.contains(&"Unread Series"));
+    assert!(names.contains(&"In Progress Series"));
+}

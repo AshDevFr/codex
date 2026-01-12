@@ -260,6 +260,60 @@ impl BookRepository {
         Ok((books, total))
     }
 
+    /// List books by library with series compound sort (series name + book number)
+    ///
+    /// This sort groups books by their series name alphabetically, then sorts
+    /// books within each series by their book number. This is the "reading order" sort.
+    pub async fn list_by_library_series_sorted(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        include_deleted: bool,
+        ascending: bool,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::db::entities::{series, series_metadata};
+        use sea_orm::{JoinType, Order};
+
+        // Build query filtering directly by library_id (now on books table)
+        let mut query = Books::find().filter(books::Column::LibraryId.eq(library_id));
+
+        if !include_deleted {
+            query = query.filter(books::Column::Deleted.eq(false));
+        }
+
+        // Get total count
+        let total = query
+            .clone()
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count books in library")?;
+
+        // Determine sort order
+        let order = if ascending { Order::Asc } else { Order::Desc };
+
+        // Get paginated results with series sorting
+        // JOIN with series and series_metadata to get series name for sorting
+        let books = query
+            .join(JoinType::LeftJoin, books::Relation::Series.def())
+            .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+            // Sort by series title_sort (if set) or series name
+            .order_by(series_metadata::Column::TitleSort, order.clone())
+            .order_by(series::Column::Name, order.clone())
+            // Then by book number within series
+            .order_by(books::Column::Number, Order::Asc)
+            // Then by title as fallback
+            .order_by(books::Column::Title, Order::Asc)
+            .offset(page * page_size)
+            .limit(page_size)
+            .all(db)
+            .await
+            .context("Failed to list books by library with series sort")?;
+
+        Ok((books, total))
+    }
+
     /// List recently added books with pagination
     pub async fn list_recently_added(
         db: &DatabaseConnection,
