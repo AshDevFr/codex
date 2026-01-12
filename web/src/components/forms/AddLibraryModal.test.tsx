@@ -221,7 +221,7 @@ describe("LibraryModal (Add Mode)", () => {
 			const nameInput = modalContent.getByPlaceholderText(
 				"Enter library name",
 			) as HTMLInputElement;
-			expect(nameInput.value).toBe("user");
+			expect(nameInput.value).toBe("User");
 		});
 	});
 
@@ -1042,5 +1042,268 @@ describe("LibraryModal (Add Mode)", () => {
 		expect(
 			screen.getAllByText("PDF (Portable Document Format)").length,
 		).toBeGreaterThan(0);
+	});
+
+	// Strategy Tab Tests
+	describe("Strategy Tab", () => {
+		it("should display Strategy tab in add mode", async () => {
+			renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+
+			await waitFor(() => {
+				expect(screen.getByText("Add New Library")).toBeInTheDocument();
+			});
+
+			// Strategy tab should be visible in add mode
+			expect(screen.getByRole("tab", { name: /strategy/i })).toBeInTheDocument();
+		});
+
+		it("should show series strategy selector when Strategy tab is clicked", async () => {
+			const user = userEvent.setup();
+			renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+
+			await waitFor(() => {
+				expect(screen.getByText("Add New Library")).toBeInTheDocument();
+			});
+
+			// Click on Strategy tab
+			const strategyTab = screen.getByRole("tab", { name: /strategy/i });
+			await user.click(strategyTab);
+
+			await waitFor(() => {
+				expect(screen.getByText("Series Detection Strategy")).toBeInTheDocument();
+				expect(screen.getByText("Book Naming Strategy")).toBeInTheDocument();
+			});
+		});
+
+		it("should show warning about strategy being permanent", async () => {
+			const user = userEvent.setup();
+			renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+
+			await waitFor(() => {
+				expect(screen.getByText("Add New Library")).toBeInTheDocument();
+			});
+
+			// Click on Strategy tab
+			const strategyTab = screen.getByRole("tab", { name: /strategy/i });
+			await user.click(strategyTab);
+
+			await waitFor(() => {
+				expect(screen.getByText(/permanent/i)).toBeInTheDocument();
+				expect(screen.getByText(/cannot be changed after library creation/i)).toBeInTheDocument();
+			});
+		});
+
+		it("should default to series_volume and filename strategies", async () => {
+			const user = userEvent.setup();
+			renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+
+			await waitFor(() => {
+				expect(screen.getByText("Add New Library")).toBeInTheDocument();
+			});
+
+			// Click on Strategy tab
+			const strategyTab = screen.getByRole("tab", { name: /strategy/i });
+			await user.click(strategyTab);
+
+			await waitFor(() => {
+				// Check that the default strategies are selected (Mantine shows label in textbox)
+				const textboxes = screen.getAllByRole("textbox", { hidden: true });
+				// One of them should have "Series-Volume (Recommended)"
+				const hasSeriesVolume = textboxes.some(
+					(tb) => tb.getAttribute("value") === "Series-Volume (Recommended)",
+				);
+				const hasFilename = textboxes.some(
+					(tb) => tb.getAttribute("value") === "Filename (Recommended)",
+				);
+				expect(hasSeriesVolume).toBe(true);
+				expect(hasFilename).toBe(true);
+			});
+		});
+
+		it("should include strategy in create request with default values", async () => {
+			const user = userEvent.setup();
+			const mockLibrary = {
+				id: "1",
+				name: "Test Library",
+				path: "/home/user/Comics",
+				isActive: true,
+				createdAt: "2024-01-01T00:00:00Z",
+				updatedAt: "2024-01-01T00:00:00Z",
+				seriesStrategy: "series_volume" as const,
+				bookStrategy: "filename" as const,
+				defaultReadingDirection: "ltr",
+			};
+
+			vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+
+			renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+
+			// Wait for modal
+			const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+			const modalContent = within(modal);
+			const nameInput = await modalContent.findByPlaceholderText(
+				"Enter library name",
+				{},
+				{ timeout: 3000 },
+			);
+
+			// Fill in required fields
+			await user.clear(nameInput);
+			await user.type(nameInput, "Test Library");
+
+			// Set path
+			const browseButton = screen.getByText("Browse");
+			await user.click(browseButton);
+
+			const driveButton = await screen.findByText("Home Directory");
+			await user.click(driveButton);
+
+			const selectButton = await screen.findByText("Select This Folder");
+			await user.click(selectButton);
+
+			// Submit form without changing strategy (defaults should be used)
+			await waitFor(() => {
+				const createButton = screen.getByText("Create Library");
+				expect(createButton).not.toBeDisabled();
+			});
+
+			const createButton = screen.getByText("Create Library");
+			await user.click(createButton);
+
+			await waitFor(() => {
+				expect(librariesApi.create).toHaveBeenCalledWith(
+					expect.objectContaining({
+						name: "Test Library",
+						path: "/home/user",
+						seriesStrategy: "series_volume",
+						bookStrategy: "filename",
+					}),
+				);
+			});
+		});
+
+		it("should include selected strategy in create request", async () => {
+			const user = userEvent.setup();
+			const mockLibrary = {
+				id: "1",
+				name: "Manga Library",
+				path: "/home/user/Manga",
+				isActive: true,
+				createdAt: "2024-01-01T00:00:00Z",
+				updatedAt: "2024-01-01T00:00:00Z",
+				seriesStrategy: "series_volume_chapter" as const,
+				bookStrategy: "smart" as const,
+				defaultReadingDirection: "rtl",
+			};
+
+			vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+
+			renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+
+			// Wait for modal
+			const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+			const modalContent = within(modal);
+			const nameInput = await modalContent.findByPlaceholderText(
+				"Enter library name",
+				{},
+				{ timeout: 3000 },
+			);
+
+			// Fill in required fields
+			await user.clear(nameInput);
+			await user.type(nameInput, "Manga Library");
+
+			// Set path
+			const browseButton = screen.getByText("Browse");
+			await user.click(browseButton);
+
+			const driveButton = await screen.findByText("Home Directory");
+			await user.click(driveButton);
+
+			const selectButton = await screen.findByText("Select This Folder");
+			await user.click(selectButton);
+
+			// Go to Strategy tab and change strategy
+			const strategyTab = screen.getByRole("tab", { name: /strategy/i });
+			await user.click(strategyTab);
+
+			await waitFor(() => {
+				expect(screen.getByText("Series Detection Strategy")).toBeInTheDocument();
+			});
+
+			// Change series strategy to series_volume_chapter
+			const seriesStrategySelect = screen
+				.getByText("Series Detection Strategy")
+				.closest("div")
+				?.parentElement?.querySelector('input[type="text"]');
+			if (seriesStrategySelect) {
+				await user.click(seriesStrategySelect.parentElement as Element);
+			}
+
+			await waitFor(() => {
+				expect(screen.getByText("Series-Volume-Chapter")).toBeInTheDocument();
+			});
+			await user.click(screen.getByText("Series-Volume-Chapter"));
+
+			// Change book strategy to smart
+			const bookStrategySelect = screen
+				.getByText("Book Naming Strategy")
+				.closest("div")
+				?.parentElement?.querySelector('input[type="text"]');
+			if (bookStrategySelect) {
+				await user.click(bookStrategySelect.parentElement as Element);
+			}
+
+			await waitFor(() => {
+				expect(screen.getByText("Smart Detection")).toBeInTheDocument();
+			});
+			await user.click(screen.getByText("Smart Detection"));
+
+			// Submit form
+			await waitFor(() => {
+				const createButton = screen.getByText("Create Library");
+				expect(createButton).not.toBeDisabled();
+			});
+
+			const createButton = screen.getByText("Create Library");
+			await user.click(createButton);
+
+			await waitFor(() => {
+				expect(librariesApi.create).toHaveBeenCalledWith(
+					expect.objectContaining({
+						name: "Manga Library",
+						seriesStrategy: "series_volume_chapter",
+						bookStrategy: "smart",
+					}),
+				);
+			});
+		});
+
+		it("should show preview scan panel in Strategy tab", async () => {
+			const user = userEvent.setup();
+			renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+
+			await waitFor(() => {
+				expect(screen.getByText("Add New Library")).toBeInTheDocument();
+			});
+
+			// First set a path (preview panel requires a path)
+			const browseButton = screen.getByText("Browse");
+			await user.click(browseButton);
+
+			const driveButton = await screen.findByText("Home Directory");
+			await user.click(driveButton);
+
+			const selectButton = await screen.findByText("Select This Folder");
+			await user.click(selectButton);
+
+			// Click on Strategy tab
+			const strategyTab = screen.getByRole("tab", { name: /strategy/i });
+			await user.click(strategyTab);
+
+			await waitFor(() => {
+				expect(screen.getByText("Preview Scan Results")).toBeInTheDocument();
+			});
+		});
 	});
 });

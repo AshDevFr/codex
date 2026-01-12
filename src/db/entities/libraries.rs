@@ -10,7 +10,17 @@ pub struct Model {
     pub id: Uuid,
     pub name: String,
     pub path: String,
-    pub scanning_strategy: String,
+    /// Series detection strategy (series_volume, series_volume_chapter, flat, etc.)
+    pub series_strategy: String,
+    /// Strategy-specific configuration (JSON)
+    #[sea_orm(column_type = "Json")]
+    pub series_config: Option<serde_json::Value>,
+    /// Book naming strategy (filename, metadata_first, smart, series_name)
+    pub book_strategy: String,
+    /// Book strategy-specific configuration (JSON)
+    #[sea_orm(column_type = "Json")]
+    pub book_config: Option<serde_json::Value>,
+    /// Legacy: stores cron/scan settings (kept for backward compatibility)
     pub scanning_config: Option<String>,
     pub default_reading_direction: String,
     pub allowed_formats: Option<String>,

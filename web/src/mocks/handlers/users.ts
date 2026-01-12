@@ -3,7 +3,7 @@
  */
 
 import { http, HttpResponse, delay } from "msw";
-import { createUser, createList, createPaginatedResponse } from "../data/factories";
+import { createUser, createList } from "../data/factories";
 
 // Generate mock users
 const mockUsers = [
@@ -12,24 +12,10 @@ const mockUsers = [
 ];
 
 export const usersHandlers = [
-	// List all users (paginated)
-	http.get("/api/v1/users", async ({ request }) => {
+	// List all users
+	http.get("/api/v1/users", async () => {
 		await delay(100);
-		const url = new URL(request.url);
-		const page = parseInt(url.searchParams.get("page") || "0");
-		const pageSize = parseInt(url.searchParams.get("pageSize") || "20");
-
-		const start = page * pageSize;
-		const end = start + pageSize;
-		const paginatedUsers = mockUsers.slice(start, end);
-
-		return HttpResponse.json(
-			createPaginatedResponse(paginatedUsers, {
-				page,
-				pageSize,
-				total: mockUsers.length,
-			})
-		);
+		return HttpResponse.json(mockUsers);
 	}),
 
 	// Get single user

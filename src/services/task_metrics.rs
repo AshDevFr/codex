@@ -304,60 +304,170 @@ impl TaskMetricsService {
         TaskMetricsRepository::nuke_all_metrics(&self.db).await
     }
 
-    /// Get current in-memory aggregates by task type
+    /// Get current aggregates by task type (combines database + in-memory data)
     pub async fn get_current_aggregates(&self) -> HashMap<String, TaskTypeMetrics> {
-        let collector = self.collector.read().await;
         let mut result = HashMap::new();
 
+        // First, get database aggregates from the last 24 hours
+        let from = Utc::now() - Duration::hours(24);
+        let to = Utc::now();
+
+        if let Ok(db_aggregates) =
+            TaskMetricsRepository::get_aggregated_by_type(&self.db, from, to).await
+        {
+            for agg in db_aggregates {
+                let count = agg.total_count as u64;
+                result.insert(
+                    agg.task_type,
+                    TaskTypeMetrics {
+                        executed: count,
+                        succeeded: agg.total_succeeded as u64,
+                        failed: agg.total_failed as u64,
+                        retried: agg.total_retried as u64,
+                        avg_duration_ms: if count > 0 {
+                            agg.sum_duration_ms as f64 / count as f64
+                        } else {
+                            0.0
+                        },
+                        min_duration_ms: agg.min_duration_ms.unwrap_or(0) as u64,
+                        max_duration_ms: agg.max_duration_ms.unwrap_or(0) as u64,
+                        p50_duration_ms: 0, // Not available from aggregated DB data
+                        p95_duration_ms: 0, // Not available from aggregated DB data
+                        avg_queue_wait_ms: if count > 0 {
+                            agg.sum_queue_wait_ms as f64 / count as f64
+                        } else {
+                            0.0
+                        },
+                        items_processed: agg.total_items as u64,
+                        bytes_processed: agg.total_bytes as u64,
+                        throughput_per_sec: 0.0, // Calculated later with time window
+                        error_rate_pct: if count > 0 {
+                            (agg.total_failed as f64 / count as f64) * 100.0
+                        } else {
+                            0.0
+                        },
+                        last_error: None, // Would need additional query
+                        last_error_at: None,
+                    },
+                );
+            }
+        }
+
+        // Then merge with in-memory aggregates (which may have more recent data not yet flushed)
+        let collector = self.collector.read().await;
         for (task_type, agg) in &collector.aggregates {
-            result.insert(
-                task_type.clone(),
-                TaskTypeMetrics {
-                    executed: agg.count,
-                    succeeded: agg.succeeded,
-                    failed: agg.failed,
-                    retried: agg.retried,
-                    avg_duration_ms: if agg.count > 0 {
-                        agg.total_duration_ms as f64 / agg.count as f64
-                    } else {
-                        0.0
+            // In-memory data represents unflushed completions since last flush
+            // We add these to any existing database counts
+            if let Some(existing) = result.get_mut(task_type) {
+                existing.executed += agg.count;
+                existing.succeeded += agg.succeeded;
+                existing.failed += agg.failed;
+                existing.retried += agg.retried;
+
+                let total_count = existing.executed;
+                let new_total_duration = (existing.avg_duration_ms
+                    * (total_count - agg.count) as f64)
+                    + agg.total_duration_ms as f64;
+                existing.avg_duration_ms = new_total_duration / total_count as f64;
+
+                let new_total_queue_wait = (existing.avg_queue_wait_ms
+                    * (total_count - agg.count) as f64)
+                    + agg.total_queue_wait_ms as f64;
+                existing.avg_queue_wait_ms = new_total_queue_wait / total_count as f64;
+
+                existing.items_processed += agg.items_processed as u64;
+                existing.bytes_processed += agg.bytes_processed as u64;
+
+                // Update min/max
+                if let Some(min) = agg.min_duration_ms {
+                    existing.min_duration_ms = existing.min_duration_ms.min(min as u64);
+                }
+                if let Some(max) = agg.max_duration_ms {
+                    existing.max_duration_ms = existing.max_duration_ms.max(max as u64);
+                }
+
+                // Use in-memory percentiles since they're from recent samples
+                existing.p50_duration_ms = agg.percentile(50.0).unwrap_or(0) as u64;
+                existing.p95_duration_ms = agg.percentile(95.0).unwrap_or(0) as u64;
+
+                existing.error_rate_pct = if total_count > 0 {
+                    (existing.failed as f64 / total_count as f64) * 100.0
+                } else {
+                    0.0
+                };
+
+                // Use in-memory error if more recent
+                if agg.last_error_at.is_some() {
+                    existing.last_error = agg.last_error.clone();
+                    existing.last_error_at = agg.last_error_at;
+                }
+            } else {
+                // No database data for this task type, use in-memory only
+                result.insert(
+                    task_type.clone(),
+                    TaskTypeMetrics {
+                        executed: agg.count,
+                        succeeded: agg.succeeded,
+                        failed: agg.failed,
+                        retried: agg.retried,
+                        avg_duration_ms: if agg.count > 0 {
+                            agg.total_duration_ms as f64 / agg.count as f64
+                        } else {
+                            0.0
+                        },
+                        min_duration_ms: agg.min_duration_ms.unwrap_or(0) as u64,
+                        max_duration_ms: agg.max_duration_ms.unwrap_or(0) as u64,
+                        p50_duration_ms: agg.percentile(50.0).unwrap_or(0) as u64,
+                        p95_duration_ms: agg.percentile(95.0).unwrap_or(0) as u64,
+                        avg_queue_wait_ms: if agg.count > 0 {
+                            agg.total_queue_wait_ms as f64 / agg.count as f64
+                        } else {
+                            0.0
+                        },
+                        items_processed: agg.items_processed as u64,
+                        bytes_processed: agg.bytes_processed as u64,
+                        throughput_per_sec: 0.0,
+                        error_rate_pct: if agg.count > 0 {
+                            (agg.failed as f64 / agg.count as f64) * 100.0
+                        } else {
+                            0.0
+                        },
+                        last_error: agg.last_error.clone(),
+                        last_error_at: agg.last_error_at,
                     },
-                    min_duration_ms: agg.min_duration_ms.unwrap_or(0) as u64,
-                    max_duration_ms: agg.max_duration_ms.unwrap_or(0) as u64,
-                    p50_duration_ms: agg.percentile(50.0).unwrap_or(0) as u64,
-                    p95_duration_ms: agg.percentile(95.0).unwrap_or(0) as u64,
-                    avg_queue_wait_ms: if agg.count > 0 {
-                        agg.total_queue_wait_ms as f64 / agg.count as f64
-                    } else {
-                        0.0
-                    },
-                    items_processed: agg.items_processed as u64,
-                    bytes_processed: agg.bytes_processed as u64,
-                    throughput_per_sec: 0.0, // Calculated later with time window
-                    error_rate_pct: if agg.count > 0 {
-                        (agg.failed as f64 / agg.count as f64) * 100.0
-                    } else {
-                        0.0
-                    },
-                    last_error: agg.last_error.clone(),
-                    last_error_at: agg.last_error_at,
-                },
-            );
+                );
+            }
         }
 
         result
     }
 
-    /// Get summary statistics
+    /// Get summary statistics (combines database + in-memory data)
     pub async fn get_summary(&self) -> TaskMetricsSummary {
-        let collector = self.collector.read().await;
-
         let mut total_executed = 0u64;
         let mut total_succeeded = 0u64;
         let mut total_failed = 0u64;
         let mut total_duration_ms = 0i64;
         let mut total_queue_wait_ms = 0i64;
 
+        // Get database aggregates from the last 24 hours
+        let from = Utc::now() - Duration::hours(24);
+        let to = Utc::now();
+
+        if let Ok(db_aggregates) =
+            TaskMetricsRepository::get_aggregated_by_type(&self.db, from, to).await
+        {
+            for agg in db_aggregates {
+                total_executed += agg.total_count as u64;
+                total_succeeded += agg.total_succeeded as u64;
+                total_failed += agg.total_failed as u64;
+                total_duration_ms += agg.sum_duration_ms;
+                total_queue_wait_ms += agg.sum_queue_wait_ms;
+            }
+        }
+
+        // Add in-memory data (not yet flushed)
+        let collector = self.collector.read().await;
         for agg in collector.aggregates.values() {
             total_executed += agg.count;
             total_succeeded += agg.succeeded;

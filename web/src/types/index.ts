@@ -34,6 +34,16 @@ export type ScanningConfig = Schemas["ScanningConfigDto"];
 export type CreateLibraryRequest = Schemas["CreateLibraryRequest"];
 
 // =============================================================================
+// Strategy types
+// =============================================================================
+export type SeriesStrategy = Schemas["SeriesStrategy"];
+export type BookStrategy = Schemas["BookStrategy"];
+export type PreviewScanRequest = Schemas["PreviewScanRequest"];
+export type PreviewScanResponse = Schemas["PreviewScanResponse"];
+export type DetectedSeries = Schemas["DetectedSeriesDto"];
+export type DetectedSeriesMetadata = Schemas["DetectedSeriesMetadataDto"];
+
+// =============================================================================
 // Series types
 // =============================================================================
 export type Series = Schemas["SeriesDto"];

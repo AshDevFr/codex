@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
-    sea_query::Alias, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait,
-    FromQueryResult, JoinType, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
-    RelationTrait, Set,
+    sea_query::{Alias, Expr, Func},
+    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
+    JoinType, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
 };
 use uuid::Uuid;
 
@@ -416,6 +416,51 @@ impl SeriesRepository {
             .all(db)
             .await
             .context("Failed to search series by name")
+    }
+
+    /// Full-text search series by name (case-insensitive using LOWER())
+    pub async fn full_text_search(
+        db: &DatabaseConnection,
+        query: &str,
+    ) -> Result<Vec<series::Model>> {
+        let pattern = format!("%{}%", query.to_lowercase());
+
+        // Use LOWER(name) LIKE pattern for case-insensitive search
+        let lower_name = Func::lower(Expr::col(series::Column::Name));
+        let search_condition = Condition::all().add(Expr::expr(lower_name).like(&pattern));
+
+        Series::find()
+            .filter(search_condition)
+            .order_by_asc(series::Column::Name)
+            .all(db)
+            .await
+            .context("Failed to execute full-text search")
+    }
+
+    /// Full-text search series by name within candidate IDs (case-insensitive)
+    pub async fn full_text_search_filtered(
+        db: &DatabaseConnection,
+        query: &str,
+        candidate_ids: &[Uuid],
+    ) -> Result<Vec<series::Model>> {
+        if candidate_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let pattern = format!("%{}%", query.to_lowercase());
+
+        // Use LOWER(name) LIKE pattern for case-insensitive search
+        let lower_name = Func::lower(Expr::col(series::Column::Name));
+        let search_condition = Condition::all()
+            .add(Expr::expr(lower_name).like(&pattern))
+            .add(series::Column::Id.is_in(candidate_ids.to_vec()));
+
+        Series::find()
+            .filter(search_condition)
+            .order_by_asc(series::Column::Name)
+            .all(db)
+            .await
+            .context("Failed to execute full-text search")
     }
 
     /// Update series core fields

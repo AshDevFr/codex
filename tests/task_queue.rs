@@ -16,7 +16,8 @@ async fn create_test_library(db: &DatabaseConnection) -> Uuid {
         id: Set(library_id),
         name: Set("Test Library".to_string()),
         path: Set("/tmp/test-library".to_string()),
-        scanning_strategy: Set("normal".to_string()),
+        series_strategy: Set("series_volume".to_string()),
+        book_strategy: Set("filename".to_string()),
         created_at: Set(now),
         updated_at: Set(now),
         ..Default::default()

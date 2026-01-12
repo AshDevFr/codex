@@ -4,10 +4,10 @@ import {
 	Burger,
 	Group,
 	Text,
-	TextInput,
 	useMantineColorScheme,
 } from "@mantine/core";
-import { IconMenu2, IconMoon, IconSearch, IconSun } from "@tabler/icons-react";
+import { IconMenu2, IconMoon, IconSun } from "@tabler/icons-react";
+import { SearchInput } from "@/components/search";
 
 interface HeaderProps {
 	mobileOpened: boolean;
@@ -47,12 +47,7 @@ export function Header({
 				</Group>
 
 				<Group>
-					<TextInput
-						placeholder="Search..."
-						leftSection={<IconSearch size={16} />}
-						visibleFrom="sm"
-						w={300}
-					/>
+					<SearchInput />
 
 					<ActionIcon
 						variant="subtle"

@@ -1,4 +1,4 @@
-import type { Book, PaginatedResponse, components } from "@/types";
+import type { Book, BookCondition, BookListRequest, PaginatedResponse, components } from "@/types";
 import { api } from "./client";
 
 export type BookDetailResponse = components["schemas"]["BookDetailResponse"];
@@ -153,6 +153,53 @@ export const booksApi = {
 		const response = await api.post<{ message: string }>(
 			`/books/${bookId}/thumbnail`,
 		);
+		return response.data;
+	},
+
+	/**
+	 * Search/filter books with advanced condition-based filtering.
+	 *
+	 * Uses POST /books/list endpoint which supports:
+	 * - Nested AllOf/AnyOf conditions
+	 * - Include/exclude filtering for genres, tags, read status, etc.
+	 * - Full-text search (optional)
+	 * - Pagination and sorting
+	 *
+	 * @param libraryId - Library to filter by, or "all" for all libraries
+	 * @param request - The search request with condition, pagination, and sort options
+	 */
+	search: async (
+		libraryId: string,
+		request: Omit<BookListRequest, "condition"> & { condition?: BookCondition },
+	): Promise<PaginatedResponse<Book>> => {
+		// Build the full condition including library filter
+		let finalCondition: BookCondition | undefined = request.condition;
+
+		// Add library filter if not "all"
+		if (libraryId !== "all") {
+			const libraryCondition: BookCondition = {
+				libraryId: { operator: "is", value: libraryId },
+			};
+
+			if (finalCondition) {
+				// Combine with existing condition using allOf
+				finalCondition = {
+					allOf: [libraryCondition, finalCondition],
+				};
+			} else {
+				finalCondition = libraryCondition;
+			}
+		}
+
+		const body: BookListRequest = {
+			condition: finalCondition,
+			search: request.search,
+			page: request.page,
+			pageSize: request.pageSize,
+			sort: request.sort,
+		};
+
+		const response = await api.post<PaginatedResponse<Book>>("/books/list", body);
 		return response.data;
 	},
 };

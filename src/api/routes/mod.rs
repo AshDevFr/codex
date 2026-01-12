@@ -111,6 +111,7 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         // Library routes (protected)
         .route("/libraries", get(handlers::list_libraries))
         .route("/libraries", post(handlers::create_library))
+        .route("/libraries/preview-scan", post(handlers::preview_scan))
         .route("/libraries/:library_id", get(handlers::get_library))
         .route("/libraries/:library_id", patch(handlers::update_library))
         .route("/libraries/:library_id", delete(handlers::delete_library))

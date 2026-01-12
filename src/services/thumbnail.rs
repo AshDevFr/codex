@@ -139,9 +139,11 @@ impl ThumbnailService {
         self.save_thumbnail(book.id, &thumbnail_data).await?;
 
         // Update book record in database
+        let now = Utc::now();
         let mut book_active: books::ActiveModel = book.clone().into();
         book_active.thumbnail_path = Set(Some(thumbnail_path.to_string_lossy().to_string()));
-        book_active.thumbnail_generated_at = Set(Some(Utc::now()));
+        book_active.thumbnail_generated_at = Set(Some(now));
+        book_active.updated_at = Set(now); // Update timestamp for cache-busting
         book_active.update(db).await?;
 
         Ok(thumbnail_path)
@@ -163,9 +165,11 @@ impl ThumbnailService {
             .await?
             .ok_or_else(|| anyhow!("Book not found: {}", book_id))?;
 
+        let now = Utc::now();
         let mut book_active: books::ActiveModel = book.into();
         book_active.thumbnail_path = Set(Some(thumbnail_path.to_string_lossy().to_string()));
-        book_active.thumbnail_generated_at = Set(Some(Utc::now()));
+        book_active.thumbnail_generated_at = Set(Some(now));
+        book_active.updated_at = Set(now); // Update timestamp for cache-busting
         book_active.update(db).await?;
 
         Ok(thumbnail_path)

@@ -29,6 +29,10 @@ interface UseFilterStateReturn {
 	setStatusState: (value: string, state: TriState) => void;
 	setStatusMode: (mode: FilterMode) => void;
 
+	// Actions for read status filters
+	setReadStatusState: (value: string, state: TriState) => void;
+	setReadStatusMode: (mode: FilterMode) => void;
+
 	// Actions for publisher filters
 	setPublisherState: (value: string, state: TriState) => void;
 	setPublisherMode: (mode: FilterMode) => void;
@@ -77,6 +81,7 @@ export function useFilterState(): UseFilterStateReturn {
 			newParams.delete("gf");
 			newParams.delete("tf");
 			newParams.delete("sf");
+			newParams.delete("rf");
 			newParams.delete("pf");
 			newParams.delete("lf");
 
@@ -172,6 +177,29 @@ export function useFilterState(): UseFilterStateReturn {
 		[updateGroup],
 	);
 
+	// Read status actions
+	const setReadStatusState = useCallback(
+		(value: string, state: TriState) => {
+			updateGroup("readStatus", (current) => {
+				const newValues = new Map(current.values);
+				if (state === "neutral") {
+					newValues.delete(value);
+				} else {
+					newValues.set(value, state);
+				}
+				return { ...current, values: newValues };
+			});
+		},
+		[updateGroup],
+	);
+
+	const setReadStatusMode = useCallback(
+		(mode: FilterMode) => {
+			updateGroup("readStatus", (current) => ({ ...current, mode }));
+		},
+		[updateGroup],
+	);
+
 	// Publisher actions
 	const setPublisherState = useCallback(
 		(value: string, state: TriState) => {
@@ -240,6 +268,7 @@ export function useFilterState(): UseFilterStateReturn {
 			genres: countActiveFilters(filters.genres),
 			tags: countActiveFilters(filters.tags),
 			status: countActiveFilters(filters.status),
+			readStatus: countActiveFilters(filters.readStatus),
 			publisher: countActiveFilters(filters.publisher),
 			language: countActiveFilters(filters.language),
 		}),
@@ -261,6 +290,8 @@ export function useFilterState(): UseFilterStateReturn {
 		setTagMode,
 		setStatusState,
 		setStatusMode,
+		setReadStatusState,
+		setReadStatusMode,
 		setPublisherState,
 		setPublisherMode,
 		setLanguageState,

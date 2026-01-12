@@ -351,7 +351,7 @@ export function ServerSettings() {
 		isLoading: integrationsLoading,
 	} = useQuery({
 		queryKey: ["system-integrations"],
-		queryFn: systemIntegrationsApi.list,
+		queryFn: systemIntegrationsApi.getAll,
 	});
 
 	// Create integration form
@@ -569,9 +569,9 @@ export function ServerSettings() {
 								<Group justify="center" py="xl">
 									<Loader />
 								</Group>
-							) : integrations && integrations.length > 0 ? (
+							) : integrations?.integrations && integrations.integrations.length > 0 ? (
 								<Stack gap="md">
-									{integrations.map((integration: SystemIntegrationDto) => (
+									{integrations.integrations.map((integration: SystemIntegrationDto) => (
 										<IntegrationCard
 											key={integration.id}
 											integration={integration}
@@ -638,18 +638,18 @@ export function ServerSettings() {
 								<Table.Tr key={index}>
 									<Table.Td>
 										<Text size="sm" style={{ fontFamily: "monospace" }}>
-											{entry.previousValue}
+											{entry.old_value}
 										</Text>
 									</Table.Td>
 									<Table.Td>
 										<Text size="sm" style={{ fontFamily: "monospace" }}>
-											{entry.newValue}
+											{entry.new_value}
 										</Text>
 									</Table.Td>
 									<Table.Td>
-										{new Date(entry.changedAt).toLocaleString()}
+										{new Date(entry.changed_at).toLocaleString()}
 									</Table.Td>
-									<Table.Td>{entry.changeReason || "-"}</Table.Td>
+									<Table.Td>{entry.change_reason || "-"}</Table.Td>
 								</Table.Tr>
 							))}
 						</Table.Tbody>

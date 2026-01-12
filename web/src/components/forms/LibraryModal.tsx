@@ -1,10 +1,12 @@
 import {
 	Alert,
 	Anchor,
+	Badge,
 	Breadcrumbs,
 	Button,
 	Center,
 	Checkbox,
+	Divider,
 	Group,
 	Loader,
 	Modal,
@@ -30,18 +32,28 @@ import {
 	IconInfoCircle,
 	IconRefresh,
 	IconSettings,
+	IconWand,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { capitalize } from "es-toolkit/string";
 import { filesystemApi } from "@/api/filesystem";
 import { librariesApi } from "@/api/libraries";
 import type {
+	BookStrategy,
 	CreateLibraryRequest,
 	FileSystemEntry,
 	Library,
 	ScanningConfig,
+	SeriesStrategy,
 } from "@/types";
 import { CronInput } from "./CronInput";
+import { PreviewScanPanel } from "./PreviewScanPanel";
+import {
+	BookStrategySelector,
+	SERIES_STRATEGIES,
+	SeriesStrategySelector,
+} from "./StrategySelector";
 
 interface LibraryModalProps {
 	opened: boolean;
@@ -84,6 +96,12 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 	const [allowedFormats, setAllowedFormats] = useState<string[]>(ALL_FORMATS);
 	const [excludedPatterns, setExcludedPatterns] = useState("");
 
+	// Strategy state (only used in add mode - strategies are immutable after creation)
+	const [seriesStrategy, setSeriesStrategy] =
+		useState<SeriesStrategy>("series_volume");
+	const [seriesConfig, setSeriesConfig] = useState<Record<string, unknown>>({});
+	const [bookStrategy, setBookStrategy] = useState<BookStrategy>("filename");
+
 	// Load drives when modal opens (only for add mode)
 	const { data: drives, isLoading: drivesLoading } = useQuery({
 		queryKey: ["drives"],
@@ -103,7 +121,10 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 	});
 
 	// Initialize form with library data when library changes (edit mode)
+	// or reset form when modal opens in add mode
 	useEffect(() => {
+		if (!opened) return;
+
 		if (isEditMode && library) {
 			setLibraryName(library.name);
 			setLibraryPath(library.path);
@@ -143,8 +164,12 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 			setPurgeDeletedOnScan(false);
 			setAllowedFormats(ALL_FORMATS);
 			setExcludedPatterns("");
+			// Reset strategy state
+			setSeriesStrategy("series_volume");
+			setSeriesConfig({});
+			setBookStrategy("filename");
 		}
-	}, [library, isEditMode]);
+	}, [opened, library, isEditMode]);
 
 	// Create library mutation
 	const createMutation = useMutation({
@@ -216,7 +241,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 				const folderName =
 					pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
 				if (folderName) {
-					setLibraryName(folderName);
+					setLibraryName(capitalize(folderName));
 				}
 			}
 		}
@@ -321,6 +346,11 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 				allowedFormats: allowedFormats.length > 0 ? allowedFormats : undefined,
 				excludedPatterns: excludedPatterns.trim() || undefined,
 				defaultReadingDirection: readingDirection,
+				// Include strategy configuration
+				seriesStrategy,
+				seriesConfig:
+					Object.keys(seriesConfig).length > 0 ? seriesConfig : undefined,
+				bookStrategy,
 			});
 		}
 	};
@@ -644,6 +674,71 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 		</Stack>
 	);
 
+	// Strategy tab content (only for add mode)
+	const renderStrategyTab = () => {
+		const selectedStrategyInfo = SERIES_STRATEGIES.find(
+			(s) => s.value === seriesStrategy,
+		);
+
+		return (
+			<Stack gap="md">
+				<Alert
+					icon={<IconInfoCircle size={16} />}
+					color="yellow"
+					variant="light"
+				>
+					<Text size="sm">
+						Strategy settings are <strong>permanent</strong> and cannot be
+						changed after library creation. Choose carefully based on your
+						folder structure.
+					</Text>
+				</Alert>
+
+				<SeriesStrategySelector
+					value={seriesStrategy}
+					onChange={setSeriesStrategy}
+					config={seriesConfig}
+					onConfigChange={setSeriesConfig}
+				/>
+
+				<Divider my="sm" />
+
+				<BookStrategySelector value={bookStrategy} onChange={setBookStrategy} />
+
+				<Divider my="sm" />
+
+				<PreviewScanPanel
+					path={selectedPath || libraryPath}
+					seriesStrategy={seriesStrategy}
+					seriesConfig={seriesConfig}
+				/>
+
+				{isEditMode && library && (
+					<Paper p="md" withBorder>
+						<Stack gap="xs">
+							<Text size="sm" fw={500}>
+								Current Strategy (Read-only)
+							</Text>
+							<Group gap="xs">
+								<Badge color="blue" variant="light">
+									Series: {library.seriesStrategy || "series_volume"}
+								</Badge>
+								<Badge color="gray" variant="light">
+									Book: {library.bookStrategy || "filename"}
+								</Badge>
+							</Group>
+							{selectedStrategyInfo && (
+								<Text size="xs" c="dimmed">
+									{selectedStrategyInfo.description}
+								</Text>
+							)}
+						</Stack>
+					</Paper>
+				)}
+			</Stack>
+		);
+	};
+
 	return (
 		<Modal
 			opened={opened}
@@ -670,6 +765,14 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 								>
 									General
 								</Tabs.Tab>
+								{!isEditMode && (
+									<Tabs.Tab
+										value="strategy"
+										leftSection={<IconWand size={16} />}
+									>
+										Strategy
+									</Tabs.Tab>
+								)}
 								<Tabs.Tab
 									value="formats"
 									leftSection={<IconFilter size={16} />}
@@ -687,6 +790,12 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 							<Tabs.Panel value="general" pt="md">
 								{renderGeneralTab()}
 							</Tabs.Panel>
+
+							{!isEditMode && (
+								<Tabs.Panel value="strategy" pt="md">
+									{renderStrategyTab()}
+								</Tabs.Panel>
+							)}
 
 							<Tabs.Panel value="formats" pt="md">
 								{renderFormatsTab()}

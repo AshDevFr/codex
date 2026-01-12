@@ -29,13 +29,13 @@ export const metadataHandlers = [
   // Get all genres
   http.get("/api/v1/genres", async () => {
     await delay(100);
-    return HttpResponse.json(mockGenres);
+    return HttpResponse.json({ genres: mockGenres });
   }),
 
   // Get all tags
   http.get("/api/v1/tags", async () => {
     await delay(100);
-    return HttpResponse.json(mockTags);
+    return HttpResponse.json({ tags: mockTags });
   }),
 ];
 

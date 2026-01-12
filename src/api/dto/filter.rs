@@ -137,11 +137,12 @@ pub enum BookCondition {
 pub struct SeriesListRequest {
     /// Filter condition (optional - no condition returns all)
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
     pub condition: Option<SeriesCondition>,
 
-    /// Full-text search query (optional, future feature)
+    /// Full-text search query (case-insensitive search on series name)
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub search: Option<String>,
+    pub full_text_search: Option<String>,
 
     /// Page number (0-indexed)
     #[serde(default)]
@@ -162,11 +163,12 @@ pub struct SeriesListRequest {
 pub struct BookListRequest {
     /// Filter condition (optional - no condition returns all)
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
     pub condition: Option<BookCondition>,
 
-    /// Full-text search query (optional, future feature)
+    /// Full-text search query (case-insensitive search on book title)
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub search: Option<String>,
+    pub full_text_search: Option<String>,
 
     /// Page number (0-indexed)
     #[serde(default)]
@@ -189,7 +191,7 @@ impl Default for SeriesListRequest {
     fn default() -> Self {
         Self {
             condition: None,
-            search: None,
+            full_text_search: None,
             page: 0,
             page_size: default_page_size(),
             sort: None,
@@ -201,7 +203,7 @@ impl Default for BookListRequest {
     fn default() -> Self {
         Self {
             condition: None,
-            search: None,
+            full_text_search: None,
             page: 0,
             page_size: default_page_size(),
             sort: None,
@@ -384,7 +386,7 @@ mod tests {
                     value: "Action".to_string(),
                 },
             }),
-            search: None,
+            full_text_search: None,
             page: 0,
             page_size: 20,
             sort: Some("name,asc".to_string()),
@@ -404,7 +406,7 @@ mod tests {
         let json = serde_json::to_string(&request).unwrap();
         // Empty optional fields should be omitted
         assert!(!json.contains(r#""condition""#));
-        assert!(!json.contains(r#""search""#));
+        assert!(!json.contains(r#""fullTextSearch""#));
         assert!(!json.contains(r#""sort""#));
     }
 

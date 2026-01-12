@@ -270,23 +270,46 @@ pub async fn list_books_filtered(
         None
     };
 
-    // Fetch books based on filter results
-    let (books_list, total) = if let Some(ref ids) = filtered_ids {
-        if ids.is_empty() {
-            // No matches, return empty response
-            (vec![], 0)
-        } else {
-            // Fetch books by IDs with pagination
-            let id_vec: Vec<Uuid> = ids.iter().cloned().collect();
-            BookRepository::list_by_ids(&state.db, &id_vec, request.page, page_size)
+    // Fetch books based on filter results and full-text search
+    let (books_list, total) = match (&filtered_ids, &request.full_text_search) {
+        // Full-text search with filter conditions
+        (Some(ids), Some(search_query)) if !search_query.trim().is_empty() => {
+            if ids.is_empty() {
+                (vec![], 0)
+            } else {
+                let id_vec: Vec<Uuid> = ids.iter().cloned().collect();
+                BookRepository::full_text_search_filtered(
+                    &state.db,
+                    search_query,
+                    &id_vec,
+                    request.page,
+                    page_size,
+                )
                 .await
-                .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
+                .map_err(|e| ApiError::Internal(format!("Failed to search books: {}", e)))?
+            }
         }
-    } else {
-        // No filter, fetch all books
-        BookRepository::list_all(&state.db, false, request.page, page_size)
+        // Full-text search without filter conditions
+        (None, Some(search_query)) if !search_query.trim().is_empty() => {
+            BookRepository::full_text_search(&state.db, search_query, request.page, page_size)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to search books: {}", e)))?
+        }
+        // Filter conditions only (no full-text search)
+        (Some(ids), _) => {
+            if ids.is_empty() {
+                (vec![], 0)
+            } else {
+                let id_vec: Vec<Uuid> = ids.iter().cloned().collect();
+                BookRepository::list_by_ids(&state.db, &id_vec, request.page, page_size)
+                    .await
+                    .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
+            }
+        }
+        // No filter and no full-text search
+        (None, _) => BookRepository::list_all(&state.db, false, request.page, page_size)
             .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?,
     };
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;

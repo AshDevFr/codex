@@ -918,6 +918,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/libraries/preview-scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview scan a path with a given strategy
+         * @description This endpoint allows users to preview how a scanning strategy would organize
+         *     files without actually creating a library or importing anything. Useful for
+         *     testing strategy configurations before committing to them.
+         */
+        post: operations["preview_scan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/libraries/{library_id}": {
         parameters: {
             query?: never;
@@ -3174,7 +3196,10 @@ export interface components {
         };
         /** @description Request body for POST /books/list */
         BookListRequest: {
-            condition?: null | components["schemas"]["BookCondition"];
+            /** @description Filter condition (optional - no condition returns all) */
+            condition?: Record<string, never> | null;
+            /** @description Full-text search query (case-insensitive search on book title) */
+            fullTextSearch?: string | null;
             /**
              * Format: int64
              * @description Page number (0-indexed)
@@ -3185,8 +3210,6 @@ export interface components {
              * @description Items per page (default 20, max 100)
              */
             pageSize?: number;
-            /** @description Full-text search query (optional, future feature) */
-            search?: string | null;
             /** @description Sort field and direction (e.g., "title,asc" or "createdAt,desc") */
             sort?: string | null;
         };
@@ -3401,6 +3424,13 @@ export interface components {
              */
             year?: number | null;
         };
+        /**
+         * @description Book naming strategy type for determining book titles
+         *
+         *     Determines how individual book titles and numbers are resolved.
+         * @enum {string}
+         */
+        BookStrategy: "filename" | "metadata_first" | "smart" | "series_name" | "custom";
         /** @description Operators for boolean comparisons */
         BoolOperator: {
             /** @enum {string} */
@@ -3472,6 +3502,22 @@ export interface components {
             change_reason?: string | null;
             /** @description List of settings to update */
             updates: components["schemas"]["BulkSettingUpdate"][];
+        };
+        /**
+         * @description How Calibre strategy groups books into series
+         * @enum {string}
+         */
+        CalibreSeriesMode: "standalone" | "by_author" | "from_metadata";
+        /** @description Configuration for Calibre strategy */
+        CalibreStrategyConfig: {
+            /** @description Use author folder name as author metadata */
+            authorFromFolder?: boolean;
+            /** @description Read metadata.opf files for rich metadata */
+            readOpfMetadata?: boolean;
+            /** @description How to group books into series */
+            seriesMode?: components["schemas"]["CalibreSeriesMode"];
+            /** @description Strip Calibre ID suffix from folder names (e.g., " (123)") */
+            stripIdSuffix?: boolean;
         };
         /** @description Configure initial settings request */
         ConfigureSettingsRequest: {
@@ -3616,6 +3662,9 @@ export interface components {
              *     ]
              */
             allowedFormats?: string[] | null;
+            /** @description Book strategy-specific configuration (JSON, immutable after creation) */
+            bookConfig?: unknown;
+            bookStrategy?: null | components["schemas"]["BookStrategy"];
             /**
              * @description Default reading direction for books in this library (ltr, rtl, ttb, btt)
              * @example ltr
@@ -3648,6 +3697,9 @@ export interface components {
              */
             scanImmediately?: boolean;
             scanningConfig?: null | components["schemas"]["ScanningConfigDto"];
+            /** @description Strategy-specific configuration (JSON, immutable after creation) */
+            seriesConfig?: unknown;
+            seriesStrategy?: null | components["schemas"]["SeriesStrategy"];
         };
         /** @description Request to create a new system integration */
         CreateSystemIntegrationRequest: {
@@ -3723,6 +3775,25 @@ export interface components {
              */
             username: string;
         };
+        /**
+         * @description Configuration for custom series strategy
+         *
+         *     Note: Volume/chapter extraction from filenames is handled by the book strategy,
+         *     not the series strategy. Use CustomBookConfig for regex-based volume/chapter parsing.
+         */
+        CustomStrategyConfig: {
+            /**
+             * @description Regex pattern with named capture groups for series detection
+             *     Supported groups: publisher, series, book
+             *     Example: "^(?P<publisher>[^/]+)/(?P<series>[^/]+)/(?P<book>.+)\\.(cbz|cbr|epub|pdf)$"
+             */
+            pattern: string;
+            /**
+             * @description Template for constructing series name from capture groups
+             *     Example: "{publisher} - {series}"
+             */
+            seriesNameTemplate?: string;
+        };
         /** @description Response after deleting a preference */
         DeletePreferenceResponse: {
             /**
@@ -3735,6 +3806,25 @@ export interface components {
              * @example Preference 'ui.theme' was reset to default
              */
             message: string;
+        };
+        /** @description Detected series information for preview */
+        DetectedSeriesDto: {
+            /** @description Number of books detected */
+            bookCount: number;
+            metadata?: null | components["schemas"]["DetectedSeriesMetadataDto"];
+            /** @description Series name as detected */
+            name: string;
+            /** @description Path relative to library root */
+            path?: string | null;
+            /** @description Sample book filenames (first 5) */
+            sampleBooks: string[];
+        };
+        /** @description Metadata extracted during series detection */
+        DetectedSeriesMetadataDto: {
+            /** @description Author (for calibre strategy) */
+            author?: string | null;
+            /** @description Publisher (for publisher_hierarchy strategy) */
+            publisher?: string | null;
         };
         /** @description A group of duplicate books */
         DuplicateGroup: {
@@ -4053,6 +4143,16 @@ export interface components {
             /** @description Full path to the entry */
             path: string;
         };
+        /** @description Configuration for flat scanning strategy */
+        FlatStrategyConfig: {
+            /**
+             * @description Regex patterns for extracting series name from filename
+             *     Patterns are tried in order, first match wins
+             */
+            filenamePatterns?: string[];
+            /** @description If true, require metadata for series detection (no filename fallback) */
+            requireMetadata?: boolean;
+        };
         ForceRequest: {
             /**
              * @description If true, regenerate thumbnails even if they exist. If false (default), only generate missing thumbnails.
@@ -4304,11 +4404,15 @@ export interface components {
              *     ]
              */
             allowedFormats?: string[] | null;
+            /** @description Book strategy-specific configuration (JSON) */
+            bookConfig?: unknown;
             /**
              * Format: int64
              * @example 1250
              */
             bookCount?: number | null;
+            /** @description Book naming strategy (filename, metadata_first, smart, series_name) */
+            bookStrategy: components["schemas"]["BookStrategy"];
             /**
              * Format: date-time
              * @example 2024-01-01T00:00:00Z
@@ -4344,11 +4448,15 @@ export interface components {
             /** @example /media/comics */
             path: string;
             scanningConfig?: null | components["schemas"]["ScanningConfigDto"];
+            /** @description Strategy-specific configuration (JSON) */
+            seriesConfig?: unknown;
             /**
              * Format: int64
              * @example 85
              */
             seriesCount?: number | null;
+            /** @description Series detection strategy (series_volume, series_volume_chapter, flat, etc.) */
+            seriesStrategy: components["schemas"]["SeriesStrategy"];
             /**
              * Format: date-time
              * @example 2024-01-15T10:30:00Z
@@ -5138,6 +5246,24 @@ export interface components {
              */
             year?: number | null;
         };
+        /** @description Preview scan request */
+        PreviewScanRequest: {
+            /**
+             * @description Filesystem path to scan
+             * @example /media/comics
+             */
+            path: string;
+            /** @description Strategy-specific configuration (JSON) */
+            seriesConfig?: unknown;
+            seriesStrategy?: null | components["schemas"]["SeriesStrategy"];
+        };
+        /** @description Preview scan response showing detected series */
+        PreviewScanResponse: {
+            /** @description List of detected series */
+            detectedSeries: components["schemas"]["DetectedSeriesDto"][];
+            /** @description Total number of files found */
+            totalFiles: number;
+        };
         /**
          * @description OPDS 2.0 Publication Entry
          *
@@ -5192,6 +5318,16 @@ export interface components {
             subtitle?: string | null;
             /** @description Title of the publication */
             title: string;
+        };
+        /** @description Configuration for publisher hierarchy strategy */
+        PublisherHierarchyConfig: {
+            /**
+             * Format: int32
+             * @description Number of directory levels to skip before series detection
+             */
+            skipDepth?: number;
+            /** @description Metadata field to store skipped folder names (e.g., "publisher") */
+            storeSkippedAs?: string | null;
         };
         PurgeTasksResponse: {
             /**
@@ -5784,7 +5920,10 @@ export interface components {
         };
         /** @description Request body for POST /series/list */
         SeriesListRequest: {
-            condition?: null | components["schemas"]["SeriesCondition"];
+            /** @description Filter condition (optional - no condition returns all) */
+            condition?: Record<string, never> | null;
+            /** @description Full-text search query (case-insensitive search on series name) */
+            fullTextSearch?: string | null;
             /**
              * Format: int64
              * @description Page number (0-indexed)
@@ -5795,8 +5934,6 @@ export interface components {
              * @description Items per page (default 20, max 100)
              */
             pageSize?: number;
-            /** @description Full-text search query (optional, future feature) */
-            search?: string | null;
             /** @description Sort field and direction (e.g., "name,asc" or "createdAt,desc") */
             sort?: string | null;
         };
@@ -5846,6 +5983,13 @@ export interface components {
              */
             year?: number | null;
         };
+        /**
+         * @description Series scanning strategy type for library organization
+         *
+         *     Determines how series are detected and organized from the filesystem structure.
+         * @enum {string}
+         */
+        SeriesStrategy: "series_volume" | "series_volume_chapter" | "flat" | "publisher_hierarchy" | "calibre" | "custom";
         /** @description Request to set a single preference value */
         SetPreferenceRequest: {
             /** @description The value to set */
@@ -6035,6 +6179,11 @@ export interface components {
             hasUsers: boolean;
             /** @description Whether initial setup is required */
             setupRequired: boolean;
+        };
+        /** @description Configuration for smart book naming strategy */
+        SmartBookConfig: {
+            /** @description Additional patterns to consider as "generic" titles (beyond defaults) */
+            additionalGenericPatterns?: string[];
         };
         /** @description Response from triggering a sync */
         SyncTriggerResponse: {
@@ -6734,7 +6883,13 @@ export interface components {
             /** @description Updated settings */
             settings?: unknown;
         };
-        /** @description Update library request */
+        /**
+         * @description Update library request
+         *
+         *     Note: series_strategy, series_config, book_strategy, and book_config are
+         *     immutable after library creation and cannot be updated. To change strategies,
+         *     delete the library and recreate it.
+         */
         UpdateLibraryRequest: {
             /**
              * @description Allowed file formats (e.g., ["CBZ", "CBR", "EPUB"])
@@ -9237,6 +9392,44 @@ export interface operations {
                 };
             };
             /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_scan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewScanRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview scan results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewScanResponse"];
+                };
+            };
+            /** @description Invalid request or path */
             400: {
                 headers: {
                     [name: string]: unknown;

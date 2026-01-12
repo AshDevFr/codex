@@ -1,12 +1,17 @@
 use crate::api::{
-    dto::{CreateLibraryRequest, LibraryDto, UpdateLibraryRequest},
+    dto::{
+        CreateLibraryRequest, DetectedSeriesDto, DetectedSeriesMetadataDto, LibraryDto,
+        PreviewScanRequest, PreviewScanResponse, UpdateLibraryRequest,
+    },
     error::ApiError,
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
 use crate::db::entities::libraries;
-use crate::db::repositories::LibraryRepository;
+use crate::db::repositories::{CreateLibraryParams, LibraryRepository};
+use crate::models::{BookStrategy, SeriesStrategy};
 use crate::require_permission;
+use crate::scanner::strategies::create_strategy;
 use axum::{
     extract::{Path, State},
     Json,
@@ -31,12 +36,26 @@ async fn library_to_dto(db: &DatabaseConnection, library: libraries::Model) -> L
         .allowed_formats
         .and_then(|json| serde_json::from_str::<Vec<String>>(&json).ok());
 
+    // Parse strategy fields
+    let series_strategy =
+        SeriesStrategy::from_str(&library.series_strategy).unwrap_or(SeriesStrategy::SeriesVolume);
+    let book_strategy =
+        BookStrategy::from_str(&library.book_strategy).unwrap_or(BookStrategy::Filename);
+
+    // Extract config values (already serde_json::Value)
+    let series_config = library.series_config;
+    let book_config = library.book_config;
+
     LibraryDto {
         id: library.id,
         name: library.name,
         path: library.path,
         description: None, // No description field in libraries entity
         is_active: true,   // No is_active field in libraries entity
+        series_strategy,
+        series_config,
+        book_strategy,
+        book_config,
         scanning_config: library
             .scanning_config
             .and_then(|json| serde_json::from_str(&json).ok()),
@@ -146,55 +165,52 @@ pub async fn create_library(
         )));
     }
 
-    // Use the ScanningStrategy enum from the db module
-    let mut library = LibraryRepository::create(
-        &state.db,
-        &request.name,
-        &request.path,
-        crate::db::ScanningStrategy::Default,
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to create library: {}", e)))?;
+    // Build CreateLibraryParams with all strategy and config fields
+    let series_strategy = request.series_strategy.unwrap_or_default();
+    let book_strategy = request.book_strategy.unwrap_or_default();
 
-    // Track if we need to update after creation
-    let mut needs_update = false;
+    // Use series and book configs directly (already serde_json::Value)
+    let series_config = request.series_config.clone();
+    let book_config = request.book_config.clone();
 
-    // Handle allowed_formats if provided
+    // Validate the strategy can be created (validates config is appropriate for strategy)
+    let series_config_str = series_config.as_ref().map(|v| v.to_string());
+    create_strategy(series_strategy, series_config_str.as_deref()).map_err(|e| {
+        ApiError::BadRequest(format!("Invalid series strategy configuration: {}", e))
+    })?;
+
+    // Build params
+    let mut params = CreateLibraryParams::new(&request.name, &request.path)
+        .with_series_strategy(series_strategy)
+        .with_series_config(series_config)
+        .with_book_strategy(book_strategy)
+        .with_book_config(book_config);
+
+    // Add optional fields
+    if let Some(config_dto) = &request.scanning_config {
+        let config_json = serde_json::to_string(config_dto)
+            .map_err(|e| ApiError::BadRequest(format!("Invalid scanning config: {}", e)))?;
+        params = params.with_scanning_config(Some(config_json));
+    }
+
     if let Some(formats) = &request.allowed_formats {
         let formats_json = serde_json::to_string(formats)
             .map_err(|e| ApiError::BadRequest(format!("Invalid allowed formats: {}", e)))?;
-        library.allowed_formats = Some(formats_json);
-        needs_update = true;
+        params.allowed_formats = Some(formats_json);
     }
 
-    // Handle excluded_patterns if provided
     if let Some(patterns) = &request.excluded_patterns {
-        library.excluded_patterns = Some(patterns.clone());
-        needs_update = true;
+        params.excluded_patterns = Some(patterns.clone());
     }
 
-    // Handle default_reading_direction if provided
     if let Some(direction) = &request.default_reading_direction {
-        library.default_reading_direction = direction.clone();
-        needs_update = true;
+        params.default_reading_direction = Some(direction.clone());
     }
 
-    // Handle scanning_config if provided
-    if let Some(config_dto) = &request.scanning_config {
-        // Serialize the config to JSON string for database storage
-        let config_json = serde_json::to_string(config_dto)
-            .map_err(|e| ApiError::BadRequest(format!("Invalid scanning config: {}", e)))?;
-
-        library.scanning_config = Some(config_json);
-        needs_update = true;
-    }
-
-    // Save all optional fields if any were provided
-    if needs_update {
-        LibraryRepository::update(&state.db, &library)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to update library config: {}", e)))?;
-    }
+    // Create library with all params at once
+    let library = LibraryRepository::create_with_params(&state.db, params)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to create library: {}", e)))?;
 
     // Trigger scan immediately after creation if requested
     if request.scan_immediately {
@@ -431,4 +447,137 @@ pub async fn purge_deleted_books(
     .map_err(|e| ApiError::Internal(format!("Failed to purge deleted books: {}", e)))?;
 
     Ok(Json(count))
+}
+
+/// Preview scan a path with a given strategy
+///
+/// This endpoint allows users to preview how a scanning strategy would organize
+/// files without actually creating a library or importing anything. Useful for
+/// testing strategy configurations before committing to them.
+#[utoipa::path(
+    post,
+    path = "/api/v1/libraries/preview-scan",
+    request_body = PreviewScanRequest,
+    responses(
+        (status = 200, description = "Preview scan results", body = PreviewScanResponse),
+        (status = 400, description = "Invalid request or path"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "libraries"
+)]
+pub async fn preview_scan(
+    State(_state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Json(request): Json<PreviewScanRequest>,
+) -> Result<Json<PreviewScanResponse>, ApiError> {
+    require_permission!(auth, Permission::LibrariesWrite)?;
+
+    // Validate path exists
+    let library_path = std::path::Path::new(&request.path);
+    if !library_path.exists() {
+        return Err(ApiError::BadRequest(format!(
+            "Path does not exist: {}",
+            request.path
+        )));
+    }
+
+    if !library_path.is_dir() {
+        return Err(ApiError::BadRequest(format!(
+            "Path is not a directory: {}",
+            request.path
+        )));
+    }
+
+    // Parse series strategy and config
+    let series_strategy = request.series_strategy.unwrap_or_default();
+    let series_config_str = request.series_config.as_ref().map(|v| v.to_string());
+
+    // Create the strategy
+    let strategy = create_strategy(series_strategy, series_config_str.as_deref()).map_err(|e| {
+        ApiError::BadRequest(format!("Invalid series strategy configuration: {}", e))
+    })?;
+
+    // Discover files in the path (similar to scanner's discover_files)
+    let discovered_files = discover_preview_files(library_path)
+        .map_err(|e| ApiError::Internal(format!("Failed to scan directory: {}", e)))?;
+
+    let total_files = discovered_files.len();
+
+    // Use the strategy to organize files
+    let series_map = strategy
+        .organize_files(&discovered_files, library_path)
+        .map_err(|e| ApiError::Internal(format!("Failed to organize files: {}", e)))?;
+
+    // Convert to DTOs
+    let detected_series: Vec<DetectedSeriesDto> = series_map
+        .into_iter()
+        .map(|(name, detected)| {
+            let sample_books: Vec<String> = detected
+                .books
+                .iter()
+                .take(5)
+                .filter_map(|b| b.path.file_name())
+                .map(|n| n.to_string_lossy().to_string())
+                .collect();
+
+            DetectedSeriesDto {
+                name,
+                path: detected.path,
+                book_count: detected.books.len(),
+                sample_books,
+                metadata: if detected.metadata.publisher.is_some()
+                    || detected.metadata.author.is_some()
+                {
+                    Some(DetectedSeriesMetadataDto {
+                        publisher: detected.metadata.publisher,
+                        author: detected.metadata.author,
+                    })
+                } else {
+                    None
+                },
+            }
+        })
+        .collect();
+
+    Ok(Json(PreviewScanResponse {
+        detected_series,
+        total_files,
+    }))
+}
+
+/// Discover files for preview scan (simplified version of scanner's discover_files)
+fn discover_preview_files(
+    library_path: &std::path::Path,
+) -> Result<Vec<std::path::PathBuf>, std::io::Error> {
+    use std::fs;
+
+    let mut files = Vec::new();
+
+    fn visit_dir(
+        dir: &std::path::Path,
+        files: &mut Vec<std::path::PathBuf>,
+    ) -> Result<(), std::io::Error> {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.is_dir() {
+                visit_dir(&path, files)?;
+            } else if let Some(ext) = path.extension() {
+                let ext_lower = ext.to_string_lossy().to_lowercase();
+                // Check for supported formats
+                if matches!(ext_lower.as_str(), "cbz" | "cbr" | "epub" | "pdf") {
+                    files.push(path);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    visit_dir(library_path, &mut files)?;
+    Ok(files)
 }

@@ -16,6 +16,7 @@ import { Home } from "@/pages/Home";
 import { LibraryPage } from "@/pages/Library";
 import { Login } from "@/pages/Login";
 import { Register } from "@/pages/Register";
+import { SearchResults } from "@/pages/SearchResults";
 import { SeriesDetail } from "@/pages/SeriesDetail";
 import { Setup } from "@/pages/Setup";
 import {
@@ -156,6 +157,18 @@ function App() {
 						<ProtectedRoute>
 							<AppLayout currentPath="/books/:bookId">
 								<BookDetail />
+							</AppLayout>
+						</ProtectedRoute>
+					}
+				/>
+
+				{/* Search results page */}
+				<Route
+					path="/search"
+					element={
+						<ProtectedRoute>
+							<AppLayout currentPath="/search">
+								<SearchResults />
 							</AppLayout>
 						</ProtectedRoute>
 					}

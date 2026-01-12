@@ -44,10 +44,11 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 	};
 
 	// Use API endpoint directly - browser will send auth cookie automatically
+	// Include updatedAt as cache-busting parameter so images refresh when thumbnails are generated
 	const coverUrl =
 		type === "book"
-			? `/api/v1/books/${(data as Book).id}/thumbnail`
-			: `/api/v1/series/${(data as Series).id}/thumbnail`;
+			? `/api/v1/books/${(data as Book).id}/thumbnail?v=${encodeURIComponent(data.updatedAt)}`
+			: `/api/v1/series/${(data as Series).id}/thumbnail?v=${encodeURIComponent(data.updatedAt)}`;
 
 	const book = type === "book" ? (data as Book) : null;
 	const series = type === "series" ? (data as Series) : null;

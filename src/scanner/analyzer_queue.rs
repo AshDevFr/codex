@@ -10,11 +10,13 @@ use uuid::Uuid;
 
 use crate::db::entities::{book_metadata_records, books, pages};
 use crate::db::repositories::{
-    BookMetadataRepository, BookRepository, PageRepository, SeriesMetadataRepository,
-    SeriesRepository, TaskRepository,
+    BookMetadataRepository, BookRepository, LibraryRepository, PageRepository,
+    SeriesMetadataRepository, SeriesRepository, TaskRepository,
 };
 use crate::events::EventBroadcaster;
+use crate::models::BookStrategy;
 use crate::scanner::analyze_file;
+use crate::scanner::strategies::{create_book_strategy, BookMetadata, BookNamingContext};
 use crate::tasks::types::TaskType;
 
 use super::types::ScanProgress;
@@ -168,22 +170,16 @@ async fn analyze_single_book(
     // Track if cover is becoming available (page_count going from 0 to positive)
     let cover_now_available = book.page_count == 0 && metadata.page_count > 0;
 
-    // Extract title from metadata, or fall back to filename without extension
-    // Handle both None and empty string cases
-    book.title = metadata
+    // Get book number from metadata
+    let book_number: Option<f32> = metadata
         .comic_info
         .as_ref()
-        .and_then(|ci| ci.title.clone())
-        .filter(|title| !title.is_empty()) // Filter out empty strings
-        .or_else(|| {
-            // Fallback to filename without extension
-            let file_name = &book.file_name;
-            if let Some(pos) = file_name.rfind('.') {
-                Some(file_name[..pos].to_string())
-            } else {
-                Some(file_name.clone())
-            }
-        });
+        .and_then(|ci| ci.number.as_ref())
+        .and_then(|n| n.parse::<f32>().ok());
+
+    // Resolve book title using the library's book naming strategy
+    book.title = Some(resolve_book_title(db, &book, &metadata, book_number).await);
+
     book.number = metadata.comic_info.as_ref().and_then(|ci| {
         ci.number
             .as_ref()
@@ -431,6 +427,78 @@ async fn analyze_single_book(
     }
 
     Ok(())
+}
+
+/// Resolve book title using the library's book naming strategy
+async fn resolve_book_title(
+    db: &DatabaseConnection,
+    book: &books::Model,
+    file_metadata: &crate::parsers::BookMetadata,
+    book_number: Option<f32>,
+) -> String {
+    // Get library to determine book naming strategy
+    let library = match LibraryRepository::get_by_id(db, book.library_id).await {
+        Ok(Some(lib)) => lib,
+        Ok(None) | Err(_) => {
+            // Fallback to filename if library not found
+            warn!(
+                "Library not found for book {}, using filename strategy",
+                book.id
+            );
+            return filename_fallback(&book.file_name);
+        }
+    };
+
+    // Parse book strategy from library
+    let book_strategy =
+        BookStrategy::from_str(&library.book_strategy).unwrap_or(BookStrategy::Filename);
+    let book_config_str = library.book_config.as_ref().map(|v| v.to_string());
+    let strategy = create_book_strategy(book_strategy, book_config_str.as_deref());
+
+    // Get series info for context
+    let series = match SeriesRepository::get_by_id(db, book.series_id).await {
+        Ok(Some(s)) => s,
+        Ok(None) | Err(_) => {
+            warn!(
+                "Series not found for book {}, using filename strategy",
+                book.id
+            );
+            return filename_fallback(&book.file_name);
+        }
+    };
+
+    // Get total books in series for padding calculation
+    let total_books = match BookRepository::count_by_series(db, book.series_id).await {
+        Ok(count) => count as usize,
+        Err(_) => 1,
+    };
+
+    // Build metadata from comic info
+    let metadata = file_metadata.comic_info.as_ref().map(|ci| BookMetadata {
+        title: ci.title.clone().filter(|t| !t.is_empty()),
+        number: book_number,
+    });
+
+    // Build naming context
+    let context = BookNamingContext {
+        series_name: series.name.clone(),
+        book_number,
+        volume: None, // Could be extracted from metadata/path for series_volume_chapter
+        chapter_number: None, // Could be extracted from metadata/path
+        total_books,
+    };
+
+    // Resolve title using strategy
+    strategy.resolve_title(&book.file_name, metadata.as_ref(), &context)
+}
+
+/// Fallback: extract title from filename (without extension)
+fn filename_fallback(file_name: &str) -> String {
+    if let Some(pos) = file_name.rfind('.') {
+        file_name[..pos].to_string()
+    } else {
+        file_name.to_string()
+    }
 }
 
 /// Helper function to count non-null fields in metadata for logging

@@ -3,10 +3,11 @@ use anyhow::Result;
 use chrono::Utc;
 use codex::db::entities::{books, series};
 use codex::db::repositories::{
-    BookMetadataRepository, BookRepository, LibraryRepository, PageRepository,
-    SeriesMetadataRepository, SeriesRepository,
+    library::CreateLibraryParams, BookMetadataRepository, BookRepository, LibraryRepository,
+    PageRepository, SeriesMetadataRepository, SeriesRepository,
 };
 use codex::db::ScanningStrategy;
+use codex::models::BookStrategy;
 use codex::scanner::analyze_book;
 use std::fs;
 use std::io::Write;
@@ -32,6 +33,51 @@ async fn create_test_book(
         ScanningStrategy::Default,
     )
     .await?;
+
+    let series =
+        SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None).await?;
+
+    let book = books::Model {
+        id: Uuid::new_v4(),
+        series_id: series.id,
+        library_id: library.id,
+        title: None,
+        number: None,
+        file_path: file_path.to_string(),
+        file_name: PathBuf::from(file_path)
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .to_string(),
+        file_size: 0,
+        file_hash: "test_hash".to_string(),
+        partial_hash: String::new(),
+        format: "cbz".to_string(),
+        page_count: 0,
+        deleted: false,
+        analyzed: false,
+        analysis_error: None,
+        modified_at: Utc::now(),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        thumbnail_path: None,
+        thumbnail_generated_at: None,
+    };
+
+    let created_book = BookRepository::create(db.sea_orm_connection(), &book, None).await?;
+    Ok((created_book, series))
+}
+
+/// Helper to create a test book with a specific book naming strategy
+async fn create_test_book_with_strategy(
+    db: &codex::db::Database,
+    file_path: &str,
+    book_strategy: BookStrategy,
+) -> Result<(books::Model, series::Model)> {
+    let params =
+        CreateLibraryParams::new("Test Library", "/test/path").with_book_strategy(book_strategy);
+
+    let library = LibraryRepository::create_with_params(db.sea_orm_connection(), params).await?;
 
     let series =
         SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None).await?;
@@ -304,6 +350,7 @@ async fn test_analyze_book_title_from_metadata_takes_precedence() -> Result<()> 
     let mut zip = ZipWriter::new(file);
 
     // ComicInfo.xml with Title field - should take precedence over filename
+    // when using MetadataFirst book naming strategy
     let comic_info_xml = r#"<?xml version="1.0"?>
 <ComicInfo>
   <Title>Actual Book Title from Metadata</Title>
@@ -323,8 +370,13 @@ async fn test_analyze_book_title_from_metadata_takes_precedence() -> Result<()> 
 
     zip.finish()?;
 
-    // Create book record
-    let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
+    // Create book record with MetadataFirst strategy (required for metadata to override filename)
+    let (book, _series) = create_test_book_with_strategy(
+        &db,
+        file_path.to_str().unwrap(),
+        BookStrategy::MetadataFirst,
+    )
+    .await?;
 
     // Analyze the book
     let result = analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
@@ -339,11 +391,11 @@ async fn test_analyze_book_title_from_metadata_takes_precedence() -> Result<()> 
         .expect("Book should exist");
     assert!(updated_book.analyzed);
 
-    // Verify title from metadata is used, not filename
+    // Verify title from metadata is used, not filename (MetadataFirst strategy)
     assert_eq!(
         updated_book.title,
         Some("Actual Book Title from Metadata".to_string()),
-        "Title from ComicInfo.xml should take precedence over filename"
+        "Title from ComicInfo.xml should take precedence over filename with MetadataFirst strategy"
     );
 
     Ok(())

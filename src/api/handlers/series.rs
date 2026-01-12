@@ -399,11 +399,28 @@ pub async fn list_series_filtered(
         all_series_ids.clone()
     };
 
-    // Filter series list to only matching ones
-    let mut filtered_series: Vec<_> = all_series
-        .into_iter()
-        .filter(|s| matching_ids.contains(&s.id))
-        .collect();
+    // Apply full-text search if provided
+    let mut filtered_series: Vec<_> = if let Some(ref search_query) = request.full_text_search {
+        if !search_query.trim().is_empty() {
+            // Use full-text search with candidate filtering
+            let candidate_ids: Vec<Uuid> = matching_ids.iter().cloned().collect();
+            SeriesRepository::full_text_search_filtered(&state.db, search_query, &candidate_ids)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?
+        } else {
+            // Empty search query, use condition-filtered results
+            all_series
+                .into_iter()
+                .filter(|s| matching_ids.contains(&s.id))
+                .collect()
+        }
+    } else {
+        // No full-text search, use condition-filtered results
+        all_series
+            .into_iter()
+            .filter(|s| matching_ids.contains(&s.id))
+            .collect()
+    };
 
     // Apply sorting if specified
     if let Some(ref sort_param) = request.sort {

@@ -626,6 +626,25 @@ impl TaskMetricsRepository {
         Ok(oldest.map(|m| m.period_start))
     }
 
+    /// Delete all metrics for a specific library
+    /// This should be called before deleting a library to avoid foreign key conflicts
+    pub async fn delete_by_library_id(db: &DatabaseConnection, library_id: Uuid) -> Result<u64> {
+        let result = TaskMetrics::delete_many()
+            .filter(task_metrics::Column::LibraryId.eq(library_id))
+            .exec(db)
+            .await
+            .context("Failed to delete metrics for library")?;
+
+        if result.rows_affected > 0 {
+            info!(
+                "Deleted {} metric records for library {}",
+                result.rows_affected, library_id
+            );
+        }
+
+        Ok(result.rows_affected)
+    }
+
     /// Get the most recent error for a task type
     pub async fn get_last_error(
         db: &DatabaseConnection,
@@ -854,6 +873,108 @@ mod tests {
             .await
             .expect("Failed to get aggregates");
         assert!(metrics.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_delete_by_library_id() {
+        use crate::db::repositories::LibraryRepository;
+        use crate::db::ScanningStrategy;
+
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        // Create real libraries (foreign key constraint requires this)
+        let library1 =
+            LibraryRepository::create(conn, "Library 1", "/path1", ScanningStrategy::Default)
+                .await
+                .expect("Failed to create library 1");
+        let library2 =
+            LibraryRepository::create(conn, "Library 2", "/path2", ScanningStrategy::Default)
+                .await
+                .expect("Failed to create library 2");
+
+        // Record completions for first library
+        let data1 = TaskCompletionData {
+            task_type: "scan_library".to_string(),
+            library_id: Some(library1.id),
+            success: true,
+            retried: false,
+            duration_ms: 1000,
+            queue_wait_ms: 50,
+            items_processed: 10,
+            bytes_processed: 1024,
+            error: None,
+        };
+        TaskMetricsRepository::record_completion(conn, data1)
+            .await
+            .expect("Failed to record completion");
+
+        // Record completion for second library
+        let data2 = TaskCompletionData {
+            task_type: "scan_library".to_string(),
+            library_id: Some(library2.id),
+            success: true,
+            retried: false,
+            duration_ms: 500,
+            queue_wait_ms: 25,
+            items_processed: 5,
+            bytes_processed: 512,
+            error: None,
+        };
+        TaskMetricsRepository::record_completion(conn, data2)
+            .await
+            .expect("Failed to record completion");
+
+        // Record completion with no library (global)
+        let data3 = TaskCompletionData {
+            task_type: "cleanup".to_string(),
+            library_id: None,
+            success: true,
+            retried: false,
+            duration_ms: 100,
+            queue_wait_ms: 10,
+            items_processed: 1,
+            bytes_processed: 100,
+            error: None,
+        };
+        TaskMetricsRepository::record_completion(conn, data3)
+            .await
+            .expect("Failed to record completion");
+
+        // Verify we have 3 records
+        let metrics = TaskMetricsRepository::get_current_aggregates(conn)
+            .await
+            .expect("Failed to get aggregates");
+        assert_eq!(metrics.len(), 3);
+
+        // Delete metrics for the first library
+        let deleted = TaskMetricsRepository::delete_by_library_id(conn, library1.id)
+            .await
+            .expect("Failed to delete by library id");
+        assert_eq!(deleted, 1);
+
+        // Verify only 2 records remain (other library + global)
+        let metrics = TaskMetricsRepository::get_current_aggregates(conn)
+            .await
+            .expect("Failed to get aggregates");
+        assert_eq!(metrics.len(), 2);
+
+        // Verify the deleted library's metrics are gone
+        let remaining_library_ids: Vec<_> = metrics.iter().filter_map(|m| m.library_id).collect();
+        assert!(!remaining_library_ids.contains(&library1.id));
+        assert!(remaining_library_ids.contains(&library2.id));
+    }
+
+    #[tokio::test]
+    async fn test_delete_by_library_id_no_metrics() {
+        let (db, _temp_dir) = create_test_db().await;
+        let db = db.sea_orm_connection();
+
+        // Delete metrics for a library that has no metrics
+        let deleted = TaskMetricsRepository::delete_by_library_id(&db, Uuid::new_v4())
+            .await
+            .expect("Failed to delete by library id");
+        assert_eq!(deleted, 0);
     }
 
     #[tokio::test]

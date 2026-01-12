@@ -12,8 +12,8 @@ export const usersApi = {
 	 * List all users (admin only)
 	 */
 	list: async (): Promise<UserDto[]> => {
-		const response = await api.get<PaginatedUsersResponse>("/users");
-		return response.data.data;
+		const response = await api.get<UserDto[]>("/users");
+		return response.data;
 	},
 
 	/**

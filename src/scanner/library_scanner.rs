@@ -15,7 +15,9 @@ use walkdir::WalkDir;
 use crate::db::entities::{books, series};
 use crate::db::repositories::{BookRepository, LibraryRepository, SeriesRepository};
 use crate::events::EventBroadcaster;
+use crate::models::SeriesStrategy;
 
+use super::strategies::{create_strategy, DetectedSeries, ScanningStrategyImpl};
 use super::types::{ScanMode, ScanProgress, ScanResult, ScanStatus};
 
 const SUPPORTED_EXTENSIONS: &[&str] = &["cbz", "cbr", "epub", "pdf"];
@@ -202,9 +204,19 @@ async fn scan_normal(
         }
     }
 
-    // Organize files by series (folder structure)
+    // Create scanning strategy based on library configuration
+    let series_strategy = SeriesStrategy::from_str(&library.series_strategy).unwrap_or_default();
+    let series_config_str = library.series_config.as_ref().map(|v| v.to_string());
+    let strategy = create_strategy(series_strategy, series_config_str.as_deref())?;
+    info!(
+        "Using {} strategy for library '{}'",
+        series_strategy, library.name
+    );
+
+    // Organize files by series using strategy
     let organize_start = Instant::now();
-    let series_map = organize_by_series(&discovered_files, &library.path);
+    let library_path = Path::new(&library.path);
+    let series_map = strategy.organize_files(&discovered_files, library_path)?;
     info!(
         "Organized files into {} series in {:?}",
         series_map.len(),
@@ -214,7 +226,7 @@ async fn scan_normal(
     // Process each series
     let series_count = series_map.len();
     let mut series_processed = 0;
-    for (series_name, file_paths) in series_map {
+    for (series_name, detected_series) in series_map {
         series_processed += 1;
         let series_start = Instant::now();
         info!(
@@ -222,14 +234,13 @@ async fn scan_normal(
             series_processed,
             series_count,
             series_name,
-            file_paths.len()
+            detected_series.books.len()
         );
 
-        match process_series(
+        match process_series_with_detected(
             db,
             library,
-            &series_name,
-            &file_paths,
+            &detected_series,
             &existing_books,
             ScanMode::Normal,
             progress,
@@ -354,9 +365,19 @@ async fn scan_deep(
         }
     );
 
-    // Organize files by series (folder structure)
+    // Create scanning strategy based on library configuration
+    let series_strategy = SeriesStrategy::from_str(&library.series_strategy).unwrap_or_default();
+    let series_config_str = library.series_config.as_ref().map(|v| v.to_string());
+    let strategy = create_strategy(series_strategy, series_config_str.as_deref())?;
+    info!(
+        "Using {} strategy for deep scan of library '{}'",
+        series_strategy, library.name
+    );
+
+    // Organize files by series using strategy
     let organize_start = Instant::now();
-    let series_map = organize_by_series(&discovered_files, &library.path);
+    let library_path = Path::new(&library.path);
+    let series_map = strategy.organize_files(&discovered_files, library_path)?;
     info!(
         "Organized files into {} series in {:?}",
         series_map.len(),
@@ -369,7 +390,7 @@ async fn scan_deep(
     // Process each series
     let series_count = series_map.len();
     let mut series_processed = 0;
-    for (series_name, file_paths) in series_map {
+    for (series_name, detected_series) in series_map {
         series_processed += 1;
         let series_start = Instant::now();
         info!(
@@ -377,14 +398,13 @@ async fn scan_deep(
             series_processed,
             series_count,
             series_name,
-            file_paths.len()
+            detected_series.books.len()
         );
 
-        match process_series(
+        match process_series_with_detected(
             db,
             library,
-            &series_name,
-            &file_paths,
+            &detected_series,
             &existing_books,
             ScanMode::Deep, // Always deep mode
             progress,
@@ -545,6 +565,151 @@ async fn process_series(
             }
             Err(e) => {
                 let error_msg = format!("Error processing file '{}': {}", file_path.display(), e);
+                error!("{} (took {:?})", error_msg, file_start.elapsed());
+                result.errors.push(error_msg);
+            }
+        }
+
+        // Yield to the runtime after each file to allow other tasks to run
+        tokio::task::yield_now().await;
+    }
+
+    Ok(())
+}
+
+/// Process a single series with detected series information from strategy
+async fn process_series_with_detected(
+    db: &DatabaseConnection,
+    library: &crate::db::entities::libraries::Model,
+    detected_series: &DetectedSeries,
+    existing_books: &HashMap<String, (String, books::Model)>,
+    mode: ScanMode,
+    progress: &mut ScanProgress,
+    progress_tx: &Option<mpsc::Sender<ScanProgress>>,
+    result: &mut ScanResult,
+    event_broadcaster: Option<&Arc<EventBroadcaster>>,
+) -> Result<()> {
+    // Extract file paths from detected books
+    let file_paths: Vec<PathBuf> = detected_series
+        .books
+        .iter()
+        .map(|b| b.path.clone())
+        .collect();
+
+    // Calculate series fingerprint from file paths
+    let file_refs: Vec<&PathBuf> = file_paths.iter().collect();
+    let fingerprint = calculate_series_fingerprint(&file_refs);
+
+    // Use series path from detected series if available
+    let series_path = detected_series.path.clone();
+
+    // Find or create series with fingerprint
+    let series_model = find_or_create_series(
+        db,
+        library.id,
+        &detected_series.name,
+        Some(&fingerprint),
+        series_path.as_deref(),
+        event_broadcaster,
+    )
+    .await?;
+
+    let is_new_series = existing_books
+        .values()
+        .all(|(_, book)| book.series_id != series_model.id);
+
+    if is_new_series {
+        result.series_created += 1;
+        progress.increment_series();
+    }
+
+    // Process each detected book in the series
+    let file_count = detected_series.books.len();
+    let mut file_processed = 0;
+    let mut last_progress_log = Instant::now();
+    const PROGRESS_LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+
+    for detected_book in &detected_series.books {
+        file_processed += 1;
+        let file_start = Instant::now();
+
+        match process_file(
+            db,
+            &series_model,
+            &detected_book.path,
+            existing_books,
+            mode,
+            progress,
+            result,
+            event_broadcaster,
+        )
+        .await
+        {
+            Ok(_) => {
+                result.files_processed += 1;
+                progress.files_processed += 1;
+
+                let file_duration = file_start.elapsed();
+                if file_duration.as_millis() > 1000 {
+                    // Log slow files (>1s)
+                    debug!(
+                        "Processed file {}/{} in {:?}: {}",
+                        file_processed,
+                        file_count,
+                        file_duration,
+                        detected_book
+                            .path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                    );
+                }
+
+                // Send progress update every file (for real-time updates)
+                send_progress(progress_tx, progress).await;
+
+                // Log progress periodically
+                if last_progress_log.elapsed() >= PROGRESS_LOG_INTERVAL {
+                    let elapsed_duration = Utc::now()
+                        .signed_duration_since(progress.started_at)
+                        .to_std()
+                        .unwrap_or(std::time::Duration::ZERO);
+                    let elapsed_secs = elapsed_duration.as_secs_f64();
+                    let files_per_sec = if elapsed_secs > 0.0 {
+                        progress.files_processed as f64 / elapsed_secs
+                    } else {
+                        0.0
+                    };
+                    let remaining = if files_per_sec > 0.0
+                        && progress.files_total > progress.files_processed
+                    {
+                        let remaining_files = progress.files_total - progress.files_processed;
+                        std::time::Duration::from_secs_f64(remaining_files as f64 / files_per_sec)
+                    } else {
+                        std::time::Duration::ZERO
+                    };
+
+                    info!(
+                        "Scan progress: {}/{} files ({:.1}%), {:.2} files/sec, ~{:?} remaining",
+                        progress.files_processed,
+                        progress.files_total,
+                        if progress.files_total > 0 {
+                            (progress.files_processed as f64 / progress.files_total as f64) * 100.0
+                        } else {
+                            0.0
+                        },
+                        files_per_sec,
+                        remaining
+                    );
+                    last_progress_log = Instant::now();
+                }
+            }
+            Err(e) => {
+                let error_msg = format!(
+                    "Error processing file '{}': {}",
+                    detected_book.path.display(),
+                    e
+                );
                 error!("{} (took {:?})", error_msg, file_start.elapsed());
                 result.errors.push(error_msg);
             }

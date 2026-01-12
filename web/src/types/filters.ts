@@ -120,6 +120,7 @@ export interface SeriesFilterState {
 	genres: FilterGroupState;
 	tags: FilterGroupState;
 	status: FilterGroupState;
+	readStatus: FilterGroupState;
 	publisher: FilterGroupState;
 	language: FilterGroupState;
 }
@@ -156,6 +157,7 @@ export function createEmptySeriesFilterState(): SeriesFilterState {
 		genres: createEmptyFilterGroup(),
 		tags: createEmptyFilterGroup(),
 		status: createEmptyFilterGroup(),
+		readStatus: createEmptyFilterGroup(),
 		publisher: createEmptyFilterGroup(),
 		language: createEmptyFilterGroup(),
 	};
@@ -227,7 +229,7 @@ export function getExcludedValues(group: FilterGroupState): string[] {
 /**
  * Convert a filter group to API conditions
  */
-export function filterGroupToConditions<T extends "genre" | "tag" | "status" | "publisher" | "language">(
+export function filterGroupToConditions<T extends "genre" | "tag" | "status" | "readStatus" | "publisher" | "language">(
 	group: FilterGroupState,
 	field: T,
 ): SeriesCondition[] {
@@ -277,6 +279,9 @@ export function seriesFilterStateToCondition(state: SeriesFilterState): SeriesCo
 	// Add status conditions
 	allConditions.push(...filterGroupToConditions(state.status, "status"));
 
+	// Add read status conditions
+	allConditions.push(...filterGroupToConditions(state.readStatus, "readStatus"));
+
 	// Add publisher conditions
 	allConditions.push(...filterGroupToConditions(state.publisher, "publisher"));
 
@@ -291,6 +296,95 @@ export function seriesFilterStateToCondition(state: SeriesFilterState): SeriesCo
 		return allConditions[0];
 	}
 	return { allOf: allConditions };
+}
+
+/**
+ * Convert a book filter group to API conditions
+ */
+export function bookFilterGroupToConditions<T extends "genre" | "tag" | "readStatus">(
+	group: FilterGroupState,
+	field: T,
+): BookCondition[] {
+	const conditions: BookCondition[] = [];
+	const includes = getIncludedValues(group);
+	const excludes = getExcludedValues(group);
+
+	// Build include conditions
+	if (includes.length > 0) {
+		const includeConditions = includes.map((value) => ({
+			[field]: { operator: "is" as const, value },
+		})) as BookCondition[];
+
+		if (group.mode === "allOf") {
+			// All must match - add each as separate condition
+			conditions.push(...includeConditions);
+		} else {
+			// Any can match - wrap in anyOf
+			if (includeConditions.length === 1) {
+				conditions.push(includeConditions[0]);
+			} else {
+				conditions.push({ anyOf: includeConditions });
+			}
+		}
+	}
+
+	// Build exclude conditions (always AND - must not have ANY of them)
+	for (const value of excludes) {
+		conditions.push({ [field]: { operator: "isNot" as const, value } } as BookCondition);
+	}
+
+	return conditions;
+}
+
+/**
+ * Convert UI book filter state to API condition
+ */
+export function bookFilterStateToCondition(state: BookFilterState): BookCondition | undefined {
+	const allConditions: BookCondition[] = [];
+
+	// Add genre conditions
+	allConditions.push(...bookFilterGroupToConditions(state.genres, "genre"));
+
+	// Add tag conditions
+	allConditions.push(...bookFilterGroupToConditions(state.tags, "tag"));
+
+	// Add read status conditions
+	allConditions.push(...bookFilterGroupToConditions(state.readStatus, "readStatus"));
+
+	// Add hasError condition
+	if (state.hasError === "include") {
+		allConditions.push({ hasError: { operator: "isTrue" } });
+	} else if (state.hasError === "exclude") {
+		allConditions.push({ hasError: { operator: "isFalse" } });
+	}
+
+	// Return combined condition
+	if (allConditions.length === 0) {
+		return undefined;
+	}
+	if (allConditions.length === 1) {
+		return allConditions[0];
+	}
+	return { allOf: allConditions };
+}
+
+/**
+ * Count active filters in book filter state
+ */
+export function countBookActiveFilters(state: BookFilterState): number {
+	let count = 0;
+	count += countActiveFilters(state.genres);
+	count += countActiveFilters(state.tags);
+	count += countActiveFilters(state.readStatus);
+	if (state.hasError !== "neutral") count++;
+	return count;
+}
+
+/**
+ * Check if book filter state has any active filters
+ */
+export function hasBookActiveFilters(state: BookFilterState): boolean {
+	return countBookActiveFilters(state) > 0;
 }
 
 // =============================================================================
@@ -371,6 +465,7 @@ export const FILTER_PARAM_KEYS = {
 	genres: "gf",
 	tags: "tf",
 	status: "sf",
+	readStatus: "rf",
 	publisher: "pf",
 	language: "lf",
 } as const;
@@ -390,6 +485,9 @@ export function serializeSeriesFilters(state: SeriesFilterState): URLSearchParam
 	const statusParam = serializeFilterGroup(state.status);
 	if (statusParam) params.set(FILTER_PARAM_KEYS.status, statusParam);
 
+	const readStatusParam = serializeFilterGroup(state.readStatus);
+	if (readStatusParam) params.set(FILTER_PARAM_KEYS.readStatus, readStatusParam);
+
 	const publisherParam = serializeFilterGroup(state.publisher);
 	if (publisherParam) params.set(FILTER_PARAM_KEYS.publisher, publisherParam);
 
@@ -407,7 +505,53 @@ export function parseSeriesFilters(params: URLSearchParams): SeriesFilterState {
 		genres: parseFilterGroup(params.get(FILTER_PARAM_KEYS.genres)),
 		tags: parseFilterGroup(params.get(FILTER_PARAM_KEYS.tags)),
 		status: parseFilterGroup(params.get(FILTER_PARAM_KEYS.status)),
+		readStatus: parseFilterGroup(params.get(FILTER_PARAM_KEYS.readStatus)),
 		publisher: parseFilterGroup(params.get(FILTER_PARAM_KEYS.publisher)),
 		language: parseFilterGroup(params.get(FILTER_PARAM_KEYS.language)),
+	};
+}
+
+/**
+ * URL parameter keys for book filter groups
+ */
+export const BOOK_FILTER_PARAM_KEYS = {
+	genres: "bgf",
+	tags: "btf",
+	readStatus: "brf",
+	hasError: "bef",
+} as const;
+
+/**
+ * Serialize book filter state to URL search params
+ */
+export function serializeBookFilters(state: BookFilterState): URLSearchParams {
+	const params = new URLSearchParams();
+
+	const genreParam = serializeFilterGroup(state.genres);
+	if (genreParam) params.set(BOOK_FILTER_PARAM_KEYS.genres, genreParam);
+
+	const tagParam = serializeFilterGroup(state.tags);
+	if (tagParam) params.set(BOOK_FILTER_PARAM_KEYS.tags, tagParam);
+
+	const readStatusParam = serializeFilterGroup(state.readStatus);
+	if (readStatusParam) params.set(BOOK_FILTER_PARAM_KEYS.readStatus, readStatusParam);
+
+	if (state.hasError !== "neutral") {
+		params.set(BOOK_FILTER_PARAM_KEYS.hasError, state.hasError);
+	}
+
+	return params;
+}
+
+/**
+ * Parse book filter state from URL search params
+ */
+export function parseBookFilters(params: URLSearchParams): BookFilterState {
+	const hasErrorParam = params.get(BOOK_FILTER_PARAM_KEYS.hasError);
+	return {
+		genres: parseFilterGroup(params.get(BOOK_FILTER_PARAM_KEYS.genres)),
+		tags: parseFilterGroup(params.get(BOOK_FILTER_PARAM_KEYS.tags)),
+		readStatus: parseFilterGroup(params.get(BOOK_FILTER_PARAM_KEYS.readStatus)),
+		hasError: hasErrorParam === "include" || hasErrorParam === "exclude" ? hasErrorParam : "neutral",
 	};
 }

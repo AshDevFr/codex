@@ -1,5 +1,6 @@
 import { ActionIcon, Group, Menu, Tabs } from "@mantine/core";
 import { IconChevronDown, IconChevronUp, IconGridDots, IconSortAscending, IconSortDescending } from "@tabler/icons-react";
+import { BookFilterPanel } from "./BookFilterPanel";
 import { FilterPanel } from "./FilterPanel";
 
 export interface SortOption {
@@ -133,8 +134,8 @@ export function LibraryToolbar({
 						</Menu.Dropdown>
 					</Menu>
 
-					{/* Filter Panel */}
-					<FilterPanel />
+					{/* Filter Panel - show appropriate panel based on current tab */}
+					{currentTab === "books" ? <BookFilterPanel /> : <FilterPanel />}
 				</Group>
 			)}
 		</Group>

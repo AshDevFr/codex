@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, RelationTrait, Set,
+    sea_query::{Expr, Func},
+    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -118,6 +119,16 @@ impl BookRepository {
             .all(db)
             .await
             .context("Failed to list books by series")
+    }
+
+    /// Count books in a series (excluding deleted)
+    pub async fn count_by_series(db: &DatabaseConnection, series_id: Uuid) -> Result<u64> {
+        Books::find()
+            .filter(books::Column::SeriesId.eq(series_id))
+            .filter(books::Column::Deleted.eq(false))
+            .count(db)
+            .await
+            .context("Failed to count books in series")
     }
 
     /// Get the adjacent (previous and next) books in the same series
@@ -577,6 +588,79 @@ impl BookRepository {
             .all(db)
             .await
             .context("Failed to search books by title")
+    }
+
+    /// Full-text search books by title (truly case-insensitive using LOWER())
+    /// Returns book IDs matching the search query with pagination
+    pub async fn full_text_search(
+        db: &DatabaseConnection,
+        query: &str,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        let pattern = format!("%{}%", query.to_lowercase());
+
+        // Use LOWER(title) LIKE LOWER(pattern) for case-insensitive search
+        let lower_title = Func::lower(Expr::col(books::Column::Title));
+        let search_condition = Condition::all()
+            .add(Expr::expr(lower_title).like(&pattern))
+            .add(books::Column::Deleted.eq(false));
+
+        let total = Books::find()
+            .filter(search_condition.clone())
+            .count(db)
+            .await
+            .context("Failed to count full-text search results")?;
+
+        let books_list = Books::find()
+            .filter(search_condition)
+            .order_by_asc(books::Column::Title)
+            .offset(page * page_size)
+            .limit(page_size)
+            .all(db)
+            .await
+            .context("Failed to execute full-text search")?;
+
+        Ok((books_list, total))
+    }
+
+    /// Full-text search books by title within a set of candidate IDs
+    pub async fn full_text_search_filtered(
+        db: &DatabaseConnection,
+        query: &str,
+        candidate_ids: &[Uuid],
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        if candidate_ids.is_empty() {
+            return Ok((vec![], 0));
+        }
+
+        let pattern = format!("%{}%", query.to_lowercase());
+
+        // Use LOWER(title) LIKE LOWER(pattern) for case-insensitive search
+        let lower_title = Func::lower(Expr::col(books::Column::Title));
+        let search_condition = Condition::all()
+            .add(Expr::expr(lower_title).like(&pattern))
+            .add(books::Column::Deleted.eq(false))
+            .add(books::Column::Id.is_in(candidate_ids.to_vec()));
+
+        let total = Books::find()
+            .filter(search_condition.clone())
+            .count(db)
+            .await
+            .context("Failed to count full-text search results")?;
+
+        let books_list = Books::find()
+            .filter(search_condition)
+            .order_by_asc(books::Column::Title)
+            .offset(page * page_size)
+            .limit(page_size)
+            .all(db)
+            .await
+            .context("Failed to execute full-text search")?;
+
+        Ok((books_list, total))
     }
 
     /// Update book

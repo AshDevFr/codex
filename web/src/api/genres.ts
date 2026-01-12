@@ -10,7 +10,7 @@ export const genresApi = {
 	 */
 	getAll: async (): Promise<Genre[]> => {
 		const response = await api.get<GenreListResponse>("/genres");
-		return response.data.genres;
+		return response.data.genres ?? [];
 	},
 
 	/**

@@ -56,6 +56,7 @@ Codex provides OPDS catalog feeds for e-reader applications:
         // Library endpoints
         handlers::list_libraries,
         handlers::create_library,
+        handlers::preview_scan,
         handlers::get_library,
         handlers::update_library,
         handlers::delete_library,
@@ -300,6 +301,20 @@ Codex provides OPDS catalog feeds for e-reader applications:
             dto::LibraryDto,
             dto::CreateLibraryRequest,
             dto::UpdateLibraryRequest,
+            dto::PreviewScanRequest,
+            dto::PreviewScanResponse,
+            dto::DetectedSeriesDto,
+            dto::DetectedSeriesMetadataDto,
+
+            // Strategy types
+            crate::models::SeriesStrategy,
+            crate::models::BookStrategy,
+            crate::models::FlatStrategyConfig,
+            crate::models::PublisherHierarchyConfig,
+            crate::models::CalibreStrategyConfig,
+            crate::models::CalibreSeriesMode,
+            crate::models::CustomStrategyConfig,
+            crate::models::SmartBookConfig,
             dto::SeriesDto,
             dto::SeriesListResponse,
             dto::SearchSeriesRequest,

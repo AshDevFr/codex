@@ -135,13 +135,13 @@ impl MigrationTrait for Migration {
                         }
                         col
                     })
-                    // Foreign key to libraries (optional - set to NULL on library delete)
+                    // Foreign key to libraries (optional - cascade delete when library is removed)
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_task_metrics_library")
                             .from(TaskMetrics::Table, TaskMetrics::LibraryId)
                             .to(Libraries::Table, Libraries::Id)
-                            .on_delete(ForeignKeyAction::SetNull)
+                            .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::NoAction),
                     )
                     .to_owned(),

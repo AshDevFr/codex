@@ -70,17 +70,16 @@ function handleEntityEvent(
 		case "book_created":
 		case "book_updated":
 		case "book_deleted": {
-			// Invalidate book queries with immediate refetch for active queries
+			// Invalidate book queries - use "all" to ensure Recommended section updates
+			// even when user switches between tabs
 			queryClient.invalidateQueries({
 				queryKey: ["books"],
-				refetchType: "active",
 			});
 
 			// Invalidate specific book if it's an update
 			if (event.type === "book_updated") {
 				queryClient.invalidateQueries({
 					queryKey: ["books", event.book_id],
-					refetchType: "active",
 				});
 			}
 
@@ -88,13 +87,11 @@ function handleEntityEvent(
 			if (event.library_id) {
 				queryClient.invalidateQueries({
 					queryKey: ["libraries", event.library_id],
-					refetchType: "active",
 				});
 
 				// Invalidate series in this library
 				queryClient.invalidateQueries({
 					queryKey: ["series"],
-					refetchType: "active",
 				});
 			}
 			break;
@@ -104,17 +101,15 @@ function handleEntityEvent(
 		case "series_updated":
 		case "series_deleted":
 		case "series_bulk_purged": {
-			// Invalidate series queries with immediate refetch for active queries
+			// Invalidate series queries - use default to ensure Recommended section updates
 			queryClient.invalidateQueries({
 				queryKey: ["series"],
-				refetchType: "active",
 			});
 
 			// Invalidate specific series if it's an update
 			if (event.type === "series_updated") {
 				queryClient.invalidateQueries({
 					queryKey: ["series", event.series_id],
-					refetchType: "active",
 				});
 			}
 
@@ -122,7 +117,6 @@ function handleEntityEvent(
 			if (event.library_id) {
 				queryClient.invalidateQueries({
 					queryKey: ["libraries", event.library_id],
-					refetchType: "active",
 				});
 			}
 			break;
@@ -130,24 +124,22 @@ function handleEntityEvent(
 
 		case "cover_updated": {
 			if (event.entity_type === "book") {
-				// Invalidate book queries with immediate refetch
+				// Invalidate book queries to refresh covers
 				queryClient.invalidateQueries({
 					queryKey: ["books", event.entity_id],
-					refetchType: "active",
 				});
 				queryClient.invalidateQueries({
 					queryKey: ["books"],
-					refetchType: "active",
+					refetchType: "all",
 				});
 			} else if (event.entity_type === "series") {
-				// Invalidate series queries with immediate refetch
+				// Invalidate series queries to refresh covers
 				queryClient.invalidateQueries({
 					queryKey: ["series", event.entity_id],
-					refetchType: "active",
 				});
 				queryClient.invalidateQueries({
 					queryKey: ["series"],
-					refetchType: "active",
+					refetchType: "all",
 				});
 			}
 			break;
@@ -155,15 +147,27 @@ function handleEntityEvent(
 
 		case "library_updated":
 		case "library_deleted": {
-			// Invalidate library queries with immediate refetch
+			// Invalidate library queries
 			queryClient.invalidateQueries({
 				queryKey: ["libraries"],
-				refetchType: "active",
 			});
+			// Invalidate both query key patterns used in the codebase
 			queryClient.invalidateQueries({
 				queryKey: ["libraries", event.library_id],
-				refetchType: "active",
 			});
+			queryClient.invalidateQueries({
+				queryKey: ["library", event.library_id],
+			});
+			// When a library is deleted, also invalidate all books and series queries
+			// since they may contain data from the deleted library
+			if (event.type === "library_deleted") {
+				queryClient.invalidateQueries({
+					queryKey: ["books"],
+				});
+				queryClient.invalidateQueries({
+					queryKey: ["series"],
+				});
+			}
 			break;
 		}
 

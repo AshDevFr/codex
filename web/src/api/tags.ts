@@ -10,7 +10,7 @@ export const tagsApi = {
 	 */
 	getAll: async (): Promise<Tag[]> => {
 		const response = await api.get<TagListResponse>("/tags");
-		return response.data.tags;
+		return response.data.tags ?? [];
 	},
 
 	/**

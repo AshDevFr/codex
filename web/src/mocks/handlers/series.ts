@@ -2,323 +2,374 @@
  * Series API mock handlers
  */
 
-import { http, HttpResponse, delay } from "msw";
+import { delay, HttpResponse, http } from "msw";
 import { createPaginatedResponse } from "../data/factories";
-import { mockSeries, getSeriesByLibrary } from "../data/store";
+import { getSeriesByLibrary, mockSeries } from "../data/store";
 
 export const seriesHandlers = [
-  // IMPORTANT: Specific routes MUST come before parameterized routes
-  // Otherwise /api/v1/series/:id will match "started" or "search" as an ID
+	// IMPORTANT: Specific routes MUST come before parameterized routes
+	// Otherwise /api/v1/series/:id will match "started" or "search" as an ID
 
-  // Search series (GET - legacy)
-  http.get("/api/v1/series/search", async ({ request }) => {
-    await delay(200);
-    const url = new URL(request.url);
-    const query = url.searchParams.get("q")?.toLowerCase() || "";
-    const libraryId = url.searchParams.get("libraryId");
+	// Search series (GET - legacy)
+	http.get("/api/v1/series/search", async ({ request }) => {
+		await delay(200);
+		const url = new URL(request.url);
+		const query = url.searchParams.get("q")?.toLowerCase() || "";
+		const libraryId = url.searchParams.get("libraryId");
 
-    let results = mockSeries.filter((s) => s.name.toLowerCase().includes(query));
+		let results = mockSeries.filter((s) =>
+			s.name.toLowerCase().includes(query),
+		);
 
-    if (libraryId) {
-      results = results.filter((s) => s.libraryId === libraryId);
-    }
+		if (libraryId) {
+			results = results.filter((s) => s.libraryId === libraryId);
+		}
 
-    return HttpResponse.json(
-      createPaginatedResponse(results.slice(0, 20), {
-        total: results.length,
-      })
-    );
-  }),
+		return HttpResponse.json(
+			createPaginatedResponse(results.slice(0, 20), {
+				total: results.length,
+			}),
+		);
+	}),
 
-  // POST /series/list - Advanced filtering with condition tree
-  http.post("/api/v1/series/list", async ({ request }) => {
-    await delay(200);
-    const body = await request.json() as {
-      condition?: unknown;
-      search?: string;
-      page?: number;
-      pageSize?: number;
-      sort?: string;
-    };
+	// Search series (POST - new API)
+	http.post("/api/v1/series/search", async ({ request }) => {
+		await delay(200);
+		const body = (await request.json()) as {
+			query: string;
+			libraryId?: string;
+		};
 
-    const page = body.page ?? 0;
-    const pageSize = body.pageSize ?? 20;
+		const query = body.query?.toLowerCase() || "";
+		let results = mockSeries.filter((s) =>
+			s.name.toLowerCase().includes(query),
+		);
 
-    // For mock purposes, we'll do basic filtering
-    // In a real implementation, the backend evaluates the full condition tree
-    let results = [...mockSeries];
+		if (body.libraryId) {
+			results = results.filter((s) => s.libraryId === body.libraryId);
+		}
 
-    // Apply basic library filtering if condition contains libraryId
-    if (body.condition && typeof body.condition === 'object') {
-      const condition = body.condition as Record<string, unknown>;
+		// Return array directly (not paginated) - matches backend API
+		return HttpResponse.json(results.slice(0, 20));
+	}),
 
-      // Handle direct libraryId condition
-      if ('libraryId' in condition) {
-        const libOp = condition.libraryId as { operator: string; value: string };
-        if (libOp.operator === 'is') {
-          results = results.filter(s => s.libraryId === libOp.value);
-        }
-      }
+	// POST /series/list - Advanced filtering with condition tree
+	http.post("/api/v1/series/list", async ({ request }) => {
+		await delay(200);
+		const body = (await request.json()) as {
+			condition?: unknown;
+			search?: string;
+			page?: number;
+			pageSize?: number;
+			sort?: string;
+		};
 
-      // Handle allOf wrapper with libraryId
-      if ('allOf' in condition && Array.isArray(condition.allOf)) {
-        for (const c of condition.allOf) {
-          if (c && typeof c === 'object' && 'libraryId' in c) {
-            const libOp = (c as Record<string, unknown>).libraryId as { operator: string; value: string };
-            if (libOp.operator === 'is') {
-              results = results.filter(s => s.libraryId === libOp.value);
-            }
-          }
-        }
-      }
-    }
+		const page = body.page ?? 0;
+		const pageSize = body.pageSize ?? 20;
 
-    // Apply text search
-    if (body.search) {
-      const searchLower = body.search.toLowerCase();
-      results = results.filter(s => s.name.toLowerCase().includes(searchLower));
-    }
+		// For mock purposes, we'll do basic filtering
+		// In a real implementation, the backend evaluates the full condition tree
+		let results = [...mockSeries];
 
-    // Apply sorting
-    if (body.sort) {
-      const [field, direction] = body.sort.split(',');
-      results.sort((a, b) => {
-        const aVal = (a as Record<string, unknown>)[field];
-        const bVal = (b as Record<string, unknown>)[field];
-        if (typeof aVal === 'string' && typeof bVal === 'string') {
-          return direction === 'desc' ? bVal.localeCompare(aVal) : aVal.localeCompare(bVal);
-        }
-        return 0;
-      });
-    }
+		// Apply basic library filtering if condition contains libraryId
+		if (body.condition && typeof body.condition === "object") {
+			const condition = body.condition as Record<string, unknown>;
 
-    // Paginate
-    const start = page * pageSize;
-    const end = start + pageSize;
-    const items = results.slice(start, end);
+			// Handle direct libraryId condition
+			if ("libraryId" in condition) {
+				const libOp = condition.libraryId as {
+					operator: string;
+					value: string;
+				};
+				if (libOp.operator === "is") {
+					results = results.filter((s) => s.libraryId === libOp.value);
+				}
+			}
 
-    return HttpResponse.json(
-      createPaginatedResponse(items, {
-        page,
-        pageSize,
-        total: results.length,
-      })
-    );
-  }),
+			// Handle allOf wrapper with libraryId
+			if ("allOf" in condition && Array.isArray(condition.allOf)) {
+				for (const c of condition.allOf) {
+					if (c && typeof c === "object" && "libraryId" in c) {
+						const libOp = (c as Record<string, unknown>).libraryId as {
+							operator: string;
+							value: string;
+						};
+						if (libOp.operator === "is") {
+							results = results.filter((s) => s.libraryId === libOp.value);
+						}
+					}
+				}
+			}
+		}
 
-  // List in-progress series
-  // Supports ?library_id= query param for library filtering
-  // Returns plain array (not paginated) - matches API expectation
-  http.get("/api/v1/series/in-progress", async ({ request }) => {
-    await delay(200);
-    const url = new URL(request.url);
-    const libraryId = url.searchParams.get("library_id");
+		// Apply text search
+		if (body.search) {
+			const searchLower = body.search.toLowerCase();
+			results = results.filter((s) =>
+				s.name.toLowerCase().includes(searchLower),
+			);
+		}
 
-    // Return a subset as "in-progress" series (those with reading progress)
-    const baseSeries = libraryId ? getSeriesByLibrary(libraryId) : mockSeries;
-    const inProgressSeries = baseSeries.slice(0, 5);
+		// Apply sorting
+		if (body.sort) {
+			const [field, direction] = body.sort.split(",");
+			results.sort((a, b) => {
+				const aVal = (a as Record<string, unknown>)[field];
+				const bVal = (b as Record<string, unknown>)[field];
+				if (typeof aVal === "string" && typeof bVal === "string") {
+					return direction === "desc"
+						? bVal.localeCompare(aVal)
+						: aVal.localeCompare(bVal);
+				}
+				return 0;
+			});
+		}
 
-    return HttpResponse.json(inProgressSeries);
-  }),
+		// Paginate
+		const start = page * pageSize;
+		const end = start + pageSize;
+		const items = results.slice(start, end);
 
-  // List series with pagination
-  // Supports both ?library_id= (new) and ?libraryId= (legacy) for library filtering
-  http.get("/api/v1/series", async ({ request }) => {
-    await delay(200);
-    const url = new URL(request.url);
-    const page = Number.parseInt(url.searchParams.get("page") || "0");
-    const pageSize = Number.parseInt(url.searchParams.get("page_size") || url.searchParams.get("pageSize") || "20");
-    // Support both library_id (new) and libraryId (legacy)
-    const libraryId = url.searchParams.get("library_id") || url.searchParams.get("libraryId");
+		return HttpResponse.json(
+			createPaginatedResponse(items, {
+				page,
+				pageSize,
+				total: results.length,
+			}),
+		);
+	}),
 
-    const filteredSeries = libraryId
-      ? getSeriesByLibrary(libraryId)
-      : mockSeries;
+	// List in-progress series
+	// Supports ?library_id= query param for library filtering
+	// Returns plain array (not paginated) - matches API expectation
+	http.get("/api/v1/series/in-progress", async ({ request }) => {
+		await delay(200);
+		const url = new URL(request.url);
+		const libraryId = url.searchParams.get("library_id");
 
-    const start = page * pageSize;
-    const end = start + pageSize;
-    const items = filteredSeries.slice(start, end);
+		// Return a subset as "in-progress" series (those with reading progress)
+		const baseSeries = libraryId ? getSeriesByLibrary(libraryId) : mockSeries;
+		const inProgressSeries = baseSeries.slice(0, 5);
 
-    return HttpResponse.json(
-      createPaginatedResponse(items, {
-        page,
-        pageSize,
-        total: filteredSeries.length,
-      })
-    );
-  }),
+		return HttpResponse.json(inProgressSeries);
+	}),
 
-  // List recently added series
-  // Supports ?library_id= query param for library filtering
-  http.get("/api/v1/series/recently-added", async ({ request }) => {
-    await delay(200);
-    const url = new URL(request.url);
-    const libraryId = url.searchParams.get("library_id");
-    const limit = Number.parseInt(url.searchParams.get("limit") || "50");
+	// List series with pagination
+	// Supports both ?library_id= (new) and ?libraryId= (legacy) for library filtering
+	http.get("/api/v1/series", async ({ request }) => {
+		await delay(200);
+		const url = new URL(request.url);
+		const page = Number.parseInt(url.searchParams.get("page") || "0");
+		const pageSize = Number.parseInt(
+			url.searchParams.get("page_size") ||
+				url.searchParams.get("pageSize") ||
+				"20",
+		);
+		// Support both library_id (new) and libraryId (legacy)
+		const libraryId =
+			url.searchParams.get("library_id") || url.searchParams.get("libraryId");
 
-    const baseSeries = libraryId ? getSeriesByLibrary(libraryId) : mockSeries;
-    // Sort by createdAt desc and limit
-    const recentSeries = [...baseSeries]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, limit);
+		const filteredSeries = libraryId
+			? getSeriesByLibrary(libraryId)
+			: mockSeries;
 
-    return HttpResponse.json(recentSeries);
-  }),
+		const start = page * pageSize;
+		const end = start + pageSize;
+		const items = filteredSeries.slice(start, end);
 
-  // List recently updated series
-  // Supports ?library_id= query param for library filtering
-  http.get("/api/v1/series/recently-updated", async ({ request }) => {
-    await delay(200);
-    const url = new URL(request.url);
-    const libraryId = url.searchParams.get("library_id");
-    const limit = Number.parseInt(url.searchParams.get("limit") || "50");
+		return HttpResponse.json(
+			createPaginatedResponse(items, {
+				page,
+				pageSize,
+				total: filteredSeries.length,
+			}),
+		);
+	}),
 
-    const baseSeries = libraryId ? getSeriesByLibrary(libraryId) : mockSeries;
-    // Sort by updatedAt desc and limit
-    const recentSeries = [...baseSeries]
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, limit);
+	// List recently added series
+	// Supports ?library_id= query param for library filtering
+	http.get("/api/v1/series/recently-added", async ({ request }) => {
+		await delay(200);
+		const url = new URL(request.url);
+		const libraryId = url.searchParams.get("library_id");
+		const limit = Number.parseInt(url.searchParams.get("limit") || "50");
 
-    return HttpResponse.json(recentSeries);
-  }),
+		const baseSeries = libraryId ? getSeriesByLibrary(libraryId) : mockSeries;
+		// Sort by createdAt desc and limit
+		const recentSeries = [...baseSeries]
+			.sort(
+				(a, b) =>
+					new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+			)
+			.slice(0, limit);
 
-  // Get full series metadata (must come BEFORE generic /series/:id route)
-  http.get("/api/v1/series/:id/metadata/full", async ({ params }) => {
-    await delay(100);
-    const seriesItem = mockSeries.find((s) => s.id === params.id);
+		return HttpResponse.json(recentSeries);
+	}),
 
-    if (!seriesItem) {
-      return HttpResponse.json({ error: "Series not found" }, { status: 404 });
-    }
+	// List recently updated series
+	// Supports ?library_id= query param for library filtering
+	http.get("/api/v1/series/recently-updated", async ({ request }) => {
+		await delay(200);
+		const url = new URL(request.url);
+		const libraryId = url.searchParams.get("library_id");
+		const limit = Number.parseInt(url.searchParams.get("limit") || "50");
 
-    // Return full metadata response
-    return HttpResponse.json({
-      seriesId: seriesItem.id,
-      title: seriesItem.name,
-      summary: `Summary for ${seriesItem.name}`,
-      publisher: "Mock Publisher",
-      imprint: null,
-      ageRating: 13,
-      language: "en",
-      status: "ongoing",
-      readingDirection: "ltr",
-      titleSort: seriesItem.name.toLowerCase(),
-      customMetadata: null,
-      createdAt: seriesItem.createdAt,
-      updatedAt: seriesItem.updatedAt,
-      genres: [],
-      tags: [],
-      alternateTitles: [],
-      externalRatings: [],
-      externalLinks: [],
-      locks: {
-        title: false,
-        summary: false,
-        publisher: false,
-        imprint: false,
-        ageRating: false,
-        language: false,
-        status: false,
-        readingDirection: false,
-        titleSort: false,
-        genres: false,
-        tags: false,
-      },
-    });
-  }),
+		const baseSeries = libraryId ? getSeriesByLibrary(libraryId) : mockSeries;
+		// Sort by updatedAt desc and limit
+		const recentSeries = [...baseSeries]
+			.sort(
+				(a, b) =>
+					new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+			)
+			.slice(0, limit);
 
-  // Get user rating for series (returns 404 if no rating)
-  http.get("/api/v1/series/:id/rating", async () => {
-    await delay(50);
-    // Return 404 to indicate no rating exists (user hasn't rated yet)
-    return HttpResponse.json({ error: "Rating not found" }, { status: 404 });
-  }),
+		return HttpResponse.json(recentSeries);
+	}),
 
-  // Set user rating for series
-  http.put("/api/v1/series/:id/rating", async ({ params, request }) => {
-    await delay(100);
-    const body = await request.json() as { rating: number; notes?: string };
-    return HttpResponse.json({
-      id: "mock-rating-id",
-      seriesId: params.id,
-      userId: "mock-user-id",
-      rating: body.rating,
-      notes: body.notes || null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-  }),
+	// Get full series metadata (must come BEFORE generic /series/:id route)
+	http.get("/api/v1/series/:id/metadata/full", async ({ params }) => {
+		await delay(100);
+		const seriesItem = mockSeries.find((s) => s.id === params.id);
 
-  // Delete user rating for series
-  http.delete("/api/v1/series/:id/rating", async () => {
-    await delay(50);
-    return new HttpResponse(null, { status: 204 });
-  }),
+		if (!seriesItem) {
+			return HttpResponse.json({ error: "Series not found" }, { status: 404 });
+		}
 
-  // Generate thumbnails for series
-  http.post("/api/v1/series/:id/thumbnails", async () => {
-    await delay(100);
-    return HttpResponse.json({ message: "Thumbnail generation queued for all books" });
-  }),
+		// Return full metadata response
+		return HttpResponse.json({
+			seriesId: seriesItem.id,
+			title: seriesItem.name,
+			summary: `Summary for ${seriesItem.name}`,
+			publisher: "Mock Publisher",
+			imprint: null,
+			ageRating: 13,
+			language: "en",
+			status: "ongoing",
+			readingDirection: "ltr",
+			titleSort: seriesItem.name.toLowerCase(),
+			customMetadata: null,
+			createdAt: seriesItem.createdAt,
+			updatedAt: seriesItem.updatedAt,
+			genres: [],
+			tags: [],
+			alternateTitles: [],
+			externalRatings: [],
+			externalLinks: [],
+			locks: {
+				title: false,
+				summary: false,
+				publisher: false,
+				imprint: false,
+				ageRating: false,
+				language: false,
+				status: false,
+				readingDirection: false,
+				titleSort: false,
+				genres: false,
+				tags: false,
+			},
+		});
+	}),
 
-  // Get series by ID (must come AFTER specific routes like /in-progress, /recently-added, etc.)
-  http.get("/api/v1/series/:id", async ({ params }) => {
-    await delay(100);
-    const seriesItem = mockSeries.find((s) => s.id === params.id);
+	// Get user rating for series (returns 404 if no rating)
+	http.get("/api/v1/series/:id/rating", async () => {
+		await delay(50);
+		// Return 404 to indicate no rating exists (user hasn't rated yet)
+		return HttpResponse.json({ error: "Rating not found" }, { status: 404 });
+	}),
 
-    if (!seriesItem) {
-      return HttpResponse.json({ error: "Series not found" }, { status: 404 });
-    }
+	// Set user rating for series
+	http.put("/api/v1/series/:id/rating", async ({ params, request }) => {
+		await delay(100);
+		const body = (await request.json()) as { rating: number; notes?: string };
+		return HttpResponse.json({
+			id: "mock-rating-id",
+			seriesId: params.id,
+			userId: "mock-user-id",
+			rating: body.rating,
+			notes: body.notes || null,
+			createdAt: new Date().toISOString(),
+			updatedAt: new Date().toISOString(),
+		});
+	}),
 
-    return HttpResponse.json(seriesItem);
-  }),
+	// Delete user rating for series
+	http.delete("/api/v1/series/:id/rating", async () => {
+		await delay(50);
+		return new HttpResponse(null, { status: 204 });
+	}),
 
-  // Get series thumbnail
-  http.get("/api/v1/series/:id/thumbnail", async () => {
-    await delay(50);
-    // Return a placeholder image response
-    return new HttpResponse(null, {
-      status: 302,
-      headers: {
-        Location: "https://placehold.co/300x450/333/fff?text=Cover",
-      },
-    });
-  }),
+	// Generate thumbnails for series
+	http.post("/api/v1/series/:id/thumbnails", async () => {
+		await delay(100);
+		return HttpResponse.json({
+			message: "Thumbnail generation queued for all books",
+		});
+	}),
 
-  // List series by library
-  http.get(
-    "/api/v1/libraries/:libraryId/series",
-    async ({ params, request }) => {
-      await delay(200);
-      const url = new URL(request.url);
-      const page = Number.parseInt(url.searchParams.get("page") || "0");
-      const pageSize = Number.parseInt(url.searchParams.get("pageSize") || "20");
+	// Get series by ID (must come AFTER specific routes like /in-progress, /recently-added, etc.)
+	http.get("/api/v1/series/:id", async ({ params }) => {
+		await delay(100);
+		const seriesItem = mockSeries.find((s) => s.id === params.id);
 
-      const filteredSeries = getSeriesByLibrary(params.libraryId as string);
-      const start = page * pageSize;
-      const end = start + pageSize;
-      const items = filteredSeries.slice(start, end);
+		if (!seriesItem) {
+			return HttpResponse.json({ error: "Series not found" }, { status: 404 });
+		}
 
-      return HttpResponse.json(
-        createPaginatedResponse(items, {
-          page,
-          pageSize,
-          total: filteredSeries.length,
-        })
-      );
-    }
-  ),
+		return HttpResponse.json(seriesItem);
+	}),
 
-  // Library-scoped: List in-progress series
-  http.get("/api/v1/libraries/:libraryId/series/in-progress", async ({ params }) => {
-    await delay(200);
+	// Get series thumbnail
+	http.get("/api/v1/series/:id/thumbnail", async () => {
+		await delay(50);
+		// Return a placeholder image response
+		return new HttpResponse(null, {
+			status: 302,
+			headers: {
+				Location: "https://placehold.co/300x450/333/fff?text=Cover",
+			},
+		});
+	}),
 
-    // Return a subset of in-progress series for this library
-    const librarySeries = getSeriesByLibrary(params.libraryId as string);
-    const inProgressSeries = librarySeries.slice(0, 5);
+	// List series by library
+	http.get(
+		"/api/v1/libraries/:libraryId/series",
+		async ({ params, request }) => {
+			await delay(200);
+			const url = new URL(request.url);
+			const page = Number.parseInt(url.searchParams.get("page") || "0");
+			const pageSize = Number.parseInt(
+				url.searchParams.get("pageSize") || "20",
+			);
 
-    return HttpResponse.json(inProgressSeries);
-  }),
+			const filteredSeries = getSeriesByLibrary(params.libraryId as string);
+			const start = page * pageSize;
+			const end = start + pageSize;
+			const items = filteredSeries.slice(start, end);
+
+			return HttpResponse.json(
+				createPaginatedResponse(items, {
+					page,
+					pageSize,
+					total: filteredSeries.length,
+				}),
+			);
+		},
+	),
+
+	// Library-scoped: List in-progress series
+	http.get(
+		"/api/v1/libraries/:libraryId/series/in-progress",
+		async ({ params }) => {
+			await delay(200);
+
+			// Return a subset of in-progress series for this library
+			const librarySeries = getSeriesByLibrary(params.libraryId as string);
+			const inProgressSeries = librarySeries.slice(0, 5);
+
+			return HttpResponse.json(inProgressSeries);
+		},
+	),
 ];
 
 // Helper to get current mock series (for testing)

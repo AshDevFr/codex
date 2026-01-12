@@ -1,17 +1,11 @@
-import {
-	Box,
-	Card,
-	Group,
-	Pagination,
-	Skeleton,
-	Stack,
-	Text,
-} from "@mantine/core";
+import { Box, Card, Group, Pagination, Skeleton, Stack, Text } from "@mantine/core";
+import { useDebouncedValue } from "@mantine/hooks";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { booksApi } from "@/api/books";
 import { MediaCard } from "@/components/library/MediaCard";
+import { useBookFilterState } from "@/hooks/useBookFilterState";
 
 /** Fixed skeleton IDs to avoid array index keys */
 const SKELETON_IDS = ["b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9", "b10", "b11", "b12"];
@@ -46,32 +40,31 @@ interface BooksSectionProps {
 
 export function BooksSection({ libraryId, searchParams, onTotalChange }: BooksSectionProps) {
 	const navigate = useNavigate();
+	const filterState = useBookFilterState();
 
 	// Read query parameters (URL uses 1-indexed pages for user-friendly URLs)
 	const page = parseInt(searchParams.get("page") || "1", 10);
 	const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
 	const sort = searchParams.get("sort") || "title,asc";
-	const seriesFilter = searchParams.get("series") || "";
-	const genreFilter = searchParams.get("genre") || "";
 
-	// Fetch books data (convert to 0-indexed for backend)
+	// Debounce the filter condition to avoid rapid API calls when clicking multiple chips
+	const [debouncedCondition] = useDebouncedValue(filterState.condition, 150);
+
+	// Serialize the condition for use as a query key (stable string representation)
+	const conditionKey = useMemo(() => {
+		if (!debouncedCondition) return "none";
+		return JSON.stringify(debouncedCondition);
+	}, [debouncedCondition]);
+
+	// Fetch books data using the search endpoint with conditions
 	const { data: booksData, isLoading } = useQuery({
-		queryKey: [
-			"books",
-			libraryId,
-			page,
-			pageSize,
-			sort,
-			seriesFilter,
-			genreFilter,
-		],
+		queryKey: ["books", "search", libraryId, page, pageSize, sort, conditionKey],
 		queryFn: () =>
-			booksApi.getByLibrary(libraryId, {
+			booksApi.search(libraryId, {
+				condition: debouncedCondition,
 				page: page - 1, // Convert to 0-indexed for backend
 				pageSize,
 				sort,
-				series_id: seriesFilter,
-				genre: genreFilter,
 			}),
 		staleTime: 30000, // 30 seconds - shorter than global default
 		refetchOnMount: true, // Always refetch when component mounts
@@ -101,9 +94,7 @@ export function BooksSection({ libraryId, searchParams, onTotalChange }: BooksSe
 		handleFilterChange({ page: newPage });
 	};
 
-	const totalPages = booksData
-		? Math.ceil(booksData.total / booksData.pageSize)
-		: 1;
+	const totalPages = booksData ? Math.ceil(booksData.total / booksData.pageSize) : 1;
 
 	const showPagination = booksData ? booksData.total > pageSize : false;
 
@@ -150,9 +141,8 @@ export function BooksSection({ libraryId, searchParams, onTotalChange }: BooksSe
 
 					{/* Results info */}
 					<Text size="sm" c="dimmed" ta="center">
-						Showing {(page - 1) * pageSize + 1} to{" "}
-						{Math.min(page * pageSize, booksData.total)} of {booksData.total}{" "}
-						books
+						Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, booksData.total)} of{" "}
+						{booksData.total} books
 					</Text>
 				</>
 			) : (
@@ -162,7 +152,9 @@ export function BooksSection({ libraryId, searchParams, onTotalChange }: BooksSe
 							No books found
 						</Text>
 						<Text size="sm" c="dimmed">
-							Try adjusting your filters or search query
+							{filterState.hasActiveFilters
+								? "Try adjusting your filters"
+								: "This library doesn't have any books yet"}
 						</Text>
 					</Stack>
 				</Card>
@@ -170,4 +162,3 @@ export function BooksSection({ libraryId, searchParams, onTotalChange }: BooksSe
 		</Stack>
 	);
 }
-

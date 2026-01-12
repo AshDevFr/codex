@@ -117,16 +117,17 @@ describe("useEntityEvents", () => {
 			user_id: undefined,
 		};
 
-		capturedCallback!(event);
+		if (capturedCallback) {
+			capturedCallback(event);
+		}
 
 		await waitFor(() => {
 			expect(invalidateSpy).toHaveBeenCalledWith({
 				queryKey: ["series", "series-123"],
-				refetchType: "active",
 			});
 			expect(invalidateSpy).toHaveBeenCalledWith({
 				queryKey: ["series"],
-				refetchType: "active",
+				refetchType: "all",
 			});
 		});
 	});
@@ -159,16 +160,16 @@ describe("useEntityEvents", () => {
 			user_id: "user-1",
 		};
 
-		capturedCallback!(event);
+		if (capturedCallback) {
+			capturedCallback(event);
+		}
 
 		await waitFor(() => {
 			expect(invalidateSpy).toHaveBeenCalledWith({
 				queryKey: ["series"],
-				refetchType: "active",
 			});
 			expect(invalidateSpy).toHaveBeenCalledWith({
 				queryKey: ["libraries", "lib-2"],
-				refetchType: "active",
 			});
 		});
 	});
@@ -210,6 +211,149 @@ describe("useEntityEvents", () => {
 
 		await waitFor(() => {
 			expect(result.current.connectionState).toBe("disconnected");
+		});
+	});
+
+	it("should invalidate library queries on library_deleted event", async () => {
+		let capturedCallback: ((event: EntityChangeEvent) => void) | undefined;
+
+		vi.spyOn(eventsApi.eventsApi, "subscribeToEntityEvents").mockImplementation(
+			(onEvent) => {
+				capturedCallback = onEvent;
+				return mockUnsubscribe;
+			},
+		);
+
+		const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+		renderHook(() => useEntityEvents(), { wrapper });
+
+		await waitFor(() => {
+			expect(capturedCallback).toBeDefined();
+		});
+
+		// Simulate receiving a library_deleted event
+		const event: EntityChangeEvent = {
+			type: "library_deleted",
+			library_id: "lib-123",
+			timestamp: "2026-01-12T12:00:00Z",
+			user_id: "user-1",
+		};
+
+		if (capturedCallback) {
+			capturedCallback(event);
+		}
+
+		await waitFor(() => {
+			// Should invalidate the libraries list
+			expect(invalidateSpy).toHaveBeenCalledWith({
+				queryKey: ["libraries"],
+			});
+			// Should invalidate the specific library with both key patterns
+			expect(invalidateSpy).toHaveBeenCalledWith({
+				queryKey: ["libraries", "lib-123"],
+			});
+			expect(invalidateSpy).toHaveBeenCalledWith({
+				queryKey: ["library", "lib-123"],
+			});
+			// Should also invalidate books and series queries
+			expect(invalidateSpy).toHaveBeenCalledWith({
+				queryKey: ["books"],
+			});
+			expect(invalidateSpy).toHaveBeenCalledWith({
+				queryKey: ["series"],
+			});
+		});
+	});
+
+	it("should invalidate Recommended section queries on cover_updated event", async () => {
+		let capturedCallback: ((event: EntityChangeEvent) => void) | undefined;
+
+		vi.spyOn(eventsApi.eventsApi, "subscribeToEntityEvents").mockImplementation(
+			(onEvent) => {
+				capturedCallback = onEvent;
+				return mockUnsubscribe;
+			},
+		);
+
+		// Set up queries that match the Recommended section's query keys
+		queryClient.setQueryData(["series", "recently-added", "lib-1"], []);
+		queryClient.setQueryData(["series", "recently-updated", "lib-1"], []);
+		queryClient.setQueryData(["books", "recently-added", "lib-1"], []);
+		queryClient.setQueryData(["books", "in-progress", "lib-1"], []);
+
+		renderHook(() => useEntityEvents(), { wrapper });
+
+		await waitFor(() => {
+			expect(capturedCallback).toBeDefined();
+		});
+
+		// Simulate receiving a cover_updated event for a series
+		const seriesEvent: EntityChangeEvent = {
+			type: "cover_updated",
+			entity_type: "series",
+			entity_id: "series-123",
+			timestamp: "2026-01-12T12:00:00Z",
+			user_id: undefined,
+		};
+
+		if (capturedCallback) {
+			capturedCallback(seriesEvent);
+		}
+
+		// All series queries should be invalidated (stale)
+		await waitFor(() => {
+			const recentlyAddedState = queryClient.getQueryState([
+				"series",
+				"recently-added",
+				"lib-1",
+			]);
+			const recentlyUpdatedState = queryClient.getQueryState([
+				"series",
+				"recently-updated",
+				"lib-1",
+			]);
+
+			expect(recentlyAddedState?.isInvalidated).toBe(true);
+			expect(recentlyUpdatedState?.isInvalidated).toBe(true);
+		});
+
+		// Books queries should NOT be invalidated by series cover update
+		const booksRecentlyAddedState = queryClient.getQueryState([
+			"books",
+			"recently-added",
+			"lib-1",
+		]);
+		expect(booksRecentlyAddedState?.isInvalidated).toBe(false);
+
+		// Simulate receiving a cover_updated event for a book
+		const bookEvent: EntityChangeEvent = {
+			type: "cover_updated",
+			entity_type: "book",
+			entity_id: "book-456",
+			timestamp: "2026-01-12T12:00:00Z",
+			user_id: undefined,
+		};
+
+		if (capturedCallback) {
+			capturedCallback(bookEvent);
+		}
+
+		// All book queries should now be invalidated (stale)
+		await waitFor(() => {
+			const booksRecentlyAddedState = queryClient.getQueryState([
+				"books",
+				"recently-added",
+				"lib-1",
+			]);
+			const booksInProgressState = queryClient.getQueryState([
+				"books",
+				"in-progress",
+				"lib-1",
+			]);
+
+			expect(booksRecentlyAddedState?.isInvalidated).toBe(true);
+			expect(booksInProgressState?.isInvalidated).toBe(true);
 		});
 	});
 

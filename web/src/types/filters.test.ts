@@ -32,6 +32,7 @@ describe("Filter Types - Helper Functions", () => {
 			expect(state.genres.values.size).toBe(0);
 			expect(state.tags.values.size).toBe(0);
 			expect(state.status.values.size).toBe(0);
+			expect(state.readStatus.values.size).toBe(0);
 			expect(state.publisher.values.size).toBe(0);
 			expect(state.language.values.size).toBe(0);
 		});

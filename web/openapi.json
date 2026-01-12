@@ -2684,6 +2684,52 @@
         ]
       }
     },
+    "/api/v1/libraries/preview-scan": {
+      "post": {
+        "tags": [
+          "libraries"
+        ],
+        "summary": "Preview scan a path with a given strategy",
+        "description": "This endpoint allows users to preview how a scanning strategy would organize\nfiles without actually creating a library or importing anything. Useful for\ntesting strategy configurations before committing to them.",
+        "operationId": "preview_scan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Preview scan results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewScanResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or path"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/libraries/{library_id}": {
       "get": {
         "tags": [
@@ -9188,15 +9234,18 @@
         "description": "Request body for POST /books/list",
         "properties": {
           "condition": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/BookCondition",
-                "description": "Filter condition (optional - no condition returns all)"
-              }
-            ]
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Filter condition (optional - no condition returns all)"
+          },
+          "fullTextSearch": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Full-text search query (case-insensitive search on book title)"
           },
           "page": {
             "type": "integer",
@@ -9209,13 +9258,6 @@
             "format": "int64",
             "description": "Items per page (default 20, max 100)",
             "minimum": 0
-          },
-          "search": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Full-text search query (optional, future feature)"
           },
           "sort": {
             "type": [
@@ -9591,6 +9633,17 @@
           }
         }
       },
+      "BookStrategy": {
+        "type": "string",
+        "description": "Book naming strategy type for determining book titles\n\nDetermines how individual book titles and numbers are resolved.",
+        "enum": [
+          "filename",
+          "metadata_first",
+          "smart",
+          "series_name",
+          "custom"
+        ]
+      },
       "BoolOperator": {
         "oneOf": [
           {
@@ -9731,6 +9784,37 @@
               "$ref": "#/components/schemas/BulkSettingUpdate"
             },
             "description": "List of settings to update"
+          }
+        }
+      },
+      "CalibreSeriesMode": {
+        "type": "string",
+        "description": "How Calibre strategy groups books into series",
+        "enum": [
+          "standalone",
+          "by_author",
+          "from_metadata"
+        ]
+      },
+      "CalibreStrategyConfig": {
+        "type": "object",
+        "description": "Configuration for Calibre strategy",
+        "properties": {
+          "authorFromFolder": {
+            "type": "boolean",
+            "description": "Use author folder name as author metadata"
+          },
+          "readOpfMetadata": {
+            "type": "boolean",
+            "description": "Read metadata.opf files for rich metadata"
+          },
+          "seriesMode": {
+            "$ref": "#/components/schemas/CalibreSeriesMode",
+            "description": "How to group books into series"
+          },
+          "stripIdSuffix": {
+            "type": "boolean",
+            "description": "Strip Calibre ID suffix from folder names (e.g., \" (123)\")"
           }
         }
       },
@@ -10014,6 +10098,20 @@
               "EPUB"
             ]
           },
+          "bookConfig": {
+            "description": "Book strategy-specific configuration (JSON, immutable after creation)"
+          },
+          "bookStrategy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BookStrategy",
+                "description": "Book naming strategy (immutable after creation)\nOptions: filename, metadata_first, smart, series_name"
+              }
+            ]
+          },
           "defaultReadingDirection": {
             "type": [
               "string",
@@ -10061,6 +10159,20 @@
               {
                 "$ref": "#/components/schemas/ScanningConfigDto",
                 "description": "Scanning configuration"
+              }
+            ]
+          },
+          "seriesConfig": {
+            "description": "Strategy-specific configuration (JSON, immutable after creation)"
+          },
+          "seriesStrategy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SeriesStrategy",
+                "description": "Series detection strategy (immutable after creation)\nOptions: series_volume, series_volume_chapter, flat, publisher_hierarchy, calibre, custom"
               }
             ]
           }
@@ -10178,6 +10290,23 @@
           }
         }
       },
+      "CustomStrategyConfig": {
+        "type": "object",
+        "description": "Configuration for custom series strategy\n\nNote: Volume/chapter extraction from filenames is handled by the book strategy,\nnot the series strategy. Use CustomBookConfig for regex-based volume/chapter parsing.",
+        "required": [
+          "pattern"
+        ],
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Regex pattern with named capture groups for series detection\nSupported groups: publisher, series, book\nExample: \"^(?P<publisher>[^/]+)/(?P<series>[^/]+)/(?P<book>.+)\\\\.(cbz|cbr|epub|pdf)$\""
+          },
+          "seriesNameTemplate": {
+            "type": "string",
+            "description": "Template for constructing series name from capture groups\nExample: \"{publisher} - {series}\""
+          }
+        }
+      },
       "DeletePreferenceResponse": {
         "type": "object",
         "description": "Response after deleting a preference",
@@ -10195,6 +10324,71 @@
             "type": "string",
             "description": "Message describing the result",
             "example": "Preference 'ui.theme' was reset to default"
+          }
+        }
+      },
+      "DetectedSeriesDto": {
+        "type": "object",
+        "description": "Detected series information for preview",
+        "required": [
+          "name",
+          "bookCount",
+          "sampleBooks"
+        ],
+        "properties": {
+          "bookCount": {
+            "type": "integer",
+            "description": "Number of books detected",
+            "minimum": 0
+          },
+          "metadata": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DetectedSeriesMetadataDto",
+                "description": "Metadata extracted during detection"
+              }
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "Series name as detected"
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Path relative to library root"
+          },
+          "sampleBooks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sample book filenames (first 5)"
+          }
+        }
+      },
+      "DetectedSeriesMetadataDto": {
+        "type": "object",
+        "description": "Metadata extracted during series detection",
+        "properties": {
+          "author": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Author (for calibre strategy)"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Publisher (for publisher_hierarchy strategy)"
           }
         }
       },
@@ -10979,6 +11173,23 @@
           "path": "/home/user/Documents"
         }
       },
+      "FlatStrategyConfig": {
+        "type": "object",
+        "description": "Configuration for flat scanning strategy",
+        "properties": {
+          "filenamePatterns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Regex patterns for extracting series name from filename\nPatterns are tried in order, first match wins"
+          },
+          "requireMetadata": {
+            "type": "boolean",
+            "description": "If true, require metadata for series detection (no filename fallback)"
+          }
+        }
+      },
       "ForceRequest": {
         "type": "object",
         "properties": {
@@ -11423,6 +11634,8 @@
           "name",
           "path",
           "isActive",
+          "seriesStrategy",
+          "bookStrategy",
           "createdAt",
           "updatedAt",
           "defaultReadingDirection"
@@ -11443,6 +11656,9 @@
               "PDF"
             ]
           },
+          "bookConfig": {
+            "description": "Book strategy-specific configuration (JSON)"
+          },
           "bookCount": {
             "type": [
               "integer",
@@ -11450,6 +11666,10 @@
             ],
             "format": "int64",
             "example": 1250
+          },
+          "bookStrategy": {
+            "$ref": "#/components/schemas/BookStrategy",
+            "description": "Book naming strategy (filename, metadata_first, smart, series_name)"
           },
           "createdAt": {
             "type": "string",
@@ -11511,6 +11731,9 @@
               }
             ]
           },
+          "seriesConfig": {
+            "description": "Strategy-specific configuration (JSON)"
+          },
           "seriesCount": {
             "type": [
               "integer",
@@ -11518,6 +11741,10 @@
             ],
             "format": "int64",
             "example": 85
+          },
+          "seriesStrategy": {
+            "$ref": "#/components/schemas/SeriesStrategy",
+            "description": "Series detection strategy (series_volume, series_volume_chapter, flat, etc.)"
           },
           "updatedAt": {
             "type": "string",
@@ -12788,6 +13015,56 @@
           }
         }
       },
+      "PreviewScanRequest": {
+        "type": "object",
+        "description": "Preview scan request",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Filesystem path to scan",
+            "example": "/media/comics"
+          },
+          "seriesConfig": {
+            "description": "Strategy-specific configuration (JSON)"
+          },
+          "seriesStrategy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SeriesStrategy",
+                "description": "Series detection strategy to use"
+              }
+            ]
+          }
+        }
+      },
+      "PreviewScanResponse": {
+        "type": "object",
+        "description": "Preview scan response showing detected series",
+        "required": [
+          "detectedSeries",
+          "totalFiles"
+        ],
+        "properties": {
+          "detectedSeries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DetectedSeriesDto"
+            },
+            "description": "List of detected series"
+          },
+          "totalFiles": {
+            "type": "integer",
+            "description": "Total number of files found",
+            "minimum": 0
+          }
+        }
+      },
       "Publication": {
         "type": "object",
         "description": "OPDS 2.0 Publication Entry\n\nRepresents a single publication (book) in an OPDS 2.0 feed.",
@@ -12934,6 +13211,25 @@
           "title": {
             "type": "string",
             "description": "Title of the publication"
+          }
+        }
+      },
+      "PublisherHierarchyConfig": {
+        "type": "object",
+        "description": "Configuration for publisher hierarchy strategy",
+        "properties": {
+          "skipDepth": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of directory levels to skip before series detection",
+            "minimum": 0
+          },
+          "storeSkippedAs": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Metadata field to store skipped folder names (e.g., \"publisher\")"
           }
         }
       },
@@ -13956,15 +14252,18 @@
         "description": "Request body for POST /series/list",
         "properties": {
           "condition": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SeriesCondition",
-                "description": "Filter condition (optional - no condition returns all)"
-              }
-            ]
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Filter condition (optional - no condition returns all)"
+          },
+          "fullTextSearch": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Full-text search query (case-insensitive search on series name)"
           },
           "page": {
             "type": "integer",
@@ -13977,13 +14276,6 @@
             "format": "int64",
             "description": "Items per page (default 20, max 100)",
             "minimum": 0
-          },
-          "search": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Full-text search query (optional, future feature)"
           },
           "sort": {
             "type": [
@@ -14064,6 +14356,18 @@
             "example": 1987
           }
         }
+      },
+      "SeriesStrategy": {
+        "type": "string",
+        "description": "Series scanning strategy type for library organization\n\nDetermines how series are detected and organized from the filesystem structure.",
+        "enum": [
+          "series_volume",
+          "series_volume_chapter",
+          "flat",
+          "publisher_hierarchy",
+          "calibre",
+          "custom"
+        ]
       },
       "SetPreferenceRequest": {
         "type": "object",
@@ -14349,6 +14653,19 @@
           "setupRequired": {
             "type": "boolean",
             "description": "Whether initial setup is required"
+          }
+        }
+      },
+      "SmartBookConfig": {
+        "type": "object",
+        "description": "Configuration for smart book naming strategy",
+        "properties": {
+          "additionalGenericPatterns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Additional patterns to consider as \"generic\" titles (beyond defaults)"
           }
         }
       },
@@ -15608,7 +15925,7 @@
       },
       "UpdateLibraryRequest": {
         "type": "object",
-        "description": "Update library request",
+        "description": "Update library request\n\nNote: series_strategy, series_config, book_strategy, and book_config are\nimmutable after library creation and cannot be updated. To change strategies,\ndelete the library and recreate it.",
         "properties": {
           "allowedFormats": {
             "type": [

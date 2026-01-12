@@ -33,7 +33,7 @@ pub use email_verification_token::EmailVerificationTokenRepository;
 pub use external_link::ExternalLinkRepository;
 pub use external_rating::ExternalRatingRepository;
 pub use genre::GenreRepository;
-pub use library::LibraryRepository;
+pub use library::{CreateLibraryParams, LibraryRepository};
 pub use metadata::BookMetadataRepository;
 pub use metrics::MetricsRepository;
 pub use page::PageRepository;

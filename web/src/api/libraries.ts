@@ -1,4 +1,10 @@
-import type { CreateLibraryRequest, Library, ScanningConfig } from "@/types";
+import type {
+	CreateLibraryRequest,
+	Library,
+	PreviewScanRequest,
+	PreviewScanResponse,
+	ScanningConfig,
+} from "@/types";
 import { api } from "./client";
 
 export const librariesApi = {
@@ -50,6 +56,15 @@ export const librariesApi = {
 	// Purge deleted books from a library
 	purgeDeleted: async (id: string): Promise<number> => {
 		const response = await api.delete<number>(`/libraries/${id}/purge-deleted`);
+		return response.data;
+	},
+
+	// Preview scan to detect series before creating library
+	previewScan: async (request: PreviewScanRequest): Promise<PreviewScanResponse> => {
+		const response = await api.post<PreviewScanResponse>(
+			"/libraries/preview-scan",
+			request,
+		);
 		return response.data;
 	},
 };

@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::ScanningConfigDto;
+use crate::models::{BookStrategy, SeriesStrategy};
 
 /// Library data transfer object
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -18,6 +19,23 @@ pub struct LibraryDto {
     pub description: Option<String>,
     #[schema(example = true)]
     pub is_active: bool,
+
+    /// Series detection strategy (series_volume, series_volume_chapter, flat, etc.)
+    #[schema(example = "series_volume")]
+    pub series_strategy: SeriesStrategy,
+
+    /// Strategy-specific configuration (JSON)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub series_config: Option<serde_json::Value>,
+
+    /// Book naming strategy (filename, metadata_first, smart, series_name)
+    #[schema(example = "filename")]
+    pub book_strategy: BookStrategy,
+
+    /// Book strategy-specific configuration (JSON)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub book_config: Option<serde_json::Value>,
+
     pub scanning_config: Option<ScanningConfigDto>,
     #[schema(example = "2024-01-15T10:30:00Z")]
     pub last_scanned_at: Option<DateTime<Utc>>,
@@ -60,6 +78,26 @@ pub struct CreateLibraryRequest {
     #[schema(example = "My comic book collection")]
     pub description: Option<String>,
 
+    /// Series detection strategy (immutable after creation)
+    /// Options: series_volume, series_volume_chapter, flat, publisher_hierarchy, calibre, custom
+    #[serde(default)]
+    #[schema(example = "series_volume")]
+    pub series_strategy: Option<SeriesStrategy>,
+
+    /// Strategy-specific configuration (JSON, immutable after creation)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub series_config: Option<serde_json::Value>,
+
+    /// Book naming strategy (immutable after creation)
+    /// Options: filename, metadata_first, smart, series_name
+    #[serde(default)]
+    #[schema(example = "filename")]
+    pub book_strategy: Option<BookStrategy>,
+
+    /// Book strategy-specific configuration (JSON, immutable after creation)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub book_config: Option<serde_json::Value>,
+
     /// Scanning configuration
     pub scanning_config: Option<ScanningConfigDto>,
 
@@ -89,6 +127,10 @@ fn is_false(b: &bool) -> bool {
 }
 
 /// Update library request
+///
+/// Note: series_strategy, series_config, book_strategy, and book_config are
+/// immutable after library creation and cannot be updated. To change strategies,
+/// delete the library and recreate it.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateLibraryRequest {
@@ -125,4 +167,61 @@ pub struct UpdateLibraryRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = "rtl")]
     pub default_reading_direction: Option<String>,
+}
+
+/// Preview scan request
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewScanRequest {
+    /// Filesystem path to scan
+    #[schema(example = "/media/comics")]
+    pub path: String,
+
+    /// Series detection strategy to use
+    #[serde(default)]
+    #[schema(example = "series_volume")]
+    pub series_strategy: Option<SeriesStrategy>,
+
+    /// Strategy-specific configuration (JSON)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub series_config: Option<serde_json::Value>,
+}
+
+/// Preview scan response showing detected series
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewScanResponse {
+    /// List of detected series
+    pub detected_series: Vec<DetectedSeriesDto>,
+    /// Total number of files found
+    pub total_files: usize,
+}
+
+/// Detected series information for preview
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DetectedSeriesDto {
+    /// Series name as detected
+    pub name: String,
+    /// Path relative to library root
+    pub path: Option<String>,
+    /// Number of books detected
+    pub book_count: usize,
+    /// Sample book filenames (first 5)
+    pub sample_books: Vec<String>,
+    /// Metadata extracted during detection
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<DetectedSeriesMetadataDto>,
+}
+
+/// Metadata extracted during series detection
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DetectedSeriesMetadataDto {
+    /// Publisher (for publisher_hierarchy strategy)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub publisher: Option<String>,
+    /// Author (for calibre strategy)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
 }

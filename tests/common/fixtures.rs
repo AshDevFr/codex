@@ -141,6 +141,25 @@ pub async fn create_test_library(
         .unwrap()
 }
 
+/// Create a test library with specific book strategy
+pub async fn create_test_library_with_strategies(
+    db: &DatabaseConnection,
+    name: &str,
+    path: &str,
+    series_strategy: codex::models::SeriesStrategy,
+    book_strategy: codex::models::BookStrategy,
+) -> libraries::Model {
+    use codex::db::repositories::library::CreateLibraryParams;
+
+    let params = CreateLibraryParams::new(name, path)
+        .with_series_strategy(series_strategy)
+        .with_book_strategy(book_strategy);
+
+    LibraryRepository::create_with_params(db, params)
+        .await
+        .unwrap()
+}
+
 /// Create a test series in the database
 pub async fn create_test_series(
     db: &DatabaseConnection,

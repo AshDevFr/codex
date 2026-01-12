@@ -33,7 +33,7 @@ services:
     volumes:
       - ./config:/app/config:ro
       - codex_data:/app/data # Includes thumbnail cache at /app/data/thumbnails
-      - ./docker/data/library:/library:ro
+      - ./docker/data/libraries:/libraries:ro
       - ./docker/data/thumbnails:/app/data/thumbnails:rw
     command: ["codex", "serve", "--config", "/app/config/config.docker.yaml"]
     environment:
@@ -80,7 +80,7 @@ services:
       - cargo_cache:/usr/local/cargo/registry
       - target_cache:/app/target
       - ./config:/app/config:ro
-      - ./docker/data/library:/library:ro
+      - ./docker/data/libraries:/libraries:ro
       - ./docker/data/thumbnails:/app/data/thumbnails:rw
     environment:
       RUST_BACKTRACE: 1
@@ -103,7 +103,7 @@ services:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 30
       start_period: 30s
     networks:
       - codex-network
@@ -127,7 +127,7 @@ services:
       - cargo_cache:/usr/local/cargo/registry
       - target_cache:/app/target
       - ./config:/app/config:ro
-      - ./docker/data/library:/library:ro
+      - ./docker/data/libraries:/libraries:ro
     command:
       [
         "cargo",

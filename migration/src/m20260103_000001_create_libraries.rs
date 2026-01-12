@@ -19,11 +19,25 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(Libraries::Name).string().not_null())
                     .col(ColumnDef::new(Libraries::Path).string().not_null())
+                    // Series detection strategy (series_volume, series_volume_chapter, flat, etc.)
                     .col(
-                        ColumnDef::new(Libraries::ScanningStrategy)
+                        ColumnDef::new(Libraries::SeriesStrategy)
                             .string()
-                            .not_null(),
+                            .not_null()
+                            .default("series_volume"),
                     )
+                    // Strategy-specific configuration (JSON)
+                    .col(ColumnDef::new(Libraries::SeriesConfig).json())
+                    // Book naming strategy (filename, metadata_first, smart, series_name)
+                    .col(
+                        ColumnDef::new(Libraries::BookStrategy)
+                            .string()
+                            .not_null()
+                            .default("filename"),
+                    )
+                    // Book strategy-specific configuration (JSON)
+                    .col(ColumnDef::new(Libraries::BookConfig).json())
+                    // Legacy: kept for backward compatibility, stores cron/scan settings
                     .col(ColumnDef::new(Libraries::ScanningConfig).string())
                     .col(
                         ColumnDef::new(Libraries::DefaultReadingDirection)
@@ -62,7 +76,10 @@ enum Libraries {
     Id,
     Name,
     Path,
-    ScanningStrategy,
+    SeriesStrategy,
+    SeriesConfig,
+    BookStrategy,
+    BookConfig,
     ScanningConfig,
     DefaultReadingDirection,
     AllowedFormats,
