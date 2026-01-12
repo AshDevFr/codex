@@ -20,44 +20,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-docs:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: docs/package-lock.json
-
-      - name: Install dependencies
-        working-directory: docs
-        run: npm ci
-
-      - name: Generate API docs from OpenAPI spec
-        working-directory: docs
-        run: npm run gen-api-docs
-
-      - name: Build docs
-        working-directory: docs
-        run: npm run build
-        env:
-          NODE_OPTIONS: '--max-old-space-size=1536'
-
-      - name: Upload docs artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: docs-build
-          path: docs/build
-          retention-days: 7
-
   # Build and push Docker image for docs (push to main only)
   docker-docs:
-    needs: build-docs
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -68,12 +32,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Download docs build
-        uses: actions/download-artifact@v3
-        with:
-          name: docs-build
-          path: docs/build
 
       - name: Registry FQDN Setup
         id: registry
@@ -104,7 +62,7 @@ jobs:
       - name: Build and push docs Docker image
         uses: docker/build-push-action@v6
         with:
-          context: docs
+          context: .
           file: docs/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}

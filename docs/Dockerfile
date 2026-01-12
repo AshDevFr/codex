@@ -4,13 +4,16 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY docs/package*.json ./
 
 # Install dependencies
 RUN npm ci
 
-# Copy source files
-COPY . .
+# Copy docs source files
+COPY docs/ ./
+
+# Copy OpenAPI spec (referenced by docusaurus config as ../web/openapi.json)
+COPY web/openapi.json /web/openapi.json
 
 # Build the static site
 RUN npm run build
