@@ -95,23 +95,15 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
-        run: |
-          apt-get remove -y nodejs npm || true
-          curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-          apt-get install -y nodejs
-          node --version
-
-      - name: Cache npm dependencies
-        uses: actions/cache@v4
+        uses: actions/setup-node@v4
         with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('web/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-npm-
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
 
       - name: Install dependencies
         working-directory: web
-        run: npm ci
+        run: npm ci --include=optional
 
       - name: Lint check
         continue-on-error: true
@@ -175,16 +167,16 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
-        run: |
-          apt-get remove -y nodejs npm || true
-          curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-          apt-get install -y nodejs
-          node --version
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
 
       - name: Build frontend
         working-directory: web
         run: |
-          npm ci
+          npm ci --include=optional
           npm run build
 
       - name: Install Rust

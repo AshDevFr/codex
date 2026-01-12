@@ -243,6 +243,11 @@ curl -X POST "http://localhost:8080/api/v1/libraries/{id}/scan?mode=deep" \
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/series` | List all series |
+| POST | `/series/list` | Advanced filtering with conditions |
+| POST | `/series/search` | Full-text search |
+| GET | `/series/in-progress` | Series with in-progress books |
+| GET | `/series/recently-added` | Recently added series |
+| GET | `/series/recently-updated` | Recently updated series |
 | GET | `/series/{id}` | Get series details |
 | GET | `/series/{id}/books` | Get books in series |
 | GET | `/series/{id}/thumbnail` | Get series cover |
@@ -250,16 +255,37 @@ curl -X POST "http://localhost:8080/api/v1/libraries/{id}/scan?mode=deep" \
 | POST | `/series/{id}/read` | Mark series as read |
 | POST | `/series/{id}/unread` | Mark series as unread |
 
+#### Series Sorting
+
+Use the `sort` parameter with format `field,direction`. Available fields: `name`, `date_added`, `date_updated`, `release_date`, `date_read`, `book_count`, `file_size`, `page_count`.
+
+```bash
+curl "http://localhost:8080/api/v1/series?sort=date_added,desc" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
 ### Books
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/books` | List all books |
+| POST | `/books/list` | Advanced filtering with conditions |
 | GET | `/books/{id}` | Get book details |
 | GET | `/books/{id}/thumbnail` | Get book cover |
 | POST | `/books/{id}/analyze` | Trigger book analysis |
 | GET | `/books/in-progress` | Get books currently being read |
+| GET | `/books/on-deck` | Next unread book in started series |
 | GET | `/books/recently-added` | Get recently added books |
+| GET | `/books/recently-read` | Get recently read books |
+
+#### On Deck
+
+The "On Deck" endpoint returns the next unread book in series where you have completed at least one book but have no books currently in progress.
+
+```bash
+curl "http://localhost:8080/api/v1/books/on-deck" \
+  -H "Authorization: Bearer $TOKEN"
+```
 
 ### Pages
 
@@ -345,6 +371,27 @@ curl -X PUT http://localhost:8080/api/v1/books/{id}/progress \
 | POST | `/duplicates/scan` | Scan for duplicates |
 | DELETE | `/duplicates/{id}` | Dismiss a duplicate group |
 
+### User Preferences
+
+Per-user settings (theme, language, reader options). See [Users & Permissions](./users#user-preferences) for details.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/user/preferences` | List all preferences |
+| PUT | `/user/preferences/{key}` | Set a preference |
+| DELETE | `/user/preferences/{key}` | Reset to default |
+
+### User Integrations
+
+Connect external services (AniList, MyAnimeList, etc.). See [Users & Permissions](./users#external-integrations) for details.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/user/integrations` | List connected and available integrations |
+| POST | `/user/integrations` | Connect integration |
+| DELETE | `/user/integrations/{name}` | Disconnect integration |
+| POST | `/user/integrations/{name}/sync` | Trigger manual sync |
+
 ### Settings (Admin Only)
 
 | Method | Endpoint | Description |
@@ -355,6 +402,16 @@ curl -X PUT http://localhost:8080/api/v1/books/{id}/progress \
 | POST | `/admin/settings/bulk` | Bulk update settings |
 | POST | `/admin/settings/{key}/reset` | Reset to default |
 | GET | `/admin/settings/{key}/history` | Get setting change history |
+
+### System Integrations (Admin Only)
+
+App-wide external service connections (metadata providers, notifications).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin/integrations` | List all system integrations |
+| POST | `/admin/integrations` | Create integration |
+| POST | `/admin/integrations/{id}/test` | Test connection |
 
 ### Filesystem (Admin Only)
 
@@ -469,7 +526,7 @@ Response:
 
 **Books**: `title`, `number`, `file_size`, `page_count`, `created_at`, `modified_at`
 
-**Series**: `name`, `book_count`, `created_at`, `updated_at`
+**Series**: `name`, `date_added`, `date_updated`, `release_date`, `date_read`, `book_count`, `file_size`, `filename`, `page_count`
 
 Example:
 
@@ -477,6 +534,64 @@ Example:
 curl -H "Authorization: Bearer $TOKEN" \
   "http://localhost:8080/api/v1/books?library_id=uuid&sort=title&order=asc"
 ```
+
+### Advanced Filtering
+
+Use `POST /series/list` or `POST /books/list` for condition-based filtering.
+
+#### Condition Structure
+
+Filters use a tree structure with `allOf` (AND) and `anyOf` (OR) combinators:
+
+```json
+{
+  "condition": {
+    "allOf": [
+      { "genre": { "operator": "is", "value": "Action" } },
+      { "genre": { "operator": "isNot", "value": "Horror" } }
+    ]
+  },
+  "fullTextSearch": "batman",
+  "page": 0,
+  "pageSize": 20,
+  "sort": "name,asc"
+}
+```
+
+#### Operators
+
+| Operator | Description |
+|----------|-------------|
+| `is` | Equals value |
+| `isNot` | Not equals value |
+| `isNull` | Field is null |
+| `isNotNull` | Field has value |
+| `contains` | Contains substring |
+| `beginsWith` | Starts with |
+
+#### Filter Fields
+
+**Series**: `libraryId`, `genre`, `tag`, `status`, `publisher`, `language`, `name`, `readStatus`
+
+**Books**: `libraryId`, `seriesId`, `genre`, `tag`, `title`, `readStatus`, `hasError`
+
+#### Example: Genre filter with exclusion
+
+```bash
+curl -X POST http://localhost:8080/api/v1/series/list \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "condition": {
+      "allOf": [
+        { "genre": { "operator": "is", "value": "Action" } },
+        { "genre": { "operator": "isNot", "value": "Horror" } }
+      ]
+    }
+  }'
+```
+
+See the [Filtering & Search](./filtering) guide for more examples.
 
 ## Error Responses
 

@@ -269,12 +269,58 @@ server {
 
 ## OPDS Versions
 
-Codex supports:
+Codex supports multiple OPDS versions:
 
-- **OPDS 1.2**: Standard catalog format (Atom-based)
+- **OPDS 1.2**: Standard catalog format (Atom XML-based)
+- **OPDS 2.0**: Modern JSON-based catalog format
 - **OPDS PSE 1.0**: Page Streaming Extension for comics
 
 Most clients work with OPDS 1.2. PSE enables page-by-page streaming in supported apps.
+
+### OPDS 2.0
+
+OPDS 2.0 is the next-generation standard using JSON instead of XML. It provides better tooling support and richer metadata via schema.org.
+
+#### OPDS 2.0 Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `/opds/v2` | Root catalog (JSON) |
+| `/opds/v2/libraries` | List all libraries |
+| `/opds/v2/libraries/{id}` | Series in a library |
+| `/opds/v2/series/{id}` | Books in a series (publications feed) |
+| `/opds/v2/recent` | Recent additions |
+| `/opds/v2/search?query=...` | Search books and series |
+
+#### Content Type
+
+OPDS 2.0 feeds use `application/opds+json` content type.
+
+#### Example Response
+
+```json
+{
+  "metadata": {
+    "title": "Codex OPDS 2.0 Catalog",
+    "modified": "2026-01-10T12:00:00Z"
+  },
+  "links": [
+    {"rel": "self", "href": "/opds/v2", "type": "application/opds+json"},
+    {"rel": "search", "href": "/opds/v2/search{?query}", "type": "application/opds+json", "templated": true}
+  ],
+  "navigation": [
+    {"href": "/opds/v2/libraries", "title": "All Libraries", "type": "application/opds+json"}
+  ]
+}
+```
+
+#### Reading Progress in OPDS 2.0
+
+OPDS 2.0 feeds include reading progress for each book (user-specific). Progress is included as a `readingProgress` object on each publication.
+
+#### Client Support
+
+Modern OPDS clients are increasingly supporting OPDS 2.0. If your client doesn't support 2.0, use the standard OPDS 1.2 endpoint at `/opds`.
 
 ## Security Considerations
 

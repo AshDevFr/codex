@@ -422,6 +422,116 @@ curl -X PUT http://localhost:8080/api/v1/users/{id} \
   -d '{"password":"new-password"}'
 ```
 
+## User Preferences
+
+Codex supports per-user preferences for customizing the user experience. Preferences are stored as key-value pairs and synced across devices.
+
+### Available Preferences
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `ui.theme` | string | `"system"` | Theme: "light", "dark", "system" |
+| `ui.language` | string | `"en"` | UI language (BCP47 code) |
+| `ui.sidebar_collapsed` | boolean | `false` | Sidebar state |
+| `reader.default_zoom` | integer | `100` | Default zoom percentage |
+| `reader.reading_direction` | string | `"auto"` | Reading direction |
+| `reader.page_fit` | string | `"width"` | Page fit mode |
+| `library.default_view` | string | `"grid"` | Default view mode |
+| `library.default_page_size` | integer | `24` | Items per page |
+
+### Managing Preferences via Web Interface
+
+1. Go to **Settings** > **Profile**
+2. Navigate to the **Preferences** tab
+3. Adjust settings as needed
+4. Changes are saved automatically
+
+### Managing Preferences via API
+
+```bash
+# Get all preferences
+curl http://localhost:8080/api/v1/user/preferences \
+  -H "Authorization: Bearer $TOKEN"
+
+# Set a preference
+curl -X PUT http://localhost:8080/api/v1/user/preferences/ui.theme \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"value": "dark"}'
+
+# Reset to default
+curl -X DELETE http://localhost:8080/api/v1/user/preferences/ui.theme \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+## External Integrations
+
+Connect your Codex account to external services for reading progress sync and list management.
+
+### Available Integrations
+
+| Provider | Auth Type | Features |
+|----------|-----------|----------|
+| AniList | OAuth2 | Sync progress, ratings, import lists |
+| MyAnimeList | OAuth2 | Sync progress, ratings, import lists |
+| Kitsu | OAuth2 | Sync progress, ratings |
+| MangaDex | API Key | Sync progress |
+| Kavita | API Key | Sync progress, ratings |
+
+### Connecting an Integration
+
+#### Via Web Interface
+
+1. Go to **Settings** > **Profile**
+2. Navigate to the **Integrations** tab
+3. Click **Connect** on the desired integration
+4. Follow the OAuth flow or enter your API key
+5. Configure sync settings
+
+#### Via API
+
+```bash
+# List available integrations
+curl http://localhost:8080/api/v1/user/integrations \
+  -H "Authorization: Bearer $TOKEN"
+
+# Connect an OAuth integration
+curl -X POST http://localhost:8080/api/v1/user/integrations \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "integration_name": "anilist",
+    "redirect_uri": "http://localhost:8080/settings/integrations/callback"
+  }'
+```
+
+### Sync Settings
+
+For each integration, you can configure:
+
+| Setting | Description |
+|---------|-------------|
+| `sync_reading_progress` | Sync reading progress to external service |
+| `sync_ratings` | Sync ratings to external service |
+| `sync_on_complete` | Trigger sync when marking book as complete |
+| `sync_direction` | "push", "pull", or "bidirectional" |
+
+### Manual Sync
+
+Trigger a manual sync for an integration:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/user/integrations/anilist/sync \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Disconnecting an Integration
+
+```bash
+curl -X DELETE http://localhost:8080/api/v1/user/integrations/anilist \
+  -H "Authorization: Bearer $TOKEN"
+```
+
 ## Security Best Practices
 
 ### User Management

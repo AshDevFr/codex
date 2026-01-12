@@ -14,7 +14,7 @@ const sidebars: SidebarsConfig = {
       type: "category",
       label: "Using Codex",
       collapsed: false,
-      items: ["libraries", "formats", "users", "opds"],
+      items: ["libraries", "formats", "filtering", "users", "opds"],
     },
     {
       type: "category",
