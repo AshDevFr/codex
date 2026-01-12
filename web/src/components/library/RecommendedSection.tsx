@@ -1,13 +1,12 @@
-import {
-	Card,
-	Stack,
-	Text,
-	Title,
-} from "@mantine/core";
+import { Card, Stack, Text } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
+
 import { booksApi } from "@/api/books";
 import { seriesApi } from "@/api/series";
+import { HorizontalCarousel } from "@/components/library/HorizontalCarousel";
 import { MediaCard } from "@/components/library/MediaCard";
+
+const MAX_ITEMS_PER_SECTION = 20;
 
 interface RecommendedSectionProps {
 	libraryId: string;
@@ -23,7 +22,7 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 	// Fetch recently added books
 	const { data: recentlyAddedBooks, isLoading: loadingRecentBooks } = useQuery({
 		queryKey: ["books", "recently-added", libraryId],
-		queryFn: () => booksApi.getRecentlyAdded(libraryId, 50),
+		queryFn: () => booksApi.getRecentlyAdded(libraryId, MAX_ITEMS_PER_SECTION),
 	});
 
 	// Fetch on-deck books (next unread book in series where user has completed books)
@@ -33,30 +32,52 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 	});
 
 	// Fetch recently added series
-	const { data: recentlyAddedSeries, isLoading: loadingRecentSeries } = useQuery({
-		queryKey: ["series", "recently-added", libraryId],
-		queryFn: () => seriesApi.getRecentlyAdded(libraryId, 50),
-	});
+	const { data: recentlyAddedSeries, isLoading: loadingRecentSeries } =
+		useQuery({
+			queryKey: ["series", "recently-added", libraryId],
+			queryFn: () =>
+				seriesApi.getRecentlyAdded(libraryId, MAX_ITEMS_PER_SECTION),
+		});
 
 	// Fetch recently updated series
-	const { data: recentlyUpdatedSeries, isLoading: loadingUpdatedSeries } = useQuery({
-		queryKey: ["series", "recently-updated", libraryId],
-		queryFn: () => seriesApi.getRecentlyUpdated(libraryId, 50),
-	});
+	const { data: recentlyUpdatedSeries, isLoading: loadingUpdatedSeries } =
+		useQuery({
+			queryKey: ["series", "recently-updated", libraryId],
+			queryFn: () =>
+				seriesApi.getRecentlyUpdated(libraryId, MAX_ITEMS_PER_SECTION),
+		});
 
 	// Fetch recently read books
 	const { data: recentlyReadBooks, isLoading: loadingRecentlyRead } = useQuery({
 		queryKey: ["books", "recently-read", libraryId],
-		queryFn: () => booksApi.getRecentlyRead(libraryId, 50),
+		queryFn: () => booksApi.getRecentlyRead(libraryId, MAX_ITEMS_PER_SECTION),
 	});
 
-	const onDeckBooks = onDeckResponse?.data ?? [];
+	const onDeckBooks = (onDeckResponse?.data ?? []).slice(
+		0,
+		MAX_ITEMS_PER_SECTION
+	);
+	const limitedInProgressBooks = (inProgressBooks?.data ?? []).slice(
+		0,
+		MAX_ITEMS_PER_SECTION
+	);
 
-	const isLoading = loadingInProgress || loadingRecentBooks || loadingOnDeck ||
-		loadingRecentSeries || loadingUpdatedSeries || loadingRecentlyRead;
+	const isLoading =
+		loadingInProgress ||
+		loadingRecentBooks ||
+		loadingOnDeck ||
+		loadingRecentSeries ||
+		loadingUpdatedSeries ||
+		loadingRecentlyRead;
 
-	const hasContent = (inProgressBooks?.length ?? 0) > 0 ||
-		(recentlyAddedBooks?.length ?? 0) > 0 ||
+	const limitedRecentlyAddedBooks = (recentlyAddedBooks?.data ?? []).slice(
+		0,
+		MAX_ITEMS_PER_SECTION
+	);
+
+	const hasContent =
+		limitedInProgressBooks.length > 0 ||
+		limitedRecentlyAddedBooks.length > 0 ||
 		onDeckBooks.length > 0 ||
 		(recentlyAddedSeries?.length ?? 0) > 0 ||
 		(recentlyUpdatedSeries?.length ?? 0) > 0 ||
@@ -65,126 +86,66 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 	return (
 		<Stack gap="xl">
 			{/* Keep Reading Section */}
-			{inProgressBooks && inProgressBooks.length > 0 && (
-				<Stack gap="md">
-					<Title order={2}>Keep Reading</Title>
-					<div
-						style={{
-							display: "grid",
-							gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-							gap: "var(--mantine-spacing-md)",
-							width: "100%",
-						}}
-					>
-						{inProgressBooks.map((book) => (
-							<MediaCard key={book.id} type="book" data={book} showProgress />
-						))}
-					</div>
-				</Stack>
+			{limitedInProgressBooks.length > 0 && (
+				<HorizontalCarousel title="Keep Reading">
+					{limitedInProgressBooks.map((book) => (
+						<MediaCard key={book.id} type="book" data={book} showProgress />
+					))}
+				</HorizontalCarousel>
 			)}
 
 			{/* On Deck Section */}
 			{onDeckBooks.length > 0 && (
-				<Stack gap="md">
-					<Title order={2}>On Deck</Title>
-					<Text size="sm" c="dimmed">
-						Next book in series you've been reading
-					</Text>
-					<div
-						style={{
-							display: "grid",
-							gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-							gap: "var(--mantine-spacing-md)",
-							width: "100%",
-						}}
-					>
-						{onDeckBooks.map((book) => (
-							<MediaCard key={book.id} type="book" data={book} />
-						))}
-					</div>
-				</Stack>
+				<HorizontalCarousel
+					title="On Deck"
+					subtitle="Next book in series you've been reading"
+				>
+					{onDeckBooks.map((book) => (
+						<MediaCard key={book.id} type="book" data={book} />
+					))}
+				</HorizontalCarousel>
 			)}
 
 			{/* Recently Added Books */}
-			{recentlyAddedBooks && recentlyAddedBooks.length > 0 && (
-				<Stack gap="md">
-					<Title order={2}>Recently Added Books</Title>
-					<div
-						style={{
-							display: "grid",
-							gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-							gap: "var(--mantine-spacing-md)",
-							width: "100%",
-						}}
-					>
-						{recentlyAddedBooks.map((book) => (
-							<MediaCard key={book.id} type="book" data={book} />
-						))}
-					</div>
-				</Stack>
+			{limitedRecentlyAddedBooks.length > 0 && (
+				<HorizontalCarousel title="Recently Added Books">
+					{limitedRecentlyAddedBooks.map((book) => (
+						<MediaCard key={book.id} type="book" data={book} />
+					))}
+				</HorizontalCarousel>
 			)}
 
 			{/* Recently Added Series */}
 			{recentlyAddedSeries && recentlyAddedSeries.length > 0 && (
-				<Stack gap="md">
-					<Title order={2}>Recently Added Series</Title>
-					<div
-						style={{
-							display: "grid",
-							gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-							gap: "var(--mantine-spacing-md)",
-							width: "100%",
-						}}
-					>
-						{recentlyAddedSeries.map((series) => (
-							<MediaCard key={series.id} type="series" data={series} />
-						))}
-					</div>
-				</Stack>
+				<HorizontalCarousel title="Recently Added Series">
+					{recentlyAddedSeries.map((series) => (
+						<MediaCard key={series.id} type="series" data={series} />
+					))}
+				</HorizontalCarousel>
 			)}
 
 			{/* Recently Updated Series */}
 			{recentlyUpdatedSeries && recentlyUpdatedSeries.length > 0 && (
-				<Stack gap="md">
-					<Title order={2}>Recently Updated Series</Title>
-					<Text size="sm" c="dimmed">
-						Series with new or updated content
-					</Text>
-					<div
-						style={{
-							display: "grid",
-							gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-							gap: "var(--mantine-spacing-md)",
-							width: "100%",
-						}}
-					>
-						{recentlyUpdatedSeries.map((series) => (
-							<MediaCard key={series.id} type="series" data={series} />
-						))}
-					</div>
-				</Stack>
+				<HorizontalCarousel
+					title="Recently Updated Series"
+					subtitle="Series with new or updated content"
+				>
+					{recentlyUpdatedSeries.map((series) => (
+						<MediaCard key={series.id} type="series" data={series} />
+					))}
+				</HorizontalCarousel>
 			)}
 
 			{/* Recently Read Books */}
 			{recentlyReadBooks && recentlyReadBooks.length > 0 && (
-				<Stack gap="md">
-					<Title order={2}>Recently Read Books</Title>
-					<Text size="sm" c="dimmed">
-						Books you've read recently
-					</Text>
-					<div
-						style={{
-							display: "grid",
-							gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-							gap: "var(--mantine-spacing-md)",
-							width: "100%",
-						}}
-					>
-						{recentlyReadBooks.map((book) => (
-							<MediaCard key={book.id} type="book" data={book} showProgress />
-						))}
-					</div>
-				</Stack>
+				<HorizontalCarousel
+					title="Recently Read Books"
+					subtitle="Books you've read recently"
+				>
+					{recentlyReadBooks.map((book) => (
+						<MediaCard key={book.id} type="book" data={book} showProgress />
+					))}
+				</HorizontalCarousel>
 			)}
 
 			{/* Empty state */}

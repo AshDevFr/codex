@@ -30,7 +30,7 @@ use uuid::Uuid;
 /// - If `CODEX_COOKIE_SECURE` env var is set, uses that value
 /// - Otherwise, defaults to `false` for development (allows HTTP cookies)
 /// - In production, should be set to `true` via env var
-fn build_auth_cookie(token: &str, max_age: u64) -> String {
+pub(crate) fn build_auth_cookie(token: &str, max_age: u64) -> String {
     // Check environment variable first
     let use_secure = env::var("CODEX_COOKIE_SECURE")
         .ok()

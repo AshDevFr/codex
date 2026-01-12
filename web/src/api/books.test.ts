@@ -204,20 +204,23 @@ describe("booksApi", () => {
 
 	describe("getInProgress", () => {
 		it("should fetch in-progress books for a library", async () => {
-			const mockBooks = [
-				{ id: "book-1", title: "Reading Book 1", readProgress: { currentPage: 50, totalPages: 200 } },
-			];
+			const mockResponse = {
+				data: [
+					{ id: "book-1", title: "Reading Book 1", readProgress: { currentPage: 50, totalPages: 200 } },
+				],
+				total: 1,
+			};
 
-			vi.mocked(api.get).mockResolvedValueOnce({ data: mockBooks });
+			vi.mocked(api.get).mockResolvedValueOnce({ data: mockResponse });
 
 			const result = await booksApi.getInProgress("library-123");
 
 			expect(api.get).toHaveBeenCalledWith("/books/in-progress?library_id=library-123");
-			expect(result).toEqual(mockBooks);
+			expect(result).toEqual(mockResponse);
 		});
 
 		it("should fetch all in-progress books when libraryId is 'all'", async () => {
-			vi.mocked(api.get).mockResolvedValueOnce({ data: [] });
+			vi.mocked(api.get).mockResolvedValueOnce({ data: { data: [], total: 0 } });
 
 			await booksApi.getInProgress("all");
 
@@ -243,22 +246,25 @@ describe("booksApi", () => {
 
 	describe("getRecentlyAdded", () => {
 		it("should fetch recently added books with default limit", async () => {
-			const mockBooks = [{ id: "book-new", title: "New Book" }];
+			const mockResponse = {
+				data: [{ id: "book-new", title: "New Book" }],
+				total: 1,
+			};
 
-			vi.mocked(api.get).mockResolvedValueOnce({ data: mockBooks });
+			vi.mocked(api.get).mockResolvedValueOnce({ data: mockResponse });
 
 			const result = await booksApi.getRecentlyAdded("library-123");
 
-			expect(api.get).toHaveBeenCalledWith("/books/recently-added?library_id=library-123&limit=50");
-			expect(result).toEqual(mockBooks);
+			expect(api.get).toHaveBeenCalledWith("/books/recently-added?library_id=library-123&page_size=50");
+			expect(result).toEqual(mockResponse);
 		});
 
 		it("should fetch recently added books with custom limit", async () => {
-			vi.mocked(api.get).mockResolvedValueOnce({ data: [] });
+			vi.mocked(api.get).mockResolvedValueOnce({ data: { data: [], total: 0 } });
 
 			await booksApi.getRecentlyAdded("all", 10);
 
-			expect(api.get).toHaveBeenCalledWith("/books/recently-added?limit=10");
+			expect(api.get).toHaveBeenCalledWith("/books/recently-added?page_size=10");
 		});
 	});
 

@@ -5,10 +5,16 @@ use crate::api::{
     },
     error::ApiError,
     extractors::{AuthContext, AuthState},
+    handlers::auth::build_auth_cookie,
 };
 use crate::db::{entities::users, repositories::UserRepository};
 use crate::utils::password;
-use axum::{extract::State, Json};
+use axum::{
+    extract::State,
+    http::{header, HeaderMap},
+    response::{IntoResponse, Response},
+    Json,
+};
 use chrono::Utc;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -54,7 +60,7 @@ pub async fn setup_status(
 pub async fn initialize_setup(
     State(state): State<Arc<AuthState>>,
     Json(request): Json<InitializeSetupRequest>,
-) -> Result<Json<InitializeSetupResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     // Check if setup is still needed
     let has_users = UserRepository::has_any_users(&state.db)
         .await
@@ -175,13 +181,25 @@ pub async fn initialize_setup(
             is_admin: created_user.is_admin,
             email_verified: created_user.email_verified,
         },
-        access_token,
+        access_token: access_token.clone(),
         token_type: "Bearer".to_string(),
         expires_in: 24 * 3600, // 24 hours in seconds
         message: "Setup completed successfully. Welcome to Codex!".to_string(),
     };
 
-    Ok(Json(response))
+    // Create HTTP-only cookie for image authentication (same as login)
+    let cookie = build_auth_cookie(&access_token, 24 * 3600);
+
+    // Build response with cookie
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::SET_COOKIE,
+        cookie
+            .parse()
+            .map_err(|_| ApiError::Internal("Failed to create cookie header".to_string()))?,
+    );
+
+    Ok((headers, Json(response)).into_response())
 }
 
 /// Configure initial settings (optional step in setup wizard)

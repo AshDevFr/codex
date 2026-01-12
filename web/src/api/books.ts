@@ -56,7 +56,7 @@ export const booksApi = {
 	},
 
 	// Get books with reading progress (incomplete reads)
-	getInProgress: async (libraryId: string): Promise<Book[]> => {
+	getInProgress: async (libraryId: string): Promise<PaginatedResponse<Book>> => {
 		const params = new URLSearchParams();
 		if (libraryId !== "all") {
 			params.set("library_id", libraryId);
@@ -64,7 +64,7 @@ export const booksApi = {
 		const queryString = params.toString();
 		const url = `/books/in-progress${queryString ? `?${queryString}` : ""}`;
 
-		const response = await api.get<Book[]>(url);
+		const response = await api.get<PaginatedResponse<Book>>(url);
 		return response.data;
 	},
 
@@ -85,16 +85,16 @@ export const booksApi = {
 	getRecentlyAdded: async (
 		libraryId: string,
 		limit = 50,
-	): Promise<Book[]> => {
+	): Promise<PaginatedResponse<Book>> => {
 		const params = new URLSearchParams();
 		if (libraryId !== "all") {
 			params.set("library_id", libraryId);
 		}
-		params.set("limit", limit.toString());
+		params.set("page_size", limit.toString());
 		const queryString = params.toString();
 		const url = `/books/recently-added?${queryString}`;
 
-		const response = await api.get<Book[]>(url);
+		const response = await api.get<PaginatedResponse<Book>>(url);
 		return response.data;
 	},
 

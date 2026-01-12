@@ -44,14 +44,30 @@ export function TaskNotificationBadge() {
 		return `${taskName}${progress}`;
 	};
 
+	// Sort running tasks by formatted task type name
+	const sortedRunningTasks = [...runningTasks].sort((a, b) => {
+		const nameA = formatTaskType(a.task_type);
+		const nameB = formatTaskType(b.task_type);
+		return nameA.localeCompare(nameB);
+	});
+
+	// Filter and sort pending task entries by formatted name, excluding entries with 0 count
+	const sortedPendingEntries = Object.entries(pendingCounts)
+		.filter(([, count]) => count > 0)
+		.sort(([typeA], [typeB]) => {
+			const nameA = formatTaskType(typeA);
+			const nameB = formatTaskType(typeB);
+			return nameA.localeCompare(nameB);
+		});
+
 	const tooltipContent = (
 		<Stack gap={8}>
-			{runningTasks.length > 0 && (
+			{sortedRunningTasks.length > 0 && (
 				<Stack gap={4}>
 					<Text size="xs" fw={600}>
 						Running Tasks
 					</Text>
-					{runningTasks.map((task) => (
+					{sortedRunningTasks.map((task) => (
 						<Group key={task.task_id} gap="xs">
 							<IconLoader2
 								size={12}
@@ -64,12 +80,12 @@ export function TaskNotificationBadge() {
 				</Stack>
 			)}
 
-			{totalPendingCount > 0 && (
+			{sortedPendingEntries.length > 0 && (
 				<Stack gap={4}>
 					<Text size="xs" fw={600}>
 						Pending Tasks ({totalPendingCount})
 					</Text>
-					{Object.entries(pendingCounts).map(([taskType, count]) => (
+					{sortedPendingEntries.map(([taskType, count]) => (
 						<Group key={taskType} gap="xs">
 							<Text size="xs" c="dimmed">
 								{formatTaskType(taskType)}: {count}

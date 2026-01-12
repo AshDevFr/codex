@@ -525,3 +525,73 @@ async fn test_valid_email_accepted() {
 
     assert_eq!(status, StatusCode::OK, "Valid email should be accepted");
 }
+
+// ============================================================================
+// Cookie Authentication Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_initialize_setup_sets_auth_cookie() {
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    let init_request = InitializeSetupRequest {
+        username: "admin".to_string(),
+        email: "admin@example.com".to_string(),
+        password: "SecurePassword123!".to_string(),
+    };
+
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/api/v1/setup/initialize")
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_string(&init_request).unwrap())
+        .unwrap();
+
+    // Make request and get full response with headers
+    let response = app
+        .oneshot(request)
+        .await
+        .expect("Failed to execute request");
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Check that Set-Cookie header is present with auth_token
+    let set_cookie = response
+        .headers()
+        .get("set-cookie")
+        .expect("Response should include Set-Cookie header");
+
+    let cookie_value = set_cookie.to_str().expect("Cookie should be valid UTF-8");
+    assert!(
+        cookie_value.starts_with("auth_token="),
+        "Cookie should be named 'auth_token', got: {}",
+        cookie_value
+    );
+    assert!(
+        cookie_value.contains("HttpOnly"),
+        "Cookie should be HttpOnly for security"
+    );
+    assert!(
+        cookie_value.contains("SameSite=Lax"),
+        "Cookie should have SameSite=Lax"
+    );
+    assert!(cookie_value.contains("Path=/"), "Cookie should have Path=/");
+
+    // Also verify the response body is correct
+    let body = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read body")
+        .to_bytes();
+    let init_response: InitializeSetupResponse =
+        serde_json::from_slice(&body).expect("Failed to parse response");
+
+    assert!(!init_response.access_token.is_empty());
+    assert_eq!(init_response.user.username, "admin");
+}

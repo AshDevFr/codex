@@ -1,0 +1,26 @@
+.scrollContainer {
+	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+	margin: 0 calc(-1 * var(--mantine-spacing-md));
+	padding: 0 var(--mantine-spacing-md);
+}
+
+.scrollContainer::-webkit-scrollbar {
+	display: none;
+}
+
+.itemsContainer {
+	display: flex;
+	gap: var(--mantine-spacing-md);
+	padding-bottom: var(--mantine-spacing-xs);
+}
+
+/* Style direct children - the MediaCard components */
+.itemsContainer > * {
+	flex: 0 0 150px;
+	width: 150px;
+	min-width: 150px;
+	max-width: 150px;
+}
