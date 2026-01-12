@@ -104,7 +104,7 @@ jobs:
       - name: Cache npm dependencies
         uses: actions/cache@v4
         with:
-          path: web/node_modules
+          path: ~/.npm
           key: ${{ runner.os }}-npm-${{ hashFiles('web/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-npm-
