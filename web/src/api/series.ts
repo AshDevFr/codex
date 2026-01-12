@@ -77,6 +77,14 @@ export const seriesApi = {
 		return response.data;
 	},
 
+	// Generate thumbnails for all books in series
+	generateThumbnails: async (seriesId: string): Promise<{ message: string }> => {
+		const response = await api.post<{ message: string }>(
+			`/series/${seriesId}/thumbnails`,
+		);
+		return response.data;
+	},
+
 	// Mark all books in a series as read
 	markAsRead: async (seriesId: string): Promise<{ count: number; message: string }> => {
 		const response = await api.post<{ count: number; message: string }>(

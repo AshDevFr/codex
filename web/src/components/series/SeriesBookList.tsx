@@ -57,7 +57,7 @@ export function SeriesBookList({
 		queryFn: () =>
 			booksApi.getByLibrary("all", {
 				series_id: seriesId,
-				page,
+				page: page - 1, // API uses 0-indexed pages
 				pageSize,
 				sort,
 			}),

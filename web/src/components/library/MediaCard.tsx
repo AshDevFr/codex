@@ -346,7 +346,10 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 										{(!book?.readProgress || !book.readProgress.completed) && (
 											<Menu.Item
 												leftSection={<IconCheck size={14} />}
-												onClick={() => bookMarkAsReadMutation.mutate()}
+												onClick={(e: React.MouseEvent) => {
+													e.stopPropagation();
+													bookMarkAsReadMutation.mutate();
+												}}
 												disabled={bookMarkAsReadMutation.isPending}
 											>
 												{bookMarkAsReadMutation.isPending ? "Marking..." : "Mark as Read"}
@@ -356,7 +359,10 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 										{book?.readProgress && (
 											<Menu.Item
 												leftSection={<IconBookOff size={14} />}
-												onClick={() => bookMarkAsUnreadMutation.mutate()}
+												onClick={(e: React.MouseEvent) => {
+													e.stopPropagation();
+													bookMarkAsUnreadMutation.mutate();
+												}}
 												disabled={bookMarkAsUnreadMutation.isPending}
 											>
 												{bookMarkAsUnreadMutation.isPending ? "Marking..." : "Mark as Unread"}
@@ -364,10 +370,13 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 										)}
 										<Menu.Item
 											leftSection={<IconAnalyze size={14} />}
-											onClick={() => bookAnalyzeMutation.mutate()}
+											onClick={(e: React.MouseEvent) => {
+												e.stopPropagation();
+												bookAnalyzeMutation.mutate();
+											}}
 											disabled={bookAnalyzeMutation.isPending}
 										>
-											{bookAnalyzeMutation.isPending ? "Analyzing..." : "Analyze"}
+											{bookAnalyzeMutation.isPending ? "Analyzing..." : "Force Analyze"}
 										</Menu.Item>
 									</>
 								) : (
@@ -376,7 +385,10 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 										{series && (series.unreadCount ?? 0) > 0 && (
 											<Menu.Item
 												leftSection={<IconCheck size={14} />}
-												onClick={() => seriesMarkAsReadMutation.mutate()}
+												onClick={(e: React.MouseEvent) => {
+													e.stopPropagation();
+													seriesMarkAsReadMutation.mutate();
+												}}
 												disabled={seriesMarkAsReadMutation.isPending}
 											>
 												{seriesMarkAsReadMutation.isPending ? "Marking..." : "Mark as Read"}
@@ -386,7 +398,10 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 										{series && (series.bookCount ?? 0) > (series.unreadCount ?? 0) && (
 											<Menu.Item
 												leftSection={<IconBookOff size={14} />}
-												onClick={() => seriesMarkAsUnreadMutation.mutate()}
+												onClick={(e: React.MouseEvent) => {
+													e.stopPropagation();
+													seriesMarkAsUnreadMutation.mutate();
+												}}
 												disabled={seriesMarkAsUnreadMutation.isPending}
 											>
 												{seriesMarkAsUnreadMutation.isPending ? "Marking..." : "Mark as Unread"}
@@ -394,14 +409,20 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 										)}
 										<Menu.Item
 											leftSection={<IconAnalyze size={14} />}
-											onClick={() => seriesAnalyzeMutation.mutate()}
+											onClick={(e: React.MouseEvent) => {
+												e.stopPropagation();
+												seriesAnalyzeMutation.mutate();
+											}}
 											disabled={seriesAnalyzeMutation.isPending}
 										>
-											{seriesAnalyzeMutation.isPending ? "Analyzing..." : "Analyze All"}
+											{seriesAnalyzeMutation.isPending ? "Analyzing..." : "Force Analyze All"}
 										</Menu.Item>
 										<Menu.Item
 											leftSection={<IconAnalyze size={14} />}
-											onClick={() => seriesAnalyzeUnanalyzedMutation.mutate()}
+											onClick={(e: React.MouseEvent) => {
+												e.stopPropagation();
+												seriesAnalyzeUnanalyzedMutation.mutate();
+											}}
 											disabled={seriesAnalyzeUnanalyzedMutation.isPending}
 										>
 											{seriesAnalyzeUnanalyzedMutation.isPending
@@ -422,12 +443,18 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 							lineClamp={1}
 							c="dimmed"
 							size="xs"
+							onClick={(e: React.MouseEvent) => {
+								e.stopPropagation();
+								navigate(`/series/${book.seriesId}`);
+							}}
 							style={{
 								overflow: "hidden",
 								textOverflow: "ellipsis",
 								whiteSpace: "nowrap",
 								display: "block",
+								cursor: "pointer",
 							}}
+							className="hover-underline"
 						>
 							{book.seriesName}
 						</Text>

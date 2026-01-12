@@ -182,6 +182,85 @@ export const seriesHandlers = [
     return HttpResponse.json(recentSeries);
   }),
 
+  // Get full series metadata (must come BEFORE generic /series/:id route)
+  http.get("/api/v1/series/:id/metadata/full", async ({ params }) => {
+    await delay(100);
+    const seriesItem = mockSeries.find((s) => s.id === params.id);
+
+    if (!seriesItem) {
+      return HttpResponse.json({ error: "Series not found" }, { status: 404 });
+    }
+
+    // Return full metadata response
+    return HttpResponse.json({
+      seriesId: seriesItem.id,
+      title: seriesItem.name,
+      summary: `Summary for ${seriesItem.name}`,
+      publisher: "Mock Publisher",
+      imprint: null,
+      ageRating: 13,
+      language: "en",
+      status: "ongoing",
+      readingDirection: "ltr",
+      titleSort: seriesItem.name.toLowerCase(),
+      customMetadata: null,
+      createdAt: seriesItem.createdAt,
+      updatedAt: seriesItem.updatedAt,
+      genres: [],
+      tags: [],
+      alternateTitles: [],
+      externalRatings: [],
+      externalLinks: [],
+      locks: {
+        title: false,
+        summary: false,
+        publisher: false,
+        imprint: false,
+        ageRating: false,
+        language: false,
+        status: false,
+        readingDirection: false,
+        titleSort: false,
+        genres: false,
+        tags: false,
+      },
+    });
+  }),
+
+  // Get user rating for series (returns 404 if no rating)
+  http.get("/api/v1/series/:id/rating", async () => {
+    await delay(50);
+    // Return 404 to indicate no rating exists (user hasn't rated yet)
+    return HttpResponse.json({ error: "Rating not found" }, { status: 404 });
+  }),
+
+  // Set user rating for series
+  http.put("/api/v1/series/:id/rating", async ({ params, request }) => {
+    await delay(100);
+    const body = await request.json() as { rating: number; notes?: string };
+    return HttpResponse.json({
+      id: "mock-rating-id",
+      seriesId: params.id,
+      userId: "mock-user-id",
+      rating: body.rating,
+      notes: body.notes || null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  }),
+
+  // Delete user rating for series
+  http.delete("/api/v1/series/:id/rating", async () => {
+    await delay(50);
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  // Generate thumbnails for series
+  http.post("/api/v1/series/:id/thumbnails", async () => {
+    await delay(100);
+    return HttpResponse.json({ message: "Thumbnail generation queued for all books" });
+  }),
+
   // Get series by ID (must come AFTER specific routes like /in-progress, /recently-added, etc.)
   http.get("/api/v1/series/:id", async ({ params }) => {
     await delay(100);

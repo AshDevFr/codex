@@ -85,12 +85,13 @@ export let mockSeries: MockSeries[] = [];
 for (const library of mockLibraries) {
   const seriesNames = seriesNamesByLibrary[library.name] || [];
   for (const name of seriesNames) {
-    mockSeries.push(
-      createSeries({
-        libraryId: library.id,
-        name,
-      })
-    );
+    const series = createSeries({
+      libraryId: library.id,
+      name,
+    });
+    // Add library name for UI convenience (not in API schema)
+    series.libraryName = library.name;
+    mockSeries.push(series);
   }
 }
 
@@ -158,12 +159,13 @@ export const resetMockData = () => {
   for (const library of mockLibraries) {
     const seriesNames = seriesNamesByLibrary[library.name] || [];
     for (const name of seriesNames) {
-      mockSeries.push(
-        createSeries({
-          libraryId: library.id,
-          name,
-        })
-      );
+      const series = createSeries({
+        libraryId: library.id,
+        name,
+      });
+      // Add library name for UI convenience (not in API schema)
+      series.libraryName = library.name;
+      mockSeries.push(series);
     }
   }
 

@@ -5,3 +5,4 @@ export { GenreTagChips } from "./GenreTagChips";
 export { SeriesBookList } from "./SeriesBookList";
 export { SeriesMetadata } from "./SeriesMetadata";
 export { SeriesRating } from "./SeriesRating";
+export { SeriesRatingModal } from "./SeriesRatingModal";

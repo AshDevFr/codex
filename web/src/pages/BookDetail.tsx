@@ -1,45 +1,72 @@
 import {
 	ActionIcon,
+	Badge,
 	Box,
 	Breadcrumbs,
 	Button,
 	Center,
-	Divider,
 	Grid,
 	Group,
 	Image,
 	Loader,
 	Menu,
+	Progress,
 	Stack,
 	Text,
 	Title,
 	Tooltip,
 } from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
 	IconAnalyze,
-	IconArrowLeft,
 	IconBook,
 	IconBookOff,
 	IconCheck,
+	IconChevronDown,
 	IconChevronLeft,
 	IconChevronRight,
+	IconChevronUp,
 	IconDotsVertical,
 	IconDownload,
+	IconPhoto,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { booksApi } from "@/api/books";
-import {
-	BookFileInfo,
-	BookMetadataDisplay,
-	BookProgress,
-} from "@/components/book";
+
+// Language code mapping
+const LANGUAGE_DISPLAY: Record<string, string> = {
+	en: "English",
+	ja: "Japanese",
+	ko: "Korean",
+	zh: "Chinese",
+	fr: "French",
+	de: "German",
+	es: "Spanish",
+	it: "Italian",
+	pt: "Portuguese",
+	ru: "Russian",
+};
+
+function formatFileSize(bytes: number): string {
+	if (bytes >= 1073741824) {
+		return `${(bytes / 1073741824).toFixed(2)} GB`;
+	}
+	if (bytes >= 1048576) {
+		return `${(bytes / 1048576).toFixed(2)} MB`;
+	}
+	if (bytes >= 1024) {
+		return `${(bytes / 1024).toFixed(2)} KB`;
+	}
+	return `${bytes} B`;
+}
 
 export function BookDetail() {
 	const { bookId } = useParams<{ bookId: string }>();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
+	const [summaryOpened, { toggle: toggleSummary }] = useDisclosure(false);
 
 	// Fetch book details
 	const {
@@ -125,6 +152,25 @@ export function BookDetail() {
 		},
 	});
 
+	// Generate thumbnail mutation
+	const generateThumbnailMutation = useMutation({
+		mutationFn: () => booksApi.generateThumbnail(bookId ?? ""),
+		onSuccess: () => {
+			notifications.show({
+				title: "Thumbnail generation started",
+				message: "Book queued for thumbnail generation",
+				color: "blue",
+			});
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Failed",
+				message: error.message,
+				color: "red",
+			});
+		},
+	});
+
 	if (isLoading) {
 		return (
 			<Center h={400}>
@@ -165,9 +211,32 @@ export function BookDetail() {
 		{ title: displayTitle, href: `/books/${book.id}` },
 	];
 
+	// Calculate reading progress
+	const currentPage = book.readProgress ? book.readProgress.current_page + 1 : 0;
+	const percentage = book.pageCount > 0 ? (currentPage / book.pageCount) * 100 : 0;
+
+	// Extract metadata values
+	const languageDisplay = metadata?.languageIso
+		? LANGUAGE_DISPLAY[metadata.languageIso] || metadata.languageIso
+		: null;
+	const releaseYear = metadata?.releaseDate
+		? new Date(metadata.releaseDate).getFullYear()
+		: null;
+
+	// Collect all creators
+	const creators: { role: string; names: string[] }[] = [
+		{ role: "WRITERS", names: metadata?.writers || [] },
+		{ role: "PENCILLERS", names: metadata?.pencillers || [] },
+		{ role: "INKERS", names: metadata?.inkers || [] },
+		{ role: "COLORISTS", names: metadata?.colorists || [] },
+		{ role: "LETTERERS", names: metadata?.letterers || [] },
+		{ role: "COVER ARTISTS", names: metadata?.coverArtists || [] },
+		{ role: "EDITORS", names: metadata?.editors || [] },
+	].filter((c) => c.names.length > 0);
+
 	return (
-		<Box py="xl" px="md">
-			<Stack gap="xl">
+		<Box py="md" px="md">
+			<Stack gap="md">
 				{/* Breadcrumbs */}
 				<Breadcrumbs separator={<IconChevronRight size={14} />}>
 					{breadcrumbItems.map((item, index) =>
@@ -190,53 +259,46 @@ export function BookDetail() {
 					)}
 				</Breadcrumbs>
 
-				{/* Header section with cover, title, and actions */}
-				<Grid gutter="xl">
-					{/* Cover image */}
-					<Grid.Col span={{ base: 12, sm: 4, md: 3 }}>
-						<Box
-							style={{
-								position: "relative",
-								width: "100%",
-								maxWidth: 300,
-								margin: "0 auto",
-							}}
-						>
-							<Image
-								src={coverUrl}
-								alt={book.title}
-								radius="md"
-								fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='425'%3E%3Crect fill='%23ddd' width='300' height='425'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Cover%3C/text%3E%3C/svg%3E"
-								style={{ aspectRatio: "150/212.125" }}
-							/>
-						</Box>
+				{/* Header: Cover + Info side by side */}
+				<Grid gutter="md">
+					{/* Cover - smaller */}
+					<Grid.Col span={{ base: 4, xs: 3, sm: 2 }}>
+						<Image
+							src={coverUrl}
+							alt={book.title}
+							radius="sm"
+							fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='212'%3E%3Crect fill='%23333' width='150' height='212'/%3E%3Ctext fill='%23666' font-family='sans-serif' font-size='12' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Cover%3C/text%3E%3C/svg%3E"
+							style={{ aspectRatio: "150/212.125" }}
+						/>
 					</Grid.Col>
 
-					{/* Title, metadata, and actions */}
-					<Grid.Col span={{ base: 12, sm: 8, md: 9 }}>
-						<Stack gap="md">
-							<Group justify="space-between" align="flex-start">
-								<Stack gap="xs">
-									<Group gap="xs">
-										<ActionIcon
-											variant="subtle"
-											onClick={() => navigate(-1)}
-											title="Go back"
-										>
-											<IconArrowLeft size={20} />
-										</ActionIcon>
-										<Title order={1}>{displayTitle}</Title>
+					{/* Info */}
+					<Grid.Col span={{ base: 8, xs: 9, sm: 10 }}>
+						<Stack gap="xs">
+							{/* Title row with badges and menu */}
+							<Group justify="space-between" align="flex-start" wrap="nowrap">
+								<Box style={{ flex: 1, minWidth: 0 }}>
+									<Group gap="sm" align="center" wrap="wrap">
+										<Title order={2} style={{ wordBreak: "break-word" }}>
+											{displayTitle}
+										</Title>
 									</Group>
-									<Text
-										component={Link}
-										to={`/series/${book.seriesId}`}
-										size="lg"
-										c="dimmed"
-										style={{ textDecoration: "none" }}
-									>
-										in {book.seriesName}
-									</Text>
-								</Stack>
+									<Group gap="xs" mt={4}>
+										<Badge size="sm" variant="filled">
+											{book.fileFormat.toUpperCase()}
+										</Badge>
+										{isCompleted && (
+											<Badge size="sm" variant="filled" color="green">
+												Completed
+											</Badge>
+										)}
+										{hasProgress && !isCompleted && (
+											<Badge size="sm" variant="outline" color="blue">
+												In Progress
+											</Badge>
+										)}
+									</Group>
+								</Box>
 
 								<Menu shadow="md" width={200} position="bottom-end">
 									<Menu.Target>
@@ -269,44 +331,101 @@ export function BookDetail() {
 											onClick={() => analyzeMutation.mutate()}
 											disabled={analyzeMutation.isPending}
 										>
-											Analyze Book
+											Force Analyze
+										</Menu.Item>
+										<Menu.Item
+											leftSection={<IconPhoto size={14} />}
+											onClick={() => generateThumbnailMutation.mutate()}
+											disabled={generateThumbnailMutation.isPending}
+										>
+											Generate Thumbnail
 										</Menu.Item>
 									</Menu.Dropdown>
 								</Menu>
 							</Group>
 
+							{/* Series link */}
+							<Text
+								component={Link}
+								to={`/series/${book.seriesId}`}
+								size="sm"
+								c="dimmed"
+								className="hover-underline"
+								style={{ textDecoration: "none", width: "fit-content" }}
+							>
+								in {book.seriesName}
+							</Text>
+
 							{/* Reading progress */}
-							<BookProgress
-								progress={book.readProgress}
-								pageCount={book.pageCount}
-							/>
+							{hasProgress && !isCompleted && (
+								<Group gap="sm" align="center">
+									<Text size="sm">
+										Page {currentPage} of {book.pageCount}
+									</Text>
+									<Progress
+										value={percentage}
+										size="sm"
+										style={{ flex: 1, maxWidth: 200 }}
+									/>
+									<Text size="sm" c="dimmed">
+										{Math.round(percentage)}%
+									</Text>
+								</Group>
+							)}
 
 							{/* Action buttons */}
-							<Group gap="sm">
+							<Group gap="sm" mt="xs">
 								<Button
-									leftSection={<IconBook size={16} />}
+									size="xs"
+									variant="filled"
+									leftSection={<IconBook size={14} />}
 									onClick={() => {
-										// Navigate to reader (placeholder - reader not implemented yet)
 										const page = book.readProgress?.current_page ?? 0;
 										navigate(`/reader/${book.id}?page=${page}`);
 									}}
 								>
-									{hasProgress && !isCompleted ? "Continue Reading" : "Read"}
+									{hasProgress && !isCompleted ? "Continue" : "Read"}
 								</Button>
 								<Button
+									size="xs"
 									variant="outline"
 									component="a"
 									href={downloadUrl}
-									leftSection={<IconDownload size={16} />}
+									leftSection={<IconDownload size={14} />}
 								>
 									Download
 								</Button>
 							</Group>
 
+							{/* Summary - show preview with expand if long */}
+							{metadata?.summary && (
+								<Box mt="xs">
+									<Text
+										size="sm"
+										style={{ whiteSpace: "pre-wrap" }}
+										lineClamp={summaryOpened ? undefined : 2}
+									>
+										{metadata.summary}
+									</Text>
+									{(metadata.summary.length > 150 || metadata.summary.includes("\n")) && (
+										<Text
+											size="sm"
+											c="dimmed"
+											style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+											onClick={toggleSummary}
+											mt={4}
+										>
+											{summaryOpened ? "READ LESS" : "READ MORE"}
+											{summaryOpened ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />}
+										</Text>
+									)}
+								</Box>
+							)}
+
 							{/* Analysis error */}
 							{book.analysisError && (
 								<Box
-									p="sm"
+									p="xs"
 									style={{
 										backgroundColor: "var(--mantine-color-red-light)",
 										borderRadius: "var(--mantine-radius-sm)",
@@ -321,36 +440,112 @@ export function BookDetail() {
 					</Grid.Col>
 				</Grid>
 
-				<Divider />
+				{/* Metadata rows - Komga style */}
+				<Stack gap="xs">
+					{/* File Info */}
+					<Group gap="md" align="center">
+						<Text size="sm" c="dimmed" w={100}>SIZE</Text>
+						<Text size="sm">{formatFileSize(book.fileSize)}</Text>
+					</Group>
 
-				{/* File information */}
-				<BookFileInfo book={book} />
+					<Group gap="md" align="center">
+						<Text size="sm" c="dimmed" w={100}>PAGES</Text>
+						<Text size="sm">{book.pageCount}</Text>
+					</Group>
 
-				{/* Metadata */}
-				{metadata && (
-					<>
-						<Divider />
-						<BookMetadataDisplay metadata={metadata} />
-					</>
-				)}
+					{/* Publisher */}
+					{metadata?.publisher && (
+						<Group gap="md" align="center">
+							<Text size="sm" c="dimmed" w={100}>PUBLISHER</Text>
+							<Badge variant="outline" size="sm">{metadata.publisher}</Badge>
+						</Group>
+					)}
+
+					{/* Imprint */}
+					{metadata?.imprint && (
+						<Group gap="md" align="center">
+							<Text size="sm" c="dimmed" w={100}>IMPRINT</Text>
+							<Badge variant="outline" size="sm">{metadata.imprint}</Badge>
+						</Group>
+					)}
+
+					{/* Release Year */}
+					{releaseYear && (
+						<Group gap="md" align="center">
+							<Text size="sm" c="dimmed" w={100}>YEAR</Text>
+							<Text size="sm">{releaseYear}</Text>
+						</Group>
+					)}
+
+					{/* Language */}
+					{languageDisplay && (
+						<Group gap="md" align="center">
+							<Text size="sm" c="dimmed" w={100}>LANGUAGE</Text>
+							<Text size="sm">{languageDisplay}</Text>
+						</Group>
+					)}
+
+					{/* Genre */}
+					{metadata?.genre && (
+						<Group gap="md" align="center">
+							<Text size="sm" c="dimmed" w={100}>GENRE</Text>
+							<Badge variant="light" size="sm">{metadata.genre}</Badge>
+						</Group>
+					)}
+
+					{/* Creators */}
+					{creators.map(({ role, names }) => (
+						<Group key={role} gap="md" align="flex-start">
+							<Text size="sm" c="dimmed" w={100}>{role}</Text>
+							<Group gap="xs">
+								{names.map((name) => (
+									<Badge key={`${role}-${name}`} variant="light" size="sm">
+										{name}
+									</Badge>
+								))}
+							</Group>
+						</Group>
+					))}
+
+					{/* File Path */}
+					<Group gap="md" align="center">
+						<Text size="sm" c="dimmed" w={100}>FILE</Text>
+						<Tooltip label={book.filePath} position="top" multiline maw={400}>
+							<Text size="sm" style={{ cursor: "help" }}>
+								{book.filePath.split("/").pop() || book.filePath}
+							</Text>
+						</Tooltip>
+					</Group>
+
+					{/* Hash */}
+					<Group gap="md" align="center">
+						<Text size="sm" c="dimmed" w={100}>HASH</Text>
+						<Tooltip label={book.fileHash} position="top">
+							<Text size="sm" style={{ cursor: "help" }}>
+								{book.fileHash.substring(0, 16)}...
+							</Text>
+						</Tooltip>
+					</Group>
+				</Stack>
 
 				{/* Series navigation */}
-				<Divider />
-				<Group justify="space-between">
+				<Group justify="space-between" mt="md">
 					{prevBook ? (
-						<Tooltip label={`Previous: ${prevBook.title}`} position="top">
+						<Tooltip label={prevBook.title} position="top">
 							<Button
 								variant="subtle"
-								leftSection={<IconChevronLeft size={16} />}
+								size="xs"
+								leftSection={<IconChevronLeft size={14} />}
 								onClick={() => navigate(`/books/${prevBook.id}`)}
 							>
-								Previous Book
+								Previous
 							</Button>
 						</Tooltip>
 					) : (
 						<Button
 							variant="subtle"
-							leftSection={<IconArrowLeft size={16} />}
+							size="xs"
+							leftSection={<IconChevronLeft size={14} />}
 							onClick={() => navigate(`/series/${book.seriesId}`)}
 						>
 							Back to Series
@@ -358,13 +553,14 @@ export function BookDetail() {
 					)}
 
 					{nextBook && (
-						<Tooltip label={`Next: ${nextBook.title}`} position="top">
+						<Tooltip label={nextBook.title} position="top">
 							<Button
 								variant="subtle"
-								rightSection={<IconChevronRight size={16} />}
+								size="xs"
+								rightSection={<IconChevronRight size={14} />}
 								onClick={() => navigate(`/books/${nextBook.id}`)}
 							>
-								Next Book
+								Next
 							</Button>
 						</Tooltip>
 					)}

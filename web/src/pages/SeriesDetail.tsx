@@ -1,10 +1,10 @@
 import {
 	ActionIcon,
+	Badge,
 	Box,
 	Breadcrumbs,
 	Button,
 	Center,
-	Divider,
 	Grid,
 	Group,
 	Image,
@@ -14,16 +14,18 @@ import {
 	Text,
 	Title,
 } from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
 	IconAnalyze,
-	IconArrowLeft,
-	IconBook,
 	IconBookOff,
 	IconCheck,
+	IconChevronDown,
 	IconChevronRight,
+	IconChevronUp,
 	IconDotsVertical,
 	IconDownload,
+	IconPhoto,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -32,17 +34,34 @@ import { seriesMetadataApi } from "@/api/seriesMetadata";
 import {
 	AlternateTitles,
 	ExternalLinks,
-	ExternalRatings,
 	GenreTagChips,
 	SeriesBookList,
-	SeriesMetadata,
 	SeriesRating,
 } from "@/components/series";
+
+// Helper to format reading direction
+function formatReadingDirection(dir?: string | null): string | null {
+	if (!dir) return null;
+	const map: Record<string, string> = {
+		ltr: "Left to Right",
+		rtl: "Right to Left",
+		ttb: "Top to Bottom",
+		btt: "Bottom to Top",
+	};
+	return map[dir] || dir;
+}
+
+// Helper to format status
+function formatStatus(status?: string | null): string | null {
+	if (!status) return null;
+	return status.charAt(0).toUpperCase() + status.slice(1);
+}
 
 export function SeriesDetail() {
 	const { seriesId } = useParams<{ seriesId: string }>();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
+	const [summaryOpened, { toggle: toggleSummary }] = useDisclosure(false);
 
 	// Fetch series basic info
 	const {
@@ -146,6 +165,25 @@ export function SeriesDetail() {
 		},
 	});
 
+	// Generate thumbnails mutation
+	const generateThumbnailsMutation = useMutation({
+		mutationFn: () => seriesApi.generateThumbnails(seriesId!),
+		onSuccess: () => {
+			notifications.show({
+				title: "Thumbnails generation started",
+				message: "All books queued for thumbnail generation",
+				color: "blue",
+			});
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Failed",
+				message: error.message,
+				color: "red",
+			});
+		},
+	});
+
 	const isLoading = seriesLoading || metadataLoading;
 	const error = seriesError || metadataError;
 
@@ -174,16 +212,17 @@ export function SeriesDetail() {
 	const coverUrl = `/api/v1/series/${series.id}/thumbnail`;
 	const hasUnread = (series.unreadCount ?? 0) > 0;
 	const hasRead = (series.bookCount ?? 0) > (series.unreadCount ?? 0);
+	const readingDirection = formatReadingDirection(metadata?.readingDirection);
+	const status = formatStatus(metadata?.status);
 
 	// Build breadcrumbs
-	const breadcrumbItems = [
+	const breadcrumbItems: { title: string; href: string }[] = [
 		{ title: "Home", href: "/" },
-		{ title: "Libraries", href: "/libraries/all/series" },
 	];
 
 	if (series.libraryId) {
 		breadcrumbItems.push({
-			title: series.libraryName || "Library",
+			title: (series as { libraryName?: string }).libraryName || "Library",
 			href: `/libraries/${series.libraryId}/series`,
 		});
 	}
@@ -194,8 +233,8 @@ export function SeriesDetail() {
 	});
 
 	return (
-		<Box py="xl" px="md">
-			<Stack gap="xl">
+		<Box py="md" px="md">
+			<Stack gap="md">
 				{/* Breadcrumbs */}
 				<Breadcrumbs separator={<IconChevronRight size={14} />}>
 					{breadcrumbItems.map((item, index) =>
@@ -218,49 +257,48 @@ export function SeriesDetail() {
 					)}
 				</Breadcrumbs>
 
-				{/* Header section with cover, title, and actions */}
-				<Grid gutter="xl">
-					{/* Cover image */}
-					<Grid.Col span={{ base: 12, sm: 4, md: 3 }}>
-						<Box
-							style={{
-								position: "relative",
-								width: "100%",
-								maxWidth: 300,
-								margin: "0 auto",
-							}}
-						>
-							<Image
-								src={coverUrl}
-								alt={series.name}
-								radius="md"
-								fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='425'%3E%3Crect fill='%23ddd' width='300' height='425'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Cover%3C/text%3E%3C/svg%3E"
-								style={{ aspectRatio: "150/212.125" }}
-							/>
-						</Box>
+				{/* Header: Cover + Info side by side */}
+				<Grid gutter="md">
+					{/* Cover - smaller */}
+					<Grid.Col span={{ base: 4, xs: 3, sm: 2 }}>
+						<Image
+							src={coverUrl}
+							alt={series.name}
+							radius="sm"
+							fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='212'%3E%3Crect fill='%23333' width='150' height='212'/%3E%3Ctext fill='%23666' font-family='sans-serif' font-size='12' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Cover%3C/text%3E%3C/svg%3E"
+							style={{ aspectRatio: "150/212.125" }}
+						/>
 					</Grid.Col>
 
-					{/* Title, metadata, and actions */}
-					<Grid.Col span={{ base: 12, sm: 8, md: 9 }}>
-						<Stack gap="md">
-							<Group justify="space-between" align="flex-start">
-								<Stack gap="xs">
-									<Group gap="xs">
-										<ActionIcon
-											variant="subtle"
-											onClick={() => navigate(-1)}
-											title="Go back"
-										>
-											<IconArrowLeft size={20} />
-										</ActionIcon>
-										<Title order={1}>{series.name}</Title>
+					{/* Info */}
+					<Grid.Col span={{ base: 8, xs: 9, sm: 10 }}>
+						<Stack gap="xs">
+							{/* Title row with badges and menu */}
+							<Group justify="space-between" align="flex-start" wrap="nowrap">
+								<Box style={{ flex: 1, minWidth: 0 }}>
+									<Group gap="sm" align="center" wrap="wrap">
+										<Title order={2} style={{ wordBreak: "break-word" }}>
+											{series.name}
+										</Title>
+										{metadata?.publisher && (
+											<Text size="sm" c="dimmed">
+												in {(series as { libraryName?: string }).libraryName || "Library"}
+											</Text>
+										)}
 									</Group>
-									{metadata?.publisher && (
-										<Text size="lg" c="dimmed">
-											{metadata.publisher}
-										</Text>
-									)}
-								</Stack>
+									<Group gap="xs" mt={4}>
+										{status && (
+											<Badge size="sm" variant="filled" color={status === "Ended" ? "green" : "blue"}>
+												{status}
+											</Badge>
+										)}
+										{readingDirection && (
+											<Badge size="sm" variant="outline">
+												{readingDirection}
+											</Badge>
+										)}
+									</Group>
+								</Box>
 
 								<Menu shadow="md" width={200} position="bottom-end">
 									<Menu.Target>
@@ -302,125 +340,111 @@ export function SeriesDetail() {
 										>
 											Analyze Unanalyzed
 										</Menu.Item>
-										<Menu.Divider />
 										<Menu.Item
-											component="a"
-											href={`/api/v1/series/${series.id}/file`}
-											leftSection={<IconDownload size={14} />}
+											leftSection={<IconPhoto size={14} />}
+											onClick={() => generateThumbnailsMutation.mutate()}
+											disabled={generateThumbnailsMutation.isPending}
 										>
-											Download Series
+											Generate Thumbnails
 										</Menu.Item>
 									</Menu.Dropdown>
 								</Menu>
 							</Group>
 
-							{/* External ratings */}
-							{metadata?.externalRatings &&
-								metadata.externalRatings.length > 0 && (
-									<ExternalRatings ratings={metadata.externalRatings} />
-								)}
+							{/* Book count */}
+							<Text size="sm" c="dimmed">
+								{series.bookCount ?? 0} / {series.bookCount ?? 0} books
+							</Text>
 
-							{/* Action buttons */}
-							<Group gap="sm">
+							{/* Alternate titles inline */}
+							{metadata?.alternateTitles && metadata.alternateTitles.length > 0 && (
+								<AlternateTitles titles={metadata.alternateTitles} compact />
+							)}
+
+							{/* Download button */}
+							<Group gap="sm" mt="xs">
 								<Button
-									leftSection={<IconBook size={16} />}
-									onClick={() => {
-										// Navigate to first unread book, or first book
-										// This will be improved when we have the adjacent books endpoint
-										navigate(`/libraries/${series.libraryId}/series`);
-									}}
-								>
-									Read
-								</Button>
-								<Button
-									variant="outline"
+									size="xs"
+									variant="filled"
 									component="a"
 									href={`/api/v1/series/${series.id}/file`}
-									leftSection={<IconDownload size={16} />}
+									leftSection={<IconDownload size={14} />}
 								>
 									Download
 								</Button>
 							</Group>
 
-							{/* External links */}
-							{metadata?.externalLinks &&
-								metadata.externalLinks.length > 0 && (
-									<Box>
-										<Text size="sm" fw={500} mb="xs">
-											External Links
+							{/* Summary - show preview with expand if long */}
+							{metadata?.summary && (
+								<Box mt="xs">
+									<Text
+										size="sm"
+										style={{ whiteSpace: "pre-wrap" }}
+										lineClamp={summaryOpened ? undefined : 2}
+									>
+										{metadata.summary}
+									</Text>
+									{/* Only show READ MORE if summary is long enough (roughly > 150 chars or has newlines) */}
+									{(metadata.summary.length > 150 || metadata.summary.includes("\n")) && (
+										<Text
+											size="sm"
+											c="dimmed"
+											style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+											onClick={toggleSummary}
+											mt={4}
+										>
+											{summaryOpened ? "READ LESS" : "READ MORE"}
+											{summaryOpened ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />}
 										</Text>
-										<ExternalLinks links={metadata.externalLinks} />
-									</Box>
-								)}
+									)}
+								</Box>
+							)}
 						</Stack>
 					</Grid.Col>
 				</Grid>
 
-				<Divider />
-
-				{/* Summary */}
-				{metadata?.summary && (
-					<>
-						<Stack gap="xs">
-							<Title order={4}>Summary</Title>
-							<Text style={{ whiteSpace: "pre-wrap" }}>{metadata.summary}</Text>
-						</Stack>
-						<Divider />
-					</>
-				)}
-
-				{/* Metadata grid */}
-				{metadata && <SeriesMetadata metadata={metadata} />}
-
-				{/* Genres and Tags */}
-				{metadata &&
-					(metadata.genres.length > 0 || metadata.tags.length > 0) && (
-						<>
-							<Divider />
-							<Stack gap="md">
-								{metadata.genres.length > 0 && (
-									<Box>
-										<Text size="sm" fw={500} mb="xs">
-											Genres
-										</Text>
-										<GenreTagChips
-											genres={metadata.genres}
-											libraryId={series.libraryId}
-										/>
-									</Box>
-								)}
-								{metadata.tags.length > 0 && (
-									<Box>
-										<Text size="sm" fw={500} mb="xs">
-											Tags
-										</Text>
-										<GenreTagChips
-											tags={metadata.tags}
-											libraryId={series.libraryId}
-										/>
-									</Box>
-								)}
-							</Stack>
-						</>
+				{/* Metadata rows - Komga style */}
+				<Stack gap="xs">
+					{/* Publisher */}
+					{metadata?.publisher && (
+						<Group gap="md">
+							<Text size="sm" c="dimmed" w={100}>PUBLISHER</Text>
+							<Badge variant="outline" size="sm">{metadata.publisher}</Badge>
+						</Group>
 					)}
 
-				{/* Alternate titles */}
-				{metadata?.alternateTitles && metadata.alternateTitles.length > 0 && (
-					<>
-						<Divider />
-						<Stack gap="xs">
-							<Title order={4}>Alternate Titles</Title>
-							<AlternateTitles titles={metadata.alternateTitles} />
-						</Stack>
-					</>
-				)}
+					{/* Genres */}
+					{metadata && (metadata.genres?.length ?? 0) > 0 && (
+						<Group gap="md" align="flex-start">
+							<Text size="sm" c="dimmed" w={100}>GENRE</Text>
+							<GenreTagChips genres={metadata.genres} libraryId={series.libraryId} />
+						</Group>
+					)}
 
-				{/* User Rating */}
-				<Divider />
-				<SeriesRating seriesId={series.id} />
+					{/* Tags */}
+					{metadata && (metadata.tags?.length ?? 0) > 0 && (
+						<Group gap="md" align="flex-start">
+							<Text size="sm" c="dimmed" w={100}>TAGS</Text>
+							<GenreTagChips tags={metadata.tags} libraryId={series.libraryId} />
+						</Group>
+					)}
+
+					{/* External Links */}
+					{metadata?.externalLinks && metadata.externalLinks.length > 0 && (
+						<Group gap="md" align="flex-start">
+							<Text size="sm" c="dimmed" w={100}>LINKS</Text>
+							<ExternalLinks links={metadata.externalLinks} />
+						</Group>
+					)}
+
+					{/* User Rating - compact */}
+					<Group gap="md" align="center">
+						<Text size="sm" c="dimmed" w={100}>YOUR RATING</Text>
+						<SeriesRating seriesId={series.id} />
+					</Group>
+				</Stack>
 
 				{/* Books list */}
-				<Divider />
 				<SeriesBookList
 					seriesId={series.id}
 					seriesName={series.name}

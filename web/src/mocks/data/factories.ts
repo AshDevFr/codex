@@ -13,6 +13,11 @@ export type UserDto = components["schemas"]["UserDto"];
 export type LibraryDto = components["schemas"]["LibraryDto"];
 export type SeriesDto = components["schemas"]["SeriesDto"];
 export type BookDto = components["schemas"]["BookDto"];
+
+// Extended mock types with additional fields for UI convenience
+export type MockLibrary = LibraryDto;
+export type MockSeries = SeriesDto & { libraryName?: string };
+export type MockBook = BookDto;
 export type ReadProgressResponse = components["schemas"]["ReadProgressResponse"];
 export type MetricsDto = components["schemas"]["MetricsDto"];
 export type LibraryMetricsDto = components["schemas"]["LibraryMetricsDto"];
@@ -86,9 +91,9 @@ export const createLibrary = (overrides: Partial<LibraryDto> = {}): LibraryDto =
 };
 
 /**
- * Series factory - matches SeriesDto schema
+ * Series factory - matches SeriesDto schema with optional mock extensions
  */
-export const createSeries = (overrides: Partial<SeriesDto> = {}): SeriesDto => {
+export const createSeries = (overrides: Partial<MockSeries> = {}): MockSeries => {
 	const publishers = [
 		"DC Comics",
 		"Marvel",

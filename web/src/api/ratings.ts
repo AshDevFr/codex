@@ -13,23 +13,16 @@ export const ratingsApi = {
 	 * Returns null if no rating exists
 	 */
 	getUserRating: async (seriesId: string): Promise<UserSeriesRating | null> => {
-		try {
-			const response = await api.get<UserSeriesRating>(
-				`/series/${seriesId}/rating`,
-			);
-			return response.data;
-		} catch (error) {
-			// Return null if no rating found (404)
-			if (
-				error &&
-				typeof error === "object" &&
-				"response" in error &&
-				(error as { response?: { status?: number } }).response?.status === 404
-			) {
-				return null;
-			}
-			throw error;
+		// Use validateStatus to prevent axios from throwing on 404
+		const response = await api.get<UserSeriesRating | { error: string }>(
+			`/series/${seriesId}/rating`,
+			{ validateStatus: (status) => status === 200 || status === 404 },
+		);
+		// Return null if no rating found (404)
+		if (response.status === 404) {
+			return null;
 		}
+		return response.data as UserSeriesRating;
 	},
 
 	/**

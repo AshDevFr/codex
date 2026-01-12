@@ -80,3 +80,8 @@ button:focus-visible {
 		transform: scale(1);
 	}
 }
+
+/* Hover underline effect for clickable text */
+.hover-underline:hover {
+	text-decoration: underline;
+}

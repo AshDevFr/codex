@@ -147,4 +147,12 @@ export const booksApi = {
 		);
 		return response.data;
 	},
+
+	// Generate thumbnail for a book
+	generateThumbnail: async (bookId: string): Promise<{ message: string }> => {
+		const response = await api.post<{ message: string }>(
+			`/books/${bookId}/thumbnail`,
+		);
+		return response.data;
+	},
 };

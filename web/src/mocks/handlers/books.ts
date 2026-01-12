@@ -167,6 +167,51 @@ export const bookHandlers = [
     });
   }),
 
+  // Get adjacent books (previous and next in series)
+  http.get("/api/v1/books/:id/adjacent", async ({ params }) => {
+    await delay(100);
+    const book = mockBooks.find((b) => b.id === params.id);
+
+    if (!book) {
+      return HttpResponse.json({ error: "Book not found" }, { status: 404 });
+    }
+
+    // Find books in the same series
+    const seriesBooks = mockBooks
+      .filter((b) => b.seriesId === book.seriesId)
+      .sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
+
+    const currentIndex = seriesBooks.findIndex((b) => b.id === book.id);
+    const prev = currentIndex > 0 ? seriesBooks[currentIndex - 1] : null;
+    const next = currentIndex < seriesBooks.length - 1 ? seriesBooks[currentIndex + 1] : null;
+
+    return HttpResponse.json({ prev, next });
+  }),
+
+  // Generate thumbnail for a book
+  http.post("/api/v1/books/:id/thumbnail", async () => {
+    await delay(100);
+    return HttpResponse.json({ message: "Thumbnail generation queued" });
+  }),
+
+  // Analyze book
+  http.post("/api/v1/books/:id/analyze", async () => {
+    await delay(100);
+    return HttpResponse.json({ message: "Book analysis queued" });
+  }),
+
+  // Mark book as read
+  http.post("/api/v1/books/:id/read", async () => {
+    await delay(100);
+    return HttpResponse.json({ message: "Book marked as read" });
+  }),
+
+  // Mark book as unread
+  http.post("/api/v1/books/:id/unread", async () => {
+    await delay(100);
+    return HttpResponse.json({ message: "Book marked as unread" });
+  }),
+
   // List books by series
   http.get("/api/v1/series/:seriesId/books", async ({ params, request }) => {
     await delay(200);
