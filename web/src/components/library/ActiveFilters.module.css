@@ -1,0 +1,22 @@
+.container {
+	flex-wrap: wrap;
+	padding: var(--mantine-spacing-xs) 0;
+}
+
+.chip {
+	text-transform: none;
+	font-weight: 500;
+}
+
+.clearButton {
+	text-transform: none;
+}
+
+.clearButton:hover {
+	background-color: var(--mantine-color-gray-1);
+}
+
+/* Dark mode */
+:global([data-mantine-color-scheme="dark"]) .clearButton:hover {
+	background-color: var(--mantine-color-dark-5);
+}

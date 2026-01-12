@@ -251,7 +251,10 @@ impl GenreRepository {
     }
 
     /// Get all series IDs that have a specific genre (alias for get_series_ids_by_genre_name)
-    pub async fn get_series_with_genre(db: &DatabaseConnection, genre_name: &str) -> Result<Vec<Uuid>> {
+    pub async fn get_series_with_genre(
+        db: &DatabaseConnection,
+        genre_name: &str,
+    ) -> Result<Vec<Uuid>> {
         Self::get_series_ids_by_genre_name(db, genre_name).await
     }
 

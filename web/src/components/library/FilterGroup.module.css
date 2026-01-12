@@ -1,0 +1,34 @@
+.container {
+	padding: var(--mantine-spacing-sm);
+	border-radius: var(--mantine-radius-md);
+	background-color: var(--mantine-color-dark-7);
+}
+
+.modeToggle {
+	background-color: var(--mantine-color-dark-6);
+}
+
+.chipsContainer {
+	max-height: 200px;
+	overflow-y: auto;
+	padding-right: var(--mantine-spacing-xs);
+}
+
+/* Custom scrollbar for chips container */
+.chipsContainer::-webkit-scrollbar {
+	width: 6px;
+}
+
+.chipsContainer::-webkit-scrollbar-track {
+	background: var(--mantine-color-dark-6);
+	border-radius: 3px;
+}
+
+.chipsContainer::-webkit-scrollbar-thumb {
+	background: var(--mantine-color-dark-4);
+	border-radius: 3px;
+}
+
+.chipsContainer::-webkit-scrollbar-thumb:hover {
+	background: var(--mantine-color-dark-3);
+}

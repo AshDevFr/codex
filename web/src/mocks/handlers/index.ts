@@ -9,6 +9,7 @@ import { libraryHandlers } from "./libraries";
 import { seriesHandlers } from "./series";
 import { bookHandlers } from "./books";
 import { eventHandlers } from "./events";
+import { metadataHandlers } from "./metadata";
 import { http, HttpResponse, delay } from "msw";
 
 // Additional utility handlers
@@ -77,6 +78,7 @@ export const handlers = [
   ...seriesHandlers,
   ...bookHandlers,
   ...eventHandlers,
+  ...metadataHandlers,
   ...utilityHandlers,
 ];
 
@@ -85,4 +87,5 @@ export { authHandlers } from "./auth";
 export { bookHandlers } from "./books";
 export { eventHandlers } from "./events";
 export { libraryHandlers } from "./libraries";
+export { metadataHandlers } from "./metadata";
 export { seriesHandlers } from "./series";

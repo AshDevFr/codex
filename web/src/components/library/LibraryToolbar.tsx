@@ -1,9 +1,6 @@
 import { ActionIcon, Group, Menu, Tabs } from "@mantine/core";
-import {
-	IconAdjustments,
-	IconGridDots,
-	IconSortAscending,
-} from "@tabler/icons-react";
+import { IconGridDots, IconSortAscending } from "@tabler/icons-react";
+import { FilterPanel } from "./FilterPanel";
 
 interface SortOption {
 	value: string;
@@ -105,16 +102,8 @@ export function LibraryToolbar({
 						</Menu.Dropdown>
 					</Menu>
 
-					{/* Filter Menu - Placeholder for future implementation */}
-					<ActionIcon
-						variant="subtle"
-						size="lg"
-						title="Filters"
-						aria-label="Filter options"
-						disabled
-					>
-						<IconAdjustments size={20} />
-					</ActionIcon>
+					{/* Filter Panel */}
+					<FilterPanel />
 				</Group>
 			)}
 		</Group>

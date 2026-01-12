@@ -17,12 +17,22 @@ global.console.error = vi.fn((...args: unknown[]) => {
 	const message = args[0];
 
 	// Suppress expected connection errors and React act() warnings during tests
-	if (
-		typeof message === "string" &&
-		(message.includes("Task progress stream error") ||
+	if (typeof message === "string") {
+		if (
+			message.includes("Task progress stream error") ||
 			message.includes("ECONNREFUSED") ||
 			message.includes("fetch failed") ||
-			message.includes("not wrapped in act("))
+			message.includes("not wrapped in act(") ||
+			message.includes("AggregateError")
+		) {
+			return;
+		}
+	}
+
+	// Suppress AggregateError objects (jsdom XMLHttpRequest errors)
+	if (
+		message instanceof Error &&
+		(message.name === "AggregateError" || message.constructor.name === "AggregateError")
 	) {
 		return;
 	}

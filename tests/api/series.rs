@@ -2719,9 +2719,7 @@ async fn test_list_series_filtered_by_library_id() {
     // Filter by library1 ID
     let request_body = SeriesListRequest {
         condition: Some(SeriesCondition::LibraryId {
-            library_id: UuidOperator::Is {
-                value: library1.id,
-            },
+            library_id: UuidOperator::Is { value: library1.id },
         }),
         ..Default::default()
     };
@@ -2732,10 +2730,7 @@ async fn test_list_series_filtered_by_library_id() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 2);
-    assert!(series_list
-        .data
-        .iter()
-        .all(|s| s.name.starts_with("Lib1")));
+    assert!(series_list.data.iter().all(|s| s.name.starts_with("Lib1")));
 }
 
 #[tokio::test]
@@ -3020,4 +3015,378 @@ async fn test_list_series_filtered_genre_contains() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 2); // Both have "Action" in genre name
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_by_name() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    SeriesRepository::create(&db, library.id, "Naruto", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "One Piece", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Naruto Shippuden", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Filter by name "Is"
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Name {
+            name: FieldOperator::Is {
+                value: "Naruto".to_string(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].name, "Naruto");
+
+    // Filter by name "Contains"
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Name {
+            name: FieldOperator::Contains {
+                value: "Naruto".to_string(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 2); // Naruto and Naruto Shippuden
+
+    // Filter by name "BeginsWith"
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Name {
+            name: FieldOperator::BeginsWith {
+                value: "One".to_string(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].name, "One Piece");
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_by_status() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    use codex::db::repositories::SeriesMetadataRepository;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(&db, library.id, "Ongoing Series", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "Ended Series", None)
+        .await
+        .unwrap();
+    let series3 = SeriesRepository::create(&db, library.id, "Hiatus Series", None)
+        .await
+        .unwrap();
+
+    // Set statuses
+    SeriesMetadataRepository::update_status(&db, series1.id, Some("ongoing".to_string()))
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_status(&db, series2.id, Some("ended".to_string()))
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_status(&db, series3.id, Some("hiatus".to_string()))
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Filter by status = "ongoing"
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Status {
+            status: FieldOperator::Is {
+                value: "ongoing".to_string(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].name, "Ongoing Series");
+
+    // Filter by status != "ended"
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Status {
+            status: FieldOperator::IsNot {
+                value: "ended".to_string(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 2); // ongoing and hiatus
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_by_publisher() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    use codex::db::repositories::SeriesMetadataRepository;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(&db, library.id, "Shueisha Series", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "Kodansha Series", None)
+        .await
+        .unwrap();
+    let series3 = SeriesRepository::create(&db, library.id, "No Publisher Series", None)
+        .await
+        .unwrap();
+
+    // Set publishers
+    SeriesMetadataRepository::update_publisher(&db, series1.id, Some("Shueisha".to_string()), None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_publisher(&db, series2.id, Some("Kodansha".to_string()), None)
+        .await
+        .unwrap();
+    // series3 has no publisher (NULL)
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Filter by publisher = "Shueisha"
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Publisher {
+            publisher: FieldOperator::Is {
+                value: "Shueisha".to_string(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].name, "Shueisha Series");
+
+    // Filter by publisher IsNull (no publisher set)
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Publisher {
+            publisher: FieldOperator::IsNull,
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].name, "No Publisher Series");
+
+    // Filter by publisher IsNotNull (has publisher)
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Publisher {
+            publisher: FieldOperator::IsNotNull,
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 2); // Shueisha and Kodansha series
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_by_language() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    use codex::db::repositories::SeriesMetadataRepository;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(&db, library.id, "Japanese Series", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "English Series", None)
+        .await
+        .unwrap();
+    let series3 = SeriesRepository::create(&db, library.id, "Korean Series", None)
+        .await
+        .unwrap();
+
+    // Set languages
+    SeriesMetadataRepository::update_language(&db, series1.id, Some("ja".to_string()))
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_language(&db, series2.id, Some("en".to_string()))
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_language(&db, series3.id, Some("ko".to_string()))
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Filter by language = "ja"
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Language {
+            language: FieldOperator::Is {
+                value: "ja".to_string(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].name, "Japanese Series");
+
+    // Filter by language != "en"
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Language {
+            language: FieldOperator::IsNot {
+                value: "en".to_string(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 2); // ja and ko
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_combined_metadata() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    use codex::db::repositories::{GenreRepository, SeriesMetadataRepository};
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(&db, library.id, "My Hero Academia", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "Attack on Titan", None)
+        .await
+        .unwrap();
+    let series3 = SeriesRepository::create(&db, library.id, "One Punch Man", None)
+        .await
+        .unwrap();
+
+    // Set metadata
+    SeriesMetadataRepository::update_status(&db, series1.id, Some("ongoing".to_string()))
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_status(&db, series2.id, Some("ended".to_string()))
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_status(&db, series3.id, Some("ongoing".to_string()))
+        .await
+        .unwrap();
+
+    GenreRepository::add_genre_to_series(&db, series1.id, "Action")
+        .await
+        .unwrap();
+    GenreRepository::add_genre_to_series(&db, series2.id, "Action")
+        .await
+        .unwrap();
+    GenreRepository::add_genre_to_series(&db, series3.id, "Comedy")
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Combined filter: status = "ongoing" AND genre = "Action"
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::AllOf {
+            all_of: vec![
+                SeriesCondition::Status {
+                    status: FieldOperator::Is {
+                        value: "ongoing".to_string(),
+                    },
+                },
+                SeriesCondition::Genre {
+                    genre: FieldOperator::Is {
+                        value: "Action".to_string(),
+                    },
+                },
+            ],
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].name, "My Hero Academia");
 }

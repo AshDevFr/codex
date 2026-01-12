@@ -2386,9 +2386,7 @@ async fn test_list_books_filtered_by_series_id() {
     // Filter by series1 ID
     let request_body = BookListRequest {
         condition: Some(BookCondition::SeriesId {
-            series_id: UuidOperator::Is {
-                value: series1.id,
-            },
+            series_id: UuidOperator::Is { value: series1.id },
         }),
         ..Default::default()
     };
@@ -2433,9 +2431,7 @@ async fn test_list_books_filtered_by_library_id() {
     // Filter by library1 ID
     let request_body = BookListRequest {
         condition: Some(BookCondition::LibraryId {
-            library_id: UuidOperator::Is {
-                value: library1.id,
-            },
+            library_id: UuidOperator::Is { value: library1.id },
         }),
         ..Default::default()
     };
@@ -2554,9 +2550,7 @@ async fn test_list_books_filtered_all_of() {
         condition: Some(BookCondition::AllOf {
             all_of: vec![
                 BookCondition::SeriesId {
-                    series_id: UuidOperator::Is {
-                        value: series1.id,
-                    },
+                    series_id: UuidOperator::Is { value: series1.id },
                 },
                 BookCondition::Title {
                     title: FieldOperator::Contains {
@@ -2610,14 +2604,10 @@ async fn test_list_books_filtered_any_of() {
         condition: Some(BookCondition::AnyOf {
             any_of: vec![
                 BookCondition::SeriesId {
-                    series_id: UuidOperator::Is {
-                        value: series1.id,
-                    },
+                    series_id: UuidOperator::Is { value: series1.id },
                 },
                 BookCondition::SeriesId {
-                    series_id: UuidOperator::Is {
-                        value: series2.id,
-                    },
+                    series_id: UuidOperator::Is { value: series2.id },
                 },
             ],
         }),

@@ -279,9 +279,7 @@ pub async fn update_library(
         use crate::events::{EntityChangeEvent, EntityEvent};
 
         let event = EntityChangeEvent {
-            event: EntityEvent::LibraryUpdated {
-                library_id,
-            },
+            event: EntityEvent::LibraryUpdated { library_id },
             user_id: Some(auth.user_id),
             timestamp: Utc::now(),
         };

@@ -197,7 +197,7 @@ describe("LibraryToolbar", () => {
 		});
 	});
 
-	it("should show filter button as disabled", () => {
+	it("should show filter button", () => {
 		renderWithProviders(
 			<LibraryToolbar
 				{...defaultProps}
@@ -207,7 +207,8 @@ describe("LibraryToolbar", () => {
 		);
 
 		const filterButton = screen.getByLabelText("Filter options");
-		expect(filterButton).toBeDisabled();
+		expect(filterButton).toBeInTheDocument();
+		expect(filterButton).not.toBeDisabled();
 	});
 
 	it("should render all page size options", async () => {

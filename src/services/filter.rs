@@ -1,12 +1,10 @@
-use crate::api::dto::{
-    BookCondition, BoolOperator, FieldOperator, SeriesCondition, UuidOperator,
-};
+use crate::api::dto::{BookCondition, BoolOperator, FieldOperator, SeriesCondition, UuidOperator};
 use crate::db::repositories::{GenreRepository, TagRepository};
 use anyhow::Result;
 use sea_orm::DatabaseConnection;
 use std::collections::HashSet;
-use std::pin::Pin;
 use std::future::Future;
+use std::pin::Pin;
 use uuid::Uuid;
 
 /// Service for evaluating filter conditions against series/books
@@ -69,9 +67,7 @@ impl FilterService {
                     Self::filter_by_genre(db, genre, candidate_ids).await
                 }
 
-                SeriesCondition::Tag { tag } => {
-                    Self::filter_by_tag(db, tag, candidate_ids).await
-                }
+                SeriesCondition::Tag { tag } => Self::filter_by_tag(db, tag, candidate_ids).await,
 
                 SeriesCondition::Status { status } => {
                     Self::filter_by_status(db, status, candidate_ids).await
@@ -458,40 +454,211 @@ impl FilterService {
     }
 
     async fn filter_by_status(
-        _db: &DatabaseConnection,
-        _operator: &FieldOperator,
-        _candidate_ids: Option<&HashSet<Uuid>>,
+        db: &DatabaseConnection,
+        operator: &FieldOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        // TODO: Implement status filtering when series_metadata.status is added
-        // For now, return empty set (no matches)
-        Ok(HashSet::new())
+        use crate::db::entities::series_metadata;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        let query = series_metadata::Entity::find();
+
+        let filtered_query = match operator {
+            FieldOperator::Is { value } => {
+                query.filter(series_metadata::Column::Status.eq(value.clone()))
+            }
+            FieldOperator::IsNot { value } => {
+                query.filter(series_metadata::Column::Status.ne(value.clone()))
+            }
+            FieldOperator::IsNull => query.filter(series_metadata::Column::Status.is_null()),
+            FieldOperator::IsNotNull => query.filter(series_metadata::Column::Status.is_not_null()),
+            FieldOperator::Contains { value } => {
+                query.filter(series_metadata::Column::Status.contains(value.clone()))
+            }
+            FieldOperator::DoesNotContain { value } => {
+                query.filter(series_metadata::Column::Status.not_like(&format!("%{}%", value)))
+            }
+            FieldOperator::BeginsWith { value } => {
+                query.filter(series_metadata::Column::Status.starts_with(value.clone()))
+            }
+            FieldOperator::EndsWith { value } => {
+                query.filter(series_metadata::Column::Status.ends_with(value.clone()))
+            }
+        };
+
+        let series_ids: Vec<Uuid> = filtered_query
+            .select_only()
+            .column(series_metadata::Column::SeriesId)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
+            series_ids
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect()
+        } else {
+            series_ids.into_iter().collect()
+        };
+
+        Ok(result)
     }
 
     async fn filter_by_publisher(
-        _db: &DatabaseConnection,
-        _operator: &FieldOperator,
-        _candidate_ids: Option<&HashSet<Uuid>>,
+        db: &DatabaseConnection,
+        operator: &FieldOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        // TODO: Implement publisher filtering using series_metadata.publisher
-        Ok(HashSet::new())
+        use crate::db::entities::series_metadata;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        let query = series_metadata::Entity::find();
+
+        let filtered_query = match operator {
+            FieldOperator::Is { value } => {
+                query.filter(series_metadata::Column::Publisher.eq(value.clone()))
+            }
+            FieldOperator::IsNot { value } => {
+                query.filter(series_metadata::Column::Publisher.ne(value.clone()))
+            }
+            FieldOperator::IsNull => query.filter(series_metadata::Column::Publisher.is_null()),
+            FieldOperator::IsNotNull => {
+                query.filter(series_metadata::Column::Publisher.is_not_null())
+            }
+            FieldOperator::Contains { value } => {
+                query.filter(series_metadata::Column::Publisher.contains(value.clone()))
+            }
+            FieldOperator::DoesNotContain { value } => {
+                query.filter(series_metadata::Column::Publisher.not_like(&format!("%{}%", value)))
+            }
+            FieldOperator::BeginsWith { value } => {
+                query.filter(series_metadata::Column::Publisher.starts_with(value.clone()))
+            }
+            FieldOperator::EndsWith { value } => {
+                query.filter(series_metadata::Column::Publisher.ends_with(value.clone()))
+            }
+        };
+
+        let series_ids: Vec<Uuid> = filtered_query
+            .select_only()
+            .column(series_metadata::Column::SeriesId)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
+            series_ids
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect()
+        } else {
+            series_ids.into_iter().collect()
+        };
+
+        Ok(result)
     }
 
     async fn filter_by_language(
-        _db: &DatabaseConnection,
-        _operator: &FieldOperator,
-        _candidate_ids: Option<&HashSet<Uuid>>,
+        db: &DatabaseConnection,
+        operator: &FieldOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        // TODO: Implement language filtering using series_metadata.language
-        Ok(HashSet::new())
+        use crate::db::entities::series_metadata;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        let query = series_metadata::Entity::find();
+
+        let filtered_query = match operator {
+            FieldOperator::Is { value } => {
+                query.filter(series_metadata::Column::Language.eq(value.clone()))
+            }
+            FieldOperator::IsNot { value } => {
+                query.filter(series_metadata::Column::Language.ne(value.clone()))
+            }
+            FieldOperator::IsNull => query.filter(series_metadata::Column::Language.is_null()),
+            FieldOperator::IsNotNull => {
+                query.filter(series_metadata::Column::Language.is_not_null())
+            }
+            FieldOperator::Contains { value } => {
+                query.filter(series_metadata::Column::Language.contains(value.clone()))
+            }
+            FieldOperator::DoesNotContain { value } => {
+                query.filter(series_metadata::Column::Language.not_like(&format!("%{}%", value)))
+            }
+            FieldOperator::BeginsWith { value } => {
+                query.filter(series_metadata::Column::Language.starts_with(value.clone()))
+            }
+            FieldOperator::EndsWith { value } => {
+                query.filter(series_metadata::Column::Language.ends_with(value.clone()))
+            }
+        };
+
+        let series_ids: Vec<Uuid> = filtered_query
+            .select_only()
+            .column(series_metadata::Column::SeriesId)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
+            series_ids
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect()
+        } else {
+            series_ids.into_iter().collect()
+        };
+
+        Ok(result)
     }
 
     async fn filter_by_name(
-        _db: &DatabaseConnection,
-        _operator: &FieldOperator,
-        _candidate_ids: Option<&HashSet<Uuid>>,
+        db: &DatabaseConnection,
+        operator: &FieldOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        // TODO: Implement name filtering using series.name
-        Ok(HashSet::new())
+        use crate::db::entities::series;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        let query = series::Entity::find();
+
+        let filtered_query = match operator {
+            FieldOperator::Is { value } => query.filter(series::Column::Name.eq(value.clone())),
+            FieldOperator::IsNot { value } => query.filter(series::Column::Name.ne(value.clone())),
+            FieldOperator::IsNull => query.filter(series::Column::Name.is_null()),
+            FieldOperator::IsNotNull => query.filter(series::Column::Name.is_not_null()),
+            FieldOperator::Contains { value } => {
+                query.filter(series::Column::Name.contains(value.clone()))
+            }
+            FieldOperator::DoesNotContain { value } => {
+                query.filter(series::Column::Name.not_like(&format!("%{}%", value)))
+            }
+            FieldOperator::BeginsWith { value } => {
+                query.filter(series::Column::Name.starts_with(value.clone()))
+            }
+            FieldOperator::EndsWith { value } => {
+                query.filter(series::Column::Name.ends_with(value.clone()))
+            }
+        };
+
+        let series_ids: Vec<Uuid> = filtered_query
+            .select_only()
+            .column(series::Column::Id)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
+            series_ids
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect()
+        } else {
+            series_ids.into_iter().collect()
+        };
+
+        Ok(result)
     }
 
     async fn filter_by_read_status(
@@ -895,5 +1062,347 @@ impl FilterService {
         };
 
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::dto::{BookCondition, FieldOperator, SeriesCondition, UuidOperator};
+
+    // Unit tests for condition building and basic logic
+
+    #[test]
+    fn test_empty_all_of_condition() {
+        let condition = SeriesCondition::AllOf { all_of: vec![] };
+        match condition {
+            SeriesCondition::AllOf { all_of } => {
+                assert!(all_of.is_empty());
+            }
+            _ => panic!("Expected AllOf condition"),
+        }
+    }
+
+    #[test]
+    fn test_empty_any_of_condition() {
+        let condition = SeriesCondition::AnyOf { any_of: vec![] };
+        match condition {
+            SeriesCondition::AnyOf { any_of } => {
+                assert!(any_of.is_empty());
+            }
+            _ => panic!("Expected AnyOf condition"),
+        }
+    }
+
+    #[test]
+    fn test_nested_all_of_any_of_condition() {
+        // (Genre = Action AND Genre != Horror) OR (Genre = Comedy)
+        let condition = SeriesCondition::AnyOf {
+            any_of: vec![
+                SeriesCondition::AllOf {
+                    all_of: vec![
+                        SeriesCondition::Genre {
+                            genre: FieldOperator::Is {
+                                value: "Action".to_string(),
+                            },
+                        },
+                        SeriesCondition::Genre {
+                            genre: FieldOperator::IsNot {
+                                value: "Horror".to_string(),
+                            },
+                        },
+                    ],
+                },
+                SeriesCondition::Genre {
+                    genre: FieldOperator::Is {
+                        value: "Comedy".to_string(),
+                    },
+                },
+            ],
+        };
+
+        match condition {
+            SeriesCondition::AnyOf { any_of } => {
+                assert_eq!(any_of.len(), 2);
+                match &any_of[0] {
+                    SeriesCondition::AllOf { all_of } => {
+                        assert_eq!(all_of.len(), 2);
+                    }
+                    _ => panic!("Expected first item to be AllOf"),
+                }
+            }
+            _ => panic!("Expected AnyOf condition"),
+        }
+    }
+
+    #[test]
+    fn test_library_id_condition_is() {
+        let uuid = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        let condition = SeriesCondition::LibraryId {
+            library_id: UuidOperator::Is { value: uuid },
+        };
+
+        match condition {
+            SeriesCondition::LibraryId { library_id } => match library_id {
+                UuidOperator::Is { value } => {
+                    assert_eq!(value, uuid);
+                }
+                _ => panic!("Expected Is operator"),
+            },
+            _ => panic!("Expected LibraryId condition"),
+        }
+    }
+
+    #[test]
+    fn test_library_id_condition_is_not() {
+        let uuid = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        let condition = SeriesCondition::LibraryId {
+            library_id: UuidOperator::IsNot { value: uuid },
+        };
+
+        match condition {
+            SeriesCondition::LibraryId { library_id } => match library_id {
+                UuidOperator::IsNot { value } => {
+                    assert_eq!(value, uuid);
+                }
+                _ => panic!("Expected IsNot operator"),
+            },
+            _ => panic!("Expected LibraryId condition"),
+        }
+    }
+
+    #[test]
+    fn test_field_operator_is() {
+        let operator = FieldOperator::Is {
+            value: "Action".to_string(),
+        };
+        match operator {
+            FieldOperator::Is { value } => {
+                assert_eq!(value, "Action");
+            }
+            _ => panic!("Expected Is operator"),
+        }
+    }
+
+    #[test]
+    fn test_field_operator_is_not() {
+        let operator = FieldOperator::IsNot {
+            value: "Horror".to_string(),
+        };
+        match operator {
+            FieldOperator::IsNot { value } => {
+                assert_eq!(value, "Horror");
+            }
+            _ => panic!("Expected IsNot operator"),
+        }
+    }
+
+    #[test]
+    fn test_field_operator_contains() {
+        let operator = FieldOperator::Contains {
+            value: "Act".to_string(),
+        };
+        match operator {
+            FieldOperator::Contains { value } => {
+                assert_eq!(value, "Act");
+            }
+            _ => panic!("Expected Contains operator"),
+        }
+    }
+
+    #[test]
+    fn test_field_operator_is_null() {
+        let operator = FieldOperator::IsNull;
+        assert!(matches!(operator, FieldOperator::IsNull));
+    }
+
+    #[test]
+    fn test_field_operator_is_not_null() {
+        let operator = FieldOperator::IsNotNull;
+        assert!(matches!(operator, FieldOperator::IsNotNull));
+    }
+
+    #[test]
+    fn test_book_condition_series_id() {
+        let uuid = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        let condition = BookCondition::SeriesId {
+            series_id: UuidOperator::Is { value: uuid },
+        };
+
+        match condition {
+            BookCondition::SeriesId { series_id } => match series_id {
+                UuidOperator::Is { value } => {
+                    assert_eq!(value, uuid);
+                }
+                _ => panic!("Expected Is operator"),
+            },
+            _ => panic!("Expected SeriesId condition"),
+        }
+    }
+
+    #[test]
+    fn test_book_condition_has_error() {
+        let condition = BookCondition::HasError {
+            has_error: BoolOperator::IsTrue,
+        };
+
+        match condition {
+            BookCondition::HasError { has_error } => {
+                assert!(matches!(has_error, BoolOperator::IsTrue));
+            }
+            _ => panic!("Expected HasError condition"),
+        }
+    }
+
+    #[test]
+    fn test_book_condition_title() {
+        let condition = BookCondition::Title {
+            title: FieldOperator::Contains {
+                value: "Chapter".to_string(),
+            },
+        };
+
+        match condition {
+            BookCondition::Title { title } => match title {
+                FieldOperator::Contains { value } => {
+                    assert_eq!(value, "Chapter");
+                }
+                _ => panic!("Expected Contains operator"),
+            },
+            _ => panic!("Expected Title condition"),
+        }
+    }
+
+    #[test]
+    fn test_series_condition_status() {
+        let condition = SeriesCondition::Status {
+            status: FieldOperator::Is {
+                value: "ongoing".to_string(),
+            },
+        };
+
+        match condition {
+            SeriesCondition::Status { status } => match status {
+                FieldOperator::Is { value } => {
+                    assert_eq!(value, "ongoing");
+                }
+                _ => panic!("Expected Is operator"),
+            },
+            _ => panic!("Expected Status condition"),
+        }
+    }
+
+    #[test]
+    fn test_series_condition_publisher() {
+        let condition = SeriesCondition::Publisher {
+            publisher: FieldOperator::Contains {
+                value: "Viz".to_string(),
+            },
+        };
+
+        match condition {
+            SeriesCondition::Publisher { publisher } => match publisher {
+                FieldOperator::Contains { value } => {
+                    assert_eq!(value, "Viz");
+                }
+                _ => panic!("Expected Contains operator"),
+            },
+            _ => panic!("Expected Publisher condition"),
+        }
+    }
+
+    #[test]
+    fn test_series_condition_language() {
+        let condition = SeriesCondition::Language {
+            language: FieldOperator::Is {
+                value: "ja".to_string(),
+            },
+        };
+
+        match condition {
+            SeriesCondition::Language { language } => match language {
+                FieldOperator::Is { value } => {
+                    assert_eq!(value, "ja");
+                }
+                _ => panic!("Expected Is operator"),
+            },
+            _ => panic!("Expected Language condition"),
+        }
+    }
+
+    #[test]
+    fn test_series_condition_name() {
+        let condition = SeriesCondition::Name {
+            name: FieldOperator::BeginsWith {
+                value: "Naruto".to_string(),
+            },
+        };
+
+        match condition {
+            SeriesCondition::Name { name } => match name {
+                FieldOperator::BeginsWith { value } => {
+                    assert_eq!(value, "Naruto");
+                }
+                _ => panic!("Expected BeginsWith operator"),
+            },
+            _ => panic!("Expected Name condition"),
+        }
+    }
+
+    #[test]
+    fn test_complex_book_condition() {
+        // Books in library X AND (has Action genre OR has Comedy genre) AND NOT Horror
+        let library_uuid = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        let condition = BookCondition::AllOf {
+            all_of: vec![
+                BookCondition::LibraryId {
+                    library_id: UuidOperator::Is {
+                        value: library_uuid,
+                    },
+                },
+                BookCondition::AnyOf {
+                    any_of: vec![
+                        BookCondition::Genre {
+                            genre: FieldOperator::Is {
+                                value: "Action".to_string(),
+                            },
+                        },
+                        BookCondition::Genre {
+                            genre: FieldOperator::Is {
+                                value: "Comedy".to_string(),
+                            },
+                        },
+                    ],
+                },
+                BookCondition::Genre {
+                    genre: FieldOperator::IsNot {
+                        value: "Horror".to_string(),
+                    },
+                },
+            ],
+        };
+
+        match condition {
+            BookCondition::AllOf { all_of } => {
+                assert_eq!(all_of.len(), 3);
+                // First should be LibraryId
+                assert!(matches!(&all_of[0], BookCondition::LibraryId { .. }));
+                // Second should be AnyOf
+                match &all_of[1] {
+                    BookCondition::AnyOf { any_of } => {
+                        assert_eq!(any_of.len(), 2);
+                    }
+                    _ => panic!("Expected AnyOf"),
+                }
+                // Third should be Genre with IsNot
+                match &all_of[2] {
+                    BookCondition::Genre { genre } => {
+                        assert!(matches!(genre, FieldOperator::IsNot { .. }));
+                    }
+                    _ => panic!("Expected Genre"),
+                }
+            }
+            _ => panic!("Expected AllOf condition"),
+        }
     }
 }

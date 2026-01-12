@@ -12,7 +12,8 @@ use crate::api::{
             UpdateAlternateTitleRequest, UpdateMetadataLocksRequest, UserRatingsListResponse,
             UserSeriesRatingDto,
         },
-        BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListRequest, SeriesListResponse,
+        BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListRequest,
+        SeriesListResponse,
     },
     error::ApiError,
     extractors::{AuthContext, AuthState, FlexibleAuthContext},
@@ -879,9 +880,12 @@ pub async fn list_recently_added_series(
 ) -> Result<Json<Vec<SeriesDto>>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    let series_list = SeriesRepository::list_recently_added(&state.db, query.library_id, query.limit)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch recently added series: {}", e)))?;
+    let series_list =
+        SeriesRepository::list_recently_added(&state.db, query.library_id, query.limit)
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to fetch recently added series: {}", e))
+            })?;
 
     let user_id = Some(auth.user_id);
     let dtos: Vec<SeriesDto> = futures::future::join_all(
@@ -969,11 +973,12 @@ pub async fn list_recently_updated_series(
 ) -> Result<Json<Vec<SeriesDto>>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    let series_list = SeriesRepository::list_recently_updated(&state.db, query.library_id, query.limit)
-        .await
-        .map_err(|e| {
-            ApiError::Internal(format!("Failed to fetch recently updated series: {}", e))
-        })?;
+    let series_list =
+        SeriesRepository::list_recently_updated(&state.db, query.library_id, query.limit)
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to fetch recently updated series: {}", e))
+            })?;
 
     let user_id = Some(auth.user_id);
     let dtos: Vec<SeriesDto> = futures::future::join_all(

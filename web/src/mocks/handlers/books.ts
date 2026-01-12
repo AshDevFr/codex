@@ -10,25 +10,33 @@ export const bookHandlers = [
   // IMPORTANT: Specific routes MUST come before parameterized routes
   // Otherwise /api/v1/books/:id will match "in-progress" as an ID
 
-  // List in-progress books (global - all libraries)
+  // List in-progress books
+  // Supports ?library_id= query param for library filtering
   // Returns plain array (not paginated) - matches API expectation
-  http.get("/api/v1/books/in-progress", async () => {
+  http.get("/api/v1/books/in-progress", async ({ request }) => {
     await delay(200);
+    const url = new URL(request.url);
+    const libraryId = url.searchParams.get("library_id");
 
     // Return books that have read progress
-    const inProgressBooks = mockBooks.filter((b) => b.readProgress !== null);
+    const baseBooks = libraryId ? getBooksByLibrary(libraryId) : mockBooks;
+    const inProgressBooks = baseBooks.filter((b) => b.readProgress !== null);
 
     return HttpResponse.json(inProgressBooks);
   }),
 
-  // List on-deck books (global - all libraries)
+  // List on-deck books
+  // Supports ?library_id= query param for library filtering
   // Returns paginated response with next book in series where user has completed books
-  http.get("/api/v1/books/on-deck", async () => {
+  http.get("/api/v1/books/on-deck", async ({ request }) => {
     await delay(200);
+    const url = new URL(request.url);
+    const libraryId = url.searchParams.get("library_id");
 
     // Return books that don't have progress (simulating "next to read")
     // In reality this would be first unread book from series with completed books
-    const onDeckBooks = mockBooks.filter((b) => b.readProgress === null).slice(0, 10);
+    const baseBooks = libraryId ? getBooksByLibrary(libraryId) : mockBooks;
+    const onDeckBooks = baseBooks.filter((b) => b.readProgress === null).slice(0, 10);
 
     return HttpResponse.json(
       createPaginatedResponse(onDeckBooks, {
@@ -37,15 +45,18 @@ export const bookHandlers = [
     );
   }),
 
-  // List recently added books (global - all libraries)
+  // List recently added books
+  // Supports ?library_id= query param for library filtering
   // Returns plain array (not paginated) - matches API expectation
   http.get("/api/v1/books/recently-added", async ({ request }) => {
     await delay(200);
     const url = new URL(request.url);
+    const libraryId = url.searchParams.get("library_id");
     const limit = Number.parseInt(url.searchParams.get("limit") || "50");
 
     // Sort by created date (newest first)
-    const sortedBooks = [...mockBooks].sort(
+    const baseBooks = libraryId ? getBooksByLibrary(libraryId) : mockBooks;
+    const sortedBooks = [...baseBooks].sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
@@ -53,15 +64,36 @@ export const bookHandlers = [
     return HttpResponse.json(sortedBooks.slice(0, limit));
   }),
 
+  // List recently read books
+  // Supports ?library_id= query param for library filtering
+  // Returns plain array (not paginated) - matches API expectation
+  http.get("/api/v1/books/recently-read", async ({ request }) => {
+    await delay(200);
+    const url = new URL(request.url);
+    const libraryId = url.searchParams.get("library_id");
+    const limit = Number.parseInt(url.searchParams.get("limit") || "50");
+
+    // Return books that have been read (have read progress), sorted by last read
+    const baseBooks = libraryId ? getBooksByLibrary(libraryId) : mockBooks;
+    const readBooks = baseBooks.filter((b) => b.readProgress !== null).slice(0, limit);
+
+    return HttpResponse.json(readBooks);
+  }),
+
   // List books with pagination
+  // Supports ?library_id= and ?series_id= query params for filtering
   http.get("/api/v1/books", async ({ request }) => {
     await delay(200);
     const url = new URL(request.url);
     const page = Number.parseInt(url.searchParams.get("page") || "0");
-    const pageSize = Number.parseInt(url.searchParams.get("pageSize") || "20");
-    const seriesId = url.searchParams.get("seriesId");
+    const pageSize = Number.parseInt(url.searchParams.get("page_size") || url.searchParams.get("pageSize") || "20");
+    const libraryId = url.searchParams.get("library_id");
+    const seriesId = url.searchParams.get("series_id") || url.searchParams.get("seriesId");
 
-    const filteredBooks = seriesId ? getBooksBySeries(seriesId) : mockBooks;
+    let filteredBooks = libraryId ? getBooksByLibrary(libraryId) : mockBooks;
+    if (seriesId) {
+      filteredBooks = filteredBooks.filter((b) => b.seriesId === seriesId);
+    }
 
     const start = page * pageSize;
     const end = start + pageSize;

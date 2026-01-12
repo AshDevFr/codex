@@ -1,0 +1,24 @@
+.triggerButton {
+	position: relative;
+}
+
+.filterBadge {
+	position: absolute;
+	top: -4px;
+	right: -4px;
+	min-width: 16px;
+	height: 16px;
+	padding: 0 4px;
+	font-size: 10px;
+}
+
+.drawerBody {
+	display: flex;
+	flex-direction: column;
+	height: calc(100% - 60px);
+}
+
+.footer {
+	padding-top: var(--mantine-spacing-md);
+	border-top: 1px solid var(--mantine-color-dark-4);
+}

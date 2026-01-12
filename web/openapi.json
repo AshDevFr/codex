@@ -104,7 +104,7 @@
         ]
       }
     },
-    "/api/v1/admin/settings/{key}": {
+    "/api/v1/admin/settings/{setting_key}": {
       "get": {
         "tags": [
           "settings"
@@ -113,7 +113,7 @@
         "operationId": "get_setting",
         "parameters": [
           {
-            "name": "key",
+            "name": "setting_key",
             "in": "path",
             "description": "Setting key (e.g., scanner.max_concurrent_scans)",
             "required": true,
@@ -157,7 +157,7 @@
         "operationId": "update_setting",
         "parameters": [
           {
-            "name": "key",
+            "name": "setting_key",
             "in": "path",
             "description": "Setting key (e.g., scanner.max_concurrent_scans)",
             "required": true,
@@ -207,7 +207,7 @@
         ]
       }
     },
-    "/api/v1/admin/settings/{key}/history": {
+    "/api/v1/admin/settings/{setting_key}/history": {
       "get": {
         "tags": [
           "settings"
@@ -216,7 +216,7 @@
         "operationId": "get_setting_history",
         "parameters": [
           {
-            "name": "key",
+            "name": "setting_key",
             "in": "path",
             "description": "Setting key (e.g., scanner.max_concurrent_scans)",
             "required": true,
@@ -266,7 +266,7 @@
         ]
       }
     },
-    "/api/v1/admin/settings/{key}/reset": {
+    "/api/v1/admin/settings/{setting_key}/reset": {
       "post": {
         "tags": [
           "settings"
@@ -275,7 +275,7 @@
         "operationId": "reset_setting",
         "parameters": [
           {
-            "name": "key",
+            "name": "setting_key",
             "in": "path",
             "description": "Setting key (e.g., scanner.max_concurrent_scans)",
             "required": true,
@@ -390,7 +390,7 @@
         ]
       }
     },
-    "/api/v1/api-keys/{id}": {
+    "/api/v1/api-keys/{api_key_id}": {
       "get": {
         "tags": [
           "api-keys"
@@ -399,7 +399,7 @@
         "operationId": "get_api_key",
         "parameters": [
           {
-            "name": "id",
+            "name": "api_key_id",
             "in": "path",
             "description": "API key ID",
             "required": true,
@@ -444,7 +444,7 @@
         "operationId": "delete_api_key",
         "parameters": [
           {
-            "name": "id",
+            "name": "api_key_id",
             "in": "path",
             "description": "API key ID",
             "required": true,
@@ -482,7 +482,7 @@
         "operationId": "update_api_key",
         "parameters": [
           {
-            "name": "id",
+            "name": "api_key_id",
             "in": "path",
             "description": "API key ID",
             "required": true,
@@ -771,6 +771,16 @@
         "operationId": "list_in_progress_books",
         "parameters": [
           {
+            "name": "library_id",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
             "name": "page",
             "in": "path",
             "description": "Page number (0-indexed)",
@@ -818,6 +828,49 @@
         ]
       }
     },
+    "/api/v1/books/list": {
+      "post": {
+        "tags": [
+          "books"
+        ],
+        "summary": "List books with advanced filtering",
+        "description": "Supports complex filter conditions including nested AllOf/AnyOf logic,\ngenre/tag filtering with include/exclude, and more.",
+        "operationId": "list_books_filtered",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookListRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Paginated list of filtered books",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/on-deck": {
       "get": {
         "tags": [
@@ -826,6 +879,16 @@
         "summary": "List on-deck books (next unread book in series where user has completed at least one book)",
         "operationId": "list_on_deck_books",
         "parameters": [
+          {
+            "name": "library_id",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
           {
             "name": "page",
             "in": "path",
@@ -882,6 +945,16 @@
         "summary": "List recently added books",
         "operationId": "list_recently_added_books",
         "parameters": [
+          {
+            "name": "library_id",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
           {
             "name": "page",
             "in": "path",
@@ -947,6 +1020,16 @@
               "type": "integer",
               "format": "int64",
               "minimum": 0
+            }
+          },
+          {
+            "name": "library_id",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -1054,6 +1137,50 @@
         ]
       }
     },
+    "/api/v1/books/{book_id}": {
+      "get": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Get book by ID",
+        "operationId": "get_book",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Book details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/{book_id}/adjacent": {
       "get": {
         "tags": [
@@ -1084,6 +1211,263 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/{book_id}/analyze": {
+      "post": {
+        "tags": [
+          "Scans"
+        ],
+        "summary": "Trigger analysis of a single book (force reanalysis)",
+        "description": "# Permission Required\n- `books:write`\n\n# Behavior\nEnqueues an AnalyzeBook task with force=true.\nReturns immediately with a task_id to track progress.",
+        "operationId": "trigger_book_analysis",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Analysis task enqueued successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateTaskResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/{book_id}/analyze-unanalyzed": {
+      "post": {
+        "tags": [
+          "Scans"
+        ],
+        "summary": "Trigger analysis of a book if not already analyzed",
+        "description": "# Permission Required\n- `books:write`\n\n# Behavior\nEnqueues an AnalyzeBook task with force=false if the book has not been analyzed yet.\nReturns 400 if the book is already analyzed.\nReturns immediately with a task_id to track progress.",
+        "operationId": "trigger_book_unanalyzed_analysis",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Analysis task enqueued successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateTaskResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Book is already analyzed"
+          },
+          "403": {
+            "description": "Permission denied"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/{book_id}/file": {
+      "get": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Download book file",
+        "description": "Streams the original book file (CBZ, CBR, EPUB, PDF) for download.\nUsed by OPDS clients for acquisition links.",
+        "operationId": "get_book_file",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Book file",
+            "content": {
+              "application/octet-stream": {}
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/{book_id}/metadata": {
+      "put": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Replace all book metadata (PUT)",
+        "description": "Completely replaces all metadata fields. Omitted or null fields will be cleared.\nIf no metadata record exists, one will be created.",
+        "operationId": "replace_book_metadata",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceBookMetadataRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Metadata replaced successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookMetadataResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Partially update book metadata (PATCH)",
+        "description": "Only provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared.\nIf no metadata record exists, one will be created with the provided fields.",
+        "operationId": "patch_book_metadata",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchBookMetadataRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Metadata updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookMetadataResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Book not found"
@@ -1345,6 +1729,50 @@
         ]
       }
     },
+    "/api/v1/books/{book_id}/thumbnail": {
+      "get": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Get thumbnail/cover image for a book",
+        "description": "Extracts the first page and resizes it to a thumbnail (max 400px width/height)",
+        "operationId": "get_book_thumbnail",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thumbnail image",
+            "content": {
+              "image/jpeg": {}
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/{book_id}/unread": {
       "post": {
         "tags": [
@@ -1377,351 +1805,6 @@
         "security": [
           {
             "bearer_auth": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      }
-    },
-    "/api/v1/books/{id}": {
-      "get": {
-        "tags": [
-          "books"
-        ],
-        "summary": "Get book by ID",
-        "operationId": "get_book",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Book ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Book details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BookDetailResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Book not found"
-          }
-        },
-        "security": [
-          {
-            "jwt_bearer": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      }
-    },
-    "/api/v1/books/{id}/analyze": {
-      "post": {
-        "tags": [
-          "Scans"
-        ],
-        "summary": "Trigger analysis of a single book (force reanalysis)",
-        "description": "# Permission Required\n- `books:write`\n\n# Behavior\nEnqueues an AnalyzeBook task with force=true.\nReturns immediately with a task_id to track progress.",
-        "operationId": "trigger_book_analysis",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Book ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Analysis task enqueued successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateTaskResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Permission denied"
-          },
-          "404": {
-            "description": "Book not found"
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      }
-    },
-    "/api/v1/books/{id}/analyze-unanalyzed": {
-      "post": {
-        "tags": [
-          "Scans"
-        ],
-        "summary": "Trigger analysis of a book if not already analyzed",
-        "description": "# Permission Required\n- `books:write`\n\n# Behavior\nEnqueues an AnalyzeBook task with force=false if the book has not been analyzed yet.\nReturns 400 if the book is already analyzed.\nReturns immediately with a task_id to track progress.",
-        "operationId": "trigger_book_unanalyzed_analysis",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Book ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Analysis task enqueued successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateTaskResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Book is already analyzed"
-          },
-          "403": {
-            "description": "Permission denied"
-          },
-          "404": {
-            "description": "Book not found"
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      }
-    },
-    "/api/v1/books/{id}/file": {
-      "get": {
-        "tags": [
-          "books"
-        ],
-        "summary": "Download book file",
-        "description": "Streams the original book file (CBZ, CBR, EPUB, PDF) for download.\nUsed by OPDS clients for acquisition links.",
-        "operationId": "get_book_file",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Book ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Book file",
-            "content": {
-              "application/octet-stream": {}
-            }
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Book not found"
-          }
-        },
-        "security": [
-          {
-            "jwt_bearer": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      }
-    },
-    "/api/v1/books/{id}/metadata": {
-      "put": {
-        "tags": [
-          "books"
-        ],
-        "summary": "Replace all book metadata (PUT)",
-        "description": "Completely replaces all metadata fields. Omitted or null fields will be cleared.\nIf no metadata record exists, one will be created.",
-        "operationId": "replace_book_metadata",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Book ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReplaceBookMetadataRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Metadata replaced successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BookMetadataResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Book not found"
-          }
-        },
-        "security": [
-          {
-            "jwt_bearer": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      },
-      "patch": {
-        "tags": [
-          "books"
-        ],
-        "summary": "Partially update book metadata (PATCH)",
-        "description": "Only provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared.\nIf no metadata record exists, one will be created with the provided fields.",
-        "operationId": "patch_book_metadata",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Book ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PatchBookMetadataRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Metadata updated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BookMetadataResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Book not found"
-          }
-        },
-        "security": [
-          {
-            "jwt_bearer": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      }
-    },
-    "/api/v1/books/{id}/thumbnail": {
-      "get": {
-        "tags": [
-          "books"
-        ],
-        "summary": "Get thumbnail/cover image for a book",
-        "description": "Extracts the first page and resizes it to a thumbnail (max 400px width/height)",
-        "operationId": "get_book_thumbnail",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Book ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Thumbnail image",
-            "content": {
-              "image/jpeg": {}
-            }
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Book not found"
-          }
-        },
-        "security": [
-          {
-            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -1798,7 +1881,7 @@
         ]
       }
     },
-    "/api/v1/duplicates/{id}": {
+    "/api/v1/duplicates/{duplicate_id}": {
       "delete": {
         "tags": [
           "Duplicates"
@@ -1808,7 +1891,7 @@
         "operationId": "delete_duplicate_group",
         "parameters": [
           {
-            "name": "id",
+            "name": "duplicate_id",
             "in": "path",
             "description": "Duplicate group ID",
             "required": true,
@@ -2042,7 +2125,7 @@
         ]
       }
     },
-    "/api/v1/genres/{id}": {
+    "/api/v1/genres/{genre_id}": {
       "delete": {
         "tags": [
           "genres"
@@ -2051,7 +2134,7 @@
         "operationId": "delete_genre",
         "parameters": [
           {
-            "name": "id",
+            "name": "genre_id",
             "in": "path",
             "description": "Genre ID",
             "required": true,
@@ -2160,7 +2243,7 @@
         ]
       }
     },
-    "/api/v1/libraries/{id}": {
+    "/api/v1/libraries/{library_id}": {
       "get": {
         "tags": [
           "libraries"
@@ -2169,7 +2252,7 @@
         "operationId": "get_library",
         "parameters": [
           {
-            "name": "id",
+            "name": "library_id",
             "in": "path",
             "description": "Library ID",
             "required": true,
@@ -2211,7 +2294,7 @@
         "operationId": "delete_library",
         "parameters": [
           {
-            "name": "id",
+            "name": "library_id",
             "in": "path",
             "description": "Library ID",
             "required": true,
@@ -2249,7 +2332,7 @@
         "operationId": "update_library",
         "parameters": [
           {
-            "name": "id",
+            "name": "library_id",
             "in": "path",
             "description": "Library ID",
             "required": true,
@@ -2297,7 +2380,7 @@
         ]
       }
     },
-    "/api/v1/libraries/{id}/analyze": {
+    "/api/v1/libraries/{library_id}/analyze": {
       "post": {
         "tags": [
           "Scans"
@@ -2307,7 +2390,7 @@
         "operationId": "trigger_library_analysis",
         "parameters": [
           {
-            "name": "id",
+            "name": "library_id",
             "in": "path",
             "description": "Library ID",
             "required": true,
@@ -2345,7 +2428,7 @@
         ]
       }
     },
-    "/api/v1/libraries/{id}/analyze-unanalyzed": {
+    "/api/v1/libraries/{library_id}/analyze-unanalyzed": {
       "post": {
         "tags": [
           "Scans"
@@ -2355,7 +2438,7 @@
         "operationId": "trigger_library_unanalyzed_analysis",
         "parameters": [
           {
-            "name": "id",
+            "name": "library_id",
             "in": "path",
             "description": "Library ID",
             "required": true,
@@ -2381,207 +2464,6 @@
           },
           "404": {
             "description": "Library not found"
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      }
-    },
-    "/api/v1/libraries/{id}/purge-deleted": {
-      "delete": {
-        "tags": [
-          "libraries"
-        ],
-        "summary": "Purge deleted books from a library",
-        "operationId": "purge_deleted_books",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Library ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Number of books purged",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "integer",
-                  "format": "int64",
-                  "minimum": 0
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Library not found"
-          }
-        },
-        "security": [
-          {
-            "jwt_bearer": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      }
-    },
-    "/api/v1/libraries/{id}/scan": {
-      "post": {
-        "tags": [
-          "Scans"
-        ],
-        "summary": "Trigger a library scan",
-        "description": "# Permission Required\n- `libraries:write`",
-        "operationId": "trigger_scan",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Library ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "mode",
-            "in": "query",
-            "description": "Scan mode: 'normal' or 'deep' (default: 'normal')",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Scan started successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScanStatusDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid scan mode"
-          },
-          "403": {
-            "description": "Permission denied"
-          },
-          "404": {
-            "description": "Library not found"
-          },
-          "409": {
-            "description": "Scan already in progress"
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      }
-    },
-    "/api/v1/libraries/{id}/scan-status": {
-      "get": {
-        "tags": [
-          "Scans"
-        ],
-        "summary": "Get scan status for a library",
-        "description": "# Permission Required\n- `libraries:read`",
-        "operationId": "get_scan_status",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Library ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Scan status retrieved",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScanStatusDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Permission denied"
-          },
-          "404": {
-            "description": "No scan found for this library"
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      }
-    },
-    "/api/v1/libraries/{id}/scan/cancel": {
-      "post": {
-        "tags": [
-          "Scans"
-        ],
-        "summary": "Cancel a running scan",
-        "description": "# Permission Required\n- `libraries:write`",
-        "operationId": "cancel_scan",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Library ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Scan cancelled successfully"
-          },
-          "403": {
-            "description": "Permission denied"
-          },
-          "404": {
-            "description": "No active scan found"
           }
         },
         "security": [
@@ -2975,6 +2857,207 @@
         "security": [
           {
             "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/libraries/{library_id}/purge-deleted": {
+      "delete": {
+        "tags": [
+          "libraries"
+        ],
+        "summary": "Purge deleted books from a library",
+        "operationId": "purge_deleted_books",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Number of books purged",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int64",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Library not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/libraries/{library_id}/scan": {
+      "post": {
+        "tags": [
+          "Scans"
+        ],
+        "summary": "Trigger a library scan",
+        "description": "# Permission Required\n- `libraries:write`",
+        "operationId": "trigger_scan",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "description": "Scan mode: 'normal' or 'deep' (default: 'normal')",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Scan started successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanStatusDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid scan mode"
+          },
+          "403": {
+            "description": "Permission denied"
+          },
+          "404": {
+            "description": "Library not found"
+          },
+          "409": {
+            "description": "Scan already in progress"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/libraries/{library_id}/scan-status": {
+      "get": {
+        "tags": [
+          "Scans"
+        ],
+        "summary": "Get scan status for a library",
+        "description": "# Permission Required\n- `libraries:read`",
+        "operationId": "get_scan_status",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Scan status retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanStatusDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied"
+          },
+          "404": {
+            "description": "No scan found for this library"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/libraries/{library_id}/scan/cancel": {
+      "post": {
+        "tags": [
+          "Scans"
+        ],
+        "summary": "Cancel a running scan",
+        "description": "# Permission Required\n- `libraries:write`",
+        "operationId": "cancel_scan",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Scan cancelled successfully"
+          },
+          "403": {
+            "description": "Permission denied"
+          },
+          "404": {
+            "description": "No active scan found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
           },
           {
             "api_key": []
@@ -3625,6 +3708,18 @@
         ],
         "summary": "List series with in-progress books (series that have at least one book with reading progress that is not completed)",
         "operationId": "list_in_progress_series",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "List of in-progress series",
@@ -3635,6 +3730,49 @@
                   "items": {
                     "$ref": "#/components/schemas/SeriesDto"
                   }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/list": {
+      "post": {
+        "tags": [
+          "series"
+        ],
+        "summary": "List series with advanced filtering",
+        "description": "Supports complex filter conditions including nested AllOf/AnyOf logic,\ngenre/tag filtering with include/exclude, and more.",
+        "operationId": "list_series_filtered",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeriesListRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Paginated list of filtered series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse"
                 }
               }
             }
@@ -3670,6 +3808,16 @@
               "type": "integer",
               "format": "int64",
               "minimum": 0
+            }
+          },
+          {
+            "name": "library_id",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -3718,6 +3866,16 @@
               "type": "integer",
               "format": "int64",
               "minimum": 0
+            }
+          },
+          {
+            "name": "library_id",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -3794,7 +3952,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}": {
+    "/api/v1/series/{series_id}": {
       "get": {
         "tags": [
           "series"
@@ -3803,7 +3961,7 @@
         "operationId": "get_series",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -3838,7 +3996,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/alternate-titles": {
+    "/api/v1/series/{series_id}/alternate-titles": {
       "get": {
         "tags": [
           "series"
@@ -3847,7 +4005,7 @@
         "operationId": "get_series_alternate_titles",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -3892,7 +4050,7 @@
         "operationId": "create_alternate_title",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -3940,7 +4098,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/alternate-titles/{title_id}": {
+    "/api/v1/series/{series_id}/alternate-titles/{title_id}": {
       "delete": {
         "tags": [
           "series"
@@ -3949,7 +4107,7 @@
         "operationId": "delete_alternate_title",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -3997,7 +4155,7 @@
         "operationId": "update_alternate_title",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4055,7 +4213,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/analyze": {
+    "/api/v1/series/{series_id}/analyze": {
       "post": {
         "tags": [
           "Scans"
@@ -4065,7 +4223,7 @@
         "operationId": "trigger_series_analysis",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4103,7 +4261,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/analyze-unanalyzed": {
+    "/api/v1/series/{series_id}/analyze-unanalyzed": {
       "post": {
         "tags": [
           "Scans"
@@ -4113,7 +4271,7 @@
         "operationId": "trigger_series_unanalyzed_analysis",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4151,7 +4309,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/books": {
+    "/api/v1/series/{series_id}/books": {
       "get": {
         "tags": [
           "series"
@@ -4160,7 +4318,7 @@
         "operationId": "get_series_books",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4210,7 +4368,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/books/with-errors": {
+    "/api/v1/series/{series_id}/books/with-errors": {
       "get": {
         "tags": [
           "books"
@@ -4219,7 +4377,7 @@
         "operationId": "list_series_books_with_errors",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4276,7 +4434,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/cover": {
+    "/api/v1/series/{series_id}/cover": {
       "post": {
         "tags": [
           "series"
@@ -4285,7 +4443,7 @@
         "operationId": "upload_series_cover",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4330,7 +4488,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/cover/source": {
+    "/api/v1/series/{series_id}/cover/source": {
       "patch": {
         "tags": [
           "series"
@@ -4339,7 +4497,7 @@
         "operationId": "set_series_cover_source",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4380,7 +4538,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/covers": {
+    "/api/v1/series/{series_id}/covers": {
       "get": {
         "tags": [
           "series"
@@ -4389,7 +4547,7 @@
         "operationId": "list_series_covers",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4427,7 +4585,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/covers/{cover_id}": {
+    "/api/v1/series/{series_id}/covers/{cover_id}": {
       "delete": {
         "tags": [
           "series"
@@ -4436,7 +4594,7 @@
         "operationId": "delete_series_cover",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4480,7 +4638,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/covers/{cover_id}/select": {
+    "/api/v1/series/{series_id}/covers/{cover_id}/select": {
       "put": {
         "tags": [
           "series"
@@ -4489,7 +4647,7 @@
         "operationId": "select_series_cover",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4537,7 +4695,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/download": {
+    "/api/v1/series/{series_id}/download": {
       "get": {
         "tags": [
           "series"
@@ -4547,7 +4705,7 @@
         "operationId": "download_series",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4581,7 +4739,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/external-links": {
+    "/api/v1/series/{series_id}/external-links": {
       "get": {
         "tags": [
           "series"
@@ -4590,7 +4748,7 @@
         "operationId": "get_series_external_links",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4635,7 +4793,7 @@
         "operationId": "create_external_link",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4683,7 +4841,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/external-links/{source}": {
+    "/api/v1/series/{series_id}/external-links/{source}": {
       "delete": {
         "tags": [
           "series"
@@ -4692,7 +4850,7 @@
         "operationId": "delete_external_link",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4732,7 +4890,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/external-ratings": {
+    "/api/v1/series/{series_id}/external-ratings": {
       "get": {
         "tags": [
           "series"
@@ -4741,7 +4899,7 @@
         "operationId": "get_series_external_ratings",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4786,7 +4944,7 @@
         "operationId": "create_external_rating",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4834,7 +4992,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/external-ratings/{source}": {
+    "/api/v1/series/{series_id}/external-ratings/{source}": {
       "delete": {
         "tags": [
           "series"
@@ -4843,7 +5001,7 @@
         "operationId": "delete_external_rating",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4883,7 +5041,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/genres": {
+    "/api/v1/series/{series_id}/genres": {
       "get": {
         "tags": [
           "genres"
@@ -4892,7 +5050,7 @@
         "operationId": "get_series_genres",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4937,7 +5095,7 @@
         "operationId": "set_series_genres",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -4992,7 +5150,7 @@
         "operationId": "add_series_genre",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -5040,7 +5198,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/genres/{genre_id}": {
+    "/api/v1/series/{series_id}/genres/{genre_id}": {
       "delete": {
         "tags": [
           "genres"
@@ -5049,7 +5207,7 @@
         "operationId": "remove_series_genre",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -5090,7 +5248,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/metadata": {
+    "/api/v1/series/{series_id}/metadata": {
       "put": {
         "tags": [
           "series"
@@ -5100,7 +5258,7 @@
         "operationId": "replace_series_metadata",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -5156,7 +5314,7 @@
         "operationId": "patch_series_metadata",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -5204,7 +5362,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/metadata/full": {
+    "/api/v1/series/{series_id}/metadata/full": {
       "get": {
         "tags": [
           "series"
@@ -5214,7 +5372,7 @@
         "operationId": "get_full_series_metadata",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -5252,7 +5410,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/metadata/locks": {
+    "/api/v1/series/{series_id}/metadata/locks": {
       "get": {
         "tags": [
           "series"
@@ -5261,7 +5419,7 @@
         "operationId": "get_metadata_locks",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -5307,7 +5465,7 @@
         "operationId": "update_metadata_locks",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -5355,7 +5513,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/purge-deleted": {
+    "/api/v1/series/{series_id}/purge-deleted": {
       "delete": {
         "tags": [
           "series"
@@ -5364,7 +5522,7 @@
         "operationId": "purge_series_deleted_books",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -5404,7 +5562,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/rating": {
+    "/api/v1/series/{series_id}/rating": {
       "get": {
         "tags": [
           "ratings"
@@ -5413,7 +5571,7 @@
         "operationId": "get_series_rating",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -5458,7 +5616,7 @@
         "operationId": "set_series_rating",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -5516,7 +5674,7 @@
         "operationId": "delete_series_rating",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -5547,7 +5705,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/read": {
+    "/api/v1/series/{series_id}/read": {
       "post": {
         "tags": [
           "series"
@@ -5556,7 +5714,7 @@
         "operationId": "mark_series_as_read",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -5594,7 +5752,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/tags": {
+    "/api/v1/series/{series_id}/tags": {
       "get": {
         "tags": [
           "tags"
@@ -5603,7 +5761,7 @@
         "operationId": "get_series_tags",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -5648,7 +5806,7 @@
         "operationId": "set_series_tags",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -5703,7 +5861,7 @@
         "operationId": "add_series_tag",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -5751,7 +5909,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/tags/{tag_id}": {
+    "/api/v1/series/{series_id}/tags/{tag_id}": {
       "delete": {
         "tags": [
           "tags"
@@ -5760,7 +5918,7 @@
         "operationId": "remove_series_tag",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -5801,7 +5959,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/thumbnail": {
+    "/api/v1/series/{series_id}/thumbnail": {
       "get": {
         "tags": [
           "series"
@@ -5810,7 +5968,7 @@
         "operationId": "get_series_thumbnail",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -5844,7 +6002,7 @@
         ]
       }
     },
-    "/api/v1/series/{id}/unread": {
+    "/api/v1/series/{series_id}/unread": {
       "post": {
         "tags": [
           "series"
@@ -5853,7 +6011,7 @@
         "operationId": "mark_series_as_unread",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -6055,7 +6213,7 @@
         ]
       }
     },
-    "/api/v1/tags/{id}": {
+    "/api/v1/tags/{tag_id}": {
       "delete": {
         "tags": [
           "tags"
@@ -6064,7 +6222,7 @@
         "operationId": "delete_tag",
         "parameters": [
           {
-            "name": "id",
+            "name": "tag_id",
             "in": "path",
             "description": "Tag ID",
             "required": true,
@@ -6349,7 +6507,7 @@
         ]
       }
     },
-    "/api/v1/tasks/{id}": {
+    "/api/v1/tasks/{task_id}": {
       "get": {
         "tags": [
           "Task Queue"
@@ -6359,7 +6517,7 @@
         "operationId": "get_task",
         "parameters": [
           {
-            "name": "id",
+            "name": "task_id",
             "in": "path",
             "description": "Task ID",
             "required": true,
@@ -6397,7 +6555,7 @@
         ]
       }
     },
-    "/api/v1/tasks/{id}/cancel": {
+    "/api/v1/tasks/{task_id}/cancel": {
       "post": {
         "tags": [
           "Task Queue"
@@ -6407,7 +6565,7 @@
         "operationId": "cancel_task",
         "parameters": [
           {
-            "name": "id",
+            "name": "task_id",
             "in": "path",
             "description": "Task ID",
             "required": true,
@@ -6448,7 +6606,7 @@
         ]
       }
     },
-    "/api/v1/tasks/{id}/retry": {
+    "/api/v1/tasks/{task_id}/retry": {
       "post": {
         "tags": [
           "Task Queue"
@@ -6458,7 +6616,7 @@
         "operationId": "retry_task",
         "parameters": [
           {
-            "name": "id",
+            "name": "task_id",
             "in": "path",
             "description": "Task ID",
             "required": true,
@@ -6499,7 +6657,7 @@
         ]
       }
     },
-    "/api/v1/tasks/{id}/unlock": {
+    "/api/v1/tasks/{task_id}/unlock": {
       "post": {
         "tags": [
           "Task Queue"
@@ -6509,7 +6667,7 @@
         "operationId": "unlock_task",
         "parameters": [
           {
-            "name": "id",
+            "name": "task_id",
             "in": "path",
             "description": "Task ID",
             "required": true,
@@ -6657,7 +6815,7 @@
         ]
       }
     },
-    "/api/v1/users/{id}": {
+    "/api/v1/users/{user_id}": {
       "get": {
         "tags": [
           "users"
@@ -6666,7 +6824,7 @@
         "operationId": "get_user",
         "parameters": [
           {
-            "name": "id",
+            "name": "user_id",
             "in": "path",
             "description": "User ID",
             "required": true,
@@ -6711,7 +6869,7 @@
         "operationId": "delete_user",
         "parameters": [
           {
-            "name": "id",
+            "name": "user_id",
             "in": "path",
             "description": "User ID",
             "required": true,
@@ -6749,7 +6907,7 @@
         "operationId": "update_user",
         "parameters": [
           {
-            "name": "id",
+            "name": "user_id",
             "in": "path",
             "description": "User ID",
             "required": true,
@@ -6844,7 +7002,7 @@
         ]
       }
     },
-    "/opds/books/{id}/pages": {
+    "/opds/books/{book_id}/pages": {
       "get": {
         "tags": [
           "opds"
@@ -6854,7 +7012,7 @@
         "operationId": "opds_book_pages",
         "parameters": [
           {
-            "name": "id",
+            "name": "book_id",
             "in": "path",
             "description": "Book ID",
             "required": true,
@@ -6917,7 +7075,7 @@
         ]
       }
     },
-    "/opds/libraries/{id}": {
+    "/opds/libraries/{library_id}": {
       "get": {
         "tags": [
           "opds"
@@ -6927,7 +7085,7 @@
         "operationId": "opds_library_series",
         "parameters": [
           {
-            "name": "id",
+            "name": "library_id",
             "in": "path",
             "description": "Library ID",
             "required": true,
@@ -7047,7 +7205,7 @@
         ]
       }
     },
-    "/opds/series/{id}": {
+    "/opds/series/{series_id}": {
       "get": {
         "tags": [
           "opds"
@@ -7057,7 +7215,7 @@
         "operationId": "opds_series_books",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -7157,7 +7315,7 @@
         ]
       }
     },
-    "/opds/v2/libraries/{id}": {
+    "/opds/v2/libraries/{library_id}": {
       "get": {
         "tags": [
           "opds2"
@@ -7167,7 +7325,7 @@
         "operationId": "opds2_library_series",
         "parameters": [
           {
-            "name": "id",
+            "name": "library_id",
             "in": "path",
             "description": "Library ID",
             "required": true,
@@ -7327,7 +7485,7 @@
         ]
       }
     },
-    "/opds/v2/series/{id}": {
+    "/opds/v2/series/{series_id}": {
       "get": {
         "tags": [
           "opds2"
@@ -7337,7 +7495,7 @@
         "operationId": "opds2_series_books",
         "parameters": [
           {
-            "name": "id",
+            "name": "series_id",
             "in": "path",
             "description": "Series ID",
             "required": true,
@@ -7614,6 +7772,125 @@
           }
         }
       },
+      "BookCondition": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "All conditions must match (AND)",
+            "required": [
+              "allOf"
+            ],
+            "properties": {
+              "allOf": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BookCondition"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Any condition must match (OR)",
+            "required": [
+              "anyOf"
+            ],
+            "properties": {
+              "anyOf": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BookCondition"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by library ID",
+            "required": [
+              "libraryId"
+            ],
+            "properties": {
+              "libraryId": {
+                "$ref": "#/components/schemas/UuidOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by series ID",
+            "required": [
+              "seriesId"
+            ],
+            "properties": {
+              "seriesId": {
+                "$ref": "#/components/schemas/UuidOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by genre name (from parent series)",
+            "required": [
+              "genre"
+            ],
+            "properties": {
+              "genre": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by tag name (from parent series)",
+            "required": [
+              "tag"
+            ],
+            "properties": {
+              "tag": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by book title",
+            "required": [
+              "title"
+            ],
+            "properties": {
+              "title": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by read status (unread, in_progress, read)",
+            "required": [
+              "readStatus"
+            ],
+            "properties": {
+              "readStatus": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by books with analysis errors",
+            "required": [
+              "hasError"
+            ],
+            "properties": {
+              "hasError": {
+                "$ref": "#/components/schemas/BoolOperator"
+              }
+            }
+          }
+        ],
+        "description": "Book-level search conditions"
+      },
       "BookDetailResponse": {
         "type": "object",
         "description": "Detailed book response with metadata",
@@ -7734,6 +8011,49 @@
             "type": "string",
             "format": "date-time",
             "example": "2024-01-15T10:30:00Z"
+          }
+        }
+      },
+      "BookListRequest": {
+        "type": "object",
+        "description": "Request body for POST /books/list",
+        "properties": {
+          "condition": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BookCondition",
+                "description": "Filter condition (optional - no condition returns all)"
+              }
+            ]
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Page number (0-indexed)",
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Items per page (default 20, max 100)",
+            "minimum": 0
+          },
+          "search": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Full-text search query (optional, future feature)"
+          },
+          "sort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Sort field and direction (e.g., \"title,asc\" or \"createdAt,desc\")"
           }
         }
       },
@@ -8101,6 +8421,39 @@
             "example": 1987
           }
         }
+      },
+      "BoolOperator": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "isTrue"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "isFalse"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "Operators for boolean comparisons"
       },
       "BrowseResponse": {
         "type": "object",
@@ -9126,6 +9479,155 @@
             "description": "Title of the feed"
           }
         }
+      },
+      "FieldOperator": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Exact match",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "is"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Not equal",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "isNot"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Field is null/empty",
+            "required": [
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "isNull"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Field is not null/empty",
+            "required": [
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "isNotNull"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "String contains (case-insensitive)",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "contains"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "String does not contain (case-insensitive)",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "doesNotContain"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "String starts with (case-insensitive)",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "beginsWith"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "String ends with (case-insensitive)",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "endsWith"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "description": "Operators for string and equality comparisons"
       },
       "FileSystemEntry": {
         "type": "object",
@@ -11672,6 +12174,137 @@
           }
         }
       },
+      "SeriesCondition": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "All conditions must match (AND)",
+            "required": [
+              "allOf"
+            ],
+            "properties": {
+              "allOf": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SeriesCondition"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Any condition must match (OR)",
+            "required": [
+              "anyOf"
+            ],
+            "properties": {
+              "anyOf": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SeriesCondition"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by library ID",
+            "required": [
+              "libraryId"
+            ],
+            "properties": {
+              "libraryId": {
+                "$ref": "#/components/schemas/UuidOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by genre name",
+            "required": [
+              "genre"
+            ],
+            "properties": {
+              "genre": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by tag name",
+            "required": [
+              "tag"
+            ],
+            "properties": {
+              "tag": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by series status (ongoing, ended, hiatus, etc.)",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by publisher",
+            "required": [
+              "publisher"
+            ],
+            "properties": {
+              "publisher": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by language",
+            "required": [
+              "language"
+            ],
+            "properties": {
+              "language": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by series name/title",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by read status (unread, in_progress, read)",
+            "required": [
+              "readStatus"
+            ],
+            "properties": {
+              "readStatus": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
+          }
+        ],
+        "description": "Series-level search conditions\n\nConditions can be composed using `allOf` (AND) and `anyOf` (OR).\nUses untagged enum for cleaner JSON without explicit type field."
+      },
       "SeriesCoverDto": {
         "type": "object",
         "description": "Series cover data transfer object",
@@ -11879,6 +12512,49 @@
             ],
             "format": "double",
             "description": "Position within the series (volume/issue number)"
+          }
+        }
+      },
+      "SeriesListRequest": {
+        "type": "object",
+        "description": "Request body for POST /series/list",
+        "properties": {
+          "condition": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SeriesCondition",
+                "description": "Filter condition (optional - no condition returns all)"
+              }
+            ]
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Page number (0-indexed)",
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Items per page (default 20, max 100)",
+            "minimum": 0
+          },
+          "search": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Full-text search query (optional, future feature)"
+          },
+          "sort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Sort field and direction (e.g., \"name,asc\" or \"createdAt,desc\")"
           }
         }
       },
@@ -13686,6 +14362,51 @@
             "example": "2024-01-15T10:30:00Z"
           }
         }
+      },
+      "UuidOperator": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Exact match",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "is"
+                ]
+              },
+              "value": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Not equal",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "isNot"
+                ]
+              },
+              "value": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        ],
+        "description": "Operators for UUID comparisons (library_id, series_id, etc.)"
       },
       "VerifyEmailRequest": {
         "type": "object",

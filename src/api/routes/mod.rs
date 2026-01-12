@@ -161,10 +161,7 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             get(handlers::list_library_recently_read_books),
         )
         // Scan routes (protected)
-        .route(
-            "/libraries/:library_id/scan",
-            post(handlers::trigger_scan),
-        )
+        .route("/libraries/:library_id/scan", post(handlers::trigger_scan))
         .route(
             "/libraries/:library_id/scan-status",
             get(handlers::get_scan_status),
@@ -366,7 +363,10 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/books", get(handlers::list_books))
         .route("/books/list", post(handlers::list_books_filtered))
         .route("/books/:book_id", get(handlers::get_book))
-        .route("/books/:book_id/adjacent", get(handlers::get_adjacent_books))
+        .route(
+            "/books/:book_id/adjacent",
+            get(handlers::get_adjacent_books),
+        )
         .route("/books/:book_id/file", get(handlers::get_book_file))
         .route(
             "/books/:book_id/thumbnail",

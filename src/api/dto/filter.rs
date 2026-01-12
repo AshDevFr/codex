@@ -54,11 +54,13 @@ pub enum SeriesCondition {
     /// All conditions must match (AND)
     AllOf {
         #[serde(rename = "allOf")]
+        #[schema(no_recursion)]
         all_of: Vec<SeriesCondition>,
     },
     /// Any condition must match (OR)
     AnyOf {
         #[serde(rename = "anyOf")]
+        #[schema(no_recursion)]
         any_of: Vec<SeriesCondition>,
     },
     /// Filter by library ID
@@ -92,11 +94,13 @@ pub enum BookCondition {
     /// All conditions must match (AND)
     AllOf {
         #[serde(rename = "allOf")]
+        #[schema(no_recursion)]
         all_of: Vec<BookCondition>,
     },
     /// Any condition must match (OR)
     AnyOf {
         #[serde(rename = "anyOf")]
+        #[schema(no_recursion)]
         any_of: Vec<BookCondition>,
     },
     /// Filter by library ID

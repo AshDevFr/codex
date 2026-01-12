@@ -1035,9 +1035,12 @@ pub async fn list_recently_read_books(
 ) -> Result<Json<Vec<BookDto>>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    let books_list = BookRepository::list_recently_read(&state.db, auth.user_id, query.library_id, query.limit)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch recently read books: {}", e)))?;
+    let books_list =
+        BookRepository::list_recently_read(&state.db, auth.user_id, query.library_id, query.limit)
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to fetch recently read books: {}", e))
+            })?;
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 

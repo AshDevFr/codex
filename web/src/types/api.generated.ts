@@ -38,7 +38,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/settings/{key}": {
+    "/api/v1/admin/settings/{setting_key}": {
         parameters: {
             query?: never;
             header?: never;
@@ -56,7 +56,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/settings/{key}/history": {
+    "/api/v1/admin/settings/{setting_key}/history": {
         parameters: {
             query?: never;
             header?: never;
@@ -73,7 +73,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/settings/{key}/reset": {
+    "/api/v1/admin/settings/{setting_key}/reset": {
         parameters: {
             query?: never;
             header?: never;
@@ -114,7 +114,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/api-keys/{id}": {
+    "/api/v1/api-keys/{api_key_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -276,6 +276,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * List books with advanced filtering
+         * @description Supports complex filter conditions including nested AllOf/AnyOf logic,
+         *     genre/tag filtering with include/exclude, and more.
+         */
+        post: operations["list_books_filtered"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/on-deck": {
         parameters: {
             query?: never;
@@ -344,6 +365,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get book by ID */
+        get: operations["get_book"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/adjacent": {
         parameters: {
             query?: never;
@@ -363,6 +401,105 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger analysis of a single book (force reanalysis)
+         * @description # Permission Required
+         *     - `books:write`
+         *
+         *     # Behavior
+         *     Enqueues an AnalyzeBook task with force=true.
+         *     Returns immediately with a task_id to track progress.
+         */
+        post: operations["trigger_book_analysis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/analyze-unanalyzed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger analysis of a book if not already analyzed
+         * @description # Permission Required
+         *     - `books:write`
+         *
+         *     # Behavior
+         *     Enqueues an AnalyzeBook task with force=false if the book has not been analyzed yet.
+         *     Returns 400 if the book is already analyzed.
+         *     Returns immediately with a task_id to track progress.
+         */
+        post: operations["trigger_book_unanalyzed_analysis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download book file
+         * @description Streams the original book file (CBZ, CBR, EPUB, PDF) for download.
+         *     Used by OPDS clients for acquisition links.
+         */
+        get: operations["get_book_file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace all book metadata (PUT)
+         * @description Completely replaces all metadata fields. Omitted or null fields will be cleared.
+         *     If no metadata record exists, one will be created.
+         */
+        put: operations["replace_book_metadata"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Partially update book metadata (PATCH)
+         * @description Only provided fields will be updated. Absent fields are unchanged.
+         *     Explicitly null fields will be cleared.
+         *     If no metadata record exists, one will be created with the provided fields.
+         */
+        patch: operations["patch_book_metadata"];
         trace?: never;
     };
     "/api/v1/books/{book_id}/pages/{page_number}": {
@@ -421,140 +558,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/books/{book_id}/unread": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mark a book as unread (removes reading progress) */
-        post: operations["mark_book_as_unread"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/books/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get book by ID */
-        get: operations["get_book"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/books/{id}/analyze": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Trigger analysis of a single book (force reanalysis)
-         * @description # Permission Required
-         *     - `books:write`
-         *
-         *     # Behavior
-         *     Enqueues an AnalyzeBook task with force=true.
-         *     Returns immediately with a task_id to track progress.
-         */
-        post: operations["trigger_book_analysis"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/books/{id}/analyze-unanalyzed": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Trigger analysis of a book if not already analyzed
-         * @description # Permission Required
-         *     - `books:write`
-         *
-         *     # Behavior
-         *     Enqueues an AnalyzeBook task with force=false if the book has not been analyzed yet.
-         *     Returns 400 if the book is already analyzed.
-         *     Returns immediately with a task_id to track progress.
-         */
-        post: operations["trigger_book_unanalyzed_analysis"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/books/{id}/file": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download book file
-         * @description Streams the original book file (CBZ, CBR, EPUB, PDF) for download.
-         *     Used by OPDS clients for acquisition links.
-         */
-        get: operations["get_book_file"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/books/{id}/metadata": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Replace all book metadata (PUT)
-         * @description Completely replaces all metadata fields. Omitted or null fields will be cleared.
-         *     If no metadata record exists, one will be created.
-         */
-        put: operations["replace_book_metadata"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Partially update book metadata (PATCH)
-         * @description Only provided fields will be updated. Absent fields are unchanged.
-         *     Explicitly null fields will be cleared.
-         *     If no metadata record exists, one will be created with the provided fields.
-         */
-        patch: operations["patch_book_metadata"];
-        trace?: never;
-    };
-    "/api/v1/books/{id}/thumbnail": {
+    "/api/v1/books/{book_id}/thumbnail": {
         parameters: {
             query?: never;
             header?: never;
@@ -568,6 +572,23 @@ export interface paths {
         get: operations["get_book_thumbnail"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/unread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark a book as unread (removes reading progress) */
+        post: operations["mark_book_as_unread"];
         delete?: never;
         options?: never;
         head?: never;
@@ -616,7 +637,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/duplicates/{id}": {
+    "/api/v1/duplicates/{duplicate_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -751,7 +772,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/genres/{id}": {
+    "/api/v1/genres/{genre_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -786,7 +807,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/libraries/{id}": {
+    "/api/v1/libraries/{library_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -805,7 +826,7 @@ export interface paths {
         patch: operations["update_library"];
         trace?: never;
     };
-    "/api/v1/libraries/{id}/analyze": {
+    "/api/v1/libraries/{library_id}/analyze": {
         parameters: {
             query?: never;
             header?: never;
@@ -831,7 +852,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/libraries/{id}/analyze-unanalyzed": {
+    "/api/v1/libraries/{library_id}/analyze-unanalyzed": {
         parameters: {
             query?: never;
             header?: never;
@@ -851,86 +872,6 @@ export interface paths {
          *     Returns immediately with a task_id to track progress.
          */
         post: operations["trigger_library_unanalyzed_analysis"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/libraries/{id}/purge-deleted": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Purge deleted books from a library */
-        delete: operations["purge_deleted_books"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/libraries/{id}/scan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Trigger a library scan
-         * @description # Permission Required
-         *     - `libraries:write`
-         */
-        post: operations["trigger_scan"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/libraries/{id}/scan-status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get scan status for a library
-         * @description # Permission Required
-         *     - `libraries:read`
-         */
-        get: operations["get_scan_status"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/libraries/{id}/scan/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Cancel a running scan
-         * @description # Permission Required
-         *     - `libraries:write`
-         */
-        post: operations["cancel_scan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1033,6 +974,86 @@ export interface paths {
         get: operations["list_library_books_with_errors"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{library_id}/purge-deleted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Purge deleted books from a library */
+        delete: operations["purge_deleted_books"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{library_id}/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger a library scan
+         * @description # Permission Required
+         *     - `libraries:write`
+         */
+        post: operations["trigger_scan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{library_id}/scan-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get scan status for a library
+         * @description # Permission Required
+         *     - `libraries:read`
+         */
+        get: operations["get_scan_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{library_id}/scan/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a running scan
+         * @description # Permission Required
+         *     - `libraries:write`
+         */
+        post: operations["cancel_scan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1310,6 +1331,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * List series with advanced filtering
+         * @description Supports complex filter conditions including nested AllOf/AnyOf logic,
+         *     genre/tag filtering with include/exclude, and more.
+         */
+        post: operations["list_series_filtered"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/recently-added": {
         parameters: {
             query?: never;
@@ -1361,7 +1403,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}": {
+    "/api/v1/series/{series_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1378,7 +1420,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/alternate-titles": {
+    "/api/v1/series/{series_id}/alternate-titles": {
         parameters: {
             query?: never;
             header?: never;
@@ -1396,7 +1438,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/alternate-titles/{title_id}": {
+    "/api/v1/series/{series_id}/alternate-titles/{title_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1414,7 +1456,7 @@ export interface paths {
         patch: operations["update_alternate_title"];
         trace?: never;
     };
-    "/api/v1/series/{id}/analyze": {
+    "/api/v1/series/{series_id}/analyze": {
         parameters: {
             query?: never;
             header?: never;
@@ -1440,7 +1482,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/analyze-unanalyzed": {
+    "/api/v1/series/{series_id}/analyze-unanalyzed": {
         parameters: {
             query?: never;
             header?: never;
@@ -1466,7 +1508,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/books": {
+    "/api/v1/series/{series_id}/books": {
         parameters: {
             query?: never;
             header?: never;
@@ -1483,7 +1525,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/books/with-errors": {
+    "/api/v1/series/{series_id}/books/with-errors": {
         parameters: {
             query?: never;
             header?: never;
@@ -1500,7 +1542,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/cover": {
+    "/api/v1/series/{series_id}/cover": {
         parameters: {
             query?: never;
             header?: never;
@@ -1517,7 +1559,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/cover/source": {
+    "/api/v1/series/{series_id}/cover/source": {
         parameters: {
             query?: never;
             header?: never;
@@ -1534,7 +1576,7 @@ export interface paths {
         patch: operations["set_series_cover_source"];
         trace?: never;
     };
-    "/api/v1/series/{id}/covers": {
+    "/api/v1/series/{series_id}/covers": {
         parameters: {
             query?: never;
             header?: never;
@@ -1551,7 +1593,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/covers/{cover_id}": {
+    "/api/v1/series/{series_id}/covers/{cover_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1568,7 +1610,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/covers/{cover_id}/select": {
+    "/api/v1/series/{series_id}/covers/{cover_id}/select": {
         parameters: {
             query?: never;
             header?: never;
@@ -1585,7 +1627,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/download": {
+    "/api/v1/series/{series_id}/download": {
         parameters: {
             query?: never;
             header?: never;
@@ -1606,7 +1648,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/external-links": {
+    "/api/v1/series/{series_id}/external-links": {
         parameters: {
             query?: never;
             header?: never;
@@ -1624,7 +1666,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/external-links/{source}": {
+    "/api/v1/series/{series_id}/external-links/{source}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1641,7 +1683,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/external-ratings": {
+    "/api/v1/series/{series_id}/external-ratings": {
         parameters: {
             query?: never;
             header?: never;
@@ -1659,7 +1701,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/external-ratings/{source}": {
+    "/api/v1/series/{series_id}/external-ratings/{source}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1676,7 +1718,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/genres": {
+    "/api/v1/series/{series_id}/genres": {
         parameters: {
             query?: never;
             header?: never;
@@ -1695,7 +1737,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/genres/{genre_id}": {
+    "/api/v1/series/{series_id}/genres/{genre_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1712,7 +1754,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/metadata": {
+    "/api/v1/series/{series_id}/metadata": {
         parameters: {
             query?: never;
             header?: never;
@@ -1738,7 +1780,7 @@ export interface paths {
         patch: operations["patch_series_metadata"];
         trace?: never;
     };
-    "/api/v1/series/{id}/metadata/full": {
+    "/api/v1/series/{series_id}/metadata/full": {
         parameters: {
             query?: never;
             header?: never;
@@ -1759,7 +1801,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/metadata/locks": {
+    "/api/v1/series/{series_id}/metadata/locks": {
         parameters: {
             query?: never;
             header?: never;
@@ -1781,7 +1823,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/purge-deleted": {
+    "/api/v1/series/{series_id}/purge-deleted": {
         parameters: {
             query?: never;
             header?: never;
@@ -1798,7 +1840,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/rating": {
+    "/api/v1/series/{series_id}/rating": {
         parameters: {
             query?: never;
             header?: never;
@@ -1817,7 +1859,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/read": {
+    "/api/v1/series/{series_id}/read": {
         parameters: {
             query?: never;
             header?: never;
@@ -1834,7 +1876,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/tags": {
+    "/api/v1/series/{series_id}/tags": {
         parameters: {
             query?: never;
             header?: never;
@@ -1853,7 +1895,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/tags/{tag_id}": {
+    "/api/v1/series/{series_id}/tags/{tag_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1870,7 +1912,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/thumbnail": {
+    "/api/v1/series/{series_id}/thumbnail": {
         parameters: {
             query?: never;
             header?: never;
@@ -1887,7 +1929,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{id}/unread": {
+    "/api/v1/series/{series_id}/unread": {
         parameters: {
             query?: never;
             header?: never;
@@ -1998,7 +2040,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/tags/{id}": {
+    "/api/v1/tags/{tag_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2148,7 +2190,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/tasks/{id}": {
+    "/api/v1/tasks/{task_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2169,7 +2211,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/tasks/{id}/cancel": {
+    "/api/v1/tasks/{task_id}/cancel": {
         parameters: {
             query?: never;
             header?: never;
@@ -2190,7 +2232,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/tasks/{id}/retry": {
+    "/api/v1/tasks/{task_id}/retry": {
         parameters: {
             query?: never;
             header?: never;
@@ -2211,7 +2253,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/tasks/{id}/unlock": {
+    "/api/v1/tasks/{task_id}/unlock": {
         parameters: {
             query?: never;
             header?: never;
@@ -2267,7 +2309,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/users/{id}": {
+    "/api/v1/users/{user_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2330,7 +2372,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/opds/books/{id}/pages": {
+    "/opds/books/{book_id}/pages": {
         parameters: {
             query?: never;
             header?: never;
@@ -2371,7 +2413,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/opds/libraries/{id}": {
+    "/opds/libraries/{library_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2431,7 +2473,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/opds/series/{id}": {
+    "/opds/series/{series_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2494,7 +2536,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/opds/v2/libraries/{id}": {
+    "/opds/v2/libraries/{library_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2554,7 +2596,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/opds/v2/series/{id}": {
+    "/opds/v2/series/{series_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2718,6 +2760,26 @@ export interface components {
         BelongsTo: {
             series?: null | components["schemas"]["SeriesInfo"];
         };
+        /** @description Book-level search conditions */
+        BookCondition: {
+            allOf: components["schemas"]["BookCondition"][];
+        } | {
+            anyOf: components["schemas"]["BookCondition"][];
+        } | {
+            libraryId: components["schemas"]["UuidOperator"];
+        } | {
+            seriesId: components["schemas"]["UuidOperator"];
+        } | {
+            genre: components["schemas"]["FieldOperator"];
+        } | {
+            tag: components["schemas"]["FieldOperator"];
+        } | {
+            title: components["schemas"]["FieldOperator"];
+        } | {
+            readStatus: components["schemas"]["FieldOperator"];
+        } | {
+            hasError: components["schemas"]["BoolOperator"];
+        };
         /** @description Detailed book response with metadata */
         BookDetailResponse: {
             book: components["schemas"]["BookDto"];
@@ -2775,6 +2837,24 @@ export interface components {
              * @example 2024-01-15T10:30:00Z
              */
             updatedAt: string;
+        };
+        /** @description Request body for POST /books/list */
+        BookListRequest: {
+            condition?: null | components["schemas"]["BookCondition"];
+            /**
+             * Format: int64
+             * @description Page number (0-indexed)
+             */
+            page?: number;
+            /**
+             * Format: int64
+             * @description Items per page (default 20, max 100)
+             */
+            pageSize?: number;
+            /** @description Full-text search query (optional, future feature) */
+            search?: string | null;
+            /** @description Sort field and direction (e.g., "title,asc" or "createdAt,desc") */
+            sort?: string | null;
         };
         /** @description Book metadata DTO */
         BookMetadataDto: {
@@ -2986,6 +3066,14 @@ export interface components {
              * @example 1987
              */
             year?: number | null;
+        };
+        /** @description Operators for boolean comparisons */
+        BoolOperator: {
+            /** @enum {string} */
+            operator: "isTrue";
+        } | {
+            /** @enum {string} */
+            operator: "isFalse";
         };
         /**
          * @example {
@@ -3493,6 +3581,38 @@ export interface components {
             subtitle?: string | null;
             /** @description Title of the feed */
             title: string;
+        };
+        /** @description Operators for string and equality comparisons */
+        FieldOperator: {
+            /** @enum {string} */
+            operator: "is";
+            value: string;
+        } | {
+            /** @enum {string} */
+            operator: "isNot";
+            value: string;
+        } | {
+            /** @enum {string} */
+            operator: "isNull";
+        } | {
+            /** @enum {string} */
+            operator: "isNotNull";
+        } | {
+            /** @enum {string} */
+            operator: "contains";
+            value: string;
+        } | {
+            /** @enum {string} */
+            operator: "doesNotContain";
+            value: string;
+        } | {
+            /** @enum {string} */
+            operator: "beginsWith";
+            value: string;
+        } | {
+            /** @enum {string} */
+            operator: "endsWith";
+            value: string;
         };
         /**
          * @example {
@@ -5015,6 +5135,33 @@ export interface components {
             /** @description Cover source: "default" (first book cover) or "custom" (uploaded cover) */
             source: string;
         };
+        /**
+         * @description Series-level search conditions
+         *
+         *     Conditions can be composed using `allOf` (AND) and `anyOf` (OR).
+         *     Uses untagged enum for cleaner JSON without explicit type field.
+         */
+        SeriesCondition: {
+            allOf: components["schemas"]["SeriesCondition"][];
+        } | {
+            anyOf: components["schemas"]["SeriesCondition"][];
+        } | {
+            libraryId: components["schemas"]["UuidOperator"];
+        } | {
+            genre: components["schemas"]["FieldOperator"];
+        } | {
+            tag: components["schemas"]["FieldOperator"];
+        } | {
+            status: components["schemas"]["FieldOperator"];
+        } | {
+            publisher: components["schemas"]["FieldOperator"];
+        } | {
+            language: components["schemas"]["FieldOperator"];
+        } | {
+            name: components["schemas"]["FieldOperator"];
+        } | {
+            readStatus: components["schemas"]["FieldOperator"];
+        };
         /** @description Series cover data transfer object */
         SeriesCoverDto: {
             /**
@@ -5135,6 +5282,24 @@ export interface components {
              * @description Position within the series (volume/issue number)
              */
             position?: number | null;
+        };
+        /** @description Request body for POST /series/list */
+        SeriesListRequest: {
+            condition?: null | components["schemas"]["SeriesCondition"];
+            /**
+             * Format: int64
+             * @description Page number (0-indexed)
+             */
+            page?: number;
+            /**
+             * Format: int64
+             * @description Items per page (default 20, max 100)
+             */
+            pageSize?: number;
+            /** @description Full-text search query (optional, future feature) */
+            search?: string | null;
+            /** @description Sort field and direction (e.g., "name,asc" or "createdAt,desc") */
+            sort?: string | null;
         };
         /** @description Response containing series metadata */
         SeriesMetadataResponse: {
@@ -6208,6 +6373,18 @@ export interface components {
              */
             updatedAt: string;
         };
+        /** @description Operators for UUID comparisons (library_id, series_id, etc.) */
+        UuidOperator: {
+            /** @enum {string} */
+            operator: "is";
+            /** Format: uuid */
+            value: string;
+        } | {
+            /** @enum {string} */
+            operator: "isNot";
+            /** Format: uuid */
+            value: string;
+        };
         /** @description Verify email request */
         VerifyEmailRequest: {
             /**
@@ -6325,7 +6502,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Setting key (e.g., scanner.max_concurrent_scans) */
-                key: string;
+                setting_key: string;
             };
             cookie?: never;
         };
@@ -6362,7 +6539,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Setting key (e.g., scanner.max_concurrent_scans) */
-                key: string;
+                setting_key: string;
             };
             cookie?: never;
         };
@@ -6413,7 +6590,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Setting key (e.g., scanner.max_concurrent_scans) */
-                key: string;
+                setting_key: string;
             };
             cookie?: never;
         };
@@ -6450,7 +6627,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Setting key (e.g., scanner.max_concurrent_scans) */
-                key: string;
+                setting_key: string;
             };
             cookie?: never;
         };
@@ -6552,7 +6729,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description API key ID */
-                id: string;
+                api_key_id: string;
             };
             cookie?: never;
         };
@@ -6589,7 +6766,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description API key ID */
-                id: string;
+                api_key_id: string;
             };
             cookie?: never;
         };
@@ -6624,7 +6801,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description API key ID */
-                id: string;
+                api_key_id: string;
             };
             cookie?: never;
         };
@@ -6845,7 +7022,10 @@ export interface operations {
     };
     list_in_progress_books: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter by library ID */
+                library_id?: string;
+            };
             header?: never;
             path: {
                 /** @description Page number (0-indexed) */
@@ -6875,9 +7055,43 @@ export interface operations {
             };
         };
     };
-    list_on_deck_books: {
+    list_books_filtered: {
         parameters: {
             query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookListRequest"];
+            };
+        };
+        responses: {
+            /** @description Paginated list of filtered books */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_on_deck_books: {
+        parameters: {
+            query?: {
+                /** @description Filter by library ID */
+                library_id?: string;
+            };
             header?: never;
             path: {
                 /** @description Page number (0-indexed) */
@@ -6909,7 +7123,10 @@ export interface operations {
     };
     list_recently_added_books: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter by library ID */
+                library_id?: string;
+            };
             header?: never;
             path: {
                 /** @description Page number (0-indexed) */
@@ -6944,6 +7161,8 @@ export interface operations {
             query?: {
                 /** @description Maximum number of books to return (default: 50) */
                 limit?: number;
+                /** @description Filter by library ID */
+                library_id?: string;
             };
             header?: never;
             path?: never;
@@ -7005,6 +7224,36 @@ export interface operations {
             };
         };
     };
+    get_book: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Book details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookDetailResponse"];
+                };
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_adjacent_books: {
         parameters: {
             query?: never;
@@ -7025,6 +7274,206 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AdjacentBooksResponse"];
                 };
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    trigger_book_analysis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Analysis task enqueued successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateTaskResponse"];
+                };
+            };
+            /** @description Permission denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    trigger_book_unanalyzed_analysis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Analysis task enqueued successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateTaskResponse"];
+                };
+            };
+            /** @description Book is already analyzed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Permission denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_book_file: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Book file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": unknown;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    replace_book_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceBookMetadataRequest"];
+            };
+        };
+        responses: {
+            /** @description Metadata replaced successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookMetadataResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    patch_book_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchBookMetadataRequest"];
+            };
+        };
+        responses: {
+            /** @description Metadata updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookMetadataResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Book not found */
             404: {
@@ -7241,6 +7690,43 @@ export interface operations {
             };
         };
     };
+    get_book_thumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thumbnail image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mark_book_as_unread: {
         parameters: {
             query?: never;
@@ -7268,273 +7754,6 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_book: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Book ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Book details */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BookDetailResponse"];
-                };
-            };
-            /** @description Book not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    trigger_book_analysis: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Book ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Analysis task enqueued successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreateTaskResponse"];
-                };
-            };
-            /** @description Permission denied */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Book not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    trigger_book_unanalyzed_analysis: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Book ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Analysis task enqueued successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreateTaskResponse"];
-                };
-            };
-            /** @description Book is already analyzed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Permission denied */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Book not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_book_file: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Book ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Book file */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/octet-stream": unknown;
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Book not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    replace_book_metadata: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Book ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReplaceBookMetadataRequest"];
-            };
-        };
-        responses: {
-            /** @description Metadata replaced successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BookMetadataResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Book not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    patch_book_metadata: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Book ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PatchBookMetadataRequest"];
-            };
-        };
-        responses: {
-            /** @description Metadata updated successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BookMetadataResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Book not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_book_thumbnail: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Book ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Thumbnail image */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "image/jpeg": unknown;
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Book not found */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7609,7 +7828,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Duplicate group ID */
-                id: string;
+                duplicate_id: string;
             };
             cookie?: never;
         };
@@ -7802,7 +8021,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Genre ID */
-                id: string;
+                genre_id: string;
             };
             cookie?: never;
         };
@@ -7902,7 +8121,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Library ID */
-                id: string;
+                library_id: string;
             };
             cookie?: never;
         };
@@ -7932,7 +8151,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Library ID */
-                id: string;
+                library_id: string;
             };
             cookie?: never;
         };
@@ -7967,7 +8186,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Library ID */
-                id: string;
+                library_id: string;
             };
             cookie?: never;
         };
@@ -8008,7 +8227,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Library ID */
-                id: string;
+                library_id: string;
             };
             cookie?: never;
         };
@@ -8045,7 +8264,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Library ID */
-                id: string;
+                library_id: string;
             };
             cookie?: never;
         };
@@ -8068,169 +8287,6 @@ export interface operations {
                 content?: never;
             };
             /** @description Library not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    purge_deleted_books: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Library ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Number of books purged */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/plain": number;
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Library not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    trigger_scan: {
-        parameters: {
-            query?: {
-                /** @description Scan mode: 'normal' or 'deep' (default: 'normal') */
-                mode?: string;
-            };
-            header?: never;
-            path: {
-                /** @description Library ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Scan started successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScanStatusDto"];
-                };
-            };
-            /** @description Invalid scan mode */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Permission denied */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Library not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Scan already in progress */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_scan_status: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Library ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Scan status retrieved */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScanStatusDto"];
-                };
-            };
-            /** @description Permission denied */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description No scan found for this library */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    cancel_scan: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Library ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Scan cancelled successfully */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Permission denied */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description No active scan found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -8436,6 +8492,169 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    purge_deleted_books: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Number of books purged */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": number;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Library not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    trigger_scan: {
+        parameters: {
+            query?: {
+                /** @description Scan mode: 'normal' or 'deep' (default: 'normal') */
+                mode?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Scan started successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanStatusDto"];
+                };
+            };
+            /** @description Invalid scan mode */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Permission denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Library not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Scan already in progress */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_scan_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Scan status retrieved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanStatusDto"];
+                };
+            };
+            /** @description Permission denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No scan found for this library */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cancel_scan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Scan cancelled successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Permission denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No active scan found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8881,7 +9100,10 @@ export interface operations {
     };
     list_in_progress_series: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter by library ID */
+                library_id?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -8906,11 +9128,44 @@ export interface operations {
             };
         };
     };
+    list_series_filtered: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SeriesListRequest"];
+            };
+        };
+        responses: {
+            /** @description Paginated list of filtered series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_recently_added_series: {
         parameters: {
             query?: {
                 /** @description Maximum number of series to return (default: 50) */
                 limit?: number;
+                /** @description Filter by library ID */
+                library_id?: string;
             };
             header?: never;
             path?: never;
@@ -8941,6 +9196,8 @@ export interface operations {
             query?: {
                 /** @description Maximum number of series to return (default: 50) */
                 limit?: number;
+                /** @description Filter by library ID */
+                library_id?: string;
             };
             header?: never;
             path?: never;
@@ -9003,7 +9260,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9033,7 +9290,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9070,7 +9327,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9111,7 +9368,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
                 /** @description Alternate title ID */
                 title_id: string;
             };
@@ -9148,7 +9405,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
                 /** @description Alternate title ID */
                 title_id: string;
             };
@@ -9191,7 +9448,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9228,7 +9485,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9268,7 +9525,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9310,7 +9567,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9340,7 +9597,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9387,7 +9644,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9426,7 +9683,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9463,7 +9720,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
                 /** @description Cover ID to delete */
                 cover_id: string;
             };
@@ -9507,7 +9764,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
                 /** @description Cover ID to select */
                 cover_id: string;
             };
@@ -9546,7 +9803,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9583,7 +9840,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9620,7 +9877,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9661,7 +9918,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
                 /** @description Source name (e.g., 'myanimelist', 'mangadex') */
                 source: string;
             };
@@ -9698,7 +9955,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9735,7 +9992,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9776,7 +10033,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
                 /** @description Source name (e.g., 'myanimelist', 'anilist') */
                 source: string;
             };
@@ -9813,7 +10070,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9850,7 +10107,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9891,7 +10148,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -9932,7 +10189,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
                 /** @description Genre ID */
                 genre_id: string;
             };
@@ -9969,7 +10226,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -10010,7 +10267,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -10051,7 +10308,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -10088,7 +10345,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -10125,7 +10382,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -10166,7 +10423,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -10203,7 +10460,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -10240,7 +10497,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -10288,7 +10545,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -10323,7 +10580,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -10360,7 +10617,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -10397,7 +10654,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -10438,7 +10695,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -10479,7 +10736,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
                 /** @description Tag ID */
                 tag_id: string;
             };
@@ -10516,7 +10773,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -10553,7 +10810,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -10733,7 +10990,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Tag ID */
-                id: string;
+                tag_id: string;
             };
             cookie?: never;
         };
@@ -10958,7 +11215,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Task ID */
-                id: string;
+                task_id: string;
             };
             cookie?: never;
         };
@@ -10995,7 +11252,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Task ID */
-                id: string;
+                task_id: string;
             };
             cookie?: never;
         };
@@ -11039,7 +11296,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Task ID */
-                id: string;
+                task_id: string;
             };
             cookie?: never;
         };
@@ -11083,7 +11340,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Task ID */
-                id: string;
+                task_id: string;
             };
             cookie?: never;
         };
@@ -11212,7 +11469,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description User ID */
-                id: string;
+                user_id: string;
             };
             cookie?: never;
         };
@@ -11249,7 +11506,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description User ID */
-                id: string;
+                user_id: string;
             };
             cookie?: never;
         };
@@ -11284,7 +11541,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description User ID */
-                id: string;
+                user_id: string;
             };
             cookie?: never;
         };
@@ -11377,7 +11634,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Book ID */
-                id: string;
+                book_id: string;
             };
             cookie?: never;
         };
@@ -11444,7 +11701,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Library ID */
-                id: string;
+                library_id: string;
             };
             cookie?: never;
         };
@@ -11531,7 +11788,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };
@@ -11625,7 +11882,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Library ID */
-                id: string;
+                library_id: string;
             };
             cookie?: never;
         };
@@ -11729,7 +11986,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Series ID */
-                id: string;
+                series_id: string;
             };
             cookie?: never;
         };

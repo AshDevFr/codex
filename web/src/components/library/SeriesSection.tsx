@@ -6,10 +6,12 @@ import {
 	Text,
 } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { seriesApi } from "@/api/series";
+import { ActiveFilters } from "@/components/library/ActiveFilters";
 import { MediaCard } from "@/components/library/MediaCard";
+import { useFilterState } from "@/hooks/useFilterState";
 
 interface SeriesSectionProps {
 	libraryId: string;
@@ -24,31 +26,37 @@ export function SeriesSection({
 }: SeriesSectionProps) {
 	const navigate = useNavigate();
 
+	// Get filter state from URL (uses the advanced filtering system)
+	const { condition, hasActiveFilters } = useFilterState();
+
 	// Read query parameters (URL uses 1-indexed pages for user-friendly URLs)
 	const page = parseInt(searchParams.get("page") || "1", 10);
 	const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
 	const sort = searchParams.get("sort") || "name,asc";
-	const genreFilter = searchParams.get("genre") || "";
-	const statusFilter = searchParams.get("status") || "";
 
-	// Fetch series data (convert to 0-indexed for backend)
+	// Serialize condition for use in query key (stable reference)
+	const conditionKey = useMemo(
+		() => (condition ? JSON.stringify(condition) : "none"),
+		[condition],
+	);
+
+	// Fetch series data using the new POST search endpoint
 	const { data: seriesData, isLoading } = useQuery({
 		queryKey: [
 			"series",
+			"search",
 			libraryId,
 			page,
 			pageSize,
 			sort,
-			genreFilter,
-			statusFilter,
+			conditionKey,
 		],
 		queryFn: () =>
-			seriesApi.getByLibrary(libraryId, {
+			seriesApi.search(libraryId, {
+				condition,
 				page: page - 1, // Convert to 0-indexed for backend
 				pageSize,
 				sort,
-				genre: genreFilter,
-				status: statusFilter,
 			}),
 		staleTime: 30000, // 30 seconds - shorter than global default
 		refetchOnMount: true, // Always refetch when component mounts
@@ -93,10 +101,13 @@ export function SeriesSection({
 
 	return (
 		<Stack gap="md">
+			{/* Active Filters Summary */}
+			{hasActiveFilters && <ActiveFilters />}
+
 			{/* Series Grid */}
-	{isLoading ? (
-		<Text c="dimmed">Loading series...</Text>
-	) : seriesData?.data && seriesData.data.length > 0 ? (
+			{isLoading ? (
+				<Text c="dimmed">Loading series...</Text>
+			) : seriesData?.data && seriesData.data.length > 0 ? (
 				<>
 					{/* Top Pagination */}
 					{showPagination && (

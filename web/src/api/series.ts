@@ -1,4 +1,4 @@
-import type { PaginatedResponse, Series } from "@/types";
+import type { PaginatedResponse, Series, SeriesCondition, SeriesListRequest } from "@/types";
 import { api } from "./client";
 
 export interface SeriesFilters {
@@ -118,6 +118,53 @@ export const seriesApi = {
 		const url = `/series/recently-updated?${queryString}`;
 
 		const response = await api.get<Series[]>(url);
+		return response.data;
+	},
+
+	/**
+	 * Search/filter series with advanced condition-based filtering.
+	 *
+	 * Uses POST /series/list endpoint which supports:
+	 * - Nested AllOf/AnyOf conditions
+	 * - Include/exclude filtering for genres, tags, status, etc.
+	 * - Full-text search (optional)
+	 * - Pagination and sorting
+	 *
+	 * @param libraryId - Library to filter by, or "all" for all libraries
+	 * @param request - The search request with condition, pagination, and sort options
+	 */
+	search: async (
+		libraryId: string,
+		request: Omit<SeriesListRequest, "condition"> & { condition?: SeriesCondition },
+	): Promise<PaginatedResponse<Series>> => {
+		// Build the full condition including library filter
+		let finalCondition: SeriesCondition | undefined = request.condition;
+
+		// Add library filter if not "all"
+		if (libraryId !== "all") {
+			const libraryCondition: SeriesCondition = {
+				libraryId: { operator: "is", value: libraryId },
+			};
+
+			if (finalCondition) {
+				// Combine with existing condition using allOf
+				finalCondition = {
+					allOf: [libraryCondition, finalCondition],
+				};
+			} else {
+				finalCondition = libraryCondition;
+			}
+		}
+
+		const body: SeriesListRequest = {
+			condition: finalCondition,
+			search: request.search,
+			page: request.page,
+			pageSize: request.pageSize,
+			sort: request.sort,
+		};
+
+		const response = await api.post<PaginatedResponse<Series>>("/series/list", body);
 		return response.data;
 	},
 };
