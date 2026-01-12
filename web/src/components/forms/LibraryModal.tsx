@@ -516,7 +516,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 								placeholder="Select a path..."
 								required
 								value={selectedPath}
-								readOnly
+								onChange={(e) => setSelectedPath(e.currentTarget.value)}
 								rightSection={
 									<Button
 										size="xs"

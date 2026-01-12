@@ -528,3 +528,240 @@ pub async fn nuke_all_tasks(
 
     Ok(Json(PurgeTasksResponse { deleted }))
 }
+
+// Thumbnail generation endpoints
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct GenerateThumbnailsRequest {
+    /// Library ID to generate thumbnails for (optional)
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
+    pub library_id: Option<Uuid>,
+
+    /// Series ID to generate thumbnails for (optional, takes precedence over library_id)
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440001")]
+    pub series_id: Option<Uuid>,
+
+    /// If true, regenerate all thumbnails even if they exist. If false (default), only generate missing thumbnails.
+    #[serde(default)]
+    #[schema(example = false)]
+    pub force: bool,
+}
+
+/// Generate thumbnails for books in a scope
+///
+/// This queues a fan-out task that enqueues individual thumbnail generation tasks for each book.
+///
+/// **Scope priority:**
+/// 1. If `series_id` is provided, only books in that series
+/// 2. If `library_id` is provided, only books in that library
+/// 3. If neither is provided, all books in all libraries
+///
+/// **Force behavior:**
+/// - `force: false` (default): Only generates thumbnails for books that don't have one
+/// - `force: true`: Regenerates all thumbnails, replacing existing ones
+///
+/// # Permission Required
+/// - `tasks:write`
+#[utoipa::path(
+    post,
+    path = "/api/v1/thumbnails/generate",
+    request_body = GenerateThumbnailsRequest,
+    responses(
+        (status = 200, description = "Thumbnail generation task queued", body = CreateTaskResponse),
+        (status = 403, description = "Permission denied"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Thumbnails"
+)]
+pub async fn generate_thumbnails(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Json(request): Json<GenerateThumbnailsRequest>,
+) -> Result<Json<CreateTaskResponse>, ApiError> {
+    // Check permission
+    auth.require_permission(&Permission::TasksWrite)?;
+
+    let task_type = TaskType::GenerateThumbnails {
+        library_id: request.library_id,
+        series_id: request.series_id,
+        force: request.force,
+    };
+
+    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to queue thumbnail generation: {}", e)))?;
+
+    Ok(Json(CreateTaskResponse { task_id }))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ForceRequest {
+    /// If true, regenerate thumbnails even if they exist. If false (default), only generate missing thumbnails.
+    #[serde(default)]
+    #[schema(example = false)]
+    pub force: bool,
+}
+
+/// Generate thumbnails for all books in a library
+///
+/// Queues a fan-out task that enqueues individual thumbnail generation tasks for each book in the library.
+///
+/// # Permission Required
+/// - `tasks:write`
+#[utoipa::path(
+    post,
+    path = "/api/v1/libraries/{library_id}/thumbnails/generate",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID")
+    ),
+    request_body = ForceRequest,
+    responses(
+        (status = 200, description = "Thumbnail generation task queued", body = CreateTaskResponse),
+        (status = 403, description = "Permission denied"),
+        (status = 404, description = "Library not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Thumbnails"
+)]
+pub async fn generate_library_thumbnails(
+    State(state): State<Arc<AppState>>,
+    Path(library_id): Path<Uuid>,
+    auth: AuthContext,
+    Json(request): Json<ForceRequest>,
+) -> Result<Json<CreateTaskResponse>, ApiError> {
+    use crate::db::repositories::LibraryRepository;
+
+    // Check permission
+    auth.require_permission(&Permission::TasksWrite)?;
+
+    // Verify library exists
+    LibraryRepository::get_by_id(&state.db, library_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check library: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
+
+    let task_type = TaskType::GenerateThumbnails {
+        library_id: Some(library_id),
+        series_id: None,
+        force: request.force,
+    };
+
+    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to queue thumbnail generation: {}", e)))?;
+
+    Ok(Json(CreateTaskResponse { task_id }))
+}
+
+/// Generate thumbnails for all books in a series
+///
+/// Queues a fan-out task that enqueues individual thumbnail generation tasks for each book in the series.
+///
+/// # Permission Required
+/// - `tasks:write`
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/{series_id}/thumbnails/generate",
+    params(
+        ("series_id" = Uuid, Path, description = "Series ID")
+    ),
+    request_body = ForceRequest,
+    responses(
+        (status = 200, description = "Thumbnail generation task queued", body = CreateTaskResponse),
+        (status = 403, description = "Permission denied"),
+        (status = 404, description = "Series not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Thumbnails"
+)]
+pub async fn generate_series_thumbnails(
+    State(state): State<Arc<AppState>>,
+    Path(series_id): Path<Uuid>,
+    auth: AuthContext,
+    Json(request): Json<ForceRequest>,
+) -> Result<Json<CreateTaskResponse>, ApiError> {
+    use crate::db::repositories::SeriesRepository;
+
+    // Check permission
+    auth.require_permission(&Permission::TasksWrite)?;
+
+    // Verify series exists
+    SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    let task_type = TaskType::GenerateThumbnails {
+        library_id: None,
+        series_id: Some(series_id),
+        force: request.force,
+    };
+
+    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to queue thumbnail generation: {}", e)))?;
+
+    Ok(Json(CreateTaskResponse { task_id }))
+}
+
+/// Generate thumbnail for a single book
+///
+/// Queues a task to generate (or regenerate) the thumbnail for a specific book.
+///
+/// # Permission Required
+/// - `tasks:write`
+#[utoipa::path(
+    post,
+    path = "/api/v1/books/{book_id}/thumbnail/generate",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    request_body = ForceRequest,
+    responses(
+        (status = 200, description = "Thumbnail generation task queued", body = CreateTaskResponse),
+        (status = 403, description = "Permission denied"),
+        (status = 404, description = "Book not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Thumbnails"
+)]
+pub async fn generate_book_thumbnail(
+    State(state): State<Arc<AppState>>,
+    Path(book_id): Path<Uuid>,
+    auth: AuthContext,
+    Json(request): Json<ForceRequest>,
+) -> Result<Json<CreateTaskResponse>, ApiError> {
+    use crate::db::repositories::BookRepository;
+
+    // Check permission
+    auth.require_permission(&Permission::TasksWrite)?;
+
+    // Verify book exists
+    BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let task_type = TaskType::GenerateThumbnail {
+        book_id,
+        force: request.force,
+    };
+
+    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to queue thumbnail generation: {}", e)))?;
+
+    Ok(Json(CreateTaskResponse { task_id }))
+}

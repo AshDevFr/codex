@@ -38,7 +38,10 @@ import { LibraryToolbar } from "@/components/library/LibraryToolbar";
 import { RecommendedSection } from "@/components/library/RecommendedSection";
 import { SeriesSection } from "@/components/library/SeriesSection";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
-import { useLibraryPreferencesStore } from "@/store/libraryPreferencesStore";
+import {
+	useLibraryPreferencesHydrated,
+	useLibraryPreferencesStore,
+} from "@/store/libraryPreferencesStore";
 import type { Library } from "@/types";
 
 export function LibraryPage() {
@@ -46,6 +49,9 @@ export function LibraryPage() {
 	const location = useLocation();
 	const navigate = useNavigate();
 	const [searchParams, setSearchParams] = useSearchParams();
+
+	// Wait for preferences store to hydrate from localStorage
+	const hasHydrated = useLibraryPreferencesHydrated();
 
 	// Use performance selectors - only subscribe to actions (no re-renders)
 	const getTabPreferences = useLibraryPreferencesStore(
@@ -288,7 +294,9 @@ export function LibraryPage() {
 
 	// Read sort and page size from URL
 	const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
-	const sort = searchParams.get("sort") || (currentTab === "books" ? "title,asc" : "name,asc");
+	const sort =
+		searchParams.get("sort") ||
+		(currentTab === "books" ? "title,asc" : "name,asc");
 
 	// Handle filter changes
 	const handleFilterChange = (updates: Record<string, string | number>) => {
@@ -331,37 +339,92 @@ export function LibraryPage() {
 		});
 	};
 
-
 	// Get current count based on tab
-	const currentCount = currentTab === "books" ? booksCount : currentTab === "series" ? seriesCount : null;
-	const countLabel = currentTab === "books" ? "books" : currentTab === "series" ? "series" : "";
+	const currentCount =
+		currentTab === "books"
+			? booksCount
+			: currentTab === "series"
+				? seriesCount
+				: null;
+	const countLabel =
+		currentTab === "books" ? "books" : currentTab === "series" ? "series" : "";
 
 	// Sort options based on tab
-	const sortOptions = currentTab === "books"
-		? [
-				{ field: "series", label: "Series", defaultDirection: "asc" as const },
-				{ field: "title", label: "Title", defaultDirection: "asc" as const },
-				{ field: "created_at", label: "Date Added", defaultDirection: "desc" as const },
-				{ field: "release_date", label: "Release Date", defaultDirection: "desc" as const },
-				{ field: "chapter_number", label: "Chapter Number", defaultDirection: "asc" as const },
-				{ field: "file_size", label: "File Size", defaultDirection: "desc" as const },
-				{ field: "filename", label: "Filename", defaultDirection: "asc" as const },
-				{ field: "page_count", label: "Page Count", defaultDirection: "desc" as const },
-			]
-		: [
-				{ field: "name", label: "Name", defaultDirection: "asc" as const },
-				{ field: "date_added", label: "Date Added", defaultDirection: "desc" as const },
-				{ field: "date_updated", label: "Date Updated", defaultDirection: "desc" as const },
-				{ field: "release_date", label: "Release Date", defaultDirection: "desc" as const },
-				{ field: "date_read", label: "Recently Read", defaultDirection: "desc" as const },
-				{ field: "book_count", label: "Book Count", defaultDirection: "desc" as const },
-			];
+	const sortOptions =
+		currentTab === "books"
+			? [
+					{
+						field: "series",
+						label: "Series",
+						defaultDirection: "asc" as const,
+					},
+					{ field: "title", label: "Title", defaultDirection: "asc" as const },
+					{
+						field: "created_at",
+						label: "Date Added",
+						defaultDirection: "desc" as const,
+					},
+					{
+						field: "release_date",
+						label: "Release Date",
+						defaultDirection: "desc" as const,
+					},
+					{
+						field: "chapter_number",
+						label: "Chapter Number",
+						defaultDirection: "asc" as const,
+					},
+					{
+						field: "file_size",
+						label: "File Size",
+						defaultDirection: "desc" as const,
+					},
+					{
+						field: "filename",
+						label: "Filename",
+						defaultDirection: "asc" as const,
+					},
+					{
+						field: "page_count",
+						label: "Page Count",
+						defaultDirection: "desc" as const,
+					},
+				]
+			: [
+					{ field: "name", label: "Name", defaultDirection: "asc" as const },
+					{
+						field: "date_added",
+						label: "Date Added",
+						defaultDirection: "desc" as const,
+					},
+					{
+						field: "date_updated",
+						label: "Date Updated",
+						defaultDirection: "desc" as const,
+					},
+					{
+						field: "release_date",
+						label: "Release Date",
+						defaultDirection: "desc" as const,
+					},
+					{
+						field: "date_read",
+						label: "Recently Read",
+						defaultDirection: "desc" as const,
+					},
+					{
+						field: "book_count",
+						label: "Book Count",
+						defaultDirection: "desc" as const,
+					},
+				];
 
 	if (!libraryId) {
 		return <Navigate to="/" replace />;
 	}
 
-	if (isLoading && !isAllLibraries) {
+	// Wait for preferences to hydrate before rendering to prevent flash of default values
+	if (!hasHydrated || (isLoading && !isAllLibraries)) {
 		return (
 			<Center h={400}>
 				<Loader size="lg" />
@@ -399,53 +462,53 @@ export function LibraryPage() {
 										</ActionIcon>
 									</Menu.Target>
 
-								<Menu.Dropdown>
-									<Menu.Item
-										leftSection={<IconScan size={16} />}
-										onClick={() =>
-											scanMutation.mutate({
-												libraryId: library.id,
-												mode: "normal",
-											})
-										}
-									>
-										Scan Library
-									</Menu.Item>
-									<Menu.Item
-										leftSection={<IconRadar size={16} />}
-										onClick={() =>
-											scanMutation.mutate({
-												libraryId: library.id,
-												mode: "deep",
-											})
-										}
-									>
-										Scan Library (Deep)
-									</Menu.Item>
-									<Menu.Divider />
-									<Menu.Item
-										leftSection={<IconEdit size={16} />}
-										onClick={handleEditLibrary}
-									>
-										Edit Library
-									</Menu.Item>
-									<Menu.Divider />
-									<Menu.Item
-										leftSection={<IconTrashX size={16} />}
-										color="orange"
-										onClick={handlePurgeDeleted}
-									>
-										Purge Deleted Books
-									</Menu.Item>
-									<Menu.Item
-										leftSection={<IconTrash size={16} />}
-										color="red"
-										onClick={handleDeleteLibrary}
-									>
-										Delete Library
-									</Menu.Item>
-								</Menu.Dropdown>
-							</Menu>
+									<Menu.Dropdown>
+										<Menu.Item
+											leftSection={<IconScan size={16} />}
+											onClick={() =>
+												scanMutation.mutate({
+													libraryId: library.id,
+													mode: "normal",
+												})
+											}
+										>
+											Scan Library
+										</Menu.Item>
+										<Menu.Item
+											leftSection={<IconRadar size={16} />}
+											onClick={() =>
+												scanMutation.mutate({
+													libraryId: library.id,
+													mode: "deep",
+												})
+											}
+										>
+											Scan Library (Deep)
+										</Menu.Item>
+										<Menu.Divider />
+										<Menu.Item
+											leftSection={<IconEdit size={16} />}
+											onClick={handleEditLibrary}
+										>
+											Edit Library
+										</Menu.Item>
+										<Menu.Divider />
+										<Menu.Item
+											leftSection={<IconTrashX size={16} />}
+											color="orange"
+											onClick={handlePurgeDeleted}
+										>
+											Purge Deleted Books
+										</Menu.Item>
+										<Menu.Item
+											leftSection={<IconTrash size={16} />}
+											color="red"
+											onClick={handleDeleteLibrary}
+										>
+											Delete Library
+										</Menu.Item>
+									</Menu.Dropdown>
+								</Menu>
 							)}
 							<Title order={1} tt="capitalize">
 								{isAllLibraries ? "All Libraries" : library?.name || "Library"}
@@ -465,122 +528,124 @@ export function LibraryPage() {
 						</Group>
 					</Group>
 
-				{/* Toolbar with Tabs and Controls */}
-				<LibraryToolbar
-					currentTab={currentTab}
-					onTabChange={handleTabChange}
-					showRecommended={!isAllLibraries}
-					sort={sort}
-					onSortChange={(value) => {
-						if (libraryId) {
-							handleFilterChange({ sort: value });
-							const currentPrefs = getTabPreferences(libraryId, currentTab) || {};
-							setTabPreferences(libraryId, currentTab, {
-								...currentPrefs,
-								sort: value,
-							});
-						}
-					}}
-					sortOptions={sortOptions}
-					pageSize={pageSize}
-					onPageSizeChange={(value) => {
-						if (libraryId) {
-							handleFilterChange({ pageSize: value });
-							const currentPrefs = getTabPreferences(libraryId, currentTab) || {};
-							setTabPreferences(libraryId, currentTab, {
-								...currentPrefs,
-								pageSize: value,
-							});
-						}
-					}}
-				/>
+					{/* Toolbar with Tabs and Controls */}
+					<LibraryToolbar
+						currentTab={currentTab}
+						onTabChange={handleTabChange}
+						showRecommended={!isAllLibraries}
+						sort={sort}
+						onSortChange={(value) => {
+							if (libraryId) {
+								handleFilterChange({ sort: value });
+								const currentPrefs =
+									getTabPreferences(libraryId, currentTab) || {};
+								setTabPreferences(libraryId, currentTab, {
+									...currentPrefs,
+									sort: value,
+								});
+							}
+						}}
+						sortOptions={sortOptions}
+						pageSize={pageSize}
+						onPageSizeChange={(value) => {
+							if (libraryId) {
+								handleFilterChange({ pageSize: value });
+								const currentPrefs =
+									getTabPreferences(libraryId, currentTab) || {};
+								setTabPreferences(libraryId, currentTab, {
+									...currentPrefs,
+									pageSize: value,
+								});
+							}
+						}}
+					/>
 
-				{/* Tab Content */}
-				<Box pt="xl">
-					{currentTab === "recommended" && !isAllLibraries && (
-						<RecommendedSection libraryId={libraryId} />
-					)}
+					{/* Tab Content */}
+					<Box pt="xl">
+						{currentTab === "recommended" && !isAllLibraries && (
+							<RecommendedSection libraryId={libraryId} />
+						)}
 
-					{currentTab === "series" && (
-						<SeriesSection
-							libraryId={libraryId}
-							searchParams={searchParams}
-							onTotalChange={setSeriesCount}
-						/>
-					)}
+						{currentTab === "series" && (
+							<SeriesSection
+								libraryId={libraryId}
+								searchParams={searchParams}
+								onTotalChange={setSeriesCount}
+							/>
+						)}
 
-					{currentTab === "books" && (
-						<BooksSection
-							libraryId={libraryId}
-							searchParams={searchParams}
-							onTotalChange={setBooksCount}
-						/>
-					)}
-				</Box>
-			</Stack>
-		</Box>
+						{currentTab === "books" && (
+							<BooksSection
+								libraryId={libraryId}
+								searchParams={searchParams}
+								onTotalChange={setBooksCount}
+							/>
+						)}
+					</Box>
+				</Stack>
+			</Box>
 
-		{/* Edit Library Modal */}
-		<LibraryModal
-			opened={editLibraryOpened}
-			onClose={() => {
-				setEditLibraryOpened(false);
-				queryClient.refetchQueries({ queryKey: ["library", libraryId] });
-			}}
-			library={library || undefined}
-		/>
+			{/* Edit Library Modal */}
+			<LibraryModal
+				opened={editLibraryOpened}
+				onClose={() => {
+					setEditLibraryOpened(false);
+					queryClient.refetchQueries({ queryKey: ["library", libraryId] });
+				}}
+				library={library || undefined}
+			/>
 
-		{/* Delete Confirmation Modal */}
-		<Modal
-			opened={deleteConfirmOpened}
-			onClose={() => setDeleteConfirmOpened(false)}
-			title="Delete Library"
-			centered
-		>
-			<Stack gap="md">
-				<Text>
-					Are you sure you want to delete "{libraryToDelete?.name}"? This action
-					cannot be undone.
-				</Text>
-				<Group justify="flex-end" gap="sm">
-					<Button
-						variant="subtle"
-						onClick={() => setDeleteConfirmOpened(false)}
-					>
-						Cancel
-					</Button>
-					<Button color="red" onClick={confirmDelete}>
-						Delete
-					</Button>
-				</Group>
-			</Stack>
-		</Modal>
+			{/* Delete Confirmation Modal */}
+			<Modal
+				opened={deleteConfirmOpened}
+				onClose={() => setDeleteConfirmOpened(false)}
+				title="Delete Library"
+				centered
+			>
+				<Stack gap="md">
+					<Text>
+						Are you sure you want to delete "{libraryToDelete?.name}"? This
+						action cannot be undone.
+					</Text>
+					<Group justify="flex-end" gap="sm">
+						<Button
+							variant="subtle"
+							onClick={() => setDeleteConfirmOpened(false)}
+						>
+							Cancel
+						</Button>
+						<Button color="red" onClick={confirmDelete}>
+							Delete
+						</Button>
+					</Group>
+				</Stack>
+			</Modal>
 
-		{/* Purge Deleted Confirmation Modal */}
-		<Modal
-			opened={purgeConfirmOpened}
-			onClose={() => setPurgeConfirmOpened(false)}
-			title="Purge Deleted Books"
-			centered
-		>
-			<Stack gap="md">
-				<Text>
-					Are you sure you want to permanently delete all soft-deleted books from
-					"{libraryToPurge?.name}"? This action cannot be undone.
-				</Text>
-				<Group justify="flex-end" gap="sm">
-					<Button
-						variant="subtle"
-						onClick={() => setPurgeConfirmOpened(false)}
-					>
-						Cancel
-					</Button>
-					<Button color="orange" onClick={confirmPurge}>
-						Purge
-					</Button>
-				</Group>
-			</Stack>
-		</Modal>
+			{/* Purge Deleted Confirmation Modal */}
+			<Modal
+				opened={purgeConfirmOpened}
+				onClose={() => setPurgeConfirmOpened(false)}
+				title="Purge Deleted Books"
+				centered
+			>
+				<Stack gap="md">
+					<Text>
+						Are you sure you want to permanently delete all soft-deleted books
+						from "{libraryToPurge?.name}"? This action cannot be undone.
+					</Text>
+					<Group justify="flex-end" gap="sm">
+						<Button
+							variant="subtle"
+							onClick={() => setPurgeConfirmOpened(false)}
+						>
+							Cancel
+						</Button>
+						<Button color="orange" onClick={confirmPurge}>
+							Purge
+						</Button>
+					</Group>
+				</Stack>
+			</Modal>
 		</>
 	);
 }

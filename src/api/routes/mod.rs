@@ -495,6 +495,23 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             delete(handlers::task_queue::purge_old_tasks),
         )
         .route("/tasks/nuke", delete(handlers::task_queue::nuke_all_tasks))
+        // Thumbnail generation routes (protected)
+        .route(
+            "/thumbnails/generate",
+            post(handlers::task_queue::generate_thumbnails),
+        )
+        .route(
+            "/libraries/:library_id/thumbnails/generate",
+            post(handlers::task_queue::generate_library_thumbnails),
+        )
+        .route(
+            "/series/:series_id/thumbnails/generate",
+            post(handlers::task_queue::generate_series_thumbnails),
+        )
+        .route(
+            "/books/:book_id/thumbnail/generate",
+            post(handlers::task_queue::generate_book_thumbnail),
+        )
         // Duplicate detection routes (protected)
         .route("/duplicates", get(handlers::list_duplicates))
         .route("/duplicates/scan", post(handlers::trigger_duplicate_scan))

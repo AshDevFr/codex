@@ -1,10 +1,10 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::db::entities::tasks;
-use crate::db::repositories::BookRepository;
+use crate::db::repositories::{BookRepository, TaskRepository};
 use crate::events::EventBroadcaster;
 use crate::services::ThumbnailService;
 use crate::tasks::handlers::TaskHandler;
@@ -25,76 +25,129 @@ impl TaskHandler for GenerateThumbnailsHandler {
         &'a self,
         task: &'a tasks::Model,
         db: &'a DatabaseConnection,
-        event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
+        _event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>> {
         Box::pin(async move {
-            info!("Task {}: Starting thumbnail generation", task.id);
+            info!(
+                "Task {}: Starting batch thumbnail generation (fan-out)",
+                task.id
+            );
 
-            // Parse task parameters
-            let params: TaskType = if let Some(params_value) = &task.params {
-                serde_json::from_value(params_value.clone())
-                    .map_err(|e| anyhow!("Failed to parse task params: {}", e))?
-            } else {
-                return Err(anyhow!("Missing task params"));
-            };
+            // Extract parameters from task
+            let library_id = task.library_id;
+            let series_id = task.series_id;
+            let force = task
+                .params
+                .as_ref()
+                .and_then(|p| p.get("force"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
 
-            let library_id = match params {
-                TaskType::GenerateThumbnails { library_id } => library_id,
-                _ => {
-                    return Err(anyhow!(
-                        "Invalid task type for GenerateThumbnails: expected GenerateThumbnails, got {:?}",
-                        params
-                    ));
-                }
-            };
-
-            // Get books to process
-            let books = if let Some(lib_id) = library_id {
-                info!("Generating thumbnails for library {}", lib_id);
-                // Get non-deleted books from the library
+            // Determine scope and get books
+            let books = if let Some(ser_id) = series_id {
+                // Series scope takes precedence
+                info!(
+                    "Generating thumbnails for series {} (force={})",
+                    ser_id, force
+                );
+                BookRepository::list_by_series(db, ser_id, false).await?
+            } else if let Some(lib_id) = library_id {
+                // Library scope
+                info!(
+                    "Generating thumbnails for library {} (force={})",
+                    lib_id, force
+                );
                 let (books, _total) =
                     BookRepository::list_by_library(db, lib_id, false, 0, 1000000).await?;
                 books
             } else {
-                info!("Generating thumbnails for all books");
-                // Get all non-deleted books
+                // All libraries
+                info!("Generating thumbnails for all books (force={})", force);
                 let (books, _total) = BookRepository::list_all(db, false, 0, 1000000).await?;
                 books
             };
 
-            let book_ids: Vec<_> = books.iter().map(|b| b.id).collect();
-            let total = book_ids.len();
+            let total = books.len();
             info!("Found {} books to process", total);
 
-            // Generate thumbnails in batch
-            let stats = self
-                .thumbnail_service
-                .generate_thumbnails_batch(db, book_ids, event_broadcaster)
-                .await?;
+            // Filter books if not forcing - only include books without thumbnails
+            let books_to_process: Vec<_> = if force {
+                books
+            } else {
+                let mut filtered = Vec::new();
+                for book in books {
+                    if !self.thumbnail_service.thumbnail_exists(book.id).await {
+                        filtered.push(book);
+                    }
+                }
+                filtered
+            };
+
+            let to_process = books_to_process.len();
+            let skipped = total - to_process;
+
+            if skipped > 0 {
+                info!("Skipping {} books that already have thumbnails", skipped);
+            }
+
+            if to_process == 0 {
+                info!("No books need thumbnail generation");
+                return Ok(TaskResult::success_with_data(
+                    "No books need thumbnail generation".to_string(),
+                    serde_json::json!({
+                        "total": total,
+                        "enqueued": 0,
+                        "skipped": skipped,
+                    }),
+                ));
+            }
+
+            // Enqueue individual GenerateThumbnail tasks for each book
+            let mut enqueued = 0;
+            let mut errors = Vec::new();
+
+            for book in books_to_process {
+                let task_type = TaskType::GenerateThumbnail {
+                    book_id: book.id,
+                    force,
+                };
+
+                match TaskRepository::enqueue(db, task_type, 0, None).await {
+                    Ok(task_id) => {
+                        debug!(
+                            "Enqueued thumbnail task {} for book {} (force={})",
+                            task_id, book.id, force
+                        );
+                        enqueued += 1;
+                    }
+                    Err(e) => {
+                        let error_msg = format!(
+                            "Failed to enqueue thumbnail task for book {}: {}",
+                            book.id, e
+                        );
+                        warn!("{}", error_msg);
+                        errors.push(error_msg);
+                    }
+                }
+            }
 
             info!(
-                "Thumbnail generation complete: {}/{} generated, {} skipped, {} failed",
-                stats.generated, stats.total, stats.skipped, stats.failed
+                "Batch thumbnail generation complete: enqueued {} tasks ({} skipped, {} errors)",
+                enqueued,
+                skipped,
+                errors.len()
             );
-
-            if stats.failed > 0 {
-                warn!(
-                    "Some thumbnails failed to generate. Errors: {:?}",
-                    stats.errors
-                );
-            }
 
             Ok(TaskResult::success_with_data(
                 format!(
-                    "Generated {}/{} thumbnails ({} skipped, {} failed)",
-                    stats.generated, stats.total, stats.skipped, stats.failed
+                    "Enqueued {} thumbnail tasks ({} skipped)",
+                    enqueued, skipped
                 ),
                 serde_json::json!({
-                    "total": stats.total,
-                    "generated": stats.generated,
-                    "skipped": stats.skipped,
-                    "failed": stats.failed,
-                    "errors": stats.errors,
+                    "total": total,
+                    "enqueued": enqueued,
+                    "skipped": skipped,
+                    "errors": errors,
                 }),
             ))
         })

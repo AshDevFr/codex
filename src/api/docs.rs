@@ -209,6 +209,10 @@ Codex provides OPDS catalog feeds for e-reader applications:
         handlers::task_queue::get_task_stats,
         handlers::task_queue::purge_old_tasks,
         handlers::task_queue::nuke_all_tasks,
+        handlers::task_queue::generate_thumbnails,
+        handlers::task_queue::generate_library_thumbnails,
+        handlers::task_queue::generate_series_thumbnails,
+        handlers::task_queue::generate_book_thumbnail,
 
         // Filesystem endpoints
         handlers::browse_filesystem,
@@ -389,6 +393,8 @@ Codex provides OPDS catalog feeds for e-reader applications:
             handlers::task_queue::TaskResponse,
             handlers::task_queue::PurgeTasksResponse,
             handlers::task_queue::MessageResponse,
+            handlers::task_queue::GenerateThumbnailsRequest,
+            handlers::task_queue::ForceRequest,
             crate::tasks::types::TaskStats,
             crate::tasks::types::TaskTypeStats,
             crate::tasks::types::TaskType,
@@ -437,6 +443,7 @@ Codex provides OPDS catalog feeds for e-reader applications:
         (name = "Metrics", description = "Application metrics and statistics"),
         (name = "Scans", description = "Library scanning and analysis endpoints"),
         (name = "Task Queue", description = "Distributed task queue for background jobs (analysis, thumbnails, scans)"),
+        (name = "Thumbnails", description = "Thumbnail generation and management"),
         (name = "filesystem", description = "Filesystem browsing for library path selection"),
         (name = "settings", description = "Runtime configuration settings management (admin only)"),
         (name = "duplicates", description = "Duplicate book detection and management"),

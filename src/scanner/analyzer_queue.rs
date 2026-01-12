@@ -202,56 +202,66 @@ async fn analyze_single_book(
 
     BookRepository::update(db, &book, event_broadcaster).await?;
 
-    // Emit CoverUpdated event and queue thumbnail generation if cover became available
-    if cover_now_available {
-        if let Some(broadcaster) = event_broadcaster {
-            // Get library_id from series
-            if let Ok(Some(series)) = SeriesRepository::get_by_id(db, book.series_id).await {
-                use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
+    // Queue thumbnail generation for this book
+    // - For new books (cover_now_available): generate thumbnail (force=false since it doesn't exist)
+    // - For force re-analysis: regenerate thumbnail (force=true to replace existing)
+    // - For file changes: regenerate thumbnail (force=true to replace existing)
+    // Note: We only reach this point if the file actually changed or force=true,
+    // since unchanged files return early after full hash verification
+    let should_generate_thumbnail = cover_now_available || force || metadata.page_count > 0;
+    let thumbnail_force = force || !cover_now_available; // Force if re-analyzing, not if new book
 
-                let event = EntityChangeEvent {
-                    event: EntityEvent::CoverUpdated {
-                        entity_type: EntityType::Book,
-                        entity_id: book.id,
-                        library_id: Some(series.library_id),
-                    },
-                    user_id: None,
-                    timestamp: Utc::now(),
-                };
+    if should_generate_thumbnail {
+        // Queue per-book thumbnail generation task
+        let task_type = TaskType::GenerateThumbnail {
+            book_id: book.id,
+            force: thumbnail_force,
+        };
 
-                match broadcaster.emit(event) {
-                    Ok(count) => {
-                        debug!(
-                            "Emitted CoverUpdated event to {} subscribers for book: {}",
-                            count, book.id
-                        );
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Failed to emit CoverUpdated event for book {}: {:?}",
-                            book.id, e
-                        );
-                    }
-                }
+        match TaskRepository::enqueue(db, task_type, 0, None).await {
+            Ok(task_id) => {
+                debug!(
+                    "Queued thumbnail generation task {} for book {} (force={})",
+                    task_id, book.id, thumbnail_force
+                );
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to queue thumbnail generation task for book {}: {:?}",
+                    book.id, e
+                );
+            }
+        }
 
-                // Queue thumbnail generation task for this book's library
-                // This will batch with other books analyzed around the same time
-                let task_type = TaskType::GenerateThumbnails {
-                    library_id: Some(series.library_id),
-                };
+        // Emit CoverUpdated event if cover became available
+        if cover_now_available {
+            if let Some(broadcaster) = event_broadcaster {
+                if let Ok(Some(series)) = SeriesRepository::get_by_id(db, book.series_id).await {
+                    use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
 
-                match TaskRepository::enqueue(db, task_type, 0, None).await {
-                    Ok(task_id) => {
-                        debug!(
-                            "Queued thumbnail generation task {} for library {} after book analysis",
-                            task_id, series.library_id
-                        );
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Failed to queue thumbnail generation task for library {}: {:?}",
-                            series.library_id, e
-                        );
+                    let event = EntityChangeEvent {
+                        event: EntityEvent::CoverUpdated {
+                            entity_type: EntityType::Book,
+                            entity_id: book.id,
+                            library_id: Some(series.library_id),
+                        },
+                        user_id: None,
+                        timestamp: Utc::now(),
+                    };
+
+                    match broadcaster.emit(event) {
+                        Ok(count) => {
+                            debug!(
+                                "Emitted CoverUpdated event to {} subscribers for book: {}",
+                                count, book.id
+                            );
+                        }
+                        Err(e) => {
+                            warn!(
+                                "Failed to emit CoverUpdated event for book {}: {:?}",
+                                book.id, e
+                            );
+                        }
                     }
                 }
             }

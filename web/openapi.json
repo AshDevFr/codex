@@ -1773,6 +1773,64 @@
         ]
       }
     },
+    "/api/v1/books/{book_id}/thumbnail/generate": {
+      "post": {
+        "tags": [
+          "Thumbnails"
+        ],
+        "summary": "Generate thumbnail for a single book",
+        "description": "Queues a task to generate (or regenerate) the thumbnail for a specific book.\n\n# Permission Required\n- `tasks:write`",
+        "operationId": "generate_book_thumbnail",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Thumbnail generation task queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateTaskResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/{book_id}/unread": {
       "post": {
         "tags": [
@@ -3287,6 +3345,64 @@
         "security": [
           {
             "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/libraries/{library_id}/thumbnails/generate": {
+      "post": {
+        "tags": [
+          "Thumbnails"
+        ],
+        "summary": "Generate thumbnails for all books in a library",
+        "description": "Queues a fan-out task that enqueues individual thumbnail generation tasks for each book in the library.\n\n# Permission Required\n- `tasks:write`",
+        "operationId": "generate_library_thumbnails",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Thumbnail generation task queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateTaskResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied"
+          },
+          "404": {
+            "description": "Library not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
           },
           {
             "api_key": []
@@ -6002,6 +6118,64 @@
         ]
       }
     },
+    "/api/v1/series/{series_id}/thumbnails/generate": {
+      "post": {
+        "tags": [
+          "Thumbnails"
+        ],
+        "summary": "Generate thumbnails for all books in a series",
+        "description": "Queues a fan-out task that enqueues individual thumbnail generation tasks for each book in the series.\n\n# Permission Required\n- `tasks:write`",
+        "operationId": "generate_series_thumbnails",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Thumbnail generation task queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateTaskResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/{series_id}/unread": {
       "post": {
         "tags": [
@@ -6693,6 +6867,49 @@
           },
           "404": {
             "description": "Task not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/thumbnails/generate": {
+      "post": {
+        "tags": [
+          "Thumbnails"
+        ],
+        "summary": "Generate thumbnails for books in a scope",
+        "description": "This queues a fan-out task that enqueues individual thumbnail generation tasks for each book.\n\n**Scope priority:**\n1. If `series_id` is provided, only books in that series\n2. If `library_id` is provided, only books in that library\n3. If neither is provided, all books in all libraries\n\n**Force behavior:**\n- `force: false` (default): Only generates thumbnails for books that don't have one\n- `force: true`: Regenerates all thumbnails, replacing existing ones\n\n# Permission Required\n- `tasks:write`",
+        "operationId": "generate_thumbnails",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateThumbnailsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Thumbnail generation task queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateTaskResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied"
           }
         },
         "security": [
@@ -9662,6 +9879,16 @@
           "path": "/home/user/Documents"
         }
       },
+      "ForceRequest": {
+        "type": "object",
+        "properties": {
+          "force": {
+            "type": "boolean",
+            "description": "If true, regenerate thumbnails even if they exist. If false (default), only generate missing thumbnails.",
+            "example": false
+          }
+        }
+      },
       "FullSeriesMetadataResponse": {
         "type": "object",
         "description": "Full series metadata response including all related data",
@@ -9829,6 +10056,34 @@
             "format": "int32",
             "description": "Release year",
             "example": 1987
+          }
+        }
+      },
+      "GenerateThumbnailsRequest": {
+        "type": "object",
+        "properties": {
+          "force": {
+            "type": "boolean",
+            "description": "If true, regenerate all thumbnails even if they exist. If false (default), only generate missing thumbnails.",
+            "example": false
+          },
+          "library_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Library ID to generate thumbnails for (optional)",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "series_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Series ID to generate thumbnails for (optional, takes precedence over library_id)",
+            "example": "550e8400-e29b-41d4-a716-446655440001"
           }
         }
       },
@@ -13569,12 +13824,22 @@
           },
           {
             "type": "object",
-            "description": "Generate missing thumbnails",
+            "description": "Generate thumbnails for books in a scope (library, series, or all)\nThis is a fan-out task that enqueues individual GenerateThumbnail tasks",
             "required": [
               "type"
             ],
             "properties": {
+              "force": {
+                "type": "boolean"
+              },
               "library_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "series_id": {
                 "type": [
                   "string",
                   "null"
@@ -13585,6 +13850,29 @@
                 "type": "string",
                 "enum": [
                   "generate_thumbnails"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Generate thumbnail for a single book",
+            "required": [
+              "book_id",
+              "type"
+            ],
+            "properties": {
+              "book_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "force": {
+                "type": "boolean"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "generate_thumbnail"
                 ]
               }
             }
@@ -14536,6 +14824,10 @@
     {
       "name": "Task Queue",
       "description": "Distributed task queue for background jobs (analysis, thumbnails, scans)"
+    },
+    {
+      "name": "Thumbnails",
+      "description": "Thumbnail generation and management"
     },
     {
       "name": "filesystem",

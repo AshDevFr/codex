@@ -18,7 +18,11 @@ async fn test_e2e_task_execution() {
     // Create a task
     let task_id = TaskRepository::enqueue(
         &db,
-        TaskType::GenerateThumbnails { library_id: None },
+        TaskType::GenerateThumbnails {
+            library_id: None,
+            series_id: None,
+            force: false,
+        },
         0,
         None,
     )
@@ -92,7 +96,11 @@ async fn test_task_retry_on_failure() {
     // Create a task that will fail (non-existent book)
     let task_id = TaskRepository::enqueue(
         &db,
-        TaskType::GenerateThumbnails { library_id: None },
+        TaskType::GenerateThumbnails {
+            library_id: None,
+            series_id: None,
+            force: false,
+        },
         0,
         None,
     )
@@ -131,7 +139,11 @@ async fn test_concurrent_workers_skip_locked() {
     // Create a single task
     TaskRepository::enqueue(
         &db,
-        TaskType::GenerateThumbnails { library_id: None },
+        TaskType::GenerateThumbnails {
+            library_id: None,
+            series_id: None,
+            force: false,
+        },
         0,
         None,
     )
@@ -225,7 +237,11 @@ async fn test_cancelled_task_not_executed() {
 
     let task_id = TaskRepository::enqueue(
         &db,
-        TaskType::GenerateThumbnails { library_id: None },
+        TaskType::GenerateThumbnails {
+            library_id: None,
+            series_id: None,
+            force: false,
+        },
         0,
         None,
     )
@@ -261,7 +277,11 @@ async fn test_stale_task_recovery() {
 
     let task_id = TaskRepository::enqueue(
         &db,
-        TaskType::GenerateThumbnails { library_id: None },
+        TaskType::GenerateThumbnails {
+            library_id: None,
+            series_id: None,
+            force: false,
+        },
         0,
         None,
     )

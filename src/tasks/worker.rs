@@ -14,8 +14,8 @@ use crate::db::repositories::TaskRepository;
 use crate::events::{EventBroadcaster, RecordedEvent, TaskProgressEvent};
 use crate::services::{SettingsService, TaskMetricsService, ThumbnailService};
 use crate::tasks::handlers::{
-    AnalyzeBookHandler, AnalyzeSeriesHandler, FindDuplicatesHandler, GenerateThumbnailsHandler,
-    PurgeDeletedHandler, ScanLibraryHandler, TaskHandler,
+    AnalyzeBookHandler, AnalyzeSeriesHandler, FindDuplicatesHandler, GenerateThumbnailHandler,
+    GenerateThumbnailsHandler, PurgeDeletedHandler, ScanLibraryHandler, TaskHandler,
 };
 
 /// Task worker that processes tasks from the queue
@@ -103,10 +103,15 @@ impl TaskWorker {
 
     /// Set the thumbnail service for thumbnail generation
     pub fn with_thumbnail_service(mut self, thumbnail_service: Arc<ThumbnailService>) -> Self {
-        // Re-register the GenerateThumbnailsHandler with thumbnail service
+        // Register the GenerateThumbnailsHandler (batch) with thumbnail service
         self.handlers.insert(
             "generate_thumbnails".to_string(),
             Arc::new(GenerateThumbnailsHandler::new(thumbnail_service.clone())),
+        );
+        // Register the GenerateThumbnailHandler (single book) with thumbnail service
+        self.handlers.insert(
+            "generate_thumbnail".to_string(),
+            Arc::new(GenerateThumbnailHandler::new(thumbnail_service.clone())),
         );
         self.thumbnail_service = Some(thumbnail_service);
         self

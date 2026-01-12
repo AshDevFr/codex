@@ -28,5 +28,6 @@ mod api {
     mod sse;
     mod tags;
     mod task_metrics;
+    mod thumbnails;
     mod user_ratings;
 }

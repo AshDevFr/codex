@@ -151,17 +151,19 @@ impl TaskRepository {
                             // 2. purge_deleted (1)
                             // 3. analyze_book (2)
                             // 4. analyze_series (3)
-                            // 5. generate_thumbnails (4)
-                            // 6. find_duplicates (5)
-                            // 7. refresh_metadata (6)
+                            // 5. generate_thumbnail (4) - per-book thumbnail
+                            // 6. generate_thumbnails (5) - batch thumbnail
+                            // 7. find_duplicates (6)
+                            // 8. refresh_metadata (7)
                             "ORDER BY (CASE
                                 WHEN task_type = 'scan_library' THEN 0
                                 WHEN task_type = 'purge_deleted' THEN 1
                                 WHEN task_type = 'analyze_book' THEN 2
                                 WHEN task_type = 'analyze_series' THEN 3
-                                WHEN task_type = 'generate_thumbnails' THEN 4
-                                WHEN task_type = 'find_duplicates' THEN 5
-                                WHEN task_type = 'refresh_metadata' THEN 6
+                                WHEN task_type = 'generate_thumbnail' THEN 4
+                                WHEN task_type = 'generate_thumbnails' THEN 5
+                                WHEN task_type = 'find_duplicates' THEN 6
+                                WHEN task_type = 'refresh_metadata' THEN 7
                                 ELSE 99
                             END), priority DESC, scheduled_for ASC"
                         } else {
@@ -223,17 +225,19 @@ impl TaskRepository {
                             // 2. purge_deleted (1)
                             // 3. analyze_book (2)
                             // 4. analyze_series (3)
-                            // 5. generate_thumbnails (4)
-                            // 6. find_duplicates (5)
-                            // 7. refresh_metadata (6)
+                            // 5. generate_thumbnail (4) - per-book thumbnail
+                            // 6. generate_thumbnails (5) - batch thumbnail
+                            // 7. find_duplicates (6)
+                            // 8. refresh_metadata (7)
                             "ORDER BY (CASE
                                 WHEN task_type = 'scan_library' THEN 0
                                 WHEN task_type = 'purge_deleted' THEN 1
                                 WHEN task_type = 'analyze_book' THEN 2
                                 WHEN task_type = 'analyze_series' THEN 3
-                                WHEN task_type = 'generate_thumbnails' THEN 4
-                                WHEN task_type = 'find_duplicates' THEN 5
-                                WHEN task_type = 'refresh_metadata' THEN 6
+                                WHEN task_type = 'generate_thumbnail' THEN 4
+                                WHEN task_type = 'generate_thumbnails' THEN 5
+                                WHEN task_type = 'find_duplicates' THEN 6
+                                WHEN task_type = 'refresh_metadata' THEN 7
                                 ELSE 99
                             END), priority DESC, scheduled_for ASC"
                         } else {

@@ -32,9 +32,20 @@ pub enum TaskType {
         source: String, // "comicvine", "openlibrary", etc.
     },
 
-    /// Generate missing thumbnails
+    /// Generate thumbnails for books in a scope (library, series, or all)
+    /// This is a fan-out task that enqueues individual GenerateThumbnail tasks
     GenerateThumbnails {
-        library_id: Option<Uuid>, // None = all libraries
+        library_id: Option<Uuid>, // If set, only books in this library
+        series_id: Option<Uuid>, // If set, only books in this series (takes precedence over library_id)
+        #[serde(default)]
+        force: bool, // If true, regenerate all thumbnails; if false, only missing ones
+    },
+
+    /// Generate thumbnail for a single book
+    GenerateThumbnail {
+        book_id: Uuid,
+        #[serde(default)]
+        force: bool, // If true, regenerate even if thumbnail exists
     },
 
     /// Find and catalog duplicate books across all libraries
@@ -55,6 +66,7 @@ impl TaskType {
             TaskType::PurgeDeleted { .. } => "purge_deleted",
             TaskType::RefreshMetadata { .. } => "refresh_metadata",
             TaskType::GenerateThumbnails { .. } => "generate_thumbnails",
+            TaskType::GenerateThumbnail { .. } => "generate_thumbnail",
             TaskType::FindDuplicates => "find_duplicates",
         }
     }
@@ -64,24 +76,7 @@ impl TaskType {
         match self {
             TaskType::ScanLibrary { library_id, .. } => Some(*library_id),
             TaskType::PurgeDeleted { library_id } => Some(*library_id),
-            TaskType::GenerateThumbnails { library_id } => *library_id,
-            _ => None,
-        }
-    }
-
-    /// Extract series_id if present
-    pub fn series_id(&self) -> Option<Uuid> {
-        match self {
-            TaskType::AnalyzeSeries { series_id, .. } => Some(*series_id),
-            _ => None,
-        }
-    }
-
-    /// Extract book_id if present
-    pub fn book_id(&self) -> Option<Uuid> {
-        match self {
-            TaskType::AnalyzeBook { book_id, .. } => Some(*book_id),
-            TaskType::RefreshMetadata { book_id, .. } => Some(*book_id),
+            TaskType::GenerateThumbnails { library_id, .. } => *library_id,
             _ => None,
         }
     }
@@ -101,7 +96,32 @@ impl TaskType {
             TaskType::RefreshMetadata { source, .. } => {
                 serde_json::json!({ "source": source })
             }
+            TaskType::GenerateThumbnails { force, .. } => {
+                serde_json::json!({ "force": force })
+            }
+            TaskType::GenerateThumbnail { force, .. } => {
+                serde_json::json!({ "force": force })
+            }
             _ => serde_json::json!({}),
+        }
+    }
+
+    /// Extract series_id if present
+    pub fn series_id(&self) -> Option<Uuid> {
+        match self {
+            TaskType::AnalyzeSeries { series_id, .. } => Some(*series_id),
+            TaskType::GenerateThumbnails { series_id, .. } => *series_id,
+            _ => None,
+        }
+    }
+
+    /// Extract book_id if present
+    pub fn book_id(&self) -> Option<Uuid> {
+        match self {
+            TaskType::AnalyzeBook { book_id, .. } => Some(*book_id),
+            TaskType::RefreshMetadata { book_id, .. } => Some(*book_id),
+            TaskType::GenerateThumbnail { book_id, .. } => Some(*book_id),
+            _ => None,
         }
     }
 
@@ -273,5 +293,111 @@ mod tests {
             stats.pending + stats.processing + stats.completed + stats.failed,
             20
         );
+    }
+
+    #[test]
+    fn test_generate_thumbnails_extraction() {
+        let library_id = Uuid::new_v4();
+        let series_id = Uuid::new_v4();
+
+        // Library scope
+        let task = TaskType::GenerateThumbnails {
+            library_id: Some(library_id),
+            series_id: None,
+            force: false,
+        };
+        assert_eq!(task.type_string(), "generate_thumbnails");
+        assert_eq!(task.library_id(), Some(library_id));
+        assert_eq!(task.series_id(), None);
+        assert_eq!(task.book_id(), None);
+
+        let params = task.params();
+        assert_eq!(params["force"], false);
+
+        // Series scope
+        let task = TaskType::GenerateThumbnails {
+            library_id: None,
+            series_id: Some(series_id),
+            force: true,
+        };
+        assert_eq!(task.library_id(), None);
+        assert_eq!(task.series_id(), Some(series_id));
+
+        let params = task.params();
+        assert_eq!(params["force"], true);
+
+        // All scope
+        let task = TaskType::GenerateThumbnails {
+            library_id: None,
+            series_id: None,
+            force: false,
+        };
+        assert_eq!(task.library_id(), None);
+        assert_eq!(task.series_id(), None);
+    }
+
+    #[test]
+    fn test_generate_thumbnail_extraction() {
+        let book_id = Uuid::new_v4();
+
+        let task = TaskType::GenerateThumbnail {
+            book_id,
+            force: true,
+        };
+
+        assert_eq!(task.type_string(), "generate_thumbnail");
+        assert_eq!(task.library_id(), None);
+        assert_eq!(task.series_id(), None);
+        assert_eq!(task.book_id(), Some(book_id));
+
+        let params = task.params();
+        assert_eq!(params["force"], true);
+
+        // Test with force=false
+        let task = TaskType::GenerateThumbnail {
+            book_id,
+            force: false,
+        };
+        let params = task.params();
+        assert_eq!(params["force"], false);
+    }
+
+    #[test]
+    fn test_generate_thumbnail_extract_fields() {
+        let book_id = Uuid::new_v4();
+
+        let task = TaskType::GenerateThumbnail {
+            book_id,
+            force: true,
+        };
+
+        let (type_str, lib_id, series_id, extracted_book_id, params) = task.extract_fields();
+        assert_eq!(type_str, "generate_thumbnail");
+        assert_eq!(lib_id, None);
+        assert_eq!(series_id, None);
+        assert_eq!(extracted_book_id, Some(book_id));
+        assert!(params.is_some());
+        assert_eq!(params.unwrap()["force"], true);
+    }
+
+    #[test]
+    fn test_generate_thumbnails_extract_fields() {
+        let library_id = Uuid::new_v4();
+        let series_id = Uuid::new_v4();
+
+        // With series_id (takes precedence)
+        let task = TaskType::GenerateThumbnails {
+            library_id: Some(library_id),
+            series_id: Some(series_id),
+            force: true,
+        };
+
+        let (type_str, lib_id, extracted_series_id, book_id, params) = task.extract_fields();
+        assert_eq!(type_str, "generate_thumbnails");
+        assert_eq!(lib_id, Some(library_id));
+        assert_eq!(extracted_series_id, Some(series_id));
+        assert_eq!(book_id, None);
+        assert!(params.is_some());
+        assert_eq!(params.unwrap()["force"], true);
     }
 }

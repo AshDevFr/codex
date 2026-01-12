@@ -49,7 +49,11 @@ async fn test_api_list_tasks() {
     // Create some tasks
     TaskRepository::enqueue(
         &db,
-        TaskType::GenerateThumbnails { library_id: None },
+        TaskType::GenerateThumbnails {
+            library_id: None,
+            series_id: None,
+            force: false,
+        },
         0,
         None,
     )
@@ -95,7 +99,11 @@ async fn test_api_get_task() {
     // Create a task
     let task_id = TaskRepository::enqueue(
         &db,
-        TaskType::GenerateThumbnails { library_id: None },
+        TaskType::GenerateThumbnails {
+            library_id: None,
+            series_id: None,
+            force: false,
+        },
         0,
         None,
     )
@@ -230,7 +238,11 @@ async fn test_api_cancel_task() {
     // Create a task
     let task_id = TaskRepository::enqueue(
         &db,
-        TaskType::GenerateThumbnails { library_id: None },
+        TaskType::GenerateThumbnails {
+            library_id: None,
+            series_id: None,
+            force: false,
+        },
         0,
         None,
     )
@@ -275,7 +287,11 @@ async fn test_api_unlock_task() {
     // Create and claim a task
     let task_id = TaskRepository::enqueue(
         &db,
-        TaskType::GenerateThumbnails { library_id: None },
+        TaskType::GenerateThumbnails {
+            library_id: None,
+            series_id: None,
+            force: false,
+        },
         0,
         None,
     )

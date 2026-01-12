@@ -91,7 +91,6 @@ export function Setup() {
 	const [deduplicationExpanded, setDeduplicationExpanded] = useState(false);
 
 	// Scanner settings
-	const [maxConcurrentScans, setMaxConcurrentScans] = useState(2);
 	const [scanTimeoutMinutes, setScanTimeoutMinutes] = useState(120);
 	const [retryFailedFiles, setRetryFailedFiles] = useState(false);
 
@@ -105,7 +104,8 @@ export function Setup() {
 		useState(true);
 
 	// Thumbnail settings
-	const [thumbnailCacheDir, setThumbnailCacheDir] = useState("data/thumbnails");
+	const [thumbnailMaxDimension, setThumbnailMaxDimension] = useState(400);
+	const [thumbnailJpegQuality, setThumbnailJpegQuality] = useState(85);
 
 	// Deduplication settings
 	const [deduplicationEnabled, setDeduplicationEnabled] = useState(true);
@@ -166,7 +166,6 @@ export function Setup() {
 			});
 		} else {
 			const settings: Record<string, string> = {
-				"scanner.max_concurrent_scans": maxConcurrentScans.toString(),
 				"scanner.scan_timeout_minutes": scanTimeoutMinutes.toString(),
 				"scanner.retry_failed_files": retryFailedFiles.toString(),
 				"application.name": appName,
@@ -174,7 +173,8 @@ export function Setup() {
 				"task.cleanup_interval_seconds": cleanupIntervalSeconds.toString(),
 				"task.prioritize_scans_over_analysis":
 					prioritizeScansOverAnalysis.toString(),
-				"thumbnail.cache_dir": thumbnailCacheDir,
+				"thumbnail.max_dimension": thumbnailMaxDimension.toString(),
+				"thumbnail.jpeg_quality": thumbnailJpegQuality.toString(),
 				"deduplication.enabled": deduplicationEnabled.toString(),
 			};
 
@@ -330,17 +330,6 @@ export function Setup() {
 											<Collapse in={scannerExpanded}>
 												<Stack gap="sm" mt="sm">
 													<NumberInput
-														label="Max Concurrent Scans"
-														description="Number of libraries that can be scanned simultaneously"
-														value={maxConcurrentScans}
-														onChange={(val) =>
-															setMaxConcurrentScans(Number(val) || 2)
-														}
-														min={1}
-														max={10}
-													/>
-
-													<NumberInput
 														label="Scan Timeout (minutes)"
 														description="Maximum time for a single library scan"
 														value={scanTimeoutMinutes}
@@ -471,14 +460,26 @@ export function Setup() {
 
 											<Collapse in={thumbnailExpanded}>
 												<Stack gap="sm" mt="sm">
-													<TextInput
-														label="Thumbnail Cache Directory"
-														description="Directory path for storing generated thumbnails (relative to data directory or absolute path)"
-														placeholder="data/thumbnails"
-														value={thumbnailCacheDir}
-														onChange={(e) =>
-															setThumbnailCacheDir(e.currentTarget.value)
+													<NumberInput
+														label="Max Dimension (pixels)"
+														description="Maximum width or height for generated thumbnails"
+														value={thumbnailMaxDimension}
+														onChange={(val) =>
+															setThumbnailMaxDimension(Number(val) || 400)
 														}
+														min={100}
+														max={2000}
+													/>
+
+													<NumberInput
+														label="JPEG Quality"
+														description="Quality for thumbnail images (higher = better quality but larger files)"
+														value={thumbnailJpegQuality}
+														onChange={(val) =>
+															setThumbnailJpegQuality(Number(val) || 85)
+														}
+														min={50}
+														max={100}
 													/>
 												</Stack>
 											</Collapse>

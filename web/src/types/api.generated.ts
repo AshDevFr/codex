@@ -578,6 +578,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/thumbnail/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate thumbnail for a single book
+         * @description Queues a task to generate (or regenerate) the thumbnail for a specific book.
+         *
+         *     # Permission Required
+         *     - `tasks:write`
+         */
+        post: operations["generate_book_thumbnail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/unread": {
         parameters: {
             query?: never;
@@ -1122,6 +1145,29 @@ export interface paths {
         get: operations["list_library_recently_updated_series"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{library_id}/thumbnails/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate thumbnails for all books in a library
+         * @description Queues a fan-out task that enqueues individual thumbnail generation tasks for each book in the library.
+         *
+         *     # Permission Required
+         *     - `tasks:write`
+         */
+        post: operations["generate_library_thumbnails"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1929,6 +1975,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/{series_id}/thumbnails/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate thumbnails for all books in a series
+         * @description Queues a fan-out task that enqueues individual thumbnail generation tasks for each book in the series.
+         *
+         *     # Permission Required
+         *     - `tasks:write`
+         */
+        post: operations["generate_series_thumbnails"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/{series_id}/unread": {
         parameters: {
             query?: never;
@@ -2268,6 +2337,38 @@ export interface paths {
          *     - `tasks:write`
          */
         post: operations["unlock_task"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/thumbnails/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate thumbnails for books in a scope
+         * @description This queues a fan-out task that enqueues individual thumbnail generation tasks for each book.
+         *
+         *     **Scope priority:**
+         *     1. If `series_id` is provided, only books in that series
+         *     2. If `library_id` is provided, only books in that library
+         *     3. If neither is provided, all books in all libraries
+         *
+         *     **Force behavior:**
+         *     - `force: false` (default): Only generates thumbnails for books that don't have one
+         *     - `force: true`: Regenerates all thumbnails, replacing existing ones
+         *
+         *     # Permission Required
+         *     - `tasks:write`
+         */
+        post: operations["generate_thumbnails"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3632,6 +3733,13 @@ export interface components {
             /** @description Full path to the entry */
             path: string;
         };
+        ForceRequest: {
+            /**
+             * @description If true, regenerate thumbnails even if they exist. If false (default), only generate missing thumbnails.
+             * @example false
+             */
+            force?: boolean;
+        };
         /** @description Full series metadata response including all related data */
         FullSeriesMetadataResponse: {
             /**
@@ -3726,6 +3834,25 @@ export interface components {
              * @example 1987
              */
             year?: number | null;
+        };
+        GenerateThumbnailsRequest: {
+            /**
+             * @description If true, regenerate all thumbnails even if they exist. If false (default), only generate missing thumbnails.
+             * @example false
+             */
+            force?: boolean;
+            /**
+             * Format: uuid
+             * @description Library ID to generate thumbnails for (optional)
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            library_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Series ID to generate thumbnails for (optional, takes precedence over library_id)
+             * @example 550e8400-e29b-41d4-a716-446655440001
+             */
+            series_id?: string | null;
         };
         /** @description Genre data transfer object */
         GenreDto: {
@@ -5898,10 +6025,19 @@ export interface components {
             /** @enum {string} */
             type: "refresh_metadata";
         } | {
+            force?: boolean;
             /** Format: uuid */
             library_id?: string | null;
+            /** Format: uuid */
+            series_id?: string | null;
             /** @enum {string} */
             type: "generate_thumbnails";
+        } | {
+            /** Format: uuid */
+            book_id: string;
+            force?: boolean;
+            /** @enum {string} */
+            type: "generate_thumbnail";
         } | {
             /** @enum {string} */
             type: "find_duplicates";
@@ -7727,6 +7863,47 @@ export interface operations {
             };
         };
     };
+    generate_book_thumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForceRequest"];
+            };
+        };
+        responses: {
+            /** @description Thumbnail generation task queued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateTaskResponse"];
+                };
+            };
+            /** @description Permission denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mark_book_as_unread: {
         parameters: {
             query?: never;
@@ -8786,6 +8963,47 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    generate_library_thumbnails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForceRequest"];
+            };
+        };
+        responses: {
+            /** @description Thumbnail generation task queued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateTaskResponse"];
+                };
+            };
+            /** @description Permission denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Library not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10804,6 +11022,47 @@ export interface operations {
             };
         };
     };
+    generate_series_thumbnails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForceRequest"];
+            };
+        };
+        responses: {
+            /** @description Thumbnail generation task queued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateTaskResponse"];
+                };
+            };
+            /** @description Permission denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mark_series_as_unread: {
         parameters: {
             query?: never;
@@ -11364,6 +11623,37 @@ export interface operations {
             };
             /** @description Task not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    generate_thumbnails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateThumbnailsRequest"];
+            };
+        };
+        responses: {
+            /** @description Thumbnail generation task queued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateTaskResponse"];
+                };
+            };
+            /** @description Permission denied */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

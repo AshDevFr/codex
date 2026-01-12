@@ -58,6 +58,8 @@ async fn test_analyze_book_queues_thumbnail_task_on_cover_available() {
         // Queue thumbnail generation task
         let task_type = TaskType::GenerateThumbnails {
             library_id: Some(series.library_id),
+            series_id: None,
+            force: false,
         };
 
         TaskRepository::enqueue(&db, task_type, 0, None)

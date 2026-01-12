@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
@@ -128,56 +129,84 @@ export const useLibraryPreferencesStore = create<LibraryPreferencesState>()(
  * Select the last active tab for a specific library.
  * Components using this will only re-render when the tab changes for THIS library.
  */
-export const selectLastTab = (libraryId: string) => (state: LibraryPreferencesState) => {
-	return state.libraries[libraryId]?.lastTab ?? DEFAULT_TAB;
-};
+export const selectLastTab =
+	(libraryId: string) => (state: LibraryPreferencesState) => {
+		return state.libraries[libraryId]?.lastTab ?? DEFAULT_TAB;
+	};
 
 /**
  * Select tab preferences for a specific library and tab.
  * Components using this will only re-render when preferences change for THIS specific tab.
  */
-export const selectTabPreferences = (libraryId: string, tab: string) => (
-	state: LibraryPreferencesState,
-) => {
-	return state.libraries[libraryId]?.tabs[tab];
-};
+export const selectTabPreferences =
+	(libraryId: string, tab: string) => (state: LibraryPreferencesState) => {
+		return state.libraries[libraryId]?.tabs[tab];
+	};
 
 /**
  * Select page size for a specific library and tab.
  */
-export const selectPageSize = (libraryId: string, tab: string) => (
-	state: LibraryPreferencesState,
-) => {
-	return state.libraries[libraryId]?.tabs[tab]?.pageSize;
-};
+export const selectPageSize =
+	(libraryId: string, tab: string) => (state: LibraryPreferencesState) => {
+		return state.libraries[libraryId]?.tabs[tab]?.pageSize;
+	};
 
 /**
  * Select sort preference for a specific library and tab.
  */
-export const selectSort = (libraryId: string, tab: string) => (
-	state: LibraryPreferencesState,
-) => {
-	return state.libraries[libraryId]?.tabs[tab]?.sort;
-};
+export const selectSort =
+	(libraryId: string, tab: string) => (state: LibraryPreferencesState) => {
+		return state.libraries[libraryId]?.tabs[tab]?.sort;
+	};
 
 /**
  * Select filters for a specific library and tab.
  */
-export const selectFilters = (libraryId: string, tab: string) => (
-	state: LibraryPreferencesState,
-) => {
-	return state.libraries[libraryId]?.tabs[tab]?.filters;
-};
+export const selectFilters =
+	(libraryId: string, tab: string) => (state: LibraryPreferencesState) => {
+		return state.libraries[libraryId]?.tabs[tab]?.filters;
+	};
 
 /**
  * Check if a library has any custom preferences set.
  * Useful for showing indicators or badges.
  */
-export const selectHasCustomPreferences = (libraryId: string) => (
-	state: LibraryPreferencesState,
-) => {
-	const library = state.libraries[libraryId];
-	if (!library) return false;
+export const selectHasCustomPreferences =
+	(libraryId: string) => (state: LibraryPreferencesState) => {
+		const library = state.libraries[libraryId];
+		if (!library) return false;
 
-	return library.lastTab !== DEFAULT_TAB || Object.keys(library.tabs).length > 0;
-};
+		return (
+			library.lastTab !== DEFAULT_TAB || Object.keys(library.tabs).length > 0
+		);
+	};
+
+// ============================================================================
+// Hydration Hook
+// ============================================================================
+
+/**
+ * Hook that returns true once the store has finished hydrating from localStorage.
+ * Use this to prevent flash of default values before persisted state loads.
+ *
+ * @example
+ * function MyComponent() {
+ *   const hasHydrated = useLibraryPreferencesHydrated();
+ *   if (!hasHydrated) return <Loader />;
+ *   // ... render with persisted preferences
+ * }
+ */
+export function useLibraryPreferencesHydrated(): boolean {
+	const [hasHydrated, setHasHydrated] = useState(
+		useLibraryPreferencesStore.persist.hasHydrated(),
+	);
+
+	useEffect(() => {
+		const unsub = useLibraryPreferencesStore.persist.onFinishHydration(() => {
+			setHasHydrated(true);
+		});
+		return unsub;
+	}, []);
+
+	return hasHydrated;
+}
