@@ -5,6 +5,7 @@
 
 pub mod book;
 pub mod common;
+pub mod number;
 pub mod series;
 
 // Re-export book naming types
@@ -15,6 +16,9 @@ pub use book::{
 
 // Re-export common types
 pub use common::{DetectedBook, DetectedSeries, SeriesMetadata};
+
+// Re-export number strategy types
+pub use number::{create_number_strategy, BookNumberStrategy, NumberContext, NumberMetadata};
 
 // Re-export series strategy types
 pub use series::{

@@ -1255,9 +1255,14 @@ describe("LibraryModal (Add Mode)", () => {
 			}
 
 			await waitFor(() => {
-				expect(screen.getByText("Smart Detection")).toBeInTheDocument();
+				// There may be multiple "Smart Detection" texts on the page
+				// (one for BookStrategy, one for NumberStrategy)
+				const smartOptions = screen.getAllByText("Smart Detection");
+				expect(smartOptions.length).toBeGreaterThan(0);
 			});
-			await user.click(screen.getByText("Smart Detection"));
+			// Click the first one (from the BookStrategy dropdown)
+			const smartOptions = screen.getAllByText("Smart Detection");
+			await user.click(smartOptions[0]);
 
 			// Submit form
 			await waitFor(() => {
@@ -1303,6 +1308,201 @@ describe("LibraryModal (Add Mode)", () => {
 
 			await waitFor(() => {
 				expect(screen.getByText("Preview Scan Results")).toBeInTheDocument();
+			});
+		});
+
+		it("should show number strategy selector when Strategy tab is clicked", async () => {
+			const user = userEvent.setup();
+			renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+
+			await waitFor(() => {
+				expect(screen.getByText("Add New Library")).toBeInTheDocument();
+			});
+
+			// Click on Strategy tab
+			const strategyTab = screen.getByRole("tab", { name: /strategy/i });
+			await user.click(strategyTab);
+
+			await waitFor(() => {
+				expect(screen.getByText("Series Detection Strategy")).toBeInTheDocument();
+				expect(screen.getByText("Book Naming Strategy")).toBeInTheDocument();
+				expect(screen.getByText("Book Number Strategy")).toBeInTheDocument();
+			});
+		});
+
+		it("should default to file_order number strategy", async () => {
+			const user = userEvent.setup();
+			renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+
+			await waitFor(() => {
+				expect(screen.getByText("Add New Library")).toBeInTheDocument();
+			});
+
+			// Click on Strategy tab
+			const strategyTab = screen.getByRole("tab", { name: /strategy/i });
+			await user.click(strategyTab);
+
+			await waitFor(() => {
+				// Check that the default number strategy is selected (Mantine shows label in textbox)
+				const textboxes = screen.getAllByRole("textbox", { hidden: true });
+				const hasFileOrder = textboxes.some(
+					(tb) => tb.getAttribute("value") === "File Order (Recommended)",
+				);
+				expect(hasFileOrder).toBe(true);
+			});
+		});
+
+		it("should include number strategy in create request with default value", async () => {
+			const user = userEvent.setup();
+			const mockLibrary = {
+				id: "1",
+				name: "Test Library",
+				path: "/home/user/Comics",
+				isActive: true,
+				createdAt: "2024-01-01T00:00:00Z",
+				updatedAt: "2024-01-01T00:00:00Z",
+				seriesStrategy: "series_volume" as const,
+				bookStrategy: "filename" as const,
+				numberStrategy: "file_order" as const,
+				defaultReadingDirection: "ltr",
+			};
+
+			vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+
+			renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+
+			// Wait for modal
+			const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+			const modalContent = within(modal);
+			const nameInput = await modalContent.findByPlaceholderText(
+				"Enter library name",
+				{},
+				{ timeout: 3000 },
+			);
+
+			// Fill in required fields
+			await user.clear(nameInput);
+			await user.type(nameInput, "Test Library");
+
+			// Set path
+			const browseButton = screen.getByText("Browse");
+			await user.click(browseButton);
+
+			const driveButton = await screen.findByText("Home Directory");
+			await user.click(driveButton);
+
+			const selectButton = await screen.findByText("Select This Folder");
+			await user.click(selectButton);
+
+			// Submit form without changing strategy (defaults should be used)
+			await waitFor(() => {
+				const createButton = screen.getByText("Create Library");
+				expect(createButton).not.toBeDisabled();
+			});
+
+			const createButton = screen.getByText("Create Library");
+			await user.click(createButton);
+
+			await waitFor(() => {
+				expect(librariesApi.create).toHaveBeenCalledWith(
+					expect.objectContaining({
+						name: "Test Library",
+						path: "/home/user",
+						seriesStrategy: "series_volume",
+						bookStrategy: "filename",
+						numberStrategy: "file_order",
+					}),
+				);
+			});
+		});
+
+		it("should include selected number strategy in create request", async () => {
+			const user = userEvent.setup();
+			const mockLibrary = {
+				id: "1",
+				name: "Manga Library",
+				path: "/home/user/Manga",
+				isActive: true,
+				createdAt: "2024-01-01T00:00:00Z",
+				updatedAt: "2024-01-01T00:00:00Z",
+				seriesStrategy: "series_volume_chapter" as const,
+				bookStrategy: "smart" as const,
+				numberStrategy: "smart" as const,
+				defaultReadingDirection: "rtl",
+			};
+
+			vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+
+			renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+
+			// Wait for modal
+			const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+			const modalContent = within(modal);
+			const nameInput = await modalContent.findByPlaceholderText(
+				"Enter library name",
+				{},
+				{ timeout: 3000 },
+			);
+
+			// Fill in required fields
+			await user.clear(nameInput);
+			await user.type(nameInput, "Manga Library");
+
+			// Set path
+			const browseButton = screen.getByText("Browse");
+			await user.click(browseButton);
+
+			const driveButton = await screen.findByText("Home Directory");
+			await user.click(driveButton);
+
+			const selectButton = await screen.findByText("Select This Folder");
+			await user.click(selectButton);
+
+			// Go to Strategy tab and change strategies
+			const strategyTab = screen.getByRole("tab", { name: /strategy/i });
+			await user.click(strategyTab);
+
+			await waitFor(() => {
+				expect(screen.getByText("Book Number Strategy")).toBeInTheDocument();
+			});
+
+			// Change number strategy to smart
+			const numberStrategySelect = screen
+				.getByText("Book Number Strategy")
+				.closest("div")
+				?.parentElement?.querySelector('input[type="text"]');
+			if (numberStrategySelect) {
+				await user.click(numberStrategySelect.parentElement as Element);
+			}
+
+			await waitFor(() => {
+				// Find the Smart Detection option in the number strategy dropdown
+				// There may be multiple "Smart Detection" texts on the page
+				const smartOptions = screen.getAllByText("Smart Detection");
+				expect(smartOptions.length).toBeGreaterThan(0);
+			});
+
+			// Click the Smart Detection option from the number strategy dropdown
+			const smartOptions = screen.getAllByText("Smart Detection");
+			// Click the last one which should be from the dropdown
+			await user.click(smartOptions[smartOptions.length - 1]);
+
+			// Submit form
+			await waitFor(() => {
+				const createButton = screen.getByText("Create Library");
+				expect(createButton).not.toBeDisabled();
+			});
+
+			const createButton = screen.getByText("Create Library");
+			await user.click(createButton);
+
+			await waitFor(() => {
+				expect(librariesApi.create).toHaveBeenCalledWith(
+					expect.objectContaining({
+						name: "Manga Library",
+						numberStrategy: "smart",
+					}),
+				);
 			});
 		});
 	});

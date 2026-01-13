@@ -36,7 +36,7 @@ export const librariesApi = {
 					scanningConfig?: ScanningConfig;
 			  },
 	): Promise<Library> => {
-		const response = await api.put<Library>(`/libraries/${id}`, library);
+		const response = await api.patch<Library>(`/libraries/${id}`, library);
 		return response.data;
 	},
 

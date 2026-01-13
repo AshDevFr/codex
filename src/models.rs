@@ -178,6 +178,75 @@ impl fmt::Display for BookStrategy {
 }
 
 // ============================================================================
+// Book Number Strategy
+// ============================================================================
+
+/// Book number strategy type for determining book ordering numbers
+///
+/// Determines how individual book numbers are resolved for sorting and display.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum NumberStrategy {
+    /// Use file position in sorted directory listing (default)
+    /// Books are numbered 1, 2, 3... based on alphabetical sort order
+    #[default]
+    FileOrder,
+
+    /// Use ComicInfo/metadata number field only, no fallback
+    Metadata,
+
+    /// Parse number from filename patterns (#001, v01, c001, etc.)
+    Filename,
+
+    /// Smart fallback chain: metadata → filename patterns → file order
+    Smart,
+}
+
+impl NumberStrategy {
+    /// Convert to string representation for database storage
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::FileOrder => "file_order",
+            Self::Metadata => "metadata",
+            Self::Filename => "filename",
+            Self::Smart => "smart",
+        }
+    }
+
+    /// Parse from string representation
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "file_order" => Some(Self::FileOrder),
+            "metadata" => Some(Self::Metadata),
+            "filename" => Some(Self::Filename),
+            "smart" => Some(Self::Smart),
+            _ => None,
+        }
+    }
+
+    /// Get all available strategies
+    pub fn all() -> Vec<Self> {
+        vec![Self::FileOrder, Self::Metadata, Self::Filename, Self::Smart]
+    }
+
+    /// Get human-readable description
+    pub fn description(&self) -> &'static str {
+        match self {
+            Self::FileOrder => "Use file position in sorted directory listing (default)",
+            Self::Metadata => "Use ComicInfo/metadata number field only",
+            Self::Filename => "Parse number from filename patterns (#001, v01, c001, etc.)",
+            Self::Smart => "Smart fallback: metadata → filename → file order",
+        }
+    }
+}
+
+impl fmt::Display for NumberStrategy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+// ============================================================================
 // Strategy Configuration Types
 // ============================================================================
 
@@ -484,5 +553,29 @@ mod tests {
         assert!(config.read_opf_metadata);
         assert!(config.author_from_folder);
         assert_eq!(config.series_mode, CalibreSeriesMode::FromMetadata);
+    }
+
+    #[test]
+    fn test_number_strategy_roundtrip() {
+        for strategy in NumberStrategy::all() {
+            let s = strategy.as_str();
+            let parsed = NumberStrategy::from_str(s);
+            assert_eq!(parsed, Some(strategy), "Failed roundtrip for {}", s);
+        }
+    }
+
+    #[test]
+    fn test_number_strategy_serde() {
+        let strategy = NumberStrategy::FileOrder;
+        let json = serde_json::to_string(&strategy).unwrap();
+        assert_eq!(json, "\"file_order\"");
+
+        let parsed: NumberStrategy = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, strategy);
+    }
+
+    #[test]
+    fn test_number_strategy_default() {
+        assert_eq!(NumberStrategy::default(), NumberStrategy::FileOrder);
     }
 }

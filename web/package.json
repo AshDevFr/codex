@@ -13,7 +13,8 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "generate:types": "openapi-typescript ./openapi.json -o ./src/types/api.generated.ts"
+    "generate:types": "openapi-typescript ./openapi.json -o ./src/types/api.generated.ts",
+    "generate:fixtures": "node scripts/generate-fixtures.mjs"
   },
   "dependencies": {
     "@mantine/core": "^7.14.0",
@@ -28,10 +29,14 @@
     "cron-parser": "^5.4.0",
     "cronstrue": "^3.9.0",
     "date-fns": "^4.1.0",
+    "epubjs": "^0.3.93",
     "es-toolkit": "^1.43.0",
     "immer": "^11.1.3",
+    "pdfjs-dist": "^4.10.38",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-pdf": "^9.2.1",
+    "react-reader": "^2.0.15",
     "react-router-dom": "^7.1.3",
     "zod": "^3.24.1",
     "zustand": "^5.0.2"

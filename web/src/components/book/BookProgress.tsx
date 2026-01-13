@@ -15,7 +15,7 @@ export function BookProgress({ progress, pageCount }: BookProgressProps) {
 		);
 	}
 
-	const currentPage = progress.current_page + 1; // Convert from 0-indexed
+	const currentPage = progress.current_page; // Already 1-indexed
 	const percentage = pageCount > 0 ? (currentPage / pageCount) * 100 : 0;
 
 	if (progress.completed) {

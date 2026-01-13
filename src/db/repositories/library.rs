@@ -6,7 +6,7 @@ use sea_orm::{
 use uuid::Uuid;
 
 use crate::db::entities::{libraries, prelude::*};
-use crate::models::{BookStrategy, SeriesStrategy};
+use crate::models::{BookStrategy, NumberStrategy, SeriesStrategy};
 
 /// Parameters for creating a new library
 #[derive(Debug, Clone)]
@@ -17,6 +17,8 @@ pub struct CreateLibraryParams {
     pub series_config: Option<serde_json::Value>,
     pub book_strategy: BookStrategy,
     pub book_config: Option<serde_json::Value>,
+    pub number_strategy: NumberStrategy,
+    pub number_config: Option<serde_json::Value>,
     pub scanning_config: Option<String>,
     pub default_reading_direction: Option<String>,
     pub allowed_formats: Option<String>,
@@ -33,6 +35,8 @@ impl CreateLibraryParams {
             series_config: None,
             book_strategy: BookStrategy::default(),
             book_config: None,
+            number_strategy: NumberStrategy::default(),
+            number_config: None,
             scanning_config: None,
             default_reading_direction: None,
             allowed_formats: None,
@@ -57,6 +61,16 @@ impl CreateLibraryParams {
 
     pub fn with_book_config(mut self, config: Option<serde_json::Value>) -> Self {
         self.book_config = config;
+        self
+    }
+
+    pub fn with_number_strategy(mut self, strategy: NumberStrategy) -> Self {
+        self.number_strategy = strategy;
+        self
+    }
+
+    pub fn with_number_config(mut self, config: Option<serde_json::Value>) -> Self {
+        self.number_config = config;
         self
     }
 
@@ -85,6 +99,8 @@ impl LibraryRepository {
             series_config: Set(params.series_config),
             book_strategy: Set(params.book_strategy.as_str().to_string()),
             book_config: Set(params.book_config),
+            number_strategy: Set(params.number_strategy.as_str().to_string()),
+            number_config: Set(params.number_config),
             scanning_config: Set(params.scanning_config),
             default_reading_direction: Set(params
                 .default_reading_direction
@@ -149,6 +165,8 @@ impl LibraryRepository {
             series_config: Set(library.series_config.clone()),
             book_strategy: Set(library.book_strategy.clone()),
             book_config: Set(library.book_config.clone()),
+            number_strategy: Set(library.number_strategy.clone()),
+            number_config: Set(library.number_config.clone()),
             scanning_config: Set(library.scanning_config.clone()),
             default_reading_direction: Set(library.default_reading_direction.clone()),
             allowed_formats: Set(library.allowed_formats.clone()),
@@ -203,6 +221,11 @@ impl LibraryRepository {
     /// Get the book strategy for a library
     pub fn get_book_strategy(library: &libraries::Model) -> BookStrategy {
         BookStrategy::from_str(&library.book_strategy).unwrap_or_default()
+    }
+
+    /// Get the number strategy for a library
+    pub fn get_number_strategy(library: &libraries::Model) -> NumberStrategy {
+        NumberStrategy::from_str(&library.number_strategy).unwrap_or_default()
     }
 }
 
@@ -639,5 +662,59 @@ mod tests {
 
         let strategy = LibraryRepository::get_book_strategy(&library);
         assert_eq!(strategy, BookStrategy::Smart);
+    }
+
+    #[tokio::test]
+    async fn test_get_number_strategy() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let params =
+            CreateLibraryParams::new("Test", "/test").with_number_strategy(NumberStrategy::Smart);
+
+        let library = LibraryRepository::create_with_params(db.sea_orm_connection(), params)
+            .await
+            .unwrap();
+
+        let strategy = LibraryRepository::get_number_strategy(&library);
+        assert_eq!(strategy, NumberStrategy::Smart);
+    }
+
+    #[tokio::test]
+    async fn test_library_default_number_strategy() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Should default to file_order
+        assert_eq!(library.number_strategy, "file_order");
+        assert_eq!(
+            LibraryRepository::get_number_strategy(&library),
+            NumberStrategy::FileOrder
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_library_with_all_strategies() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let params = CreateLibraryParams::new("Full Strategy Library", "/full/path")
+            .with_series_strategy(SeriesStrategy::SeriesVolumeChapter)
+            .with_book_strategy(BookStrategy::Smart)
+            .with_number_strategy(NumberStrategy::Filename);
+
+        let library = LibraryRepository::create_with_params(db.sea_orm_connection(), params)
+            .await
+            .unwrap();
+
+        assert_eq!(library.series_strategy, "series_volume_chapter");
+        assert_eq!(library.book_strategy, "smart");
+        assert_eq!(library.number_strategy, "filename");
     }
 }

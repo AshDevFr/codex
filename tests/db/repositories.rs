@@ -228,6 +228,7 @@ async fn test_user_read_progress() {
         user_id: Set(user.id),
         book_id: Set(book.id),
         current_page: Set(1),
+        progress_percentage: Set(None),
         completed: Set(false),
         started_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),

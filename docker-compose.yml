@@ -188,8 +188,13 @@ services:
       # This is used by vite.config.ts proxy configuration
       VITE_API_URL: http://codex-dev:8080
     volumes:
-      - ./web:/app
-      - node_modules:/app/node_modules # Anonymous volume to preserve container's node_modules
+      - ./web/src:/app/src
+      - ./web/public:/app/public
+      - ./web/index.html:/app/index.html
+      - ./web/vite.config.ts:/app/vite.config.ts
+      - ./web/tsconfig.json:/app/tsconfig.json
+      - ./web/package.json:/app/package.json
+      - node_modules:/app/node_modules # Named volume to preserve container's node_modules
     depends_on:
       - codex-dev
     networks:

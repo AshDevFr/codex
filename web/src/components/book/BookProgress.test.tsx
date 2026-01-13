@@ -42,21 +42,20 @@ describe("BookProgress", () => {
 
 	it("should show progress bar when reading in progress", () => {
 		const progress = {
-			current_page: 49, // 0-indexed, so this is page 50
+			current_page: 50, // 1-indexed
 			completed: false,
 			completed_at: null,
 		};
 
 		renderWithProviders(<BookProgress progress={progress} pageCount={100} />);
 
-		// Current page should be displayed as 1-indexed (50)
 		expect(screen.getByText(/Page 50 of 100/)).toBeInTheDocument();
 		expect(screen.getByText(/\(50%\)/)).toBeInTheDocument();
 	});
 
 	it("should calculate percentage correctly", () => {
 		const progress = {
-			current_page: 24, // 0-indexed, so this is page 25
+			current_page: 25, // 1-indexed
 			completed: false,
 			completed_at: null,
 		};
@@ -67,9 +66,9 @@ describe("BookProgress", () => {
 		expect(screen.getByText(/\(25%\)/)).toBeInTheDocument();
 	});
 
-	it("should handle first page (0-indexed)", () => {
+	it("should handle first page (1-indexed)", () => {
 		const progress = {
-			current_page: 0,
+			current_page: 1, // 1-indexed
 			completed: false,
 			completed_at: null,
 		};
@@ -82,7 +81,7 @@ describe("BookProgress", () => {
 
 	it("should handle edge case of zero page count", () => {
 		const progress = {
-			current_page: 0,
+			current_page: 1,
 			completed: false,
 			completed_at: null,
 		};

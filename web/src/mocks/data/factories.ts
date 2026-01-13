@@ -17,7 +17,8 @@ export type BookDto = components["schemas"]["BookDto"];
 // Extended mock types with additional fields for UI convenience
 export type MockLibrary = LibraryDto;
 export type MockSeries = SeriesDto & { libraryName?: string };
-export type MockBook = BookDto;
+// MockBook includes libraryId for mock filtering (books are associated with libraries via series)
+export type MockBook = BookDto & { libraryId?: string };
 export type ReadProgressResponse = components["schemas"]["ReadProgressResponse"];
 export type MetricsDto = components["schemas"]["MetricsDto"];
 export type LibraryMetricsDto = components["schemas"]["LibraryMetricsDto"];
@@ -86,6 +87,9 @@ export const createLibrary = (overrides: Partial<LibraryDto> = {}): LibraryDto =
 		allowedFormats: ["CBZ", "CBR", "PDF", "EPUB"],
 		excludedPatterns: ".DS_Store\nThumbs.db",
 		defaultReadingDirection: "ltr",
+		seriesStrategy: "series_volume",
+		bookStrategy: "smart",
+		numberStrategy: "smart",
 		...overrides,
 	};
 };
@@ -135,8 +139,9 @@ export const createSeries = (overrides: Partial<MockSeries> = {}): MockSeries =>
 
 /**
  * Book factory - matches BookDto schema
+ * Note: libraryId is an extension for mock filtering (books are associated with libraries via series)
  */
-export const createBook = (overrides: Partial<BookDto> = {}): BookDto => {
+export const createBook = (overrides: Partial<MockBook> = {}): MockBook => {
 	const seriesName =
 		overrides.seriesName ||
 		faker.helpers.arrayElement([
@@ -164,6 +169,7 @@ export const createBook = (overrides: Partial<BookDto> = {}): BookDto => {
 		createdAt: faker.date.past().toISOString(),
 		updatedAt: faker.date.recent().toISOString(),
 		readProgress: null,
+		readingDirection: "ltr",
 		deleted: false,
 		...overrides,
 	};

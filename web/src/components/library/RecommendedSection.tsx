@@ -89,7 +89,7 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 			{limitedInProgressBooks.length > 0 && (
 				<HorizontalCarousel title="Keep Reading">
 					{limitedInProgressBooks.map((book) => (
-						<MediaCard key={book.id} type="book" data={book} showProgress />
+						<MediaCard key={book.id} type="book" data={book} />
 					))}
 				</HorizontalCarousel>
 			)}
@@ -143,7 +143,7 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 					subtitle="Books you've read recently"
 				>
 					{recentlyReadBooks.map((book) => (
-						<MediaCard key={book.id} type="book" data={book} showProgress />
+						<MediaCard key={book.id} type="book" data={book} />
 					))}
 				</HorizontalCarousel>
 			)}

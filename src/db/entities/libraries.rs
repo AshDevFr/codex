@@ -20,6 +20,11 @@ pub struct Model {
     /// Book strategy-specific configuration (JSON)
     #[sea_orm(column_type = "Json")]
     pub book_config: Option<serde_json::Value>,
+    /// Book number strategy (file_order, metadata, filename, smart)
+    pub number_strategy: String,
+    /// Number strategy-specific configuration (JSON)
+    #[sea_orm(column_type = "Json")]
+    pub number_config: Option<serde_json::Value>,
     /// Legacy: stores cron/scan settings (kept for backward compatibility)
     pub scanning_config: Option<String>,
     pub default_reading_direction: String,

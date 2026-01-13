@@ -5,6 +5,8 @@ import { renderWithProviders } from "@/test/utils";
 import {
 	BOOK_STRATEGIES,
 	BookStrategySelector,
+	NUMBER_STRATEGIES,
+	NumberStrategySelector,
 	SERIES_STRATEGIES,
 	SeriesStrategySelector,
 } from "./StrategySelector";
@@ -306,6 +308,126 @@ describe("BookStrategySelector", () => {
 	});
 });
 
+describe("NumberStrategySelector", () => {
+	it("renders with default file_order strategy selected", () => {
+		const onChange = vi.fn();
+
+		renderWithProviders(
+			<NumberStrategySelector value="file_order" onChange={onChange} />,
+		);
+
+		expect(screen.getByText("Book Number Strategy")).toBeInTheDocument();
+		// Mantine Select displays the label in the textbox, not the value
+		expect(
+			screen.getByRole("textbox", { hidden: true }),
+		).toHaveValue("File Order (Recommended)");
+	});
+
+	it("displays description for selected strategy", () => {
+		const onChange = vi.fn();
+
+		renderWithProviders(
+			<NumberStrategySelector value="file_order" onChange={onChange} />,
+		);
+
+		const fileOrderStrategy = NUMBER_STRATEGIES.find(
+			(s) => s.value === "file_order",
+		);
+		expect(screen.getByText(fileOrderStrategy!.description)).toBeInTheDocument();
+	});
+
+	it("calls onChange when strategy is changed", async () => {
+		const user = userEvent.setup();
+		const onChange = vi.fn();
+
+		renderWithProviders(
+			<NumberStrategySelector value="file_order" onChange={onChange} />,
+		);
+
+		// Open the select dropdown
+		const select = screen.getByRole("textbox", { hidden: true });
+		await user.click(select.parentElement!);
+
+		// Select a different strategy
+		await waitFor(() => {
+			expect(screen.getByText("Metadata Only")).toBeInTheDocument();
+		});
+		await user.click(screen.getByText("Metadata Only"));
+
+		expect(onChange).toHaveBeenCalledWith("metadata");
+	});
+
+	it("disables select when disabled prop is true", () => {
+		const onChange = vi.fn();
+
+		renderWithProviders(
+			<NumberStrategySelector value="file_order" onChange={onChange} disabled />,
+		);
+
+		const select = screen.getByRole("textbox", { hidden: true });
+		expect(select).toBeDisabled();
+	});
+
+	it("shows all number strategy options", async () => {
+		const user = userEvent.setup();
+		const onChange = vi.fn();
+
+		renderWithProviders(
+			<NumberStrategySelector value="file_order" onChange={onChange} />,
+		);
+
+		// Open the select dropdown
+		const select = screen.getByRole("textbox", { hidden: true });
+		await user.click(select.parentElement!);
+
+		await waitFor(() => {
+			expect(screen.getByText("File Order (Recommended)")).toBeInTheDocument();
+			expect(screen.getByText("Metadata Only")).toBeInTheDocument();
+			expect(screen.getByText("Filename Patterns")).toBeInTheDocument();
+			expect(screen.getByText("Smart Detection")).toBeInTheDocument();
+		});
+	});
+
+	it("displays correct description for metadata strategy", () => {
+		const onChange = vi.fn();
+
+		renderWithProviders(
+			<NumberStrategySelector value="metadata" onChange={onChange} />,
+		);
+
+		const metadataStrategy = NUMBER_STRATEGIES.find(
+			(s) => s.value === "metadata",
+		);
+		expect(screen.getByText(metadataStrategy!.description)).toBeInTheDocument();
+	});
+
+	it("displays correct description for filename strategy", () => {
+		const onChange = vi.fn();
+
+		renderWithProviders(
+			<NumberStrategySelector value="filename" onChange={onChange} />,
+		);
+
+		const filenameStrategy = NUMBER_STRATEGIES.find(
+			(s) => s.value === "filename",
+		);
+		expect(screen.getByText(filenameStrategy!.description)).toBeInTheDocument();
+	});
+
+	it("displays correct description for smart strategy", () => {
+		const onChange = vi.fn();
+
+		renderWithProviders(
+			<NumberStrategySelector value="smart" onChange={onChange} />,
+		);
+
+		const smartStrategy = NUMBER_STRATEGIES.find(
+			(s) => s.value === "smart",
+		);
+		expect(screen.getByText(smartStrategy!.description)).toBeInTheDocument();
+	});
+});
+
 describe("Strategy data constants", () => {
 	it("SERIES_STRATEGIES contains all expected strategies", () => {
 		const strategyValues = SERIES_STRATEGIES.map((s) => s.value);
@@ -327,6 +449,15 @@ describe("Strategy data constants", () => {
 		expect(BOOK_STRATEGIES).toHaveLength(4);
 	});
 
+	it("NUMBER_STRATEGIES contains all expected strategies", () => {
+		const strategyValues = NUMBER_STRATEGIES.map((s) => s.value);
+		expect(strategyValues).toContain("file_order");
+		expect(strategyValues).toContain("metadata");
+		expect(strategyValues).toContain("filename");
+		expect(strategyValues).toContain("smart");
+		expect(NUMBER_STRATEGIES).toHaveLength(4);
+	});
+
 	it("all series strategies have required fields", () => {
 		for (const strategy of SERIES_STRATEGIES) {
 			expect(strategy.value).toBeTruthy();
@@ -339,6 +470,14 @@ describe("Strategy data constants", () => {
 
 	it("all book strategies have required fields", () => {
 		for (const strategy of BOOK_STRATEGIES) {
+			expect(strategy.value).toBeTruthy();
+			expect(strategy.label).toBeTruthy();
+			expect(strategy.description).toBeTruthy();
+		}
+	});
+
+	it("all number strategies have required fields", () => {
+		for (const strategy of NUMBER_STRATEGIES) {
 			expect(strategy.value).toBeTruthy();
 			expect(strategy.label).toBeTruthy();
 			expect(strategy.description).toBeTruthy();

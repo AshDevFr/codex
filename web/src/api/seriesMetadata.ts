@@ -104,7 +104,7 @@ export const seriesMetadataApi = {
 		title?: string,
 		label?: string,
 	): Promise<AlternateTitle> => {
-		const response = await api.put<AlternateTitle>(
+		const response = await api.patch<AlternateTitle>(
 			`/series/${seriesId}/alternate-titles/${titleId}`,
 			{ title, label },
 		);

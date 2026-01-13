@@ -105,6 +105,7 @@ for (let seriesIndex = 0; seriesIndex < mockSeries.length; seriesIndex++) {
     const book = createBook({
       seriesId: series.id,
       seriesName: series.name,
+      libraryId: series.libraryId,
       number: i + 1,
     });
 
@@ -178,6 +179,7 @@ export const resetMockData = () => {
       const book = createBook({
         seriesId: series.id,
         seriesName: series.name,
+        libraryId: series.libraryId,
         number: i + 1,
       });
 

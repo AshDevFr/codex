@@ -21,7 +21,7 @@ pub struct Model {
     pub status: Option<String>, // ongoing, ended, hiatus, abandoned, unknown
     pub age_rating: Option<i32>,
     pub language: Option<String>,          // BCP47: "en", "ja", "ko"
-    pub reading_direction: Option<String>, // ltr, rtl, ttb, btt
+    pub reading_direction: Option<String>, // ltr, rtl, ttb
     pub year: Option<i32>,
     pub total_book_count: Option<i32>, // Expected total (for ongoing series)
     // Lock fields

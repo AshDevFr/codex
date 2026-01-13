@@ -20,6 +20,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(ReadProgress::UserId).uuid().not_null())
                     .col(ColumnDef::new(ReadProgress::BookId).uuid().not_null())
                     .col(integer(ReadProgress::CurrentPage))
+                    .col(ColumnDef::new(ReadProgress::ProgressPercentage).double())
                     .col(boolean(ReadProgress::Completed))
                     .col(
                         ColumnDef::new(ReadProgress::StartedAt)
@@ -69,6 +70,7 @@ enum ReadProgress {
     UserId,
     BookId,
     CurrentPage,
+    ProgressPercentage,
     Completed,
     StartedAt,
     UpdatedAt,

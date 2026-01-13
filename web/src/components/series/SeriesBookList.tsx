@@ -197,7 +197,7 @@ export function SeriesBookList({
 								onClick={() => handleBookClick(book.id)}
 								style={{ cursor: "pointer" }}
 							>
-								<MediaCard type="book" data={book} />
+								<MediaCard type="book" data={book} hideSeriesName />
 							</Box>
 						))}
 					</SimpleGrid>

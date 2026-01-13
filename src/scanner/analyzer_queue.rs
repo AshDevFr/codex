@@ -14,9 +14,12 @@ use crate::db::repositories::{
     SeriesMetadataRepository, SeriesRepository, TaskRepository,
 };
 use crate::events::EventBroadcaster;
-use crate::models::BookStrategy;
+use crate::models::{BookStrategy, NumberStrategy};
 use crate::scanner::analyze_file;
-use crate::scanner::strategies::{create_book_strategy, BookMetadata, BookNamingContext};
+use crate::scanner::strategies::{
+    create_book_strategy, create_number_strategy, BookMetadata, BookNamingContext, NumberContext,
+    NumberMetadata,
+};
 use crate::tasks::types::TaskType;
 
 use super::types::ScanProgress;
@@ -170,22 +173,21 @@ async fn analyze_single_book(
     // Track if cover is becoming available (page_count going from 0 to positive)
     let cover_now_available = book.page_count == 0 && metadata.page_count > 0;
 
-    // Get book number from metadata
-    let book_number: Option<f32> = metadata
+    // Get book number from metadata (for use in title resolution)
+    let metadata_number: Option<f32> = metadata
         .comic_info
         .as_ref()
         .and_then(|ci| ci.number.as_ref())
         .and_then(|n| n.parse::<f32>().ok());
 
-    // Resolve book title using the library's book naming strategy
-    book.title = Some(resolve_book_title(db, &book, &metadata, book_number).await);
+    // Resolve book number using the library's number strategy
+    let resolved_number = resolve_book_number(db, &book, &metadata, metadata_number).await;
 
-    book.number = metadata.comic_info.as_ref().and_then(|ci| {
-        ci.number
-            .as_ref()
-            .and_then(|n| n.parse::<f64>().ok())
-            .map(|v| Decimal::from_f64_retain(v).unwrap_or_default())
-    });
+    // Resolve book title using the library's book naming strategy
+    book.title = Some(resolve_book_title(db, &book, &metadata, resolved_number).await);
+
+    // Store the resolved number
+    book.number = resolved_number.map(|n| Decimal::from_f64_retain(n as f64).unwrap_or_default());
     book.file_size = metadata.file_size as i64;
     book.file_hash = metadata.file_hash.clone();
     book.partial_hash = partial_hash;
@@ -499,6 +501,85 @@ fn filename_fallback(file_name: &str) -> String {
     } else {
         file_name.to_string()
     }
+}
+
+/// Resolve book number using the library's number strategy
+async fn resolve_book_number(
+    db: &DatabaseConnection,
+    book: &books::Model,
+    _file_metadata: &crate::parsers::BookMetadata,
+    metadata_number: Option<f32>,
+) -> Option<f32> {
+    // Get library to determine number strategy
+    let library = match LibraryRepository::get_by_id(db, book.library_id).await {
+        Ok(Some(lib)) => lib,
+        Ok(None) | Err(_) => {
+            // Fallback to file_order (default) if library not found
+            warn!(
+                "Library not found for book {}, using file_order strategy",
+                book.id
+            );
+            // We don't have file order position here, so fall back to metadata
+            return metadata_number;
+        }
+    };
+
+    // Parse number strategy from library
+    let number_strategy =
+        NumberStrategy::from_str(&library.number_strategy).unwrap_or(NumberStrategy::FileOrder);
+    let number_config_str = library.number_config.as_ref().map(|v| v.to_string());
+    let strategy = create_number_strategy(number_strategy, number_config_str.as_deref());
+
+    // For file_order strategy, we need the book's position in the series
+    // Get total books in series and calculate position
+    let (file_order_position, total_books) =
+        match get_book_position_in_series(db, book.series_id, &book.file_name).await {
+            Ok((pos, total)) => (pos, total),
+            Err(_) => {
+                // Fallback: use 1 as position if we can't determine
+                warn!(
+                    "Could not determine file order position for book {}, using 1",
+                    book.id
+                );
+                (1, 1)
+            }
+        };
+
+    // Build number metadata
+    let number_metadata = NumberMetadata {
+        number: metadata_number,
+    };
+
+    // Build number context
+    let context = NumberContext::new(file_order_position, total_books);
+
+    // Resolve number using strategy
+    strategy.resolve_number(&book.file_name, Some(&number_metadata), &context)
+}
+
+/// Get the position of a book within its series (sorted alphabetically by filename)
+async fn get_book_position_in_series(
+    db: &DatabaseConnection,
+    series_id: Uuid,
+    file_name: &str,
+) -> Result<(usize, usize)> {
+    // Get all books in the series (not including deleted)
+    let books = BookRepository::list_by_series(db, series_id, false).await?;
+
+    let total = books.len();
+
+    // Sort by filename to match file_order strategy behavior
+    let mut sorted_names: Vec<&str> = books.iter().map(|b| b.file_name.as_str()).collect();
+    sorted_names.sort();
+
+    // Find position of this book (1-indexed)
+    let position = sorted_names
+        .iter()
+        .position(|name| *name == file_name)
+        .map(|p| p + 1) // Convert to 1-indexed
+        .unwrap_or(1); // Fallback to 1 if not found
+
+    Ok((position, total))
 }
 
 /// Helper function to count non-null fields in metadata for logging

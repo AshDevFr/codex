@@ -45,8 +45,8 @@ function formatReadingDirection(dir?: string | null): string | null {
 	const map: Record<string, string> = {
 		ltr: "Left to Right",
 		rtl: "Right to Left",
-		ttb: "Top to Bottom",
-		btt: "Bottom to Top",
+		ttb: "Vertical",
+		webtoon: "Webtoon",
 	};
 	return map[dir] || dir;
 }

@@ -4,12 +4,15 @@ import {
 	Group,
 	Image,
 	Menu,
+	Progress,
 	Stack,
 	Text,
+	Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import {
 	IconAnalyze,
+	IconBookFilled,
 	IconBookOff,
 	IconCheck,
 	IconDotsVertical,
@@ -25,10 +28,10 @@ import type { Book, Series } from "@/types";
 interface MediaCardProps {
 	type: "book" | "series";
 	data: Book | Series;
-	showProgress?: boolean;
+	hideSeriesName?: boolean;
 }
 
-export function MediaCard({ type, data, showProgress }: MediaCardProps) {
+export function MediaCard({ type, data, hideSeriesName = false }: MediaCardProps) {
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 
@@ -70,6 +73,22 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 			return () => clearTimeout(timer);
 		}
 	}, [data.createdAt]);
+
+	// Handle read button click - navigate directly to reader
+	const handleReadClick = (e: React.MouseEvent) => {
+		e.stopPropagation();
+		if (type === "book" && book) {
+			// Start from current page if there's progress, otherwise page 1
+			const page = book.readProgress?.current_page || 1;
+			navigate(`/reader/${book.id}?page=${page}`);
+		}
+	};
+
+	// Calculate progress percentage for books
+	const progressPercentage =
+		book && book.readProgress && book.pageCount
+			? (book.readProgress.current_page / book.pageCount) * 100
+			: 0;
 
 	// Book analysis mutation
 	const bookAnalyzeMutation = useMutation({
@@ -266,6 +285,7 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 			<Stack gap={0} style={{ height: "100%", minHeight: 0 }}>
 				{/* Cover Image - Fixed height section (Komga ratio: 150px width, 212.125px height = 1.414) */}
 				<div
+					className="media-card-cover"
 					style={{
 						position: "relative",
 						width: "100%",
@@ -459,34 +479,87 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 							</Menu.Dropdown>
 						</Menu>
 					</div>
+					{/* Read button overlay - shows on hover for books only */}
+					{type === "book" && !book?.deleted && (
+						<div
+							className="media-card-read-overlay"
+							style={{
+								position: "absolute",
+								top: 0,
+								left: 0,
+								right: 0,
+								bottom: 0,
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "center",
+								backgroundColor: "rgba(0, 0, 0, 0.5)",
+								opacity: 0,
+								transition: "opacity 0.2s ease",
+								zIndex: 1,
+								pointerEvents: "none",
+							}}
+						>
+							<ActionIcon
+								variant="filled"
+								color="red"
+								size={56}
+								radius="xl"
+								onClick={handleReadClick}
+								style={{ pointerEvents: "auto" }}
+								aria-label="Read book"
+							>
+								<IconBookFilled size={28} />
+							</ActionIcon>
+						</div>
+					)}
+					{/* Progress bar - shows at bottom of cover for books with progress */}
+					{type === "book" && book?.readProgress && !book.readProgress.completed && progressPercentage > 0 && (
+						<Progress
+							value={progressPercentage}
+							size="sm"
+							color="red"
+							style={{
+								position: "absolute",
+								bottom: 0,
+								left: 0,
+								right: 0,
+								zIndex: 4,
+								borderRadius: 0,
+							}}
+						/>
+					)}
 				</div>
 				{/* Card Content - Fixed height section (Komga: 94px = 5.875rem at 16px base) */}
 				<Stack gap={4} p="sm" style={{ flexShrink: 0, height: "5.875rem", minHeight: "5.875rem", overflow: "visible" }}>
-					{type === "book" && book?.seriesName && book.seriesName.trim() !== "" && book.seriesName.trim() !== "-" && (
-						<Text
-							fw={500}
-							lineClamp={1}
-							c="dimmed"
-							size="xs"
-							onClick={(e: React.MouseEvent) => {
-								e.stopPropagation();
-								navigate(`/series/${book.seriesId}`);
-							}}
-							style={{
-								overflow: "hidden",
-								textOverflow: "ellipsis",
-								whiteSpace: "nowrap",
-								display: "block",
-								cursor: "pointer",
-							}}
-							className="hover-underline"
-						>
-							{book.seriesName}
-						</Text>
+					{!hideSeriesName && type === "book" && book?.seriesName && book.seriesName.trim() !== "" && book.seriesName.trim() !== "-" && (
+						<Tooltip label={book.seriesName} openDelay={500} multiline maw={300}>
+							<Text
+								fw={500}
+								lineClamp={1}
+								c="dimmed"
+								size="xs"
+								onClick={(e: React.MouseEvent) => {
+									e.stopPropagation();
+									navigate(`/series/${book.seriesId}`);
+								}}
+								style={{
+									overflow: "hidden",
+									textOverflow: "ellipsis",
+									whiteSpace: "nowrap",
+									display: "block",
+									cursor: "pointer",
+								}}
+								className="hover-underline"
+							>
+								{book.seriesName}
+							</Text>
+						</Tooltip>
 					)}
-					<Text fw={600} lineClamp={1} size="sm" style={{ overflow: "hidden" }}>
-						{title}
-					</Text>
+					<Tooltip label={title} openDelay={500} multiline maw={300}>
+						<Text fw={600} lineClamp={hideSeriesName ? 2 : 1} size="sm" style={{ overflow: "hidden" }}>
+							{title}
+						</Text>
+					</Tooltip>
 					<Group gap="xs" mt="auto" style={{ flexShrink: 0 }}>
 						{book && (
 							<>
@@ -515,11 +588,6 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 							</>
 						)}
 					</Group>
-					{showProgress && type === "book" && (
-						<Text size="xs" c="blue">
-							Continue reading
-						</Text>
-					)}
 				</Stack>
 			</Stack>
 		</Card>

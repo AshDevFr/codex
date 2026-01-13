@@ -102,7 +102,7 @@ async fn test_mark_book_as_read() {
     let progress = response.unwrap();
     assert_eq!(progress.book_id, book.id);
     assert_eq!(progress.user_id, user_id);
-    assert_eq!(progress.current_page, 49); // 0-indexed, so last page is 49
+    assert_eq!(progress.current_page, 50); // 1-indexed, last page = page_count
     assert!(progress.completed);
     assert!(progress.completed_at.is_some());
 }
@@ -236,7 +236,7 @@ async fn test_mark_series_as_read() {
             .unwrap()
             .unwrap();
         assert!(progress.completed);
-        assert_eq!(progress.current_page, 49); // 0-indexed
+        assert_eq!(progress.current_page, 50); // 1-indexed, last page = page_count
     }
 }
 

@@ -18,8 +18,8 @@ const STATUS_DISPLAY: Record<string, string> = {
 const READING_DIRECTION_DISPLAY: Record<string, string> = {
 	ltr: "Left to Right",
 	rtl: "Right to Left",
-	ttb: "Top to Bottom",
-	btt: "Bottom to Top",
+	ttb: "Vertical",
+	webtoon: "Webtoon",
 };
 
 // Map language codes to display names

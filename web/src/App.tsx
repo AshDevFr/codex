@@ -15,6 +15,7 @@ import { BookDetail } from "@/pages/BookDetail";
 import { Home } from "@/pages/Home";
 import { LibraryPage } from "@/pages/Library";
 import { Login } from "@/pages/Login";
+import { Reader } from "@/pages/Reader";
 import { Register } from "@/pages/Register";
 import { SearchResults } from "@/pages/SearchResults";
 import { SeriesDetail } from "@/pages/SeriesDetail";
@@ -158,6 +159,16 @@ function App() {
 							<AppLayout currentPath="/books/:bookId">
 								<BookDetail />
 							</AppLayout>
+						</ProtectedRoute>
+					}
+				/>
+
+				{/* Reader page - fullscreen, no AppLayout */}
+				<Route
+					path="/reader/:bookId"
+					element={
+						<ProtectedRoute>
+							<Reader />
 						</ProtectedRoute>
 					}
 				/>

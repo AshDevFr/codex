@@ -5,6 +5,7 @@
 import { delay, HttpResponse, http } from "msw";
 import { createPaginatedResponse } from "../data/factories";
 import { getSeriesByLibrary, mockSeries } from "../data/store";
+import coverSvg from "../fixtures/cover.svg?raw";
 
 export const seriesHandlers = [
 	// IMPORTANT: Specific routes MUST come before parameterized routes
@@ -322,11 +323,10 @@ export const seriesHandlers = [
 	// Get series thumbnail
 	http.get("/api/v1/series/:id/thumbnail", async () => {
 		await delay(50);
-		// Return a placeholder image response
-		return new HttpResponse(null, {
-			status: 302,
+		// Return the cover SVG as an image response
+		return new HttpResponse(coverSvg, {
 			headers: {
-				Location: "https://placehold.co/300x450/333/fff?text=Cover",
+				"Content-Type": "image/svg+xml",
 			},
 		});
 	}),

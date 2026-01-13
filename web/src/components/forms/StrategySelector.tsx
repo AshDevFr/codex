@@ -11,7 +11,7 @@ import {
 	Textarea,
 } from "@mantine/core";
 import { IconInfoCircle } from "@tabler/icons-react";
-import type { BookStrategy, SeriesStrategy } from "@/types";
+import type { BookStrategy, NumberStrategy, SeriesStrategy } from "@/types";
 
 // =============================================================================
 // Series Strategy Configuration
@@ -460,6 +460,88 @@ export function BookStrategySelector({
 				onChange={(v) => {
 					if (v) {
 						onChange(v as BookStrategy);
+					}
+				}}
+				disabled={disabled}
+				comboboxProps={{ zIndex: 1001 }}
+			/>
+
+			{selectedStrategy && (
+				<Alert icon={<IconInfoCircle size={16} />} color="gray" variant="light">
+					<Text size="sm">{selectedStrategy.description}</Text>
+				</Alert>
+			)}
+		</Stack>
+	);
+}
+
+// =============================================================================
+// Number Strategy Configuration
+// =============================================================================
+
+export interface NumberStrategyData {
+	value: NumberStrategy;
+	label: string;
+	description: string;
+}
+
+export const NUMBER_STRATEGIES: NumberStrategyData[] = [
+	{
+		value: "file_order",
+		label: "File Order (Recommended)",
+		description:
+			"Book number = position in alphabetically sorted file list. Komga-compatible and works with any naming.",
+	},
+	{
+		value: "metadata",
+		label: "Metadata Only",
+		description:
+			"Use ComicInfo <Number> field only. Files without metadata get no number.",
+	},
+	{
+		value: "filename",
+		label: "Filename Patterns",
+		description:
+			"Parse number from filename patterns (#001, v01, c001, Chapter 001). Ignores metadata.",
+	},
+	{
+		value: "smart",
+		label: "Smart Detection",
+		description:
+			"Fallback chain: metadata → filename patterns → file order. Best coverage with graceful degradation.",
+	},
+];
+
+// =============================================================================
+// Number Strategy Selector Component
+// =============================================================================
+
+export interface NumberStrategySelectorProps {
+	value: NumberStrategy;
+	onChange: (value: NumberStrategy) => void;
+	disabled?: boolean;
+}
+
+export function NumberStrategySelector({
+	value,
+	onChange,
+	disabled = false,
+}: NumberStrategySelectorProps) {
+	const selectedStrategy = NUMBER_STRATEGIES.find((s) => s.value === value);
+
+	return (
+		<Stack gap="md">
+			<Select
+				label="Book Number Strategy"
+				description="How book numbers (sort order) are determined"
+				data={NUMBER_STRATEGIES.map((s) => ({
+					value: s.value,
+					label: s.label,
+				}))}
+				value={value}
+				onChange={(v) => {
+					if (v) {
+						onChange(v as NumberStrategy);
 					}
 				}}
 				disabled={disabled}

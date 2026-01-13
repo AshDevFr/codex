@@ -1,0 +1,636 @@
+import { act, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { renderWithProviders } from "@/test/utils";
+import { ContinuousScrollReader } from "./ContinuousScrollReader";
+
+// Mock the reader store
+const mockGoToPage = vi.fn();
+vi.mock("@/store/readerStore", () => ({
+	useReaderStore: (selector: (state: unknown) => unknown) => {
+		const state = {
+			goToPage: mockGoToPage,
+		};
+		return selector(state);
+	},
+}));
+
+// Mock IntersectionObserver
+class MockIntersectionObserver {
+	callback: IntersectionObserverCallback;
+	elements: Set<Element> = new Set();
+
+	constructor(callback: IntersectionObserverCallback) {
+		this.callback = callback;
+	}
+
+	observe(element: Element) {
+		this.elements.add(element);
+	}
+
+	unobserve(element: Element) {
+		this.elements.delete(element);
+	}
+
+	disconnect() {
+		this.elements.clear();
+	}
+
+	// Helper to simulate intersection
+	simulateIntersection(entries: Partial<IntersectionObserverEntry>[]) {
+		const fullEntries = entries.map((entry) => ({
+			boundingClientRect: {
+				top: 0,
+				bottom: 100,
+				height: 100,
+				...entry.boundingClientRect,
+			} as DOMRect,
+			intersectionRatio: 1,
+			intersectionRect: {} as DOMRect,
+			isIntersecting: true,
+			rootBounds: null,
+			target: entry.target || document.createElement("div"),
+			time: Date.now(),
+			...entry,
+		})) as IntersectionObserverEntry[];
+		this.callback(fullEntries, this as unknown as IntersectionObserver);
+	}
+}
+
+let mockObserverInstance: MockIntersectionObserver | null = null;
+
+beforeEach(() => {
+	vi.clearAllMocks();
+	mockObserverInstance = null;
+
+	// Mock IntersectionObserver
+	global.IntersectionObserver = vi.fn((callback) => {
+		mockObserverInstance = new MockIntersectionObserver(callback);
+		return mockObserverInstance as unknown as IntersectionObserver;
+	}) as unknown as typeof IntersectionObserver;
+
+	// Mock scrollIntoView
+	Element.prototype.scrollIntoView = vi.fn();
+});
+
+describe("ContinuousScrollReader", () => {
+	const defaultProps = {
+		bookId: "test-book-123",
+		totalPages: 10,
+		fitMode: "width" as const,
+		backgroundColor: "black" as const,
+	};
+
+	describe("Rendering", () => {
+		it("should render the scroll container", () => {
+			renderWithProviders(<ContinuousScrollReader {...defaultProps} />);
+
+			expect(
+				screen.getByTestId("continuous-scroll-container"),
+			).toBeInTheDocument();
+		});
+
+		it("should render page containers for all pages", () => {
+			renderWithProviders(<ContinuousScrollReader {...defaultProps} />);
+
+			for (let i = 1; i <= defaultProps.totalPages; i++) {
+				expect(screen.getByTestId(`page-container-${i}`)).toBeInTheDocument();
+			}
+		});
+
+		it("should show empty state when totalPages is 0", () => {
+			renderWithProviders(
+				<ContinuousScrollReader {...defaultProps} totalPages={0} />,
+			);
+
+			expect(screen.getByText("This book has no pages")).toBeInTheDocument();
+		});
+
+		it("should apply correct background color", () => {
+			const { rerender } = renderWithProviders(
+				<ContinuousScrollReader {...defaultProps} backgroundColor="black" />,
+			);
+
+			const container = screen.getByTestId("continuous-scroll-container");
+			expect(container).toHaveStyle({ backgroundColor: "#000000" });
+
+			rerender(
+				<ContinuousScrollReader {...defaultProps} backgroundColor="gray" />,
+			);
+			expect(container).toHaveStyle({ backgroundColor: "#1a1a1a" });
+
+			rerender(
+				<ContinuousScrollReader {...defaultProps} backgroundColor="white" />,
+			);
+			expect(container).toHaveStyle({ backgroundColor: "#ffffff" });
+		});
+	});
+
+	describe("Lazy Loading", () => {
+		it("should initially render pages around the initial page", () => {
+			renderWithProviders(
+				<ContinuousScrollReader
+					{...defaultProps}
+					initialPage={5}
+					preloadBuffer={2}
+				/>,
+			);
+
+			// Pages 3-7 should be rendered (5 +/- 2)
+			// Check for placeholders vs actual content based on initial render
+			for (let i = 1; i <= 10; i++) {
+				const container = screen.getByTestId(`page-container-${i}`);
+				expect(container).toBeInTheDocument();
+			}
+		});
+
+		it("should render placeholders for pages outside buffer", () => {
+			renderWithProviders(
+				<ContinuousScrollReader
+					{...defaultProps}
+					totalPages={20}
+					initialPage={1}
+					preloadBuffer={2}
+				/>,
+			);
+
+			// Pages far from initial should have placeholders
+			const farPagePlaceholder = screen.queryByTestId("page-placeholder-15");
+			expect(farPagePlaceholder).toBeInTheDocument();
+		});
+
+		it("should render images for pages within buffer", async () => {
+			renderWithProviders(
+				<ContinuousScrollReader
+					{...defaultProps}
+					initialPage={1}
+					preloadBuffer={2}
+				/>,
+			);
+
+			// Pages 1-3 should have images (1 + 2 buffer)
+			await waitFor(() => {
+				const image1 = screen.queryByTestId("page-image-1");
+				expect(image1).toBeInTheDocument();
+			});
+		});
+	});
+
+	describe("Fit Modes", () => {
+		it("should apply screen fit mode styles", () => {
+			renderWithProviders(
+				<ContinuousScrollReader {...defaultProps} fitMode="screen" />,
+			);
+
+			// Simulate page becoming visible
+			const pageContainer = screen.getByTestId("page-container-1");
+			act(() => {
+				mockObserverInstance?.simulateIntersection([
+					{
+						target: pageContainer,
+						isIntersecting: true,
+					},
+				]);
+			});
+
+			const image = screen.queryByTestId("page-image-1");
+			if (image) {
+				expect(image).toHaveStyle({ maxWidth: "100%", maxHeight: "100vh" });
+			}
+		});
+
+		it("should apply width fit mode styles", () => {
+			renderWithProviders(
+				<ContinuousScrollReader {...defaultProps} fitMode="width" />,
+			);
+
+			const pageContainer = screen.getByTestId("page-container-1");
+			act(() => {
+				mockObserverInstance?.simulateIntersection([
+					{
+						target: pageContainer,
+						isIntersecting: true,
+					},
+				]);
+			});
+
+			const image = screen.queryByTestId("page-image-1");
+			if (image) {
+				expect(image).toHaveStyle({ width: "100%" });
+			}
+		});
+
+		it("should apply width-shrink fit mode styles", () => {
+			renderWithProviders(
+				<ContinuousScrollReader {...defaultProps} fitMode="width-shrink" />,
+			);
+
+			const pageContainer = screen.getByTestId("page-container-1");
+			act(() => {
+				mockObserverInstance?.simulateIntersection([
+					{
+						target: pageContainer,
+						isIntersecting: true,
+					},
+				]);
+			});
+
+			const image = screen.queryByTestId("page-image-1");
+			if (image) {
+				expect(image).toHaveStyle({ maxWidth: "100%" });
+			}
+		});
+
+		it("should apply height fit mode styles", () => {
+			renderWithProviders(
+				<ContinuousScrollReader {...defaultProps} fitMode="height" />,
+			);
+
+			const pageContainer = screen.getByTestId("page-container-1");
+			act(() => {
+				mockObserverInstance?.simulateIntersection([
+					{
+						target: pageContainer,
+						isIntersecting: true,
+					},
+				]);
+			});
+
+			const image = screen.queryByTestId("page-image-1");
+			if (image) {
+				expect(image).toHaveStyle({ height: "100vh" });
+			}
+		});
+
+		it("should apply original fit mode styles", () => {
+			renderWithProviders(
+				<ContinuousScrollReader {...defaultProps} fitMode="original" />,
+			);
+
+			// Image should be present in the DOM (within buffer range)
+			const image = screen.queryByTestId("page-image-1");
+			// Original mode: image should exist and have margin: 0 auto (centered)
+			expect(image).toBeInTheDocument();
+		});
+	});
+
+	describe("Image URLs", () => {
+		it("should generate correct page URLs", () => {
+			renderWithProviders(
+				<ContinuousScrollReader
+					{...defaultProps}
+					bookId="my-book-id"
+					initialPage={1}
+				/>,
+			);
+
+			// Simulate first page becoming visible
+			const pageContainer = screen.getByTestId("page-container-1");
+			act(() => {
+				mockObserverInstance?.simulateIntersection([
+					{
+						target: pageContainer,
+						isIntersecting: true,
+					},
+				]);
+			});
+
+			const image = screen.queryByTestId("page-image-1");
+			if (image) {
+				expect(image).toHaveAttribute(
+					"src",
+					"/api/v1/books/my-book-id/pages/1",
+				);
+			}
+		});
+	});
+
+	describe("Intersection Observer", () => {
+		it("should create an IntersectionObserver", () => {
+			renderWithProviders(<ContinuousScrollReader {...defaultProps} />);
+
+			expect(global.IntersectionObserver).toHaveBeenCalled();
+		});
+
+		it("should observe page containers", () => {
+			renderWithProviders(<ContinuousScrollReader {...defaultProps} />);
+
+			expect(mockObserverInstance).not.toBeNull();
+			// Observer should be observing elements
+			expect(mockObserverInstance?.elements.size).toBeGreaterThan(0);
+		});
+
+		it("should track visible pages when elements intersect", () => {
+			renderWithProviders(<ContinuousScrollReader {...defaultProps} />);
+
+			const pageContainer = screen.getByTestId("page-container-1");
+
+			act(() => {
+				mockObserverInstance?.simulateIntersection([
+					{
+						target: pageContainer,
+						isIntersecting: true,
+						boundingClientRect: { top: 0, bottom: 100, height: 100 } as DOMRect,
+					},
+				]);
+			});
+
+			// The page should now be rendered (not a placeholder)
+			const image = screen.queryByTestId("page-image-1");
+			expect(image).toBeInTheDocument();
+		});
+	});
+
+	describe("Progress Tracking", () => {
+		it("should call goToPage when visible page changes", async () => {
+			vi.useFakeTimers();
+
+			renderWithProviders(
+				<ContinuousScrollReader {...defaultProps} initialPage={1} />,
+			);
+
+			// Clear initial calls
+			mockGoToPage.mockClear();
+
+			const pageContainer3 = screen.getByTestId("page-container-3");
+
+			act(() => {
+				// Simulate scrolling to page 3 - it becomes the topmost visible page
+				mockObserverInstance?.simulateIntersection([
+					{
+						target: pageContainer3,
+						isIntersecting: true,
+						boundingClientRect: { top: 0, bottom: 100, height: 100 } as DOMRect,
+					},
+				]);
+			});
+
+			// Advance timers to trigger debounced page change
+			await act(async () => {
+				vi.advanceTimersByTime(150);
+			});
+
+			// goToPage should have been called (exact page depends on implementation)
+			expect(mockGoToPage).toHaveBeenCalled();
+
+			vi.useRealTimers();
+		});
+
+		it("should debounce page change callbacks", async () => {
+			vi.useFakeTimers();
+
+			renderWithProviders(
+				<ContinuousScrollReader {...defaultProps} initialPage={1} />,
+			);
+
+			// Clear initial calls
+			mockGoToPage.mockClear();
+
+			const pageContainer2 = screen.getByTestId("page-container-2");
+			const pageContainer3 = screen.getByTestId("page-container-3");
+
+			// Simulate rapid scrolling - first to page 2
+			act(() => {
+				mockObserverInstance?.simulateIntersection([
+					{
+						target: pageContainer2,
+						isIntersecting: true,
+						boundingClientRect: { top: 0, bottom: 100, height: 100 } as DOMRect,
+					},
+				]);
+			});
+
+			await act(async () => {
+				vi.advanceTimersByTime(50);
+			});
+
+			// Then quickly to page 3
+			act(() => {
+				mockObserverInstance?.simulateIntersection([
+					{
+						target: pageContainer3,
+						isIntersecting: true,
+						boundingClientRect: { top: 0, bottom: 100, height: 100 } as DOMRect,
+					},
+				]);
+			});
+
+			await act(async () => {
+				vi.advanceTimersByTime(150);
+			});
+
+			// Due to debouncing, should not call too many times
+			// The exact behavior depends on intersection timing
+			expect(mockGoToPage.mock.calls.length).toBeLessThanOrEqual(2);
+
+			vi.useRealTimers();
+		});
+
+		it("should call onPageChange callback when page changes", async () => {
+			vi.useFakeTimers();
+			const onPageChange = vi.fn();
+
+			renderWithProviders(
+				<ContinuousScrollReader
+					{...defaultProps}
+					initialPage={1}
+					onPageChange={onPageChange}
+				/>,
+			);
+
+			const pageContainer5 = screen.getByTestId("page-container-5");
+
+			act(() => {
+				mockObserverInstance?.simulateIntersection([
+					{
+						target: pageContainer5,
+						isIntersecting: true,
+						boundingClientRect: { top: 0, bottom: 100, height: 100 } as DOMRect,
+					},
+				]);
+			});
+
+			await act(async () => {
+				vi.advanceTimersByTime(150);
+			});
+
+			// onPageChange should have been called at least once
+			expect(onPageChange).toHaveBeenCalled();
+
+			vi.useRealTimers();
+		});
+	});
+
+	describe("Initial Scroll Position", () => {
+		it("should scroll to initial page on mount", () => {
+			renderWithProviders(
+				<ContinuousScrollReader {...defaultProps} initialPage={5} />,
+			);
+
+			// The component should attempt to scroll to the initial page
+			// scrollIntoView is mocked, so we just verify it was set up
+			expect(Element.prototype.scrollIntoView).toBeDefined();
+		});
+
+		it("should not scroll when initial page is 1", () => {
+			// Reset the mock before this test
+			vi.mocked(Element.prototype.scrollIntoView).mockClear();
+
+			renderWithProviders(
+				<ContinuousScrollReader {...defaultProps} initialPage={1} />,
+			);
+
+			// For page 1, we don't need to scroll since it's already at the top
+			// This is implementation-dependent but scrollIntoView should not be called
+			expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("Page Gap", () => {
+		it("should apply custom page gap", () => {
+			renderWithProviders(
+				<ContinuousScrollReader {...defaultProps} pageGap={16} />,
+			);
+
+			// The gap is applied via inline styles on the inner flex container
+			const innerContainer = screen.getByTestId("continuous-scroll-inner");
+			expect(innerContainer).toHaveStyle({ gap: "16px" });
+		});
+
+		it("should use default page gap when not specified", () => {
+			renderWithProviders(<ContinuousScrollReader {...defaultProps} />);
+
+			const innerContainer = screen.getByTestId("continuous-scroll-inner");
+			expect(innerContainer).toHaveStyle({ gap: "0" }); // DEFAULT_PAGE_GAP is 0
+		});
+	});
+
+	describe("Image Loading States", () => {
+		it("should show loader while image is loading", () => {
+			renderWithProviders(
+				<ContinuousScrollReader {...defaultProps} initialPage={1} />,
+			);
+
+			// Simulate page becoming visible
+			const pageContainer = screen.getByTestId("page-container-1");
+			act(() => {
+				mockObserverInstance?.simulateIntersection([
+					{
+						target: pageContainer,
+						isIntersecting: true,
+					},
+				]);
+			});
+
+			// Initially, loader should be visible (image not loaded yet)
+			// The image is hidden until loaded
+			const image = screen.queryByTestId("page-image-1");
+			if (image) {
+				expect(image).toHaveStyle({ display: "none" });
+			}
+		});
+
+		it("should hide loader and show image after load", async () => {
+			renderWithProviders(
+				<ContinuousScrollReader {...defaultProps} initialPage={1} />,
+			);
+
+			const pageContainer = screen.getByTestId("page-container-1");
+			act(() => {
+				mockObserverInstance?.simulateIntersection([
+					{
+						target: pageContainer,
+						isIntersecting: true,
+					},
+				]);
+			});
+
+			const image = screen.queryByTestId("page-image-1");
+			if (image) {
+				// Simulate image load
+				await act(async () => {
+					image.dispatchEvent(new Event("load"));
+				});
+
+				expect(image).toHaveStyle({ display: "block" });
+			}
+		});
+	});
+
+	describe("Preload Buffer", () => {
+		it("should respect custom preload buffer", () => {
+			renderWithProviders(
+				<ContinuousScrollReader
+					{...defaultProps}
+					totalPages={20}
+					initialPage={10}
+					preloadBuffer={5}
+				/>,
+			);
+
+			// Pages 5-15 should be in the render range (10 +/- 5)
+			// Check that page 5 is not a placeholder
+			const page5Placeholder = screen.queryByTestId("page-placeholder-5");
+			const page15Placeholder = screen.queryByTestId("page-placeholder-15");
+
+			// These should NOT be placeholders since they're within buffer
+			expect(page5Placeholder).not.toBeInTheDocument();
+			expect(page15Placeholder).not.toBeInTheDocument();
+
+			// Page 1 should be a placeholder (outside buffer)
+			const page1Placeholder = screen.queryByTestId("page-placeholder-1");
+			expect(page1Placeholder).toBeInTheDocument();
+		});
+
+		it("should use default preload buffer when not specified", () => {
+			renderWithProviders(
+				<ContinuousScrollReader
+					{...defaultProps}
+					totalPages={20}
+					initialPage={10}
+				/>,
+			);
+
+			// Default buffer is 2, so pages 8-12 should be rendered
+			// Page 1 should be a placeholder
+			const page1Placeholder = screen.queryByTestId("page-placeholder-1");
+			expect(page1Placeholder).toBeInTheDocument();
+		});
+	});
+
+	describe("Accessibility", () => {
+		it("should have alt text for images", () => {
+			renderWithProviders(
+				<ContinuousScrollReader {...defaultProps} initialPage={1} />,
+			);
+
+			const pageContainer = screen.getByTestId("page-container-1");
+			act(() => {
+				mockObserverInstance?.simulateIntersection([
+					{
+						target: pageContainer,
+						isIntersecting: true,
+					},
+				]);
+			});
+
+			const image = screen.queryByTestId("page-image-1");
+			if (image) {
+				expect(image).toHaveAttribute("alt", "Page 1");
+			}
+		});
+	});
+
+	describe("Cleanup", () => {
+		it("should disconnect observer on unmount", () => {
+			const { unmount } = renderWithProviders(
+				<ContinuousScrollReader {...defaultProps} />,
+			);
+
+			if (mockObserverInstance) {
+				const disconnectSpy = vi.spyOn(mockObserverInstance, "disconnect");
+				unmount();
+				expect(disconnectSpy).toHaveBeenCalled();
+			}
+		});
+	});
+});

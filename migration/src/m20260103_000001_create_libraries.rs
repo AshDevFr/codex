@@ -37,6 +37,15 @@ impl MigrationTrait for Migration {
                     )
                     // Book strategy-specific configuration (JSON)
                     .col(ColumnDef::new(Libraries::BookConfig).json())
+                    // Book number strategy (file_order, metadata, filename, smart)
+                    .col(
+                        ColumnDef::new(Libraries::NumberStrategy)
+                            .string()
+                            .not_null()
+                            .default("file_order"),
+                    )
+                    // Number strategy-specific configuration (JSON)
+                    .col(ColumnDef::new(Libraries::NumberConfig).json())
                     // Legacy: kept for backward compatibility, stores cron/scan settings
                     .col(ColumnDef::new(Libraries::ScanningConfig).string())
                     .col(
@@ -80,6 +89,8 @@ enum Libraries {
     SeriesConfig,
     BookStrategy,
     BookConfig,
+    NumberStrategy,
+    NumberConfig,
     ScanningConfig,
     DefaultReadingDirection,
     AllowedFormats,

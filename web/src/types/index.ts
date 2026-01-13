@@ -38,6 +38,7 @@ export type CreateLibraryRequest = Schemas["CreateLibraryRequest"];
 // =============================================================================
 export type SeriesStrategy = Schemas["SeriesStrategy"];
 export type BookStrategy = Schemas["BookStrategy"];
+export type NumberStrategy = Schemas["NumberStrategy"];
 export type PreviewScanRequest = Schemas["PreviewScanRequest"];
 export type PreviewScanResponse = Schemas["PreviewScanResponse"];
 export type DetectedSeries = Schemas["DetectedSeriesDto"];

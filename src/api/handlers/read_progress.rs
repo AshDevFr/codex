@@ -65,12 +65,13 @@ pub async fn update_reading_progress(
     // Check permission - users can manage their own reading progress
     auth.require_permission(&Permission::BooksRead)?;
 
-    // Update progress
-    let progress = ReadProgressRepository::upsert(
+    // Update progress with optional percentage (used for EPUB books)
+    let progress = ReadProgressRepository::upsert_with_percentage(
         &state.db,
         auth.user_id,
         book_id,
         request.current_page,
+        request.progress_percentage,
         request.completed,
     )
     .await

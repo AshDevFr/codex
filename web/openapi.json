@@ -9208,6 +9208,14 @@
               }
             ]
           },
+          "readingDirection": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Effective reading direction (from series metadata, or library default if not set)\nValues: ltr, rtl, ttb or webtoon",
+            "example": "ltr"
+          },
           "seriesId": {
             "type": "string",
             "format": "uuid",
@@ -10109,7 +10117,7 @@
             ]
           },
           "bookConfig": {
-            "description": "Book strategy-specific configuration (JSON, immutable after creation)"
+            "description": "Book strategy-specific configuration (JSON, mutable after creation)"
           },
           "bookStrategy": {
             "oneOf": [
@@ -10118,7 +10126,7 @@
               },
               {
                 "$ref": "#/components/schemas/BookStrategy",
-                "description": "Book naming strategy (immutable after creation)\nOptions: filename, metadata_first, smart, series_name"
+                "description": "Book naming strategy (mutable after creation)\nOptions: filename, metadata_first, smart, series_name"
               }
             ]
           },
@@ -10127,7 +10135,7 @@
               "string",
               "null"
             ],
-            "description": "Default reading direction for books in this library (ltr, rtl, ttb, btt)",
+            "description": "Default reading direction for books in this library (ltr, rtl, ttb or webtoon)",
             "example": "ltr"
           },
           "description": {
@@ -10150,6 +10158,20 @@
             "type": "string",
             "description": "Library name",
             "example": "Comics"
+          },
+          "numberConfig": {
+            "description": "Number strategy-specific configuration (JSON, mutable after creation)"
+          },
+          "numberStrategy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NumberStrategy",
+                "description": "Book number strategy (mutable after creation)\nOptions: file_order, metadata, filename, smart"
+              }
+            ]
           },
           "path": {
             "type": "string",
@@ -11310,7 +11332,7 @@
               "string",
               "null"
             ],
-            "description": "Reading direction (ltr, rtl, ttb, btt)",
+            "description": "Reading direction (ltr, rtl, ttb or webtoon)",
             "example": "ltr"
           },
           "seriesId": {
@@ -11646,6 +11668,7 @@
           "isActive",
           "seriesStrategy",
           "bookStrategy",
+          "numberStrategy",
           "createdAt",
           "updatedAt",
           "defaultReadingDirection"
@@ -11688,7 +11711,7 @@
           },
           "defaultReadingDirection": {
             "type": "string",
-            "description": "Default reading direction for books in this library (ltr, rtl, ttb, btt)",
+            "description": "Default reading direction for books in this library (ltr, rtl, ttb or webtoon)",
             "example": "ltr"
           },
           "description": {
@@ -11726,6 +11749,13 @@
           "name": {
             "type": "string",
             "example": "Comics"
+          },
+          "numberConfig": {
+            "description": "Number strategy-specific configuration (JSON)"
+          },
+          "numberStrategy": {
+            "$ref": "#/components/schemas/NumberStrategy",
+            "description": "Book number strategy (file_order, metadata, filename, smart)"
           },
           "path": {
             "type": "string",
@@ -12141,6 +12171,16 @@
           }
         }
       },
+      "NumberStrategy": {
+        "type": "string",
+        "description": "Book number strategy type for determining book ordering numbers\n\nDetermines how individual book numbers are resolved for sorting and display.",
+        "enum": [
+          "file_order",
+          "metadata",
+          "filename",
+          "smart"
+        ]
+      },
       "OAuthCallbackRequest": {
         "type": "object",
         "description": "OAuth callback request",
@@ -12476,6 +12516,14 @@
                       "$ref": "#/components/schemas/ReadProgressResponse"
                     }
                   ]
+                },
+                "readingDirection": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Effective reading direction (from series metadata, or library default if not set)\nValues: ltr, rtl, ttb or webtoon",
+                  "example": "ltr"
                 },
                 "seriesId": {
                   "type": "string",
@@ -13001,7 +13049,7 @@
               "string",
               "null"
             ],
-            "description": "Reading direction (ltr, rtl, ttb, btt, or auto)",
+            "description": "Reading direction (ltr, rtl, ttb or webtoon)",
             "example": "ltr"
           },
           "sortName": {
@@ -13364,7 +13412,7 @@
           "current_page": {
             "type": "integer",
             "format": "int32",
-            "description": "Current page (0-indexed)",
+            "description": "Current page (1-indexed)",
             "example": 42
           },
           "id": {
@@ -13372,6 +13420,15 @@
             "format": "uuid",
             "description": "Progress record ID",
             "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "progress_percentage": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Progress as a percentage (0.0-1.0)\nFor EPUBs, this is the stored percentage from reflowable content\nFor other formats, this is calculated from current_page / total_pages",
+            "example": 0.45
           },
           "started_at": {
             "type": "string",
@@ -13717,7 +13774,7 @@
               "string",
               "null"
             ],
-            "description": "Reading direction (ltr, rtl, ttb, btt, or auto)",
+            "description": "Reading direction (ltr, rtl, ttb or webtoon)",
             "example": "ltr"
           },
           "sortName": {
@@ -15941,7 +15998,7 @@
       },
       "UpdateLibraryRequest": {
         "type": "object",
-        "description": "Update library request\n\nNote: series_strategy, series_config, book_strategy, and book_config are\nimmutable after library creation and cannot be updated. To change strategies,\ndelete the library and recreate it.",
+        "description": "Update library request\n\nNote: series_strategy and series_config are immutable after library creation.\nbook_strategy, book_config, number_strategy, and number_config can be updated.",
         "properties": {
           "allowedFormats": {
             "type": [
@@ -15957,12 +16014,26 @@
               "CBR"
             ]
           },
+          "bookConfig": {
+            "description": "Book strategy-specific configuration (JSON, mutable)"
+          },
+          "bookStrategy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BookStrategy",
+                "description": "Book naming strategy (mutable)\nOptions: filename, metadata_first, smart, series_name"
+              }
+            ]
+          },
           "defaultReadingDirection": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Default reading direction for books in this library (ltr, rtl, ttb, btt)",
+            "description": "Default reading direction for books in this library (ltr, rtl, ttb or webtoon)",
             "example": "rtl"
           },
           "description": {
@@ -15996,6 +16067,20 @@
             ],
             "description": "Library name",
             "example": "Comics Collection"
+          },
+          "numberConfig": {
+            "description": "Number strategy-specific configuration (JSON, mutable)"
+          },
+          "numberStrategy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NumberStrategy",
+                "description": "Book number strategy (mutable)\nOptions: file_order, metadata, filename, smart"
+              }
+            ]
           },
           "path": {
             "type": [
@@ -16135,8 +16220,17 @@
           "current_page": {
             "type": "integer",
             "format": "int32",
-            "description": "Current page number (0-indexed)",
+            "description": "Current page number (1-indexed)",
             "example": 42
+          },
+          "progress_percentage": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Progress as a percentage (0.0-1.0), used for EPUB books with reflowable content",
+            "example": 0.45
           }
         }
       },

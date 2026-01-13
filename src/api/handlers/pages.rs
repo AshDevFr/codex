@@ -1,6 +1,6 @@
 use crate::api::{
     error::ApiError,
-    extractors::{AuthContext, AuthState, FlexibleAuthContext},
+    extractors::{AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
 use crate::db::repositories::{BookRepository, PageRepository, ReadProgressRepository};
@@ -39,7 +39,7 @@ use uuid::Uuid;
 )]
 pub async fn get_page_image(
     State(state): State<Arc<AuthState>>,
-    auth: AuthContext,
+    FlexibleAuthContext(auth): FlexibleAuthContext,
     Path((book_id, page_number)): Path<(Uuid, i32)>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::PagesRead)?;

@@ -10,7 +10,7 @@ import {
 	useCombobox,
 } from "@mantine/core";
 import { IconSearch } from "@tabler/icons-react";
-import { useCallback, useState } from "react";
+import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSearch } from "@/hooks/useSearch";
 import type { Book, Series } from "@/types";
@@ -21,10 +21,21 @@ interface SearchInputProps {
 	width?: number;
 }
 
-export function SearchInput({
+export interface SearchInputHandle {
+	focus: () => void;
+}
+
+export const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(function SearchInput({
 	placeholder = "Search...",
 	width = 300,
-}: SearchInputProps) {
+}, ref) {
+	const inputRef = useRef<HTMLInputElement>(null);
+
+	useImperativeHandle(ref, () => ({
+		focus: () => {
+			inputRef.current?.focus();
+		},
+	}));
 	const navigate = useNavigate();
 	const combobox = useCombobox({
 		onDropdownClose: () => combobox.resetSelectedOption(),
@@ -38,6 +49,18 @@ export function SearchInput({
 	const books = results?.books ?? [];
 	const hasResults = series.length > 0 || books.length > 0;
 	const showDropdown = query.trim().length >= 2;
+
+	// Create a map of option values to their navigation targets
+	const optionMap = useMemo(() => {
+		const map = new Map<string, { type: "series" | "book"; id: string }>();
+		for (const s of series.slice(0, 5)) {
+			map.set(`series-${s.id}`, { type: "series", id: s.id });
+		}
+		for (const b of books.slice(0, 5)) {
+			map.set(`book-${b.id}`, { type: "book", id: b.id });
+		}
+		return map;
+	}, [series, books]);
 
 	const handleInputChange = useCallback(
 		(event: React.ChangeEvent<HTMLInputElement>) => {
@@ -54,31 +77,44 @@ export function SearchInput({
 
 	const handleKeyDown = useCallback(
 		(event: React.KeyboardEvent<HTMLInputElement>) => {
+			// Handle Enter key - navigate to selected option or search page
 			if (event.key === "Enter" && query.trim().length >= 2) {
 				event.preventDefault();
+				const selectedOption = combobox.getSelectedOptionIndex();
+
+				// If an option is selected, trigger submission
+				if (selectedOption !== -1) {
+					combobox.clickSelectedOption();
+					return;
+				}
+
+				// No option selected, go to search results page
 				combobox.closeDropdown();
 				navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+			}
+
+			// Handle Escape key
+			if (event.key === "Escape") {
+				combobox.closeDropdown();
 			}
 		},
 		[query, navigate, combobox],
 	);
 
-	const handleSeriesSelect = useCallback(
-		(series: Series) => {
-			combobox.closeDropdown();
-			setQuery("");
-			navigate(`/series/${series.id}`);
+	const handleOptionSubmit = useCallback(
+		(value: string) => {
+			const target = optionMap.get(value);
+			if (target) {
+				combobox.closeDropdown();
+				setQuery("");
+				if (target.type === "series") {
+					navigate(`/series/${target.id}`);
+				} else {
+					navigate(`/books/${target.id}`);
+				}
+			}
 		},
-		[navigate, combobox],
-	);
-
-	const handleBookSelect = useCallback(
-		(book: Book) => {
-			combobox.closeDropdown();
-			setQuery("");
-			navigate(`/books/${book.id}`);
-		},
-		[navigate, combobox],
+		[navigate, combobox, optionMap],
 	);
 
 	const renderSeriesOption = (series: Series) => (
@@ -86,7 +122,6 @@ export function SearchInput({
 			value={`series-${series.id}`}
 			key={series.id}
 			className={classes.option}
-			onClick={() => handleSeriesSelect(series)}
 		>
 			<Group gap="sm" wrap="nowrap">
 				<Image
@@ -115,7 +150,6 @@ export function SearchInput({
 			value={`book-${book.id}`}
 			key={book.id}
 			className={classes.option}
-			onClick={() => handleBookSelect(book)}
 		>
 			<Group gap="sm" wrap="nowrap">
 				<Image
@@ -144,9 +178,10 @@ export function SearchInput({
 	);
 
 	return (
-		<Combobox store={combobox} withinPortal={false}>
-			<Combobox.Target>
+		<Combobox store={combobox} withinPortal={false} onOptionSubmit={handleOptionSubmit}>
+			<Combobox.EventsTarget>
 				<TextInput
+					ref={inputRef}
 					placeholder={placeholder}
 					leftSection={
 						isLoading ? <Loader size={16} /> : <IconSearch size={16} />
@@ -163,7 +198,7 @@ export function SearchInput({
 					visibleFrom="sm"
 					w={width}
 				/>
-			</Combobox.Target>
+			</Combobox.EventsTarget>
 
 			{showDropdown && (
 				<Combobox.Dropdown className={classes.dropdown}>
@@ -180,7 +215,7 @@ export function SearchInput({
 						) : !hasResults ? (
 							<Combobox.Empty>No results found</Combobox.Empty>
 						) : (
-							<>
+							<Combobox.Options>
 								{series.length > 0 && (
 									<Combobox.Group label="Series">
 										{series.slice(0, 5).map(renderSeriesOption)}
@@ -209,11 +244,11 @@ export function SearchInput({
 										</Text>
 									</Combobox.Footer>
 								)}
-							</>
+							</Combobox.Options>
 						)}
 					</ScrollArea.Autosize>
 				</Combobox.Dropdown>
 			)}
 		</Combobox>
 	);
-}
+});

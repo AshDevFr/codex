@@ -150,6 +150,11 @@ pub struct BookDto {
     /// Whether the book has been soft-deleted
     #[schema(example = false)]
     pub deleted: bool,
+    /// Effective reading direction (from series metadata, or library default if not set)
+    /// Values: ltr, rtl, ttb or webtoon
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "ltr")]
+    pub reading_direction: Option<String>,
 }
 
 /// Book list response

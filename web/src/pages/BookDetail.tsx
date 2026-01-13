@@ -213,8 +213,8 @@ export function BookDetail() {
 		{ title: displayTitle, href: `/books/${book.id}` },
 	];
 
-	// Calculate reading progress
-	const currentPage = book.readProgress ? book.readProgress.current_page + 1 : 0;
+	// Calculate reading progress (current_page is 1-indexed)
+	const currentPage = book.readProgress ? book.readProgress.current_page : 0;
 	const percentage = book.pageCount > 0 ? (currentPage / book.pageCount) * 100 : 0;
 
 	// Extract metadata values
@@ -412,7 +412,7 @@ export function BookDetail() {
 									variant="filled"
 									leftSection={<IconBook size={14} />}
 									onClick={() => {
-										const page = book.readProgress?.current_page ?? 0;
+										const page = book.readProgress?.current_page ?? 1;
 										navigate(`/reader/${book.id}?page=${page}`);
 									}}
 								>

@@ -3183,6 +3183,12 @@ export interface components {
             pageCount: number;
             readProgress?: null | components["schemas"]["ReadProgressResponse"];
             /**
+             * @description Effective reading direction (from series metadata, or library default if not set)
+             *     Values: ltr, rtl, ttb or webtoon
+             * @example ltr
+             */
+            readingDirection?: string | null;
+            /**
              * Format: uuid
              * @example 550e8400-e29b-41d4-a716-446655440002
              */
@@ -3669,11 +3675,11 @@ export interface components {
              *     ]
              */
             allowedFormats?: string[] | null;
-            /** @description Book strategy-specific configuration (JSON, immutable after creation) */
+            /** @description Book strategy-specific configuration (JSON, mutable after creation) */
             bookConfig?: unknown;
             bookStrategy?: null | components["schemas"]["BookStrategy"];
             /**
-             * @description Default reading direction for books in this library (ltr, rtl, ttb, btt)
+             * @description Default reading direction for books in this library (ltr, rtl, ttb or webtoon)
              * @example ltr
              */
             defaultReadingDirection?: string | null;
@@ -3693,6 +3699,9 @@ export interface components {
              * @example Comics
              */
             name: string;
+            /** @description Number strategy-specific configuration (JSON, mutable after creation) */
+            numberConfig?: unknown;
+            numberStrategy?: null | components["schemas"]["NumberStrategy"];
             /**
              * @description Filesystem path to the library
              * @example /media/comics
@@ -4212,7 +4221,7 @@ export interface components {
              */
             publisher?: string | null;
             /**
-             * @description Reading direction (ltr, rtl, ttb, btt)
+             * @description Reading direction (ltr, rtl, ttb or webtoon)
              * @example ltr
              */
             readingDirection?: string | null;
@@ -4426,7 +4435,7 @@ export interface components {
              */
             createdAt: string;
             /**
-             * @description Default reading direction for books in this library (ltr, rtl, ttb, btt)
+             * @description Default reading direction for books in this library (ltr, rtl, ttb or webtoon)
              * @example ltr
              */
             defaultReadingDirection: string;
@@ -4452,6 +4461,10 @@ export interface components {
             lastScannedAt?: string | null;
             /** @example Comics */
             name: string;
+            /** @description Number strategy-specific configuration (JSON) */
+            numberConfig?: unknown;
+            /** @description Book number strategy (file_order, metadata, filename, smart) */
+            numberStrategy: components["schemas"]["NumberStrategy"];
             /** @example /media/comics */
             path: string;
             scanningConfig?: null | components["schemas"]["ScanningConfigDto"];
@@ -4725,6 +4738,13 @@ export interface components {
              */
             deleted_count: number;
         };
+        /**
+         * @description Book number strategy type for determining book ordering numbers
+         *
+         *     Determines how individual book numbers are resolved for sorting and display.
+         * @enum {string}
+         */
+        NumberStrategy: "file_order" | "metadata" | "filename" | "smart";
         /** @description OAuth callback request */
         OAuthCallbackRequest: {
             /**
@@ -4901,6 +4921,12 @@ export interface components {
                  */
                 pageCount: number;
                 readProgress?: null | components["schemas"]["ReadProgressResponse"];
+                /**
+                 * @description Effective reading direction (from series metadata, or library default if not set)
+                 *     Values: ltr, rtl, ttb or webtoon
+                 * @example ltr
+                 */
+                readingDirection?: string | null;
                 /**
                  * Format: uuid
                  * @example 550e8400-e29b-41d4-a716-446655440002
@@ -5237,7 +5263,7 @@ export interface components {
              */
             publisher?: string | null;
             /**
-             * @description Reading direction (ltr, rtl, ttb, btt, or auto)
+             * @description Reading direction (ltr, rtl, ttb or webtoon)
              * @example ltr
              */
             readingDirection?: string | null;
@@ -5406,7 +5432,7 @@ export interface components {
             completed_at?: string | null;
             /**
              * Format: int32
-             * @description Current page (0-indexed)
+             * @description Current page (1-indexed)
              * @example 42
              */
             current_page: number;
@@ -5416,6 +5442,14 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             id: string;
+            /**
+             * Format: double
+             * @description Progress as a percentage (0.0-1.0)
+             *     For EPUBs, this is the stored percentage from reflowable content
+             *     For other formats, this is calculated from current_page / total_pages
+             * @example 0.45
+             */
+            progress_percentage?: number | null;
             /**
              * Format: date-time
              * @description When reading started
@@ -5650,7 +5684,7 @@ export interface components {
              */
             publisher?: string | null;
             /**
-             * @description Reading direction (ltr, rtl, ttb, btt, or auto)
+             * @description Reading direction (ltr, rtl, ttb or webtoon)
              * @example ltr
              */
             readingDirection?: string | null;
@@ -6898,9 +6932,8 @@ export interface components {
         /**
          * @description Update library request
          *
-         *     Note: series_strategy, series_config, book_strategy, and book_config are
-         *     immutable after library creation and cannot be updated. To change strategies,
-         *     delete the library and recreate it.
+         *     Note: series_strategy and series_config are immutable after library creation.
+         *     book_strategy, book_config, number_strategy, and number_config can be updated.
          */
         UpdateLibraryRequest: {
             /**
@@ -6911,8 +6944,11 @@ export interface components {
              *     ]
              */
             allowedFormats?: string[] | null;
+            /** @description Book strategy-specific configuration (JSON, mutable) */
+            bookConfig?: unknown;
+            bookStrategy?: null | components["schemas"]["BookStrategy"];
             /**
-             * @description Default reading direction for books in this library (ltr, rtl, ttb, btt)
+             * @description Default reading direction for books in this library (ltr, rtl, ttb or webtoon)
              * @example rtl
              */
             defaultReadingDirection?: string | null;
@@ -6936,6 +6972,9 @@ export interface components {
              * @example Comics Collection
              */
             name?: string | null;
+            /** @description Number strategy-specific configuration (JSON, mutable) */
+            numberConfig?: unknown;
+            numberStrategy?: null | components["schemas"]["NumberStrategy"];
             /**
              * @description Filesystem path to the library
              * @example /media/comics
@@ -7015,10 +7054,16 @@ export interface components {
             completed?: boolean;
             /**
              * Format: int32
-             * @description Current page number (0-indexed)
+             * @description Current page number (1-indexed)
              * @example 42
              */
             current_page: number;
+            /**
+             * Format: double
+             * @description Progress as a percentage (0.0-1.0), used for EPUB books with reflowable content
+             * @example 0.45
+             */
+            progress_percentage?: number | null;
         };
         /** @description Update setting request */
         UpdateSettingRequest: {

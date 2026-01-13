@@ -7,19 +7,22 @@ import {
 	useComputedColorScheme,
 } from "@mantine/core";
 import { IconMenu2, IconMoon, IconSun } from "@tabler/icons-react";
-import { SearchInput } from "@/components/search";
+import type { RefObject } from "react";
+import { SearchInput, type SearchInputHandle } from "@/components/search";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
 
 interface HeaderProps {
 	mobileOpened: boolean;
 	toggleMobile: () => void;
 	toggleDesktop: () => void;
+	searchInputRef?: RefObject<SearchInputHandle | null>;
 }
 
 export function Header({
 	mobileOpened,
 	toggleMobile,
 	toggleDesktop,
+	searchInputRef,
 }: HeaderProps) {
 	const computedColorScheme = useComputedColorScheme("dark");
 	const setPreference = useUserPreferencesStore((state) => state.setPreference);
@@ -54,7 +57,7 @@ export function Header({
 				</Group>
 
 				<Group>
-					<SearchInput />
+					<SearchInput ref={searchInputRef} />
 
 					<ActionIcon
 						variant="subtle"

@@ -44,6 +44,7 @@ import type {
 	CreateLibraryRequest,
 	FileSystemEntry,
 	Library,
+	NumberStrategy,
 	ScanningConfig,
 	SeriesStrategy,
 } from "@/types";
@@ -51,6 +52,7 @@ import { CronInput } from "./CronInput";
 import { PreviewScanPanel } from "./PreviewScanPanel";
 import {
 	BookStrategySelector,
+	NumberStrategySelector,
 	SERIES_STRATEGIES,
 	SeriesStrategySelector,
 } from "./StrategySelector";
@@ -66,10 +68,10 @@ type ScanStrategy = "manual" | "auto";
 const ALL_FORMATS = ["CBZ", "CBR", "EPUB", "PDF"];
 
 const READING_DIRECTIONS = [
-	{ value: "ltr", label: "Left to Right (Comics)" },
+	{ value: "ltr", label: "Left to Right (Books & Comics)" },
 	{ value: "rtl", label: "Right to Left (Manga)" },
-	{ value: "ttb", label: "Top to Bottom (Webtoon)" },
-	{ value: "btt", label: "Bottom to Top" },
+	{ value: "ttb", label: "Vertical" },
+	{ value: "webtoon", label: "Webtoon" },
 ];
 
 export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
@@ -96,11 +98,13 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 	const [allowedFormats, setAllowedFormats] = useState<string[]>(ALL_FORMATS);
 	const [excludedPatterns, setExcludedPatterns] = useState("");
 
-	// Strategy state (only used in add mode - strategies are immutable after creation)
+	// Strategy state (only used in add mode - series strategy is immutable after creation)
 	const [seriesStrategy, setSeriesStrategy] =
 		useState<SeriesStrategy>("series_volume");
 	const [seriesConfig, setSeriesConfig] = useState<Record<string, unknown>>({});
 	const [bookStrategy, setBookStrategy] = useState<BookStrategy>("filename");
+	const [numberStrategy, setNumberStrategy] =
+		useState<NumberStrategy>("file_order");
 
 	// Load drives when modal opens (only for add mode)
 	const { data: drives, isLoading: drivesLoading } = useQuery({
@@ -168,6 +172,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 			setSeriesStrategy("series_volume");
 			setSeriesConfig({});
 			setBookStrategy("filename");
+			setNumberStrategy("file_order");
 		}
 	}, [opened, library, isEditMode]);
 
@@ -351,6 +356,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 				seriesConfig:
 					Object.keys(seriesConfig).length > 0 ? seriesConfig : undefined,
 				bookStrategy,
+				numberStrategy,
 			});
 		}
 	};
@@ -707,6 +713,13 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 
 				<Divider my="sm" />
 
+				<NumberStrategySelector
+					value={numberStrategy}
+					onChange={setNumberStrategy}
+				/>
+
+				<Divider my="sm" />
+
 				<PreviewScanPanel
 					path={selectedPath || libraryPath}
 					seriesStrategy={seriesStrategy}
@@ -725,6 +738,9 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 								</Badge>
 								<Badge color="gray" variant="light">
 									Book: {library.bookStrategy || "filename"}
+								</Badge>
+								<Badge color="teal" variant="light">
+									Number: {library.numberStrategy || "file_order"}
 								</Badge>
 							</Group>
 							{selectedStrategyInfo && (

@@ -5,6 +5,11 @@
 import { delay, HttpResponse, http } from "msw";
 import { createPaginatedResponse } from "../data/factories";
 import { getBooksByLibrary, getBooksBySeries, mockBooks } from "../data/store";
+import coverSvg from "../fixtures/cover.svg?raw";
+import pageSvg from "../fixtures/page.svg?raw";
+import sampleCbzUrl from "../fixtures/sample.cbz?url";
+import sampleEpubUrl from "../fixtures/sample.epub?url";
+import samplePdfUrl from "../fixtures/sample.pdf?url";
 
 export const bookHandlers = [
 	// IMPORTANT: Specific routes MUST come before parameterized routes
@@ -259,23 +264,21 @@ export const bookHandlers = [
 	// Get book thumbnail
 	http.get("/api/v1/books/:id/thumbnail", async () => {
 		await delay(50);
-		// Return a placeholder image response
-		return new HttpResponse(null, {
-			status: 302,
+		// Return the cover SVG as an image response
+		return new HttpResponse(coverSvg, {
 			headers: {
-				Location: "https://placehold.co/300x450/333/fff?text=Cover",
+				"Content-Type": "image/svg+xml",
 			},
 		});
 	}),
 
 	// Get book page image
-	http.get("/api/v1/books/:id/pages/:pageNum", async ({ params }) => {
+	http.get("/api/v1/books/:id/pages/:pageNum", async () => {
 		await delay(100);
-		// Return a placeholder page image
-		return new HttpResponse(null, {
-			status: 302,
+		// Return the page SVG as an image response
+		return new HttpResponse(pageSvg, {
 			headers: {
-				Location: `https://placehold.co/800x1200/222/fff?text=Page+${params.pageNum}`,
+				"Content-Type": "image/svg+xml",
 			},
 		});
 	}),
@@ -328,25 +331,61 @@ export const bookHandlers = [
 		return HttpResponse.json({ message: "Book marked as unread" });
 	}),
 
+	// Download book file
+	http.get("/api/v1/books/:id/file", async ({ params }) => {
+		await delay(100);
+		const book = mockBooks.find((b) => b.id === params.id);
+
+		if (!book) {
+			return HttpResponse.json({ error: "Book not found" }, { status: 404 });
+		}
+
+		// Map file format to fixture URL and content type
+		const format = book.fileFormat.toLowerCase();
+		let fixtureUrl: string;
+		let contentType: string;
+		let filename: string;
+
+		switch (format) {
+			case "epub":
+				fixtureUrl = sampleEpubUrl;
+				contentType = "application/epub+zip";
+				filename = `${book.title}.epub`;
+				break;
+			case "pdf":
+				fixtureUrl = samplePdfUrl;
+				contentType = "application/pdf";
+				filename = `${book.title}.pdf`;
+				break;
+			case "cbz":
+			case "cbr":
+			default:
+				fixtureUrl = sampleCbzUrl;
+				contentType = "application/zip";
+				filename = `${book.title}.cbz`;
+				break;
+		}
+
+		// Fetch the fixture file and return it
+		const response = await fetch(fixtureUrl);
+		const blob = await response.blob();
+
+		return new HttpResponse(blob, {
+			headers: {
+				"Content-Type": contentType,
+				"Content-Disposition": `attachment; filename="${filename}"`,
+			},
+		});
+	}),
+
 	// List books by series
-	http.get("/api/v1/series/:seriesId/books", async ({ params, request }) => {
+	// Returns plain array (not paginated) - matches API expectation
+	http.get("/api/v1/series/:seriesId/books", async ({ params }) => {
 		await delay(200);
-		const url = new URL(request.url);
-		const page = Number.parseInt(url.searchParams.get("page") || "0");
-		const pageSize = Number.parseInt(url.searchParams.get("pageSize") || "20");
 
 		const filteredBooks = getBooksBySeries(params.seriesId as string);
-		const start = page * pageSize;
-		const end = start + pageSize;
-		const items = filteredBooks.slice(start, end);
 
-		return HttpResponse.json(
-			createPaginatedResponse(items, {
-				page,
-				pageSize,
-				total: filteredBooks.length,
-			}),
-		);
+		return HttpResponse.json(filteredBooks);
 	}),
 
 	// List books by library

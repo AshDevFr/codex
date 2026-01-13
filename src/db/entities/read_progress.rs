@@ -3,7 +3,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "read_progress")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -11,6 +11,8 @@ pub struct Model {
     pub user_id: Uuid,
     pub book_id: Uuid,
     pub current_page: i32,
+    /// Progress as a percentage (0.0-1.0), used for EPUB books with reflowable content
+    pub progress_percentage: Option<f64>,
     pub completed: bool,
     pub started_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

@@ -223,7 +223,7 @@ pub struct ReplaceSeriesMetadataRequest {
     #[schema(example = 1987)]
     pub year: Option<i32>,
 
-    /// Reading direction (ltr, rtl, ttb, btt, or auto)
+    /// Reading direction (ltr, rtl, ttb or webtoon)
     #[schema(example = "ltr")]
     pub reading_direction: Option<String>,
 
@@ -259,7 +259,7 @@ pub struct PatchSeriesMetadataRequest {
     #[schema(value_type = Option<i32>, example = 1987, nullable = true)]
     pub year: super::patch::PatchValue<i32>,
 
-    /// Reading direction (ltr, rtl, ttb, btt, or auto)
+    /// Reading direction (ltr, rtl, ttb or webtoon)
     #[serde(default)]
     #[schema(value_type = Option<String>, example = "ltr", nullable = true)]
     pub reading_direction: super::patch::PatchValue<String>,
@@ -782,7 +782,7 @@ pub struct FullSeriesMetadataResponse {
     #[schema(example = "en")]
     pub language: Option<String>,
 
-    /// Reading direction (ltr, rtl, ttb, btt)
+    /// Reading direction (ltr, rtl, ttb or webtoon)
     #[schema(example = "ltr")]
     pub reading_direction: Option<String>,
 

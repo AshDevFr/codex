@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::ScanningConfigDto;
-use crate::models::{BookStrategy, SeriesStrategy};
+use crate::models::{BookStrategy, NumberStrategy, SeriesStrategy};
 
 /// Library data transfer object
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -36,6 +36,14 @@ pub struct LibraryDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub book_config: Option<serde_json::Value>,
 
+    /// Book number strategy (file_order, metadata, filename, smart)
+    #[schema(example = "file_order")]
+    pub number_strategy: NumberStrategy,
+
+    /// Number strategy-specific configuration (JSON)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub number_config: Option<serde_json::Value>,
+
     pub scanning_config: Option<ScanningConfigDto>,
     #[schema(example = "2024-01-15T10:30:00Z")]
     pub last_scanned_at: Option<DateTime<Utc>>,
@@ -57,7 +65,7 @@ pub struct LibraryDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = ".DS_Store\nThumbs.db")]
     pub excluded_patterns: Option<String>,
-    /// Default reading direction for books in this library (ltr, rtl, ttb, btt)
+    /// Default reading direction for books in this library (ltr, rtl, ttb or webtoon)
     #[schema(example = "ltr")]
     pub default_reading_direction: String,
 }
@@ -88,15 +96,25 @@ pub struct CreateLibraryRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub series_config: Option<serde_json::Value>,
 
-    /// Book naming strategy (immutable after creation)
+    /// Book naming strategy (mutable after creation)
     /// Options: filename, metadata_first, smart, series_name
     #[serde(default)]
     #[schema(example = "filename")]
     pub book_strategy: Option<BookStrategy>,
 
-    /// Book strategy-specific configuration (JSON, immutable after creation)
+    /// Book strategy-specific configuration (JSON, mutable after creation)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub book_config: Option<serde_json::Value>,
+
+    /// Book number strategy (mutable after creation)
+    /// Options: file_order, metadata, filename, smart
+    #[serde(default)]
+    #[schema(example = "file_order")]
+    pub number_strategy: Option<NumberStrategy>,
+
+    /// Number strategy-specific configuration (JSON, mutable after creation)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub number_config: Option<serde_json::Value>,
 
     /// Scanning configuration
     pub scanning_config: Option<ScanningConfigDto>,
@@ -116,7 +134,7 @@ pub struct CreateLibraryRequest {
     #[schema(example = ".DS_Store\nThumbs.db")]
     pub excluded_patterns: Option<String>,
 
-    /// Default reading direction for books in this library (ltr, rtl, ttb, btt)
+    /// Default reading direction for books in this library (ltr, rtl, ttb or webtoon)
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = "ltr")]
     pub default_reading_direction: Option<String>,
@@ -128,9 +146,8 @@ fn is_false(b: &bool) -> bool {
 
 /// Update library request
 ///
-/// Note: series_strategy, series_config, book_strategy, and book_config are
-/// immutable after library creation and cannot be updated. To change strategies,
-/// delete the library and recreate it.
+/// Note: series_strategy and series_config are immutable after library creation.
+/// book_strategy, book_config, number_strategy, and number_config can be updated.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateLibraryRequest {
@@ -150,6 +167,26 @@ pub struct UpdateLibraryRequest {
     #[schema(example = true)]
     pub is_active: Option<bool>,
 
+    /// Book naming strategy (mutable)
+    /// Options: filename, metadata_first, smart, series_name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "filename")]
+    pub book_strategy: Option<BookStrategy>,
+
+    /// Book strategy-specific configuration (JSON, mutable)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub book_config: Option<serde_json::Value>,
+
+    /// Book number strategy (mutable)
+    /// Options: file_order, metadata, filename, smart
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "file_order")]
+    pub number_strategy: Option<NumberStrategy>,
+
+    /// Number strategy-specific configuration (JSON, mutable)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub number_config: Option<serde_json::Value>,
+
     /// Scanning configuration
     pub scanning_config: Option<ScanningConfigDto>,
 
@@ -163,7 +200,7 @@ pub struct UpdateLibraryRequest {
     #[schema(example = ".DS_Store")]
     pub excluded_patterns: Option<String>,
 
-    /// Default reading direction for books in this library (ltr, rtl, ttb, btt)
+    /// Default reading direction for books in this library (ltr, rtl, ttb or webtoon)
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = "rtl")]
     pub default_reading_direction: Option<String>,

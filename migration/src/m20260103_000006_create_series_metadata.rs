@@ -39,7 +39,7 @@ impl MigrationTrait for Migration {
                     ) // ongoing, ended, hiatus, abandoned, unknown
                     .col(ColumnDef::new(SeriesMetadata::AgeRating).integer()) // e.g., 13, 16, 18
                     .col(ColumnDef::new(SeriesMetadata::Language).string_len(10)) // BCP47: "en", "ja", "ko"
-                    .col(ColumnDef::new(SeriesMetadata::ReadingDirection).string_len(10)) // ltr, rtl, ttb, btt
+                    .col(ColumnDef::new(SeriesMetadata::ReadingDirection).string_len(10)) // ltr, rtl, ttb, webtoon
                     .col(ColumnDef::new(SeriesMetadata::Year).integer())
                     .col(ColumnDef::new(SeriesMetadata::TotalBookCount).integer()) // Expected total (for ongoing series)
                     // Lock fields (prevent auto-refresh from overwriting user edits)

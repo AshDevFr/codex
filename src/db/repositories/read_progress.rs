@@ -30,6 +30,19 @@ impl ReadProgressRepository {
         current_page: i32,
         completed: bool,
     ) -> Result<read_progress::Model> {
+        Self::upsert_with_percentage(db, user_id, book_id, current_page, None, completed).await
+    }
+
+    /// Create or update reading progress for a user and book with optional percentage
+    /// The percentage field is primarily used for EPUB books with reflowable content
+    pub async fn upsert_with_percentage(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        book_id: Uuid,
+        current_page: i32,
+        progress_percentage: Option<f64>,
+        completed: bool,
+    ) -> Result<read_progress::Model> {
         // Check if progress already exists
         let existing = Self::get_by_user_and_book(db, user_id, book_id).await?;
 
@@ -39,6 +52,7 @@ impl ReadProgressRepository {
             // Update existing progress
             let mut active_model: read_progress::ActiveModel = existing_model.clone().into();
             active_model.current_page = Set(current_page);
+            active_model.progress_percentage = Set(progress_percentage);
             active_model.completed = Set(completed);
             active_model.updated_at = Set(now);
 
@@ -56,6 +70,7 @@ impl ReadProgressRepository {
                 user_id: Set(user_id),
                 book_id: Set(book_id),
                 current_page: Set(current_page),
+                progress_percentage: Set(progress_percentage),
                 completed: Set(completed),
                 started_at: Set(now),
                 updated_at: Set(now),
@@ -130,16 +145,15 @@ impl ReadProgressRepository {
     }
 
     /// Mark a book as read (completed) for a user
-    /// Sets current_page to the book's last page
+    /// Sets current_page to the book's last page (1-indexed)
     pub async fn mark_as_read(
         db: &DatabaseConnection,
         user_id: Uuid,
         book_id: Uuid,
         page_count: i32,
     ) -> Result<read_progress::Model> {
-        // Mark as completed with the last page (page_count - 1, since 0-indexed)
-        let last_page = if page_count > 0 { page_count - 1 } else { 0 };
-        Self::upsert(db, user_id, book_id, last_page, true).await
+        // Mark as completed with the last page (1-indexed, same as page_count)
+        Self::upsert(db, user_id, book_id, page_count, true).await
     }
 
     /// Mark a book as unread for a user
@@ -162,10 +176,9 @@ impl ReadProgressRepository {
         let _now = Utc::now();
         let mut count = 0;
 
-        // Process each book
+        // Process each book - page_count is 1-indexed (last page = page_count)
         for (book_id, page_count) in book_ids {
-            let last_page = if page_count > 0 { page_count - 1 } else { 0 };
-            Self::upsert(db, user_id, book_id, last_page, true).await?;
+            Self::upsert(db, user_id, book_id, page_count, true).await?;
             count += 1;
         }
 
@@ -425,7 +438,7 @@ mod tests {
 
         assert_eq!(progress.user_id, user.id);
         assert_eq!(progress.book_id, book.id);
-        assert_eq!(progress.current_page, book.page_count - 1); // 0-indexed
+        assert_eq!(progress.current_page, book.page_count); // 1-indexed (last page = page_count)
         assert!(progress.completed);
         assert!(progress.completed_at.is_some());
     }
@@ -493,9 +506,10 @@ mod tests {
         assert!(progress1.completed);
         assert!(progress2.completed);
         assert!(progress3.completed);
-        assert_eq!(progress1.current_page, book1.page_count - 1);
-        assert_eq!(progress2.current_page, book2.page_count - 1);
-        assert_eq!(progress3.current_page, book3.page_count - 1);
+        // 1-indexed: last page = page_count
+        assert_eq!(progress1.current_page, book1.page_count);
+        assert_eq!(progress2.current_page, book2.page_count);
+        assert_eq!(progress3.current_page, book3.page_count);
     }
 
     #[tokio::test]

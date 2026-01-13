@@ -171,6 +171,9 @@ openapi-types: ## Generate TypeScript types from OpenAPI spec
 
 openapi-all: openapi openapi-types ## Generate OpenAPI spec and TypeScript types
 
+frontend-fixtures: ## Generate mock fixture files (CBZ, EPUB, PDF)
+	cd web && npm run generate:fixtures
+
 # =============================================================================
 # Setup
 # =============================================================================

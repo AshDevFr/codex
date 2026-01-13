@@ -9,7 +9,7 @@ use crate::api::{
 };
 use crate::db::entities::libraries;
 use crate::db::repositories::{CreateLibraryParams, LibraryRepository};
-use crate::models::{BookStrategy, SeriesStrategy};
+use crate::models::{BookStrategy, NumberStrategy, SeriesStrategy};
 use crate::require_permission;
 use crate::scanner::strategies::create_strategy;
 use axum::{
@@ -41,10 +41,13 @@ async fn library_to_dto(db: &DatabaseConnection, library: libraries::Model) -> L
         SeriesStrategy::from_str(&library.series_strategy).unwrap_or(SeriesStrategy::SeriesVolume);
     let book_strategy =
         BookStrategy::from_str(&library.book_strategy).unwrap_or(BookStrategy::Filename);
+    let number_strategy =
+        NumberStrategy::from_str(&library.number_strategy).unwrap_or(NumberStrategy::FileOrder);
 
     // Extract config values (already serde_json::Value)
     let series_config = library.series_config;
     let book_config = library.book_config;
+    let number_config = library.number_config;
 
     LibraryDto {
         id: library.id,
@@ -56,6 +59,8 @@ async fn library_to_dto(db: &DatabaseConnection, library: libraries::Model) -> L
         series_config,
         book_strategy,
         book_config,
+        number_strategy,
+        number_config,
         scanning_config: library
             .scanning_config
             .and_then(|json| serde_json::from_str(&json).ok()),
@@ -168,10 +173,12 @@ pub async fn create_library(
     // Build CreateLibraryParams with all strategy and config fields
     let series_strategy = request.series_strategy.unwrap_or_default();
     let book_strategy = request.book_strategy.unwrap_or_default();
+    let number_strategy = request.number_strategy.unwrap_or_default();
 
-    // Use series and book configs directly (already serde_json::Value)
+    // Use configs directly (already serde_json::Value)
     let series_config = request.series_config.clone();
     let book_config = request.book_config.clone();
+    let number_config = request.number_config.clone();
 
     // Validate the strategy can be created (validates config is appropriate for strategy)
     let series_config_str = series_config.as_ref().map(|v| v.to_string());
@@ -184,7 +191,9 @@ pub async fn create_library(
         .with_series_strategy(series_strategy)
         .with_series_config(series_config)
         .with_book_strategy(book_strategy)
-        .with_book_config(book_config);
+        .with_book_config(book_config)
+        .with_number_strategy(number_strategy)
+        .with_number_config(number_config);
 
     // Add optional fields
     if let Some(config_dto) = &request.scanning_config {
@@ -304,7 +313,24 @@ pub async fn update_library(
 
         library.scanning_config = Some(config_json);
     }
+    // Handle book_strategy if provided (mutable)
+    if let Some(book_strategy) = request.book_strategy {
+        library.book_strategy = book_strategy.as_str().to_string();
+    }
+    // Handle book_config if provided (mutable)
+    if let Some(book_config) = request.book_config {
+        library.book_config = Some(book_config);
+    }
+    // Handle number_strategy if provided (mutable)
+    if let Some(number_strategy) = request.number_strategy {
+        library.number_strategy = number_strategy.as_str().to_string();
+    }
+    // Handle number_config if provided (mutable)
+    if let Some(number_config) = request.number_config {
+        library.number_config = Some(number_config);
+    }
     // Note: description and is_active fields don't exist in the entity
+    // Note: series_strategy and series_config are IMMUTABLE after creation
     library.updated_at = Utc::now();
 
     LibraryRepository::update(&state.db, &library)

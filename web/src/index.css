@@ -85,3 +85,8 @@ button:focus-visible {
 .hover-underline:hover {
 	text-decoration: underline;
 }
+
+/* Media card hover effect - show read button overlay */
+.media-card-cover:hover .media-card-read-overlay {
+	opacity: 1 !important;
+}

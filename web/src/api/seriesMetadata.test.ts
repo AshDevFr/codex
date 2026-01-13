@@ -186,7 +186,7 @@ describe("seriesMetadataApi", () => {
 					label: "Updated Label",
 				};
 
-				vi.mocked(api.put).mockResolvedValueOnce({ data: mockTitle });
+				vi.mocked(api.patch).mockResolvedValueOnce({ data: mockTitle });
 
 				const result = await seriesMetadataApi.updateAlternateTitle(
 					"series-123",
@@ -195,7 +195,7 @@ describe("seriesMetadataApi", () => {
 					"Updated Label",
 				);
 
-				expect(api.put).toHaveBeenCalledWith("/series/series-123/alternate-titles/alt-1", {
+				expect(api.patch).toHaveBeenCalledWith("/series/series-123/alternate-titles/alt-1", {
 					title: "Updated Title",
 					label: "Updated Label",
 				});

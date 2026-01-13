@@ -5,11 +5,12 @@ use crate::api::{
         BookMetadataDto, PaginationParams, SortDirection,
     },
     error::ApiError,
-    extractors::{AuthContext, AuthState},
+    extractors::{AuthContext, AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
 use crate::db::repositories::{
-    BookMetadataRepository, BookRepository, ReadProgressRepository, SeriesRepository,
+    BookMetadataRepository, BookRepository, LibraryRepository, ReadProgressRepository,
+    SeriesMetadataRepository, SeriesRepository,
 };
 use crate::require_permission;
 use crate::services::FilterService;
@@ -80,7 +81,7 @@ pub async fn books_to_dtos(
     user_id: Uuid,
     books: Vec<crate::db::entities::books::Model>,
 ) -> Result<Vec<BookDto>, ApiError> {
-    // Collect unique series IDs
+    // Collect unique series IDs and library IDs
     let series_ids: Vec<Uuid> = books
         .iter()
         .map(|b| b.series_id)
@@ -88,11 +89,35 @@ pub async fn books_to_dtos(
         .into_iter()
         .collect();
 
+    let library_ids: Vec<Uuid> = books
+        .iter()
+        .map(|b| b.library_id)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+
     // Fetch all series in one query
     let mut series_map = HashMap::new();
-    for series_id in series_ids {
-        if let Ok(Some(series)) = SeriesRepository::get_by_id(db, series_id).await {
-            series_map.insert(series_id, series.name);
+    for series_id in &series_ids {
+        if let Ok(Some(series)) = SeriesRepository::get_by_id(db, *series_id).await {
+            series_map.insert(*series_id, series.name);
+        }
+    }
+
+    // Fetch series metadata for reading direction
+    let mut series_metadata_map: HashMap<Uuid, Option<String>> = HashMap::new();
+    for series_id in &series_ids {
+        if let Ok(Some(metadata)) = SeriesMetadataRepository::get_by_series_id(db, *series_id).await
+        {
+            series_metadata_map.insert(*series_id, metadata.reading_direction);
+        }
+    }
+
+    // Fetch libraries for default reading direction fallback
+    let mut library_reading_direction_map: HashMap<Uuid, String> = HashMap::new();
+    for library_id in &library_ids {
+        if let Ok(Some(library)) = LibraryRepository::get_by_id(db, *library_id).await {
+            library_reading_direction_map.insert(*library_id, library.default_reading_direction);
         }
     }
 
@@ -128,6 +153,12 @@ pub async fn books_to_dtos(
 
             let read_progress = progress_map.get(&book.id).cloned();
 
+            // Determine effective reading direction: series metadata > library default
+            let reading_direction = series_metadata_map
+                .get(&book.series_id)
+                .and_then(|opt| opt.clone())
+                .or_else(|| library_reading_direction_map.get(&book.library_id).cloned());
+
             BookDto {
                 id: book.id,
                 series_id: book.series_id,
@@ -147,6 +178,7 @@ pub async fn books_to_dtos(
                 read_progress,
                 analysis_error: book.analysis_error,
                 deleted: book.deleted,
+                reading_direction,
             }
         })
         .collect();
@@ -1208,7 +1240,7 @@ pub async fn list_library_recently_read_books(
 )]
 pub async fn get_book_file(
     State(state): State<Arc<AuthState>>,
-    auth: AuthContext,
+    FlexibleAuthContext(auth): FlexibleAuthContext,
     Path(book_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;

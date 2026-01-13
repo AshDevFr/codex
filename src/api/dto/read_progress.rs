@@ -6,9 +6,14 @@ use uuid::Uuid;
 /// Request to update reading progress for a book
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct UpdateProgressRequest {
-    /// Current page number (0-indexed)
+    /// Current page number (1-indexed)
     #[schema(example = 42)]
     pub current_page: i32,
+
+    /// Progress as a percentage (0.0-1.0), used for EPUB books with reflowable content
+    #[schema(example = 0.45)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress_percentage: Option<f64>,
 
     /// Whether the book is marked as completed
     #[schema(example = false)]
@@ -31,9 +36,16 @@ pub struct ReadProgressResponse {
     #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]
     pub book_id: Uuid,
 
-    /// Current page (0-indexed)
+    /// Current page (1-indexed)
     #[schema(example = 42)]
     pub current_page: i32,
+
+    /// Progress as a percentage (0.0-1.0)
+    /// For EPUBs, this is the stored percentage from reflowable content
+    /// For other formats, this is calculated from current_page / total_pages
+    #[schema(example = 0.45)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress_percentage: Option<f64>,
 
     /// Whether the book is completed
     #[schema(example = false)]
@@ -60,6 +72,7 @@ impl From<crate::db::entities::read_progress::Model> for ReadProgressResponse {
             user_id: model.user_id,
             book_id: model.book_id,
             current_page: model.current_page,
+            progress_percentage: model.progress_percentage,
             completed: model.completed,
             started_at: model.started_at,
             updated_at: model.updated_at,
