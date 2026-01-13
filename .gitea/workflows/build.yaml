@@ -103,7 +103,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: web
-        run: npm ci --include=optional
+        run: npm ci --force
 
       - name: Lint check
         continue-on-error: true
