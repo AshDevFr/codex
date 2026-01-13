@@ -38,6 +38,7 @@ describe("readerStore", () => {
 				transitionDuration: 200,
 				webtoonSidePadding: 0,
 				webtoonPageGap: 0,
+				autoAdvanceToNextBook: false,
 			},
 			currentPage: 1,
 			totalPages: 0,
@@ -1067,6 +1068,50 @@ describe("readerStore", () => {
 			expect(state.settings.epubMargin).toBe(20);
 			expect(state.settings.epubFontSize).toBe(120);
 			expect(state.settings.epubTheme).toBe("dark");
+		});
+	});
+
+	describe("Auto-advance to next book", () => {
+		describe("setAutoAdvanceToNextBook", () => {
+			it("should enable auto-advance", () => {
+				const { setAutoAdvanceToNextBook } = useReaderStore.getState();
+
+				setAutoAdvanceToNextBook(true);
+
+				expect(useReaderStore.getState().settings.autoAdvanceToNextBook).toBe(true);
+			});
+
+			it("should disable auto-advance", () => {
+				useReaderStore.setState({
+					settings: {
+						...useReaderStore.getState().settings,
+						autoAdvanceToNextBook: true,
+					},
+				});
+
+				const { setAutoAdvanceToNextBook } = useReaderStore.getState();
+				setAutoAdvanceToNextBook(false);
+
+				expect(useReaderStore.getState().settings.autoAdvanceToNextBook).toBe(false);
+			});
+
+			it("should default to false", () => {
+				expect(useReaderStore.getState().settings.autoAdvanceToNextBook).toBe(false);
+			});
+		});
+
+		it("should preserve auto-advance setting when resetting session", () => {
+			useReaderStore.setState({
+				settings: {
+					...useReaderStore.getState().settings,
+					autoAdvanceToNextBook: true,
+				},
+			});
+
+			const { resetSession } = useReaderStore.getState();
+			resetSession();
+
+			expect(useReaderStore.getState().settings.autoAdvanceToNextBook).toBe(true);
 		});
 	});
 });

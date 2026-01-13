@@ -74,6 +74,9 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 	const setWebtoonPageGap = useReaderStore(
 		(state) => state.setWebtoonPageGap,
 	);
+	const setAutoAdvanceToNextBook = useReaderStore(
+		(state) => state.setAutoAdvanceToNextBook,
+	);
 
 	// Mutation to update series reading direction
 	const updateSeriesReadingDirection = useMutation({
@@ -135,6 +138,18 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 						size="sm"
 						checked={settings.autoHideToolbar}
 						onChange={(e) => setAutoHideToolbar(e.currentTarget.checked)}
+					/>
+				</Group>
+
+				<Group justify="space-between">
+					<Box>
+						<Text size="sm" fw={500}>Auto-advance to next book</Text>
+						<Text size="xs" c="dimmed">Automatically continue to next book in series</Text>
+					</Box>
+					<Switch
+						size="sm"
+						checked={settings.autoAdvanceToNextBook}
+						onChange={(e) => setAutoAdvanceToNextBook(e.currentTarget.checked)}
 					/>
 				</Group>
 

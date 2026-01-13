@@ -353,4 +353,126 @@ describe("useSeriesNavigation", () => {
 			expect(useReaderStore.getState().boundaryState).toBe("none");
 		});
 	});
+
+	describe("auto-advance to next book", () => {
+		it("should immediately navigate to next book when auto-advance is enabled", () => {
+			const onBoundaryChange = vi.fn();
+
+			act(() => {
+				useReaderStore.getState().initializeReader("book-1", 10, 10);
+				useReaderStore.getState().setAdjacentBooks({
+					prev: null,
+					next: { id: "book-2", title: "Next Book", pageCount: 100 },
+				});
+				useReaderStore.getState().setAutoAdvanceToNextBook(true);
+			});
+
+			const { result } = renderHook(
+				() => useSeriesNavigation({ onBoundaryChange }),
+				{ wrapper },
+			);
+
+			act(() => {
+				result.current.handleNextPage();
+			});
+
+			// Should navigate immediately without requiring second press
+			expect(mockNavigate).toHaveBeenCalledWith("/reader/book-2?page=1");
+			expect(onBoundaryChange).toHaveBeenCalledWith(
+				"at-end",
+				'Continuing to "Next Book"...',
+			);
+		});
+
+		it("should immediately navigate to prev book when auto-advance is enabled", () => {
+			const onBoundaryChange = vi.fn();
+
+			act(() => {
+				useReaderStore.getState().initializeReader("book-1", 10, 1);
+				useReaderStore.getState().setAdjacentBooks({
+					prev: { id: "book-0", title: "Prev Book", pageCount: 50 },
+					next: null,
+				});
+				useReaderStore.getState().setAutoAdvanceToNextBook(true);
+			});
+
+			const { result } = renderHook(
+				() => useSeriesNavigation({ onBoundaryChange }),
+				{ wrapper },
+			);
+
+			act(() => {
+				result.current.handlePrevPage();
+			});
+
+			// Should navigate immediately to prev book at last page
+			expect(mockNavigate).toHaveBeenCalledWith("/reader/book-0?page=50");
+			expect(onBoundaryChange).toHaveBeenCalledWith(
+				"at-start",
+				'Going back to "Prev Book"...',
+			);
+		});
+
+		it("should not auto-advance when there is no next book", () => {
+			const onBoundaryChange = vi.fn();
+
+			act(() => {
+				useReaderStore.getState().initializeReader("book-1", 10, 10);
+				useReaderStore.getState().setAdjacentBooks({
+					prev: { id: "book-0", title: "Prev Book", pageCount: 50 },
+					next: null,
+				});
+				useReaderStore.getState().setAutoAdvanceToNextBook(true);
+			});
+
+			const { result } = renderHook(
+				() => useSeriesNavigation({ onBoundaryChange }),
+				{ wrapper },
+			);
+
+			act(() => {
+				result.current.handleNextPage();
+			});
+
+			// Should show end of series message, not navigate
+			expect(mockNavigate).not.toHaveBeenCalled();
+			expect(onBoundaryChange).toHaveBeenCalledWith(
+				"at-end",
+				"You have reached the end of the series",
+			);
+		});
+
+		it("should require two presses when auto-advance is disabled", () => {
+			const onBoundaryChange = vi.fn();
+
+			act(() => {
+				useReaderStore.getState().initializeReader("book-1", 10, 10);
+				useReaderStore.getState().setAdjacentBooks({
+					prev: null,
+					next: { id: "book-2", title: "Next Book", pageCount: 100 },
+				});
+				useReaderStore.getState().setAutoAdvanceToNextBook(false);
+			});
+
+			const { result } = renderHook(
+				() => useSeriesNavigation({ onBoundaryChange }),
+				{ wrapper },
+			);
+
+			// First press - should set boundary state
+			act(() => {
+				result.current.handleNextPage();
+			});
+
+			expect(mockNavigate).not.toHaveBeenCalled();
+			expect(useReaderStore.getState().boundaryState).toBe("at-end");
+
+			// Second press - should navigate
+			act(() => {
+				result.current.handleNextPage();
+			});
+
+			expect(mockNavigate).toHaveBeenCalledWith("/reader/book-2?page=1");
+		});
+	});
 });

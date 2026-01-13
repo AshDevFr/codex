@@ -75,6 +75,8 @@ export interface ReaderSettings {
 	webtoonSidePadding: number;
 	/** Webtoon mode: gap between pages in pixels (0-20 in 5px increments) */
 	webtoonPageGap: number;
+	/** Auto-advance to next book when reaching end (default: false) */
+	autoAdvanceToNextBook: boolean;
 }
 
 export interface ReaderState {
@@ -138,6 +140,7 @@ export interface ReaderState {
 	setTransitionDuration: (duration: number) => void;
 	setWebtoonSidePadding: (padding: number) => void;
 	setWebtoonPageGap: (gap: number) => void;
+	setAutoAdvanceToNextBook: (enabled: boolean) => void;
 
 	// ==========================================================================
 	// Actions - Navigation
@@ -215,6 +218,7 @@ const DEFAULT_SETTINGS: ReaderSettings = {
 	transitionDuration: 200,
 	webtoonSidePadding: 0,
 	webtoonPageGap: 0,
+	autoAdvanceToNextBook: false,
 };
 
 const FIT_MODE_CYCLE: FitMode[] = [
@@ -371,6 +375,11 @@ export const useReaderStore = create<ReaderState>()(
 					set((state) => {
 						// Clamp gap between 0px and 20px
 						state.settings.webtoonPageGap = Math.max(0, Math.min(20, gap));
+					}),
+
+				setAutoAdvanceToNextBook: (enabled) =>
+					set((state) => {
+						state.settings.autoAdvanceToNextBook = enabled;
 					}),
 
 				// ==========================================================================

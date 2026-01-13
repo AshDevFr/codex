@@ -37,7 +37,8 @@ export interface UseSeriesNavigationOptions {
  * Hook that provides series navigation functionality with boundary detection.
  *
  * When at the end of a book and the user tries to go forward:
- * - First attempt: Sets boundary state to 'at-end' and returns a message
+ * - If auto-advance is enabled: Navigates directly to next book
+ * - Otherwise, first attempt: Sets boundary state to 'at-end' and returns a message
  * - Second attempt: Navigates to next book at page 1
  *
  * Same logic applies to the beginning (at-start -> previous book at last page)
@@ -51,6 +52,7 @@ export function useSeriesNavigation(
 	// Store state
 	const adjacentBooks = useReaderStore((state) => state.adjacentBooks);
 	const boundaryState = useReaderStore((state) => state.boundaryState);
+	const autoAdvance = useReaderStore((state) => state.settings.autoAdvanceToNextBook);
 	const isFirstPage = useReaderStore(selectIsFirstPage);
 	const isLastPage = useReaderStore(selectIsLastPage);
 
@@ -95,7 +97,12 @@ export function useSeriesNavigation(
 		}
 
 		// At the last page
-		if (boundaryState === "at-end" && canGoNextBook) {
+		if (autoAdvance && canGoNextBook) {
+			// Auto-advance is enabled - navigate directly to next book
+			const message = `Continuing to "${adjacentBooks?.next?.title}"...`;
+			onBoundaryChange?.("at-end", message);
+			goToNextBook();
+		} else if (boundaryState === "at-end" && canGoNextBook) {
 			// User pressed again at end - navigate to next book
 			goToNextBook();
 		} else if (canGoNextBook) {
@@ -111,6 +118,7 @@ export function useSeriesNavigation(
 	}, [
 		isLastPage,
 		boundaryState,
+		autoAdvance,
 		canGoNextBook,
 		adjacentBooks?.next?.title,
 		nextPage,
@@ -132,7 +140,12 @@ export function useSeriesNavigation(
 		}
 
 		// At the first page
-		if (boundaryState === "at-start" && canGoPrevBook) {
+		if (autoAdvance && canGoPrevBook) {
+			// Auto-advance is enabled - navigate directly to prev book at last page
+			const message = `Going back to "${adjacentBooks?.prev?.title}"...`;
+			onBoundaryChange?.("at-start", message);
+			goToPrevBook();
+		} else if (boundaryState === "at-start" && canGoPrevBook) {
 			// User pressed again at start - navigate to prev book at last page
 			goToPrevBook();
 		} else if (canGoPrevBook) {
@@ -148,6 +161,7 @@ export function useSeriesNavigation(
 	}, [
 		isFirstPage,
 		boundaryState,
+		autoAdvance,
 		canGoPrevBook,
 		adjacentBooks?.prev?.title,
 		prevPage,
