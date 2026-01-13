@@ -1,0 +1,9 @@
+# Only include files needed for docs build
+*
+!docs/
+!web/openapi.json
+
+# Exclude docs build artifacts
+docs/node_modules/
+docs/build/
+docs/.docusaurus/

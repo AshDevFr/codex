@@ -92,6 +92,7 @@ export interface BookListRequest {
 	page?: number;
 	pageSize?: number;
 	sort?: string;
+	includeDeleted?: boolean;
 }
 
 // =============================================================================

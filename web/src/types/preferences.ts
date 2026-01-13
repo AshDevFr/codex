@@ -12,21 +12,9 @@
 export interface TypedPreferences {
 	// UI preferences
 	"ui.theme": "light" | "dark" | "system";
-	"ui.language": string;
-	"ui.sidebar_collapsed": boolean;
-
-	// Reader preferences
-	"reader.default_zoom": number;
-	"reader.reading_direction": "auto" | "ltr" | "rtl";
-	"reader.page_fit": "width" | "height" | "contain" | "cover";
-
-	// Notification preferences
-	"notifications.email_enabled": boolean;
-	"notifications.new_books": boolean;
 
 	// Library preferences
-	"library.default_view": "grid" | "list";
-	"library.default_page_size": number;
+	"library.show_deleted_books": boolean;
 }
 
 /**
@@ -39,15 +27,7 @@ export type PreferenceKey = keyof TypedPreferences;
  */
 export const PREFERENCE_DEFAULTS: TypedPreferences = {
 	"ui.theme": "system",
-	"ui.language": "en",
-	"ui.sidebar_collapsed": false,
-	"reader.default_zoom": 100,
-	"reader.reading_direction": "auto",
-	"reader.page_fit": "width",
-	"notifications.email_enabled": true,
-	"notifications.new_books": true,
-	"library.default_view": "grid",
-	"library.default_page_size": 24,
+	"library.show_deleted_books": false,
 };
 
 /**

@@ -56,7 +56,7 @@ export function ProfileSettings() {
 	const [newApiKey, setNewApiKey] = useState<string | null>(null);
 
 	// Fetch user preferences
-	const { data: preferences, isLoading: preferencesLoading } = useQuery({
+	const { data: preferences } = useQuery({
 		queryKey: ["user-preferences"],
 		queryFn: userPreferencesApi.getAll,
 	});
@@ -85,7 +85,7 @@ export function ProfileSettings() {
 		isLoading: integrationsLoading,
 	} = useQuery({
 		queryKey: ["user-integrations"],
-		queryFn: userIntegrationsApi.list,
+		queryFn: userIntegrationsApi.getAll,
 	});
 
 	// Password change form
@@ -368,105 +368,6 @@ export function ProfileSettings() {
 											]}
 										/>
 									</Group>
-									<Group justify="space-between">
-										<div>
-											<Text fw={500}>Language</Text>
-											<Text size="sm" c="dimmed">
-												Display language (more coming soon)
-											</Text>
-										</div>
-										<Select
-											value={getPref("ui.language")}
-											onChange={(value) =>
-												updatePref("ui.language", value || "en")
-											}
-											data={[
-												{ label: "English", value: "en" },
-												{ label: "Japanese", value: "ja" },
-												{ label: "Spanish", value: "es" },
-											]}
-											w={150}
-										/>
-									</Group>
-								</Stack>
-							</Card>
-
-							<Card withBorder>
-								<Stack gap="md">
-									<Title order={3}>Reader Settings</Title>
-									<Group justify="space-between">
-										<div>
-											<Text fw={500}>Default Zoom</Text>
-											<Text size="sm" c="dimmed">
-												Default zoom level for the reader
-											</Text>
-										</div>
-										<Select
-											value={String(getPref("reader.default_zoom"))}
-											onChange={(value) =>
-												updatePref(
-													"reader.default_zoom",
-													Number.parseInt(value || "100"),
-												)
-											}
-											data={[
-												{ label: "50%", value: "50" },
-												{ label: "75%", value: "75" },
-												{ label: "100%", value: "100" },
-												{ label: "125%", value: "125" },
-												{ label: "150%", value: "150" },
-												{ label: "200%", value: "200" },
-											]}
-											w={100}
-										/>
-									</Group>
-									<Group justify="space-between">
-										<div>
-											<Text fw={500}>Reading Direction</Text>
-											<Text size="sm" c="dimmed">
-												Default page turn direction
-											</Text>
-										</div>
-										<SegmentedControl
-											value={getPref("reader.reading_direction")}
-											onChange={(value) =>
-												updatePref(
-													"reader.reading_direction",
-													value as "auto" | "ltr" | "rtl",
-												)
-											}
-											data={[
-												{ label: "Auto", value: "auto" },
-												{ label: "Left to Right", value: "ltr" },
-												{ label: "Right to Left", value: "rtl" },
-											]}
-										/>
-									</Group>
-									<Group justify="space-between">
-										<div>
-											<Text fw={500}>Page Fit</Text>
-											<Text size="sm" c="dimmed">
-												How pages fit in the reader window
-											</Text>
-										</div>
-										<Select
-											value={getPref("reader.page_fit")}
-											onChange={(value) =>
-												updatePref(
-													"reader.page_fit",
-													(value as "width" | "height" | "contain" | "cover") ||
-														"width",
-												)
-											}
-											data={[
-												{ label: "Fit Width", value: "width" },
-												{ label: "Fit Height", value: "height" },
-												{ label: "Contain", value: "contain" },
-												{ label: "Cover", value: "cover" },
-											]}
-											w={140}
-										/>
-									</Group>
 								</Stack>
 							</Card>
 
@@ -475,84 +376,16 @@ export function ProfileSettings() {
 									<Title order={3}>Library Display</Title>
 									<Group justify="space-between">
 										<div>
-											<Text fw={500}>Default View</Text>
+											<Text fw={500}>Show Deleted Books</Text>
 											<Text size="sm" c="dimmed">
-												Grid or list view for library browsing
-											</Text>
-										</div>
-										<SegmentedControl
-											value={getPref("library.default_view")}
-											onChange={(value) =>
-												updatePref(
-													"library.default_view",
-													value as "grid" | "list",
-												)
-											}
-											data={[
-												{ label: "Grid", value: "grid" },
-												{ label: "List", value: "list" },
-											]}
-										/>
-									</Group>
-									<Group justify="space-between">
-										<div>
-											<Text fw={500}>Items Per Page</Text>
-											<Text size="sm" c="dimmed">
-												Number of items to show per page
-											</Text>
-										</div>
-										<Select
-											value={String(getPref("library.default_page_size"))}
-											onChange={(value) =>
-												updatePref(
-													"library.default_page_size",
-													Number.parseInt(value || "24"),
-												)
-											}
-											data={[
-												{ label: "12", value: "12" },
-												{ label: "24", value: "24" },
-												{ label: "48", value: "48" },
-												{ label: "96", value: "96" },
-											]}
-											w={100}
-										/>
-									</Group>
-								</Stack>
-							</Card>
-
-							<Card withBorder>
-								<Stack gap="md">
-									<Title order={3}>Notifications</Title>
-									<Group justify="space-between">
-										<div>
-											<Text fw={500}>Email Notifications</Text>
-											<Text size="sm" c="dimmed">
-												Receive email notifications (when configured)
+												Display soft-deleted books in the library
 											</Text>
 										</div>
 										<Switch
-											checked={getPref("notifications.email_enabled")}
+											checked={getPref("library.show_deleted_books")}
 											onChange={(e) =>
 												updatePref(
-													"notifications.email_enabled",
-													e.currentTarget.checked,
-												)
-											}
-										/>
-									</Group>
-									<Group justify="space-between">
-										<div>
-											<Text fw={500}>New Books</Text>
-											<Text size="sm" c="dimmed">
-												Notify when new books are added to the library
-											</Text>
-										</div>
-										<Switch
-											checked={getPref("notifications.new_books")}
-											onChange={(e) =>
-												updatePref(
-													"notifications.new_books",
+													"library.show_deleted_books",
 													e.currentTarget.checked,
 												)
 											}

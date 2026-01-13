@@ -164,6 +164,7 @@ export const booksApi = {
 	 * - Include/exclude filtering for genres, tags, read status, etc.
 	 * - Full-text search (optional)
 	 * - Pagination and sorting
+	 * - Include deleted books (optional)
 	 *
 	 * @param libraryId - Library to filter by, or "all" for all libraries
 	 * @param request - The search request with condition, pagination, and sort options
@@ -197,6 +198,7 @@ export const booksApi = {
 			page: request.page,
 			pageSize: request.pageSize,
 			sort: request.sort,
+			includeDeleted: request.includeDeleted,
 		};
 
 		const response = await api.post<PaginatedResponse<Book>>("/books/list", body);

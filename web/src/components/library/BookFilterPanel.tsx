@@ -19,6 +19,7 @@ import { FilterGroup } from "./FilterGroup";
 import { useBookFilterState } from "@/hooks/useBookFilterState";
 import { genresApi } from "@/api/genres";
 import { tagsApi } from "@/api/tags";
+import { useUserPreferencesStore } from "@/store/userPreferencesStore";
 import classes from "./FilterPanel.module.css";
 
 // Read status options (user's reading progress)
@@ -42,6 +43,12 @@ export function BookFilterPanel() {
 	const [opened, { open, close }] = useDisclosure(false);
 	const filterState = useBookFilterState();
 	const isMobile = useMediaQuery("(max-width: 768px)");
+
+	// Get show deleted preference from user preferences store
+	const showDeletedBooks = useUserPreferencesStore((state) =>
+		state.getPreference("library.show_deleted_books"),
+	);
+	const setPreference = useUserPreferencesStore((state) => state.setPreference);
 
 	// Fetch available genres (global, not library-specific)
 	const { data: genres = [], isLoading: genresLoading } = useQuery({
@@ -176,6 +183,18 @@ export function BookFilterPanel() {
 													? "Only errors"
 													: "No errors"
 										}
+									/>
+								</Group>
+
+								{/* Show Deleted Toggle */}
+								<Group justify="space-between" px="xs">
+									<Text size="sm">Show deleted books</Text>
+									<Switch
+										checked={showDeletedBooks}
+										onChange={(e) =>
+											setPreference("library.show_deleted_books", e.currentTarget.checked)
+										}
+										color="red"
 									/>
 								</Group>
 

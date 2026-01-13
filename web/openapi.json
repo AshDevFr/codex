@@ -9142,7 +9142,8 @@
           "fileHash",
           "pageCount",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "deleted"
         ],
         "properties": {
           "analysisError": {
@@ -9156,6 +9157,11 @@
             "type": "string",
             "format": "date-time",
             "example": "2024-01-01T00:00:00Z"
+          },
+          "deleted": {
+            "type": "boolean",
+            "description": "Whether the book has been soft-deleted",
+            "example": false
           },
           "fileFormat": {
             "type": "string",
@@ -9246,6 +9252,10 @@
               "null"
             ],
             "description": "Full-text search query (case-insensitive search on book title)"
+          },
+          "includeDeleted": {
+            "type": "boolean",
+            "description": "Include soft-deleted books in results (default: false)"
           },
           "page": {
             "type": "integer",
@@ -12401,7 +12411,8 @@
                 "fileHash",
                 "pageCount",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "deleted"
               ],
               "properties": {
                 "analysisError": {
@@ -12415,6 +12426,11 @@
                   "type": "string",
                   "format": "date-time",
                   "example": "2024-01-01T00:00:00Z"
+                },
+                "deleted": {
+                  "type": "boolean",
+                  "description": "Whether the book has been soft-deleted",
+                  "example": false
                 },
                 "fileFormat": {
                   "type": "string",

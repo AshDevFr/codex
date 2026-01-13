@@ -31,9 +31,9 @@ describe("userPreferencesApi", () => {
 						updatedAt: "2024-01-15T10:30:00Z",
 					},
 					{
-						key: "reader.default_zoom",
-						value: 150,
-						valueType: "integer",
+						key: "library.show_deleted_books",
+						value: true,
+						valueType: "boolean",
 						updatedAt: "2024-01-15T10:30:00Z",
 					},
 				],
@@ -131,28 +131,9 @@ describe("userPreferencesApi", () => {
 			expect(result).toEqual(mockPreference);
 		});
 
-		it("should set a number preference", async () => {
-			const mockPreference = {
-				key: "reader.default_zoom",
-				value: 150,
-				valueType: "integer",
-				updatedAt: "2024-01-15T10:30:00Z",
-			};
-
-			vi.mocked(api.put).mockResolvedValueOnce({ data: mockPreference });
-
-			const result = await userPreferencesApi.set("reader.default_zoom", 150);
-
-			expect(api.put).toHaveBeenCalledWith(
-				"/user/preferences/reader.default_zoom",
-				{ value: 150 },
-			);
-			expect(result).toEqual(mockPreference);
-		});
-
 		it("should set a boolean preference", async () => {
 			const mockPreference = {
-				key: "ui.sidebar_collapsed",
+				key: "library.show_deleted_books",
 				value: true,
 				valueType: "boolean",
 				updatedAt: "2024-01-15T10:30:00Z",
@@ -160,10 +141,13 @@ describe("userPreferencesApi", () => {
 
 			vi.mocked(api.put).mockResolvedValueOnce({ data: mockPreference });
 
-			const result = await userPreferencesApi.set("ui.sidebar_collapsed", true);
+			const result = await userPreferencesApi.set(
+				"library.show_deleted_books",
+				true,
+			);
 
 			expect(api.put).toHaveBeenCalledWith(
-				"/user/preferences/ui.sidebar_collapsed",
+				"/user/preferences/library.show_deleted_books",
 				{ value: true },
 			);
 			expect(result).toEqual(mockPreference);
@@ -181,9 +165,9 @@ describe("userPreferencesApi", () => {
 						updatedAt: "2024-01-15T10:30:00Z",
 					},
 					{
-						key: "reader.default_zoom",
-						value: 150,
-						valueType: "integer",
+						key: "library.show_deleted_books",
+						value: true,
+						valueType: "boolean",
 						updatedAt: "2024-01-15T10:30:00Z",
 					},
 				],
@@ -194,13 +178,13 @@ describe("userPreferencesApi", () => {
 
 			const result = await userPreferencesApi.bulkSet({
 				"ui.theme": "dark",
-				"reader.default_zoom": 150,
+				"library.show_deleted_books": true,
 			});
 
 			expect(api.put).toHaveBeenCalledWith("/user/preferences", {
 				preferences: {
 					"ui.theme": "dark",
-					"reader.default_zoom": 150,
+					"library.show_deleted_books": true,
 				},
 			});
 			expect(result).toEqual(mockResponse);

@@ -30,6 +30,7 @@ import {
 	IconDotsVertical,
 	IconDownload,
 	IconPhoto,
+	IconTrash,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -199,10 +200,11 @@ export function BookDetail() {
 	const isCompleted = book.readProgress?.completed ?? false;
 
 	// Build display title
-	const displayTitle =
+	const baseTitle =
 		book.number !== undefined && book.number !== null
 			? `${book.number} - ${book.title}`
 			: book.title;
+	const displayTitle = book.deleted ? `(Deleted) ${baseTitle}` : baseTitle;
 
 	// Build breadcrumbs
 	const breadcrumbItems = [
@@ -263,13 +265,38 @@ export function BookDetail() {
 				<Grid gutter="md">
 					{/* Cover - smaller */}
 					<Grid.Col span={{ base: 4, xs: 3, sm: 2 }}>
-						<Image
-							src={coverUrl}
-							alt={book.title}
-							radius="sm"
-							fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='212'%3E%3Crect fill='%23333' width='150' height='212'/%3E%3Ctext fill='%23666' font-family='sans-serif' font-size='12' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Cover%3C/text%3E%3C/svg%3E"
-							style={{ aspectRatio: "150/212.125" }}
-						/>
+						<Box pos="relative">
+							{book.deleted ? (
+								<Box
+									style={{
+										aspectRatio: "150/212.125",
+										display: "flex",
+										flexDirection: "column",
+										alignItems: "center",
+										justifyContent: "center",
+										backgroundColor: "var(--mantine-color-dark-6)",
+										borderRadius: "var(--mantine-radius-sm)",
+										border: "2px dashed var(--mantine-color-red-6)",
+									}}
+								>
+									<IconTrash
+										size={48}
+										style={{ color: "var(--mantine-color-red-6)", opacity: 0.7 }}
+									/>
+									<Text size="sm" fw={500} c="red" mt="xs">
+										Deleted
+									</Text>
+								</Box>
+							) : (
+								<Image
+									src={coverUrl}
+									alt={book.title}
+									radius="sm"
+									fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='212'%3E%3Crect fill='%23333' width='150' height='212'/%3E%3Ctext fill='%23666' font-family='sans-serif' font-size='12' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Cover%3C/text%3E%3C/svg%3E"
+									style={{ aspectRatio: "150/212.125" }}
+								/>
+							)}
+						</Box>
 					</Grid.Col>
 
 					{/* Info */}
@@ -284,6 +311,11 @@ export function BookDetail() {
 										</Title>
 									</Group>
 									<Group gap="xs" mt={4}>
+										{book.deleted && (
+											<Badge size="sm" variant="filled" color="red" leftSection={<IconTrash size={12} />}>
+												Deleted
+											</Badge>
+										)}
 										<Badge size="sm" variant="filled">
 											{book.fileFormat.toUpperCase()}
 										</Badge>

@@ -210,6 +210,7 @@ impl BookRepository {
     pub async fn list_by_ids(
         db: &DatabaseConnection,
         ids: &[Uuid],
+        include_deleted: bool,
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<books::Model>, u64)> {
@@ -221,9 +222,13 @@ impl BookRepository {
         let total = ids.len() as u64;
 
         // Get paginated results
-        let books = Books::find()
-            .filter(books::Column::Id.is_in(ids.to_vec()))
-            .filter(books::Column::Deleted.eq(false))
+        let mut query = Books::find().filter(books::Column::Id.is_in(ids.to_vec()));
+
+        if !include_deleted {
+            query = query.filter(books::Column::Deleted.eq(false));
+        }
+
+        let books = query
             .order_by_asc(books::Column::Title)
             .order_by_asc(books::Column::FileName)
             .offset(page * page_size)
@@ -595,6 +600,7 @@ impl BookRepository {
     pub async fn full_text_search(
         db: &DatabaseConnection,
         query: &str,
+        include_deleted: bool,
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<books::Model>, u64)> {
@@ -602,9 +608,11 @@ impl BookRepository {
 
         // Use LOWER(title) LIKE LOWER(pattern) for case-insensitive search
         let lower_title = Func::lower(Expr::col(books::Column::Title));
-        let search_condition = Condition::all()
-            .add(Expr::expr(lower_title).like(&pattern))
-            .add(books::Column::Deleted.eq(false));
+        let mut search_condition = Condition::all().add(Expr::expr(lower_title).like(&pattern));
+
+        if !include_deleted {
+            search_condition = search_condition.add(books::Column::Deleted.eq(false));
+        }
 
         let total = Books::find()
             .filter(search_condition.clone())
@@ -629,6 +637,7 @@ impl BookRepository {
         db: &DatabaseConnection,
         query: &str,
         candidate_ids: &[Uuid],
+        include_deleted: bool,
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<books::Model>, u64)> {
@@ -640,10 +649,13 @@ impl BookRepository {
 
         // Use LOWER(title) LIKE LOWER(pattern) for case-insensitive search
         let lower_title = Func::lower(Expr::col(books::Column::Title));
-        let search_condition = Condition::all()
+        let mut search_condition = Condition::all()
             .add(Expr::expr(lower_title).like(&pattern))
-            .add(books::Column::Deleted.eq(false))
             .add(books::Column::Id.is_in(candidate_ids.to_vec()));
+
+        if !include_deleted {
+            search_condition = search_condition.add(books::Column::Deleted.eq(false));
+        }
 
         let total = Books::find()
             .filter(search_condition.clone())

@@ -1,4 +1,4 @@
-import type { PaginatedResponse, Series, SeriesCondition, SeriesListRequest } from "@/types";
+import type { Book, PaginatedResponse, Series, SeriesCondition, SeriesListRequest } from "@/types";
 import { api } from "./client";
 
 export interface SeriesFilters {
@@ -126,6 +126,19 @@ export const seriesApi = {
 		const url = `/series/recently-updated?${queryString}`;
 
 		const response = await api.get<Series[]>(url);
+		return response.data;
+	},
+
+	// Get books in a series
+	getBooks: async (seriesId: string, includeDeleted = false): Promise<Book[]> => {
+		const params = new URLSearchParams();
+		if (includeDeleted) {
+			params.set("include_deleted", "true");
+		}
+		const queryString = params.toString();
+		const url = `/series/${seriesId}/books${queryString ? `?${queryString}` : ""}`;
+
+		const response = await api.get<Book[]>(url);
 		return response.data;
 	},
 

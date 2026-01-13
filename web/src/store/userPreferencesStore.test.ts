@@ -59,8 +59,8 @@ describe("userPreferencesStore", () => {
 		it("should return default value when preference not set", () => {
 			const { getPreference } = useUserPreferencesStore.getState();
 			expect(getPreference("ui.theme")).toBe(PREFERENCE_DEFAULTS["ui.theme"]);
-			expect(getPreference("reader.default_zoom")).toBe(
-				PREFERENCE_DEFAULTS["reader.default_zoom"],
+			expect(getPreference("library.show_deleted_books")).toBe(
+				PREFERENCE_DEFAULTS["library.show_deleted_books"],
 			);
 		});
 
@@ -175,9 +175,9 @@ describe("userPreferencesStore", () => {
 					updatedAt: new Date().toISOString(),
 				},
 				{
-					key: "reader.default_zoom",
-					value: 150,
-					valueType: "integer",
+					key: "library.show_deleted_books",
+					value: true,
+					valueType: "boolean",
 					updatedAt: new Date().toISOString(),
 				},
 			]);
@@ -190,7 +190,7 @@ describe("userPreferencesStore", () => {
 			});
 
 			expect(getPreference("ui.theme")).toBe("dark");
-			expect(getPreference("reader.default_zoom")).toBe(150);
+			expect(getPreference("library.show_deleted_books")).toBe(true);
 		});
 
 		it("should set isLoaded to true after loading", async () => {
@@ -249,7 +249,7 @@ describe("userPreferencesStore", () => {
 	describe("clearCache", () => {
 		it("should clear all preferences", () => {
 			useUserPreferencesStore.setState({
-				preferences: { "ui.theme": "dark", "reader.default_zoom": 150 },
+				preferences: { "ui.theme": "dark", "library.show_deleted_books": true },
 				isLoaded: true,
 			});
 

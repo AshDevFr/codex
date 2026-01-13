@@ -147,6 +147,9 @@ pub struct BookDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = "Failed to parse CBZ: invalid archive")]
     pub analysis_error: Option<String>,
+    /// Whether the book has been soft-deleted
+    #[schema(example = false)]
+    pub deleted: bool,
 }
 
 /// Book list response

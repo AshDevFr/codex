@@ -3150,6 +3150,11 @@ export interface components {
              * @example 2024-01-01T00:00:00Z
              */
             createdAt: string;
+            /**
+             * @description Whether the book has been soft-deleted
+             * @example false
+             */
+            deleted: boolean;
             /** @example cbz */
             fileFormat: string;
             /** @example a1b2c3d4e5f6g7h8i9j0 */
@@ -3200,6 +3205,8 @@ export interface components {
             condition?: Record<string, never> | null;
             /** @description Full-text search query (case-insensitive search on book title) */
             fullTextSearch?: string | null;
+            /** @description Include soft-deleted books in results (default: false) */
+            includeDeleted?: boolean;
             /**
              * Format: int64
              * @description Page number (0-indexed)
@@ -4862,6 +4869,11 @@ export interface components {
                  * @example 2024-01-01T00:00:00Z
                  */
                 createdAt: string;
+                /**
+                 * @description Whether the book has been soft-deleted
+                 * @example false
+                 */
+                deleted: boolean;
                 /** @example cbz */
                 fileFormat: string;
                 /** @example a1b2c3d4e5f6g7h8i9j0 */

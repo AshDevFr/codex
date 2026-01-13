@@ -115,6 +115,9 @@ docs-start: ## Start documentation dev server
 docs-build: ## Build documentation for production
 	cd docs && npm run build
 
+docs-build-docker: ## Build documentation for production in Docker
+	docker compose --profile docs build
+
 docs-serve: ## Serve built documentation locally
 	cd docs && npm run serve
 

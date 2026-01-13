@@ -146,6 +146,7 @@ pub async fn books_to_dtos(
                 updated_at: book.updated_at,
                 read_progress,
                 analysis_error: book.analysis_error,
+                deleted: book.deleted,
             }
         })
         .collect();
@@ -282,6 +283,7 @@ pub async fn list_books_filtered(
                     &state.db,
                     search_query,
                     &id_vec,
+                    request.include_deleted,
                     request.page,
                     page_size,
                 )
@@ -291,9 +293,15 @@ pub async fn list_books_filtered(
         }
         // Full-text search without filter conditions
         (None, Some(search_query)) if !search_query.trim().is_empty() => {
-            BookRepository::full_text_search(&state.db, search_query, request.page, page_size)
-                .await
-                .map_err(|e| ApiError::Internal(format!("Failed to search books: {}", e)))?
+            BookRepository::full_text_search(
+                &state.db,
+                search_query,
+                request.include_deleted,
+                request.page,
+                page_size,
+            )
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to search books: {}", e)))?
         }
         // Filter conditions only (no full-text search)
         (Some(ids), _) => {
@@ -301,15 +309,23 @@ pub async fn list_books_filtered(
                 (vec![], 0)
             } else {
                 let id_vec: Vec<Uuid> = ids.iter().cloned().collect();
-                BookRepository::list_by_ids(&state.db, &id_vec, request.page, page_size)
-                    .await
-                    .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
+                BookRepository::list_by_ids(
+                    &state.db,
+                    &id_vec,
+                    request.include_deleted,
+                    request.page,
+                    page_size,
+                )
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
             }
         }
         // No filter and no full-text search
-        (None, _) => BookRepository::list_all(&state.db, false, request.page, page_size)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?,
+        (None, _) => {
+            BookRepository::list_all(&state.db, request.include_deleted, request.page, page_size)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
+        }
     };
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;

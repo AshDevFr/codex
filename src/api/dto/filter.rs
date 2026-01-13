@@ -181,6 +181,10 @@ pub struct BookListRequest {
     /// Sort field and direction (e.g., "title,asc" or "createdAt,desc")
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sort: Option<String>,
+
+    /// Include soft-deleted books in results (default: false)
+    #[serde(default)]
+    pub include_deleted: bool,
 }
 
 fn default_page_size() -> u64 {
@@ -207,6 +211,7 @@ impl Default for BookListRequest {
             page: 0,
             page_size: default_page_size(),
             sort: None,
+            include_deleted: false,
         }
     }
 }

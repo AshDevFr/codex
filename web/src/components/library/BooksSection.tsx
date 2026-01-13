@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { booksApi } from "@/api/books";
 import { MediaCard } from "@/components/library/MediaCard";
 import { useBookFilterState } from "@/hooks/useBookFilterState";
+import { useUserPreferencesStore } from "@/store/userPreferencesStore";
 
 /** Fixed skeleton IDs to avoid array index keys */
 const SKELETON_IDS = ["b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9", "b10", "b11", "b12"];
@@ -42,6 +43,11 @@ export function BooksSection({ libraryId, searchParams, onTotalChange }: BooksSe
 	const navigate = useNavigate();
 	const filterState = useBookFilterState();
 
+	// Get show deleted preference from user preferences store
+	const showDeletedBooks = useUserPreferencesStore((state) =>
+		state.getPreference("library.show_deleted_books"),
+	);
+
 	// Read query parameters (URL uses 1-indexed pages for user-friendly URLs)
 	const page = parseInt(searchParams.get("page") || "1", 10);
 	const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
@@ -49,6 +55,7 @@ export function BooksSection({ libraryId, searchParams, onTotalChange }: BooksSe
 
 	// Debounce the filter condition to avoid rapid API calls when clicking multiple chips
 	const [debouncedCondition] = useDebouncedValue(filterState.condition, 150);
+	const [debouncedIncludeDeleted] = useDebouncedValue(showDeletedBooks, 150);
 
 	// Serialize the condition for use as a query key (stable string representation)
 	const conditionKey = useMemo(() => {
@@ -58,13 +65,14 @@ export function BooksSection({ libraryId, searchParams, onTotalChange }: BooksSe
 
 	// Fetch books data using the search endpoint with conditions
 	const { data: booksData, isLoading } = useQuery({
-		queryKey: ["books", "search", libraryId, page, pageSize, sort, conditionKey],
+		queryKey: ["books", "search", libraryId, page, pageSize, sort, conditionKey, debouncedIncludeDeleted],
 		queryFn: () =>
 			booksApi.search(libraryId, {
 				condition: debouncedCondition,
 				page: page - 1, // Convert to 0-indexed for backend
 				pageSize,
 				sort,
+				includeDeleted: debouncedIncludeDeleted,
 			}),
 		staleTime: 30000, // 30 seconds - shorter than global default
 		refetchOnMount: true, // Always refetch when component mounts

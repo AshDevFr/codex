@@ -13,6 +13,7 @@ import {
 	IconBookOff,
 	IconCheck,
 	IconDotsVertical,
+	IconTrash,
 } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -273,13 +274,36 @@ export function MediaCard({ type, data, showProgress }: MediaCardProps) {
 						overflow: "hidden",
 					}}
 				>
-					<Image
-						src={coverUrl}
-						alt={altText}
-						fit="cover"
-						style={{ width: "100%", height: "100%", objectFit: "cover" }}
-						fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300'%3E%3Crect fill='%23ddd' width='200' height='300'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Cover%3C/text%3E%3C/svg%3E"
-					/>
+					{book?.deleted ? (
+						<div
+							style={{
+								width: "100%",
+								height: "100%",
+								backgroundColor: "var(--mantine-color-dark-6)",
+								display: "flex",
+								flexDirection: "column",
+								alignItems: "center",
+								justifyContent: "center",
+								gap: "8px",
+							}}
+						>
+							<IconTrash
+								size={48}
+								style={{ color: "var(--mantine-color-red-6)", opacity: 0.7 }}
+							/>
+							<Text size="sm" fw={500} c="dimmed">
+								Deleted
+							</Text>
+						</div>
+					) : (
+						<Image
+							src={coverUrl}
+							alt={altText}
+							fit="cover"
+							style={{ width: "100%", height: "100%", objectFit: "cover" }}
+							fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300'%3E%3Crect fill='%23ddd' width='200' height='300'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Cover%3C/text%3E%3C/svg%3E"
+						/>
+					)}
 					{/* Unread indicator - Triangle for books, Square for series */}
 					{type === "book" && book && !book.readProgress && (
 						<div

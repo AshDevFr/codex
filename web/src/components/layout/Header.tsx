@@ -4,10 +4,11 @@ import {
 	Burger,
 	Group,
 	Text,
-	useMantineColorScheme,
+	useComputedColorScheme,
 } from "@mantine/core";
 import { IconMenu2, IconMoon, IconSun } from "@tabler/icons-react";
 import { SearchInput } from "@/components/search";
+import { useUserPreferencesStore } from "@/store/userPreferencesStore";
 
 interface HeaderProps {
 	mobileOpened: boolean;
@@ -20,7 +21,13 @@ export function Header({
 	toggleMobile,
 	toggleDesktop,
 }: HeaderProps) {
-	const { colorScheme, toggleColorScheme } = useMantineColorScheme();
+	const computedColorScheme = useComputedColorScheme("dark");
+	const setPreference = useUserPreferencesStore((state) => state.setPreference);
+
+	const toggleColorScheme = () => {
+		// Toggle between light and dark (not system) for explicit user action
+		setPreference("ui.theme", computedColorScheme === "dark" ? "light" : "dark");
+	};
 
 	return (
 		<AppShell.Header>
@@ -54,7 +61,7 @@ export function Header({
 						onClick={toggleColorScheme}
 						title="Toggle color scheme"
 					>
-						{colorScheme === "dark" ? (
+						{computedColorScheme === "dark" ? (
 							<IconSun size={18} />
 						) : (
 							<IconMoon size={18} />

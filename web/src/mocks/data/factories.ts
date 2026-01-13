@@ -164,6 +164,7 @@ export const createBook = (overrides: Partial<BookDto> = {}): BookDto => {
 		createdAt: faker.date.past().toISOString(),
 		updatedAt: faker.date.recent().toISOString(),
 		readProgress: null,
+		deleted: false,
 		...overrides,
 	};
 };

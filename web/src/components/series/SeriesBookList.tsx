@@ -13,10 +13,11 @@ import {
 } from "@mantine/core";
 import { IconSortAscending } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { booksApi } from "@/api/books";
+import { seriesApi } from "@/api/series";
 import { MediaCard } from "@/components/library/MediaCard";
+import { useUserPreferencesStore } from "@/store/userPreferencesStore";
 
 interface SeriesBookListProps {
 	seriesId: string;
@@ -51,17 +52,54 @@ export function SeriesBookList({
 	const [pageSize, setPageSize] = useState(20);
 	const [sort, setSort] = useState("number,asc");
 
+	// Get show deleted preference from user preferences store
+	const showDeletedBooks = useUserPreferencesStore((state) =>
+		state.getPreference("library.show_deleted_books"),
+	);
+
 	// Fetch books for this series
-	const { data, isLoading, error } = useQuery({
-		queryKey: ["series-books", seriesId, page, pageSize, sort],
-		queryFn: () =>
-			booksApi.getByLibrary("all", {
-				series_id: seriesId,
-				page: page - 1, // API uses 0-indexed pages
-				pageSize,
-				sort,
-			}),
+	const { data: allBooks, isLoading, error } = useQuery({
+		queryKey: ["series-books", seriesId, showDeletedBooks],
+		queryFn: () => seriesApi.getBooks(seriesId, showDeletedBooks),
 	});
+
+	// Sort and paginate client-side since the API returns all books
+	const sortedBooks = useMemo(() => {
+		if (!allBooks) return [];
+		const books = [...allBooks];
+		const [field, direction] = sort.split(",");
+		books.sort((a, b) => {
+			let comparison = 0;
+			switch (field) {
+				case "number":
+					comparison = (a.number ?? 0) - (b.number ?? 0);
+					break;
+				case "title":
+					comparison = a.title.localeCompare(b.title);
+					break;
+				case "created_at":
+					comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+					break;
+				case "release_date":
+					comparison = new Date(a.releaseDate ?? 0).getTime() - new Date(b.releaseDate ?? 0).getTime();
+					break;
+				default:
+					comparison = 0;
+			}
+			return direction === "desc" ? -comparison : comparison;
+		});
+		return books;
+	}, [allBooks, sort]);
+
+	const paginatedBooks = useMemo(() => {
+		const start = (page - 1) * pageSize;
+		return sortedBooks.slice(start, start + pageSize);
+	}, [sortedBooks, page, pageSize]);
+
+	const data = useMemo(() => ({
+		data: paginatedBooks,
+		total: sortedBooks.length,
+	}), [paginatedBooks, sortedBooks.length]);
 
 	const totalPages = data ? Math.ceil(data.total / pageSize) : 1;
 
