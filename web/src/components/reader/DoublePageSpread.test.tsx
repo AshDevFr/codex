@@ -297,10 +297,15 @@ describe("DoublePageSpread", () => {
 	// ==========================================================================
 
 	describe("image loading", () => {
-		it("should hide loader when all images load", async () => {
+		it("should keep images visible after loading", async () => {
 			renderWithProviders(<DoublePageSpread {...defaultProps} />);
 
 			const images = screen.getAllByRole("img", { hidden: true });
+
+			// Images should always be rendered (no display: none)
+			for (const img of images) {
+				expect(img).toBeInTheDocument();
+			}
 
 			// Simulate both images loading
 			for (const img of images) {
@@ -308,8 +313,9 @@ describe("DoublePageSpread", () => {
 			}
 
 			await waitFor(() => {
+				// After load, images should still be visible
 				for (const img of images) {
-					expect(img).not.toHaveStyle({ display: "none" });
+					expect(img).toBeInTheDocument();
 				}
 			});
 		});

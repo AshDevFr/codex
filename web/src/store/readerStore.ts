@@ -104,6 +104,8 @@ export interface ReaderState {
 	pageOrientations: Record<number, PageOrientation>;
 	/** Last navigation direction for transition animations */
 	lastNavigationDirection: NavigationDirection;
+	/** Set of image URLs that have been successfully preloaded */
+	preloadedImages: Set<string>;
 
 	// ==========================================================================
 	// Actions - Settings
@@ -170,6 +172,13 @@ export interface ReaderState {
 	// Actions - Navigation Direction (for transitions)
 	// ==========================================================================
 	setLastNavigationDirection: (direction: NavigationDirection) => void;
+
+	// ==========================================================================
+	// Actions - Preloaded Images
+	// ==========================================================================
+	addPreloadedImage: (url: string) => void;
+	isImagePreloaded: (url: string) => boolean;
+	clearPreloadedImages: () => void;
 }
 
 // =============================================================================
@@ -227,6 +236,7 @@ export const useReaderStore = create<ReaderState>()(
 				boundaryState: "none" as BoundaryState,
 				pageOrientations: {} as Record<number, PageOrientation>,
 				lastNavigationDirection: null as NavigationDirection,
+				preloadedImages: new Set<string>(),
 
 				// ==========================================================================
 				// Settings Actions
@@ -433,6 +443,7 @@ export const useReaderStore = create<ReaderState>()(
 						state.boundaryState = "none";
 						state.pageOrientations = {};
 						state.lastNavigationDirection = null;
+						state.preloadedImages = new Set<string>();
 					}),
 
 				// ==========================================================================
@@ -475,6 +486,22 @@ export const useReaderStore = create<ReaderState>()(
 				setLastNavigationDirection: (direction) =>
 					set((state) => {
 						state.lastNavigationDirection = direction;
+					}),
+
+				// ==========================================================================
+				// Preloaded Images Actions
+				// ==========================================================================
+
+				addPreloadedImage: (url) =>
+					set((state) => {
+						state.preloadedImages.add(url);
+					}),
+
+				isImagePreloaded: (url) => get().preloadedImages.has(url),
+
+				clearPreloadedImages: () =>
+					set((state) => {
+						state.preloadedImages.clear();
 					}),
 			})),
 			{

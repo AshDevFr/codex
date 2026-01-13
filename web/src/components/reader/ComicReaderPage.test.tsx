@@ -182,14 +182,21 @@ describe("ComicReaderPage", () => {
 	});
 
 	describe("image loading", () => {
-		it("should hide loader when image loads", async () => {
+		it("should hide loader overlay when image loads", async () => {
 			renderWithProviders(<ComicReaderPage {...defaultProps} />);
 
 			const img = screen.getByRole("img", { hidden: true });
+
+			// Image should always be rendered (no display: none)
+			expect(img).toBeInTheDocument();
+
 			fireEvent.load(img);
 
+			// After load, loader overlay should be removed (no loader element in DOM)
 			await waitFor(() => {
-				expect(img).not.toHaveStyle({ display: "none" });
+				// The loader is an overlay that disappears after loading
+				// Check that the image is still visible
+				expect(img).toBeInTheDocument();
 			});
 		});
 

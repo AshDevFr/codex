@@ -53,6 +53,7 @@ describe("ReaderSettings", () => {
 			boundaryState: "none",
 			pageOrientations: {},
 			lastNavigationDirection: null,
+			preloadedImages: new Set<string>(),
 		});
 	});
 
@@ -68,58 +69,29 @@ describe("ReaderSettings", () => {
 		expect(screen.queryByText("Reader Settings")).not.toBeInTheDocument();
 	});
 
-	describe("General section", () => {
-		it("should display General section header", () => {
-			renderWithProviders(<ReaderSettings {...defaultProps} />);
-
-			expect(screen.getByText("General")).toBeInTheDocument();
-		});
-
+	describe("Reading Mode", () => {
 		it("should display reading mode selector", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
 			expect(screen.getByText("Reading mode")).toBeInTheDocument();
 		});
 
-		it("should display auto-hide toolbar toggle", () => {
-			renderWithProviders(<ReaderSettings {...defaultProps} />);
-
-			expect(screen.getByText("Auto-hide toolbar")).toBeInTheDocument();
-		});
-
-		it("should toggle auto-hide toolbar", () => {
-			renderWithProviders(<ReaderSettings {...defaultProps} />);
-
-			// Find the auto-hide switch
-			const switches = screen.getAllByRole("switch");
-			const autoHideSwitch = switches.find(s => {
-				const parent = s.closest('.mantine-Group-root');
-				return parent?.textContent?.includes("Auto-hide toolbar");
-			}) || switches[0];
-			fireEvent.click(autoHideSwitch);
-
-			expect(useReaderStore.getState().settings.autoHideToolbar).toBe(false);
-		});
-	});
-
-	describe("Reading Mode", () => {
 		it("should display reading mode select with current value", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			// The select should show "Left to Right" as the default
 			expect(screen.getByDisplayValue("Left to Right")).toBeInTheDocument();
 		});
 
 		it("should show session message when no seriesId is provided", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.getByText("Navigation direction for this session")).toBeInTheDocument();
+			expect(screen.getByText("Session only")).toBeInTheDocument();
 		});
 
 		it("should show sync message when seriesId is provided", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} seriesId="series-123" />);
 
-			expect(screen.getByText("Saved to series metadata")).toBeInTheDocument();
+			expect(screen.getByText("Saved to series")).toBeInTheDocument();
 		});
 
 		it("should show RTL as selected when readingDirectionOverride is rtl", () => {
@@ -130,7 +102,7 @@ describe("ReaderSettings", () => {
 
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.getByDisplayValue("Right to Left")).toBeInTheDocument();
+			expect(screen.getByDisplayValue("Right to Left (Manga)")).toBeInTheDocument();
 		});
 
 		it("should show Vertical as selected when readingDirectionOverride is ttb", () => {
@@ -152,7 +124,7 @@ describe("ReaderSettings", () => {
 
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.getByDisplayValue("Webtoon")).toBeInTheDocument();
+			expect(screen.getByDisplayValue("Webtoon (Continuous Scroll)")).toBeInTheDocument();
 		});
 	});
 
@@ -163,10 +135,16 @@ describe("ReaderSettings", () => {
 			expect(screen.getByText("Display")).toBeInTheDocument();
 		});
 
+		it("should display scale selector", () => {
+			renderWithProviders(<ReaderSettings {...defaultProps} />);
+
+			expect(screen.getByText("Scale")).toBeInTheDocument();
+		});
+
 		it("should display background color options", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.getByText("Background color")).toBeInTheDocument();
+			expect(screen.getByText("Background")).toBeInTheDocument();
 			expect(screen.getByRole("radio", { name: "Black" })).toBeChecked();
 		});
 
@@ -179,30 +157,18 @@ describe("ReaderSettings", () => {
 		});
 	});
 
-	describe("Paginated Mode (LTR/RTL)", () => {
-		it("should show Paginated Reader Options header in LTR mode", () => {
-			renderWithProviders(<ReaderSettings {...defaultProps} />);
-
-			expect(screen.getByText("Paginated Reader Options")).toBeInTheDocument();
-		});
-
-		it("should show animate page transitions toggle in paginated mode", () => {
-			renderWithProviders(<ReaderSettings {...defaultProps} />);
-
-			expect(screen.getByText("Animate page transitions")).toBeInTheDocument();
-		});
-
+	describe("Paginated Mode (LTR/RTL/TTB)", () => {
 		it("should show page layout selector in paginated mode", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
 			expect(screen.getByText("Page layout")).toBeInTheDocument();
-			expect(screen.getByRole("radio", { name: "Single page" })).toBeChecked();
+			expect(screen.getByRole("radio", { name: "Single" })).toBeChecked();
 		});
 
 		it("should update page layout when changed", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			fireEvent.click(screen.getByRole("radio", { name: "Double pages" }));
+			fireEvent.click(screen.getByRole("radio", { name: "Double" }));
 
 			expect(useReaderStore.getState().settings.pageLayout).toBe("double");
 		});
@@ -217,25 +183,38 @@ describe("ReaderSettings", () => {
 
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.getByText("Show wide pages alone")).toBeInTheDocument();
+			expect(screen.getByText("Wide pages alone")).toBeInTheDocument();
 			expect(screen.getByText("Start on odd page")).toBeInTheDocument();
 		});
 
-		it("should show transition style when transitions are enabled", () => {
+		it("should show Transitions section in paginated mode", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.getByText("Transition style")).toBeInTheDocument();
-			// Slide is default
+			expect(screen.getByText("Transitions")).toBeInTheDocument();
+		});
+
+		it("should show page transitions selector in paginated mode", () => {
+			renderWithProviders(<ReaderSettings {...defaultProps} />);
+
+			expect(screen.getByText("Page transitions")).toBeInTheDocument();
+			expect(screen.getByRole("radio", { name: "None" })).toBeInTheDocument();
+			expect(screen.getByRole("radio", { name: "Fade" })).toBeInTheDocument();
+			expect(screen.getByRole("radio", { name: "Slide" })).toBeInTheDocument();
+		});
+
+		it("should show slide as default transition", () => {
+			renderWithProviders(<ReaderSettings {...defaultProps} />);
+
 			expect(screen.getByRole("radio", { name: "Slide" })).toBeChecked();
 		});
 
 		it("should show transition speed when transitions are enabled", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.getByText("Transition speed")).toBeInTheDocument();
+			expect(screen.getByText("Speed")).toBeInTheDocument();
 		});
 
-		it("should hide transition options when transitions are disabled", () => {
+		it("should hide transition speed when transitions are set to none", () => {
 			useReaderStore.setState({
 				settings: {
 					...useReaderStore.getState().settings,
@@ -245,25 +224,18 @@ describe("ReaderSettings", () => {
 
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.queryByText("Transition style")).not.toBeInTheDocument();
-			expect(screen.queryByText("Transition speed")).not.toBeInTheDocument();
+			expect(screen.getByText("Page transitions")).toBeInTheDocument();
+			expect(screen.getByRole("radio", { name: "None" })).toBeChecked();
+			expect(screen.queryByText("Speed")).not.toBeInTheDocument();
 		});
 	});
 
 	describe("TTB Reading Direction", () => {
 		beforeEach(() => {
-			// Set to TTB reading direction
 			useReaderStore.setState({
 				...useReaderStore.getState(),
 				readingDirectionOverride: "ttb",
 			});
-		});
-
-		it("should show Paginated Reader Options header in TTB mode", () => {
-			renderWithProviders(<ReaderSettings {...defaultProps} />);
-
-			// TTB is just a reading direction, not a special mode
-			expect(screen.getByText("Paginated Reader Options")).toBeInTheDocument();
 		});
 
 		it("should show page layout selector in TTB mode", () => {
@@ -272,32 +244,19 @@ describe("ReaderSettings", () => {
 			expect(screen.getByText("Page layout")).toBeInTheDocument();
 		});
 
-		it("should show animate page transitions in TTB mode", () => {
+		it("should show page transitions selector in TTB mode", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.getByText("Animate page transitions")).toBeInTheDocument();
-		});
-
-		it("should show Previous/Next page keyboard shortcut in TTB mode", () => {
-			renderWithProviders(<ReaderSettings {...defaultProps} />);
-
-			expect(screen.getByText("Previous/Next page")).toBeInTheDocument();
+			expect(screen.getByText("Page transitions")).toBeInTheDocument();
 		});
 	});
 
-	describe("Webtoon Reading Direction", () => {
+	describe("Webtoon/Continuous Scroll Mode", () => {
 		beforeEach(() => {
-			// Set to webtoon reading direction
 			useReaderStore.setState({
 				...useReaderStore.getState(),
 				readingDirectionOverride: "webtoon",
 			});
-		});
-
-		it("should show Continuous Scroll Options header in webtoon mode", () => {
-			renderWithProviders(<ReaderSettings {...defaultProps} />);
-
-			expect(screen.getByText("Continuous Scroll Options")).toBeInTheDocument();
 		});
 
 		it("should not show page layout selector in webtoon mode", () => {
@@ -306,68 +265,31 @@ describe("ReaderSettings", () => {
 			expect(screen.queryByText("Page layout")).not.toBeInTheDocument();
 		});
 
-		it("should not show animate page transitions in webtoon mode", () => {
+		it("should not show page transitions selector in webtoon mode", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.queryByText("Animate page transitions")).not.toBeInTheDocument();
+			expect(screen.queryByText("Page transitions")).not.toBeInTheDocument();
 		});
 
-		it("should show Scroll up/down keyboard shortcut in webtoon mode", () => {
+		it("should not show Transitions section in webtoon mode", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.getByText("Scroll up/down")).toBeInTheDocument();
-		});
-	});
-
-	describe("Continuous Scroll Mode", () => {
-		beforeEach(() => {
-			// Set to continuous scroll mode
-			useReaderStore.setState({
-				...useReaderStore.getState(),
-				settings: {
-					...useReaderStore.getState().settings,
-					pageLayout: "continuous",
-				},
-			});
+			expect(screen.queryByText("Transitions")).not.toBeInTheDocument();
 		});
 
-		it("should show Continuous Scroll Options header", () => {
+		it("should show Scroll Options section in webtoon mode", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.getByText("Continuous Scroll Options")).toBeInTheDocument();
+			expect(screen.getByText("Scroll Options")).toBeInTheDocument();
 		});
 
-		it("should not show page layout selector in continuous mode", () => {
-			renderWithProviders(<ReaderSettings {...defaultProps} />);
-
-			expect(screen.queryByText("Page layout")).not.toBeInTheDocument();
-		});
-
-		it("should not show animate page transitions in continuous mode", () => {
-			renderWithProviders(<ReaderSettings {...defaultProps} />);
-
-			expect(screen.queryByText("Animate page transitions")).not.toBeInTheDocument();
-		});
-
-		it("should show preload buffer option in continuous mode", () => {
-			renderWithProviders(<ReaderSettings {...defaultProps} />);
-
-			expect(screen.getByText("Preload buffer")).toBeInTheDocument();
-		});
-
-		it("should show Scroll up/down keyboard shortcut in continuous mode", () => {
-			renderWithProviders(<ReaderSettings {...defaultProps} />);
-
-			expect(screen.getByText("Scroll up/down")).toBeInTheDocument();
-		});
-
-		it("should show side padding option in continuous mode", () => {
+		it("should show side padding option in webtoon mode", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
 			expect(screen.getByText("Side padding")).toBeInTheDocument();
 		});
 
-		it("should show page gap option in continuous mode", () => {
+		it("should show page gap option in webtoon mode", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
 			expect(screen.getByText("Page gap")).toBeInTheDocument();
@@ -376,24 +298,36 @@ describe("ReaderSettings", () => {
 		it("should show scale type with only Fit width and Original options", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.getByText("Scale type")).toBeInTheDocument();
+			expect(screen.getByText("Scale")).toBeInTheDocument();
 			expect(screen.getByRole("radio", { name: "Fit width" })).toBeInTheDocument();
-			expect(screen.getByRole("radio", { name: "Original size" })).toBeInTheDocument();
+			expect(screen.getByRole("radio", { name: "Original" })).toBeInTheDocument();
 		});
 	});
 
-	describe("Keyboard Shortcuts", () => {
-		it("should display keyboard shortcuts section", () => {
+	describe("Common options", () => {
+		it("should show preload pages option", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.getByText("Keyboard Shortcuts")).toBeInTheDocument();
-			expect(screen.getByText("Arrow keys, Space")).toBeInTheDocument();
+			expect(screen.getByText("Preload pages")).toBeInTheDocument();
 		});
 
-		it("should show Previous/Next page in paginated mode", () => {
+		it("should show auto-hide toolbar option", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.getByText("Previous/Next page")).toBeInTheDocument();
+			expect(screen.getByText("Auto-hide toolbar")).toBeInTheDocument();
+		});
+
+		it("should toggle auto-hide toolbar", () => {
+			renderWithProviders(<ReaderSettings {...defaultProps} />);
+
+			const switches = screen.getAllByRole("switch");
+			const autoHideSwitch = switches.find(s => {
+				const parent = s.closest('.mantine-Group-root');
+				return parent?.textContent?.includes("Auto-hide toolbar");
+			}) || switches[switches.length - 1];
+			fireEvent.click(autoHideSwitch);
+
+			expect(useReaderStore.getState().settings.autoHideToolbar).toBe(false);
 		});
 	});
 
@@ -401,7 +335,6 @@ describe("ReaderSettings", () => {
 		it("should call onClose when modal is closed", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			// Mantine Modal close button
 			const buttons = screen.getAllByRole("button");
 			const closeButton = buttons[0];
 			fireEvent.click(closeButton);

@@ -131,6 +131,7 @@ export function ComicReader({
 	const setLastNavigationDirection = useReaderStore(
 		(state) => state.setLastNavigationDirection,
 	);
+	const addPreloadedImage = useReaderStore((state) => state.addPreloadedImage);
 
 	// Fetch adjacent books for series navigation
 	useAdjacentBooks({ bookId, enabled: true });
@@ -402,31 +403,38 @@ export function ComicReader({
 		onPrevPage: pageLayout === "double" ? handleSpreadPrevPage : handlePrevPage,
 	});
 
-	// Preload adjacent pages (spread-aware)
+	// Preload adjacent pages (spread-aware) and track in store
 	useEffect(() => {
-		if (preloadPages === 0) return;
+		// Build list of pages to preload (current page + adjacent pages)
+		let pagesToPreload: number[] = [currentPage];
 
-		let pagesToPreload: number[];
-		if (pageLayout === "double") {
-			// Use spread-aware preloading
-			pagesToPreload = getPreloadPages(currentPage, spreadConfig, preloadPages);
-		} else {
-			// Single page preloading
-			pagesToPreload = [];
-			for (let i = 1; i <= preloadPages; i++) {
-				pagesToPreload.push(currentPage - i, currentPage + i);
+		if (preloadPages > 0) {
+			if (pageLayout === "double") {
+				// Use spread-aware preloading - double the count since each "page" in settings
+				// should mean one spread (2 pages) in double-page mode
+				pagesToPreload = [...pagesToPreload, ...getPreloadPages(currentPage, spreadConfig, preloadPages * 2)];
+			} else {
+				// Single page preloading
+				for (let i = 1; i <= preloadPages; i++) {
+					pagesToPreload.push(currentPage - i, currentPage + i);
+				}
 			}
 		}
 
 		const validPages = pagesToPreload.filter(
-			(p) => p >= 1 && p <= totalPages && p !== currentPage,
+			(p) => p >= 1 && p <= totalPages,
 		);
 
+		// Preload and track each image
 		for (const pageNum of validPages) {
+			const url = getPageUrl(pageNum);
 			const img = new Image();
-			img.src = getPageUrl(pageNum);
+			img.onload = () => {
+				addPreloadedImage(url);
+			};
+			img.src = url;
 		}
-	}, [currentPage, totalPages, preloadPages, pageLayout, spreadConfig, getPageUrl]);
+	}, [currentPage, totalPages, preloadPages, pageLayout, spreadConfig, getPageUrl, addPreloadedImage]);
 
 	// Sync URL query parameter with current page
 	// Uses replaceState to avoid polluting browser history

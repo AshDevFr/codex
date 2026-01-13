@@ -1,5 +1,5 @@
 import { screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { filesystemApi } from "@/api/filesystem";
 import { librariesApi } from "@/api/libraries";
 import { renderWithProviders, userEvent } from "@/test/utils";
@@ -29,6 +29,10 @@ const mockLibrary: Library = {
 	},
 	allowedFormats: [],
 	excludedPatterns: "",
+	defaultReadingDirection: "ltr",
+	seriesStrategy: "series_volume",
+	bookStrategy: "filename",
+	numberStrategy: "file_order",
 };
 
 const mockLibraryWithAutoScan: Library = {
@@ -44,6 +48,7 @@ const mockLibraryWithAutoScan: Library = {
 
 describe("LibraryModal (Edit Mode)", () => {
 	const mockOnClose = vi.fn();
+	const originalScrollIntoView = Element.prototype.scrollIntoView;
 
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -55,6 +60,12 @@ describe("LibraryModal (Edit Mode)", () => {
 			current_path: "/",
 			parent_path: null,
 		});
+		// Mock scrollIntoView for Mantine Combobox
+		Element.prototype.scrollIntoView = vi.fn();
+	});
+
+	afterEach(() => {
+		Element.prototype.scrollIntoView = originalScrollIntoView;
 	});
 
 	it("should not render when closed", () => {
@@ -704,5 +715,224 @@ describe("LibraryModal (Edit Mode)", () => {
 		const payload = updateCall[1] as { allowedFormats?: string[] };
 		const submittedFormats = payload.allowedFormats;
 		expect(submittedFormats).not.toContain("CBR");
+	});
+
+	describe("Strategy Tab in Edit Mode", () => {
+		it("should show the Strategy tab in edit mode", async () => {
+			renderWithProviders(
+				<LibraryModal
+					opened={true}
+					onClose={mockOnClose}
+					library={mockLibrary}
+				/>,
+			);
+
+			await waitFor(() => {
+				expect(screen.getByText("Edit Library")).toBeInTheDocument();
+			});
+
+			// Strategy tab should be visible
+			expect(screen.getByRole("tab", { name: "Strategy" })).toBeInTheDocument();
+		});
+
+		it("should show series strategy as disabled in edit mode", async () => {
+			const user = userEvent.setup();
+			renderWithProviders(
+				<LibraryModal
+					opened={true}
+					onClose={mockOnClose}
+					library={mockLibrary}
+				/>,
+			);
+
+			await waitFor(() => {
+				expect(screen.getByText("Edit Library")).toBeInTheDocument();
+			});
+
+			// Click on Strategy tab
+			const strategyTab = screen.getByRole("tab", { name: "Strategy" });
+			await user.click(strategyTab);
+
+			// Wait for Strategy tab content to render
+			await waitFor(() => {
+				// Look for the select input that displays the current value
+				expect(
+					screen.getByDisplayValue("Series-Volume (Recommended)"),
+				).toBeInTheDocument();
+			});
+
+			// The series strategy select should be disabled
+			// Find the input by its displayed value
+			const seriesSelect = screen.getByDisplayValue(
+				"Series-Volume (Recommended)",
+			);
+			expect(seriesSelect).toBeDisabled();
+		});
+
+		it("should allow changing book naming strategy in edit mode", async () => {
+			const user = userEvent.setup();
+			renderWithProviders(
+				<LibraryModal
+					opened={true}
+					onClose={mockOnClose}
+					library={mockLibrary}
+				/>,
+			);
+
+			await waitFor(() => {
+				expect(screen.getByText("Edit Library")).toBeInTheDocument();
+			});
+
+			// Click on Strategy tab
+			const strategyTab = screen.getByRole("tab", { name: "Strategy" });
+			await user.click(strategyTab);
+
+			// Wait for Strategy tab content to render - look for the select by value
+			await waitFor(() => {
+				expect(
+					screen.getByDisplayValue("Filename (Recommended)"),
+				).toBeInTheDocument();
+			});
+
+			// Find and click the book strategy select
+			const bookSelect = screen.getByDisplayValue("Filename (Recommended)");
+			expect(bookSelect).not.toBeDisabled();
+			await user.click(bookSelect);
+
+			// Select a different book strategy
+			await waitFor(() => {
+				expect(screen.getByText("Metadata First")).toBeInTheDocument();
+			});
+			await user.click(screen.getByText("Metadata First"));
+
+			// Submit the form
+			const saveButton = screen.getByText("Save Changes");
+			await user.click(saveButton);
+
+			// Verify the update was called with the new book strategy
+			await waitFor(() => {
+				expect(librariesApi.update).toHaveBeenCalledWith(
+					"1",
+					expect.objectContaining({
+						bookStrategy: "metadata_first",
+					}),
+				);
+			});
+		});
+
+		it("should allow changing number strategy in edit mode", async () => {
+			const user = userEvent.setup();
+			renderWithProviders(
+				<LibraryModal
+					opened={true}
+					onClose={mockOnClose}
+					library={mockLibrary}
+				/>,
+			);
+
+			await waitFor(() => {
+				expect(screen.getByText("Edit Library")).toBeInTheDocument();
+			});
+
+			// Click on Strategy tab
+			const strategyTab = screen.getByRole("tab", { name: "Strategy" });
+			await user.click(strategyTab);
+
+			// Wait for Strategy tab content to render - look for the number strategy select by value
+			await waitFor(() => {
+				expect(
+					screen.getByDisplayValue("File Order (Recommended)"),
+				).toBeInTheDocument();
+			});
+
+			// Find and click the number strategy select
+			const numberSelect = screen.getByDisplayValue("File Order (Recommended)");
+			expect(numberSelect).not.toBeDisabled();
+			await user.click(numberSelect);
+
+			// Select a different number strategy - use "Filename Patterns" which is unique to number strategy
+			await waitFor(() => {
+				expect(screen.getByText("Filename Patterns")).toBeInTheDocument();
+			});
+			await user.click(screen.getByText("Filename Patterns"));
+
+			// Submit the form
+			const saveButton = screen.getByText("Save Changes");
+			await user.click(saveButton);
+
+			// Verify the update was called with the new number strategy
+			await waitFor(() => {
+				expect(librariesApi.update).toHaveBeenCalledWith(
+					"1",
+					expect.objectContaining({
+						numberStrategy: "filename",
+					}),
+				);
+			});
+		});
+
+		it("should show edit mode alert explaining strategy constraints", async () => {
+			const user = userEvent.setup();
+			renderWithProviders(
+				<LibraryModal
+					opened={true}
+					onClose={mockOnClose}
+					library={mockLibrary}
+				/>,
+			);
+
+			await waitFor(() => {
+				expect(screen.getByText("Edit Library")).toBeInTheDocument();
+			});
+
+			// Click on Strategy tab
+			const strategyTab = screen.getByRole("tab", { name: "Strategy" });
+			await user.click(strategyTab);
+
+			// Wait for the edit mode alert - look for the alert component with role
+			await waitFor(() => {
+				const alerts = screen.getAllByRole("alert");
+				// The first alert should be the edit mode info alert
+				expect(alerts.length).toBeGreaterThan(0);
+				// Check that the alert mentions the strategy constraint
+				expect(
+					screen.getByText(/cannot be changed after library creation/i),
+				).toBeInTheDocument();
+			});
+
+			// Should mention that book naming and numbering can be modified
+			expect(
+				screen.getByText(/book naming and numbering/i),
+			).toBeInTheDocument();
+		});
+
+		it("should not show preview scan panel in edit mode", async () => {
+			const user = userEvent.setup();
+			renderWithProviders(
+				<LibraryModal
+					opened={true}
+					onClose={mockOnClose}
+					library={mockLibrary}
+				/>,
+			);
+
+			await waitFor(() => {
+				expect(screen.getByText("Edit Library")).toBeInTheDocument();
+			});
+
+			// Click on Strategy tab
+			const strategyTab = screen.getByRole("tab", { name: "Strategy" });
+			await user.click(strategyTab);
+
+			// Wait for Strategy tab content to render - look for the series strategy select by value
+			await waitFor(() => {
+				expect(
+					screen.getByDisplayValue("Series-Volume (Recommended)"),
+				).toBeInTheDocument();
+			});
+
+			// Preview scan panel should NOT be visible in edit mode
+			expect(screen.queryByText("Preview Scan")).not.toBeInTheDocument();
+		});
 	});
 });

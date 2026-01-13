@@ -1,4 +1,4 @@
-import { Box, Center, Loader } from "@mantine/core";
+import { Box, Center } from "@mantine/core";
 import { useCallback, useState } from "react";
 import type {
 	BackgroundColor,
@@ -6,6 +6,7 @@ import type {
 	PageOrientation,
 	ReadingDirection,
 } from "@/store/readerStore";
+import { useReaderStore } from "@/store/readerStore";
 import { detectPageOrientation } from "./utils/spreadCalculation";
 
 interface PageState {
@@ -170,11 +171,30 @@ export function DoublePageSpread({
 	onClick,
 	onPageOrientationDetected,
 }: DoublePageSpreadProps) {
+	// Get preloaded images to check if pages are already loaded
+	const preloadedImages = useReaderStore((state) => state.preloadedImages);
+
 	// Track loading/error state for each page independently
-	const [pageStates, setPageStates] = useState<Record<number, PageState>>({});
+	// Store includes the page src to detect when pages change
+	const [pageStates, setPageStates] = useState<Record<string, PageState & { src: string }>>({});
+
+	// Helper to get effective loading state - considers both stored state and preload status
+	const getPageState = (pageNumber: number, src: string): PageState => {
+		const stored = pageStates[pageNumber];
+		// If we have state for this exact src, use it
+		if (stored && stored.src === src) {
+			return { isLoading: stored.isLoading, hasError: stored.hasError };
+		}
+		// Otherwise, check if preloaded
+		if (preloadedImages.has(src)) {
+			return { isLoading: false, hasError: false };
+		}
+		// Default to loading
+		return { isLoading: true, hasError: false };
+	};
 
 	const handleImageLoad = useCallback(
-		(pageNumber: number, event: React.SyntheticEvent<HTMLImageElement>) => {
+		(pageNumber: number, src: string, event: React.SyntheticEvent<HTMLImageElement>) => {
 			const img = event.currentTarget;
 
 			// Detect orientation and report it
@@ -188,16 +208,16 @@ export function DoublePageSpread({
 
 			setPageStates((prev) => ({
 				...prev,
-				[pageNumber]: { isLoading: false, hasError: false },
+				[pageNumber]: { isLoading: false, hasError: false, src },
 			}));
 		},
 		[onPageOrientationDetected],
 	);
 
-	const handleImageError = useCallback((pageNumber: number) => {
+	const handleImageError = useCallback((pageNumber: number, src: string) => {
 		setPageStates((prev) => ({
 			...prev,
-			[pageNumber]: { isLoading: false, hasError: true },
+			[pageNumber]: { isLoading: false, hasError: true, src },
 		}));
 	}, []);
 
@@ -226,9 +246,6 @@ export function DoublePageSpread({
 	}
 
 	const isSinglePage = pages.length === 1;
-	const isAnyLoading = pages.some(
-		(p) => pageStates[p.pageNumber]?.isLoading !== false,
-	);
 
 	// Pages are already ordered by the parent component (ComicReader) via getDisplayOrder()
 	// In RTL mode, pages come in as [2, 1] so higher page number displays on the left
@@ -250,27 +267,14 @@ export function DoublePageSpread({
 				gap: 0,
 				cursor: onClick ? "pointer" : "default",
 				userSelect: "none",
+				position: "relative",
 			}}
 			onClick={handleClick}
 			data-testid="double-page-spread"
 		>
-			{isAnyLoading && (
-				<Center
-					style={{
-						position: "absolute",
-						inset: 0,
-						backgroundColor: BACKGROUND_COLORS[backgroundColor],
-						zIndex: 10,
-					}}
-				>
-					<Loader size="lg" color="gray" />
-				</Center>
-			)}
-
 			{displayPages.map((page, index) => {
-				const state = pageStates[page.pageNumber];
-				const hasError = state?.hasError ?? false;
-				const isLoading = state?.isLoading !== false;
+				const state = getPageState(page.pageNumber, page.src);
+				const { hasError } = state;
 
 				// For double-page spread, align pages toward each other (left page to right edge, right page to left edge)
 				const isLeftPage = index === 0;
@@ -305,10 +309,9 @@ export function DoublePageSpread({
 								style={{
 									...getSpreadFitModeStyles(fitMode, isSinglePage),
 									objectFit: "contain",
-									display: isLoading ? "none" : "block",
 								}}
-								onLoad={(e) => handleImageLoad(page.pageNumber, e)}
-								onError={() => handleImageError(page.pageNumber)}
+								onLoad={(e) => handleImageLoad(page.pageNumber, page.src, e)}
+								onError={() => handleImageError(page.pageNumber, page.src)}
 								draggable={false}
 							/>
 						)}

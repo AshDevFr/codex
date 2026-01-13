@@ -127,9 +127,14 @@ export interface FlatStrategyConfig {
 interface FlatConfigEditorProps {
 	config: FlatStrategyConfig;
 	onChange: (config: FlatStrategyConfig) => void;
+	disabled?: boolean;
 }
 
-function FlatConfigEditor({ config, onChange }: FlatConfigEditorProps) {
+function FlatConfigEditor({
+	config,
+	onChange,
+	disabled = false,
+}: FlatConfigEditorProps) {
 	const patternsText = (config.filenamePatterns || []).join("\n");
 
 	return (
@@ -149,6 +154,7 @@ function FlatConfigEditor({ config, onChange }: FlatConfigEditorProps) {
 				}
 				minRows={3}
 				styles={{ input: { fontFamily: "monospace" } }}
+				disabled={disabled}
 			/>
 			<Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
 				<Text size="sm">
@@ -172,11 +178,13 @@ export interface PublisherHierarchyConfig {
 interface PublisherHierarchyConfigEditorProps {
 	config: PublisherHierarchyConfig;
 	onChange: (config: PublisherHierarchyConfig) => void;
+	disabled?: boolean;
 }
 
 function PublisherHierarchyConfigEditor({
 	config,
 	onChange,
+	disabled = false,
 }: PublisherHierarchyConfigEditorProps) {
 	return (
 		<Stack gap="sm">
@@ -193,6 +201,7 @@ function PublisherHierarchyConfigEditor({
 				}
 				min={1}
 				max={5}
+				disabled={disabled}
 			/>
 			<TextInput
 				label="Store Skipped As"
@@ -205,6 +214,7 @@ function PublisherHierarchyConfigEditor({
 						storeSkippedAs: e.currentTarget.value || undefined,
 					})
 				}
+				disabled={disabled}
 			/>
 		</Stack>
 	);
@@ -224,9 +234,14 @@ export interface CalibreStrategyConfig {
 interface CalibreConfigEditorProps {
 	config: CalibreStrategyConfig;
 	onChange: (config: CalibreStrategyConfig) => void;
+	disabled?: boolean;
 }
 
-function CalibreConfigEditor({ config, onChange }: CalibreConfigEditorProps) {
+function CalibreConfigEditor({
+	config,
+	onChange,
+	disabled = false,
+}: CalibreConfigEditorProps) {
 	return (
 		<Stack gap="sm">
 			<Select
@@ -255,6 +270,7 @@ function CalibreConfigEditor({ config, onChange }: CalibreConfigEditorProps) {
 					})
 				}
 				comboboxProps={{ zIndex: 1001 }}
+				disabled={disabled}
 			/>
 			<Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
 				<Text size="sm">
@@ -278,9 +294,14 @@ export interface CustomStrategyConfig {
 interface CustomConfigEditorProps {
 	config: CustomStrategyConfig;
 	onChange: (config: CustomStrategyConfig) => void;
+	disabled?: boolean;
 }
 
-function CustomConfigEditor({ config, onChange }: CustomConfigEditorProps) {
+function CustomConfigEditor({
+	config,
+	onChange,
+	disabled = false,
+}: CustomConfigEditorProps) {
 	return (
 		<Stack gap="sm">
 			<TextInput
@@ -295,6 +316,7 @@ function CustomConfigEditor({ config, onChange }: CustomConfigEditorProps) {
 					})
 				}
 				styles={{ input: { fontFamily: "monospace" } }}
+				disabled={disabled}
 			/>
 			<TextInput
 				label="Series Name Template"
@@ -308,6 +330,7 @@ function CustomConfigEditor({ config, onChange }: CustomConfigEditorProps) {
 					})
 				}
 				styles={{ input: { fontFamily: "monospace" } }}
+				disabled={disabled}
 			/>
 			<Accordion variant="separated">
 				<Accordion.Item value="help">
@@ -362,6 +385,7 @@ export function SeriesStrategySelector({
 					<FlatConfigEditor
 						config={config as FlatStrategyConfig}
 						onChange={onConfigChange}
+						disabled={disabled}
 					/>
 				);
 			case "publisher_hierarchy":
@@ -369,6 +393,7 @@ export function SeriesStrategySelector({
 					<PublisherHierarchyConfigEditor
 						config={config as PublisherHierarchyConfig}
 						onChange={onConfigChange}
+						disabled={disabled}
 					/>
 				);
 			case "calibre":
@@ -376,6 +401,7 @@ export function SeriesStrategySelector({
 					<CalibreConfigEditor
 						config={config as CalibreStrategyConfig}
 						onChange={onConfigChange}
+						disabled={disabled}
 					/>
 				);
 			case "custom":
@@ -383,6 +409,7 @@ export function SeriesStrategySelector({
 					<CustomConfigEditor
 						config={config as CustomStrategyConfig}
 						onChange={onConfigChange}
+						disabled={disabled}
 					/>
 				);
 			default:
@@ -425,7 +452,7 @@ export function SeriesStrategySelector({
 				</Alert>
 			)}
 
-			{selectedStrategy?.hasConfig && !disabled && renderConfigEditor()}
+			{selectedStrategy?.hasConfig && renderConfigEditor()}
 		</Stack>
 	);
 }

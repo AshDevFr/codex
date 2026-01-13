@@ -6,14 +6,17 @@ import { useEpubBookmarks } from "./useEpubBookmarks";
 describe("useEpubBookmarks", () => {
 	const bookId = "test-book-123";
 	const storageKey = `epub-bookmarks-${bookId}`;
+	const originalConsoleWarn = console.warn;
 
 	beforeEach(() => {
 		localStorage.clear();
 		vi.clearAllMocks();
+		console.warn = vi.fn();
 	});
 
 	afterEach(() => {
 		localStorage.clear();
+		console.warn = originalConsoleWarn;
 	});
 
 	describe("initialization", () => {

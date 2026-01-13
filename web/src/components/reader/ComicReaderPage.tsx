@@ -1,6 +1,7 @@
 import { Box, Center, Loader } from "@mantine/core";
 import { useState } from "react";
 import type { BackgroundColor, FitMode } from "@/store/readerStore";
+import { useReaderStore } from "@/store/readerStore";
 
 interface ComicReaderPageProps {
 	/** URL of the page image */
@@ -98,17 +99,24 @@ export function ComicReaderPage({
 	isVisible = true,
 	onClick,
 }: ComicReaderPageProps) {
-	const [isLoading, setIsLoading] = useState(true);
-	const [hasError, setHasError] = useState(false);
+	// Check if this image is already preloaded to avoid showing loader
+	const isPreloaded = useReaderStore((state) => state.preloadedImages.has(src));
+	const [loadingState, setLoadingState] = useState<{
+		src: string;
+		isLoading: boolean;
+		hasError: boolean;
+	}>({ src, isLoading: !isPreloaded, hasError: false });
+
+	// Reset state when src changes
+	const isLoading = loadingState.src === src ? loadingState.isLoading : !isPreloaded;
+	const hasError = loadingState.src === src ? loadingState.hasError : false;
 
 	const handleImageLoad = () => {
-		setIsLoading(false);
-		setHasError(false);
+		setLoadingState({ src, isLoading: false, hasError: false });
 	};
 
 	const handleImageError = () => {
-		setIsLoading(false);
-		setHasError(true);
+		setLoadingState({ src, isLoading: false, hasError: true });
 	};
 
 	const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -148,36 +156,39 @@ export function ComicReaderPage({
 				justifyContent: "center",
 				cursor: onClick ? "pointer" : "default",
 				userSelect: "none",
+				position: "relative",
 			}}
 			onClick={handleClick}
 		>
-			{isLoading && (
-				<Center
-					style={{
-						position: "absolute",
-						inset: 0,
-						backgroundColor: BACKGROUND_COLORS[backgroundColor],
-					}}
-				>
-					<Loader size="lg" color="gray" />
-				</Center>
-			)}
-
 			{hasError ? (
 				<Center style={{ color: "#666" }}>Failed to load page</Center>
 			) : (
-				<img
-					src={src}
-					alt={alt}
-					style={{
-						...getFitModeStyles(fitMode),
-						objectFit: "contain",
-						display: isLoading ? "none" : "block",
-					}}
-					onLoad={handleImageLoad}
-					onError={handleImageError}
-					draggable={false}
-				/>
+				<>
+					{/* Always render image - use opacity instead of display:none to allow instant cache hits */}
+					<img
+						src={src}
+						alt={alt}
+						style={{
+							...getFitModeStyles(fitMode),
+							objectFit: "contain",
+						}}
+						onLoad={handleImageLoad}
+						onError={handleImageError}
+						draggable={false}
+					/>
+					{/* Loader overlay - only show when actually loading (not preloaded) */}
+					{isLoading && (
+						<Center
+							style={{
+								position: "absolute",
+								inset: 0,
+								backgroundColor: BACKGROUND_COLORS[backgroundColor],
+							}}
+						>
+							<Loader size="lg" color="gray" />
+						</Center>
+					)}
+				</>
 			)}
 		</Box>
 	);

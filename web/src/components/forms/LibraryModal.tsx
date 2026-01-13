@@ -1,7 +1,6 @@
 import {
 	Alert,
 	Anchor,
-	Badge,
 	Breadcrumbs,
 	Button,
 	Center,
@@ -53,7 +52,6 @@ import { PreviewScanPanel } from "./PreviewScanPanel";
 import {
 	BookStrategySelector,
 	NumberStrategySelector,
-	SERIES_STRATEGIES,
 	SeriesStrategySelector,
 } from "./StrategySelector";
 
@@ -152,6 +150,14 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 					: ALL_FORMATS,
 			);
 			setExcludedPatterns(library.excludedPatterns || "");
+
+			// Initialize strategy state from library (series strategy is read-only in edit mode)
+			setSeriesStrategy(library.seriesStrategy || "series_volume");
+			setSeriesConfig(
+				(library.seriesConfig as Record<string, unknown>) || {},
+			);
+			setBookStrategy(library.bookStrategy || "filename");
+			setNumberStrategy(library.numberStrategy || "file_order");
 		} else if (!isEditMode) {
 			// Reset form for add mode
 			setLibraryName("");
@@ -306,6 +312,9 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 							allowedFormats.length > 0 ? allowedFormats : undefined,
 						excludedPatterns: excludedPatterns.trim() || undefined,
 						defaultReadingDirection: readingDirection,
+						// Book naming and number strategies can be changed in edit mode
+						bookStrategy,
+						numberStrategy,
 					},
 				});
 			}
@@ -680,31 +689,42 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 		</Stack>
 	);
 
-	// Strategy tab content (only for add mode)
+	// Strategy tab content
 	const renderStrategyTab = () => {
-		const selectedStrategyInfo = SERIES_STRATEGIES.find(
-			(s) => s.value === seriesStrategy,
-		);
-
 		return (
 			<Stack gap="md">
-				<Alert
-					icon={<IconInfoCircle size={16} />}
-					color="yellow"
-					variant="light"
-				>
-					<Text size="sm">
-						Strategy settings are <strong>permanent</strong> and cannot be
-						changed after library creation. Choose carefully based on your
-						folder structure.
-					</Text>
-				</Alert>
+				{isEditMode ? (
+					<Alert
+						icon={<IconInfoCircle size={16} />}
+						color="blue"
+						variant="light"
+					>
+						<Text size="sm">
+							The <strong>series detection strategy</strong> cannot be changed
+							after library creation. You can modify book naming and numbering
+							strategies - changes will apply on the next scan.
+						</Text>
+					</Alert>
+				) : (
+					<Alert
+						icon={<IconInfoCircle size={16} />}
+						color="yellow"
+						variant="light"
+					>
+						<Text size="sm">
+							The <strong>series detection strategy</strong> is permanent and
+							cannot be changed after library creation. Choose carefully based
+							on your folder structure.
+						</Text>
+					</Alert>
+				)}
 
 				<SeriesStrategySelector
 					value={seriesStrategy}
 					onChange={setSeriesStrategy}
 					config={seriesConfig}
 					onConfigChange={setSeriesConfig}
+					disabled={isEditMode}
 				/>
 
 				<Divider my="sm" />
@@ -718,38 +738,16 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 					onChange={setNumberStrategy}
 				/>
 
-				<Divider my="sm" />
+				{!isEditMode && (
+					<>
+						<Divider my="sm" />
 
-				<PreviewScanPanel
-					path={selectedPath || libraryPath}
-					seriesStrategy={seriesStrategy}
-					seriesConfig={seriesConfig}
-				/>
-
-				{isEditMode && library && (
-					<Paper p="md" withBorder>
-						<Stack gap="xs">
-							<Text size="sm" fw={500}>
-								Current Strategy (Read-only)
-							</Text>
-							<Group gap="xs">
-								<Badge color="blue" variant="light">
-									Series: {library.seriesStrategy || "series_volume"}
-								</Badge>
-								<Badge color="gray" variant="light">
-									Book: {library.bookStrategy || "filename"}
-								</Badge>
-								<Badge color="teal" variant="light">
-									Number: {library.numberStrategy || "file_order"}
-								</Badge>
-							</Group>
-							{selectedStrategyInfo && (
-								<Text size="xs" c="dimmed">
-									{selectedStrategyInfo.description}
-								</Text>
-							)}
-						</Stack>
-					</Paper>
+						<PreviewScanPanel
+							path={selectedPath || libraryPath}
+							seriesStrategy={seriesStrategy}
+							seriesConfig={seriesConfig}
+						/>
+					</>
 				)}
 			</Stack>
 		);
@@ -781,14 +779,12 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 								>
 									General
 								</Tabs.Tab>
-								{!isEditMode && (
-									<Tabs.Tab
-										value="strategy"
-										leftSection={<IconWand size={16} />}
-									>
-										Strategy
-									</Tabs.Tab>
-								)}
+								<Tabs.Tab
+								value="strategy"
+								leftSection={<IconWand size={16} />}
+							>
+								Strategy
+							</Tabs.Tab>
 								<Tabs.Tab
 									value="formats"
 									leftSection={<IconFilter size={16} />}
@@ -807,11 +803,9 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 								{renderGeneralTab()}
 							</Tabs.Panel>
 
-							{!isEditMode && (
-								<Tabs.Panel value="strategy" pt="md">
-									{renderStrategyTab()}
-								</Tabs.Panel>
-							)}
+							<Tabs.Panel value="strategy" pt="md">
+								{renderStrategyTab()}
+							</Tabs.Panel>
 
 							<Tabs.Panel value="formats" pt="md">
 								{renderFormatsTab()}

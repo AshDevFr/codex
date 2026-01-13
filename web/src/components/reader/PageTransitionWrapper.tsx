@@ -185,9 +185,20 @@ export function PageTransitionWrapper({
 		}, duration + 16); // duration + initial frame delay
 	}, [pageKey, children, transition, duration, navigationDirection, readingDirection]);
 
-	// No transition - just render children
+	// When idle or no transition, render content in a stable container
+	// to prevent layout shifts when transitioning between states
 	if (transition === "none" || state.phase === "idle") {
-		return <>{state.currentContent}</>;
+		return (
+			<Box
+				style={{
+					position: "relative",
+					width: "100%",
+					height: "100%",
+				}}
+			>
+				{state.currentContent}
+			</Box>
+		);
 	}
 
 	const isEntering = state.phase === "entering";
