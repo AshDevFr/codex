@@ -28,11 +28,16 @@ describe("readerStore", () => {
 				toolbarHideDelay: 3000,
 				epubTheme: "light",
 				epubFontSize: 100,
+				epubFontFamily: "default",
+				epubLineHeight: 140,
+				epubMargin: 10,
 				preloadPages: 1,
 				doublePageShowWideAlone: true,
 				doublePageStartOnOdd: true,
 				pageTransition: "slide",
 				transitionDuration: 200,
+				webtoonSidePadding: 0,
+				webtoonPageGap: 0,
 			},
 			currentPage: 1,
 			totalPages: 0,
@@ -873,6 +878,195 @@ describe("readerStore", () => {
 			const state = useReaderStore.getState();
 			expect(state.settings.pageTransition).toBe("slide");
 			expect(state.settings.transitionDuration).toBe(300);
+		});
+	});
+
+	describe("EPUB typography settings", () => {
+		describe("setEpubFontFamily", () => {
+			it("should set font family to default", () => {
+				const { setEpubFontFamily } = useReaderStore.getState();
+
+				setEpubFontFamily("default");
+
+				expect(useReaderStore.getState().settings.epubFontFamily).toBe("default");
+			});
+
+			it("should set font family to serif", () => {
+				const { setEpubFontFamily } = useReaderStore.getState();
+
+				setEpubFontFamily("serif");
+
+				expect(useReaderStore.getState().settings.epubFontFamily).toBe("serif");
+			});
+
+			it("should set font family to sans-serif", () => {
+				const { setEpubFontFamily } = useReaderStore.getState();
+
+				setEpubFontFamily("sans-serif");
+
+				expect(useReaderStore.getState().settings.epubFontFamily).toBe("sans-serif");
+			});
+
+			it("should set font family to monospace", () => {
+				const { setEpubFontFamily } = useReaderStore.getState();
+
+				setEpubFontFamily("monospace");
+
+				expect(useReaderStore.getState().settings.epubFontFamily).toBe("monospace");
+			});
+
+			it("should set font family to dyslexic", () => {
+				const { setEpubFontFamily } = useReaderStore.getState();
+
+				setEpubFontFamily("dyslexic");
+
+				expect(useReaderStore.getState().settings.epubFontFamily).toBe("dyslexic");
+			});
+		});
+
+		describe("setEpubLineHeight", () => {
+			it("should set line height", () => {
+				const { setEpubLineHeight } = useReaderStore.getState();
+
+				setEpubLineHeight(160);
+
+				expect(useReaderStore.getState().settings.epubLineHeight).toBe(160);
+			});
+
+			it("should clamp line height to minimum 100%", () => {
+				const { setEpubLineHeight } = useReaderStore.getState();
+
+				setEpubLineHeight(50);
+
+				expect(useReaderStore.getState().settings.epubLineHeight).toBe(100);
+			});
+
+			it("should clamp line height to maximum 250%", () => {
+				const { setEpubLineHeight } = useReaderStore.getState();
+
+				setEpubLineHeight(300);
+
+				expect(useReaderStore.getState().settings.epubLineHeight).toBe(250);
+			});
+		});
+
+		describe("setEpubMargin", () => {
+			it("should set margin", () => {
+				const { setEpubMargin } = useReaderStore.getState();
+
+				setEpubMargin(15);
+
+				expect(useReaderStore.getState().settings.epubMargin).toBe(15);
+			});
+
+			it("should clamp margin to minimum 0%", () => {
+				const { setEpubMargin } = useReaderStore.getState();
+
+				setEpubMargin(-10);
+
+				expect(useReaderStore.getState().settings.epubMargin).toBe(0);
+			});
+
+			it("should clamp margin to maximum 30%", () => {
+				const { setEpubMargin } = useReaderStore.getState();
+
+				setEpubMargin(50);
+
+				expect(useReaderStore.getState().settings.epubMargin).toBe(30);
+			});
+		});
+
+		describe("setEpubFontSize", () => {
+			it("should set font size", () => {
+				const { setEpubFontSize } = useReaderStore.getState();
+
+				setEpubFontSize(120);
+
+				expect(useReaderStore.getState().settings.epubFontSize).toBe(120);
+			});
+
+			it("should clamp font size to minimum 50%", () => {
+				const { setEpubFontSize } = useReaderStore.getState();
+
+				setEpubFontSize(30);
+
+				expect(useReaderStore.getState().settings.epubFontSize).toBe(50);
+			});
+
+			it("should clamp font size to maximum 200%", () => {
+				const { setEpubFontSize } = useReaderStore.getState();
+
+				setEpubFontSize(250);
+
+				expect(useReaderStore.getState().settings.epubFontSize).toBe(200);
+			});
+		});
+
+		describe("setEpubTheme", () => {
+			it("should set theme to light", () => {
+				const { setEpubTheme } = useReaderStore.getState();
+
+				setEpubTheme("light");
+
+				expect(useReaderStore.getState().settings.epubTheme).toBe("light");
+			});
+
+			it("should set theme to sepia", () => {
+				const { setEpubTheme } = useReaderStore.getState();
+
+				setEpubTheme("sepia");
+
+				expect(useReaderStore.getState().settings.epubTheme).toBe("sepia");
+			});
+
+			it("should set theme to dark", () => {
+				const { setEpubTheme } = useReaderStore.getState();
+
+				setEpubTheme("dark");
+
+				expect(useReaderStore.getState().settings.epubTheme).toBe("dark");
+			});
+
+			it("should set theme to mint", () => {
+				const { setEpubTheme } = useReaderStore.getState();
+
+				setEpubTheme("mint");
+
+				expect(useReaderStore.getState().settings.epubTheme).toBe("mint");
+			});
+
+			it("should set theme to slate", () => {
+				const { setEpubTheme } = useReaderStore.getState();
+
+				setEpubTheme("slate");
+
+				expect(useReaderStore.getState().settings.epubTheme).toBe("slate");
+			});
+		});
+	});
+
+	describe("EPUB settings persistence", () => {
+		it("should preserve EPUB typography settings when resetting session", () => {
+			useReaderStore.setState({
+				settings: {
+					...useReaderStore.getState().settings,
+					epubFontFamily: "serif",
+					epubLineHeight: 180,
+					epubMargin: 20,
+					epubFontSize: 120,
+					epubTheme: "dark",
+				},
+			});
+
+			const { resetSession } = useReaderStore.getState();
+			resetSession();
+
+			const state = useReaderStore.getState();
+			expect(state.settings.epubFontFamily).toBe("serif");
+			expect(state.settings.epubLineHeight).toBe(180);
+			expect(state.settings.epubMargin).toBe(20);
+			expect(state.settings.epubFontSize).toBe(120);
+			expect(state.settings.epubTheme).toBe("dark");
 		});
 	});
 });

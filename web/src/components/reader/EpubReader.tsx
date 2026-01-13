@@ -53,6 +53,15 @@ const EPUB_THEMES = {
 
 export type EpubTheme = keyof typeof EPUB_THEMES;
 
+// Font family CSS values mapping
+const EPUB_FONT_FAMILIES = {
+	default: "inherit",
+	serif: "Georgia, 'Times New Roman', serif",
+	"sans-serif": "'Helvetica Neue', Arial, sans-serif",
+	monospace: "'Courier New', Consolas, monospace",
+	dyslexic: "OpenDyslexic, 'Comic Sans MS', sans-serif",
+} as const;
+
 /**
  * Generate ReactReader container styles based on the current theme.
  * This ensures the reader container background matches the EPUB content theme.
@@ -175,12 +184,21 @@ export function EpubReader({
 	// EPUB-specific settings from store
 	const epubTheme = useReaderStore((state) => state.settings.epubTheme);
 	const epubFontSize = useReaderStore((state) => state.settings.epubFontSize);
+	const epubFontFamily = useReaderStore((state) => state.settings.epubFontFamily);
+	const epubLineHeight = useReaderStore((state) => state.settings.epubLineHeight);
+	const epubMargin = useReaderStore((state) => state.settings.epubMargin);
 
 	// Use refs for initial styles to avoid re-creating handleGetRendition
 	const epubThemeRef = useRef(epubTheme);
 	const epubFontSizeRef = useRef(epubFontSize);
+	const epubFontFamilyRef = useRef(epubFontFamily);
+	const epubLineHeightRef = useRef(epubLineHeight);
+	const epubMarginRef = useRef(epubMargin);
 	epubThemeRef.current = epubTheme;
 	epubFontSizeRef.current = epubFontSize;
+	epubFontFamilyRef.current = epubFontFamily;
+	epubLineHeightRef.current = epubLineHeight;
+	epubMarginRef.current = epubMargin;
 
 	// Memoize reader styles based on theme
 	const readerStyles = useMemo(() => getReaderStyles(epubTheme), [epubTheme]);
@@ -231,6 +249,28 @@ export function EpubReader({
 			renditionRef.current.themes.fontSize(`${epubFontSize}%`);
 		}
 	}, [epubFontSize]);
+
+	// Apply font family to rendition
+	useEffect(() => {
+		if (renditionRef.current?.themes) {
+			const fontFamily = EPUB_FONT_FAMILIES[epubFontFamily] ?? EPUB_FONT_FAMILIES.default;
+			renditionRef.current.themes.override("font-family", fontFamily);
+		}
+	}, [epubFontFamily]);
+
+	// Apply line height to rendition
+	useEffect(() => {
+		if (renditionRef.current?.themes) {
+			renditionRef.current.themes.override("line-height", `${epubLineHeight}%`);
+		}
+	}, [epubLineHeight]);
+
+	// Apply margin to rendition (via padding on body)
+	useEffect(() => {
+		if (renditionRef.current?.themes) {
+			renditionRef.current.themes.override("padding", `0 ${epubMargin}%`);
+		}
+	}, [epubMargin]);
 
 	// Apply startPercent from URL (highest priority - overrides saved progress)
 	useEffect(() => {
@@ -302,6 +342,13 @@ export function EpubReader({
 			rendition.themes.override("background", theme.body.background);
 			rendition.themes.override("color", theme.body.color);
 			rendition.themes.fontSize(`${epubFontSizeRef.current}%`);
+			// Apply font family
+			const fontFamily = EPUB_FONT_FAMILIES[epubFontFamilyRef.current] ?? EPUB_FONT_FAMILIES.default;
+			rendition.themes.override("font-family", fontFamily);
+			// Apply line height
+			rendition.themes.override("line-height", `${epubLineHeightRef.current}%`);
+			// Apply margin (via padding)
+			rendition.themes.override("padding", `0 ${epubMarginRef.current}%`);
 		};
 		applyInitialStyles();
 

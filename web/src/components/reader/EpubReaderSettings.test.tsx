@@ -14,6 +14,9 @@ const defaultSettings = {
 	toolbarHideDelay: 3000,
 	epubTheme: "light" as const,
 	epubFontSize: 100,
+	epubFontFamily: "default" as const,
+	epubLineHeight: 140,
+	epubMargin: 10,
 	preloadPages: 1,
 	doublePageShowWideAlone: true,
 	doublePageStartOnOdd: true,
@@ -69,7 +72,8 @@ describe("EpubReaderSettings", () => {
 			expect(screen.getByText("Font Size")).toBeInTheDocument();
 			// Multiple 100% elements exist (value display + slider mark)
 			expect(screen.getAllByText("100%").length).toBeGreaterThanOrEqual(1);
-			expect(screen.getByRole("slider")).toBeInTheDocument();
+			// Multiple sliders exist (font size, line height, margin)
+			expect(screen.getAllByRole("slider").length).toBeGreaterThanOrEqual(1);
 		});
 
 		it("should display auto-hide toolbar toggle", () => {
@@ -189,8 +193,10 @@ describe("EpubReaderSettings", () => {
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />
 			);
 
-			const slider = screen.getByRole("slider");
-			expect(slider).toHaveAttribute("aria-valuenow", "150");
+			// Font size slider is the first one in the modal
+			const sliders = screen.getAllByRole("slider");
+			const fontSizeSlider = sliders[0];
+			expect(fontSizeSlider).toHaveAttribute("aria-valuenow", "150");
 		});
 	});
 
@@ -273,9 +279,9 @@ describe("EpubReaderSettings", () => {
 
 	describe("state persistence", () => {
 		it("should reflect store values when modal opens", () => {
-			// Set up specific store state
+			// Set up specific store state - use a unique font size that won't conflict with line height
 			useReaderStore.getState().setEpubTheme("dark");
-			useReaderStore.getState().setEpubFontSize(140);
+			useReaderStore.getState().setEpubFontSize(130);
 			useReaderStore.getState().setAutoHideToolbar(false);
 
 			renderWithProviders(
@@ -283,7 +289,7 @@ describe("EpubReaderSettings", () => {
 			);
 
 			// Check that the UI reflects the store state
-			expect(screen.getByText("140%")).toBeInTheDocument();
+			expect(screen.getByText("130%")).toBeInTheDocument();
 			expect(screen.getByRole("switch")).not.toBeChecked();
 		});
 
@@ -303,6 +309,183 @@ describe("EpubReaderSettings", () => {
 			const wasChecked = useReaderStore.getState().settings.autoHideToolbar;
 			await user.click(switchControl);
 			expect(useReaderStore.getState().settings.autoHideToolbar).toBe(!wasChecked);
+		});
+	});
+
+	describe("font family", () => {
+		it("should display font family section", () => {
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			expect(screen.getByText("Font Family")).toBeInTheDocument();
+			expect(screen.getByText("Choose a typeface for reading")).toBeInTheDocument();
+		});
+
+		it("should display current font family in dropdown", () => {
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			// Default is selected
+			expect(screen.getByRole("textbox")).toHaveValue("Default");
+		});
+
+		// Note: Mantine Select dropdown interaction tests are unreliable in jsdom
+		// due to scrollIntoView not being available. We test that the store actions
+		// work correctly in readerStore.test.ts instead.
+
+		it("should show serif option as selected", () => {
+			useReaderStore.getState().setEpubFontFamily("serif");
+
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			expect(screen.getByRole("textbox")).toHaveValue("Serif (Georgia)");
+		});
+
+		it("should show sans-serif option as selected", () => {
+			useReaderStore.getState().setEpubFontFamily("sans-serif");
+
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			expect(screen.getByRole("textbox")).toHaveValue("Sans-serif (Helvetica)");
+		});
+
+		it("should show monospace option as selected", () => {
+			useReaderStore.getState().setEpubFontFamily("monospace");
+
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			expect(screen.getByRole("textbox")).toHaveValue("Monospace (Courier)");
+		});
+
+		it("should show dyslexic option as selected", () => {
+			useReaderStore.getState().setEpubFontFamily("dyslexic");
+
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			expect(screen.getByRole("textbox")).toHaveValue("Dyslexic-friendly");
+		});
+	});
+
+	describe("line spacing", () => {
+		it("should display line spacing section", () => {
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			expect(screen.getByText("Line Spacing")).toBeInTheDocument();
+			expect(screen.getByText("Space between lines of text")).toBeInTheDocument();
+		});
+
+		it("should display current line height value", () => {
+			useReaderStore.getState().setEpubLineHeight(180);
+
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			expect(screen.getByText("180%")).toBeInTheDocument();
+		});
+
+		it("should show slider with correct marks", () => {
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			expect(screen.getByText("Tight")).toBeInTheDocument();
+			// "Normal" appears in both line spacing and margins slider marks
+			expect(screen.getAllByText("Normal").length).toBeGreaterThanOrEqual(1);
+			expect(screen.getByText("Relaxed")).toBeInTheDocument();
+			expect(screen.getByText("Loose")).toBeInTheDocument();
+		});
+
+		it("should have slider with correct initial value", () => {
+			useReaderStore.getState().setEpubLineHeight(200);
+
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			// Find the line height slider (second slider in the modal)
+			const sliders = screen.getAllByRole("slider");
+			// Line height slider is the second one (after font size)
+			const lineHeightSlider = sliders[1];
+			expect(lineHeightSlider).toHaveAttribute("aria-valuenow", "200");
+		});
+	});
+
+	describe("margins", () => {
+		it("should display margins section", () => {
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			expect(screen.getByText("Margins")).toBeInTheDocument();
+			expect(screen.getByText("Horizontal padding around text")).toBeInTheDocument();
+		});
+
+		it("should display current margin value", () => {
+			useReaderStore.getState().setEpubMargin(20);
+
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			expect(screen.getByText("20%")).toBeInTheDocument();
+		});
+
+		it("should show slider with correct marks", () => {
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			expect(screen.getByText("None")).toBeInTheDocument();
+			// "Normal" appears twice (line spacing and margins)
+			expect(screen.getAllByText("Normal").length).toBeGreaterThanOrEqual(1);
+			expect(screen.getByText("Wide")).toBeInTheDocument();
+			expect(screen.getByText("Max")).toBeInTheDocument();
+		});
+
+		it("should have slider with correct initial value", () => {
+			useReaderStore.getState().setEpubMargin(25);
+
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			// Find the margin slider (third slider in the modal)
+			const sliders = screen.getAllByRole("slider");
+			// Margin slider is the third one (after font size and line height)
+			const marginSlider = sliders[2];
+			expect(marginSlider).toHaveAttribute("aria-valuenow", "25");
+		});
+	});
+
+	describe("typography settings state persistence", () => {
+		it("should reflect all typography store values when modal opens", () => {
+			// Set up specific store state - use unique values to avoid ambiguity
+			useReaderStore.getState().setEpubFontFamily("serif");
+			useReaderStore.getState().setEpubLineHeight(210);
+			useReaderStore.getState().setEpubMargin(25);
+
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			// Check that the UI reflects the store state
+			expect(screen.getByRole("textbox")).toHaveValue("Serif (Georgia)");
+			// Use getAllByText since multiple percentage values may exist
+			expect(screen.getByText("210%")).toBeInTheDocument();
+			expect(screen.getByText("25%")).toBeInTheDocument();
 		});
 	});
 });

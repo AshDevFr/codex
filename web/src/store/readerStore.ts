@@ -21,6 +21,7 @@ export type ReadingDirection = "ltr" | "rtl" | "ttb" | "webtoon";
 export type BackgroundColor = "black" | "gray" | "white";
 export type PdfMode = "streaming" | "native";
 export type EpubTheme = "light" | "sepia" | "dark" | "mint" | "slate";
+export type EpubFontFamily = "default" | "serif" | "sans-serif" | "monospace" | "dyslexic";
 export type BoundaryState = "none" | "at-start" | "at-end";
 export type PageTransition = "none" | "fade" | "slide";
 export type NavigationDirection = "next" | "prev" | null;
@@ -54,6 +55,12 @@ export interface ReaderSettings {
 	epubTheme: EpubTheme;
 	/** EPUB font size as percentage (50-200) */
 	epubFontSize: number;
+	/** EPUB font family */
+	epubFontFamily: EpubFontFamily;
+	/** EPUB line height as percentage (100-250) */
+	epubLineHeight: number;
+	/** EPUB margin as percentage (0-30) */
+	epubMargin: number;
 	/** Number of pages to preload ahead/behind current page (0-5) */
 	preloadPages: number;
 	/** In double-page mode, show landscape/wide pages alone (default: true) */
@@ -121,6 +128,9 @@ export interface ReaderState {
 	setToolbarHideDelay: (delay: number) => void;
 	setEpubTheme: (theme: EpubTheme) => void;
 	setEpubFontSize: (size: number) => void;
+	setEpubFontFamily: (family: EpubFontFamily) => void;
+	setEpubLineHeight: (height: number) => void;
+	setEpubMargin: (margin: number) => void;
 	setPreloadPages: (count: number) => void;
 	setDoublePageShowWideAlone: (enabled: boolean) => void;
 	setDoublePageStartOnOdd: (enabled: boolean) => void;
@@ -195,6 +205,9 @@ const DEFAULT_SETTINGS: ReaderSettings = {
 	toolbarHideDelay: 3000,
 	epubTheme: "light",
 	epubFontSize: 100,
+	epubFontFamily: "default",
+	epubLineHeight: 140,
+	epubMargin: 10,
 	preloadPages: 1,
 	doublePageShowWideAlone: true,
 	doublePageStartOnOdd: true,
@@ -302,6 +315,23 @@ export const useReaderStore = create<ReaderState>()(
 					set((state) => {
 						// Clamp font size between 50% and 200%
 						state.settings.epubFontSize = Math.max(50, Math.min(200, size));
+					}),
+
+				setEpubFontFamily: (family) =>
+					set((state) => {
+						state.settings.epubFontFamily = family;
+					}),
+
+				setEpubLineHeight: (height) =>
+					set((state) => {
+						// Clamp line height between 100% and 250%
+						state.settings.epubLineHeight = Math.max(100, Math.min(250, height));
+					}),
+
+				setEpubMargin: (margin) =>
+					set((state) => {
+						// Clamp margin between 0% and 30%
+						state.settings.epubMargin = Math.max(0, Math.min(30, margin));
 					}),
 
 				setPreloadPages: (count) =>

@@ -2,13 +2,18 @@ import {
 	Box,
 	Group,
 	Modal,
+	Select,
 	SegmentedControl,
 	Slider,
 	Stack,
 	Switch,
 	Text,
 } from "@mantine/core";
-import { type EpubTheme, useReaderStore } from "@/store/readerStore";
+import {
+	type EpubFontFamily,
+	type EpubTheme,
+	useReaderStore,
+} from "@/store/readerStore";
 
 interface EpubReaderSettingsProps {
 	/** Whether the modal is open */
@@ -17,12 +22,24 @@ interface EpubReaderSettingsProps {
 	onClose: () => void;
 }
 
+/** Font family options for display in select */
+const FONT_FAMILY_OPTIONS = [
+	{ value: "default", label: "Default" },
+	{ value: "serif", label: "Serif (Georgia)" },
+	{ value: "sans-serif", label: "Sans-serif (Helvetica)" },
+	{ value: "monospace", label: "Monospace (Courier)" },
+	{ value: "dyslexic", label: "Dyslexic-friendly" },
+];
+
 /**
  * Settings modal for the EPUB reader.
  *
  * Allows configuring:
  * - Theme (light, sepia, dark, mint, slate)
  * - Font size
+ * - Font family
+ * - Line height
+ * - Margins
  * - Toolbar auto-hide
  */
 export function EpubReaderSettings({
@@ -32,6 +49,9 @@ export function EpubReaderSettings({
 	const settings = useReaderStore((state) => state.settings);
 	const setEpubTheme = useReaderStore((state) => state.setEpubTheme);
 	const setEpubFontSize = useReaderStore((state) => state.setEpubFontSize);
+	const setEpubFontFamily = useReaderStore((state) => state.setEpubFontFamily);
+	const setEpubLineHeight = useReaderStore((state) => state.setEpubLineHeight);
+	const setEpubMargin = useReaderStore((state) => state.setEpubMargin);
 	const setAutoHideToolbar = useReaderStore(
 		(state) => state.setAutoHideToolbar,
 	);
@@ -70,6 +90,24 @@ export function EpubReaderSettings({
 					</Text>
 				</Box>
 
+				{/* Font Family */}
+				<Box>
+					<Text size="sm" fw={500} mb="xs">
+						Font Family
+					</Text>
+					<Select
+						value={settings.epubFontFamily}
+						onChange={(value) =>
+							value && setEpubFontFamily(value as EpubFontFamily)
+						}
+						data={FONT_FAMILY_OPTIONS}
+						allowDeselect={false}
+					/>
+					<Text size="xs" c="dimmed" mt="xs">
+						Choose a typeface for reading
+					</Text>
+				</Box>
+
 				{/* Font Size */}
 				<Box>
 					<Group justify="space-between" mb="xs">
@@ -95,6 +133,62 @@ export function EpubReaderSettings({
 					/>
 					<Text size="xs" c="dimmed" mt="lg">
 						Adjust text size for comfortable reading
+					</Text>
+				</Box>
+
+				{/* Line Height */}
+				<Box>
+					<Group justify="space-between" mb="xs">
+						<Text size="sm" fw={500}>
+							Line Spacing
+						</Text>
+						<Text size="sm" c="dimmed">
+							{settings.epubLineHeight}%
+						</Text>
+					</Group>
+					<Slider
+						value={settings.epubLineHeight}
+						onChange={setEpubLineHeight}
+						min={100}
+						max={250}
+						step={10}
+						marks={[
+							{ value: 100, label: "Tight" },
+							{ value: 140, label: "Normal" },
+							{ value: 200, label: "Relaxed" },
+							{ value: 250, label: "Loose" },
+						]}
+					/>
+					<Text size="xs" c="dimmed" mt="lg">
+						Space between lines of text
+					</Text>
+				</Box>
+
+				{/* Margins */}
+				<Box>
+					<Group justify="space-between" mb="xs">
+						<Text size="sm" fw={500}>
+							Margins
+						</Text>
+						<Text size="sm" c="dimmed">
+							{settings.epubMargin}%
+						</Text>
+					</Group>
+					<Slider
+						value={settings.epubMargin}
+						onChange={setEpubMargin}
+						min={0}
+						max={30}
+						step={5}
+						marks={[
+							{ value: 0, label: "None" },
+							{ value: 10, label: "Normal" },
+							{ value: 20, label: "Wide" },
+							{ value: 30, label: "Max" },
+						]}
+					/>
+					<Text size="xs" c="dimmed" mt="lg">
+						Horizontal padding around text
 					</Text>
 				</Box>
 
