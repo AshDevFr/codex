@@ -45,6 +45,10 @@ Codex automatically creates series from:
 2. **Filename parsing**: Extracts series name, volume, and number
 3. **Metadata**: ComicInfo.xml or EPUB metadata takes priority
 
+:::tip Flexible Organization
+Codex supports multiple scanning strategies for different organizational patterns. See [Scanning Strategies](./scanning-strategies/) to configure how series and books are detected.
+:::
+
 ## Creating a Library
 
 ### Via Web Interface
@@ -403,6 +407,7 @@ For best results, include ComicInfo.xml in your comics:
 
 ## Next Steps
 
+- [Scanning strategies](./scanning-strategies/) - Configure series and book detection
 - [Supported formats](./formats)
 - [Configure OPDS](./opds)
 - [API documentation](./api)

@@ -373,7 +373,7 @@ curl -X PUT http://localhost:8080/api/v1/books/{id}/progress \
 
 ### User Preferences
 
-Per-user settings (theme, language, reader options). See [Users & Permissions](./users#user-preferences) for details.
+Per-user settings (theme, language, reader options). See [User Management](./users/user-management#user-preferences) for details.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -383,7 +383,7 @@ Per-user settings (theme, language, reader options). See [Users & Permissions](.
 
 ### User Integrations
 
-Connect external services (AniList, MyAnimeList, etc.). See [Users & Permissions](./users#external-integrations) for details.
+Connect external services (AniList, MyAnimeList, etc.). See [User Management](./users/user-management#external-integrations) for details.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|

@@ -1,0 +1,8 @@
+{
+  "label": "Users & Permissions",
+  "position": 5,
+  "link": {
+    "type": "doc",
+    "id": "users/index"
+  }
+}

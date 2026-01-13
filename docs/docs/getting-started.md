@@ -220,7 +220,7 @@ Now that you're up and running:
 
 - [Full Configuration Guide](./configuration)
 - Enable [API docs](./api#interactive-api-documentation) for API exploration
-- Set up [HTTPS](./deployment#reverse-proxy-setup) for security
+- Set up [HTTPS](./deployment/reverse-proxy) for security
 
 ### Set Up Mobile Access
 
@@ -229,9 +229,9 @@ Now that you're up and running:
 
 ### Manage Users
 
-- Create additional [user accounts](./users)
-- Configure [permissions](./users#permission-system)
-- Set up [API keys](./users#api-keys) for automation
+- Create additional [user accounts](./users/)
+- Configure [permissions](./users/permissions)
+- Set up [API keys](./users/api-keys) for automation
 
 ### Explore Features
 
