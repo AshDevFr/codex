@@ -251,19 +251,17 @@ mod tests {
             .await
             .unwrap();
 
-        // Create a book
+        // Create a book (title/number are now in book_metadata table)
         let book = books::Model {
             id: Uuid::new_v4(),
             series_id: series.id,
             library_id: library.id,
-            title: Some("Test Book".to_string()),
             file_path: format!("/test/book_{}.cbz", Uuid::new_v4()),
             file_name: "book.cbz".to_string(),
             file_size: 1024,
             file_hash: format!("hash_{}", Uuid::new_v4()),
             partial_hash: String::new(),
             format: "cbz".to_string(),
-            number: Some(Decimal::from(1)),
             page_count: 50,
             deleted: false,
             analyzed: false,

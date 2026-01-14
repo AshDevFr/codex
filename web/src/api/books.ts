@@ -274,4 +274,22 @@ export const booksApi = {
 			},
 		});
 	},
+
+	/**
+	 * Update book core fields (title, number)
+	 * @param bookId - Book ID
+	 * @param data - Fields to update (title and/or number)
+	 */
+	patch: async (
+		bookId: string,
+		data: { title?: string | null; number?: number | null },
+	): Promise<{ id: string; title: string | null; number: number | null; updatedAt: string }> => {
+		const response = await api.patch<{
+			id: string;
+			title: string | null;
+			number: number | null;
+			updatedAt: string;
+		}>(`/books/${bookId}`, data);
+		return response.data;
+	},
 };

@@ -164,25 +164,27 @@ export function ComicReaderPage({
 				<Center style={{ color: "#666" }}>Failed to load page</Center>
 			) : (
 				<>
-					{/* Always render image - use opacity instead of display:none to allow instant cache hits */}
+					{/* Always render image - use opacity to hide while loading for smooth transitions */}
 					<img
 						src={src}
 						alt={alt}
 						style={{
 							...getFitModeStyles(fitMode),
 							objectFit: "contain",
+							opacity: isLoading ? 0 : 1,
+							transition: "opacity 50ms ease-in",
 						}}
 						onLoad={handleImageLoad}
 						onError={handleImageError}
 						draggable={false}
 					/>
-					{/* Loader overlay - only show when actually loading (not preloaded) */}
+					{/* Loader - only show when actually loading (not preloaded) */}
 					{isLoading && (
 						<Center
 							style={{
 								position: "absolute",
 								inset: 0,
-								backgroundColor: BACKGROUND_COLORS[backgroundColor],
+								pointerEvents: "none",
 							}}
 						>
 							<Loader size="lg" color="gray" />

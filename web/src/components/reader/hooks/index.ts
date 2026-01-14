@@ -7,4 +7,6 @@ export type { PerBookSettings } from "./usePerBookSettings";
 export { usePerBookSettings } from "./usePerBookSettings";
 export { useReadProgress } from "./useReadProgress";
 export { useSeriesNavigation } from "./useSeriesNavigation";
+export type { UseSeriesReaderSettingsReturn } from "./useSeriesReaderSettings";
+export { useSeriesReaderSettings } from "./useSeriesReaderSettings";
 export { useTouchNav } from "./useTouchNav";

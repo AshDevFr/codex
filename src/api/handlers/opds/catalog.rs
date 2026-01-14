@@ -5,7 +5,8 @@ use crate::api::{
     permissions::Permission,
 };
 use crate::db::repositories::{
-    BookRepository, LibraryRepository, ReadProgressRepository, SeriesRepository,
+    BookMetadataRepository, BookRepository, LibraryRepository, ReadProgressRepository,
+    SeriesMetadataRepository, SeriesRepository,
 };
 use crate::require_permission;
 use axum::{
@@ -279,16 +280,24 @@ pub async fn opds_library_series(
     }
 
     // Add series entries
-    // Note: Summary is now in series_metadata table - using empty for now in OPDS
+    // Fetch series metadata for names (title is now in series_metadata table)
     for series in series_list {
+        // Fetch series name from series_metadata
+        let series_name = SeriesMetadataRepository::get_by_series_id(&state.db, series.id)
+            .await
+            .ok()
+            .flatten()
+            .map(|m| m.title)
+            .unwrap_or_else(|| "Unknown Series".to_string());
+
         let mut entry = OpdsEntry::new(
             format!("urn:uuid:series-{}", series.id),
-            series.name.clone(),
+            series_name.clone(),
             series.updated_at,
         )
         .add_link(OpdsLink::subsection_link(
             format!("{}/series/{}", base_url, series.id),
-            series.name.clone(),
+            series_name.clone(),
         ));
 
         // Add series thumbnail link
@@ -349,6 +358,14 @@ pub async fn opds_series_books(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
 
+    // Fetch series metadata for name
+    let series_name = SeriesMetadataRepository::get_by_series_id(&state.db, series_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|m| m.title)
+        .unwrap_or_else(|| "Unknown Series".to_string());
+
     // Fetch books (excluding deleted books)
     let books = BookRepository::list_by_series(&state.db, series_id, false)
         .await
@@ -356,7 +373,7 @@ pub async fn opds_series_books(
 
     let mut feed = OpdsFeed::new(
         format!("urn:uuid:series-{}", series_id),
-        format!("{} - Books", series.name),
+        format!("{} - Books", series_name),
         now,
         true, // Include PSE namespace
     )
@@ -372,7 +389,13 @@ pub async fn opds_series_books(
 
     // Add book entries
     for book in books {
-        let title = book.title.clone().unwrap_or_else(|| "Untitled".to_string());
+        // Fetch book title from book_metadata
+        let title = BookMetadataRepository::get_by_book_id(&state.db, book.id)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|m| m.title)
+            .unwrap_or_else(|| "Untitled".to_string());
 
         let mut entry = OpdsEntry::new(
             format!("urn:uuid:book-{}", book.id),

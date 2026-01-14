@@ -26,8 +26,6 @@ impl BookRepository {
             id: Set(book_model.id),
             series_id: Set(book_model.series_id),
             library_id: Set(book_model.library_id),
-            title: Set(book_model.title.clone()),
-            number: Set(book_model.number),
             file_path: Set(book_model.file_path.clone()),
             file_name: Set(book_model.file_name.clone()),
             file_size: Set(book_model.file_size),
@@ -101,11 +99,15 @@ impl BookRepository {
     }
 
     /// Get all books in a series
+    /// Orders by book_metadata.number, book_metadata.title_sort, then file_name
     pub async fn list_by_series(
         db: &DatabaseConnection,
         series_id: Uuid,
         include_deleted: bool,
     ) -> Result<Vec<books::Model>> {
+        use crate::db::entities::book_metadata;
+        use sea_orm::JoinType;
+
         let mut query = Books::find().filter(books::Column::SeriesId.eq(series_id));
 
         if !include_deleted {
@@ -113,8 +115,10 @@ impl BookRepository {
         }
 
         query
-            .order_by_asc(books::Column::Number)
-            .order_by_asc(books::Column::Title)
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .order_by_asc(book_metadata::Column::Number)
+            .order_by_asc(book_metadata::Column::TitleSort)
+            .order_by_asc(book_metadata::Column::Title)
             .order_by_asc(books::Column::FileName)
             .all(db)
             .await
@@ -144,12 +148,17 @@ impl BookRepository {
             .await?
             .context("Book not found")?;
 
-        // Get all non-deleted books in the series, ordered
+        // Get all non-deleted books in the series, ordered by metadata fields
+        use crate::db::entities::book_metadata;
+        use sea_orm::JoinType;
+
         let all_books = Books::find()
             .filter(books::Column::SeriesId.eq(book.series_id))
             .filter(books::Column::Deleted.eq(false))
-            .order_by_asc(books::Column::Number)
-            .order_by_asc(books::Column::Title)
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .order_by_asc(book_metadata::Column::Number)
+            .order_by_asc(book_metadata::Column::TitleSort)
+            .order_by_asc(book_metadata::Column::Title)
             .order_by_asc(books::Column::FileName)
             .all(db)
             .await
@@ -193,9 +202,14 @@ impl BookRepository {
             .await
             .context("Failed to count books")?;
 
-        // Get paginated results
+        // Get paginated results - order by metadata fields
+        use crate::db::entities::book_metadata;
+        use sea_orm::JoinType;
+
         let books = query
-            .order_by_asc(books::Column::Title)
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .order_by_asc(book_metadata::Column::TitleSort)
+            .order_by_asc(book_metadata::Column::Title)
             .order_by_asc(books::Column::FileName)
             .offset(page * page_size)
             .limit(page_size)
@@ -228,8 +242,13 @@ impl BookRepository {
             query = query.filter(books::Column::Deleted.eq(false));
         }
 
+        use crate::db::entities::book_metadata;
+        use sea_orm::JoinType;
+
         let books = query
-            .order_by_asc(books::Column::Title)
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .order_by_asc(book_metadata::Column::TitleSort)
+            .order_by_asc(book_metadata::Column::Title)
             .order_by_asc(books::Column::FileName)
             .offset(page * page_size)
             .limit(page_size)
@@ -263,9 +282,14 @@ impl BookRepository {
             .await
             .context("Failed to count books in library")?;
 
-        // Get paginated results
+        // Get paginated results - order by metadata fields
+        use crate::db::entities::book_metadata;
+        use sea_orm::JoinType;
+
         let books = query
-            .order_by_asc(books::Column::Title)
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .order_by_asc(book_metadata::Column::TitleSort)
+            .order_by_asc(book_metadata::Column::Title)
             .order_by_asc(books::Column::FileName)
             .offset(page * page_size)
             .limit(page_size)
@@ -310,17 +334,20 @@ impl BookRepository {
         let order = if ascending { Order::Asc } else { Order::Desc };
 
         // Get paginated results with series sorting
-        // JOIN with series and series_metadata to get series name for sorting
+        // JOIN with series, series_metadata and book_metadata for sorting
+        use crate::db::entities::book_metadata;
+
         let books = query
             .join(JoinType::LeftJoin, books::Relation::Series.def())
             .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
-            // Sort by series title_sort (if set) or series name
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            // Sort by series title_sort (if set) or series title from metadata
             .order_by(series_metadata::Column::TitleSort, order.clone())
-            .order_by(series::Column::Name, order.clone())
-            // Then by book number within series
-            .order_by(books::Column::Number, Order::Asc)
-            // Then by title as fallback
-            .order_by(books::Column::Title, Order::Asc)
+            .order_by(series_metadata::Column::Title, order.clone())
+            // Then by book number within series (from book_metadata)
+            .order_by(book_metadata::Column::Number, Order::Asc)
+            // Then by book title as fallback (from book_metadata)
+            .order_by(book_metadata::Column::Title, Order::Asc)
             .offset(page * page_size)
             .limit(page_size)
             .all(db)
@@ -544,11 +571,15 @@ impl BookRepository {
                 .filter(series::Column::LibraryId.eq(lib_id));
         }
 
-        // Order by series, then by book number/title/filename
+        // Order by series, then by book number/title/filename (from metadata)
+        use crate::db::entities::book_metadata;
+
         let all_unread_books = unread_query
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
             .order_by_asc(books::Column::SeriesId)
-            .order_by_asc(books::Column::Number)
-            .order_by_asc(books::Column::Title)
+            .order_by_asc(book_metadata::Column::Number)
+            .order_by_asc(book_metadata::Column::TitleSort)
+            .order_by_asc(book_metadata::Column::Title)
             .order_by_asc(books::Column::FileName)
             .all(db)
             .await
@@ -578,17 +609,28 @@ impl BookRepository {
         Ok((paginated_books, total))
     }
 
-    /// Search books by title (case-insensitive)
+    /// Search books by title (case-insensitive via book_metadata)
     pub async fn search_by_title(
         db: &DatabaseConnection,
         query: &str,
     ) -> Result<Vec<books::Model>> {
+        use crate::db::entities::book_metadata;
+        use sea_orm::JoinType;
+
         let pattern = format!("%{}%", query.to_lowercase());
 
+        // Use LOWER(title) LIKE pattern from book_metadata for case-insensitive search
+        let lower_title = Func::lower(Expr::col((
+            book_metadata::Entity,
+            book_metadata::Column::Title,
+        )));
+        let search_condition = Condition::all().add(Expr::expr(lower_title).like(&pattern));
+
         Books::find()
-            .filter(books::Column::Title.contains(&pattern))
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .filter(search_condition)
             .filter(books::Column::Deleted.eq(false))
-            .order_by_asc(books::Column::Title)
+            .order_by_asc(book_metadata::Column::Title)
             .limit(50)
             .all(db)
             .await
@@ -604,10 +646,16 @@ impl BookRepository {
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::db::entities::book_metadata;
+        use sea_orm::JoinType;
+
         let pattern = format!("%{}%", query.to_lowercase());
 
-        // Use LOWER(title) LIKE LOWER(pattern) for case-insensitive search
-        let lower_title = Func::lower(Expr::col(books::Column::Title));
+        // Use LOWER(title) LIKE pattern from book_metadata for case-insensitive search
+        let lower_title = Func::lower(Expr::col((
+            book_metadata::Entity,
+            book_metadata::Column::Title,
+        )));
         let mut search_condition = Condition::all().add(Expr::expr(lower_title).like(&pattern));
 
         if !include_deleted {
@@ -615,14 +663,16 @@ impl BookRepository {
         }
 
         let total = Books::find()
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
             .filter(search_condition.clone())
             .count(db)
             .await
             .context("Failed to count full-text search results")?;
 
         let books_list = Books::find()
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
             .filter(search_condition)
-            .order_by_asc(books::Column::Title)
+            .order_by_asc(book_metadata::Column::Title)
             .offset(page * page_size)
             .limit(page_size)
             .all(db)
@@ -641,14 +691,20 @@ impl BookRepository {
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::db::entities::book_metadata;
+        use sea_orm::JoinType;
+
         if candidate_ids.is_empty() {
             return Ok((vec![], 0));
         }
 
         let pattern = format!("%{}%", query.to_lowercase());
 
-        // Use LOWER(title) LIKE LOWER(pattern) for case-insensitive search
-        let lower_title = Func::lower(Expr::col(books::Column::Title));
+        // Use LOWER(title) LIKE pattern from book_metadata for case-insensitive search
+        let lower_title = Func::lower(Expr::col((
+            book_metadata::Entity,
+            book_metadata::Column::Title,
+        )));
         let mut search_condition = Condition::all()
             .add(Expr::expr(lower_title).like(&pattern))
             .add(books::Column::Id.is_in(candidate_ids.to_vec()));
@@ -658,14 +714,16 @@ impl BookRepository {
         }
 
         let total = Books::find()
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
             .filter(search_condition.clone())
             .count(db)
             .await
             .context("Failed to count full-text search results")?;
 
         let books_list = Books::find()
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
             .filter(search_condition)
-            .order_by_asc(books::Column::Title)
+            .order_by_asc(book_metadata::Column::Title)
             .offset(page * page_size)
             .limit(page_size)
             .all(db)
@@ -685,8 +743,6 @@ impl BookRepository {
             id: Set(book_model.id),
             series_id: Set(book_model.series_id),
             library_id: Set(book_model.library_id),
-            title: Set(book_model.title.clone()),
-            number: Set(book_model.number),
             file_path: Set(book_model.file_path.clone()),
             file_name: Set(book_model.file_name.clone()),
             file_size: Set(book_model.file_size),
@@ -1156,12 +1212,11 @@ mod tests {
         name: &str,
     ) -> books::Model {
         let now = Utc::now();
+        // Note: title and number are now in book_metadata table
         books::Model {
             id: Uuid::new_v4(),
             series_id,
             library_id,
-            title: None,
-            number: None,
             file_path: path.to_string(),
             file_name: name.to_string(),
             file_size: 1024,
@@ -1325,11 +1380,9 @@ mod tests {
                 .await
                 .unwrap();
 
-        let mut book1 = create_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz");
-        book1.number = Some(Decimal::from(1));
-
-        let mut book2 = create_book_model(series.id, library.id, "/test/book2.cbz", "book2.cbz");
-        book2.number = Some(Decimal::from(2));
+        // Note: number is now in book_metadata table, not needed for this test
+        let book1 = create_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz");
+        let book2 = create_book_model(series.id, library.id, "/test/book2.cbz", "book2.cbz");
 
         BookRepository::create(db.sea_orm_connection(), &book1, None)
             .await
@@ -1368,8 +1421,9 @@ mod tests {
             .await
             .unwrap();
 
-        book.title = Some("Updated Title".to_string());
-        book.number = Some(Decimal::from(5));
+        // Update fields that are still in books table (title/number moved to book_metadata)
+        book.page_count = 50;
+        book.analyzed = true;
 
         BookRepository::update(db.sea_orm_connection(), &book, None)
             .await
@@ -1380,8 +1434,8 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(retrieved.title, Some("Updated Title".to_string()));
-        assert_eq!(retrieved.number, Some(Decimal::from(5)));
+        assert_eq!(retrieved.page_count, 50);
+        assert!(retrieved.analyzed);
     }
 
     #[tokio::test]
@@ -1577,7 +1631,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_list_all_books_orders_by_title() {
+    async fn test_list_all_books_orders_by_file_name() {
         let (db, _temp_dir) = create_test_db().await;
 
         let library = LibraryRepository::create(
@@ -1594,16 +1648,15 @@ mod tests {
                 .await
                 .unwrap();
 
-        // Create books with different titles
-        let titles = vec!["Zebra", "Apple", "Monkey", "Banana"];
-        for title in titles {
-            let mut book = create_book_model(
+        // Create books with different file names (title is now in book_metadata)
+        let names = vec!["Zebra", "Apple", "Monkey", "Banana"];
+        for name in names {
+            let book = create_book_model(
                 series.id,
                 library.id,
-                &format!("/test/{}.cbz", title),
-                &format!("{}.cbz", title),
+                &format!("/test/{}.cbz", name),
+                &format!("{}.cbz", name),
             );
-            book.title = Some(title.to_string());
             BookRepository::create(db.sea_orm_connection(), &book, None)
                 .await
                 .unwrap();
@@ -1613,10 +1666,11 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(books[0].title, Some("Apple".to_string()));
-        assert_eq!(books[1].title, Some("Banana".to_string()));
-        assert_eq!(books[2].title, Some("Monkey".to_string()));
-        assert_eq!(books[3].title, Some("Zebra".to_string()));
+        // Default sort order is by file_name
+        assert_eq!(books[0].file_name, "Apple.cbz");
+        assert_eq!(books[1].file_name, "Banana.cbz");
+        assert_eq!(books[2].file_name, "Monkey.cbz");
+        assert_eq!(books[3].file_name, "Zebra.cbz");
     }
 
     #[tokio::test]

@@ -26,6 +26,7 @@ import {
 	type AlternateTitle,
 	type ExternalLink,
 } from "@/api/seriesMetadata";
+import { seriesApi } from "@/api/series";
 import {
 	LockableInput,
 	LockableTextarea,
@@ -196,6 +197,12 @@ export function SeriesMetadataEditModal({
 	// Save mutation
 	const saveMutation = useMutation({
 		mutationFn: async () => {
+			// Update series name if changed
+			const titleChanged = formState.title !== originalFormState?.title;
+			if (titleChanged && formState.title) {
+				await seriesApi.patch(seriesId, { name: formState.title });
+			}
+
 			// Update metadata
 			await seriesMetadataApi.patchMetadata(seriesId, {
 				sortName: formState.titleSort || null,
@@ -317,8 +324,8 @@ export function SeriesMetadataEditModal({
 				locked={locksState.title}
 				onLockChange={(v) => updateLock("title", v)}
 				originalValue={originalFormState?.title}
-				disabled
-				description="Title cannot be changed from this modal"
+				placeholder="Series title"
+				description="Display name for this series"
 			/>
 
 			<LockableInput

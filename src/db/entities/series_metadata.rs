@@ -25,6 +25,7 @@ pub struct Model {
     pub year: Option<i32>,
     pub total_book_count: Option<i32>, // Expected total (for ongoing series)
     // Lock fields
+    pub total_book_count_lock: bool,
     pub title_lock: bool,
     pub title_sort_lock: bool,
     pub summary_lock: bool,

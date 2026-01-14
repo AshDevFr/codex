@@ -28,19 +28,34 @@ async fn create_test_library(db: &DatabaseConnection) -> Uuid {
 
 /// Helper to create a test series
 async fn create_test_series(db: &DatabaseConnection, library_id: Uuid) -> Uuid {
+    use codex::db::entities::series_metadata;
+
     let series_id = Uuid::new_v4();
     let now = Utc::now();
     let series = series::ActiveModel {
         id: Set(series_id),
         library_id: Set(library_id),
-        name: Set("Test Series".to_string()),
-        normalized_name: Set("test series".to_string()),
-        book_count: Set(0),
+        fingerprint: Set(Some(format!("test-series-{}", series_id))),
+        path: Set(Some("/test/series".to_string())),
+        custom_metadata: Set(None),
+        created_at: Set(now),
+        updated_at: Set(now),
+    };
+    series.insert(db).await.expect("Failed to create series");
+
+    // Also create series_metadata with the title
+    let series_meta = series_metadata::ActiveModel {
+        series_id: Set(series_id),
+        title: Set("Test Series".to_string()),
         created_at: Set(now),
         updated_at: Set(now),
         ..Default::default()
     };
-    series.insert(db).await.expect("Failed to create series");
+    series_meta
+        .insert(db)
+        .await
+        .expect("Failed to create series metadata");
+
     series_id
 }
 

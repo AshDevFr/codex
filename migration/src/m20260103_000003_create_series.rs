@@ -15,18 +15,6 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(ColumnDef::new(Series::Id).uuid().not_null().primary_key())
                     .col(ColumnDef::new(Series::LibraryId).uuid().not_null())
-                    .col(ColumnDef::new(Series::Name).string_len(500).not_null())
-                    .col(
-                        ColumnDef::new(Series::NormalizedName)
-                            .string_len(500)
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(Series::BookCount)
-                            .integer()
-                            .not_null()
-                            .default(0),
-                    )
                     .col(ColumnDef::new(Series::Fingerprint).string_len(64))
                     .col(ColumnDef::new(Series::Path).text())
                     .col(ColumnDef::new(Series::CustomMetadata).text()) // JSON escape hatch for user-defined fields
@@ -48,17 +36,6 @@ impl MigrationTrait for Migration {
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::NoAction),
                     )
-                    .to_owned(),
-            )
-            .await?;
-
-        // Index on normalized_name for search performance
-        manager
-            .create_index(
-                Index::create()
-                    .name("idx_series_normalized_name")
-                    .table(Series::Table)
-                    .col(Series::NormalizedName)
                     .to_owned(),
             )
             .await?;
@@ -89,9 +66,6 @@ pub enum Series {
     Table,
     Id,
     LibraryId,
-    Name,
-    NormalizedName,
-    BookCount,
     Fingerprint,
     Path,
     CustomMetadata,

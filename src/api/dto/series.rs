@@ -945,3 +945,37 @@ pub struct SeriesCoverListResponse {
     /// List of covers
     pub covers: Vec<SeriesCoverDto>,
 }
+
+// ============================================================================
+// Series Update DTOs
+// ============================================================================
+
+/// PATCH request for updating series core fields (name)
+///
+/// Only provided fields will be updated. Absent fields are unchanged.
+/// Explicitly null fields will be cleared (where applicable).
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PatchSeriesRequest {
+    /// Series name/title
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "Batman: Year One", nullable = true)]
+    pub name: super::patch::PatchValue<String>,
+}
+
+/// Response for series update
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesUpdateResponse {
+    /// Series ID
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]
+    pub id: uuid::Uuid,
+
+    /// Updated name
+    #[schema(example = "Batman: Year One")]
+    pub name: String,
+
+    /// Last update timestamp
+    #[schema(example = "2024-01-15T10:30:00Z")]
+    pub updated_at: DateTime<Utc>,
+}

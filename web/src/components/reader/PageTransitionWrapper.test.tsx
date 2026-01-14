@@ -191,9 +191,9 @@ describe("PageTransitionWrapper", () => {
 				</Wrapper>,
 			);
 
-			// Advance past transition duration + frame delay
+			// Advance past transition duration + rAF buffer (50ms)
 			await act(async () => {
-				vi.advanceTimersByTime(220);
+				vi.advanceTimersByTime(260);
 			});
 
 			// Only new page should remain
@@ -286,9 +286,9 @@ describe("PageTransitionWrapper", () => {
 				</Wrapper>,
 			);
 
-			// Advance past transition duration + frame delay
+			// Advance past transition duration + rAF buffer (50ms)
 			await act(async () => {
-				vi.advanceTimersByTime(220);
+				vi.advanceTimersByTime(260);
 			});
 
 			// Only new page should remain
@@ -442,9 +442,9 @@ describe("PageTransitionWrapper", () => {
 			expect(screen.getByText("Page 1")).toBeInTheDocument();
 			expect(screen.getByText("Page 2")).toBeInTheDocument();
 
-			// At 520ms, transition should be complete
+			// At 560ms (500ms duration + 50ms buffer + margin), transition should be complete
 			await act(async () => {
-				vi.advanceTimersByTime(220);
+				vi.advanceTimersByTime(260);
 			});
 			expect(screen.queryByText("Page 1")).not.toBeInTheDocument();
 			expect(screen.getByText("Page 2")).toBeInTheDocument();

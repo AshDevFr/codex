@@ -23,13 +23,11 @@ async fn create_analyzed_book(
     // Create series
     let series = SeriesRepository::create(db_conn, library.id, "Test Series", None).await?;
 
-    // Create book
+    // Create book (title is now in book_metadata table)
     let book = books::Model {
         id: Uuid::new_v4(),
         series_id: series.id,
         library_id: library.id,
-        title: Some("Test Book".to_string()),
-        number: None,
         file_path: file_path.to_string(),
         file_name: "test.cbz".to_string(),
         file_size: 1024,

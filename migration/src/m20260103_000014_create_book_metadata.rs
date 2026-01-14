@@ -23,6 +23,10 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .unique_key(),
                     )
+                    // Display fields (moved from books table)
+                    .col(ColumnDef::new(BookMetadata::Title).string())
+                    .col(ColumnDef::new(BookMetadata::TitleSort).string())
+                    .col(ColumnDef::new(BookMetadata::Number).decimal())
                     // Content fields
                     .col(ColumnDef::new(BookMetadata::Summary).text())
                     .col(ColumnDef::new(BookMetadata::Writer).string())
@@ -47,6 +51,24 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(BookMetadata::Count).integer())
                     .col(ColumnDef::new(BookMetadata::Isbns).string())
                     // Lock fields - prevent auto-refresh from overwriting user edits
+                    .col(
+                        ColumnDef::new(BookMetadata::TitleLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::TitleSortLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::NumberLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
                     .col(
                         ColumnDef::new(BookMetadata::SummaryLock)
                             .boolean()
@@ -217,6 +239,10 @@ enum BookMetadata {
     Table,
     Id,
     BookId,
+    // Display fields (moved from books table)
+    Title,
+    TitleSort,
+    Number,
     // Content fields
     Summary,
     Writer,
@@ -241,6 +267,9 @@ enum BookMetadata {
     Count,
     Isbns,
     // Lock fields
+    TitleLock,
+    TitleSortLock,
+    NumberLock,
     SummaryLock,
     WriterLock,
     PencillerLock,

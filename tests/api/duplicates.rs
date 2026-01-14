@@ -6,7 +6,7 @@ use codex::api::dto::duplicates::{
     DuplicateGroup, ListDuplicatesResponse, TriggerDuplicateScanResponse,
 };
 use codex::api::error::ErrorResponse;
-use codex::db::entities::{books, libraries, series};
+use codex::db::entities::{books, libraries, series, series_metadata};
 use codex::db::repositories::{
     BookDuplicatesRepository, BookRepository, LibraryRepository, UserRepository,
 };
@@ -128,14 +128,23 @@ async fn test_list_duplicates_with_data() {
     let test_series = series::ActiveModel {
         id: Set(series_id),
         library_id: Set(library.id),
-        name: Set("Test Series".to_string()),
-        normalized_name: Set("test series".to_string()),
-        book_count: Set(0),
+        fingerprint: Set(Some(format!("test-series-{}", series_id))),
+        path: Set(Some("/test/series".to_string())),
+        custom_metadata: Set(None),
+        created_at: Set(now),
+        updated_at: Set(now),
+    };
+    test_series.insert(&db).await.unwrap();
+
+    // Create series_metadata with the title
+    let series_meta = series_metadata::ActiveModel {
+        series_id: Set(series_id),
+        title: Set("Test Series".to_string()),
         created_at: Set(now),
         updated_at: Set(now),
         ..Default::default()
     };
-    test_series.insert(&db).await.unwrap();
+    series_meta.insert(&db).await.unwrap();
 
     // Create duplicate books
     let shared_hash = "duplicate-hash-123";
@@ -237,14 +246,23 @@ async fn test_delete_duplicate_group() {
     let test_series = series::ActiveModel {
         id: Set(series_id),
         library_id: Set(library.id),
-        name: Set("Test Series".to_string()),
-        normalized_name: Set("test series".to_string()),
-        book_count: Set(0),
+        fingerprint: Set(Some(format!("test-series-{}", series_id))),
+        path: Set(Some("/test/series".to_string())),
+        custom_metadata: Set(None),
+        created_at: Set(now),
+        updated_at: Set(now),
+    };
+    test_series.insert(&db).await.unwrap();
+
+    // Create series_metadata with the title
+    let series_meta = series_metadata::ActiveModel {
+        series_id: Set(series_id),
+        title: Set("Test Series".to_string()),
         created_at: Set(now),
         updated_at: Set(now),
         ..Default::default()
     };
-    test_series.insert(&db).await.unwrap();
+    series_meta.insert(&db).await.unwrap();
 
     // Create duplicate books
     let shared_hash = "duplicate-hash-456";
@@ -317,14 +335,23 @@ async fn test_duplicates_after_book_deletion() {
     let test_series = series::ActiveModel {
         id: Set(series_id),
         library_id: Set(library.id),
-        name: Set("Test Series".to_string()),
-        normalized_name: Set("test series".to_string()),
-        book_count: Set(0),
+        fingerprint: Set(Some(format!("test-series-{}", series_id))),
+        path: Set(Some("/test/series".to_string())),
+        custom_metadata: Set(None),
+        created_at: Set(now),
+        updated_at: Set(now),
+    };
+    test_series.insert(&db).await.unwrap();
+
+    // Create series_metadata with the title
+    let series_meta = series_metadata::ActiveModel {
+        series_id: Set(series_id),
+        title: Set("Test Series".to_string()),
         created_at: Set(now),
         updated_at: Set(now),
         ..Default::default()
     };
-    test_series.insert(&db).await.unwrap();
+    series_meta.insert(&db).await.unwrap();
 
     // Create duplicate books
     let shared_hash = "duplicate-hash-789";
@@ -367,14 +394,23 @@ async fn test_duplicates_exclude_soft_deleted_books() {
     let test_series = series::ActiveModel {
         id: Set(series_id),
         library_id: Set(library.id),
-        name: Set("Test Series".to_string()),
-        normalized_name: Set("test series".to_string()),
-        book_count: Set(0),
+        fingerprint: Set(Some(format!("test-series-{}", series_id))),
+        path: Set(Some("/test/series".to_string())),
+        custom_metadata: Set(None),
+        created_at: Set(now),
+        updated_at: Set(now),
+    };
+    test_series.insert(&db).await.unwrap();
+
+    // Create series_metadata with the title
+    let series_meta = series_metadata::ActiveModel {
+        series_id: Set(series_id),
+        title: Set("Test Series".to_string()),
         created_at: Set(now),
         updated_at: Set(now),
         ..Default::default()
     };
-    test_series.insert(&db).await.unwrap();
+    series_meta.insert(&db).await.unwrap();
 
     // Create duplicate books
     let shared_hash = "duplicate-hash-soft-delete";

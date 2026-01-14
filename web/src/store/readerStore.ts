@@ -28,6 +28,121 @@ export type BoundaryState = "none" | "at-start" | "at-end";
 export type PageTransition = "none" | "fade" | "slide";
 export type NavigationDirection = "next" | "prev" | null;
 
+// =============================================================================
+// Per-Series Settings Types
+// =============================================================================
+
+/**
+ * Settings that can be customized per-series.
+ * These are the settings that vary based on content type (manga vs western comics,
+ * old 2-page scans vs modern single-page scans, etc.)
+ */
+export interface ForkableReaderSettings {
+	fitMode: FitMode;
+	pageLayout: PageLayout;
+	readingDirection: ReadingDirection;
+	backgroundColor: BackgroundColor;
+	doublePageShowWideAlone: boolean;
+	doublePageStartOnOdd: boolean;
+}
+
+/**
+ * List of setting keys that can be forked per-series.
+ * Used for type-safe operations on forkable settings.
+ */
+export const FORKABLE_SETTING_KEYS: readonly (keyof ForkableReaderSettings)[] = [
+	"fitMode",
+	"pageLayout",
+	"readingDirection",
+	"backgroundColor",
+	"doublePageShowWideAlone",
+	"doublePageStartOnOdd",
+] as const;
+
+/**
+ * Stored series override in localStorage.
+ * Contains all forkable settings plus metadata.
+ */
+export interface SeriesReaderOverride extends ForkableReaderSettings {
+	/** Timestamp when override was created */
+	createdAt: number;
+	/** Version for future migrations */
+	version: 1;
+}
+
+/**
+ * Type guard to check if a value is a valid SeriesReaderOverride.
+ */
+export function isSeriesReaderOverride(value: unknown): value is SeriesReaderOverride {
+	if (typeof value !== "object" || value === null) return false;
+	const obj = value as Record<string, unknown>;
+
+	// Check version
+	if (obj.version !== 1) return false;
+
+	// Check createdAt
+	if (typeof obj.createdAt !== "number") return false;
+
+	// Check all forkable settings exist with correct types
+	if (
+		typeof obj.fitMode !== "string" ||
+		!["screen", "width", "width-shrink", "height", "original"].includes(obj.fitMode)
+	) {
+		return false;
+	}
+
+	if (
+		typeof obj.pageLayout !== "string" ||
+		!["single", "double", "continuous"].includes(obj.pageLayout)
+	) {
+		return false;
+	}
+
+	if (
+		typeof obj.readingDirection !== "string" ||
+		!["ltr", "rtl", "ttb", "webtoon"].includes(obj.readingDirection)
+	) {
+		return false;
+	}
+
+	if (
+		typeof obj.backgroundColor !== "string" ||
+		!["black", "gray", "white"].includes(obj.backgroundColor)
+	) {
+		return false;
+	}
+
+	if (typeof obj.doublePageShowWideAlone !== "boolean") return false;
+	if (typeof obj.doublePageStartOnOdd !== "boolean") return false;
+
+	return true;
+}
+
+/**
+ * Extract forkable settings from full reader settings.
+ */
+export function extractForkableSettings(settings: ReaderSettings): ForkableReaderSettings {
+	return {
+		fitMode: settings.fitMode,
+		pageLayout: settings.pageLayout,
+		readingDirection: settings.readingDirection,
+		backgroundColor: settings.backgroundColor,
+		doublePageShowWideAlone: settings.doublePageShowWideAlone,
+		doublePageStartOnOdd: settings.doublePageStartOnOdd,
+	};
+}
+
+/**
+ * Create a series override from forkable settings.
+ */
+export function createSeriesOverride(settings: ForkableReaderSettings): SeriesReaderOverride {
+	return {
+		...settings,
+		createdAt: Date.now(),
+		version: 1,
+	};
+}
+
 /** Minimal book info needed for series navigation */
 export interface AdjacentBook {
 	id: string;

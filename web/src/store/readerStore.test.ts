@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+	type ForkableReaderSettings,
+	type SeriesReaderOverride,
+	createSeriesOverride,
+	extractForkableSettings,
+	isSeriesReaderOverride,
 	selectAdjacentBooks,
 	selectBoundaryState,
 	selectEffectiveReadingDirection,
@@ -1158,6 +1163,226 @@ describe("readerStore", () => {
 			resetSession();
 
 			expect(useReaderStore.getState().settings.autoAdvanceToNextBook).toBe(true);
+		});
+	});
+
+	describe("Per-Series Settings Types and Utilities", () => {
+		describe("isSeriesReaderOverride", () => {
+			const validOverride: SeriesReaderOverride = {
+				fitMode: "screen",
+				pageLayout: "single",
+				readingDirection: "ltr",
+				backgroundColor: "black",
+				doublePageShowWideAlone: true,
+				doublePageStartOnOdd: true,
+				createdAt: Date.now(),
+				version: 1,
+			};
+
+			it("should return true for valid override", () => {
+				expect(isSeriesReaderOverride(validOverride)).toBe(true);
+			});
+
+			it("should return false for null", () => {
+				expect(isSeriesReaderOverride(null)).toBe(false);
+			});
+
+			it("should return false for undefined", () => {
+				expect(isSeriesReaderOverride(undefined)).toBe(false);
+			});
+
+			it("should return false for non-object", () => {
+				expect(isSeriesReaderOverride("string")).toBe(false);
+				expect(isSeriesReaderOverride(123)).toBe(false);
+				expect(isSeriesReaderOverride(true)).toBe(false);
+			});
+
+			it("should return false for wrong version", () => {
+				expect(isSeriesReaderOverride({ ...validOverride, version: 2 })).toBe(false);
+				expect(isSeriesReaderOverride({ ...validOverride, version: 0 })).toBe(false);
+			});
+
+			it("should return false for missing createdAt", () => {
+				const { createdAt: _, ...noCreatedAt } = validOverride;
+				expect(isSeriesReaderOverride(noCreatedAt)).toBe(false);
+			});
+
+			it("should return false for invalid fitMode", () => {
+				expect(isSeriesReaderOverride({ ...validOverride, fitMode: "invalid" })).toBe(false);
+				expect(isSeriesReaderOverride({ ...validOverride, fitMode: 123 })).toBe(false);
+			});
+
+			it("should return false for invalid pageLayout", () => {
+				expect(isSeriesReaderOverride({ ...validOverride, pageLayout: "invalid" })).toBe(false);
+			});
+
+			it("should return false for invalid readingDirection", () => {
+				expect(isSeriesReaderOverride({ ...validOverride, readingDirection: "invalid" })).toBe(false);
+			});
+
+			it("should return false for invalid backgroundColor", () => {
+				expect(isSeriesReaderOverride({ ...validOverride, backgroundColor: "red" })).toBe(false);
+			});
+
+			it("should return false for non-boolean doublePageShowWideAlone", () => {
+				expect(isSeriesReaderOverride({ ...validOverride, doublePageShowWideAlone: "true" })).toBe(false);
+			});
+
+			it("should return false for non-boolean doublePageStartOnOdd", () => {
+				expect(isSeriesReaderOverride({ ...validOverride, doublePageStartOnOdd: 1 })).toBe(false);
+			});
+
+			it("should accept all valid fitMode values", () => {
+				const fitModes = ["screen", "width", "width-shrink", "height", "original"];
+				for (const fitMode of fitModes) {
+					expect(isSeriesReaderOverride({ ...validOverride, fitMode })).toBe(true);
+				}
+			});
+
+			it("should accept all valid pageLayout values", () => {
+				const layouts = ["single", "double", "continuous"];
+				for (const pageLayout of layouts) {
+					expect(isSeriesReaderOverride({ ...validOverride, pageLayout })).toBe(true);
+				}
+			});
+
+			it("should accept all valid readingDirection values", () => {
+				const directions = ["ltr", "rtl", "ttb", "webtoon"];
+				for (const readingDirection of directions) {
+					expect(isSeriesReaderOverride({ ...validOverride, readingDirection })).toBe(true);
+				}
+			});
+
+			it("should accept all valid backgroundColor values", () => {
+				const colors = ["black", "gray", "white"];
+				for (const backgroundColor of colors) {
+					expect(isSeriesReaderOverride({ ...validOverride, backgroundColor })).toBe(true);
+				}
+			});
+		});
+
+		describe("extractForkableSettings", () => {
+			it("should extract only forkable settings from full settings", () => {
+				const fullSettings = useReaderStore.getState().settings;
+				const forkable = extractForkableSettings(fullSettings);
+
+				expect(forkable).toEqual({
+					fitMode: fullSettings.fitMode,
+					pageLayout: fullSettings.pageLayout,
+					readingDirection: fullSettings.readingDirection,
+					backgroundColor: fullSettings.backgroundColor,
+					doublePageShowWideAlone: fullSettings.doublePageShowWideAlone,
+					doublePageStartOnOdd: fullSettings.doublePageStartOnOdd,
+				});
+			});
+
+			it("should not include non-forkable settings", () => {
+				const fullSettings = useReaderStore.getState().settings;
+				const forkable = extractForkableSettings(fullSettings) as Record<string, unknown>;
+
+				// Verify non-forkable settings are not included
+				expect(forkable.autoHideToolbar).toBeUndefined();
+				expect(forkable.toolbarHideDelay).toBeUndefined();
+				expect(forkable.preloadPages).toBeUndefined();
+				expect(forkable.pageTransition).toBeUndefined();
+				expect(forkable.transitionDuration).toBeUndefined();
+				expect(forkable.pdfMode).toBeUndefined();
+				expect(forkable.epubTheme).toBeUndefined();
+			});
+
+			it("should preserve values from settings", () => {
+				useReaderStore.setState({
+					settings: {
+						...useReaderStore.getState().settings,
+						fitMode: "width",
+						pageLayout: "double",
+						readingDirection: "rtl",
+						backgroundColor: "white",
+						doublePageShowWideAlone: false,
+						doublePageStartOnOdd: false,
+					},
+				});
+
+				const forkable = extractForkableSettings(useReaderStore.getState().settings);
+
+				expect(forkable.fitMode).toBe("width");
+				expect(forkable.pageLayout).toBe("double");
+				expect(forkable.readingDirection).toBe("rtl");
+				expect(forkable.backgroundColor).toBe("white");
+				expect(forkable.doublePageShowWideAlone).toBe(false);
+				expect(forkable.doublePageStartOnOdd).toBe(false);
+			});
+		});
+
+		describe("createSeriesOverride", () => {
+			it("should create override with all forkable settings", () => {
+				const forkable: ForkableReaderSettings = {
+					fitMode: "width",
+					pageLayout: "double",
+					readingDirection: "rtl",
+					backgroundColor: "gray",
+					doublePageShowWideAlone: false,
+					doublePageStartOnOdd: false,
+				};
+
+				const override = createSeriesOverride(forkable);
+
+				expect(override.fitMode).toBe("width");
+				expect(override.pageLayout).toBe("double");
+				expect(override.readingDirection).toBe("rtl");
+				expect(override.backgroundColor).toBe("gray");
+				expect(override.doublePageShowWideAlone).toBe(false);
+				expect(override.doublePageStartOnOdd).toBe(false);
+			});
+
+			it("should set version to 1", () => {
+				const forkable: ForkableReaderSettings = {
+					fitMode: "screen",
+					pageLayout: "single",
+					readingDirection: "ltr",
+					backgroundColor: "black",
+					doublePageShowWideAlone: true,
+					doublePageStartOnOdd: true,
+				};
+
+				const override = createSeriesOverride(forkable);
+
+				expect(override.version).toBe(1);
+			});
+
+			it("should set createdAt to current timestamp", () => {
+				const before = Date.now();
+
+				const forkable: ForkableReaderSettings = {
+					fitMode: "screen",
+					pageLayout: "single",
+					readingDirection: "ltr",
+					backgroundColor: "black",
+					doublePageShowWideAlone: true,
+					doublePageStartOnOdd: true,
+				};
+
+				const override = createSeriesOverride(forkable);
+				const after = Date.now();
+
+				expect(override.createdAt).toBeGreaterThanOrEqual(before);
+				expect(override.createdAt).toBeLessThanOrEqual(after);
+			});
+
+			it("should pass type guard validation", () => {
+				const forkable: ForkableReaderSettings = {
+					fitMode: "screen",
+					pageLayout: "single",
+					readingDirection: "ltr",
+					backgroundColor: "black",
+					doublePageShowWideAlone: true,
+					doublePageStartOnOdd: true,
+				};
+
+				const override = createSeriesOverride(forkable);
+
+				expect(isSeriesReaderOverride(override)).toBe(true);
+			});
 		});
 	});
 });

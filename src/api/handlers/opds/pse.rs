@@ -4,7 +4,7 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
-use crate::db::repositories::BookRepository;
+use crate::db::repositories::{BookMetadataRepository, BookRepository};
 use crate::require_permission;
 use axum::{
     extract::{Path, State},
@@ -69,7 +69,13 @@ pub async fn opds_book_pages(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
 
-    let title = book.title.clone().unwrap_or_else(|| "Untitled".to_string());
+    // Fetch book title from book_metadata
+    let title = BookMetadataRepository::get_by_book_id(&state.db, book_id)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|m| m.title)
+        .unwrap_or_else(|| "Untitled".to_string());
 
     let mut feed = OpdsFeed::new(
         format!("urn:uuid:book-{}-pages", book_id),

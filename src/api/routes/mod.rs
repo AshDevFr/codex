@@ -189,6 +189,7 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/series/search", post(handlers::search_series))
         .route("/series/list", post(handlers::list_series_filtered))
         .route("/series/:series_id", get(handlers::get_series))
+        .route("/series/:series_id", patch(handlers::patch_series))
         .route("/series/:series_id/books", get(handlers::get_series_books))
         .route(
             "/series/:series_id/books/with-errors",
@@ -414,6 +415,7 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/books", get(handlers::list_books))
         .route("/books/list", post(handlers::list_books_filtered))
         .route("/books/:book_id", get(handlers::get_book))
+        .route("/books/:book_id", patch(handlers::patch_book))
         .route(
             "/books/:book_id/adjacent",
             get(handlers::get_adjacent_books),

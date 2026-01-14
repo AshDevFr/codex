@@ -27,12 +27,13 @@ async fn create_admin_and_token(
 }
 
 // Helper to create a test book
+// Note: title is now in book_metadata table, not books table
 fn create_test_book_model(
     series_id: uuid::Uuid,
     library_id: uuid::Uuid,
     path: &str,
     name: &str,
-    title: Option<String>,
+    _title: Option<String>, // No longer used - title is in book_metadata
     page_count: i32,
 ) -> codex::db::entities::books::Model {
     use chrono::Utc;
@@ -40,8 +41,6 @@ fn create_test_book_model(
         id: uuid::Uuid::new_v4(),
         series_id,
         library_id,
-        title,
-        number: None,
         file_path: path.to_string(),
         file_name: name.to_string(),
         file_size: 1024,

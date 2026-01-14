@@ -231,15 +231,16 @@ async fn test_opds_series_books_with_thumbnails() {
         .await
         .unwrap();
 
-    let book = create_test_book_model(
+    let _book = create_test_book_with_metadata(
+        &db,
         series.id,
         library.id,
         "Test Book #1",
         "/test/book1.cbz",
         1,
         25,
-    );
-    BookRepository::create(&db, &book, None).await.unwrap();
+    )
+    .await;
 
     // Create test user
     let password_hash = password::hash_password("password").unwrap();
@@ -342,24 +343,26 @@ async fn test_opds_search_books() {
         .await
         .unwrap();
 
-    let book1 = create_test_book_model(
+    let _book1 = create_test_book_with_metadata(
+        &db,
         series.id,
         library.id,
         "Amazing Spider-Man #1",
         "/test/spiderman1.cbz",
         1,
         20,
-    );
-    let book2 = create_test_book_model(
+    )
+    .await;
+    let _book2 = create_test_book_with_metadata(
+        &db,
         series.id,
         library.id,
         "Spider-Man: Blue",
         "/test/spiderman_blue.cbz",
         2,
         30,
-    );
-    BookRepository::create(&db, &book1, None).await.unwrap();
-    BookRepository::create(&db, &book2, None).await.unwrap();
+    )
+    .await;
 
     // Create test user
     let password_hash = password::hash_password("password").unwrap();
@@ -449,8 +452,16 @@ async fn test_opds_pse_page_feed() {
         .await
         .unwrap();
 
-    let book = create_test_book_model(series.id, library.id, "Test Book", "/test/book.cbz", 1, 42);
-    let created_book = BookRepository::create(&db, &book, None).await.unwrap();
+    let created_book = create_test_book_with_metadata(
+        &db,
+        series.id,
+        library.id,
+        "Test Book",
+        "/test/book.cbz",
+        1,
+        42,
+    )
+    .await;
 
     // Create test user
     let password_hash = password::hash_password("password").unwrap();
@@ -494,12 +505,13 @@ async fn test_opds_pse_page_feed() {
 // Helper Functions
 // ============================================================================
 
+// Note: title and number are now in book_metadata table, not books table
 fn create_test_book_model(
     series_id: uuid::Uuid,
     library_id: uuid::Uuid,
-    title: &str,
+    _title: &str, // No longer used - title is in book_metadata
     file_path: &str,
-    number: i32,
+    _number: i32, // No longer used - number is in book_metadata
     page_count: i32,
 ) -> codex::db::entities::books::Model {
     use chrono::Utc;
@@ -509,14 +521,12 @@ fn create_test_book_model(
         id: Uuid::new_v4(),
         series_id,
         library_id,
-        title: Some(title.to_string()),
         file_path: file_path.to_string(),
         file_name: file_path.split('/').last().unwrap().to_string(),
         file_size: 1024000,
         file_hash: format!("hash_{}", Uuid::new_v4()),
         partial_hash: String::new(),
         format: "cbz".to_string(),
-        number: Some(Decimal::from(number)),
         page_count,
         deleted: false,
         analyzed: true, // For OPDS tests, assume books are analyzed
@@ -527,4 +537,32 @@ fn create_test_book_model(
         thumbnail_path: None,
         thumbnail_generated_at: None,
     }
+}
+
+// Helper to create book with metadata (title and number now in book_metadata table)
+async fn create_test_book_with_metadata(
+    db: &sea_orm::DatabaseConnection,
+    series_id: uuid::Uuid,
+    library_id: uuid::Uuid,
+    title: &str,
+    file_path: &str,
+    number: i32,
+    page_count: i32,
+) -> codex::db::entities::books::Model {
+    use codex::db::repositories::{BookMetadataRepository, BookRepository};
+
+    let book = create_test_book_model(series_id, library_id, title, file_path, number, page_count);
+    let created = BookRepository::create(db, &book, None).await.unwrap();
+
+    // Create metadata with title and number
+    BookMetadataRepository::create_with_title_and_number(
+        db,
+        created.id,
+        Some(title.to_string()),
+        Some(sea_orm::prelude::Decimal::from(number)),
+    )
+    .await
+    .unwrap();
+
+    created
 }

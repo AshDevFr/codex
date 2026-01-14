@@ -8,13 +8,17 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "book_metadata")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     #[sea_orm(unique)]
     pub book_id: Uuid,
+    // Display fields (moved from books table)
+    pub title: Option<String>,
+    pub title_sort: Option<String>,
+    pub number: Option<Decimal>,
     // Content fields
     pub summary: Option<String>,
     pub writer: Option<String>,
@@ -39,6 +43,9 @@ pub struct Model {
     pub count: Option<i32>,
     pub isbns: Option<String>,
     // Lock fields - prevent auto-refresh from overwriting user edits
+    pub title_lock: bool,
+    pub title_sort_lock: bool,
+    pub number_lock: bool,
     pub summary_lock: bool,
     pub writer_lock: bool,
     pub penciller_lock: bool,

@@ -100,7 +100,7 @@ export function PageTransitionWrapper({
 	});
 
 	const transitionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-	const activationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+	const rafRef = useRef<number | null>(null);
 	const previousKeyRef = useRef<string>(pageKey);
 
 	// Cleanup timeouts on unmount
@@ -109,20 +109,26 @@ export function PageTransitionWrapper({
 			if (transitionTimeoutRef.current) {
 				clearTimeout(transitionTimeoutRef.current);
 			}
-			if (activationTimeoutRef.current) {
-				clearTimeout(activationTimeoutRef.current);
+			if (rafRef.current) {
+				cancelAnimationFrame(rafRef.current);
 			}
 		};
 	}, []);
 
 	// Handle page changes
 	useEffect(() => {
-		// If the page key hasn't changed, just update content
+		// If the page key hasn't changed, only update content when idle
+		// to avoid disrupting ongoing transitions
 		if (pageKey === previousKeyRef.current) {
-			setState((prev) => ({
-				...prev,
-				currentContent: children,
-			}));
+			setState((prev) => {
+				if (prev.phase === "idle") {
+					return {
+						...prev,
+						currentContent: children,
+					};
+				}
+				return prev;
+			});
 			return;
 		}
 
@@ -134,9 +140,9 @@ export function PageTransitionWrapper({
 			clearTimeout(transitionTimeoutRef.current);
 			transitionTimeoutRef.current = null;
 		}
-		if (activationTimeoutRef.current) {
-			clearTimeout(activationTimeoutRef.current);
-			activationTimeoutRef.current = null;
+		if (rafRef.current) {
+			cancelAnimationFrame(rafRef.current);
+			rafRef.current = null;
 		}
 
 		if (transition === "none") {
@@ -165,16 +171,19 @@ export function PageTransitionWrapper({
 			slideDirection,
 		}));
 
-		// Trigger animation after a frame (allows browser to paint initial position)
-		activationTimeoutRef.current = setTimeout(() => {
-			setState((prev) => ({
-				...prev,
-				phase: "active",
-			}));
-			activationTimeoutRef.current = null;
-		}, 16); // ~1 frame at 60fps
+		// Trigger animation after browser paints initial position
+		// Use double rAF to ensure layout is complete before animating
+		rafRef.current = requestAnimationFrame(() => {
+			rafRef.current = requestAnimationFrame(() => {
+				setState((prev) => ({
+					...prev,
+					phase: "active",
+				}));
+				rafRef.current = null;
+			});
+		});
 
-		// End transition after duration
+		// End transition after duration (add buffer for rAF delays ~32ms for double rAF)
 		transitionTimeoutRef.current = setTimeout(() => {
 			setState((prev) => ({
 				...prev,
@@ -182,11 +191,11 @@ export function PageTransitionWrapper({
 				phase: "idle",
 			}));
 			transitionTimeoutRef.current = null;
-		}, duration + 16); // duration + initial frame delay
+		}, duration + 50);
 	}, [pageKey, children, transition, duration, navigationDirection, readingDirection]);
 
 	// When idle or no transition, render content in a stable container
-	// to prevent layout shifts when transitioning between states
+	// Use same structure as during transitions to prevent layout shifts
 	if (transition === "none" || state.phase === "idle") {
 		return (
 			<Box
@@ -194,9 +203,17 @@ export function PageTransitionWrapper({
 					position: "relative",
 					width: "100%",
 					height: "100%",
+					overflow: "hidden",
 				}}
 			>
-				{state.currentContent}
+				<Box
+					style={{
+						position: "absolute",
+						inset: 0,
+					}}
+				>
+					{state.currentContent}
+				</Box>
 			</Box>
 		);
 	}
@@ -256,6 +273,8 @@ export function PageTransitionWrapper({
 					style={{
 						position: "absolute",
 						inset: 0,
+						willChange: "transform, opacity",
+						backfaceVisibility: "hidden",
 						transition: isActive
 							? `transform ${duration}ms ease-out, opacity ${duration}ms ease-out`
 							: undefined,
@@ -275,6 +294,8 @@ export function PageTransitionWrapper({
 				style={{
 					position: "absolute",
 					inset: 0,
+					willChange: "transform, opacity",
+					backfaceVisibility: "hidden",
 					transition: isActive
 						? `transform ${duration}ms ease-out, opacity ${duration}ms ease-out`
 						: undefined,

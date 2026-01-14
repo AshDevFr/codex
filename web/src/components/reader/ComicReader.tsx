@@ -1,7 +1,6 @@
 import { Box, Center, Loader, Text } from "@mantine/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-	type NavigationDirection,
 	type PageOrientation,
 	selectEffectiveReadingDirection,
 	useReaderStore,
@@ -15,6 +14,7 @@ import {
 	useKeyboardNav,
 	useReadProgress,
 	useSeriesNavigation,
+	useSeriesReaderSettings,
 	useTouchNav,
 } from "./hooks";
 import { PageTransitionWrapper } from "./PageTransitionWrapper";
@@ -75,14 +75,22 @@ export function ComicReader({
 	const [settingsOpened, setSettingsOpened] = useState(false);
 	const [boundaryNotification, setBoundaryNotification] = useState<string | null>(null);
 
-	// Reader store state
+	// Per-series settings (forkable settings with series overrides)
+	const { effectiveSettings, isLoaded: seriesSettingsLoaded } = useSeriesReaderSettings(seriesId);
+
+	// Extract forkable settings from effective settings
+	const {
+		fitMode,
+		backgroundColor,
+		pageLayout,
+		doublePageShowWideAlone,
+		doublePageStartOnOdd,
+	} = effectiveSettings;
+
+	// Reader store state (global/non-forkable settings)
 	const currentPage = useReaderStore((state) => state.currentPage);
 	const toolbarVisible = useReaderStore((state) => state.toolbarVisible);
 	const isFullscreen = useReaderStore((state) => state.isFullscreen);
-	const fitMode = useReaderStore((state) => state.settings.fitMode);
-	const backgroundColor = useReaderStore(
-		(state) => state.settings.backgroundColor,
-	);
 	const autoHideToolbar = useReaderStore(
 		(state) => state.settings.autoHideToolbar,
 	);
@@ -90,13 +98,6 @@ export function ComicReader({
 		(state) => state.settings.toolbarHideDelay,
 	);
 	const preloadPages = useReaderStore((state) => state.settings.preloadPages);
-	const pageLayout = useReaderStore((state) => state.settings.pageLayout);
-	const doublePageShowWideAlone = useReaderStore(
-		(state) => state.settings.doublePageShowWideAlone,
-	);
-	const doublePageStartOnOdd = useReaderStore(
-		(state) => state.settings.doublePageStartOnOdd,
-	);
 	const pageOrientations = useReaderStore((state) => state.pageOrientations);
 	const readingDirection = useReaderStore(selectEffectiveReadingDirection);
 	const adjacentBooks = useReaderStore((state) => state.adjacentBooks);
@@ -263,14 +264,16 @@ export function ComicReader({
 		resetHideTimeout();
 	}, [toolbarVisible, setToolbarVisible, resetHideTimeout]);
 
-	// Wrapper to set navigation direction and then navigate
-	const navigateWithDirection = useCallback(
-		(direction: NavigationDirection, navigate: () => void) => {
-			setLastNavigationDirection(direction);
-			navigate();
-		},
-		[setLastNavigationDirection],
-	);
+	// Wrapped handlers for single-page mode that set navigation direction
+	const handleNextPageWithDirection = useCallback(() => {
+		setLastNavigationDirection("next");
+		handleNextPage();
+	}, [setLastNavigationDirection, handleNextPage]);
+
+	const handlePrevPageWithDirection = useCallback(() => {
+		setLastNavigationDirection("prev");
+		handlePrevPage();
+	}, [setLastNavigationDirection, handlePrevPage]);
 
 	// Handle click zones for single-page navigation
 	const handleSinglePageClick = useCallback(
@@ -281,16 +284,16 @@ export function ComicReader({
 			}
 
 			// Adjust for reading direction
-			// Uses series navigation handlers which support boundary detection
+			// Uses wrapped handlers that set navigation direction for transitions
 			if (readingDirection === "ltr") {
-				if (zone === "left") navigateWithDirection("prev", handlePrevPage);
-				if (zone === "right") navigateWithDirection("next", handleNextPage);
+				if (zone === "left") handlePrevPageWithDirection();
+				if (zone === "right") handleNextPageWithDirection();
 			} else {
-				if (zone === "left") navigateWithDirection("next", handleNextPage);
-				if (zone === "right") navigateWithDirection("prev", handlePrevPage);
+				if (zone === "left") handleNextPageWithDirection();
+				if (zone === "right") handlePrevPageWithDirection();
 			}
 		},
-		[readingDirection, handleNextPage, handlePrevPage, toggleToolbar, navigateWithDirection],
+		[readingDirection, handleNextPageWithDirection, handlePrevPageWithDirection, toggleToolbar],
 	);
 
 	// Generate page URL
@@ -397,19 +400,20 @@ export function ComicReader({
 
 	// Keyboard navigation with series navigation support
 	// In double-page mode, use spread-aware navigation
+	// In single-page mode, use wrapped handlers that set navigation direction for transitions
 	useKeyboardNav({
 		enabled: !settingsOpened,
 		onEscape: onClose,
-		onNextPage: pageLayout === "double" ? handleSpreadNextPage : handleNextPage,
-		onPrevPage: pageLayout === "double" ? handleSpreadPrevPage : handlePrevPage,
+		onNextPage: pageLayout === "double" ? handleSpreadNextPage : handleNextPageWithDirection,
+		onPrevPage: pageLayout === "double" ? handleSpreadPrevPage : handlePrevPageWithDirection,
 	});
 
 	// Touch/swipe navigation for mobile devices
 	// Only enabled for paginated modes (not continuous scroll)
 	const { touchRef } = useTouchNav({
 		enabled: !settingsOpened && pageLayout !== "continuous" && readingDirection !== "webtoon",
-		onNextPage: pageLayout === "double" ? handleSpreadNextPage : handleNextPage,
-		onPrevPage: pageLayout === "double" ? handleSpreadPrevPage : handlePrevPage,
+		onNextPage: pageLayout === "double" ? handleSpreadNextPage : handleNextPageWithDirection,
+		onPrevPage: pageLayout === "double" ? handleSpreadPrevPage : handlePrevPageWithDirection,
 		onTap: toggleToolbar,
 	});
 
@@ -456,8 +460,8 @@ export function ComicReader({
 		}
 	}, [currentPage]);
 
-	// Loading state
-	if (progressLoading) {
+	// Loading state - wait for both progress and series settings to load
+	if (progressLoading || !seriesSettingsLoaded) {
 		return (
 			<Center
 				style={{ width: "100vw", height: "100vh", backgroundColor: "#000" }}

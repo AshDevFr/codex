@@ -152,7 +152,8 @@ async fn test_series_book_relationship() {
     let (book_result, series_result) = book_with_series;
     assert_eq!(book_result.id, book.id);
     assert_eq!(book_result.file_name, "book.cbz");
-    assert_eq!(series_result.unwrap().name, "Test Series");
+    // Series name is now in series_metadata table
+    assert!(series_result.is_some());
 
     db.close().await;
 }
@@ -714,8 +715,16 @@ async fn test_create_series_with_fingerprint() {
     .unwrap();
 
     // Verify series was created with fingerprint
-    assert_eq!(series.name, "Test Series");
+    // Name is now in series_metadata table
     assert_eq!(series.fingerprint.as_deref(), Some(fingerprint.as_str()));
+
+    // Verify series_metadata was created with title
+    use codex::db::repositories::SeriesMetadataRepository;
+    let metadata = SeriesMetadataRepository::get_by_series_id(conn, series.id)
+        .await
+        .unwrap()
+        .expect("Series metadata should exist");
+    assert_eq!(metadata.title, "Test Series");
 
     db.close().await;
 }
@@ -743,8 +752,16 @@ async fn test_create_series_without_fingerprint() {
     .unwrap();
 
     // Verify series was created without fingerprint
-    assert_eq!(series.name, "Test Series");
+    // Name is now in series_metadata table
     assert!(series.fingerprint.is_none());
+
+    // Verify series_metadata was created with title
+    use codex::db::repositories::SeriesMetadataRepository;
+    let metadata = SeriesMetadataRepository::get_by_series_id(conn, series.id)
+        .await
+        .unwrap()
+        .expect("Series metadata should exist");
+    assert_eq!(metadata.title, "Test Series");
 
     db.close().await;
 }
@@ -784,7 +801,12 @@ async fn test_update_series_name() {
         .unwrap()
         .unwrap();
 
-    assert_eq!(updated_series.name, "Updated Name");
+    // Name is stored in series_metadata.title
+    let metadata = SeriesMetadataRepository::get_by_series_id(conn, series.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(metadata.title, "Updated Name");
     assert_eq!(
         updated_series.fingerprint.as_deref(),
         Some(fingerprint.as_str())
@@ -827,7 +849,12 @@ async fn test_update_series_fingerprint() {
         updated_series.fingerprint.as_deref(),
         Some(new_fingerprint.as_str())
     );
-    assert_eq!(updated_series.name, "Test Series"); // Name unchanged
+    // Name is stored in series_metadata.title
+    let metadata = SeriesMetadataRepository::get_by_series_id(conn, series.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(metadata.title, "Test Series"); // Name unchanged
 
     db.close().await;
 }

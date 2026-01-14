@@ -640,33 +640,46 @@ impl FilterService {
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::series;
+        use crate::db::entities::series_metadata;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
-        let query = series::Entity::find();
+        // Name is now stored as title in series_metadata table
+        let query = series_metadata::Entity::find();
 
         let filtered_query = match operator {
-            FieldOperator::Is { value } => query.filter(series::Column::Name.eq(value.clone())),
-            FieldOperator::IsNot { value } => query.filter(series::Column::Name.ne(value.clone())),
-            FieldOperator::IsNull => query.filter(series::Column::Name.is_null()),
-            FieldOperator::IsNotNull => query.filter(series::Column::Name.is_not_null()),
+            FieldOperator::Is { value } => {
+                query.filter(series_metadata::Column::Title.eq(value.clone()))
+            }
+            FieldOperator::IsNot { value } => {
+                query.filter(series_metadata::Column::Title.ne(value.clone()))
+            }
+            FieldOperator::IsNull => {
+                // This doesn't make sense for series_metadata.title (required field)
+                // Return empty set
+                return Ok(HashSet::new());
+            }
+            FieldOperator::IsNotNull => {
+                // All series_metadata records have a title, so return all
+                query.filter(series_metadata::Column::Title.is_not_null())
+            }
             FieldOperator::Contains { value } => {
-                query.filter(series::Column::Name.contains(value.clone()))
+                query.filter(series_metadata::Column::Title.contains(value.clone()))
             }
             FieldOperator::DoesNotContain { value } => {
-                query.filter(series::Column::Name.not_like(&format!("%{}%", value)))
+                query.filter(series_metadata::Column::Title.not_like(&format!("%{}%", value)))
             }
             FieldOperator::BeginsWith { value } => {
-                query.filter(series::Column::Name.starts_with(value.clone()))
+                query.filter(series_metadata::Column::Title.starts_with(value.clone()))
             }
             FieldOperator::EndsWith { value } => {
-                query.filter(series::Column::Name.ends_with(value.clone()))
+                query.filter(series_metadata::Column::Title.ends_with(value.clone()))
             }
         };
 
+        // Select series_id from series_metadata (not the primary key)
         let series_ids: Vec<Uuid> = filtered_query
             .select_only()
-            .column(series::Column::Id)
+            .column(series_metadata::Column::SeriesId)
             .into_tuple()
             .all(db)
             .await?;
@@ -1130,33 +1143,39 @@ impl FilterService {
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
     ) -> Result<HashSet<Uuid>> {
-        use crate::db::entities::books;
+        use crate::db::entities::book_metadata;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
-        let query = books::Entity::find();
+        // Title is now stored in book_metadata table
+        let query = book_metadata::Entity::find();
 
         let filtered_query = match operator {
-            FieldOperator::Is { value } => query.filter(books::Column::Title.eq(value.clone())),
-            FieldOperator::IsNot { value } => query.filter(books::Column::Title.ne(value.clone())),
-            FieldOperator::IsNull => query.filter(books::Column::Title.is_null()),
-            FieldOperator::IsNotNull => query.filter(books::Column::Title.is_not_null()),
+            FieldOperator::Is { value } => {
+                query.filter(book_metadata::Column::Title.eq(Some(value.clone())))
+            }
+            FieldOperator::IsNot { value } => {
+                query.filter(book_metadata::Column::Title.ne(Some(value.clone())))
+            }
+            FieldOperator::IsNull => query.filter(book_metadata::Column::Title.is_null()),
+            FieldOperator::IsNotNull => query.filter(book_metadata::Column::Title.is_not_null()),
             FieldOperator::Contains { value } => {
-                query.filter(books::Column::Title.contains(value.clone()))
+                query.filter(book_metadata::Column::Title.contains(value.clone()))
             }
             FieldOperator::DoesNotContain { value } => {
-                query.filter(books::Column::Title.not_like(&format!("%{}%", value)))
+                query.filter(book_metadata::Column::Title.not_like(&format!("%{}%", value)))
             }
             FieldOperator::BeginsWith { value } => {
-                query.filter(books::Column::Title.starts_with(value.clone()))
+                query.filter(book_metadata::Column::Title.starts_with(value.clone()))
             }
             FieldOperator::EndsWith { value } => {
-                query.filter(books::Column::Title.ends_with(value.clone()))
+                query.filter(book_metadata::Column::Title.ends_with(value.clone()))
             }
         };
 
+        // Select book_id from book_metadata (not id)
         let book_ids: Vec<Uuid> = filtered_query
             .select_only()
-            .column(books::Column::Id)
+            .column(book_metadata::Column::BookId)
             .into_tuple()
             .all(db)
             .await?;

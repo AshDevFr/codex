@@ -5,12 +5,12 @@ use crate::api::{
             AlternateTitleListResponse, CreateAlternateTitleRequest, CreateExternalLinkRequest,
             CreateExternalRatingRequest, ExternalLinkDto, ExternalLinkListResponse,
             ExternalRatingDto, ExternalRatingListResponse, FullSeriesMetadataResponse, GenreDto,
-            GenreListResponse, MetadataLocks, PatchSeriesMetadataRequest,
+            GenreListResponse, MetadataLocks, PatchSeriesMetadataRequest, PatchSeriesRequest,
             ReplaceSeriesMetadataRequest, SeriesCoverDto, SeriesCoverListResponse,
-            SeriesMetadataResponse, SeriesSortParam, SetSeriesGenresRequest, SetSeriesTagsRequest,
-            SetUserRatingRequest, TagDto, TagListResponse, TaxonomyCleanupResponse,
-            UpdateAlternateTitleRequest, UpdateMetadataLocksRequest, UserRatingsListResponse,
-            UserSeriesRatingDto,
+            SeriesMetadataResponse, SeriesSortParam, SeriesUpdateResponse, SetSeriesGenresRequest,
+            SetSeriesTagsRequest, SetUserRatingRequest, TagDto, TagListResponse,
+            TaxonomyCleanupResponse, UpdateAlternateTitleRequest, UpdateMetadataLocksRequest,
+            UserRatingsListResponse, UserSeriesRatingDto,
         },
         BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListRequest,
         SeriesListResponse,
@@ -86,7 +86,7 @@ fn default_page_size() -> u64 {
 }
 
 /// Helper function to convert series model to DTO with unread count
-/// Fetches metadata and cover info from related tables
+/// Fetches metadata, cover info, and book count from related tables
 async fn series_to_dto(
     db: &DatabaseConnection,
     series: series::Model,
@@ -101,10 +101,15 @@ async fn series_to_dto(
         None
     };
 
-    // Fetch metadata from series_metadata table
+    // Fetch metadata from series_metadata table (contains title, title_sort, summary, etc.)
     let metadata = SeriesMetadataRepository::get_by_series_id(db, series.id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series metadata: {:?}", e)))?;
+
+    // Compute book count dynamically (no longer stored on series table)
+    let book_count = SeriesRepository::get_book_count(db, series.id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get book count: {:?}", e)))?;
 
     // Fetch cover info from series_covers table
     let selected_cover = SeriesCoversRepository::get_selected(db, series.id)
@@ -115,15 +120,21 @@ async fn series_to_dto(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to check custom cover: {:?}", e)))?;
 
+    // Series name now comes from series_metadata.title (fall back to "Unknown Series" if not found)
+    let name = metadata
+        .as_ref()
+        .map(|m| m.title.clone())
+        .unwrap_or_else(|| "Unknown Series".to_string());
+
     Ok(SeriesDto {
         id: series.id,
         library_id: series.library_id,
-        name: series.name,
+        name,
         sort_name: metadata.as_ref().and_then(|m| m.title_sort.clone()),
         description: metadata.as_ref().and_then(|m| m.summary.clone()),
         publisher: metadata.as_ref().and_then(|m| m.publisher.clone()),
         year: metadata.as_ref().and_then(|m| m.year),
-        book_count: series.book_count as i64,
+        book_count,
         path: series.path,
         selected_cover_source: selected_cover.map(|c| c.source),
         has_custom_cover: Some(has_custom_cover),
@@ -291,6 +302,140 @@ pub async fn get_series(
     let dto = series_to_dto(&state.db, series, user_id).await?;
 
     Ok(Json(dto))
+}
+
+/// Update series core fields (name/title)
+///
+/// Partially updates series_metadata fields. Only provided fields will be updated.
+/// Absent fields are unchanged. When name is set to a non-null value, it is automatically locked.
+#[utoipa::path(
+    patch,
+    path = "/api/v1/series/{series_id}",
+    params(
+        ("series_id" = Uuid, Path, description = "Series ID")
+    ),
+    request_body = PatchSeriesRequest,
+    responses(
+        (status = 200, description = "Series updated successfully", body = SeriesUpdateResponse),
+        (status = 404, description = "Series not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn patch_series(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+    Json(request): Json<PatchSeriesRequest>,
+) -> Result<Json<SeriesUpdateResponse>, ApiError> {
+    use sea_orm::{ActiveModelTrait, Set};
+
+    require_permission!(auth, Permission::SeriesWrite)?;
+
+    // Verify series exists
+    let series_model = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    let now = Utc::now();
+    let mut has_changes = false;
+
+    // Get or create series_metadata record (name is now stored as title in series_metadata)
+    let existing_meta = SeriesMetadataRepository::get_by_series_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+
+    let updated_name: String;
+
+    if let Some(existing) = existing_meta {
+        // Update existing metadata record
+        let mut active: series_metadata::ActiveModel = existing.clone().into();
+
+        // Update title (name) if provided
+        if let Some(Some(name)) = request.name.to_active_value() {
+            active.title = Set(name.clone());
+            active.title_lock = Set(true); // Auto-lock when user edits
+            has_changes = true;
+            updated_name = name;
+        } else {
+            updated_name = existing.title.clone();
+        }
+
+        if has_changes {
+            active.updated_at = Set(now);
+            active.update(&state.db).await.map_err(|e| {
+                ApiError::Internal(format!("Failed to update series metadata: {}", e))
+            })?;
+        }
+    } else {
+        // Create new metadata record with provided name
+        if let Some(Some(name)) = request.name.to_active_value() {
+            has_changes = true;
+            updated_name = name.clone();
+
+            let active = series_metadata::ActiveModel {
+                series_id: Set(series_id),
+                title: Set(name),
+                title_sort: Set(None),
+                summary: Set(None),
+                publisher: Set(None),
+                imprint: Set(None),
+                status: Set(None),
+                age_rating: Set(None),
+                language: Set(None),
+                reading_direction: Set(None),
+                year: Set(None),
+                total_book_count: Set(None),
+                total_book_count_lock: Set(false),
+                title_lock: Set(true), // Auto-lock when user edits
+                title_sort_lock: Set(false),
+                summary_lock: Set(false),
+                publisher_lock: Set(false),
+                imprint_lock: Set(false),
+                status_lock: Set(false),
+                age_rating_lock: Set(false),
+                language_lock: Set(false),
+                reading_direction_lock: Set(false),
+                year_lock: Set(false),
+                genres_lock: Set(false),
+                tags_lock: Set(false),
+                created_at: Set(now),
+                updated_at: Set(now),
+            };
+
+            active.insert(&state.db).await.map_err(|e| {
+                ApiError::Internal(format!("Failed to create series metadata: {}", e))
+            })?;
+        } else {
+            // No name provided and no existing metadata - return current state
+            updated_name = "Unknown Series".to_string();
+        }
+    }
+
+    // Emit update event
+    if has_changes {
+        let event = EntityChangeEvent {
+            event: EntityEvent::SeriesUpdated {
+                series_id,
+                library_id: series_model.library_id,
+                fields: Some(vec!["name".to_string()]),
+            },
+            timestamp: now,
+            user_id: Some(auth.user_id),
+        };
+        let _ = state.event_broadcaster.emit(event);
+    }
+
+    Ok(Json(SeriesUpdateResponse {
+        id: series_id,
+        name: updated_name,
+        updated_at: now,
+    }))
 }
 
 /// Search series by name
@@ -1179,6 +1324,10 @@ pub async fn list_library_in_progress_series(
 }
 
 /// Apply sorting to series list
+///
+/// Note: name and book_count are now in separate tables (series_metadata and computed from books).
+/// For accurate sorting on those fields, use repository-level database queries with joins.
+/// This in-memory fallback sorts by available fields on the series entity.
 fn apply_series_sorting(series_list: &mut [crate::db::entities::series::Model], sort_param: &str) {
     let parts: Vec<&str> = sort_param.split(',').collect();
     if parts.len() != 2 {
@@ -1190,9 +1339,12 @@ fn apply_series_sorting(series_list: &mut [crate::db::entities::series::Model], 
     let ascending = direction == "asc";
 
     match field {
-        "name" => {
+        "name" | "book_count" => {
+            // These fields now require metadata/book table joins
+            // Fall back to created_at for in-memory sorting
+            // For accurate sorting, use database-level sorting via repository
             series_list.sort_by(|a, b| {
-                let cmp = a.name.cmp(&b.name);
+                let cmp = a.created_at.cmp(&b.created_at);
                 if ascending {
                     cmp
                 } else {
@@ -1210,9 +1362,9 @@ fn apply_series_sorting(series_list: &mut [crate::db::entities::series::Model], 
                 }
             });
         }
-        "book_count" => {
+        "updated_at" => {
             series_list.sort_by(|a, b| {
-                let cmp = a.book_count.cmp(&b.book_count);
+                let cmp = a.updated_at.cmp(&b.updated_at);
                 if ascending {
                     cmp
                 } else {
@@ -1221,7 +1373,6 @@ fn apply_series_sorting(series_list: &mut [crate::db::entities::series::Model], 
             });
         }
         // Note: "year" sorting requires metadata table join - use repository-level sorting
-        // "year" => { ... }
         _ => {} // Unknown field, skip sorting
     }
 }
@@ -1446,11 +1597,19 @@ pub async fn download_series(
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    // Fetch series to verify it exists and get the name for the zip filename
+    // Fetch series to verify it exists
     let series = SeriesRepository::get_by_id(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Fetch series name from series_metadata
+    let series_name = SeriesMetadataRepository::get_by_series_id(&state.db, series_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|m| m.title)
+        .unwrap_or_else(|| format!("series-{}", series_id));
 
     // Fetch all non-deleted books in the series
     let books = BookRepository::list_by_series(&state.db, series_id, false)
@@ -1526,7 +1685,7 @@ pub async fn download_series(
     let zip_data = buffer.into_inner();
 
     // Sanitize series name for use as filename
-    let safe_name = sanitize_filename(&series.name);
+    let safe_name = sanitize_filename(&series_name);
     let zip_filename = format!("{}.zip", safe_name);
 
     // Build response

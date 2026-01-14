@@ -354,8 +354,6 @@ mod tests {
             id: Uuid::new_v4(),
             series_id: series.id,
             library_id: library.id,
-            title: None,
-            number: None,
             file_path: "/test/path/series/book.cbz".to_string(),
             file_name: "book.cbz".to_string(),
             file_size: 1000000,
@@ -418,12 +416,11 @@ mod tests {
         let book_sizes = vec![1000000, 2500000, 500000, 3000000]; // Total: 7000000
 
         for (idx, size) in book_sizes.iter().enumerate() {
+            // Note: title and number are now in book_metadata table
             let book_model = books::Model {
                 id: Uuid::new_v4(),
                 series_id: series.id,
                 library_id: library.id,
-                title: Some(format!("Book {}", idx + 1)),
-                number: None,
                 file_path: format!("/test/path/series/book{}.cbz", idx + 1),
                 file_name: format!("book{}.cbz", idx + 1),
                 file_size: *size,
@@ -494,8 +491,6 @@ mod tests {
             id: Uuid::new_v4(),
             series_id: series.id,
             library_id: library.id,
-            title: None,
-            number: None,
             file_path: "/test/path/series/book.cbz".to_string(),
             file_name: "book.cbz".to_string(),
             file_size: 1000000,

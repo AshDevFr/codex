@@ -309,6 +309,8 @@ export function DoublePageSpread({
 								style={{
 									...getSpreadFitModeStyles(fitMode, isSinglePage),
 									objectFit: "contain",
+									opacity: state.isLoading ? 0 : 1,
+									transition: "opacity 50ms ease-in",
 								}}
 								onLoad={(e) => handleImageLoad(page.pageNumber, page.src, e)}
 								onError={() => handleImageError(page.pageNumber, page.src)}

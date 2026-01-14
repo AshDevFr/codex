@@ -188,4 +188,21 @@ export const seriesApi = {
 		const response = await api.post<PaginatedResponse<Series>>("/series/list", body);
 		return response.data;
 	},
+
+	/**
+	 * Update series core fields (name)
+	 * @param seriesId - Series ID
+	 * @param data - Fields to update (name)
+	 */
+	patch: async (
+		seriesId: string,
+		data: { name?: string },
+	): Promise<{ id: string; name: string; updatedAt: string }> => {
+		const response = await api.patch<{
+			id: string;
+			name: string;
+			updatedAt: string;
+		}>(`/series/${seriesId}`, data);
+		return response.data;
+	},
 };

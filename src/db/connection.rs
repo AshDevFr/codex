@@ -283,9 +283,10 @@ impl Database {
         SeriesRepository::update(&self.conn, series, None).await
     }
 
-    /// Increment book count for a series
-    pub async fn increment_series_book_count(&self, id: Uuid) -> Result<()> {
-        SeriesRepository::increment_book_count(&self.conn, id).await
+    /// Get book count for a series (computed dynamically)
+    /// Note: book_count is now computed dynamically, not stored in the series table
+    pub async fn get_series_book_count(&self, id: Uuid) -> Result<i64> {
+        SeriesRepository::get_book_count(&self.conn, id).await
     }
 
     /// Delete a series

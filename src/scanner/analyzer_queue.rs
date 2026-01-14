@@ -184,10 +184,11 @@ async fn analyze_single_book(
     let resolved_number = resolve_book_number(db, &book, &metadata, metadata_number).await;
 
     // Resolve book title using the library's book naming strategy
-    book.title = Some(resolve_book_title(db, &book, &metadata, resolved_number).await);
+    // Note: title and number are now stored in book_metadata, not books table
+    let resolved_title = resolve_book_title(db, &book, &metadata, resolved_number).await;
+    let resolved_number_decimal =
+        resolved_number.map(|n| Decimal::from_f64_retain(n as f64).unwrap_or_default());
 
-    // Store the resolved number
-    book.number = resolved_number.map(|n| Decimal::from_f64_retain(n as f64).unwrap_or_default());
     book.file_size = metadata.file_size as i64;
     book.file_hash = metadata.file_hash.clone();
     book.partial_hash = partial_hash;
@@ -308,6 +309,22 @@ async fn analyze_single_book(
             book_metadata::Model {
                 id: metadata_id,
                 book_id: book.id,
+                // Display fields (title, title_sort, number)
+                title: if existing.title_lock {
+                    existing.title.clone()
+                } else {
+                    Some(resolved_title.clone())
+                },
+                title_sort: if existing.title_sort_lock {
+                    existing.title_sort.clone()
+                } else {
+                    None // title_sort is typically user-set, not auto-generated
+                },
+                number: if existing.number_lock {
+                    existing.number
+                } else {
+                    resolved_number_decimal
+                },
                 summary: if existing.summary_lock {
                     existing.summary.clone()
                 } else {
@@ -419,6 +436,9 @@ async fn analyze_single_book(
                     isbns_json.clone()
                 },
                 // Preserve existing lock states
+                title_lock: existing.title_lock,
+                title_sort_lock: existing.title_sort_lock,
+                number_lock: existing.number_lock,
                 summary_lock: existing.summary_lock,
                 writer_lock: existing.writer_lock,
                 penciller_lock: existing.penciller_lock,
@@ -449,6 +469,10 @@ async fn analyze_single_book(
             book_metadata::Model {
                 id: metadata_id,
                 book_id: book.id,
+                // Display fields
+                title: Some(resolved_title.clone()),
+                title_sort: None, // title_sort is typically user-set
+                number: resolved_number_decimal,
                 summary: comic_info.summary.clone(),
                 writer: comic_info.writer.clone(),
                 penciller: comic_info.penciller.clone(),
@@ -472,6 +496,9 @@ async fn analyze_single_book(
                 count: comic_info.count,
                 isbns: isbns_json,
                 // All locks default to false for new records
+                title_lock: false,
+                title_sort_lock: false,
+                number_lock: false,
                 summary_lock: false,
                 writer_lock: false,
                 penciller_lock: false,
@@ -507,50 +534,190 @@ async fn analyze_single_book(
         );
 
         // Populate series metadata from the first book if not already populated
-        if let Ok(Some(series)) = SeriesRepository::get_by_id(db, book.series_id).await {
-            // Get series metadata to check if it needs population
-            if let Ok(Some(metadata)) =
-                SeriesMetadataRepository::get_by_series_id(db, book.series_id).await
+        if let Ok(Some(series_metadata_model)) =
+            SeriesMetadataRepository::get_by_series_id(db, book.series_id).await
+        {
+            // Only populate if series metadata doesn't have summary, publisher, or year yet
+            // and the fields are not locked
+            let should_populate = series_metadata_model.summary.is_none()
+                && series_metadata_model.publisher.is_none()
+                && series_metadata_model.year.is_none()
+                && !series_metadata_model.summary_lock
+                && !series_metadata_model.publisher_lock
+                && !series_metadata_model.year_lock;
+
+            if should_populate
+                && (comic_info.summary.is_some()
+                    || comic_info.publisher.is_some()
+                    || comic_info.year.is_some())
             {
-                // Only populate if series metadata doesn't have summary, publisher, or year yet
-                // and the fields are not locked
-                let should_populate = metadata.summary.is_none()
-                    && metadata.publisher.is_none()
-                    && metadata.year.is_none()
-                    && !metadata.summary_lock
-                    && !metadata.publisher_lock
-                    && !metadata.year_lock;
+                // Populate series metadata from book's ComicInfo
+                use crate::db::entities::series_metadata;
+                use sea_orm::{ActiveModelTrait, Set};
 
-                if should_populate
-                    && (comic_info.summary.is_some()
-                        || comic_info.publisher.is_some()
-                        || comic_info.year.is_some())
-                {
-                    // Populate series metadata from book's ComicInfo
-                    use crate::db::entities::series_metadata;
-                    use sea_orm::{ActiveModelTrait, Set};
+                let series_title = series_metadata_model.title.clone();
+                let mut metadata_active: series_metadata::ActiveModel =
+                    series_metadata_model.into();
 
-                    let mut metadata_active: series_metadata::ActiveModel = metadata.into();
-
-                    if let Some(ref summary) = comic_info.summary {
-                        metadata_active.summary = Set(Some(summary.clone()));
-                    }
-                    if let Some(ref publisher) = comic_info.publisher {
-                        metadata_active.publisher = Set(Some(publisher.clone()));
-                    }
-                    if let Some(year) = comic_info.year {
-                        metadata_active.year = Set(Some(year));
-                    }
-                    metadata_active.updated_at = Set(Utc::now());
-
-                    metadata_active.update(db).await?;
-                    info!(
-                        "Populated series '{}' metadata from book: {}",
-                        series.name, book.file_path
-                    );
+                if let Some(ref summary) = comic_info.summary {
+                    metadata_active.summary = Set(Some(summary.clone()));
                 }
+                if let Some(ref publisher) = comic_info.publisher {
+                    metadata_active.publisher = Set(Some(publisher.clone()));
+                }
+                if let Some(year) = comic_info.year {
+                    metadata_active.year = Set(Some(year));
+                }
+                metadata_active.updated_at = Set(Utc::now());
+
+                metadata_active.update(db).await?;
+                info!(
+                    "Populated series '{}' metadata from book: {}",
+                    series_title, book.file_path
+                );
             }
         }
+    } else {
+        // No ComicInfo, but we still need to store the resolved title and number
+        let existing_metadata = BookMetadataRepository::get_by_book_id(db, book.id).await?;
+        let metadata_id = existing_metadata
+            .as_ref()
+            .map(|m| m.id)
+            .unwrap_or_else(Uuid::new_v4);
+
+        let metadata_record = if let Some(ref existing) = existing_metadata {
+            // Only update title/number if not locked
+            book_metadata::Model {
+                id: metadata_id,
+                book_id: book.id,
+                title: if existing.title_lock {
+                    existing.title.clone()
+                } else {
+                    Some(resolved_title.clone())
+                },
+                title_sort: existing.title_sort.clone(),
+                number: if existing.number_lock {
+                    existing.number
+                } else {
+                    resolved_number_decimal
+                },
+                // Keep all existing values
+                summary: existing.summary.clone(),
+                writer: existing.writer.clone(),
+                penciller: existing.penciller.clone(),
+                inker: existing.inker.clone(),
+                colorist: existing.colorist.clone(),
+                letterer: existing.letterer.clone(),
+                cover_artist: existing.cover_artist.clone(),
+                editor: existing.editor.clone(),
+                publisher: existing.publisher.clone(),
+                imprint: existing.imprint.clone(),
+                genre: existing.genre.clone(),
+                web: existing.web.clone(),
+                language_iso: existing.language_iso.clone(),
+                format_detail: existing.format_detail.clone(),
+                black_and_white: existing.black_and_white,
+                manga: existing.manga,
+                year: existing.year,
+                month: existing.month,
+                day: existing.day,
+                volume: existing.volume,
+                count: existing.count,
+                isbns: existing.isbns.clone(),
+                // Keep all lock states
+                title_lock: existing.title_lock,
+                title_sort_lock: existing.title_sort_lock,
+                number_lock: existing.number_lock,
+                summary_lock: existing.summary_lock,
+                writer_lock: existing.writer_lock,
+                penciller_lock: existing.penciller_lock,
+                inker_lock: existing.inker_lock,
+                colorist_lock: existing.colorist_lock,
+                letterer_lock: existing.letterer_lock,
+                cover_artist_lock: existing.cover_artist_lock,
+                editor_lock: existing.editor_lock,
+                publisher_lock: existing.publisher_lock,
+                imprint_lock: existing.imprint_lock,
+                genre_lock: existing.genre_lock,
+                web_lock: existing.web_lock,
+                language_iso_lock: existing.language_iso_lock,
+                format_detail_lock: existing.format_detail_lock,
+                black_and_white_lock: existing.black_and_white_lock,
+                manga_lock: existing.manga_lock,
+                year_lock: existing.year_lock,
+                month_lock: existing.month_lock,
+                day_lock: existing.day_lock,
+                volume_lock: existing.volume_lock,
+                count_lock: existing.count_lock,
+                isbns_lock: existing.isbns_lock,
+                created_at: existing.created_at,
+                updated_at: now,
+            }
+        } else {
+            // No existing metadata, create new with just title and number
+            book_metadata::Model {
+                id: metadata_id,
+                book_id: book.id,
+                title: Some(resolved_title.clone()),
+                title_sort: None,
+                number: resolved_number_decimal,
+                summary: None,
+                writer: None,
+                penciller: None,
+                inker: None,
+                colorist: None,
+                letterer: None,
+                cover_artist: None,
+                editor: None,
+                publisher: None,
+                imprint: None,
+                genre: None,
+                web: None,
+                language_iso: None,
+                format_detail: None,
+                black_and_white: None,
+                manga: None,
+                year: None,
+                month: None,
+                day: None,
+                volume: None,
+                count: None,
+                isbns: None,
+                title_lock: false,
+                title_sort_lock: false,
+                number_lock: false,
+                summary_lock: false,
+                writer_lock: false,
+                penciller_lock: false,
+                inker_lock: false,
+                colorist_lock: false,
+                letterer_lock: false,
+                cover_artist_lock: false,
+                editor_lock: false,
+                publisher_lock: false,
+                imprint_lock: false,
+                genre_lock: false,
+                web_lock: false,
+                language_iso_lock: false,
+                format_detail_lock: false,
+                black_and_white_lock: false,
+                manga_lock: false,
+                year_lock: false,
+                month_lock: false,
+                day_lock: false,
+                volume_lock: false,
+                count_lock: false,
+                isbns_lock: false,
+                created_at: now,
+                updated_at: now,
+            }
+        };
+
+        BookMetadataRepository::upsert(db, &metadata_record).await?;
+        debug!(
+            "Saved metadata for book (no ComicInfo): {} - title: {:?}",
+            book.file_path, metadata_record.title
+        );
     }
 
     // Save page information to pages table
@@ -625,12 +792,12 @@ async fn resolve_book_title(
     let book_config_str = library.book_config.as_ref().map(|v| v.to_string());
     let strategy = create_book_strategy(book_strategy, book_config_str.as_deref());
 
-    // Get series info for context
-    let series = match SeriesRepository::get_by_id(db, book.series_id).await {
-        Ok(Some(s)) => s,
+    // Get series name from metadata for context
+    let series_name = match SeriesMetadataRepository::get_by_series_id(db, book.series_id).await {
+        Ok(Some(m)) => m.title,
         Ok(None) | Err(_) => {
             warn!(
-                "Series not found for book {}, using filename strategy",
+                "Series metadata not found for book {}, using filename strategy",
                 book.id
             );
             return filename_fallback(&book.file_name);
@@ -651,7 +818,7 @@ async fn resolve_book_title(
 
     // Build naming context
     let context = BookNamingContext {
-        series_name: series.name.clone(),
+        series_name,
         book_number,
         volume: None, // Could be extracted from metadata/path for series_volume_chapter
         chapter_number: None, // Could be extracted from metadata/path
@@ -753,6 +920,15 @@ async fn get_book_position_in_series(
 /// Helper function to count non-null fields in metadata for logging
 fn count_non_null_fields(metadata: &book_metadata::Model) -> usize {
     let mut count = 0;
+    if metadata.title.is_some() {
+        count += 1;
+    }
+    if metadata.title_sort.is_some() {
+        count += 1;
+    }
+    if metadata.number.is_some() {
+        count += 1;
+    }
     if metadata.summary.is_some() {
         count += 1;
     }
@@ -831,6 +1007,11 @@ mod tests {
         let metadata = book_metadata::Model {
             id: Uuid::new_v4(),
             book_id: Uuid::new_v4(),
+            // Display fields (moved from books table)
+            title: Some("Test Title".to_string()),
+            title_sort: None,
+            number: None,
+            // Content fields
             summary: Some("Test summary".to_string()),
             writer: Some("Test Writer".to_string()),
             penciller: None,
@@ -854,6 +1035,9 @@ mod tests {
             count: None,
             isbns: None,
             // All locks default to false
+            title_lock: false,
+            title_sort_lock: false,
+            number_lock: false,
             summary_lock: false,
             writer_lock: false,
             penciller_lock: false,
@@ -880,7 +1064,7 @@ mod tests {
             updated_at: Utc::now(),
         };
 
-        assert_eq!(count_non_null_fields(&metadata), 7);
+        assert_eq!(count_non_null_fields(&metadata), 8); // title, summary, writer, publisher, genre, language_iso, manga, year
     }
 
     /// Test filename extraction logic (unit test for the title fallback logic)

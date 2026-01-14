@@ -10,8 +10,6 @@ pub struct Model {
     pub id: Uuid,
     pub series_id: Uuid,
     pub library_id: Uuid,
-    pub title: Option<String>,
-    pub number: Option<Decimal>,
     pub file_path: String,
     pub file_name: String,
     pub file_size: i64,

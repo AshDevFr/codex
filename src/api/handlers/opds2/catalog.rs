@@ -8,7 +8,8 @@ use crate::api::{
     permissions::Permission,
 };
 use crate::db::repositories::{
-    BookRepository, LibraryRepository, ReadProgressRepository, SeriesRepository,
+    BookMetadataRepository, BookRepository, LibraryRepository, ReadProgressRepository,
+    SeriesMetadataRepository, SeriesRepository,
 };
 use crate::require_permission;
 use axum::{
@@ -180,15 +181,22 @@ pub async fn opds2_library_series(
     let end = (start + pagination.page_size as usize).min(all_series.len());
     let series_list = all_series[start..end].to_vec();
 
-    let nav_links: Vec<Opds2Link> = series_list
-        .iter()
-        .map(|series| {
-            Opds2Link::navigation_link(
-                format!("{}/series/{}", base_url, series.id),
-                series.name.clone(),
-            )
-        })
-        .collect();
+    // Build navigation links with series names from series_metadata
+    let mut nav_links = Vec::new();
+    for series in &series_list {
+        // Fetch series name from series_metadata
+        let series_name = SeriesMetadataRepository::get_by_series_id(&state.db, series.id)
+            .await
+            .ok()
+            .flatten()
+            .map(|m| m.title)
+            .unwrap_or_else(|| "Unknown Series".to_string());
+
+        nav_links.push(Opds2Link::navigation_link(
+            format!("{}/series/{}", base_url, series.id),
+            series_name,
+        ));
+    }
 
     let mut links = vec![
         Opds2Link::self_link(format!(
@@ -270,6 +278,14 @@ pub async fn opds2_series_books(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
 
+    // Fetch series metadata for name
+    let series_name = SeriesMetadataRepository::get_by_series_id(&state.db, series_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|m| m.title)
+        .unwrap_or_else(|| "Unknown Series".to_string());
+
     // Fetch books (excluding deleted books)
     let books = BookRepository::list_by_series(&state.db, series_id, false)
         .await
@@ -281,7 +297,19 @@ pub async fn opds2_series_books(
     let mut publications: Vec<Publication> = Vec::with_capacity(books.len());
 
     for book in &books {
-        let title = book.title.clone().unwrap_or_else(|| "Untitled".to_string());
+        // Fetch book metadata for title and number
+        let book_meta = BookMetadataRepository::get_by_book_id(&state.db, book.id)
+            .await
+            .ok()
+            .flatten();
+        let title = book_meta
+            .as_ref()
+            .and_then(|m| m.title.clone())
+            .unwrap_or_else(|| "Untitled".to_string());
+        let book_number = book_meta
+            .as_ref()
+            .and_then(|m| m.number)
+            .and_then(|n| n.to_string().parse::<f64>().ok());
 
         // Determine MIME type based on format
         let mime_type = match book.format.as_str() {
@@ -296,12 +324,7 @@ pub async fn opds2_series_books(
             .with_identifier(format!("urn:uuid:{}", book.id))
             .with_modified(book.updated_at)
             .with_page_count(book.page_count)
-            .with_series(
-                series.name.clone(),
-                book.number
-                    .as_ref()
-                    .and_then(|n| n.to_string().parse::<f64>().ok()),
-            );
+            .with_series(series_name.clone(), book_number);
 
         let mut publication = Publication::new(metadata)
             .add_link(Opds2Link::acquisition_link(
@@ -331,7 +354,7 @@ pub async fn opds2_series_books(
     let total = publications.len() as i64;
 
     let feed = Opds2Feed::publications(
-        format!("{} - Books", series.name),
+        format!("{} - Books", series_name),
         vec![
             Opds2Link::self_link(format!("{}/series/{}", base_url, series_id)),
             Opds2Link::start_link(base_url),
@@ -392,7 +415,13 @@ pub async fn opds2_recent(
     let mut publications: Vec<Publication> = Vec::with_capacity(books.len());
 
     for book in &books {
-        let title = book.title.clone().unwrap_or_else(|| "Untitled".to_string());
+        // Fetch book title from book_metadata
+        let title = BookMetadataRepository::get_by_book_id(&state.db, book.id)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|m| m.title)
+            .unwrap_or_else(|| "Untitled".to_string());
 
         let mime_type = match book.format.as_str() {
             "cbz" | "zip" => "application/zip",

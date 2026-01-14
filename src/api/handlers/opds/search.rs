@@ -4,7 +4,10 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
-use crate::db::repositories::{BookRepository, ReadProgressRepository, SeriesRepository};
+use crate::db::repositories::{
+    BookMetadataRepository, BookRepository, ReadProgressRepository, SeriesMetadataRepository,
+    SeriesRepository,
+};
 use crate::require_permission;
 use axum::{
     extract::{Query, State},
@@ -142,16 +145,24 @@ pub async fn opds_search(
         .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
 
     // Add series entries (navigation to series books)
-    // Note: Summary is now in series_metadata table - skipping for OPDS search results
+    // Fetch series metadata for names (title is now in series_metadata table)
     for series in series_list.iter().take(20) {
+        // Fetch series name from series_metadata
+        let series_name = SeriesMetadataRepository::get_by_series_id(&state.db, series.id)
+            .await
+            .ok()
+            .flatten()
+            .map(|m| m.title)
+            .unwrap_or_else(|| "Unknown Series".to_string());
+
         let entry = OpdsEntry::new(
             format!("urn:uuid:series-{}", series.id),
-            series.name.clone(),
+            series_name.clone(),
             series.updated_at,
         )
         .add_link(OpdsLink::subsection_link(
             format!("{}/series/{}", base_url, series.id),
-            series.name.clone(),
+            series_name.clone(),
         ));
 
         feed = feed.add_entry(entry);
@@ -164,7 +175,13 @@ pub async fn opds_search(
 
     // Add book entries
     for book in books.iter().take(20) {
-        let title = book.title.clone().unwrap_or_else(|| "Untitled".to_string());
+        // Fetch book title from book_metadata
+        let title = BookMetadataRepository::get_by_book_id(&state.db, book.id)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|m| m.title)
+            .unwrap_or_else(|| "Untitled".to_string());
 
         let mut entry = OpdsEntry::new(
             format!("urn:uuid:book-{}", book.id),

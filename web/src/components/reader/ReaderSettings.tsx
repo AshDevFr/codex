@@ -1,5 +1,7 @@
 import {
+	Alert,
 	Box,
+	Button,
 	Divider,
 	Grid,
 	Group,
@@ -12,6 +14,7 @@ import {
 	Text,
 	Title,
 } from "@mantine/core";
+import { IconBookmark, IconRefresh } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { seriesMetadataApi } from "@/api/seriesMetadata";
 import {
@@ -23,6 +26,7 @@ import {
 	selectEffectiveReadingDirection,
 	useReaderStore,
 } from "@/store/readerStore";
+import { useSeriesReaderSettings } from "./hooks/useSeriesReaderSettings";
 
 interface ReaderSettingsProps {
 	/** Whether the modal is open */
@@ -39,29 +43,20 @@ interface ReaderSettingsProps {
  * Two-column layout on desktop, single column on mobile.
  * Left: Display settings (scale, background, layout)
  * Right: Mode-specific settings (transitions or scroll options)
+ *
+ * Supports per-series settings override. When viewing a series, users can
+ * customize settings that will only apply to that series.
  */
 export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProps) {
 	const queryClient = useQueryClient();
-	const settings = useReaderStore((state) => state.settings);
+	const globalSettings = useReaderStore((state) => state.settings);
 	const effectiveReadingDirection = useReaderStore(selectEffectiveReadingDirection);
-	const setFitMode = useReaderStore((state) => state.setFitMode);
-	const setPageLayout = useReaderStore((state) => state.setPageLayout);
-	const setReadingDirectionOverride = useReaderStore(
-		(state) => state.setReadingDirectionOverride,
-	);
-	const setBackgroundColor = useReaderStore(
-		(state) => state.setBackgroundColor,
-	);
+
+	// Global-only settings (not forkable per-series)
 	const setAutoHideToolbar = useReaderStore(
 		(state) => state.setAutoHideToolbar,
 	);
 	const setPreloadPages = useReaderStore((state) => state.setPreloadPages);
-	const setDoublePageShowWideAlone = useReaderStore(
-		(state) => state.setDoublePageShowWideAlone,
-	);
-	const setDoublePageStartOnOdd = useReaderStore(
-		(state) => state.setDoublePageStartOnOdd,
-	);
 	const setPageTransition = useReaderStore(
 		(state) => state.setPageTransition,
 	);
@@ -78,7 +73,22 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 		(state) => state.setAutoAdvanceToNextBook,
 	);
 
-	// Mutation to update series reading direction
+	// Global setters for reading direction override (used when updating series metadata)
+	const setReadingDirectionOverride = useReaderStore(
+		(state) => state.setReadingDirectionOverride,
+	);
+	const setGlobalFitMode = useReaderStore((state) => state.setFitMode);
+
+	// Per-series settings hook
+	const {
+		hasSeriesOverride,
+		effectiveSettings,
+		forkToSeries,
+		resetToGlobal,
+		updateSetting,
+	} = useSeriesReaderSettings(seriesId);
+
+	// Mutation to update series reading direction in backend
 	const updateSeriesReadingDirection = useMutation({
 		mutationFn: async (direction: ReadingDirection) => {
 			if (!seriesId) {
@@ -96,22 +106,105 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 	});
 
 	const handleReadingModeChange = (direction: ReadingDirection) => {
+		// Update the reading direction override in global store for immediate effect
 		setReadingDirectionOverride(direction);
 
-		if (direction === "webtoon" && !["width", "original"].includes(settings.fitMode)) {
-			setFitMode("width");
-		}
-
+		// If we have series context, also save to series-specific settings
 		if (seriesId) {
+			updateSetting("readingDirection", direction);
+
+			// Auto-adjust fit mode for webtoon
+			if (direction === "webtoon" && !["width", "original"].includes(effectiveSettings.fitMode)) {
+				updateSetting("fitMode", "width");
+			}
+
+			// Persist to backend
 			updateSeriesReadingDirection.mutate(direction);
+		} else {
+			// No series context - just adjust fit mode in global store if needed
+			if (direction === "webtoon" && !["width", "original"].includes(globalSettings.fitMode)) {
+				setGlobalFitMode("width");
+			}
 		}
 	};
 
-	const isContinuousMode = settings.pageLayout === "continuous" || effectiveReadingDirection === "webtoon";
+	const handleFitModeChange = (fitMode: FitMode) => {
+		if (seriesId) {
+			updateSetting("fitMode", fitMode);
+		} else {
+			setGlobalFitMode(fitMode);
+		}
+	};
+
+	const handleBackgroundChange = (bg: BackgroundColor) => {
+		if (seriesId) {
+			updateSetting("backgroundColor", bg);
+		} else {
+			useReaderStore.getState().setBackgroundColor(bg);
+		}
+	};
+
+	const handlePageLayoutChange = (layout: PageLayout) => {
+		if (seriesId) {
+			updateSetting("pageLayout", layout);
+		} else {
+			useReaderStore.getState().setPageLayout(layout);
+		}
+	};
+
+	const handleDoublePageWideAloneChange = (checked: boolean) => {
+		if (seriesId) {
+			updateSetting("doublePageShowWideAlone", checked);
+		} else {
+			useReaderStore.getState().setDoublePageShowWideAlone(checked);
+		}
+	};
+
+	const handleDoublePageStartOnOddChange = (checked: boolean) => {
+		if (seriesId) {
+			updateSetting("doublePageStartOnOdd", checked);
+		} else {
+			useReaderStore.getState().setDoublePageStartOnOdd(checked);
+		}
+	};
+
+	// Determine which settings to use for display
+	const displaySettings = seriesId ? effectiveSettings : globalSettings;
+
+	const isContinuousMode = displaySettings.pageLayout === "continuous" || effectiveReadingDirection === "webtoon";
 
 	return (
 		<Modal opened={opened} onClose={onClose} title="Reader Settings" size="lg">
 			<Stack gap="md">
+				{/* Series-specific settings banner */}
+				{seriesId && hasSeriesOverride && (
+					<Alert
+						variant="light"
+						color="blue"
+						icon={<IconBookmark size={16} />}
+						title="Using series-specific settings"
+						styles={{
+							root: { paddingBlock: "var(--mantine-spacing-xs)" },
+							title: { marginBottom: 0 },
+						}}
+					>
+						<Group justify="space-between" align="center" mt="xs">
+							<Text size="sm" c="dimmed">
+								Display settings are customized for this series
+							</Text>
+							<Button
+								size="xs"
+								variant="subtle"
+								color="gray"
+								leftSection={<IconRefresh size={14} />}
+								onClick={resetToGlobal}
+							>
+								Reset to global
+							</Button>
+						</Group>
+					</Alert>
+				)}
+
 				{/* General settings - full width at top */}
 				<Box>
 					<Text size="sm" fw={500} mb="xs">
@@ -136,7 +229,7 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 					<Text size="sm" fw={500}>Auto-hide toolbar</Text>
 					<Switch
 						size="sm"
-						checked={settings.autoHideToolbar}
+						checked={globalSettings.autoHideToolbar}
 						onChange={(e) => setAutoHideToolbar(e.currentTarget.checked)}
 					/>
 				</Group>
@@ -148,7 +241,7 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 					</Box>
 					<Switch
 						size="sm"
-						checked={settings.autoAdvanceToNextBook}
+						checked={globalSettings.autoAdvanceToNextBook}
 						onChange={(e) => setAutoAdvanceToNextBook(e.currentTarget.checked)}
 					/>
 				</Group>
@@ -157,109 +250,127 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 
 				{/* Two-column layout */}
 				<Grid gutter="xl">
-					{/* Left Column: Display */}
+					{/* Left Column: Display (Forkable settings) */}
 					<Grid.Col span={{ base: 12, sm: 6 }}>
-						<Stack gap="md">
-							<Title order={6} c="dimmed">Display</Title>
+						<Box
+							p="sm"
+							style={{
+								backgroundColor: seriesId && hasSeriesOverride
+									? "var(--mantine-color-blue-light)"
+									: undefined,
+								borderRadius: "var(--mantine-radius-sm)",
+								marginInline: "calc(-1 * var(--mantine-spacing-sm))",
+							}}
+						>
+							<Stack gap="md">
+								<Group justify="space-between" align="center">
+									<Title order={6} c="dimmed">
+										Display
+									</Title>
+									{seriesId && hasSeriesOverride && (
+										<Text size="xs" c="blue">Series</Text>
+									)}
+								</Group>
 
-							{/* Scale */}
-							<Box>
-								<Text size="sm" fw={500} mb="xs">
-									Scale
-								</Text>
-								{isContinuousMode ? (
-									<SegmentedControl
-										fullWidth
-										value={settings.fitMode === "width" || settings.fitMode === "original" ? settings.fitMode : "width"}
-										onChange={(value) => setFitMode(value as FitMode)}
-										data={[
-											{ label: "Fit width", value: "width" },
-											{ label: "Original", value: "original" },
-										]}
-									/>
-								) : (
-									<Select
-										value={settings.fitMode}
-										onChange={(value) => value && setFitMode(value as FitMode)}
-										data={[
-											{ label: "Fit screen", value: "screen" },
-											{ label: "Fit width", value: "width" },
-											{ label: "Fit width (shrink only)", value: "width-shrink" },
-											{ label: "Fit height", value: "height" },
-											{ label: "Original", value: "original" },
-										]}
-									/>
-								)}
-							</Box>
-
-							{/* Background */}
-							<Box>
-								<Text size="sm" fw={500} mb="xs">
-									Background
-								</Text>
-								<SegmentedControl
-									fullWidth
-									value={settings.backgroundColor}
-									onChange={(value) => setBackgroundColor(value as BackgroundColor)}
-									data={[
-										{ label: "Black", value: "black" },
-										{ label: "Gray", value: "gray" },
-										{ label: "White", value: "white" },
-									]}
-								/>
-							</Box>
-
-							{/* Page Layout - paginated only */}
-							{!isContinuousMode && (
+								{/* Scale */}
 								<Box>
 									<Text size="sm" fw={500} mb="xs">
-										Page layout
+										Scale
+									</Text>
+									{isContinuousMode ? (
+										<SegmentedControl
+											fullWidth
+											value={displaySettings.fitMode === "width" || displaySettings.fitMode === "original" ? displaySettings.fitMode : "width"}
+											onChange={(value) => handleFitModeChange(value as FitMode)}
+											data={[
+												{ label: "Fit width", value: "width" },
+												{ label: "Original", value: "original" },
+											]}
+										/>
+									) : (
+										<Select
+											value={displaySettings.fitMode}
+											onChange={(value) => value && handleFitModeChange(value as FitMode)}
+											data={[
+												{ label: "Fit screen", value: "screen" },
+												{ label: "Fit width", value: "width" },
+												{ label: "Fit width (shrink only)", value: "width-shrink" },
+												{ label: "Fit height", value: "height" },
+												{ label: "Original", value: "original" },
+											]}
+										/>
+									)}
+								</Box>
+
+								{/* Background */}
+								<Box>
+									<Text size="sm" fw={500} mb="xs">
+										Background
 									</Text>
 									<SegmentedControl
 										fullWidth
-										value={settings.pageLayout === "continuous" ? "single" : settings.pageLayout}
-										onChange={(value) => setPageLayout(value as PageLayout)}
+										value={displaySettings.backgroundColor}
+										onChange={(value) => handleBackgroundChange(value as BackgroundColor)}
 										data={[
-											{ label: "Single", value: "single" },
-											{ label: "Double", value: "double" },
+											{ label: "Black", value: "black" },
+											{ label: "Gray", value: "gray" },
+											{ label: "White", value: "white" },
 										]}
 									/>
 								</Box>
-							)}
 
-							{/* Double Page Options */}
-							{!isContinuousMode && settings.pageLayout === "double" && (
-								<Box
-									p="sm"
-									style={{
-										backgroundColor: "var(--mantine-color-dark-7)",
-										borderRadius: "var(--mantine-radius-sm)",
-									}}
-								>
-									<Stack gap="xs">
-										<Group justify="space-between">
-											<Text size="sm">Wide pages alone</Text>
-											<Switch
-												size="sm"
-												checked={settings.doublePageShowWideAlone}
-												onChange={(e) => setDoublePageShowWideAlone(e.currentTarget.checked)}
-											/>
-										</Group>
-										<Group justify="space-between">
-											<Text size="sm">Start on odd page</Text>
-											<Switch
-												size="sm"
-												checked={settings.doublePageStartOnOdd}
-												onChange={(e) => setDoublePageStartOnOdd(e.currentTarget.checked)}
-											/>
-										</Group>
-									</Stack>
-								</Box>
-							)}
-						</Stack>
+								{/* Page Layout - paginated only */}
+								{!isContinuousMode && (
+									<Box>
+										<Text size="sm" fw={500} mb="xs">
+											Page layout
+										</Text>
+										<SegmentedControl
+											fullWidth
+											value={displaySettings.pageLayout === "continuous" ? "single" : displaySettings.pageLayout}
+											onChange={(value) => handlePageLayoutChange(value as PageLayout)}
+											data={[
+												{ label: "Single", value: "single" },
+												{ label: "Double", value: "double" },
+											]}
+										/>
+									</Box>
+								)}
+
+								{/* Double Page Options */}
+								{!isContinuousMode && displaySettings.pageLayout === "double" && (
+									<Box
+										p="sm"
+										style={{
+											backgroundColor: "var(--mantine-color-dark-7)",
+											borderRadius: "var(--mantine-radius-sm)",
+										}}
+									>
+										<Stack gap="xs">
+											<Group justify="space-between">
+												<Text size="sm">Wide pages alone</Text>
+												<Switch
+													size="sm"
+													checked={displaySettings.doublePageShowWideAlone}
+													onChange={(e) => handleDoublePageWideAloneChange(e.currentTarget.checked)}
+												/>
+											</Group>
+											<Group justify="space-between">
+												<Text size="sm">Start on odd page</Text>
+												<Switch
+													size="sm"
+													checked={displaySettings.doublePageStartOnOdd}
+													onChange={(e) => handleDoublePageStartOnOddChange(e.currentTarget.checked)}
+												/>
+											</Group>
+										</Stack>
+									</Box>
+								)}
+							</Stack>
+						</Box>
 					</Grid.Col>
 
-					{/* Right Column: Mode-specific options */}
+					{/* Right Column: Mode-specific options (Global settings) */}
 					<Grid.Col span={{ base: 12, sm: 6 }}>
 						<Stack gap="lg">
 							{isContinuousMode ? (
@@ -270,10 +381,10 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 									<Box pb="md">
 										<Group justify="space-between" mb="xs">
 											<Text size="sm" fw={500}>Side padding</Text>
-											<Text size="xs" c="dimmed">{settings.webtoonSidePadding}%</Text>
+											<Text size="xs" c="dimmed">{globalSettings.webtoonSidePadding}%</Text>
 										</Group>
 										<Slider
-											value={settings.webtoonSidePadding}
+											value={globalSettings.webtoonSidePadding}
 											onChange={setWebtoonSidePadding}
 											min={0}
 											max={40}
@@ -290,10 +401,10 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 									<Box pb="md">
 										<Group justify="space-between" mb="xs">
 											<Text size="sm" fw={500}>Page gap</Text>
-											<Text size="xs" c="dimmed">{settings.webtoonPageGap}px</Text>
+											<Text size="xs" c="dimmed">{globalSettings.webtoonPageGap}px</Text>
 										</Group>
 										<Slider
-											value={settings.webtoonPageGap}
+											value={globalSettings.webtoonPageGap}
 											onChange={setWebtoonPageGap}
 											min={0}
 											max={20}
@@ -317,7 +428,7 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 										</Text>
 										<SegmentedControl
 											fullWidth
-											value={settings.pageTransition}
+											value={globalSettings.pageTransition}
 											onChange={(value) => setPageTransition(value as PageTransition)}
 											data={[
 												{ label: "None", value: "none" },
@@ -328,14 +439,14 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 									</Box>
 
 									{/* Transition Speed */}
-									{settings.pageTransition !== "none" && (
+									{globalSettings.pageTransition !== "none" && (
 										<Box pb="md">
 											<Group justify="space-between" mb="xs">
 												<Text size="sm" fw={500}>Speed</Text>
-												<Text size="xs" c="dimmed">{settings.transitionDuration}ms</Text>
+												<Text size="xs" c="dimmed">{globalSettings.transitionDuration}ms</Text>
 											</Group>
 											<Slider
-												value={settings.transitionDuration}
+												value={globalSettings.transitionDuration}
 												onChange={setTransitionDuration}
 												min={50}
 												max={500}
@@ -355,10 +466,10 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 								<Group justify="space-between" mb="xs">
 									<Text size="sm" fw={500}>Preload pages</Text>
 									<Text size="xs" c="dimmed" visibleFrom="sm">(Doubled for double-page layout)</Text>
-									<Text size="xs" c="dimmed">{settings.preloadPages}</Text>
+									<Text size="xs" c="dimmed">{globalSettings.preloadPages}</Text>
 								</Group>
 								<Slider
-									value={settings.preloadPages}
+									value={globalSettings.preloadPages}
 									onChange={setPreloadPages}
 									min={0}
 									max={5}
@@ -373,6 +484,30 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 						</Stack>
 					</Grid.Col>
 				</Grid>
+
+				{/* Fork button - shown when series context exists but no override yet */}
+				{seriesId && !hasSeriesOverride && (
+					<Box
+						p="sm"
+						style={{
+							backgroundColor: "var(--mantine-color-dark-6)",
+							borderRadius: "var(--mantine-radius-sm)",
+							textAlign: "center",
+						}}
+					>
+						<Button
+							variant="light"
+							color="blue"
+							leftSection={<IconBookmark size={16} />}
+							onClick={forkToSeries}
+						>
+							Customize Settings for This Series
+						</Button>
+						<Text size="xs" c="dimmed" mt="xs">
+							Display settings will be saved specifically for this series
+						</Text>
+					</Box>
+				)}
 
 				{/* Keyboard shortcuts - desktop only, compact */}
 				<Divider visibleFrom="sm" />

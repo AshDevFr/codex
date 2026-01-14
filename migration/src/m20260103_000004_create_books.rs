@@ -14,8 +14,6 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Books::Id).uuid().not_null().primary_key())
                     .col(ColumnDef::new(Books::SeriesId).uuid().not_null())
                     .col(ColumnDef::new(Books::LibraryId).uuid().not_null())
-                    .col(ColumnDef::new(Books::Title).string())
-                    .col(ColumnDef::new(Books::Number).decimal())
                     .col(ColumnDef::new(Books::FilePath).string().not_null())
                     .col(ColumnDef::new(Books::FileName).string().not_null())
                     .col(ColumnDef::new(Books::FileSize).big_integer().not_null())
@@ -100,17 +98,6 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        // Add index on title for search performance
-        manager
-            .create_index(
-                Index::create()
-                    .name("idx_books_title")
-                    .table(Books::Table)
-                    .col(Books::Title)
-                    .to_owned(),
-            )
-            .await?;
-
         // Add composite unique index on library_id + file_path
         // This ensures the same file path can only exist once per library
         manager
@@ -141,8 +128,6 @@ enum Books {
     Id,
     SeriesId,
     LibraryId,
-    Title,
-    Number,
     FilePath,
     FileName,
     FileSize,

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useAuthStore } from "@/store/authStore";
 import { useReaderStore } from "@/store/readerStore";
-import { fireEvent, renderWithProviders, screen } from "@/test/utils";
+import { fireEvent, renderWithProviders, screen, waitFor } from "@/test/utils";
+import { getSeriesStorageKey } from "./hooks/useSeriesReaderSettings";
 import { ReaderSettings } from "./ReaderSettings";
 
 // Mock the API client
@@ -14,6 +16,9 @@ vi.mock("@/api/client", () => ({
 	},
 }));
 
+const TEST_USER_ID = "user-test-123";
+const TEST_SERIES_ID = "series-test-456";
+
 describe("ReaderSettings", () => {
 	const defaultProps = {
 		opened: true,
@@ -22,6 +27,15 @@ describe("ReaderSettings", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		localStorage.clear();
+
+		// Set up authenticated user for series settings tests
+		useAuthStore.setState({
+			user: { id: TEST_USER_ID, username: "testuser", role: "user" },
+			token: "test-token",
+			isAuthenticated: true,
+		});
+
 		// Reset store to default state (LTR = paginated mode)
 		useReaderStore.setState({
 			settings: {
@@ -36,6 +50,9 @@ describe("ReaderSettings", () => {
 				toolbarHideDelay: 3000,
 				epubTheme: "light",
 				epubFontSize: 100,
+				epubFontFamily: "default",
+				epubLineHeight: 140,
+				epubMargin: 10,
 				preloadPages: 1,
 				doublePageShowWideAlone: true,
 				doublePageStartOnOdd: true,
@@ -43,6 +60,7 @@ describe("ReaderSettings", () => {
 				transitionDuration: 200,
 				webtoonSidePadding: 0,
 				webtoonPageGap: 0,
+				autoAdvanceToNextBook: false,
 			},
 			currentPage: 1,
 			totalPages: 10,
@@ -342,6 +360,287 @@ describe("ReaderSettings", () => {
 			fireEvent.click(closeButton);
 
 			expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	describe("Per-series settings", () => {
+		it("should show fork button when seriesId is provided and no override exists", async () => {
+			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+
+			await waitFor(() => {
+				expect(screen.getByRole("button", { name: /customize settings for this series/i })).toBeInTheDocument();
+			});
+		});
+
+		it("should not show fork button when no seriesId is provided", () => {
+			renderWithProviders(<ReaderSettings {...defaultProps} />);
+
+			expect(screen.queryByRole("button", { name: /customize settings for this series/i })).not.toBeInTheDocument();
+		});
+
+		it("should create series override when fork button is clicked", async () => {
+			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+
+			await waitFor(() => {
+				expect(screen.getByRole("button", { name: /customize settings for this series/i })).toBeInTheDocument();
+			});
+
+			fireEvent.click(screen.getByRole("button", { name: /customize settings for this series/i }));
+
+			// Should now show the series banner instead of fork button
+			await waitFor(() => {
+				expect(screen.getByText(/using series-specific settings/i)).toBeInTheDocument();
+			});
+
+			// Verify localStorage was updated
+			const storageKey = getSeriesStorageKey(TEST_USER_ID, TEST_SERIES_ID);
+			expect(localStorage.getItem(storageKey)).not.toBeNull();
+		});
+
+		it("should show series banner when override exists", async () => {
+			// Pre-populate localStorage with series override
+			const storageKey = getSeriesStorageKey(TEST_USER_ID, TEST_SERIES_ID);
+			const override = {
+				fitMode: "width",
+				pageLayout: "double",
+				readingDirection: "rtl",
+				backgroundColor: "gray",
+				doublePageShowWideAlone: false,
+				doublePageStartOnOdd: false,
+				createdAt: Date.now(),
+				version: 1,
+			};
+			localStorage.setItem(storageKey, JSON.stringify(override));
+
+			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+
+			await waitFor(() => {
+				expect(screen.getByText(/using series-specific settings/i)).toBeInTheDocument();
+			});
+		});
+
+		it("should show reset button in series banner", async () => {
+			// Pre-populate localStorage with series override
+			const storageKey = getSeriesStorageKey(TEST_USER_ID, TEST_SERIES_ID);
+			const override = {
+				fitMode: "width",
+				pageLayout: "single",
+				readingDirection: "ltr",
+				backgroundColor: "black",
+				doublePageShowWideAlone: true,
+				doublePageStartOnOdd: true,
+				createdAt: Date.now(),
+				version: 1,
+			};
+			localStorage.setItem(storageKey, JSON.stringify(override));
+
+			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+
+			await waitFor(() => {
+				expect(screen.getByRole("button", { name: /reset to global/i })).toBeInTheDocument();
+			});
+		});
+
+		it("should remove series override when reset button is clicked", async () => {
+			// Pre-populate localStorage with series override
+			const storageKey = getSeriesStorageKey(TEST_USER_ID, TEST_SERIES_ID);
+			const override = {
+				fitMode: "width",
+				pageLayout: "single",
+				readingDirection: "ltr",
+				backgroundColor: "black",
+				doublePageShowWideAlone: true,
+				doublePageStartOnOdd: true,
+				createdAt: Date.now(),
+				version: 1,
+			};
+			localStorage.setItem(storageKey, JSON.stringify(override));
+
+			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+
+			await waitFor(() => {
+				expect(screen.getByRole("button", { name: /reset to global/i })).toBeInTheDocument();
+			});
+
+			fireEvent.click(screen.getByRole("button", { name: /reset to global/i }));
+
+			// Should now show the fork button instead of series banner
+			await waitFor(() => {
+				expect(screen.getByRole("button", { name: /customize settings for this series/i })).toBeInTheDocument();
+			});
+
+			// Verify localStorage was cleared
+			expect(localStorage.getItem(storageKey)).toBeNull();
+		});
+
+		it("should show 'Series' label in Display section when override exists", async () => {
+			// Pre-populate localStorage with series override
+			const storageKey = getSeriesStorageKey(TEST_USER_ID, TEST_SERIES_ID);
+			const override = {
+				fitMode: "width",
+				pageLayout: "single",
+				readingDirection: "ltr",
+				backgroundColor: "black",
+				doublePageShowWideAlone: true,
+				doublePageStartOnOdd: true,
+				createdAt: Date.now(),
+				version: 1,
+			};
+			localStorage.setItem(storageKey, JSON.stringify(override));
+
+			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+
+			await waitFor(() => {
+				expect(screen.getByText("Series")).toBeInTheDocument();
+			});
+		});
+
+		it("should not show 'Series' label when no seriesId is provided", () => {
+			renderWithProviders(<ReaderSettings {...defaultProps} />);
+
+			expect(screen.queryByText("Series")).not.toBeInTheDocument();
+		});
+
+		it("should use series override settings for display when override exists", async () => {
+			// Pre-populate localStorage with series override that has different settings
+			const storageKey = getSeriesStorageKey(TEST_USER_ID, TEST_SERIES_ID);
+			const override = {
+				fitMode: "width",
+				pageLayout: "single",
+				readingDirection: "ltr",
+				backgroundColor: "gray",  // Different from global (black)
+				doublePageShowWideAlone: true,
+				doublePageStartOnOdd: true,
+				createdAt: Date.now(),
+				version: 1,
+			};
+			localStorage.setItem(storageKey, JSON.stringify(override));
+
+			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+
+			// Wait for hook to load
+			await waitFor(() => {
+				expect(screen.getByText(/using series-specific settings/i)).toBeInTheDocument();
+			});
+
+			// Gray should be selected (from series override), not Black (from global)
+			expect(screen.getByRole("radio", { name: "Gray" })).toBeChecked();
+		});
+
+		it("should persist background color change to series override when seriesId is provided", async () => {
+			// Pre-populate with series override
+			const storageKey = getSeriesStorageKey(TEST_USER_ID, TEST_SERIES_ID);
+			const override = {
+				fitMode: "screen",
+				pageLayout: "single",
+				readingDirection: "ltr",
+				backgroundColor: "black",
+				doublePageShowWideAlone: true,
+				doublePageStartOnOdd: true,
+				createdAt: Date.now(),
+				version: 1,
+			};
+			localStorage.setItem(storageKey, JSON.stringify(override));
+
+			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+
+			await waitFor(() => {
+				expect(screen.getByText(/using series-specific settings/i)).toBeInTheDocument();
+			});
+
+			// Change background color
+			fireEvent.click(screen.getByRole("radio", { name: "White" }));
+
+			// Verify localStorage was updated with new value
+			await waitFor(() => {
+				const stored = JSON.parse(localStorage.getItem(storageKey) || "{}");
+				expect(stored.backgroundColor).toBe("white");
+			});
+
+			// Global store should remain unchanged
+			expect(useReaderStore.getState().settings.backgroundColor).toBe("black");
+		});
+
+		it("should persist page layout change to series override when seriesId is provided", async () => {
+			// Pre-populate with series override
+			const storageKey = getSeriesStorageKey(TEST_USER_ID, TEST_SERIES_ID);
+			const override = {
+				fitMode: "screen",
+				pageLayout: "single",
+				readingDirection: "ltr",
+				backgroundColor: "black",
+				doublePageShowWideAlone: true,
+				doublePageStartOnOdd: true,
+				createdAt: Date.now(),
+				version: 1,
+			};
+			localStorage.setItem(storageKey, JSON.stringify(override));
+
+			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+
+			await waitFor(() => {
+				expect(screen.getByText(/using series-specific settings/i)).toBeInTheDocument();
+			});
+
+			// Change page layout
+			fireEvent.click(screen.getByRole("radio", { name: "Double" }));
+
+			// Verify localStorage was updated with new value
+			await waitFor(() => {
+				const stored = JSON.parse(localStorage.getItem(storageKey) || "{}");
+				expect(stored.pageLayout).toBe("double");
+			});
+
+			// Global store should remain unchanged
+			expect(useReaderStore.getState().settings.pageLayout).toBe("single");
+		});
+
+		it("should create series override when changing settings if none exists", async () => {
+			const storageKey = getSeriesStorageKey(TEST_USER_ID, TEST_SERIES_ID);
+
+			// Ensure no override exists initially
+			expect(localStorage.getItem(storageKey)).toBeNull();
+
+			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+
+			await waitFor(() => {
+				expect(screen.getByRole("button", { name: /customize settings for this series/i })).toBeInTheDocument();
+			});
+
+			// Change background color (should auto-create override)
+			fireEvent.click(screen.getByRole("radio", { name: "Gray" }));
+
+			// Verify override was created
+			await waitFor(() => {
+				const stored = JSON.parse(localStorage.getItem(storageKey) || "{}");
+				expect(stored.backgroundColor).toBe("gray");
+				expect(stored.version).toBe(1);
+			});
+		});
+
+		it("should not show Display section background when no override exists", async () => {
+			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+
+			await waitFor(() => {
+				expect(screen.getByRole("button", { name: /customize settings for this series/i })).toBeInTheDocument();
+			});
+
+			// The Display section should not have the series-specific styling
+			const displayHeader = screen.getByText("Display");
+			expect(displayHeader).toBeInTheDocument();
+
+			// "Series" label should not be present
+			expect(screen.queryByText("Series")).not.toBeInTheDocument();
+		});
+
+		it("should update global settings when no seriesId is provided", async () => {
+			renderWithProviders(<ReaderSettings {...defaultProps} />);
+
+			// Change background color
+			fireEvent.click(screen.getByRole("radio", { name: "White" }));
+
+			// Global store should be updated directly
+			expect(useReaderStore.getState().settings.backgroundColor).toBe("white");
 		});
 	});
 });

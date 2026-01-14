@@ -41,8 +41,6 @@ async fn create_test_book(
         id: Uuid::new_v4(),
         series_id: series.id,
         library_id: library.id,
-        title: None,
-        number: None,
         file_path: file_path.to_string(),
         file_name: PathBuf::from(file_path)
             .file_name()
@@ -86,8 +84,6 @@ async fn create_test_book_with_strategy(
         id: Uuid::new_v4(),
         series_id: series.id,
         library_id: library.id,
-        title: None,
-        number: None,
         file_path: file_path.to_string(),
         file_name: PathBuf::from(file_path)
             .file_name()
@@ -255,18 +251,18 @@ async fn test_analyze_book_without_comic_info() -> Result<()> {
     assert!(updated_book.analyzed);
     assert_eq!(updated_book.page_count, 2);
 
-    // Verify title is set from filename when no metadata is available
-    assert_eq!(
-        updated_book.title,
-        Some("no_metadata".to_string()),
-        "Title should be extracted from filename when ComicInfo.xml is missing"
-    );
-
-    // Verify no metadata record was created
+    // Verify title is set from filename when no ComicInfo.xml is available
+    // Title is now stored in book_metadata table
     let metadata = BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), book.id).await?;
     assert!(
-        metadata.is_none(),
-        "No metadata should be created without ComicInfo.xml"
+        metadata.is_some(),
+        "Metadata record should be created with title from filename"
+    );
+    let metadata = metadata.unwrap();
+    assert_eq!(
+        metadata.title,
+        Some("no_metadata".to_string()),
+        "Title should be extracted from filename when ComicInfo.xml is missing"
     );
 
     // Verify pages were still saved
@@ -323,16 +319,17 @@ async fn test_analyze_book_title_fallback_to_filename() -> Result<()> {
     assert!(updated_book.analyzed);
 
     // Verify title is set from filename when Title field is missing from ComicInfo
+    // Title is now stored in book_metadata table
+    let metadata = BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), book.id)
+        .await?
+        .expect("Metadata should exist even without Title");
     assert_eq!(
-        updated_book.title,
+        metadata.title,
         Some("my_awesome_book".to_string()),
         "Title should be extracted from filename when Title field is missing from ComicInfo.xml"
     );
 
-    // Verify metadata record was still created (other fields exist)
-    let metadata = BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), book.id)
-        .await?
-        .expect("Metadata should exist even without Title");
+    // Verify metadata record was created with other fields
     assert_eq!(metadata.writer, Some("Test Writer".to_string()));
     assert_eq!(metadata.publisher, Some("Test Publisher".to_string()));
 
@@ -392,8 +389,12 @@ async fn test_analyze_book_title_from_metadata_takes_precedence() -> Result<()> 
     assert!(updated_book.analyzed);
 
     // Verify title from metadata is used, not filename (MetadataFirst strategy)
+    // Title is now stored in book_metadata table
+    let metadata = BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), book.id)
+        .await?
+        .expect("Metadata should exist");
     assert_eq!(
-        updated_book.title,
+        metadata.title,
         Some("Actual Book Title from Metadata".to_string()),
         "Title from ComicInfo.xml should take precedence over filename with MetadataFirst strategy"
     );
@@ -444,8 +445,12 @@ async fn test_analyze_book_filename_no_extension() -> Result<()> {
     assert!(updated_book.analyzed);
 
     // Verify title is set from full filename when no extension exists in file_name
+    // Title is now stored in book_metadata table
+    let metadata = BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), book.id)
+        .await?
+        .expect("Metadata should exist");
     assert_eq!(
-        updated_book.title,
+        metadata.title,
         Some("noextension".to_string()),
         "Title should be the full filename when file_name has no extension"
     );
@@ -490,8 +495,12 @@ async fn test_analyze_book_filename_multiple_dots() -> Result<()> {
     assert!(updated_book.analyzed);
 
     // Verify title uses last dot as extension separator (book.vol.1)
+    // Title is now stored in book_metadata table
+    let metadata = BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), book.id)
+        .await?
+        .expect("Metadata should exist");
     assert_eq!(
-        updated_book.title,
+        metadata.title,
         Some("book.vol.1".to_string()),
         "Title should extract filename up to the last dot when multiple dots exist"
     );
@@ -548,8 +557,12 @@ async fn test_analyze_book_empty_title_in_comic_info() -> Result<()> {
     // Verify title falls back to filename when Title field is empty string
     // Empty <Title></Title> in XML becomes Some("") in Rust, which we filter out
     // and fallback to filename
+    // Title is now stored in book_metadata table
+    let metadata = BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), book.id)
+        .await?
+        .expect("Metadata should exist");
     assert_eq!(
-        updated_book.title,
+        metadata.title,
         Some("empty_title_test".to_string()),
         "Title should fallback to filename when ComicInfo Title is empty string"
     );
@@ -768,8 +781,6 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
         id: Uuid::new_v4(),
         series_id: series.id,
         library_id: library.id,
-        title: None,
-        number: None,
         file_path: file_path.to_string_lossy().to_string(),
         file_name: "book1.cbz".to_string(),
         file_size: 0,
@@ -827,8 +838,6 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
         id: Uuid::new_v4(),
         series_id: series.id,
         library_id: library.id,
-        title: None,
-        number: None,
         file_path: file_path2.to_string_lossy().to_string(),
         file_name: "book2.cbz".to_string(),
         file_size: 0,

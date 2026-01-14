@@ -44,6 +44,12 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(SeriesMetadata::TotalBookCount).integer()) // Expected total (for ongoing series)
                     // Lock fields (prevent auto-refresh from overwriting user edits)
                     .col(
+                        ColumnDef::new(SeriesMetadata::TotalBookCountLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
                         ColumnDef::new(SeriesMetadata::TitleLock)
                             .boolean()
                             .not_null()
@@ -164,6 +170,7 @@ pub enum SeriesMetadata {
     Year,
     TotalBookCount,
     // Lock fields
+    TotalBookCountLock,
     TitleLock,
     TitleSortLock,
     SummaryLock,

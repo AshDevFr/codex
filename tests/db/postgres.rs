@@ -102,14 +102,12 @@ async fn test_postgres_series_book_relationship() {
         .await
         .unwrap();
 
-    // Create book
+    // Create book (title and number are now in book_metadata table)
     let now = Utc::now();
     let book_model = books::Model {
         id: Uuid::new_v4(),
         series_id: series.id,
         library_id: library.id,
-        title: None,
-        number: None,
         file_path: "/test/postgres_book.cbz".to_string(),
         file_name: "postgres_book.cbz".to_string(),
         file_size: 1024,
@@ -142,7 +140,8 @@ async fn test_postgres_series_book_relationship() {
     let (book_result, series_result) = book_with_series;
     assert_eq!(book_result.id, book.id);
     assert_eq!(book_result.file_name, "postgres_book.cbz");
-    assert_eq!(series_result.unwrap().name, "Postgres Series");
+    // Series name is now in series_metadata table
+    assert!(series_result.is_some());
 
     // Cleanup
     LibraryRepository::delete(conn, library.id).await.unwrap();
@@ -245,12 +244,11 @@ async fn test_postgres_metrics_repository() {
     let book_sizes = vec![1_000_000_i64, 2_500_000, 500_000, 3_000_000]; // Total: 7,000,000
 
     for (idx, size) in book_sizes.iter().enumerate() {
+        // Title and number are now in book_metadata table
         let book_model = books::Model {
             id: Uuid::new_v4(),
             series_id: series.id,
             library_id: library.id,
-            title: Some(format!("Metrics Book {}", idx + 1)),
-            number: None,
             file_path: format!("/test/metrics/book{}.cbz", idx + 1),
             file_name: format!("book{}.cbz", idx + 1),
             file_size: *size,

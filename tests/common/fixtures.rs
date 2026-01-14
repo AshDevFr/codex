@@ -66,8 +66,6 @@ pub fn create_test_book(
         id: Uuid::new_v4(),
         series_id,
         library_id,
-        title: None,
-        number: None,
         file_path: file_path.to_string(),
         file_name: file_name.to_string(),
         file_size: 1024,
@@ -176,7 +174,7 @@ pub async fn create_test_book_with_hash(
     db: &DatabaseConnection,
     _library: &libraries::Model,
     series: &series::Model,
-    title: &str,
+    _title: &str,
     file_path: &str,
     file_hash: &str,
 ) -> books::Model {
@@ -184,8 +182,6 @@ pub async fn create_test_book_with_hash(
         id: Uuid::new_v4(),
         series_id: series.id,
         library_id: series.library_id,
-        title: Some(title.to_string()),
-        number: None,
         file_path: file_path.to_string(),
         file_name: file_path.split('/').last().unwrap_or(file_path).to_string(),
         file_size: 1024,
@@ -203,5 +199,6 @@ pub async fn create_test_book_with_hash(
         updated_at: Utc::now(),
     };
 
+    // Note: title is now stored in book_metadata table, not in books table
     BookRepository::create(db, &book, None).await.unwrap()
 }

@@ -14,9 +14,6 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub library_id: Uuid,
-    pub name: String,
-    pub normalized_name: String,
-    pub book_count: i32,
     pub fingerprint: Option<String>,
     pub path: Option<String>,
     pub custom_metadata: Option<String>, // JSON escape hatch for user-defined fields

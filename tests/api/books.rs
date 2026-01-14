@@ -28,20 +28,19 @@ async fn create_admin_and_token(
 }
 
 // Helper to create a test book
+// Note: title is now in book_metadata table, not books table
 fn create_test_book_model(
     series_id: uuid::Uuid,
     library_id: uuid::Uuid,
     path: &str,
     name: &str,
-    title: Option<String>,
+    _title: Option<String>, // No longer used - title is in book_metadata
 ) -> codex::db::entities::books::Model {
     use chrono::Utc;
     codex::db::entities::books::Model {
         id: uuid::Uuid::new_v4(),
         series_id,
         library_id,
-        title,
-        number: None,
         file_path: path.to_string(),
         file_name: name.to_string(),
         file_size: 1024,
@@ -58,6 +57,30 @@ fn create_test_book_model(
         thumbnail_path: None,
         thumbnail_generated_at: None,
     }
+}
+
+// Helper to create book with metadata (title is now in book_metadata table)
+async fn create_test_book_with_metadata(
+    db: &sea_orm::DatabaseConnection,
+    series_id: uuid::Uuid,
+    library_id: uuid::Uuid,
+    path: &str,
+    name: &str,
+    title: Option<String>,
+) -> codex::db::entities::books::Model {
+    use codex::db::repositories::{BookMetadataRepository, BookRepository};
+
+    let book = create_test_book_model(series_id, library_id, path, name, title.clone());
+    let created = BookRepository::create(db, &book, None).await.unwrap();
+
+    // Create metadata with title if provided
+    if title.is_some() {
+        BookMetadataRepository::create_with_title_and_number(db, created.id, title, None)
+            .await
+            .unwrap();
+    }
+
+    created
 }
 
 // ============================================================================
@@ -579,17 +602,27 @@ async fn test_list_on_deck_books() {
         .unwrap();
 
     // Create books in the series (numbered 1-5)
+    // Note: number is now in book_metadata table
+    use codex::db::repositories::BookMetadataRepository;
     let mut book_ids = Vec::new();
     for i in 1..=5 {
-        let mut book = create_test_book_model(
+        let book = create_test_book_model(
             series.id,
             library.id,
             &format!("/test/book{}.cbz", i),
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),
         );
-        book.number = Some(sea_orm::prelude::Decimal::from(i));
         let created = BookRepository::create(&db, &book, None).await.unwrap();
+        // Create book metadata with number
+        BookMetadataRepository::create_with_title_and_number(
+            &db,
+            created.id,
+            Some(format!("Book {}", i)),
+            Some(sea_orm::prelude::Decimal::from(i)),
+        )
+        .await
+        .unwrap();
         book_ids.push(created.id);
     }
 
@@ -642,17 +675,27 @@ async fn test_list_on_deck_excludes_series_with_in_progress() {
         .unwrap();
 
     // Create books in the series (numbered 1-5)
+    // Note: number is now in book_metadata table
+    use codex::db::repositories::BookMetadataRepository;
     let mut book_ids = Vec::new();
     for i in 1..=5 {
-        let mut book = create_test_book_model(
+        let book = create_test_book_model(
             series.id,
             library.id,
             &format!("/test/book{}.cbz", i),
             &format!("book{}.cbz", i),
             Some(format!("Book {}", i)),
         );
-        book.number = Some(sea_orm::prelude::Decimal::from(i));
         let created = BookRepository::create(&db, &book, None).await.unwrap();
+        // Create book metadata with number
+        BookMetadataRepository::create_with_title_and_number(
+            &db,
+            created.id,
+            Some(format!("Book {}", i)),
+            Some(sea_orm::prelude::Decimal::from(i)),
+        )
+        .await
+        .unwrap();
         book_ids.push(created.id);
     }
 
@@ -814,29 +857,31 @@ async fn test_list_library_recently_added_books() {
         .await
         .unwrap();
 
-    // Create books in library 1
+    // Create books in library 1 with metadata
     for i in 1..=3 {
-        let book = create_test_book_model(
+        create_test_book_with_metadata(
+            &db,
             series1.id,
             library1.id,
             &format!("/test1/book{}.cbz", i),
             &format!("book{}.cbz", i),
             Some(format!("Library 1 Book {}", i)),
-        );
-        BookRepository::create(&db, &book, None).await.unwrap();
+        )
+        .await;
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     }
 
-    // Create books in library 2
+    // Create books in library 2 with metadata
     for i in 1..=2 {
-        let book = create_test_book_model(
+        create_test_book_with_metadata(
+            &db,
             series2.id,
             library2.id,
             &format!("/test2/book{}.cbz", i),
             &format!("book{}.cbz", i),
             Some(format!("Library 2 Book {}", i)),
-        );
-        BookRepository::create(&db, &book, None).await.unwrap();
+        )
+        .await;
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     }
 
@@ -881,15 +926,16 @@ async fn test_books_include_series_name() {
         .await
         .unwrap();
 
-    // Create a book with a title
-    let book = create_test_book_model(
+    // Create a book with a title (in book_metadata table)
+    create_test_book_with_metadata(
+        &db,
         series.id,
         library.id,
         "/test/book1.cbz",
         "book1.cbz",
         Some("Book Title".to_string()),
-    );
-    BookRepository::create(&db, &book, None).await.unwrap();
+    )
+    .await;
 
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -999,6 +1045,7 @@ async fn test_books_filename_fallback_with_multiple_extensions() {
 // ============================================================================
 
 // Helper to create a test book with an analysis error
+// Note: title is now in book_metadata table, not books table
 fn create_test_book_with_error(
     series_id: uuid::Uuid,
     library_id: uuid::Uuid,
@@ -1011,8 +1058,6 @@ fn create_test_book_with_error(
         id: uuid::Uuid::new_v4(),
         series_id,
         library_id,
-        title: Some(name.to_string()),
-        number: None,
         file_path: path.to_string(),
         file_name: name.to_string(),
         file_size: 1024,
@@ -2455,30 +2500,34 @@ async fn test_list_books_filtered_by_title() {
         .await
         .unwrap();
 
-    let book1 = create_test_book_model(
+    // Create books with metadata (title is now in book_metadata table)
+    create_test_book_with_metadata(
+        &db,
         series.id,
         library.id,
         "/book1.cbz",
         "book1.cbz",
         Some("Chapter 1".to_string()),
-    );
-    let book2 = create_test_book_model(
+    )
+    .await;
+    create_test_book_with_metadata(
+        &db,
         series.id,
         library.id,
         "/book2.cbz",
         "book2.cbz",
         Some("Chapter 2".to_string()),
-    );
-    let book3 = create_test_book_model(
+    )
+    .await;
+    create_test_book_with_metadata(
+        &db,
         series.id,
         library.id,
         "/book3.cbz",
         "book3.cbz",
         Some("Volume 1".to_string()),
-    );
-    BookRepository::create(&db, &book1, None).await.unwrap();
-    BookRepository::create(&db, &book2, None).await.unwrap();
-    BookRepository::create(&db, &book3, None).await.unwrap();
+    )
+    .await;
 
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -2516,30 +2565,34 @@ async fn test_list_books_filtered_all_of() {
         .await
         .unwrap();
 
-    let book1 = create_test_book_model(
+    // Create books with metadata (title is now in book_metadata table)
+    create_test_book_with_metadata(
+        &db,
         series1.id,
         library.id,
         "/s1ch1.cbz",
         "s1ch1.cbz",
         Some("Chapter 1".to_string()),
-    );
-    let book2 = create_test_book_model(
+    )
+    .await;
+    create_test_book_with_metadata(
+        &db,
         series1.id,
         library.id,
         "/s1ch2.cbz",
         "s1ch2.cbz",
         Some("Volume 1".to_string()),
-    );
-    let book3 = create_test_book_model(
+    )
+    .await;
+    create_test_book_with_metadata(
+        &db,
         series2.id,
         library.id,
         "/s2ch1.cbz",
         "s2ch1.cbz",
         Some("Chapter 1".to_string()),
-    );
-    BookRepository::create(&db, &book1, None).await.unwrap();
-    BookRepository::create(&db, &book2, None).await.unwrap();
-    BookRepository::create(&db, &book3, None).await.unwrap();
+    )
+    .await;
 
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;

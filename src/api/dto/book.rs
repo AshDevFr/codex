@@ -671,3 +671,42 @@ pub struct AdjacentBooksResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next: Option<BookDto>,
 }
+
+/// PATCH request for updating book core fields (title, number)
+///
+/// Only provided fields will be updated. Absent fields are unchanged.
+/// Explicitly null fields will be cleared.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PatchBookRequest {
+    /// Book title (display name)
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "Chapter 1: The Beginning", nullable = true)]
+    pub title: super::patch::PatchValue<String>,
+
+    /// Book number (for sorting within series). Supports decimals like 1.5 for special chapters.
+    #[serde(default)]
+    #[schema(value_type = Option<f64>, example = 1.5, nullable = true)]
+    pub number: super::patch::PatchValue<f64>,
+}
+
+/// Response for book update
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BookUpdateResponse {
+    /// Book ID
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440001")]
+    pub id: uuid::Uuid,
+
+    /// Updated title
+    #[schema(example = "Chapter 1: The Beginning")]
+    pub title: Option<String>,
+
+    /// Updated number
+    #[schema(example = 1.5)]
+    pub number: Option<f64>,
+
+    /// Last update timestamp
+    #[schema(example = "2024-01-15T10:30:00Z")]
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}

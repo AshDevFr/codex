@@ -121,8 +121,7 @@ impl ThumbnailService {
 
         info!(
             "Generating thumbnail for book {} ({})",
-            book.id,
-            book.title.as_ref().unwrap_or(&book.file_name)
+            book.id, book.file_name
         );
 
         // Get settings from database

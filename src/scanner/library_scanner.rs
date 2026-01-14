@@ -849,12 +849,11 @@ async fn process_file(
         );
     } else {
         // Create new book WITHOUT analysis
+        // Note: title and number are now stored in book_metadata (populated during analysis)
         let book_model = books::Model {
             id: Uuid::new_v4(),
             series_id: series_model.id,
             library_id: series_model.library_id,
-            title: None,  // Will be filled during analysis phase
-            number: None, // Will be filled during analysis phase
             file_path: path_str.clone(),
             file_name: file_path
                 .file_name()
@@ -877,7 +876,7 @@ async fn process_file(
         };
 
         BookRepository::create(db, &book_model, event_broadcaster).await?;
-        SeriesRepository::increment_book_count(db, series_model.id).await?;
+        // Note: book_count is now computed dynamically via SeriesRepository::get_book_count()
 
         result.books_created += 1;
         progress.increment_books();
@@ -924,7 +923,10 @@ fn calculate_series_fingerprint(file_paths: &[&PathBuf]) -> String {
     format!("{:x}", hasher.finalize())
 }
 
-/// Find or create a series by name, with optional fingerprint matching
+/// Find or create a series by fingerprint only
+///
+/// This function uses fingerprint-only matching (no normalized name fallback).
+/// If two directories have similar names but different fingerprints, they remain separate series.
 async fn find_or_create_series(
     db: &DatabaseConnection,
     library_id: Uuid,
@@ -933,54 +935,40 @@ async fn find_or_create_series(
     path: Option<&str>,
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
 ) -> Result<series::Model> {
+    use crate::db::repositories::SeriesMetadataRepository;
+
     let series_list = SeriesRepository::list_by_library(db, library_id).await?;
 
-    // 1. Try fingerprint match first (most reliable for rename detection)
+    // Try fingerprint match only (no normalized name fallback)
     if let Some(fp) = fingerprint {
         if let Some(existing) = series_list
             .iter()
             .find(|s| s.fingerprint.as_ref().map(|f| f == fp).unwrap_or(false))
         {
-            info!(
-                "Matched series by fingerprint: {} -> {}",
-                series_name, existing.name
-            );
-
-            // Update name if changed (series was renamed)
-            if existing.name != series_name {
+            // Get the series metadata to check the current title
+            if let Ok(Some(metadata)) =
+                SeriesMetadataRepository::get_by_series_id(db, existing.id).await
+            {
                 info!(
-                    "Detected series rename: {} -> {}",
-                    existing.name, series_name
+                    "Matched series by fingerprint: {} -> {}",
+                    series_name, metadata.title
                 );
-                SeriesRepository::update_name(db, existing.id, series_name).await?;
 
-                // Return updated series
-                return SeriesRepository::get_by_id(db, existing.id)
-                    .await?
-                    .ok_or_else(|| anyhow::anyhow!("Series not found after update"));
+                // Update title if changed and not locked (series directory was renamed)
+                if metadata.title != series_name && !metadata.title_lock {
+                    info!(
+                        "Detected series rename: {} -> {}",
+                        metadata.title, series_name
+                    );
+                    SeriesRepository::update_name(db, existing.id, series_name).await?;
+                }
             }
 
             return Ok(existing.clone());
         }
     }
 
-    // 2. Fallback to normalized name match
-    let normalized_search = series_name.to_lowercase();
-    if let Some(existing) = series_list
-        .iter()
-        .find(|s| s.normalized_name.to_lowercase() == normalized_search)
-    {
-        // Update fingerprint if missing
-        if existing.fingerprint.is_none() && fingerprint.is_some() {
-            info!("Adding fingerprint to existing series: {}", existing.name);
-            SeriesRepository::update_fingerprint(db, existing.id, fingerprint.map(String::from))
-                .await?;
-        }
-
-        return Ok(existing.clone());
-    }
-
-    // 3. Create new series with fingerprint
+    // Create new series with fingerprint (title stored in series_metadata)
     SeriesRepository::create_with_fingerprint(
         db,
         library_id,

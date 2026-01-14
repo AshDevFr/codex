@@ -219,6 +219,21 @@ export function BookMetadataEditModal({
 	// Save mutation
 	const saveMutation = useMutation({
 		mutationFn: async () => {
+			// Update book core fields (title, number) if changed
+			const titleChanged = formState.title !== originalFormState?.title;
+			const numberChanged = formState.number !== originalFormState?.number;
+
+			if (titleChanged || numberChanged) {
+				const patchData: { title?: string | null; number?: number | null } = {};
+				if (titleChanged) {
+					patchData.title = formState.title || null;
+				}
+				if (numberChanged) {
+					patchData.number = formState.number ? Number.parseFloat(formState.number) : null;
+				}
+				await booksApi.patch(bookId, patchData);
+			}
+
 			// Update metadata
 			await booksApi.patchMetadata(bookId, {
 				summary: formState.summary || null,
@@ -307,35 +322,20 @@ export function BookMetadataEditModal({
 				locked={false}
 				onLockChange={() => {}}
 				originalValue={originalFormState?.title}
-				disabled
-				description="Title cannot be changed from this modal"
+				placeholder="Book title"
+				description="Display name for this book"
 			/>
 
-			<Group grow>
-				<LockableInput
-					label="Number"
-					value={formState.number}
-					onChange={(v) => updateField("number", v)}
-					locked={false}
-					onLockChange={() => {}}
-					originalValue={originalFormState?.number}
-					placeholder="Book number"
-					disabled
-					description="Book number in series"
-				/>
-
-				<LockableInput
-					label="Sort Number"
-					value={formState.sortNumber}
-					onChange={(v) => updateField("sortNumber", v)}
-					locked={false}
-					onLockChange={() => {}}
-					originalValue={originalFormState?.sortNumber}
-					placeholder="Sort number"
-					disabled
-					description="You can use decimal numbers"
-				/>
-			</Group>
+			<LockableInput
+				label="Number"
+				value={formState.number}
+				onChange={(v) => updateField("number", v)}
+				locked={false}
+				onLockChange={() => {}}
+				originalValue={originalFormState?.number}
+				placeholder="e.g., 1, 2.5, 10"
+				description="Book number in series (decimals allowed for sorting)"
+			/>
 
 			<LockableTextarea
 				label="Summary"

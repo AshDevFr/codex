@@ -17,9 +17,6 @@ use std::sync::Arc;
 pub struct SeriesWithAggregates {
     pub id: Uuid,
     pub library_id: Uuid,
-    pub name: String,
-    pub normalized_name: String,
-    pub book_count: i32,
     pub fingerprint: Option<String>,
     pub path: Option<String>,
     pub custom_metadata: Option<String>,
@@ -34,9 +31,6 @@ impl From<SeriesWithAggregates> for series::Model {
         series::Model {
             id: s.id,
             library_id: s.library_id,
-            name: s.name,
-            normalized_name: s.normalized_name,
-            book_count: s.book_count,
             fingerprint: s.fingerprint,
             path: s.path,
             custom_metadata: s.custom_metadata,
@@ -82,15 +76,11 @@ impl SeriesRepository {
         event_broadcaster: Option<&Arc<EventBroadcaster>>,
     ) -> Result<series::Model> {
         let now = Utc::now();
-        let normalized_name = Self::normalize_name(name);
         let series_id = Uuid::new_v4();
 
         let series = series::ActiveModel {
             id: Set(series_id),
             library_id: Set(library_id),
-            name: Set(name.to_string()),
-            normalized_name: Set(normalized_name),
-            book_count: Set(0),
             fingerprint: Set(fingerprint),
             path: Set(path),
             custom_metadata: Set(None),
@@ -115,6 +105,7 @@ impl SeriesRepository {
             year: Set(None),
             total_book_count: Set(None),
             // Lock fields default to false
+            total_book_count_lock: Set(false),
             title_lock: Set(false),
             title_sort_lock: Set(false),
             summary_lock: Set(false),
@@ -178,12 +169,12 @@ impl SeriesRepository {
         db: &DatabaseConnection,
         library_id: Uuid,
     ) -> Result<Vec<series::Model>> {
-        // Join with series_metadata to sort by title_sort
+        // Join with series_metadata to sort by title_sort/title
         Series::find()
             .filter(series::Column::LibraryId.eq(library_id))
             .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
             .order_by_asc(series_metadata::Column::TitleSort)
-            .order_by_asc(series::Column::Name)
+            .order_by_asc(series_metadata::Column::Title)
             .all(db)
             .await
             .context("Failed to list series by library")
@@ -208,7 +199,7 @@ impl SeriesRepository {
         Series::find()
             .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
             .order_by_asc(series_metadata::Column::TitleSort)
-            .order_by_asc(series::Column::Name)
+            .order_by_asc(series_metadata::Column::Title)
             .all(db)
             .await
             .context("Failed to list all series")
@@ -289,6 +280,19 @@ impl SeriesRepository {
                     .await
                     .context("Failed to list series with release date sort")
             }
+            SeriesSortField::BookCount => {
+                // Dynamic book count - join with books and count
+                // For now, order by series.id as a fallback (book count will be computed dynamically)
+                // TODO: Consider adding a computed/virtual column or subquery for book count sorting
+                Series::find()
+                    .filter(series::Column::LibraryId.eq(library_id))
+                    .order_by(series::Column::CreatedAt, order)
+                    .offset(offset)
+                    .limit(limit)
+                    .all(db)
+                    .await
+                    .context("Failed to list series with book count sort")
+            }
             _ => {
                 // Simple sorts that may use metadata for name sort
                 let query = Series::find().filter(series::Column::LibraryId.eq(library_id));
@@ -296,18 +300,17 @@ impl SeriesRepository {
                 // Apply sort
                 let query = match sort.field {
                     SeriesSortField::Name => {
-                        // Sort by title_sort first (if set), then name
+                        // Sort by title_sort first (if set), then title from metadata
                         query
                             .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
                             .order_by(series_metadata::Column::TitleSort, order.clone())
-                            .order_by(series::Column::Name, order)
+                            .order_by(series_metadata::Column::Title, order)
                     }
                     SeriesSortField::DateAdded => query.order_by(series::Column::CreatedAt, order),
                     SeriesSortField::DateUpdated => {
                         query.order_by(series::Column::UpdatedAt, order)
                     }
-                    SeriesSortField::BookCount => query.order_by(series::Column::BookCount, order),
-                    _ => query, // Handled above (DateRead, ReleaseDate)
+                    _ => query, // Handled above (DateRead, ReleaseDate, BookCount)
                 };
 
                 query
@@ -396,48 +399,60 @@ impl SeriesRepository {
             .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
             .group_by(series::Column::Id)
             .order_by_asc(series_metadata::Column::TitleSort)
-            .order_by_asc(series::Column::Name)
+            .order_by_asc(series_metadata::Column::Title)
             .all(db)
             .await
             .context("Failed to list in-progress series")
     }
 
-    /// Search series by normalized name
+    /// Search series by title (case-insensitive via series_metadata)
     pub async fn search_by_name(
         db: &DatabaseConnection,
         query: &str,
     ) -> Result<Vec<series::Model>> {
         let pattern = format!("%{}%", query.to_lowercase());
 
+        // Use LOWER(title) LIKE pattern from series_metadata for case-insensitive search
+        let lower_title = Func::lower(Expr::col((
+            series_metadata::Entity,
+            series_metadata::Column::Title,
+        )));
+        let search_condition = Condition::all().add(Expr::expr(lower_title).like(&pattern));
+
         Series::find()
-            .filter(series::Column::NormalizedName.contains(&pattern))
-            .order_by_asc(series::Column::Name)
+            .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+            .filter(search_condition)
+            .order_by_asc(series_metadata::Column::Title)
             .limit(50)
             .all(db)
             .await
             .context("Failed to search series by name")
     }
 
-    /// Full-text search series by name (case-insensitive using LOWER())
+    /// Full-text search series by title (case-insensitive using LOWER())
     pub async fn full_text_search(
         db: &DatabaseConnection,
         query: &str,
     ) -> Result<Vec<series::Model>> {
         let pattern = format!("%{}%", query.to_lowercase());
 
-        // Use LOWER(name) LIKE pattern for case-insensitive search
-        let lower_name = Func::lower(Expr::col(series::Column::Name));
-        let search_condition = Condition::all().add(Expr::expr(lower_name).like(&pattern));
+        // Use LOWER(title) LIKE pattern from series_metadata for case-insensitive search
+        let lower_title = Func::lower(Expr::col((
+            series_metadata::Entity,
+            series_metadata::Column::Title,
+        )));
+        let search_condition = Condition::all().add(Expr::expr(lower_title).like(&pattern));
 
         Series::find()
+            .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
             .filter(search_condition)
-            .order_by_asc(series::Column::Name)
+            .order_by_asc(series_metadata::Column::Title)
             .all(db)
             .await
             .context("Failed to execute full-text search")
     }
 
-    /// Full-text search series by name within candidate IDs (case-insensitive)
+    /// Full-text search series by title within candidate IDs (case-insensitive)
     pub async fn full_text_search_filtered(
         db: &DatabaseConnection,
         query: &str,
@@ -449,15 +464,19 @@ impl SeriesRepository {
 
         let pattern = format!("%{}%", query.to_lowercase());
 
-        // Use LOWER(name) LIKE pattern for case-insensitive search
-        let lower_name = Func::lower(Expr::col(series::Column::Name));
+        // Use LOWER(title) LIKE pattern from series_metadata for case-insensitive search
+        let lower_title = Func::lower(Expr::col((
+            series_metadata::Entity,
+            series_metadata::Column::Title,
+        )));
         let search_condition = Condition::all()
-            .add(Expr::expr(lower_name).like(&pattern))
+            .add(Expr::expr(lower_title).like(&pattern))
             .add(series::Column::Id.is_in(candidate_ids.to_vec()));
 
         Series::find()
+            .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
             .filter(search_condition)
-            .order_by_asc(series::Column::Name)
+            .order_by_asc(series_metadata::Column::Title)
             .all(db)
             .await
             .context("Failed to execute full-text search")
@@ -472,9 +491,6 @@ impl SeriesRepository {
         let active = series::ActiveModel {
             id: Set(series_model.id),
             library_id: Set(series_model.library_id),
-            name: Set(series_model.name.clone()),
-            normalized_name: Set(series_model.normalized_name.clone()),
-            book_count: Set(series_model.book_count),
             fingerprint: Set(series_model.fingerprint.clone()),
             path: Set(series_model.path.clone()),
             custom_metadata: Set(series_model.custom_metadata.clone()),
@@ -500,24 +516,27 @@ impl SeriesRepository {
         Ok(())
     }
 
-    /// Update series name (useful when folder is renamed but fingerprint matches)
+    /// Update series name/title (updates series_metadata.title)
+    /// Note: This now updates the title in series_metadata, not the series table
     pub async fn update_name(db: &DatabaseConnection, id: Uuid, name: &str) -> Result<()> {
+        use crate::db::repositories::SeriesMetadataRepository;
+
+        // Update the title in series_metadata
+        SeriesMetadataRepository::update_title(db, id, name.to_string(), None).await?;
+
+        // Also update the series updated_at timestamp
         let series = Series::find_by_id(id)
             .one(db)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Series not found"))?;
 
-        let normalized_name = Self::normalize_name(name);
-
         let mut active: series::ActiveModel = series.into();
-        active.name = Set(name.to_string());
-        active.normalized_name = Set(normalized_name);
         active.updated_at = Set(Utc::now());
 
         active
             .update(db)
             .await
-            .context("Failed to update series name")?;
+            .context("Failed to update series timestamp")?;
 
         Ok(())
     }
@@ -545,23 +564,16 @@ impl SeriesRepository {
         Ok(())
     }
 
-    /// Increment book count for a series
-    pub async fn increment_book_count(db: &DatabaseConnection, id: Uuid) -> Result<()> {
-        let series_model = Series::find_by_id(id)
-            .one(db)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("Series not found"))?;
-
-        let mut active: series::ActiveModel = series_model.into();
-        active.book_count = Set(active.book_count.unwrap() + 1);
-        active.updated_at = Set(Utc::now());
-
-        active
-            .update(db)
+    /// Count books in a series (computed dynamically, not stored on series)
+    pub async fn get_book_count(db: &DatabaseConnection, id: Uuid) -> Result<i64> {
+        let count = books::Entity::find()
+            .filter(books::Column::SeriesId.eq(id))
+            .filter(books::Column::Deleted.eq(false))
+            .count(db)
             .await
-            .context("Failed to increment book count")?;
+            .context("Failed to count books in series")?;
 
-        Ok(())
+        Ok(count as i64)
     }
 
     /// Delete a series
@@ -717,10 +729,17 @@ mod tests {
                 .await
                 .unwrap();
 
-        assert_eq!(series.name, "Test Series");
         assert_eq!(series.library_id, library.id);
-        assert_eq!(series.book_count, 0);
-        assert_eq!(series.normalized_name, "test series");
+
+        // Title is now in series_metadata
+        let metadata = crate::db::repositories::SeriesMetadataRepository::get_by_series_id(
+            db.sea_orm_connection(),
+            series.id,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(metadata.title, "Test Series");
     }
 
     #[tokio::test]
@@ -747,7 +766,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(retrieved.id, created.id);
-        assert_eq!(retrieved.name, "Test Series");
+        assert_eq!(retrieved.library_id, library.id);
     }
 
     #[tokio::test]
@@ -802,7 +821,15 @@ mod tests {
             .unwrap();
 
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].name, "One Piece");
+        // Verify the result by checking metadata
+        let metadata = crate::db::repositories::SeriesMetadataRepository::get_by_series_id(
+            db.sea_orm_connection(),
+            results[0].id,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(metadata.title, "One Piece");
     }
 
     #[tokio::test]
@@ -818,29 +845,30 @@ mod tests {
         .await
         .unwrap();
 
-        let mut series =
+        let series =
             SeriesRepository::create(db.sea_orm_connection(), library.id, "Original Name", None)
                 .await
                 .unwrap();
 
-        series.name = "Updated Name".to_string();
-        series.normalized_name = SeriesRepository::normalize_name(&series.name);
-
-        SeriesRepository::update(db.sea_orm_connection(), &series, None)
+        // Update name via update_name (which updates series_metadata.title)
+        SeriesRepository::update_name(db.sea_orm_connection(), series.id, "Updated Name")
             .await
             .unwrap();
 
-        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
-            .await
-            .unwrap()
-            .unwrap();
+        // Verify metadata was updated
+        let metadata = crate::db::repositories::SeriesMetadataRepository::get_by_series_id(
+            db.sea_orm_connection(),
+            series.id,
+        )
+        .await
+        .unwrap()
+        .unwrap();
 
-        assert_eq!(retrieved.name, "Updated Name");
-        assert_eq!(retrieved.normalized_name, "updated name");
+        assert_eq!(metadata.title, "Updated Name");
     }
 
     #[tokio::test]
-    async fn test_increment_book_count() {
+    async fn test_get_book_count() {
         let (db, _temp_dir) = create_test_db().await;
 
         let library = LibraryRepository::create(
@@ -857,18 +885,42 @@ mod tests {
                 .await
                 .unwrap();
 
-        assert_eq!(series.book_count, 0);
+        // Initial count should be 0
+        let count = SeriesRepository::get_book_count(db.sea_orm_connection(), series.id)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
 
-        SeriesRepository::increment_book_count(db.sea_orm_connection(), series.id)
+        // Add a book
+        let book = books::Model {
+            id: Uuid::new_v4(),
+            series_id: series.id,
+            library_id: library.id,
+            file_path: "/test/book1.cbz".to_string(),
+            file_name: "book1.cbz".to_string(),
+            file_size: 1024,
+            file_hash: format!("hash_{}", Uuid::new_v4()),
+            partial_hash: String::new(),
+            format: "cbz".to_string(),
+            page_count: 10,
+            deleted: false,
+            analyzed: false,
+            analysis_error: None,
+            modified_at: Utc::now(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
+        };
+        BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
             .unwrap();
 
-        let retrieved = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
+        // Count should now be 1
+        let count = SeriesRepository::get_book_count(db.sea_orm_connection(), series.id)
             .await
-            .unwrap()
             .unwrap();
-
-        assert_eq!(retrieved.book_count, 1);
+        assert_eq!(count, 1);
     }
 
     #[tokio::test]
@@ -937,8 +989,6 @@ mod tests {
             id: Uuid::new_v4(),
             series_id: series1.id,
             library_id: library.id,
-            title: Some("Book 1".to_string()),
-            number: None,
             file_path: "/test/book1.cbz".to_string(),
             file_name: "book1.cbz".to_string(),
             file_size: 1024,
@@ -963,8 +1013,6 @@ mod tests {
             id: Uuid::new_v4(),
             series_id: series2.id,
             library_id: library.id,
-            title: Some("Book 2".to_string()),
-            number: None,
             file_path: "/test/book2.cbz".to_string(),
             file_name: "book2.cbz".to_string(),
             file_size: 1024,
@@ -989,8 +1037,6 @@ mod tests {
             id: Uuid::new_v4(),
             series_id: series3.id,
             library_id: library.id,
-            title: Some("Book 3".to_string()),
-            number: None,
             file_path: "/test/book3.cbz".to_string(),
             file_name: "book3.cbz".to_string(),
             file_size: 1024,

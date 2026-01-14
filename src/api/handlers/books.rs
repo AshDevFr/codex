@@ -96,20 +96,25 @@ pub async fn books_to_dtos(
         .into_iter()
         .collect();
 
-    // Fetch all series in one query
-    let mut series_map = HashMap::new();
-    for series_id in &series_ids {
-        if let Ok(Some(series)) = SeriesRepository::get_by_id(db, *series_id).await {
-            series_map.insert(*series_id, series.name);
-        }
-    }
+    // Collect book IDs for metadata lookup
+    let book_ids: Vec<Uuid> = books.iter().map(|b| b.id).collect();
 
-    // Fetch series metadata for reading direction
-    let mut series_metadata_map: HashMap<Uuid, Option<String>> = HashMap::new();
+    // Fetch series metadata (contains title, reading direction, etc.)
+    let mut series_metadata_map: HashMap<Uuid, crate::db::entities::series_metadata::Model> =
+        HashMap::new();
     for series_id in &series_ids {
         if let Ok(Some(metadata)) = SeriesMetadataRepository::get_by_series_id(db, *series_id).await
         {
-            series_metadata_map.insert(*series_id, metadata.reading_direction);
+            series_metadata_map.insert(*series_id, metadata);
+        }
+    }
+
+    // Fetch book metadata for all books (contains title, number, etc.)
+    let mut book_metadata_map: HashMap<Uuid, crate::db::entities::book_metadata::Model> =
+        HashMap::new();
+    for book_id in &book_ids {
+        if let Ok(Some(metadata)) = BookMetadataRepository::get_by_book_id(db, *book_id).await {
+            book_metadata_map.insert(*book_id, metadata);
         }
     }
 
@@ -135,13 +140,17 @@ pub async fn books_to_dtos(
     let dtos = books
         .into_iter()
         .map(|book| {
-            let series_name = series_map
+            // Get series name from series_metadata.title
+            let series_name = series_metadata_map
                 .get(&book.series_id)
-                .cloned()
+                .map(|m| m.title.clone())
                 .unwrap_or_else(|| "Unknown Series".to_string());
 
-            // Use title if available, otherwise use file_name
-            let title = book.title.clone().unwrap_or_else(|| {
+            // Get book metadata
+            let book_meta = book_metadata_map.get(&book.id);
+
+            // Use title from book_metadata if available, otherwise use file_name (without extension)
+            let title = book_meta.and_then(|m| m.title.clone()).unwrap_or_else(|| {
                 // Extract filename without extension
                 let file_name = &book.file_name;
                 if let Some(pos) = file_name.rfind('.') {
@@ -151,12 +160,20 @@ pub async fn books_to_dtos(
                 }
             });
 
+            // Get sort_title from book_metadata
+            let sort_title = book_meta.and_then(|m| m.title_sort.clone());
+
+            // Get number from book_metadata
+            let number = book_meta
+                .and_then(|m| m.number)
+                .map(|d| d.to_string().parse::<i32>().unwrap_or(0));
+
             let read_progress = progress_map.get(&book.id).cloned();
 
             // Determine effective reading direction: series metadata > library default
             let reading_direction = series_metadata_map
                 .get(&book.series_id)
-                .and_then(|opt| opt.clone())
+                .and_then(|m| m.reading_direction.clone())
                 .or_else(|| library_reading_direction_map.get(&book.library_id).cloned());
 
             BookDto {
@@ -164,15 +181,13 @@ pub async fn books_to_dtos(
                 series_id: book.series_id,
                 series_name,
                 title,
-                sort_title: book.title.clone(),
+                sort_title,
                 file_path: book.file_path,
                 file_format: book.format,
                 file_size: book.file_size,
                 file_hash: book.file_hash,
                 page_count: book.page_count,
-                number: book
-                    .number
-                    .map(|d| d.to_string().parse::<i32>().unwrap_or(0)),
+                number,
                 created_at: book.created_at,
                 updated_at: book.updated_at,
                 read_progress,
@@ -514,6 +529,10 @@ pub async fn list_series_books_with_errors(
 }
 
 /// Apply in-memory sorting to books list using BookSortParam
+///
+/// Note: Title and Number sorting now uses file_name as fallback since those
+/// fields have moved to book_metadata table. For accurate title/number sorting,
+/// the repository should handle this at the database level with a JOIN.
 fn apply_book_sorting_with_param(
     books_list: &mut [crate::db::entities::books::Model],
     sort: &BookSortParam,
@@ -521,11 +540,11 @@ fn apply_book_sorting_with_param(
     let ascending = sort.direction == SortDirection::Asc;
 
     match sort.field {
-        BookSortField::Title => {
+        BookSortField::Title | BookSortField::Series => {
+            // Title and Series sort now fall back to file_name since title is in book_metadata
+            // For accurate sorting, use database-level sorting via repository
             books_list.sort_by(|a, b| {
-                let a_title = a.title.as_deref().unwrap_or(&a.file_name);
-                let b_title = b.title.as_deref().unwrap_or(&b.file_name);
-                let cmp = a_title.cmp(b_title);
+                let cmp = a.file_name.cmp(&b.file_name);
                 if ascending {
                     cmp
                 } else {
@@ -543,50 +562,11 @@ fn apply_book_sorting_with_param(
                 }
             });
         }
-        BookSortField::ReleaseDate => {
+        BookSortField::ReleaseDate | BookSortField::ChapterNumber => {
+            // Number is now in book_metadata; fall back to created_at for in-memory sort
+            // For accurate sorting, use database-level sorting via repository
             books_list.sort_by(|a, b| {
-                // Handle None values - put them at the end
-                match (&a.number, &b.number) {
-                    (Some(a_num), Some(b_num)) => {
-                        let cmp = a_num
-                            .partial_cmp(b_num)
-                            .unwrap_or(std::cmp::Ordering::Equal);
-                        if ascending {
-                            cmp
-                        } else {
-                            cmp.reverse()
-                        }
-                    }
-                    (Some(_), None) => std::cmp::Ordering::Less,
-                    (None, Some(_)) => std::cmp::Ordering::Greater,
-                    (None, None) => std::cmp::Ordering::Equal,
-                }
-            });
-        }
-        BookSortField::ChapterNumber => {
-            books_list.sort_by(|a, b| match (&a.number, &b.number) {
-                (Some(a_num), Some(b_num)) => {
-                    let cmp = a_num
-                        .partial_cmp(b_num)
-                        .unwrap_or(std::cmp::Ordering::Equal);
-                    if ascending {
-                        cmp
-                    } else {
-                        cmp.reverse()
-                    }
-                }
-                (Some(_), None) => std::cmp::Ordering::Less,
-                (None, Some(_)) => std::cmp::Ordering::Greater,
-                (None, None) => std::cmp::Ordering::Equal,
-            });
-        }
-        BookSortField::Series => {
-            // Series sort requires database-level JOIN, should not reach here
-            // If it does, fall back to title sort
-            books_list.sort_by(|a, b| {
-                let a_title = a.title.as_deref().unwrap_or(&a.file_name);
-                let b_title = b.title.as_deref().unwrap_or(&b.file_name);
-                let cmp = a_title.cmp(b_title);
+                let cmp = a.created_at.cmp(&b.created_at);
                 if ascending {
                     cmp
                 } else {
@@ -656,7 +636,7 @@ pub async fn get_book(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
 
-    // Try to fetch metadata
+    // Try to fetch metadata - now contains title, title_sort, number
     let metadata = BookMetadataRepository::get_by_book_id(&state.db, book_id)
         .await
         .ok()
@@ -664,16 +644,16 @@ pub async fn get_book(
         .map(|meta| BookMetadataDto {
             id: meta.id,
             book_id: meta.book_id,
-            title: None,  // No title field in metadata
-            series: None, // No series field in metadata
-            number: None, // No number field in metadata
+            title: meta.title,
+            series: None, // Series name is fetched separately via series_metadata
+            number: meta.number.map(|d| d.to_string()),
             summary: meta.summary,
             publisher: meta.publisher,
             imprint: meta.imprint,
             genre: meta.genre,
-            page_count: None, // No page_count field in metadata
+            page_count: None, // Page count is in books table, not metadata
             language_iso: meta.language_iso,
-            release_date: None, // No release_date field in metadata
+            release_date: None, // Release date is computed from year/month/day
             writers: meta.writer.map(|s| vec![s]).unwrap_or_default(),
             pencillers: meta.penciller.map(|s| vec![s]).unwrap_or_default(),
             inkers: meta.inker.map(|s| vec![s]).unwrap_or_default(),
@@ -692,6 +672,180 @@ pub async fn get_book(
     };
 
     Ok(Json(response))
+}
+
+/// Update book core fields (title, number)
+///
+/// Partially updates book_metadata fields. Only provided fields will be updated.
+/// Absent fields are unchanged. Explicitly null fields will be cleared.
+/// When a field is set to a non-null value, it is automatically locked.
+#[utoipa::path(
+    patch,
+    path = "/api/v1/books/{book_id}",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    request_body = PatchBookRequest,
+    responses(
+        (status = 200, description = "Book updated successfully", body = BookUpdateResponse),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn patch_book(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+    Json(request): Json<PatchBookRequest>,
+) -> Result<Json<BookUpdateResponse>, ApiError> {
+    use sea_orm::prelude::Decimal;
+
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let now = Utc::now();
+    let mut has_changes = false;
+
+    // Get or create book_metadata record
+    let existing_meta = BookMetadataRepository::get_by_book_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+
+    let updated_meta = if let Some(existing) = existing_meta {
+        // Update existing metadata record
+        let mut active: book_metadata::ActiveModel = existing.into();
+
+        // Update title if provided (also lock it when set to non-null)
+        if let Some(opt) = request.title.to_active_value() {
+            active.title = Set(opt.clone());
+            if opt.is_some() {
+                active.title_lock = Set(true);
+            }
+            has_changes = true;
+        }
+
+        // Update number if provided (convert f64 to Decimal, also lock when set)
+        if let Some(opt) = request.number.to_active_value() {
+            let decimal_opt = opt.and_then(|f| Decimal::from_f64_retain(f));
+            active.number = Set(decimal_opt);
+            if opt.is_some() {
+                active.number_lock = Set(true);
+            }
+            has_changes = true;
+        }
+
+        if has_changes {
+            active.updated_at = Set(now);
+        }
+
+        active
+            .update(&state.db)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to update book metadata: {}", e)))?
+    } else {
+        // Create new metadata record with provided fields
+        has_changes = true;
+        let title_opt = request.title.into_option();
+        let number_opt = request.number.into_option();
+        let decimal_opt = number_opt.and_then(|f| Decimal::from_f64_retain(f));
+
+        let active = book_metadata::ActiveModel {
+            id: Set(Uuid::new_v4()),
+            book_id: Set(book_id),
+            title: Set(title_opt.clone()),
+            title_sort: Set(None),
+            number: Set(decimal_opt),
+            summary: Set(None),
+            writer: Set(None),
+            penciller: Set(None),
+            inker: Set(None),
+            colorist: Set(None),
+            letterer: Set(None),
+            cover_artist: Set(None),
+            editor: Set(None),
+            publisher: Set(None),
+            imprint: Set(None),
+            genre: Set(None),
+            web: Set(None),
+            language_iso: Set(None),
+            format_detail: Set(None),
+            black_and_white: Set(None),
+            manga: Set(None),
+            year: Set(None),
+            month: Set(None),
+            day: Set(None),
+            volume: Set(None),
+            count: Set(None),
+            isbns: Set(None),
+            // Auto-lock fields that are set
+            title_lock: Set(title_opt.is_some()),
+            title_sort_lock: Set(false),
+            number_lock: Set(number_opt.is_some()),
+            summary_lock: Set(false),
+            writer_lock: Set(false),
+            penciller_lock: Set(false),
+            inker_lock: Set(false),
+            colorist_lock: Set(false),
+            letterer_lock: Set(false),
+            cover_artist_lock: Set(false),
+            editor_lock: Set(false),
+            publisher_lock: Set(false),
+            imprint_lock: Set(false),
+            genre_lock: Set(false),
+            web_lock: Set(false),
+            language_iso_lock: Set(false),
+            format_detail_lock: Set(false),
+            black_and_white_lock: Set(false),
+            manga_lock: Set(false),
+            year_lock: Set(false),
+            month_lock: Set(false),
+            day_lock: Set(false),
+            volume_lock: Set(false),
+            count_lock: Set(false),
+            isbns_lock: Set(false),
+            created_at: Set(now),
+            updated_at: Set(now),
+        };
+
+        active
+            .insert(&state.db)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to create book metadata: {}", e)))?
+    };
+
+    // Emit update event
+    if has_changes {
+        let event = EntityChangeEvent {
+            event: EntityEvent::BookUpdated {
+                book_id,
+                series_id: book.series_id,
+                library_id: book.library_id,
+                fields: Some(vec!["title".to_string(), "number".to_string()]),
+            },
+            timestamp: now,
+            user_id: Some(auth.user_id),
+        };
+        let _ = state.event_broadcaster.emit(event);
+    }
+
+    Ok(Json(BookUpdateResponse {
+        id: book_id,
+        title: updated_meta.title,
+        number: updated_meta
+            .number
+            .map(|d| d.to_string().parse::<f64>().unwrap_or(0.0)),
+        updated_at: updated_meta.updated_at,
+    }))
 }
 
 /// Get adjacent books in the same series
@@ -1454,6 +1608,9 @@ pub async fn replace_book_metadata(
         let active = book_metadata::ActiveModel {
             id: Set(Uuid::new_v4()),
             book_id: Set(book_id),
+            title: Set(None), // Title is not set via this endpoint (use PATCH /books/{id})
+            title_sort: Set(None), // Title sort is not set via this endpoint
+            number: Set(None), // Number is not set via this endpoint (use PATCH /books/{id})
             summary: Set(request.summary.clone()),
             writer: Set(request.writer.clone()),
             penciller: Set(request.penciller.clone()),
@@ -1477,6 +1634,9 @@ pub async fn replace_book_metadata(
             count: Set(request.count),
             isbns: Set(request.isbns.clone()),
             // Set locks for non-null fields
+            title_lock: Set(false),
+            title_sort_lock: Set(false),
+            number_lock: Set(false),
             summary_lock: Set(request.summary.is_some()),
             writer_lock: Set(request.writer.is_some()),
             penciller_lock: Set(request.penciller.is_some()),
@@ -1791,6 +1951,9 @@ pub async fn patch_book_metadata(
         let active = book_metadata::ActiveModel {
             id: Set(Uuid::new_v4()),
             book_id: Set(book_id),
+            title: Set(None), // Title is not set via metadata replace (use PATCH /books/{id})
+            title_sort: Set(None), // Title sort is not set via metadata replace
+            number: Set(None), // Number is not set via metadata replace (use PATCH /books/{id})
             summary: Set(summary_opt.clone()),
             writer: Set(writer_opt.clone()),
             penciller: Set(penciller_opt.clone()),
@@ -1814,6 +1977,9 @@ pub async fn patch_book_metadata(
             count: Set(count_opt),
             isbns: Set(isbns_opt.clone()),
             // Set locks for non-null fields
+            title_lock: Set(false),
+            title_sort_lock: Set(false),
+            number_lock: Set(false),
             summary_lock: Set(summary_opt.is_some()),
             writer_lock: Set(writer_opt.is_some()),
             penciller_lock: Set(penciller_opt.is_some()),
@@ -1893,7 +2059,9 @@ pub async fn patch_book_metadata(
 // Book Metadata Lock Endpoints
 // ============================================================================
 
-use crate::api::dto::{BookMetadataLocks, UpdateBookMetadataLocksRequest};
+use crate::api::dto::{
+    BookMetadataLocks, BookUpdateResponse, PatchBookRequest, UpdateBookMetadataLocksRequest,
+};
 
 /// Get book metadata lock states
 ///

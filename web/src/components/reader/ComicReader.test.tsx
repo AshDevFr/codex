@@ -19,12 +19,30 @@ let mockUseSeriesNavigation = vi.fn(() => ({
 	canGoPrevBook: false,
 }));
 
+let mockUseSeriesReaderSettings = vi.fn(() => ({
+	hasSeriesOverride: false,
+	effectiveSettings: {
+		fitMode: "screen" as const,
+		pageLayout: "single" as const,
+		readingDirection: "ltr" as const,
+		backgroundColor: "black" as const,
+		doublePageShowWideAlone: true,
+		doublePageStartOnOdd: true,
+	},
+	forkToSeries: vi.fn(),
+	resetToGlobal: vi.fn(),
+	updateSetting: vi.fn(),
+	isLoaded: true,
+	seriesOverride: null,
+}));
+
 // Mock the hooks
 vi.mock("./hooks", () => ({
 	useAdjacentBooks: vi.fn(),
 	useKeyboardNav: vi.fn(),
 	useReadProgress: (...args: unknown[]) => mockUseReadProgress(...args),
 	useSeriesNavigation: (...args: unknown[]) => mockUseSeriesNavigation(...args),
+	useSeriesReaderSettings: (...args: unknown[]) => mockUseSeriesReaderSettings(...args),
 	useTouchNav: vi.fn(() => ({
 		touchRef: vi.fn(),
 	})),
@@ -102,6 +120,22 @@ describe("ComicReader", () => {
 			goToPrevBook: vi.fn(),
 			canGoNextBook: false,
 			canGoPrevBook: false,
+		}));
+		mockUseSeriesReaderSettings = vi.fn(() => ({
+			hasSeriesOverride: false,
+			effectiveSettings: {
+				fitMode: "screen" as const,
+				pageLayout: "single" as const,
+				readingDirection: "ltr" as const,
+				backgroundColor: "black" as const,
+				doublePageShowWideAlone: true,
+				doublePageStartOnOdd: true,
+			},
+			forkToSeries: vi.fn(),
+			resetToGlobal: vi.fn(),
+			updateSetting: vi.fn(),
+			isLoaded: true,
+			seriesOverride: null,
 		}));
 		useReaderStore.setState({
 			settings: { ...defaultSettings },
@@ -195,10 +229,7 @@ describe("ComicReader", () => {
 
 	describe("page display", () => {
 		it("should display single page in single layout mode", () => {
-			useReaderStore.setState({
-				settings: { ...defaultSettings, pageLayout: "single" },
-			});
-
+			// pageLayout comes from the series settings hook (default is "single")
 			renderWithProviders(<ComicReader {...defaultProps} />);
 
 			const images = document.querySelectorAll('img[src*="/api/v1/books/"]');
@@ -206,9 +237,23 @@ describe("ComicReader", () => {
 		});
 
 		it("should render continuous scroll reader when layout is continuous", () => {
-			useReaderStore.setState({
-				settings: { ...defaultSettings, pageLayout: "continuous" },
-			});
+			// Set the mock to return continuous pageLayout
+			mockUseSeriesReaderSettings = vi.fn(() => ({
+				hasSeriesOverride: false,
+				effectiveSettings: {
+					fitMode: "screen" as const,
+					pageLayout: "continuous" as const,
+					readingDirection: "ltr" as const,
+					backgroundColor: "black" as const,
+					doublePageShowWideAlone: true,
+					doublePageStartOnOdd: true,
+				},
+				forkToSeries: vi.fn(),
+				resetToGlobal: vi.fn(),
+				updateSetting: vi.fn(),
+				isLoaded: true,
+				seriesOverride: null,
+			}));
 
 			renderWithProviders(<ComicReader {...defaultProps} />);
 
@@ -216,8 +261,6 @@ describe("ComicReader", () => {
 			// Verify the container is rendered (it uses overflow-y: auto)
 			const container = document.querySelector('[style*="100vw"]');
 			expect(container).toBeInTheDocument();
-			// Verify the page layout setting
-			expect(useReaderStore.getState().settings.pageLayout).toBe("continuous");
 		});
 
 		it("should render continuous scroll reader when reading direction is webtoon", () => {
@@ -344,14 +387,116 @@ describe("ComicReader", () => {
 
 	describe("double page mode", () => {
 		it("should render double page spread when layout is double", () => {
-			useReaderStore.setState({
-				settings: { ...defaultSettings, pageLayout: "double" },
-			});
+			// Set the mock to return double pageLayout
+			mockUseSeriesReaderSettings = vi.fn(() => ({
+				hasSeriesOverride: false,
+				effectiveSettings: {
+					fitMode: "screen" as const,
+					pageLayout: "double" as const,
+					readingDirection: "ltr" as const,
+					backgroundColor: "black" as const,
+					doublePageShowWideAlone: true,
+					doublePageStartOnOdd: true,
+				},
+				forkToSeries: vi.fn(),
+				resetToGlobal: vi.fn(),
+				updateSetting: vi.fn(),
+				isLoaded: true,
+				seriesOverride: null,
+			}));
 
 			renderWithProviders(<ComicReader {...defaultProps} />);
 
 			// In double mode, there might be 1-2 images depending on orientation
 			// At minimum the component should render without error
+			const container = document.querySelector('[style*="100vw"]');
+			expect(container).toBeInTheDocument();
+		});
+	});
+
+	describe("per-series settings integration", () => {
+		it("should call useSeriesReaderSettings with seriesId", () => {
+			renderWithProviders(<ComicReader {...defaultProps} seriesId="series-123" />);
+
+			expect(mockUseSeriesReaderSettings).toHaveBeenCalledWith("series-123");
+		});
+
+		it("should call useSeriesReaderSettings with null when no seriesId", () => {
+			renderWithProviders(<ComicReader {...defaultProps} seriesId={null} />);
+
+			expect(mockUseSeriesReaderSettings).toHaveBeenCalledWith(null);
+		});
+
+		it("should show loading state until series settings are loaded", () => {
+			mockUseSeriesReaderSettings = vi.fn(() => ({
+				hasSeriesOverride: false,
+				effectiveSettings: {
+					fitMode: "screen" as const,
+					pageLayout: "single" as const,
+					readingDirection: "ltr" as const,
+					backgroundColor: "black" as const,
+					doublePageShowWideAlone: true,
+					doublePageStartOnOdd: true,
+				},
+				forkToSeries: vi.fn(),
+				resetToGlobal: vi.fn(),
+				updateSetting: vi.fn(),
+				isLoaded: false, // Not loaded yet
+				seriesOverride: null,
+			}));
+
+			renderWithProviders(<ComicReader {...defaultProps} />);
+
+			// Should show loader
+			expect(document.querySelector(".mantine-Loader-root")).toBeInTheDocument();
+		});
+
+		it("should use series-specific fitMode from effectiveSettings", () => {
+			mockUseSeriesReaderSettings = vi.fn(() => ({
+				hasSeriesOverride: true,
+				effectiveSettings: {
+					fitMode: "width" as const, // Series-specific
+					pageLayout: "single" as const,
+					readingDirection: "ltr" as const,
+					backgroundColor: "black" as const,
+					doublePageShowWideAlone: true,
+					doublePageStartOnOdd: true,
+				},
+				forkToSeries: vi.fn(),
+				resetToGlobal: vi.fn(),
+				updateSetting: vi.fn(),
+				isLoaded: true,
+				seriesOverride: null,
+			}));
+
+			renderWithProviders(<ComicReader {...defaultProps} />);
+
+			// Reader should render without error - fitMode "width" is applied
+			const container = document.querySelector('[style*="100vw"]');
+			expect(container).toBeInTheDocument();
+		});
+
+		it("should use series-specific backgroundColor from effectiveSettings", () => {
+			mockUseSeriesReaderSettings = vi.fn(() => ({
+				hasSeriesOverride: true,
+				effectiveSettings: {
+					fitMode: "screen" as const,
+					pageLayout: "single" as const,
+					readingDirection: "ltr" as const,
+					backgroundColor: "white" as const, // Series-specific
+					doublePageShowWideAlone: true,
+					doublePageStartOnOdd: true,
+				},
+				forkToSeries: vi.fn(),
+				resetToGlobal: vi.fn(),
+				updateSetting: vi.fn(),
+				isLoaded: true,
+				seriesOverride: null,
+			}));
+
+			renderWithProviders(<ComicReader {...defaultProps} />);
+
+			// Reader should render without error - backgroundColor is passed to child components
 			const container = document.querySelector('[style*="100vw"]');
 			expect(container).toBeInTheDocument();
 		});
