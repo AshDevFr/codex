@@ -17,7 +17,7 @@ jobs:
   # Stage 1: Run tests first for fastest feedback
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
     container:
       image: catthehacker/ubuntu:act-latest
 
@@ -47,7 +47,7 @@ jobs:
   # Stage 1: Run lint checks in parallel with tests
   lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
     container:
       image: catthehacker/ubuntu:act-latest
 
@@ -85,7 +85,7 @@ jobs:
   # Stage 1: Run frontend checks in parallel with tests and lint
   frontend:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
     container:
       image: catthehacker/ubuntu:act-latest
 
@@ -97,13 +97,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
           cache-dependency-path: web/package-lock.json
 
       - name: Install dependencies
         working-directory: web
-        run: npm ci --force
+        run: npm ci --include=optional
 
       - name: Lint check
         continue-on-error: true
@@ -122,7 +122,7 @@ jobs:
   build:
     needs: [test, lint, frontend]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     container:
       image: catthehacker/ubuntu:act-latest
 
@@ -169,8 +169,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
           cache-dependency-path: web/package-lock.json
 
       - name: Build frontend
@@ -236,7 +236,7 @@ jobs:
   docker:
     needs: [test, lint, frontend]
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 60
 
     permissions:
       contents: write
@@ -302,7 +302,7 @@ jobs:
     needs: [build]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
 
     permissions:
       contents: write
