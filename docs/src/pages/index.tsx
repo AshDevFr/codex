@@ -21,8 +21,8 @@ function HomepageHeader() {
           <Link className={styles.primaryButton} to="/docs/getting-started">
             Get Started
           </Link>
-          <Link className={styles.secondaryButton} to="/docs/installation">
-            Installation
+          <Link className={styles.secondaryButton} to="/docs/deployment/docker">
+            Docker Setup
           </Link>
         </div>
         <div className={styles.heroCode}>
@@ -39,7 +39,7 @@ function QuickLinks(): ReactNode {
       <div className="container">
         <div className="row">
           <div className="col col--4">
-            <Link to="/docs/installation" className={styles.quickLink}>
+            <Link to="/docs/deployment/docker" className={styles.quickLink}>
               <span className={styles.quickLinkIcon}>🐳</span>
               <span className={styles.quickLinkText}>Docker Setup</span>
             </Link>
