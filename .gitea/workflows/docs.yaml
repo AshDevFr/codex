@@ -5,14 +5,16 @@ on:
     branches:
       - main
     paths:
-      - 'docs/**'
-      - 'web/openapi.json'
+      - ".gitea/workflows/docs.yaml"
+      - "docs/**"
+      - "web/openapi.json"
   pull_request:
     branches:
       - main
     paths:
-      - 'docs/**'
-      - 'web/openapi.json'
+      - ".gitea/workflows/docs.yaml"
+      - "docs/**"
+      - "web/openapi.json"
   workflow_dispatch: # Allow manual trigger
 
 concurrency:
@@ -24,11 +26,9 @@ jobs:
   docker-docs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    permissions:
-      contents: read
-      packages: write
+    container:
+      image: catthehacker/ubuntu:act-latest
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
