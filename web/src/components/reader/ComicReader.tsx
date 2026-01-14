@@ -15,6 +15,7 @@ import {
 	useKeyboardNav,
 	useReadProgress,
 	useSeriesNavigation,
+	useTouchNav,
 } from "./hooks";
 import { PageTransitionWrapper } from "./PageTransitionWrapper";
 import { ReaderSettings } from "./ReaderSettings";
@@ -403,6 +404,15 @@ export function ComicReader({
 		onPrevPage: pageLayout === "double" ? handleSpreadPrevPage : handlePrevPage,
 	});
 
+	// Touch/swipe navigation for mobile devices
+	// Only enabled for paginated modes (not continuous scroll)
+	const { touchRef } = useTouchNav({
+		enabled: !settingsOpened && pageLayout !== "continuous" && readingDirection !== "webtoon",
+		onNextPage: pageLayout === "double" ? handleSpreadNextPage : handleNextPage,
+		onPrevPage: pageLayout === "double" ? handleSpreadPrevPage : handlePrevPage,
+		onTap: toggleToolbar,
+	});
+
 	// Preload adjacent pages (spread-aware) and track in store
 	useEffect(() => {
 		// Build list of pages to preload (current page + adjacent pages)
@@ -512,32 +522,41 @@ export function ComicReader({
 					sidePadding={webtoonSidePadding}
 				/>
 			) : (
-				<PageTransitionWrapper
-					pageKey={pageLayout === "double" ? displayPages.map(p => p.pageNumber).join("-") : String(currentPage)}
-					transition={pageTransition}
-					duration={transitionDuration}
-					navigationDirection={lastNavigationDirection}
-					readingDirection={readingDirection}
+				<Box
+					ref={touchRef}
+					style={{
+						width: "100%",
+						height: "100%",
+						touchAction: "none", // Prevent browser default touch handling
+					}}
 				>
-					{pageLayout === "double" ? (
-						<DoublePageSpread
-							pages={displayPages}
-							fitMode={fitMode}
-							backgroundColor={backgroundColor}
-							readingDirection={readingDirection}
-							onClick={handleDoublePageClick}
-							onPageOrientationDetected={handlePageOrientationDetected}
-						/>
-					) : (
-						<ComicReaderPage
-							src={getPageUrl(currentPage)}
-							alt={`Page ${currentPage} of ${title}`}
-							fitMode={fitMode}
-							backgroundColor={backgroundColor}
-							onClick={handleSinglePageClick}
-						/>
-					)}
-				</PageTransitionWrapper>
+					<PageTransitionWrapper
+						pageKey={pageLayout === "double" ? displayPages.map(p => p.pageNumber).join("-") : String(currentPage)}
+						transition={pageTransition}
+						duration={transitionDuration}
+						navigationDirection={lastNavigationDirection}
+						readingDirection={readingDirection}
+					>
+						{pageLayout === "double" ? (
+							<DoublePageSpread
+								pages={displayPages}
+								fitMode={fitMode}
+								backgroundColor={backgroundColor}
+								readingDirection={readingDirection}
+								onClick={handleDoublePageClick}
+								onPageOrientationDetected={handlePageOrientationDetected}
+							/>
+						) : (
+							<ComicReaderPage
+								src={getPageUrl(currentPage)}
+								alt={`Page ${currentPage} of ${title}`}
+								fitMode={fitMode}
+								backgroundColor={backgroundColor}
+								onClick={handleSinglePageClick}
+							/>
+						)}
+					</PageTransitionWrapper>
+				</Box>
 			)}
 
 			{/* Settings modal */}

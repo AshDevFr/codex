@@ -24,6 +24,8 @@ describe("readerStore", () => {
 				readingDirection: "ltr",
 				backgroundColor: "black",
 				pdfMode: "streaming",
+				pdfSpreadMode: "single",
+				pdfContinuousScroll: false,
 				autoHideToolbar: true,
 				toolbarHideDelay: 3000,
 				epubTheme: "light",
@@ -241,6 +243,50 @@ describe("readerStore", () => {
 			setPdfMode("native");
 
 			expect(useReaderStore.getState().settings.pdfMode).toBe("native");
+		});
+
+		it("should set PDF spread mode to single", () => {
+			const { setPdfSpreadMode } = useReaderStore.getState();
+
+			setPdfSpreadMode("single");
+
+			expect(useReaderStore.getState().settings.pdfSpreadMode).toBe("single");
+		});
+
+		it("should set PDF spread mode to double", () => {
+			const { setPdfSpreadMode } = useReaderStore.getState();
+
+			setPdfSpreadMode("double");
+
+			expect(useReaderStore.getState().settings.pdfSpreadMode).toBe("double");
+		});
+
+		it("should set PDF spread mode to double-odd", () => {
+			const { setPdfSpreadMode } = useReaderStore.getState();
+
+			setPdfSpreadMode("double-odd");
+
+			expect(useReaderStore.getState().settings.pdfSpreadMode).toBe("double-odd");
+		});
+
+		it("should set PDF continuous scroll to true", () => {
+			const { setPdfContinuousScroll } = useReaderStore.getState();
+
+			setPdfContinuousScroll(true);
+
+			expect(useReaderStore.getState().settings.pdfContinuousScroll).toBe(true);
+		});
+
+		it("should set PDF continuous scroll to false", () => {
+			const { setPdfContinuousScroll } = useReaderStore.getState();
+
+			// First enable it
+			setPdfContinuousScroll(true);
+			expect(useReaderStore.getState().settings.pdfContinuousScroll).toBe(true);
+
+			// Then disable it
+			setPdfContinuousScroll(false);
+			expect(useReaderStore.getState().settings.pdfContinuousScroll).toBe(false);
 		});
 
 		it("should set auto-hide toolbar", () => {

@@ -91,6 +91,77 @@ describe("PdfReaderSettings", () => {
 		});
 	});
 
+	describe("page spread mode", () => {
+		it("should display page spread options", () => {
+			renderWithProviders(<PdfReaderSettings {...defaultProps} />);
+
+			expect(screen.getByText("Page Spread")).toBeInTheDocument();
+			expect(screen.getByRole("radio", { name: "Single" })).toBeInTheDocument();
+			expect(screen.getByRole("radio", { name: "Double" })).toBeInTheDocument();
+			expect(screen.getByRole("radio", { name: "Double (Odd)" })).toBeInTheDocument();
+		});
+
+		it("should update store when spread mode is changed to double", () => {
+			renderWithProviders(<PdfReaderSettings {...defaultProps} />);
+
+			fireEvent.click(screen.getByRole("radio", { name: "Double" }));
+
+			expect(useReaderStore.getState().settings.pdfSpreadMode).toBe("double");
+		});
+
+		it("should update store when spread mode is changed to double-odd", () => {
+			renderWithProviders(<PdfReaderSettings {...defaultProps} />);
+
+			fireEvent.click(screen.getByRole("radio", { name: "Double (Odd)" }));
+
+			expect(useReaderStore.getState().settings.pdfSpreadMode).toBe("double-odd");
+		});
+
+		it("should show description for single mode", () => {
+			useReaderStore.getState().setPdfSpreadMode("single");
+
+			renderWithProviders(<PdfReaderSettings {...defaultProps} />);
+
+			expect(screen.getByText("Display one page at a time")).toBeInTheDocument();
+		});
+
+		it("should show description for double mode", () => {
+			useReaderStore.getState().setPdfSpreadMode("double");
+
+			renderWithProviders(<PdfReaderSettings {...defaultProps} />);
+
+			expect(screen.getByText("Display two pages side by side")).toBeInTheDocument();
+		});
+
+		it("should show description for double-odd mode", () => {
+			useReaderStore.getState().setPdfSpreadMode("double-odd");
+
+			renderWithProviders(<PdfReaderSettings {...defaultProps} />);
+
+			expect(screen.getByText("Two pages, starting spreads on odd pages")).toBeInTheDocument();
+		});
+	});
+
+	describe("continuous scroll", () => {
+		it("should display continuous scroll toggle", () => {
+			renderWithProviders(<PdfReaderSettings {...defaultProps} />);
+
+			expect(screen.getByText("Continuous Scroll")).toBeInTheDocument();
+			expect(screen.getByText("Scroll through all pages vertically")).toBeInTheDocument();
+		});
+
+		it("should toggle continuous scroll setting", () => {
+			renderWithProviders(<PdfReaderSettings {...defaultProps} />);
+
+			// Find the continuous scroll toggle (first switch)
+			const switches = screen.getAllByRole("switch");
+			const continuousScrollSwitch = switches[0];
+			fireEvent.click(continuousScrollSwitch);
+
+			expect(useReaderStore.getState().settings.pdfContinuousScroll).toBe(true);
+		});
+	});
+
 	describe("auto-hide toolbar", () => {
 		it("should display auto-hide toggle", () => {
 			renderWithProviders(<PdfReaderSettings {...defaultProps} />);
@@ -105,8 +176,10 @@ describe("PdfReaderSettings", () => {
 			renderWithProviders(<PdfReaderSettings {...defaultProps} />);
 
 			// Mantine Switch uses role="switch" not "checkbox"
-			const toggle = screen.getByRole("switch");
-			fireEvent.click(toggle);
+			// Auto-hide is the second switch now
+			const switches = screen.getAllByRole("switch");
+			const autoHideSwitch = switches[1];
+			fireEvent.click(autoHideSwitch);
 
 			expect(useReaderStore.getState().settings.autoHideToolbar).toBe(false);
 		});

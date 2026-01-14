@@ -1,7 +1,8 @@
-import { Center, Text } from "@mantine/core";
+import { Center, Loader, Text } from "@mantine/core";
 import { type ReadingDirection, useReaderStore } from "@/store/readerStore";
 import { ComicReader } from "./ComicReader";
 import { EpubReader } from "./EpubReader";
+import { usePerBookSettings } from "./hooks";
 import { PdfReader } from "./PdfReader";
 
 /** Size threshold for defaulting to streaming mode (100MB) */
@@ -52,6 +53,24 @@ export function ReaderRouter({
 }: ReaderRouterProps) {
 	const normalizedFormat = format.toUpperCase();
 	const pdfMode = useReaderStore((state) => state.settings.pdfMode);
+
+	// Load per-book settings (handles localStorage loading for per-book PDF mode)
+	const {
+		isLoaded: perBookSettingsLoaded,
+		hasPerBookPdfMode,
+		savePerBookPdfMode,
+		clearPerBookPdfMode,
+	} = usePerBookSettings(bookId, normalizedFormat);
+
+	// Wait for per-book settings to load before rendering
+	// This ensures the correct PDF mode is applied from the start
+	if (!perBookSettingsLoaded && normalizedFormat === "PDF") {
+		return (
+			<Center style={{ width: "100vw", height: "100vh", backgroundColor: "#000" }}>
+				<Loader size="lg" color="gray" />
+			</Center>
+		);
+	}
 
 	// Convert reading direction string to typed value
 	const readingDirectionOverride: ReadingDirection | null =
@@ -104,6 +123,9 @@ export function ReaderRouter({
 						totalPages={totalPages}
 						startPage={startPage}
 						onClose={onClose}
+						hasPerBookPdfMode={hasPerBookPdfMode}
+						onSavePerBookPdfMode={savePerBookPdfMode}
+						onClearPerBookPdfMode={clearPerBookPdfMode}
 					/>
 				);
 			}
@@ -127,6 +149,7 @@ export function ReaderRouter({
 			return (
 				<EpubReader
 					bookId={bookId}
+					seriesId={seriesId}
 					title={title}
 					totalPages={totalPages}
 					startPercent={startPercent}

@@ -30,6 +30,8 @@ describe("ReaderSettings", () => {
 				readingDirection: "ltr",
 				backgroundColor: "black",
 				pdfMode: "streaming",
+				pdfSpreadMode: "single",
+				pdfContinuousScroll: false,
 				autoHideToolbar: true,
 				toolbarHideDelay: 3000,
 				epubTheme: "light",

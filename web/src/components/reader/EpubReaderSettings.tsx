@@ -1,9 +1,9 @@
 import {
 	Box,
+	Divider,
 	Group,
 	Modal,
 	Select,
-	SegmentedControl,
 	Slider,
 	Stack,
 	Switch,
@@ -22,6 +22,22 @@ interface EpubReaderSettingsProps {
 	onClose: () => void;
 }
 
+/** Theme options for display in select - organized by light/dark */
+const THEME_OPTIONS = [
+	// Light themes
+	{ value: "light", label: "Light" },
+	{ value: "paper", label: "Paper (Warm)" },
+	{ value: "sepia", label: "Sepia" },
+	{ value: "rose", label: "Rose" },
+	{ value: "mint", label: "Mint" },
+	// Dark themes
+	{ value: "dark", label: "Dark" },
+	{ value: "slate", label: "Slate" },
+	{ value: "night", label: "Night (OLED)" },
+	{ value: "ocean", label: "Ocean" },
+	{ value: "forest", label: "Forest" },
+];
+
 /** Font family options for display in select */
 const FONT_FAMILY_OPTIONS = [
 	{ value: "default", label: "Default" },
@@ -35,7 +51,7 @@ const FONT_FAMILY_OPTIONS = [
  * Settings modal for the EPUB reader.
  *
  * Allows configuring:
- * - Theme (light, sepia, dark, mint, slate)
+ * - Theme (10 options: light, paper, sepia, rose, mint, dark, slate, night, ocean, forest)
  * - Font size
  * - Font family
  * - Line height
@@ -55,6 +71,9 @@ export function EpubReaderSettings({
 	const setAutoHideToolbar = useReaderStore(
 		(state) => state.setAutoHideToolbar,
 	);
+	const setAutoAdvanceToNextBook = useReaderStore(
+		(state) => state.setAutoAdvanceToNextBook,
+	);
 
 	return (
 		<Modal opened={opened} onClose={onClose} title="Reader Settings" size="md">
@@ -64,27 +83,12 @@ export function EpubReaderSettings({
 					<Text size="sm" fw={500} mb="xs">
 						Theme
 					</Text>
-					<SegmentedControl
-						fullWidth
+					<Select
 						value={settings.epubTheme}
-						onChange={(value) => setEpubTheme(value as EpubTheme)}
-						data={[
-							{ label: "Light", value: "light" },
-							{ label: "Sepia", value: "sepia" },
-							{ label: "Dark", value: "dark" },
-						]}
+						onChange={(value) => value && setEpubTheme(value as EpubTheme)}
+						data={THEME_OPTIONS}
+						allowDeselect={false}
 					/>
-					<Group gap="xs" mt="xs">
-						<SegmentedControl
-							fullWidth
-							value={settings.epubTheme}
-							onChange={(value) => setEpubTheme(value as EpubTheme)}
-							data={[
-								{ label: "Mint", value: "mint" },
-								{ label: "Slate", value: "slate" },
-							]}
-						/>
-					</Group>
 					<Text size="xs" c="dimmed" mt="xs">
 						Background and text color theme
 					</Text>
@@ -207,6 +211,24 @@ export function EpubReaderSettings({
 						onChange={(e) => setAutoHideToolbar(e.currentTarget.checked)}
 					/>
 				</Group>
+
+				{/* Auto-advance to next book */}
+				<Group justify="space-between">
+					<Box>
+						<Text size="sm" fw={500}>
+							Auto-advance to next book
+						</Text>
+						<Text size="xs" c="dimmed">
+							Automatically continue to next book in series
+						</Text>
+					</Box>
+					<Switch
+						checked={settings.autoAdvanceToNextBook}
+						onChange={(e) => setAutoAdvanceToNextBook(e.currentTarget.checked)}
+					/>
+				</Group>
+
+				<Divider />
 
 				{/* Keyboard shortcuts info */}
 				<Box

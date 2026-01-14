@@ -21,6 +21,8 @@ describe("ReaderToolbar", () => {
 				readingDirection: "ltr",
 				backgroundColor: "black",
 				pdfMode: "streaming",
+				pdfSpreadMode: "single",
+				pdfContinuousScroll: false,
 				autoHideToolbar: true,
 				toolbarHideDelay: 3000,
 			},

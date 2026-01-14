@@ -85,6 +85,9 @@ vi.mock("./hooks", () => ({
 		canGoNextBook: false,
 		canGoPrevBook: false,
 	})),
+	useTouchNav: vi.fn(() => ({
+		touchRef: vi.fn(),
+	})),
 }));
 
 // Import component after mocks

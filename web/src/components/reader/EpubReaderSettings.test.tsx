@@ -10,6 +10,8 @@ const defaultSettings = {
 	readingDirection: "ltr" as const,
 	backgroundColor: "black" as const,
 	pdfMode: "streaming" as const,
+	pdfSpreadMode: "single" as const,
+	pdfContinuousScroll: false,
 	autoHideToolbar: true,
 	toolbarHideDelay: 3000,
 	epubTheme: "light" as const,
@@ -24,6 +26,7 @@ const defaultSettings = {
 	transitionDuration: 200,
 	webtoonSidePadding: 0,
 	webtoonPageGap: 0,
+	autoAdvanceToNextBook: false,
 };
 
 beforeEach(() => {
@@ -51,17 +54,17 @@ describe("EpubReaderSettings", () => {
 			expect(screen.getByText("Reader Settings")).toBeInTheDocument();
 		});
 
-		it("should display theme section", () => {
+		it("should display theme section with select dropdown", () => {
 			renderWithProviders(
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />
 			);
 
 			expect(screen.getByText("Theme")).toBeInTheDocument();
-			expect(screen.getByText("Light")).toBeInTheDocument();
-			expect(screen.getByText("Sepia")).toBeInTheDocument();
-			expect(screen.getByText("Dark")).toBeInTheDocument();
-			expect(screen.getByText("Mint")).toBeInTheDocument();
-			expect(screen.getByText("Slate")).toBeInTheDocument();
+			expect(screen.getByText("Background and text color theme")).toBeInTheDocument();
+			// Theme select shows "Light" as the default selected value
+			// We have two textboxes - one for theme, one for font family
+			const textboxes = screen.getAllByRole("textbox");
+			expect(textboxes[0]).toHaveValue("Light");
 		});
 
 		it("should display font size section", () => {
@@ -82,7 +85,18 @@ describe("EpubReaderSettings", () => {
 			);
 
 			expect(screen.getByText("Auto-hide Toolbar")).toBeInTheDocument();
-			expect(screen.getByRole("switch")).toBeInTheDocument();
+			// Now there are multiple switches (auto-hide and auto-advance)
+			const switches = screen.getAllByRole("switch");
+			expect(switches.length).toBeGreaterThanOrEqual(1);
+		});
+
+		it("should display auto-advance toggle", () => {
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			expect(screen.getByText("Auto-advance to next book")).toBeInTheDocument();
+			expect(screen.getByText("Automatically continue to next book in series")).toBeInTheDocument();
 		});
 
 		it("should display keyboard shortcuts section", () => {
@@ -101,65 +115,118 @@ describe("EpubReaderSettings", () => {
 	});
 
 	describe("theme selection", () => {
-		it("should update theme when Light is selected", async () => {
-			const user = userEvent.setup();
-			useReaderStore.getState().setEpubTheme("dark"); // Start with different theme
+		// Note: Mantine Select dropdown interaction tests are complex in jsdom
+		// We test that the correct theme is displayed when set programmatically
+		// and that the store actions work correctly in readerStore.test.ts
 
+		it("should display Light theme as selected by default", () => {
 			renderWithProviders(
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />
 			);
 
-			await user.click(screen.getByText("Light"));
-
-			expect(useReaderStore.getState().settings.epubTheme).toBe("light");
+			// Theme select is the first textbox
+			const textboxes = screen.getAllByRole("textbox");
+			expect(textboxes[0]).toHaveValue("Light");
 		});
 
-		it("should update theme when Sepia is selected", async () => {
-			const user = userEvent.setup();
+		it("should display Sepia theme when selected in store", () => {
+			useReaderStore.getState().setEpubTheme("sepia");
 
 			renderWithProviders(
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />
 			);
 
-			await user.click(screen.getByText("Sepia"));
-
-			expect(useReaderStore.getState().settings.epubTheme).toBe("sepia");
+			const textboxes = screen.getAllByRole("textbox");
+			expect(textboxes[0]).toHaveValue("Sepia");
 		});
 
-		it("should update theme when Dark is selected", async () => {
-			const user = userEvent.setup();
+		it("should display Dark theme when selected in store", () => {
+			useReaderStore.getState().setEpubTheme("dark");
 
 			renderWithProviders(
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />
 			);
 
-			await user.click(screen.getByText("Dark"));
-
-			expect(useReaderStore.getState().settings.epubTheme).toBe("dark");
+			const textboxes = screen.getAllByRole("textbox");
+			expect(textboxes[0]).toHaveValue("Dark");
 		});
 
-		it("should update theme when Mint is selected", async () => {
-			const user = userEvent.setup();
+		it("should display Mint theme when selected in store", () => {
+			useReaderStore.getState().setEpubTheme("mint");
 
 			renderWithProviders(
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />
 			);
 
-			await user.click(screen.getByText("Mint"));
-
-			expect(useReaderStore.getState().settings.epubTheme).toBe("mint");
+			const textboxes = screen.getAllByRole("textbox");
+			expect(textboxes[0]).toHaveValue("Mint");
 		});
 
-		it("should update theme when Slate is selected", async () => {
-			const user = userEvent.setup();
+		it("should display Slate theme when selected in store", () => {
+			useReaderStore.getState().setEpubTheme("slate");
 
 			renderWithProviders(
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />
 			);
 
-			await user.click(screen.getByText("Slate"));
+			const textboxes = screen.getAllByRole("textbox");
+			expect(textboxes[0]).toHaveValue("Slate");
+		});
 
-			expect(useReaderStore.getState().settings.epubTheme).toBe("slate");
+		// Test new themes
+		it("should display Night theme when selected in store", () => {
+			useReaderStore.getState().setEpubTheme("night");
+
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			const textboxes = screen.getAllByRole("textbox");
+			expect(textboxes[0]).toHaveValue("Night (OLED)");
+		});
+
+		it("should display Paper theme when selected in store", () => {
+			useReaderStore.getState().setEpubTheme("paper");
+
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			const textboxes = screen.getAllByRole("textbox");
+			expect(textboxes[0]).toHaveValue("Paper (Warm)");
+		});
+
+		it("should display Ocean theme when selected in store", () => {
+			useReaderStore.getState().setEpubTheme("ocean");
+
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			const textboxes = screen.getAllByRole("textbox");
+			expect(textboxes[0]).toHaveValue("Ocean");
+		});
+
+		it("should display Forest theme when selected in store", () => {
+			useReaderStore.getState().setEpubTheme("forest");
+
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			const textboxes = screen.getAllByRole("textbox");
+			expect(textboxes[0]).toHaveValue("Forest");
+		});
+
+		it("should display Rose theme when selected in store", () => {
+			useReaderStore.getState().setEpubTheme("rose");
+
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			const textboxes = screen.getAllByRole("textbox");
+			expect(textboxes[0]).toHaveValue("Rose");
 		});
 	});
 
@@ -209,8 +276,9 @@ describe("EpubReaderSettings", () => {
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />
 			);
 
-			// Find the switch by its associated label text
-			const autoHideSwitch = screen.getByRole("switch");
+			// Find the auto-hide switch (first switch)
+			const switches = screen.getAllByRole("switch");
+			const autoHideSwitch = switches[0];
 			await user.click(autoHideSwitch);
 
 			expect(useReaderStore.getState().settings.autoHideToolbar).toBe(!initialValue);
@@ -223,7 +291,8 @@ describe("EpubReaderSettings", () => {
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />
 			);
 
-			expect(screen.getByRole("switch")).toBeChecked();
+			const switches = screen.getAllByRole("switch");
+			expect(switches[0]).toBeChecked();
 		});
 
 		it("should show unchecked state when auto-hide is disabled", () => {
@@ -233,7 +302,48 @@ describe("EpubReaderSettings", () => {
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />
 			);
 
-			expect(screen.getByRole("switch")).not.toBeChecked();
+			const switches = screen.getAllByRole("switch");
+			expect(switches[0]).not.toBeChecked();
+		});
+	});
+
+	describe("auto-advance to next book", () => {
+		it("should toggle auto-advance on click", async () => {
+			const user = userEvent.setup();
+			const initialValue = useReaderStore.getState().settings.autoAdvanceToNextBook;
+
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			// Find the auto-advance switch (second switch)
+			const switches = screen.getAllByRole("switch");
+			const autoAdvanceSwitch = switches[1];
+			await user.click(autoAdvanceSwitch);
+
+			expect(useReaderStore.getState().settings.autoAdvanceToNextBook).toBe(!initialValue);
+		});
+
+		it("should show checked state when auto-advance is enabled", () => {
+			useReaderStore.getState().setAutoAdvanceToNextBook(true);
+
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			const switches = screen.getAllByRole("switch");
+			expect(switches[1]).toBeChecked();
+		});
+
+		it("should show unchecked state when auto-advance is disabled", () => {
+			useReaderStore.getState().setAutoAdvanceToNextBook(false);
+
+			renderWithProviders(
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+			);
+
+			const switches = screen.getAllByRole("switch");
+			expect(switches[1]).not.toBeChecked();
 		});
 	});
 
@@ -290,7 +400,8 @@ describe("EpubReaderSettings", () => {
 
 			// Check that the UI reflects the store state
 			expect(screen.getByText("130%")).toBeInTheDocument();
-			expect(screen.getByRole("switch")).not.toBeChecked();
+			const switches = screen.getAllByRole("switch");
+			expect(switches[0]).not.toBeChecked(); // auto-hide toolbar
 		});
 
 		it("should persist changes to the store immediately", async () => {
@@ -300,15 +411,14 @@ describe("EpubReaderSettings", () => {
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />
 			);
 
-			// Change theme
-			await user.click(screen.getByText("Dark"));
-			expect(useReaderStore.getState().settings.epubTheme).toBe("dark");
-
-			// Toggle auto-hide (it's true by default)
-			const switchControl = screen.getByRole("switch");
+			// Toggle auto-hide (it's true by default) - first switch
+			const switches = screen.getAllByRole("switch");
 			const wasChecked = useReaderStore.getState().settings.autoHideToolbar;
-			await user.click(switchControl);
+			await user.click(switches[0]);
 			expect(useReaderStore.getState().settings.autoHideToolbar).toBe(!wasChecked);
+
+			// Theme change is tested via store in "theme selection" tests
+			// since Mantine Select interactions are complex in jsdom
 		});
 	});
 
@@ -327,8 +437,9 @@ describe("EpubReaderSettings", () => {
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />
 			);
 
-			// Default is selected
-			expect(screen.getByRole("textbox")).toHaveValue("Default");
+			// Font family select is the second textbox (after theme)
+			const textboxes = screen.getAllByRole("textbox");
+			expect(textboxes[1]).toHaveValue("Default");
 		});
 
 		// Note: Mantine Select dropdown interaction tests are unreliable in jsdom
@@ -342,7 +453,9 @@ describe("EpubReaderSettings", () => {
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />
 			);
 
-			expect(screen.getByRole("textbox")).toHaveValue("Serif (Georgia)");
+			// Font family select is the second textbox (after theme)
+			const textboxes = screen.getAllByRole("textbox");
+			expect(textboxes[1]).toHaveValue("Serif (Georgia)");
 		});
 
 		it("should show sans-serif option as selected", () => {
@@ -352,7 +465,8 @@ describe("EpubReaderSettings", () => {
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />
 			);
 
-			expect(screen.getByRole("textbox")).toHaveValue("Sans-serif (Helvetica)");
+			const textboxes = screen.getAllByRole("textbox");
+			expect(textboxes[1]).toHaveValue("Sans-serif (Helvetica)");
 		});
 
 		it("should show monospace option as selected", () => {
@@ -362,7 +476,8 @@ describe("EpubReaderSettings", () => {
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />
 			);
 
-			expect(screen.getByRole("textbox")).toHaveValue("Monospace (Courier)");
+			const textboxes = screen.getAllByRole("textbox");
+			expect(textboxes[1]).toHaveValue("Monospace (Courier)");
 		});
 
 		it("should show dyslexic option as selected", () => {
@@ -372,7 +487,8 @@ describe("EpubReaderSettings", () => {
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />
 			);
 
-			expect(screen.getByRole("textbox")).toHaveValue("Dyslexic-friendly");
+			const textboxes = screen.getAllByRole("textbox");
+			expect(textboxes[1]).toHaveValue("Dyslexic-friendly");
 		});
 	});
 
@@ -482,7 +598,9 @@ describe("EpubReaderSettings", () => {
 			);
 
 			// Check that the UI reflects the store state
-			expect(screen.getByRole("textbox")).toHaveValue("Serif (Georgia)");
+			// Font family select is the second textbox (after theme)
+			const textboxes = screen.getAllByRole("textbox");
+			expect(textboxes[1]).toHaveValue("Serif (Georgia)");
 			// Use getAllByText since multiple percentage values may exist
 			expect(screen.getByText("210%")).toBeInTheDocument();
 			expect(screen.getByText("25%")).toBeInTheDocument();

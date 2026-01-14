@@ -20,7 +20,9 @@ export type PageLayout = "single" | "double" | "continuous";
 export type ReadingDirection = "ltr" | "rtl" | "ttb" | "webtoon";
 export type BackgroundColor = "black" | "gray" | "white";
 export type PdfMode = "streaming" | "native";
-export type EpubTheme = "light" | "sepia" | "dark" | "mint" | "slate";
+/** PDF spread mode for native PDF reader */
+export type PdfSpreadMode = "single" | "double" | "double-odd";
+export type EpubTheme = "light" | "sepia" | "dark" | "mint" | "slate" | "night" | "paper" | "ocean" | "forest" | "rose";
 export type EpubFontFamily = "default" | "serif" | "sans-serif" | "monospace" | "dyslexic";
 export type BoundaryState = "none" | "at-start" | "at-end";
 export type PageTransition = "none" | "fade" | "slide";
@@ -47,6 +49,10 @@ export interface ReaderSettings {
 	backgroundColor: BackgroundColor;
 	/** For PDF files: streaming (image-based) or native (pdf.js) */
 	pdfMode: PdfMode;
+	/** PDF spread mode for native reader: single, double, or double-odd */
+	pdfSpreadMode: PdfSpreadMode;
+	/** PDF continuous scroll mode (vertical scrolling through all pages) */
+	pdfContinuousScroll: boolean;
 	/** Auto-hide toolbar after delay */
 	autoHideToolbar: boolean;
 	/** Toolbar auto-hide delay in ms */
@@ -126,6 +132,8 @@ export interface ReaderState {
 	setBackgroundColor: (color: BackgroundColor) => void;
 	cycleBackgroundColor: () => void;
 	setPdfMode: (mode: PdfMode) => void;
+	setPdfSpreadMode: (mode: PdfSpreadMode) => void;
+	setPdfContinuousScroll: (enabled: boolean) => void;
 	setAutoHideToolbar: (enabled: boolean) => void;
 	setToolbarHideDelay: (delay: number) => void;
 	setEpubTheme: (theme: EpubTheme) => void;
@@ -204,6 +212,8 @@ const DEFAULT_SETTINGS: ReaderSettings = {
 	readingDirection: "ltr",
 	backgroundColor: "black",
 	pdfMode: "streaming",
+	pdfSpreadMode: "single",
+	pdfContinuousScroll: false,
 	autoHideToolbar: true,
 	toolbarHideDelay: 3000,
 	epubTheme: "light",
@@ -298,6 +308,16 @@ export const useReaderStore = create<ReaderState>()(
 				setPdfMode: (mode) =>
 					set((state) => {
 						state.settings.pdfMode = mode;
+					}),
+
+				setPdfSpreadMode: (mode) =>
+					set((state) => {
+						state.settings.pdfSpreadMode = mode;
+					}),
+
+				setPdfContinuousScroll: (enabled) =>
+					set((state) => {
+						state.settings.pdfContinuousScroll = enabled;
 					}),
 
 				setAutoHideToolbar: (enabled) =>

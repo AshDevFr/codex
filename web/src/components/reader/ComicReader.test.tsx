@@ -25,6 +25,9 @@ vi.mock("./hooks", () => ({
 	useKeyboardNav: vi.fn(),
 	useReadProgress: (...args: unknown[]) => mockUseReadProgress(...args),
 	useSeriesNavigation: (...args: unknown[]) => mockUseSeriesNavigation(...args),
+	useTouchNav: vi.fn(() => ({
+		touchRef: vi.fn(),
+	})),
 }));
 
 // Mock the API client
@@ -45,6 +48,8 @@ const defaultSettings = {
 	readingDirection: "ltr" as const,
 	backgroundColor: "black" as const,
 	pdfMode: "streaming" as const,
+	pdfSpreadMode: "single" as const,
+	pdfContinuousScroll: false,
 	autoHideToolbar: true,
 	toolbarHideDelay: 3000,
 	epubTheme: "light" as const,

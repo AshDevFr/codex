@@ -17,7 +17,9 @@ import {
 	useKeyboardNav,
 	useReadProgress,
 	useSeriesNavigation,
+	useTouchNav,
 } from "./hooks";
+import { PdfContinuousScrollReader } from "./PdfContinuousScrollReader";
 import { PdfReaderSettings } from "./PdfReaderSettings";
 import { ReaderToolbar } from "./ReaderToolbar";
 
@@ -52,6 +54,12 @@ export interface PdfReaderProps {
 	startPage?: number;
 	/** Callback when reader should close */
 	onClose: () => void;
+	/** Whether this book has a per-book PDF mode preference saved */
+	hasPerBookPdfMode?: boolean;
+	/** Callback to save per-book PDF mode preference */
+	onSavePerBookPdfMode?: (mode: "streaming" | "native") => void;
+	/** Callback to clear per-book PDF mode preference */
+	onClearPerBookPdfMode?: () => void;
 }
 
 /**
@@ -70,6 +78,9 @@ export function PdfReader({
 	totalPages: _backendTotalPages,
 	startPage,
 	onClose,
+	hasPerBookPdfMode,
+	onSavePerBookPdfMode,
+	onClearPerBookPdfMode,
 }: PdfReaderProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const pageContainerRef = useRef<HTMLDivElement>(null);
@@ -106,6 +117,12 @@ export function PdfReader({
 	);
 	const backgroundColor = useReaderStore(
 		(state) => state.settings.backgroundColor,
+	);
+	const pdfSpreadMode = useReaderStore(
+		(state) => state.settings.pdfSpreadMode,
+	);
+	const pdfContinuousScroll = useReaderStore(
+		(state) => state.settings.pdfContinuousScroll,
 	);
 	const adjacentBooks = useReaderStore((state) => state.adjacentBooks);
 	const boundaryState = useReaderStore((state) => state.boundaryState);
@@ -291,6 +308,25 @@ export function PdfReader({
 		onPrevPage: handlePrevPage,
 	});
 
+	// Touch/swipe navigation for mobile devices
+	const { touchRef } = useTouchNav({
+		enabled: !settingsOpened && !searchOpen,
+		onNextPage: handleNextPage,
+		onPrevPage: handlePrevPage,
+		onTap: toggleToolbar,
+	});
+
+	// Combined ref callback for page container (both pageContainerRef and touchRef)
+	const setPageContainerRef = useCallback(
+		(element: HTMLDivElement | null) => {
+			// Update the regular ref
+			(pageContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = element;
+			// Update touch ref
+			touchRef(element);
+		},
+		[touchRef],
+	);
+
 	// Handle Ctrl+F for search
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
@@ -354,6 +390,71 @@ export function PdfReader({
 
 	// Page dimensions for rendering
 	const pageDimensions = useMemo(() => getPageDimensions(), [getPageDimensions]);
+
+	// Calculate spread page dimensions (half width for double page modes)
+	const spreadPageDimensions = useMemo(() => {
+		if (pdfSpreadMode === "single") {
+			return pageDimensions;
+		}
+		// For double modes, halve the width to fit two pages
+		if ("width" in pageDimensions && pageDimensions.width !== undefined) {
+			return { ...pageDimensions, width: Math.floor(pageDimensions.width / 2) - 10 };
+		}
+		if ("scale" in pageDimensions && pageDimensions.scale !== undefined) {
+			return { ...pageDimensions, scale: pageDimensions.scale * 0.5 };
+		}
+		// For fit-page mode, use half height to maintain aspect ratio with two pages
+		if ("height" in pageDimensions && pageDimensions.height !== undefined) {
+			return { ...pageDimensions, height: pageDimensions.height * 0.9 };
+		}
+		return pageDimensions;
+	}, [pageDimensions, pdfSpreadMode]);
+
+	// Calculate which pages to display based on spread mode
+	const spreadPages = useMemo((): { left: number | null; right: number | null } => {
+		if (pdfSpreadMode === "single") {
+			return { left: currentPage, right: null };
+		}
+
+		if (pdfSpreadMode === "double") {
+			// Double mode: show pages in pairs (1-2, 3-4, etc.)
+			// Current page determines the spread
+			const isOddPage = currentPage % 2 === 1;
+			if (isOddPage) {
+				// Odd page is on left
+				return {
+					left: currentPage,
+					right: currentPage + 1 <= numPages ? currentPage + 1 : null,
+				};
+			} else {
+				// Even page - show with previous odd page
+				return {
+					left: currentPage - 1,
+					right: currentPage,
+				};
+			}
+		}
+
+		// double-odd: First page alone, then pairs starting from even pages (2-3, 4-5, etc.)
+		// This is typical for books where page 1 is the cover
+		if (currentPage === 1) {
+			return { left: 1, right: null };
+		}
+		const isEvenPage = currentPage % 2 === 0;
+		if (isEvenPage) {
+			// Even page is on left
+			return {
+				left: currentPage,
+				right: currentPage + 1 <= numPages ? currentPage + 1 : null,
+			};
+		} else {
+			// Odd page (except 1) - show with previous even page
+			return {
+				left: currentPage - 1,
+				right: currentPage,
+			};
+		}
+	}, [currentPage, numPages, pdfSpreadMode]);
 
 	// Background color style
 	const bgColor = useMemo(() => {
@@ -473,62 +574,138 @@ export function PdfReader({
 				</Box>
 			)}
 
-			{/* PDF Document */}
-			<Box
-				ref={pageContainerRef}
-				onClick={handlePageClick}
-				style={pageContainerStyle}
-			>
-				{pageError ? (
-					<Center style={{ width: "100%", height: "100%" }}>
-						<Text c="red">{pageError}</Text>
-					</Center>
-				) : (
-					<Document
-						file={pdfUrl}
-						onLoadSuccess={handleDocumentLoadSuccess}
-						onLoadError={handleDocumentLoadError}
-						loading={
-							<Center style={{ width: "100%", height: 400 }}>
-								<Loader size="lg" color="gray" />
-							</Center>
-						}
-					>
-						<Page
-							pageNumber={currentPage}
-							width={pageDimensions.width}
-							height={pageDimensions.height}
-							scale={"scale" in pageDimensions ? pageDimensions.scale : undefined}
-							renderTextLayer={true}
-							renderAnnotationLayer={true}
+			{/* PDF Document - Continuous Scroll or Paginated */}
+			{pdfContinuousScroll ? (
+				<Box
+					style={{
+						position: "absolute",
+						top: toolbarVisible ? 64 : 0,
+						left: 0,
+						right: 0,
+						bottom: 0,
+						transition: "top 0.2s ease-in-out",
+					}}
+				>
+					<PdfContinuousScrollReader
+						bookId={bookId}
+						totalPages={numPages}
+						initialPage={currentPage}
+						zoomLevel={zoomLevel}
+						backgroundColor={backgroundColor}
+						searchText={debouncedSearchText}
+						onDocumentLoadSuccess={handleDocumentLoadSuccess}
+						onDocumentLoadError={handleDocumentLoadError}
+					/>
+				</Box>
+			) : (
+				<Box
+					ref={setPageContainerRef}
+					onClick={handlePageClick}
+					style={{ ...pageContainerStyle, touchAction: "none" }}
+				>
+					{pageError ? (
+						<Center style={{ width: "100%", height: "100%" }}>
+							<Text c="red">{pageError}</Text>
+						</Center>
+					) : (
+						<Document
+							file={pdfUrl}
+							onLoadSuccess={handleDocumentLoadSuccess}
+							onLoadError={handleDocumentLoadError}
 							loading={
 								<Center style={{ width: "100%", height: 400 }}>
-									<Loader size="md" color="gray" />
+									<Loader size="lg" color="gray" />
 								</Center>
 							}
-							customTextRenderer={
-								debouncedSearchText
-									? ({ str }) => {
-											if (!debouncedSearchText) return str;
-											const regex = new RegExp(
-												`(${debouncedSearchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
-												"gi",
-											);
-											const parts = str.split(regex);
-											return parts
-												.map((part) =>
-													regex.test(part)
-														? `<mark style="background-color: yellow; padding: 0;">${part}</mark>`
-														: part,
-												)
-												.join("");
+						>
+							<Box
+								style={{
+									display: "flex",
+									flexDirection: "row",
+									gap: pdfSpreadMode !== "single" ? "8px" : "0",
+									justifyContent: "center",
+									alignItems: "flex-start",
+								}}
+							>
+								{/* Left page (or single page) */}
+								{spreadPages.left && (
+									<Page
+										pageNumber={spreadPages.left}
+										width={pdfSpreadMode === "single" ? pageDimensions.width : spreadPageDimensions.width}
+										height={pdfSpreadMode === "single" ? pageDimensions.height : spreadPageDimensions.height}
+										scale={
+											pdfSpreadMode === "single"
+												? ("scale" in pageDimensions ? pageDimensions.scale : undefined)
+												: ("scale" in spreadPageDimensions ? spreadPageDimensions.scale : undefined)
 										}
-									: undefined
-							}
-						/>
-					</Document>
-				)}
-			</Box>
+										renderTextLayer={true}
+										renderAnnotationLayer={true}
+										loading={
+											<Center style={{ width: "100%", height: 400 }}>
+												<Loader size="md" color="gray" />
+											</Center>
+										}
+										customTextRenderer={
+											debouncedSearchText
+												? ({ str }) => {
+														if (!debouncedSearchText) return str;
+														const regex = new RegExp(
+															`(${debouncedSearchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
+															"gi",
+														);
+														const parts = str.split(regex);
+														return parts
+															.map((part) =>
+																regex.test(part)
+																	? `<mark style="background-color: yellow; padding: 0;">${part}</mark>`
+																	: part,
+															)
+															.join("");
+													}
+												: undefined
+										}
+									/>
+								)}
+								{/* Right page (only in spread modes) */}
+								{spreadPages.right && (
+									<Page
+										pageNumber={spreadPages.right}
+										width={spreadPageDimensions.width}
+										height={spreadPageDimensions.height}
+										scale={"scale" in spreadPageDimensions ? spreadPageDimensions.scale : undefined}
+										renderTextLayer={true}
+										renderAnnotationLayer={true}
+										loading={
+											<Center style={{ width: "100%", height: 400 }}>
+												<Loader size="md" color="gray" />
+											</Center>
+										}
+										customTextRenderer={
+											debouncedSearchText
+												? ({ str }) => {
+														if (!debouncedSearchText) return str;
+														const regex = new RegExp(
+															`(${debouncedSearchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
+															"gi",
+														);
+														const parts = str.split(regex);
+														return parts
+															.map((part) =>
+																regex.test(part)
+																	? `<mark style="background-color: yellow; padding: 0;">${part}</mark>`
+																	: part,
+															)
+															.join("");
+													}
+												: undefined
+										}
+									/>
+								)}
+							</Box>
+						</Document>
+					)}
+				</Box>
+			)}
 
 			{/* Settings modal */}
 			<PdfReaderSettings
@@ -536,6 +713,9 @@ export function PdfReader({
 				onClose={() => setSettingsOpened(false)}
 				zoomLevel={zoomLevel}
 				onZoomChange={setZoomLevel}
+				hasPerBookPdfMode={hasPerBookPdfMode}
+				onSavePerBookPdfMode={onSavePerBookPdfMode}
+				onClearPerBookPdfMode={onClearPerBookPdfMode}
 			/>
 		</Box>
 	);

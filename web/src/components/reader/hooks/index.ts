@@ -3,5 +3,8 @@ export type { EpubBookmark } from "./useEpubBookmarks";
 export { useEpubBookmarks } from "./useEpubBookmarks";
 export { useEpubProgress } from "./useEpubProgress";
 export { useKeyboardNav } from "./useKeyboardNav";
+export type { PerBookSettings } from "./usePerBookSettings";
+export { usePerBookSettings } from "./usePerBookSettings";
 export { useReadProgress } from "./useReadProgress";
 export { useSeriesNavigation } from "./useSeriesNavigation";
+export { useTouchNav } from "./useTouchNav";

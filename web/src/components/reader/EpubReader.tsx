@@ -1,4 +1,5 @@
-import { Box, Center, Loader } from "@mantine/core";
+import { ActionIcon, Box, Center, Group, Loader, Tooltip } from "@mantine/core";
+import { IconPlayerSkipBack, IconPlayerSkipForward } from "@tabler/icons-react";
 import type { Location, NavItem, Rendition } from "epubjs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -9,12 +10,15 @@ import {
 
 import { useReaderStore } from "@/store/readerStore";
 
+import { BoundaryNotification } from "./BoundaryNotification";
 import { EpubBookmarks } from "./EpubBookmarks";
 import { EpubReaderSettings } from "./EpubReaderSettings";
 import { EpubSearch, type SearchResult } from "./EpubSearch";
 import { EpubTableOfContents } from "./EpubTableOfContents";
+import { useAdjacentBooks } from "./hooks/useAdjacentBooks";
 import { useEpubBookmarks } from "./hooks/useEpubBookmarks";
 import { useEpubProgress } from "./hooks/useEpubProgress";
+import { useSeriesNavigation } from "./hooks/useSeriesNavigation";
 import { ReaderToolbar } from "./ReaderToolbar";
 
 // EPUB theme definitions
@@ -47,6 +51,37 @@ const EPUB_THEMES = {
 		body: {
 			background: "#263238",
 			color: "#b0bec5",
+		},
+	},
+	// New themes
+	night: {
+		body: {
+			background: "#000000", // True black for OLED screens
+			color: "#cccccc",
+		},
+	},
+	paper: {
+		body: {
+			background: "#f5f2e8", // Warm off-white, easier on eyes
+			color: "#3d3d3d",
+		},
+	},
+	ocean: {
+		body: {
+			background: "#1a2634", // Deep blue-gray for evening reading
+			color: "#a8c7d9",
+		},
+	},
+	forest: {
+		body: {
+			background: "#1e2e1e", // Dark forest green
+			color: "#a8c9a8",
+		},
+	},
+	rose: {
+		body: {
+			background: "#f9f0f0", // Soft pink/rose tint
+			color: "#4a3535",
 		},
 	},
 } as const;
@@ -91,6 +126,8 @@ function getReaderStyles(theme: EpubTheme): IReactReaderStyle {
 interface EpubReaderProps {
 	/** Book ID */
 	bookId: string;
+	/** Series ID (for series navigation) */
+	seriesId: string | null;
 	/** Book title for display */
 	title: string;
 	/** Total pages in the book (for progress calculation) */
@@ -114,6 +151,7 @@ interface EpubReaderProps {
  */
 export function EpubReader({
 	bookId,
+	seriesId,
 	title,
 	totalPages,
 	startPercent,
@@ -145,6 +183,29 @@ export function EpubReader({
 		isBookmarked,
 		getBookmarkByCfi,
 	} = useEpubBookmarks({ bookId });
+
+	// Series navigation - fetch adjacent books and handle boundary navigation
+	useAdjacentBooks(bookId, seriesId);
+
+	// State for boundary notification message
+	const [boundaryMessage, setBoundaryMessage] = useState<string | null>(null);
+
+	// Series navigation with boundary handling
+	const {
+		canGoPrevBook,
+		canGoNextBook,
+		goToPrevBook,
+		goToNextBook,
+		boundaryState,
+	} = useSeriesNavigation({
+		onBoundaryChange: (_state, message) => {
+			setBoundaryMessage(message);
+			// Auto-clear message after 3 seconds
+			if (message) {
+				setTimeout(() => setBoundaryMessage(null), 3000);
+			}
+		},
+	});
 
 	// Use ref for saveLocation to avoid re-creating handleGetRendition
 	const saveLocationRef = useRef(saveLocation);
@@ -698,7 +759,35 @@ export function EpubReader({
 					/>
 				}
 				rightActions={
-					<>
+					<Group gap="xs">
+						{/* Previous book in series */}
+						<Tooltip label="Previous book in series" disabled={!canGoPrevBook}>
+							<ActionIcon
+								variant="subtle"
+								color="gray"
+								size="lg"
+								onClick={goToPrevBook}
+								disabled={!canGoPrevBook}
+								aria-label="Previous book"
+							>
+								<IconPlayerSkipBack size={20} />
+							</ActionIcon>
+						</Tooltip>
+
+						{/* Next book in series */}
+						<Tooltip label="Next book in series" disabled={!canGoNextBook}>
+							<ActionIcon
+								variant="subtle"
+								color="gray"
+								size="lg"
+								onClick={goToNextBook}
+								disabled={!canGoNextBook}
+								aria-label="Next book"
+							>
+								<IconPlayerSkipForward size={20} />
+							</ActionIcon>
+						</Tooltip>
+
 						<EpubBookmarks
 							bookmarks={bookmarks}
 							isCurrentLocationBookmarked={isCurrentLocationBookmarked}
@@ -716,8 +805,15 @@ export function EpubReader({
 							onSearch={handleSearch}
 							onNavigate={handleSearchNavigate}
 						/>
-					</>
+					</Group>
 				}
+			/>
+
+			{/* Boundary notification for series navigation */}
+			<BoundaryNotification
+				visible={boundaryState !== "none" && boundaryMessage !== null}
+				message={boundaryMessage}
+				type={boundaryState === "at-end" ? "end" : "start"}
 			/>
 
 			{/* Loading overlay */}

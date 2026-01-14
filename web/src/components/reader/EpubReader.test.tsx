@@ -90,6 +90,8 @@ const defaultSettings = {
 	readingDirection: "ltr" as const,
 	backgroundColor: "black" as const,
 	pdfMode: "streaming" as const,
+	pdfSpreadMode: "single" as const,
+	pdfContinuousScroll: false,
 	autoHideToolbar: true,
 	toolbarHideDelay: 3000,
 	epubTheme: "light" as const,
