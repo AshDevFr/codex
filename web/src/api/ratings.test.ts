@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { api } from "./client";
 import {
 	displayToStorageRating,
 	ratingsApi,
 	storageToDisplayRating,
 } from "./ratings";
-import { api } from "./client";
 
 // Mock the api client
 vi.mock("./client", () => ({
@@ -142,7 +142,11 @@ describe("ratingsApi", () => {
 
 			vi.mocked(api.put).mockResolvedValueOnce({ data: mockRating });
 
-			const result = await ratingsApi.setUserRating("series-123", 85, "Great series!");
+			const result = await ratingsApi.setUserRating(
+				"series-123",
+				85,
+				"Great series!",
+			);
 
 			expect(api.put).toHaveBeenCalledWith("/series/series-123/rating", {
 				rating: 85,

@@ -4,6 +4,6 @@
  * Re-exports all mock-related utilities.
  */
 
-export { handlers } from "./handlers";
-export { worker, startMockServiceWorker } from "./browser";
+export { startMockServiceWorker, worker } from "./browser";
 export * from "./data/factories";
+export { handlers } from "./handlers";

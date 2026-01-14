@@ -19,13 +19,16 @@ export type MockLibrary = LibraryDto;
 export type MockSeries = SeriesDto & { libraryName?: string };
 // MockBook includes libraryId for mock filtering (books are associated with libraries via series)
 export type MockBook = BookDto & { libraryId?: string };
-export type ReadProgressResponse = components["schemas"]["ReadProgressResponse"];
+export type ReadProgressResponse =
+	components["schemas"]["ReadProgressResponse"];
 export type MetricsDto = components["schemas"]["MetricsDto"];
 export type LibraryMetricsDto = components["schemas"]["LibraryMetricsDto"];
 export type TaskMetricsResponse = components["schemas"]["TaskMetricsResponse"];
-export type TaskMetricsSummaryDto = components["schemas"]["TaskMetricsSummaryDto"];
+export type TaskMetricsSummaryDto =
+	components["schemas"]["TaskMetricsSummaryDto"];
 export type TaskTypeMetricsDto = components["schemas"]["TaskTypeMetricsDto"];
-export type QueueHealthMetricsDto = components["schemas"]["QueueHealthMetricsDto"];
+export type QueueHealthMetricsDto =
+	components["schemas"]["QueueHealthMetricsDto"];
 export type TaskResponse = components["schemas"]["TaskResponse"];
 export type TaskStats = components["schemas"]["TaskStats"];
 export type SettingDto = components["schemas"]["SettingDto"];
@@ -68,7 +71,9 @@ export const createUser = (overrides: Partial<UserDto> = {}): UserDto => ({
 /**
  * Library factory - matches LibraryDto schema
  */
-export const createLibrary = (overrides: Partial<LibraryDto> = {}): LibraryDto => {
+export const createLibrary = (
+	overrides: Partial<LibraryDto> = {},
+): LibraryDto => {
 	const name =
 		overrides.name ||
 		faker.helpers.arrayElement(["Comics", "Manga", "Ebooks", "Graphic Novels"]);
@@ -97,7 +102,9 @@ export const createLibrary = (overrides: Partial<LibraryDto> = {}): LibraryDto =
 /**
  * Series factory - matches SeriesDto schema with optional mock extensions
  */
-export const createSeries = (overrides: Partial<MockSeries> = {}): MockSeries => {
+export const createSeries = (
+	overrides: Partial<MockSeries> = {},
+): MockSeries => {
 	const publishers = [
 		"DC Comics",
 		"Marvel",
@@ -179,7 +186,7 @@ export const createBook = (overrides: Partial<MockBook> = {}): MockBook => {
  * Read progress factory - matches ReadProgressResponse schema
  */
 export const createReadProgress = (
-	overrides: Partial<ReadProgressResponse> = {}
+	overrides: Partial<ReadProgressResponse> = {},
 ): ReadProgressResponse => ({
 	id: faker.string.uuid(),
 	user_id: faker.string.uuid(),
@@ -195,18 +202,24 @@ export const createReadProgress = (
 /**
  * Setting factory - matches SettingDto schema
  */
-export const createSetting = (overrides: Partial<SettingDto> = {}): SettingDto => ({
+export const createSetting = (
+	overrides: Partial<SettingDto> = {},
+): SettingDto => ({
 	id: faker.string.uuid(),
-	key: overrides.key || faker.helpers.arrayElement([
-		"server.name",
-		"server.port",
-		"auth.registration_enabled",
-		"scanning.default_interval",
-	]),
+	key:
+		overrides.key ||
+		faker.helpers.arrayElement([
+			"server.name",
+			"server.port",
+			"auth.registration_enabled",
+			"scanning.default_interval",
+		]),
 	value: overrides.value || faker.word.sample(),
 	default_value: overrides.default_value || faker.word.sample(),
 	description: faker.lorem.sentence(),
-	category: overrides.category || faker.helpers.arrayElement(["server", "auth", "scanning"]),
+	category:
+		overrides.category ||
+		faker.helpers.arrayElement(["server", "auth", "scanning"]),
 	value_type: "string",
 	is_sensitive: false,
 	updated_at: faker.date.recent().toISOString(),
@@ -219,7 +232,7 @@ export const createSetting = (overrides: Partial<SettingDto> = {}): SettingDto =
  * Setting history factory - matches SettingHistoryDto schema
  */
 export const createSettingHistory = (
-	overrides: Partial<SettingHistoryDto> = {}
+	overrides: Partial<SettingHistoryDto> = {},
 ): SettingHistoryDto => ({
 	id: faker.string.uuid(),
 	setting_id: faker.string.uuid(),
@@ -236,15 +249,24 @@ export const createSettingHistory = (
 /**
  * Task factory - matches TaskDto schema
  */
-export const createTask = (overrides: Partial<TaskResponse> = {}): TaskResponse => {
-	const statuses: TaskResponse["status"][] = ["pending", "processing", "completed", "failed"];
+export const createTask = (
+	overrides: Partial<TaskResponse> = {},
+): TaskResponse => {
+	const statuses: TaskResponse["status"][] = [
+		"pending",
+		"processing",
+		"completed",
+		"failed",
+	];
 	return {
 		id: faker.string.uuid(),
-		task_type: overrides.task_type || faker.helpers.arrayElement([
-			"scan_library",
-			"generate_thumbnails",
-			"analyze_metadata",
-		]),
+		task_type:
+			overrides.task_type ||
+			faker.helpers.arrayElement([
+				"scan_library",
+				"generate_thumbnails",
+				"analyze_metadata",
+			]),
 		status: overrides.status || faker.helpers.arrayElement(statuses),
 		priority: faker.number.int({ min: 0, max: 10 }),
 		attempts: faker.number.int({ min: 0, max: 3 }),
@@ -268,7 +290,9 @@ export const createTask = (overrides: Partial<TaskResponse> = {}): TaskResponse 
 /**
  * Task stats factory - matches TaskStats schema
  */
-export const createTaskStats = (overrides: Partial<TaskStats> = {}): TaskStats => ({
+export const createTaskStats = (
+	overrides: Partial<TaskStats> = {},
+): TaskStats => ({
 	pending: faker.number.int({ min: 0, max: 50 }),
 	processing: faker.number.int({ min: 0, max: 10 }),
 	completed: faker.number.int({ min: 100, max: 5000 }),
@@ -282,11 +306,16 @@ export const createTaskStats = (overrides: Partial<TaskStats> = {}): TaskStats =
 /**
  * Inventory metrics factory - matches MetricsDto schema
  */
-export const createInventoryMetrics = (overrides: Partial<MetricsDto> = {}): MetricsDto => ({
+export const createInventoryMetrics = (
+	overrides: Partial<MetricsDto> = {},
+): MetricsDto => ({
 	library_count: faker.number.int({ min: 1, max: 10 }),
 	series_count: faker.number.int({ min: 10, max: 500 }),
 	book_count: faker.number.int({ min: 100, max: 10000 }),
-	total_book_size: faker.number.int({ min: 1_000_000_000, max: 100_000_000_000 }),
+	total_book_size: faker.number.int({
+		min: 1_000_000_000,
+		max: 100_000_000_000,
+	}),
 	user_count: faker.number.int({ min: 1, max: 50 }),
 	database_size: faker.number.int({ min: 10_000_000, max: 500_000_000 }),
 	page_count: faker.number.int({ min: 10000, max: 500000 }),
@@ -298,7 +327,7 @@ export const createInventoryMetrics = (overrides: Partial<MetricsDto> = {}): Met
  * Library metrics factory - matches LibraryMetricsDto schema
  */
 export const createLibraryMetrics = (
-	overrides: Partial<LibraryMetricsDto> = {}
+	overrides: Partial<LibraryMetricsDto> = {},
 ): LibraryMetricsDto => ({
 	id: faker.string.uuid(),
 	name: faker.helpers.arrayElement(["Comics", "Manga", "Ebooks"]),
@@ -312,7 +341,7 @@ export const createLibraryMetrics = (
  * Task metrics factory - matches TaskMetricsResponse schema
  */
 export const createTaskMetrics = (
-	overrides: Partial<TaskMetricsResponse> = {}
+	overrides: Partial<TaskMetricsResponse> = {},
 ): TaskMetricsResponse => ({
 	updated_at: faker.date.recent().toISOString(),
 	retention: "30",
@@ -338,7 +367,7 @@ export const createTaskMetrics = (
  * Task type metrics factory - matches TaskTypeMetricsDto schema
  */
 export const createTaskTypeMetrics = (
-	overrides: Partial<TaskTypeMetricsDto> = {}
+	overrides: Partial<TaskTypeMetricsDto> = {},
 ): TaskTypeMetricsDto => ({
 	task_type: overrides.task_type || "scan_library",
 	executed: faker.number.int({ min: 10, max: 1000 }),
@@ -364,7 +393,7 @@ export const createTaskTypeMetrics = (
  * Duplicate group factory - matches DuplicateGroup schema
  */
 export const createDuplicateGroup = (
-	overrides: Partial<DuplicateGroup> = {}
+	overrides: Partial<DuplicateGroup> = {},
 ): DuplicateGroup => ({
 	id: faker.string.uuid(),
 	file_hash: faker.string.alphanumeric(64),
@@ -381,7 +410,7 @@ export const createDuplicateGroup = (
  */
 export const createPaginatedResponse = <T>(
 	data: T[],
-	options: { page?: number; pageSize?: number; total?: number } = {}
+	options: { page?: number; pageSize?: number; total?: number } = {},
 ): PaginatedResponse<T> => {
 	const page = options.page ?? 0;
 	const pageSize = options.pageSize ?? 20;
@@ -400,5 +429,7 @@ export const createPaginatedResponse = <T>(
 /**
  * Create a list of items
  */
-export const createList = <T>(factory: (index: number) => T, count: number): T[] =>
-	Array.from({ length: count }, (_, i) => factory(i));
+export const createList = <T>(
+	factory: (index: number) => T,
+	count: number,
+): T[] => Array.from({ length: count }, (_, i) => factory(i));

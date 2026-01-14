@@ -106,6 +106,7 @@ describe("LibraryModal (Edit Mode)", () => {
 
 		// Check that library name is populated
 		// Try getByLabelText first, fallback to placeholder
+		// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
 		let nameInput;
 		try {
 			nameInput = modalContent.getByLabelText("Library Name");
@@ -116,6 +117,7 @@ describe("LibraryModal (Edit Mode)", () => {
 
 		// Check that path is shown (read-only)
 		// Try getByLabelText first, fallback to placeholder
+		// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
 		let pathInput;
 		try {
 			pathInput = modalContent.getByLabelText("Library Path");
@@ -145,6 +147,7 @@ describe("LibraryModal (Edit Mode)", () => {
 		// Cron input should be visible
 		await waitFor(() => {
 			// Try getByLabelText first, fallback to placeholder or searching in document
+			// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
 			let cronInput;
 			try {
 				cronInput = modalContent.getByLabelText("Cron Schedule");
@@ -153,7 +156,8 @@ describe("LibraryModal (Edit Mode)", () => {
 					cronInput = screen.getByLabelText("Cron Schedule");
 				} catch {
 					// Fallback: find by placeholder or by the cron value
-					cronInput = modalContent.queryByPlaceholderText("0 0 * * *") ||
+					cronInput =
+						modalContent.queryByPlaceholderText("0 0 * * *") ||
 						screen.queryByDisplayValue("0 */6 * * *");
 				}
 			}
@@ -210,6 +214,7 @@ describe("LibraryModal (Edit Mode)", () => {
 
 		// Switch to auto scan
 		// Mantine Select renders as a button/combobox - find by displayed text first
+		// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
 		let selectInput;
 		try {
 			// Mantine Select shows the selected value as text
@@ -225,10 +230,12 @@ describe("LibraryModal (Edit Mode)", () => {
 					selectInput = allInteractive[0];
 				} else {
 					const buttons = modalContent.getAllByRole("button");
-					selectInput = buttons.find(btn =>
-						btn.textContent?.includes("Manual") ||
-						btn.closest("form")?.contains(label)
-					) || buttons[0];
+					selectInput =
+						buttons.find(
+							(btn) =>
+								btn.textContent?.includes("Manual") ||
+								btn.closest("form")?.contains(label),
+						) || buttons[0];
 				}
 			}
 		}
@@ -245,6 +252,7 @@ describe("LibraryModal (Edit Mode)", () => {
 		// Cron input should now be visible
 		await waitFor(() => {
 			// Try multiple ways to find the CronInput
+			// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
 			let cronInput;
 			try {
 				cronInput = modalContent.getByLabelText("Cron Schedule");
@@ -279,6 +287,7 @@ describe("LibraryModal (Edit Mode)", () => {
 
 		// Switch to auto scan
 		// Mantine Select renders as a button/combobox - find by displayed text first
+		// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
 		let selectInput;
 		try {
 			// Mantine Select shows the selected value as text
@@ -294,10 +303,12 @@ describe("LibraryModal (Edit Mode)", () => {
 					selectInput = allInteractive[0];
 				} else {
 					const buttons = modalContent.getAllByRole("button");
-					selectInput = buttons.find(btn =>
-						btn.textContent?.includes("Manual") ||
-						btn.closest("form")?.contains(label)
-					) || buttons[0];
+					selectInput =
+						buttons.find(
+							(btn) =>
+								btn.textContent?.includes("Manual") ||
+								btn.closest("form")?.contains(label),
+						) || buttons[0];
 				}
 			}
 		}
@@ -367,6 +378,7 @@ describe("LibraryModal (Edit Mode)", () => {
 
 		// Switch to manual scan
 		// Mantine Select renders as a button/combobox - find by displayed text first
+		// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
 		let selectInput;
 		try {
 			// Mantine Select shows the selected value as text
@@ -383,10 +395,12 @@ describe("LibraryModal (Edit Mode)", () => {
 					selectInput = allInteractive[0];
 				} else {
 					const buttons = modalContent.getAllByRole("button");
-					selectInput = buttons.find(btn =>
-						btn.textContent?.includes("Automatic") ||
-						btn.closest("form")?.contains(label)
-					) || buttons[0];
+					selectInput =
+						buttons.find(
+							(btn) =>
+								btn.textContent?.includes("Automatic") ||
+								btn.closest("form")?.contains(label),
+						) || buttons[0];
 				}
 			}
 		}
@@ -456,6 +470,7 @@ describe("LibraryModal (Edit Mode)", () => {
 
 		// Switch to auto scan
 		// Mantine Select renders as a button/combobox - find by displayed text first
+		// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
 		let selectInput;
 		try {
 			// Mantine Select shows the selected value as text
@@ -471,10 +486,12 @@ describe("LibraryModal (Edit Mode)", () => {
 					selectInput = allInteractive[0];
 				} else {
 					const buttons = modalContent.getAllByRole("button");
-					selectInput = buttons.find(btn =>
-						btn.textContent?.includes("Manual") ||
-						btn.closest("form")?.contains(label)
-					) || buttons[0];
+					selectInput =
+						buttons.find(
+							(btn) =>
+								btn.textContent?.includes("Manual") ||
+								btn.closest("form")?.contains(label),
+						) || buttons[0];
 				}
 			}
 		}
@@ -584,9 +601,13 @@ describe("LibraryModal (Edit Mode)", () => {
 			expect(cbzElements.length).toBeGreaterThan(0);
 		});
 		// Check other formats exist (may be multiple instances)
-		expect(screen.getAllByText("CBR (Comic Book RAR)").length).toBeGreaterThan(0);
+		expect(screen.getAllByText("CBR (Comic Book RAR)").length).toBeGreaterThan(
+			0,
+		);
 		expect(screen.getAllByText("EPUB (Ebook)").length).toBeGreaterThan(0);
-		expect(screen.getAllByText("PDF (Portable Document Format)").length).toBeGreaterThan(0);
+		expect(
+			screen.getAllByText("PDF (Portable Document Format)").length,
+		).toBeGreaterThan(0);
 	});
 
 	it("should use library's allowedFormats when provided", async () => {
@@ -685,17 +706,23 @@ describe("LibraryModal (Edit Mode)", () => {
 		await user.click(cbrOption);
 
 		// Wait for state to update after clicking
-		await waitFor(() => {
-			// Give time for the click to process and state to update
-		}, { timeout: 500 });
+		await waitFor(
+			() => {
+				// Give time for the click to process and state to update
+			},
+			{ timeout: 500 },
+		);
 
 		// Close dropdown by clicking outside or pressing escape
 		await user.keyboard("{Escape}");
 
 		// Wait for state to update after deselecting formats
-		await waitFor(() => {
-			// Give time for the MultiSelect state to update
-		}, { timeout: 500 });
+		await waitFor(
+			() => {
+				// Give time for the MultiSelect state to update
+			},
+			{ timeout: 500 },
+		);
 
 		// Submit form
 		const saveButton = screen.getByText("Save Changes");

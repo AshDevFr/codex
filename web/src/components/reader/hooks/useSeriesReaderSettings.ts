@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@/store/authStore";
 import {
-	type ForkableReaderSettings,
-	type SeriesReaderOverride,
 	createSeriesOverride,
 	extractForkableSettings,
+	type ForkableReaderSettings,
 	isSeriesReaderOverride,
+	type SeriesReaderOverride,
 	useReaderStore,
 } from "@/store/readerStore";
 
@@ -67,7 +67,10 @@ function readSeriesOverride(storageKey: string): SeriesReaderOverride | null {
 
 		return parsed;
 	} catch (error) {
-		console.warn(`Failed to read series override from localStorage: ${storageKey}`, error);
+		console.warn(
+			`Failed to read series override from localStorage: ${storageKey}`,
+			error,
+		);
 		return null;
 	}
 }
@@ -77,7 +80,10 @@ function readSeriesOverride(storageKey: string): SeriesReaderOverride | null {
  * Returns true on success, false on failure.
  * Dispatches a custom event to notify other hook instances.
  */
-function writeSeriesOverride(storageKey: string, override: SeriesReaderOverride): boolean {
+function writeSeriesOverride(
+	storageKey: string,
+	override: SeriesReaderOverride,
+): boolean {
 	try {
 		localStorage.setItem(storageKey, JSON.stringify(override));
 		// Dispatch custom event to sync other hook instances
@@ -87,7 +93,10 @@ function writeSeriesOverride(storageKey: string, override: SeriesReaderOverride)
 		return true;
 	} catch (error) {
 		// Handle quota exceeded or other storage errors
-		console.error(`Failed to write series override to localStorage: ${storageKey}`, error);
+		console.error(
+			`Failed to write series override to localStorage: ${storageKey}`,
+			error,
+		);
 		return false;
 	}
 }
@@ -104,7 +113,10 @@ function removeSeriesOverride(storageKey: string): void {
 			new CustomEvent(SERIES_SETTINGS_UPDATE_EVENT, { detail: { storageKey } }),
 		);
 	} catch (error) {
-		console.warn(`Failed to remove series override from localStorage: ${storageKey}`, error);
+		console.warn(
+			`Failed to remove series override from localStorage: ${storageKey}`,
+			error,
+		);
 	}
 }
 
@@ -158,7 +170,8 @@ export function useSeriesReaderSettings(
 	const globalSettings = useReaderStore((state) => state.settings);
 
 	// Local state for series override
-	const [seriesOverride, setSeriesOverride] = useState<SeriesReaderOverride | null>(null);
+	const [seriesOverride, setSeriesOverride] =
+		useState<SeriesReaderOverride | null>(null);
 	const [isLoaded, setIsLoaded] = useState(false);
 
 	// Compute storage key
@@ -190,7 +203,10 @@ export function useSeriesReaderSettings(
 
 		window.addEventListener(SERIES_SETTINGS_UPDATE_EVENT, handleSettingsUpdate);
 		return () => {
-			window.removeEventListener(SERIES_SETTINGS_UPDATE_EVENT, handleSettingsUpdate);
+			window.removeEventListener(
+				SERIES_SETTINGS_UPDATE_EVENT,
+				handleSettingsUpdate,
+			);
 		};
 	}, [storageKey]);
 
@@ -238,16 +254,24 @@ export function useSeriesReaderSettings(
 
 	// Update a specific setting
 	const updateSetting = useCallback(
-		<K extends keyof ForkableReaderSettings>(key: K, value: ForkableReaderSettings[K]) => {
+		<K extends keyof ForkableReaderSettings>(
+			key: K,
+			value: ForkableReaderSettings[K],
+		) => {
 			if (!storageKey) {
 				// No series context - update global store directly
-				const setters: Record<keyof ForkableReaderSettings, (v: unknown) => void> = {
+				const setters: Record<
+					keyof ForkableReaderSettings,
+					(v: unknown) => void
+				> = {
 					fitMode: useReaderStore.getState().setFitMode,
 					pageLayout: useReaderStore.getState().setPageLayout,
 					readingDirection: useReaderStore.getState().setReadingDirection,
 					backgroundColor: useReaderStore.getState().setBackgroundColor,
-					doublePageShowWideAlone: useReaderStore.getState().setDoublePageShowWideAlone,
-					doublePageStartOnOdd: useReaderStore.getState().setDoublePageStartOnOdd,
+					doublePageShowWideAlone:
+						useReaderStore.getState().setDoublePageShowWideAlone,
+					doublePageStartOnOdd:
+						useReaderStore.getState().setDoublePageStartOnOdd,
 				};
 				setters[key](value);
 				return;
@@ -325,7 +349,9 @@ export interface CleanupResult {
  * @param userId - User ID to find settings for
  * @returns Array of SeriesSettingsEntry objects
  */
-export function getSeriesSettingsForUser(userId: string): SeriesSettingsEntry[] {
+export function getSeriesSettingsForUser(
+	userId: string,
+): SeriesSettingsEntry[] {
 	const entries: SeriesSettingsEntry[] = [];
 	const keyPrefix = `${STORAGE_KEY_PREFIX}${userId}${SERIES_KEY_SUFFIX}`;
 
@@ -381,7 +407,10 @@ export function cleanupOrphanedSeriesSettings(
 				result.removed++;
 				result.removedKeys.push(entry.key);
 			} catch (error) {
-				console.warn(`Failed to remove orphaned series settings: ${entry.key}`, error);
+				console.warn(
+					`Failed to remove orphaned series settings: ${entry.key}`,
+					error,
+				);
 				result.errors++;
 			}
 		}
@@ -441,7 +470,10 @@ export function cleanupCorruptedSeriesSettings(userId: string): CleanupResult {
 				result.removed++;
 				result.removedKeys.push(entry.key);
 			} catch (error) {
-				console.warn(`Failed to remove corrupted series settings: ${entry.key}`, error);
+				console.warn(
+					`Failed to remove corrupted series settings: ${entry.key}`,
+					error,
+				);
 				result.errors++;
 			}
 		}

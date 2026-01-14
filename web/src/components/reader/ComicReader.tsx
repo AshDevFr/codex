@@ -74,7 +74,9 @@ export function ComicReader({
 	const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const initializedBookIdRef = useRef<string | null>(null);
 	const [settingsOpened, setSettingsOpened] = useState(false);
-	const [boundaryNotification, setBoundaryNotification] = useState<string | null>(null);
+	const [boundaryNotification, setBoundaryNotification] = useState<
+		string | null
+	>(null);
 
 	// Per-series settings (forkable settings with series overrides)
 	const {
@@ -284,7 +286,13 @@ export function ComicReader({
 	}, [setLastNavigationDirection, handlePrevPage]);
 
 	// Cycle fit mode - respects series settings if override exists
-	const FIT_MODE_CYCLE: FitMode[] = ["screen", "width", "width-shrink", "height", "original"];
+	const FIT_MODE_CYCLE: FitMode[] = [
+		"screen",
+		"width",
+		"width-shrink",
+		"height",
+		"original",
+	];
 	const handleCycleFitMode = useCallback(() => {
 		const currentIndex = FIT_MODE_CYCLE.indexOf(fitMode);
 		const nextIndex = (currentIndex + 1) % FIT_MODE_CYCLE.length;
@@ -326,7 +334,12 @@ export function ComicReader({
 				if (zone === "right") handlePrevPageWithDirection();
 			}
 		},
-		[readingDirection, handleNextPageWithDirection, handlePrevPageWithDirection, toggleToolbar],
+		[
+			readingDirection,
+			handleNextPageWithDirection,
+			handlePrevPageWithDirection,
+			toggleToolbar,
+		],
 	);
 
 	// Generate page URL
@@ -373,7 +386,13 @@ export function ComicReader({
 			pageNumber: pageNum,
 			src: getPageUrl(pageNum),
 		}));
-	}, [pageLayout, currentPage, currentSpread.pages, readingDirection, getPageUrl]);
+	}, [
+		pageLayout,
+		currentPage,
+		currentSpread.pages,
+		readingDirection,
+		getPageUrl,
+	]);
 
 	// Handle page orientation detection callback
 	const handlePageOrientationDetected = useCallback(
@@ -398,7 +417,14 @@ export function ComicReader({
 			// At end of book, trigger boundary detection via series navigation
 			handleNextPage();
 		}
-	}, [pageLayout, currentPage, spreadConfig, goToPage, handleNextPage, setLastNavigationDirection]);
+	}, [
+		pageLayout,
+		currentPage,
+		spreadConfig,
+		goToPage,
+		handleNextPage,
+		setLastNavigationDirection,
+	]);
 
 	// Spread-aware previous page navigation
 	const handleSpreadPrevPage = useCallback(() => {
@@ -415,7 +441,14 @@ export function ComicReader({
 			// At start of book, trigger boundary detection via series navigation
 			handlePrevPage();
 		}
-	}, [pageLayout, currentPage, spreadConfig, goToPage, handlePrevPage, setLastNavigationDirection]);
+	}, [
+		pageLayout,
+		currentPage,
+		spreadConfig,
+		goToPage,
+		handlePrevPage,
+		setLastNavigationDirection,
+	]);
 
 	// Handle click zones for double-page navigation (left/right halves only)
 	const handleDoublePageClick = useCallback(
@@ -437,16 +470,31 @@ export function ComicReader({
 	useKeyboardNav({
 		enabled: !settingsOpened,
 		onEscape: onClose,
-		onNextPage: pageLayout === "double" ? handleSpreadNextPage : handleNextPageWithDirection,
-		onPrevPage: pageLayout === "double" ? handleSpreadPrevPage : handlePrevPageWithDirection,
+		onNextPage:
+			pageLayout === "double"
+				? handleSpreadNextPage
+				: handleNextPageWithDirection,
+		onPrevPage:
+			pageLayout === "double"
+				? handleSpreadPrevPage
+				: handlePrevPageWithDirection,
 	});
 
 	// Touch/swipe navigation for mobile devices
 	// Only enabled for paginated modes (not continuous scroll)
 	const { touchRef } = useTouchNav({
-		enabled: !settingsOpened && pageLayout !== "continuous" && readingDirection !== "webtoon",
-		onNextPage: pageLayout === "double" ? handleSpreadNextPage : handleNextPageWithDirection,
-		onPrevPage: pageLayout === "double" ? handleSpreadPrevPage : handlePrevPageWithDirection,
+		enabled:
+			!settingsOpened &&
+			pageLayout !== "continuous" &&
+			readingDirection !== "webtoon",
+		onNextPage:
+			pageLayout === "double"
+				? handleSpreadNextPage
+				: handleNextPageWithDirection,
+		onPrevPage:
+			pageLayout === "double"
+				? handleSpreadPrevPage
+				: handlePrevPageWithDirection,
 		onTap: toggleToolbar,
 	});
 
@@ -459,7 +507,10 @@ export function ComicReader({
 			if (pageLayout === "double") {
 				// Use spread-aware preloading - double the count since each "page" in settings
 				// should mean one spread (2 pages) in double-page mode
-				pagesToPreload = [...pagesToPreload, ...getPreloadPages(currentPage, spreadConfig, preloadPages * 2)];
+				pagesToPreload = [
+					...pagesToPreload,
+					...getPreloadPages(currentPage, spreadConfig, preloadPages * 2),
+				];
 			} else {
 				// Single page preloading
 				for (let i = 1; i <= preloadPages; i++) {
@@ -468,9 +519,7 @@ export function ComicReader({
 			}
 		}
 
-		const validPages = pagesToPreload.filter(
-			(p) => p >= 1 && p <= totalPages,
-		);
+		const validPages = pagesToPreload.filter((p) => p >= 1 && p <= totalPages);
 
 		// Preload and track each image
 		for (const pageNum of validPages) {
@@ -481,7 +530,15 @@ export function ComicReader({
 			};
 			img.src = url;
 		}
-	}, [currentPage, totalPages, preloadPages, pageLayout, spreadConfig, getPageUrl, addPreloadedImage]);
+	}, [
+		currentPage,
+		totalPages,
+		preloadPages,
+		pageLayout,
+		spreadConfig,
+		getPageUrl,
+		addPreloadedImage,
+	]);
 
 	// Sync URL query parameter with current page
 	// Uses replaceState to avoid polluting browser history
@@ -573,7 +630,11 @@ export function ComicReader({
 					}}
 				>
 					<PageTransitionWrapper
-						pageKey={pageLayout === "double" ? displayPages.map(p => p.pageNumber).join("-") : String(currentPage)}
+						pageKey={
+							pageLayout === "double"
+								? displayPages.map((p) => p.pageNumber).join("-")
+								: String(currentPage)
+						}
 						transition={pageTransition}
 						duration={transitionDuration}
 						navigationDirection={lastNavigationDirection}

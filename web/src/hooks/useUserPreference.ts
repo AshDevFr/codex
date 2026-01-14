@@ -1,12 +1,12 @@
 import { useCallback, useEffect } from "react";
+import { useAuthStore } from "@/store/authStore";
 import {
-	useUserPreferencesStore,
-	selectPreference,
 	selectIsLoaded,
+	selectPreference,
 	useUserPreferencesHydrated,
+	useUserPreferencesStore,
 } from "@/store/userPreferencesStore";
 import type { PreferenceKey, TypedPreferences } from "@/types/preferences";
-import { useAuthStore } from "@/store/authStore";
 
 /**
  * Hook to access a single user preference with automatic loading and type safety.

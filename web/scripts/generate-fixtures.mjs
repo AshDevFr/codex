@@ -1,13 +1,14 @@
 #!/usr/bin/env node
+
 /**
  * Generate static mock fixture files (CBZ, EPUB, PDF) for frontend testing.
  * Run with: node scripts/generate-fixtures.mjs
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import JSZip from "jszip";
-import { writeFileSync, mkdirSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = join(__dirname, "../src/mocks/fixtures");
@@ -23,10 +24,10 @@ mkdirSync(FIXTURES_DIR, { recursive: true });
  * Generate SVG page content
  */
 function generateSvgPage(pageNumber, title) {
-  const colors = ["#2c3e50", "#34495e", "#1a252f", "#2d3436", "#0d1117"];
-  const bgColor = colors[pageNumber % colors.length];
+	const colors = ["#2c3e50", "#34495e", "#1a252f", "#2d3436", "#0d1117"];
+	const bgColor = colors[pageNumber % colors.length];
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
+	return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="800" height="1200" viewBox="0 0 800 1200">
   <rect width="100%" height="100%" fill="${bgColor}"/>
   <text x="400" y="100" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="32" font-weight="bold">${title}</text>
@@ -46,14 +47,14 @@ function generateSvgPage(pageNumber, title) {
  * Generate CBZ file (ZIP with comic pages)
  */
 async function generateCbz() {
-  const zip = new JSZip();
-  const title = "Sample Comic";
-  const pageCount = 20;
+	const zip = new JSZip();
+	const title = "Sample Comic";
+	const pageCount = 20;
 
-  // ComicInfo.xml
-  zip.file(
-    "ComicInfo.xml",
-    `<?xml version="1.0" encoding="UTF-8"?>
+	// ComicInfo.xml
+	zip.file(
+		"ComicInfo.xml",
+		`<?xml version="1.0" encoding="UTF-8"?>
 <ComicInfo>
   <Title>${title}</Title>
   <Series>Mock Series</Series>
@@ -64,65 +65,65 @@ async function generateCbz() {
   <Year>2024</Year>
   <PageCount>${pageCount}</PageCount>
   <Summary>${LOREM_IPSUM.substring(0, 200)}</Summary>
-</ComicInfo>`
-  );
+</ComicInfo>`,
+	);
 
-  // Add pages
-  for (let i = 1; i <= pageCount; i++) {
-    zip.file(
-      `page${String(i).padStart(3, "0")}.svg`,
-      generateSvgPage(i, title)
-    );
-  }
+	// Add pages
+	for (let i = 1; i <= pageCount; i++) {
+		zip.file(
+			`page${String(i).padStart(3, "0")}.svg`,
+			generateSvgPage(i, title),
+		);
+	}
 
-  const buffer = await zip.generateAsync({
-    type: "nodebuffer",
-    compression: "DEFLATE",
-  });
-  writeFileSync(join(FIXTURES_DIR, "sample.cbz"), buffer);
-  console.log("✓ Generated sample.cbz");
+	const buffer = await zip.generateAsync({
+		type: "nodebuffer",
+		compression: "DEFLATE",
+	});
+	writeFileSync(join(FIXTURES_DIR, "sample.cbz"), buffer);
+	console.log("✓ Generated sample.cbz");
 }
 
 /**
  * Generate EPUB file
  */
 async function generateEpub() {
-  const zip = new JSZip();
-  const title = "Sample Ebook";
-  const chapterCount = 10;
+	const zip = new JSZip();
+	const title = "Sample Ebook";
+	const chapterCount = 10;
 
-  // mimetype (must be first, uncompressed)
-  zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
+	// mimetype (must be first, uncompressed)
+	zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
 
-  // META-INF/container.xml
-  zip.file(
-    "META-INF/container.xml",
-    `<?xml version="1.0" encoding="UTF-8"?>
+	// META-INF/container.xml
+	zip.file(
+		"META-INF/container.xml",
+		`<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
   <rootfiles>
     <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
   </rootfiles>
-</container>`
-  );
+</container>`,
+	);
 
-  // content.opf
-  const chapterIds = Array.from(
-    { length: chapterCount },
-    (_, i) => `chapter${i + 1}`
-  );
-  const manifestItems = chapterIds
-    .map(
-      (id) =>
-        `    <item id="${id}" href="${id}.xhtml" media-type="application/xhtml+xml"/>`
-    )
-    .join("\n");
-  const spineItems = chapterIds
-    .map((id) => `    <itemref idref="${id}"/>`)
-    .join("\n");
+	// content.opf
+	const chapterIds = Array.from(
+		{ length: chapterCount },
+		(_, i) => `chapter${i + 1}`,
+	);
+	const manifestItems = chapterIds
+		.map(
+			(id) =>
+				`    <item id="${id}" href="${id}.xhtml" media-type="application/xhtml+xml"/>`,
+		)
+		.join("\n");
+	const spineItems = chapterIds
+		.map((id) => `    <itemref idref="${id}"/>`)
+		.join("\n");
 
-  zip.file(
-    "OEBPS/content.opf",
-    `<?xml version="1.0" encoding="UTF-8"?>
+	zip.file(
+		"OEBPS/content.opf",
+		`<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:identifier id="bookid">urn:uuid:mock-epub-12345</dc:identifier>
@@ -139,17 +140,17 @@ ${manifestItems}
   <spine>
 ${spineItems}
   </spine>
-</package>`
-  );
+</package>`,
+	);
 
-  // nav.xhtml
-  const navItems = chapterIds
-    .map((id, i) => `      <li><a href="${id}.xhtml">Chapter ${i + 1}</a></li>`)
-    .join("\n");
+	// nav.xhtml
+	const navItems = chapterIds
+		.map((id, i) => `      <li><a href="${id}.xhtml">Chapter ${i + 1}</a></li>`)
+		.join("\n");
 
-  zip.file(
-    "OEBPS/nav.xhtml",
-    `<?xml version="1.0" encoding="UTF-8"?>
+	zip.file(
+		"OEBPS/nav.xhtml",
+		`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
 <head><title>Table of Contents</title></head>
@@ -161,15 +162,15 @@ ${navItems}
     </ol>
   </nav>
 </body>
-</html>`
-  );
+</html>`,
+	);
 
-  // Chapters
-  for (let i = 0; i < chapterCount; i++) {
-    const content = Array(3).fill(`<p>${LOREM_IPSUM}</p>`).join("\n      ");
-    zip.file(
-      `OEBPS/${chapterIds[i]}.xhtml`,
-      `<?xml version="1.0" encoding="UTF-8"?>
+	// Chapters
+	for (let i = 0; i < chapterCount; i++) {
+		const content = Array(3).fill(`<p>${LOREM_IPSUM}</p>`).join("\n      ");
+		zip.file(
+			`OEBPS/${chapterIds[i]}.xhtml`,
+			`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
@@ -182,118 +183,118 @@ ${navItems}
       ${content}
   </section>
 </body>
-</html>`
-    );
-  }
+</html>`,
+		);
+	}
 
-  const buffer = await zip.generateAsync({
-    type: "nodebuffer",
-    compression: "DEFLATE",
-  });
-  writeFileSync(join(FIXTURES_DIR, "sample.epub"), buffer);
-  console.log("✓ Generated sample.epub");
+	const buffer = await zip.generateAsync({
+		type: "nodebuffer",
+		compression: "DEFLATE",
+	});
+	writeFileSync(join(FIXTURES_DIR, "sample.epub"), buffer);
+	console.log("✓ Generated sample.epub");
 }
 
 /**
  * Generate minimal PDF file
  */
 function generatePdf() {
-  const title = "Sample PDF";
-  const pageCount = 20;
+	const title = "Sample PDF";
+	const pageCount = 20;
 
-  // Wrap text for PDF
-  function wrapText(text, maxLen = 70) {
-    const words = text.split(" ");
-    const lines = [];
-    let line = "";
-    for (const word of words) {
-      if (line.length + word.length > maxLen) {
-        lines.push(line.trim());
-        line = word + " ";
-      } else {
-        line += word + " ";
-      }
-    }
-    if (line.trim()) lines.push(line.trim());
-    return lines;
-  }
+	// Wrap text for PDF
+	function wrapText(text, maxLen = 70) {
+		const words = text.split(" ");
+		const lines = [];
+		let line = "";
+		for (const word of words) {
+			if (line.length + word.length > maxLen) {
+				lines.push(line.trim());
+				line = `${word} `;
+			} else {
+				line += `${word} `;
+			}
+		}
+		if (line.trim()) lines.push(line.trim());
+		return lines;
+	}
 
-  // Escape PDF string
-  function escPdf(s) {
-    return s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
-  }
+	// Escape PDF string
+	function escPdf(s) {
+		return s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+	}
 
-  const objects = [];
-  let objNum = 0;
-  const addObj = (content) => {
-    objNum++;
-    objects.push(`${objNum} 0 obj\n${content}\nendobj\n`);
-    return objNum;
-  };
+	const objects = [];
+	let objNum = 0;
+	const addObj = (content) => {
+		objNum++;
+		objects.push(`${objNum} 0 obj\n${content}\nendobj\n`);
+		return objNum;
+	};
 
-  // Catalog
-  const catalogRef = addObj("<< /Type /Catalog /Pages 2 0 R >>");
+	// Catalog
+	const catalogRef = addObj("<< /Type /Catalog /Pages 2 0 R >>");
 
-  // Pages placeholder
-  const pagesIdx = objects.length;
-  addObj("PLACEHOLDER");
+	// Pages placeholder
+	const pagesIdx = objects.length;
+	addObj("PLACEHOLDER");
 
-  // Font
-  const fontRef = addObj(
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
-  );
+	// Font
+	const fontRef = addObj(
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+	);
 
-  // Create pages
-  const pageRefs = [];
-  for (let p = 1; p <= pageCount; p++) {
-    const lines = wrapText(LOREM_IPSUM);
-    let stream = "BT\n/F1 24 Tf\n50 750 Td\n";
-    stream += `(${escPdf(title)} - Page ${p}) Tj\n0 -40 Td\n/F1 12 Tf\n`;
-    for (const line of lines.slice(0, 20)) {
-      stream += `(${escPdf(line)}) Tj\n0 -16 Td\n`;
-    }
-    stream += "ET";
+	// Create pages
+	const pageRefs = [];
+	for (let p = 1; p <= pageCount; p++) {
+		const lines = wrapText(LOREM_IPSUM);
+		let stream = "BT\n/F1 24 Tf\n50 750 Td\n";
+		stream += `(${escPdf(title)} - Page ${p}) Tj\n0 -40 Td\n/F1 12 Tf\n`;
+		for (const line of lines.slice(0, 20)) {
+			stream += `(${escPdf(line)}) Tj\n0 -16 Td\n`;
+		}
+		stream += "ET";
 
-    const contentRef = addObj(
-      `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`
-    );
-    const pageRef = addObj(
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contentRef} 0 R /Resources << /Font << /F1 ${fontRef} 0 R >> >> >>`
-    );
-    pageRefs.push(pageRef);
-  }
+		const contentRef = addObj(
+			`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+		);
+		const pageRef = addObj(
+			`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contentRef} 0 R /Resources << /Font << /F1 ${fontRef} 0 R >> >> >>`,
+		);
+		pageRefs.push(pageRef);
+	}
 
-  // Update pages object
-  objects[pagesIdx] = `2 0 obj\n<< /Type /Pages /Kids [${pageRefs
-    .map((r) => `${r} 0 R`)
-    .join(" ")}] /Count ${pageCount} >>\nendobj\n`;
+	// Update pages object
+	objects[pagesIdx] = `2 0 obj\n<< /Type /Pages /Kids [${pageRefs
+		.map((r) => `${r} 0 R`)
+		.join(" ")}] /Count ${pageCount} >>\nendobj\n`;
 
-  // Build PDF
-  let pdf = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
-  const xrefOffsets = [0];
-  for (const obj of objects) {
-    xrefOffsets.push(pdf.length);
-    pdf += obj;
-  }
+	// Build PDF
+	let pdf = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
+	const xrefOffsets = [0];
+	for (const obj of objects) {
+		xrefOffsets.push(pdf.length);
+		pdf += obj;
+	}
 
-  const xrefOffset = pdf.length;
-  pdf += `xref\n0 ${objNum + 1}\n0000000000 65535 f \n`;
-  for (let i = 1; i <= objNum; i++) {
-    pdf += `${String(xrefOffsets[i]).padStart(10, "0")} 00000 n \n`;
-  }
-  pdf += `trailer\n<< /Size ${
-    objNum + 1
-  } /Root ${catalogRef} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+	const xrefOffset = pdf.length;
+	pdf += `xref\n0 ${objNum + 1}\n0000000000 65535 f \n`;
+	for (let i = 1; i <= objNum; i++) {
+		pdf += `${String(xrefOffsets[i]).padStart(10, "0")} 00000 n \n`;
+	}
+	pdf += `trailer\n<< /Size ${
+		objNum + 1
+	} /Root ${catalogRef} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
 
-  writeFileSync(join(FIXTURES_DIR, "sample.pdf"), pdf);
-  console.log("✓ Generated sample.pdf");
+	writeFileSync(join(FIXTURES_DIR, "sample.pdf"), pdf);
+	console.log("✓ Generated sample.pdf");
 }
 
 /**
  * Generate cover SVG
  */
 function generateCover() {
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+	const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -306,19 +307,19 @@ function generateCover() {
   <text x="150" y="240" text-anchor="middle" fill="#888888" font-family="Arial, sans-serif" font-size="14">Mock Book</text>
 </svg>`;
 
-  writeFileSync(join(FIXTURES_DIR, "cover.svg"), svg);
-  console.log("✓ Generated cover.svg");
+	writeFileSync(join(FIXTURES_DIR, "cover.svg"), svg);
+	console.log("✓ Generated cover.svg");
 }
 
 /**
  * Generate page SVG
  */
 function generatePage() {
-  writeFileSync(
-    join(FIXTURES_DIR, "page.svg"),
-    generateSvgPage(1, "Sample Page")
-  );
-  console.log("✓ Generated page.svg");
+	writeFileSync(
+		join(FIXTURES_DIR, "page.svg"),
+		generateSvgPage(1, "Sample Page"),
+	);
+	console.log("✓ Generated page.svg");
 }
 
 // Run all generators

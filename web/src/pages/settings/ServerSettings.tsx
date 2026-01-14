@@ -15,8 +15,8 @@ import {
 	Table,
 	Tabs,
 	Text,
-	TextInput,
 	Textarea,
+	TextInput,
 	Title,
 	Tooltip,
 } from "@mantine/core";
@@ -105,7 +105,7 @@ function SettingRow({
 			case "integer":
 				return (
 					<NumberInput
-						value={Number.parseInt(localValue) || 0}
+						value={Number.parseInt(localValue, 10) || 0}
 						onChange={(value) => setLocalValue(String(value))}
 						min={setting.min_value ?? undefined}
 						max={setting.max_value ?? undefined}
@@ -219,7 +219,11 @@ function SettingsCategorySection({
 				justify="space-between"
 			>
 				<Title order={4}>{formatCategoryName(category)}</Title>
-				{opened ? <IconChevronDown size={20} /> : <IconChevronRight size={20} />}
+				{opened ? (
+					<IconChevronDown size={20} />
+				) : (
+					<IconChevronRight size={20} />
+				)}
 			</Group>
 			<Collapse in={opened}>
 				<Table mt="md">
@@ -262,13 +266,14 @@ function IntegrationCard({
 	onTest: () => void;
 	onDelete: () => void;
 }) {
-	const healthColor = {
-		healthy: "green",
-		degraded: "yellow",
-		unhealthy: "red",
-		unknown: "gray",
-		disabled: "gray",
-	}[integration.healthStatus] || "gray";
+	const healthColor =
+		{
+			healthy: "green",
+			degraded: "yellow",
+			unhealthy: "red",
+			unknown: "gray",
+			disabled: "gray",
+		}[integration.healthStatus] || "gray";
 
 	return (
 		<Card withBorder padding="md">
@@ -346,10 +351,7 @@ export function ServerSettings() {
 	});
 
 	// Fetch system integrations
-	const {
-		data: integrations,
-		isLoading: integrationsLoading,
-	} = useQuery({
+	const { data: integrations, isLoading: integrationsLoading } = useQuery({
 		queryKey: ["system-integrations"],
 		queryFn: systemIntegrationsApi.getAll,
 	});
@@ -569,26 +571,29 @@ export function ServerSettings() {
 								<Group justify="center" py="xl">
 									<Loader />
 								</Group>
-							) : integrations?.integrations && integrations.integrations.length > 0 ? (
+							) : integrations?.integrations &&
+								integrations.integrations.length > 0 ? (
 								<Stack gap="md">
-									{integrations.integrations.map((integration: SystemIntegrationDto) => (
-										<IntegrationCard
-											key={integration.id}
-											integration={integration}
-											onEnable={() =>
-												enableIntegrationMutation.mutate(integration.id)
-											}
-											onDisable={() =>
-												disableIntegrationMutation.mutate(integration.id)
-											}
-											onTest={() =>
-												testIntegrationMutation.mutate(integration.id)
-											}
-											onDelete={() =>
-												deleteIntegrationMutation.mutate(integration.id)
-											}
-										/>
-									))}
+									{integrations.integrations.map(
+										(integration: SystemIntegrationDto) => (
+											<IntegrationCard
+												key={integration.id}
+												integration={integration}
+												onEnable={() =>
+													enableIntegrationMutation.mutate(integration.id)
+												}
+												onDisable={() =>
+													disableIntegrationMutation.mutate(integration.id)
+												}
+												onTest={() =>
+													testIntegrationMutation.mutate(integration.id)
+												}
+												onDelete={() =>
+													deleteIntegrationMutation.mutate(integration.id)
+												}
+											/>
+										),
+									)}
 								</Stack>
 							) : (
 								<Card withBorder>
@@ -635,6 +640,7 @@ export function ServerSettings() {
 						</Table.Thead>
 						<Table.Tbody>
 							{history.map((entry: SettingHistoryDto, index: number) => (
+								// biome-ignore lint/suspicious/noArrayIndexKey: History entries have no unique ID
 								<Table.Tr key={index}>
 									<Table.Td>
 										<Text size="sm" style={{ fontFamily: "monospace" }}>

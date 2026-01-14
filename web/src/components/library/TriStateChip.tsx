@@ -26,7 +26,13 @@ interface TriStateChipProps {
  * - include: filled blue, checkmark icon
  * - exclude: filled red, X icon
  */
-export function TriStateChip({ label, state, onChange, count, disabled = false }: TriStateChipProps) {
+export function TriStateChip({
+	label,
+	state,
+	onChange,
+	count,
+	disabled = false,
+}: TriStateChipProps) {
 	const handleClick = () => {
 		if (disabled) return;
 
@@ -73,7 +79,11 @@ export function TriStateChip({ label, state, onChange, count, disabled = false }
 	};
 
 	return (
-		<UnstyledButton onClick={handleClick} disabled={disabled} className={classes.button}>
+		<UnstyledButton
+			onClick={handleClick}
+			disabled={disabled}
+			className={classes.button}
+		>
 			<Badge
 				variant={getVariant()}
 				color={getColor()}
@@ -86,7 +96,13 @@ export function TriStateChip({ label, state, onChange, count, disabled = false }
 			>
 				{label}
 				{count !== undefined && (
-					<Badge size="xs" variant="light" color={getColor()} ml={6} className={classes.count}>
+					<Badge
+						size="xs"
+						variant="light"
+						color={getColor()}
+						ml={6}
+						className={classes.count}
+					>
 						{count}
 					</Badge>
 				)}

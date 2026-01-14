@@ -32,7 +32,8 @@ global.console.error = vi.fn((...args: unknown[]) => {
 	// Suppress AggregateError objects (jsdom XMLHttpRequest errors)
 	if (
 		message instanceof Error &&
-		(message.name === "AggregateError" || message.constructor.name === "AggregateError")
+		(message.name === "AggregateError" ||
+			message.constructor.name === "AggregateError")
 	) {
 		return;
 	}
@@ -87,7 +88,6 @@ Object.defineProperty(window, "matchMedia", {
 
 // Mock IntersectionObserver
 global.IntersectionObserver = class IntersectionObserver {
-	constructor() {}
 	disconnect() {}
 	observe() {}
 	takeRecords() {
@@ -98,7 +98,6 @@ global.IntersectionObserver = class IntersectionObserver {
 
 // Mock ResizeObserver
 global.ResizeObserver = class ResizeObserver {
-	constructor() {}
 	disconnect() {}
 	observe() {}
 	unobserve() {}

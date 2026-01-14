@@ -192,7 +192,14 @@ export function PageTransitionWrapper({
 			}));
 			transitionTimeoutRef.current = null;
 		}, duration + 50);
-	}, [pageKey, children, transition, duration, navigationDirection, readingDirection]);
+	}, [
+		pageKey,
+		children,
+		transition,
+		duration,
+		navigationDirection,
+		readingDirection,
+	]);
 
 	// When idle or no transition, render content in a stable container
 	// Use same structure as during transitions to prevent layout shifts

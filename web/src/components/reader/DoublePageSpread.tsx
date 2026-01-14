@@ -183,7 +183,10 @@ export function DoublePageSpread({
 	// Helper to get effective loading state - considers both stored state and preload status
 	// This is called during render, so it always gets the current preloadedImages
 	const getPageLoadState = useCallback(
-		(pageNumber: number, src: string): { isLoading: boolean; hasError: boolean } => {
+		(
+			pageNumber: number,
+			src: string,
+		): { isLoading: boolean; hasError: boolean } => {
 			const stored = pageStates[pageNumber];
 			// If we have state for this exact src, use it
 			if (stored && stored.src === src) {
@@ -200,7 +203,11 @@ export function DoublePageSpread({
 	);
 
 	const handleImageLoad = useCallback(
-		(pageNumber: number, src: string, event: React.SyntheticEvent<HTMLImageElement>) => {
+		(
+			pageNumber: number,
+			src: string,
+			event: React.SyntheticEvent<HTMLImageElement>,
+		) => {
 			const img = event.currentTarget;
 
 			// Detect orientation and report it
@@ -264,7 +271,9 @@ export function DoublePageSpread({
 				height: "100%",
 				backgroundColor: BACKGROUND_COLORS[backgroundColor],
 				overflow:
-					fitMode === "original" || fitMode === "width" || fitMode === "width-shrink"
+					fitMode === "original" ||
+					fitMode === "width" ||
+					fitMode === "width-shrink"
 						? "auto"
 						: "hidden",
 				display: "flex",

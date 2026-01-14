@@ -109,7 +109,9 @@ describe("ReaderSettings", () => {
 		});
 
 		it("should show sync message when seriesId is provided", () => {
-			renderWithProviders(<ReaderSettings {...defaultProps} seriesId="series-123" />);
+			renderWithProviders(
+				<ReaderSettings {...defaultProps} seriesId="series-123" />,
+			);
 
 			expect(screen.getByText("Saved to series")).toBeInTheDocument();
 		});
@@ -122,7 +124,9 @@ describe("ReaderSettings", () => {
 
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.getByDisplayValue("Right to Left (Manga)")).toBeInTheDocument();
+			expect(
+				screen.getByDisplayValue("Right to Left (Manga)"),
+			).toBeInTheDocument();
 		});
 
 		it("should show Vertical as selected when readingDirectionOverride is ttb", () => {
@@ -144,7 +148,9 @@ describe("ReaderSettings", () => {
 
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.getByDisplayValue("Webtoon (Continuous Scroll)")).toBeInTheDocument();
+			expect(
+				screen.getByDisplayValue("Webtoon (Continuous Scroll)"),
+			).toBeInTheDocument();
 		});
 	});
 
@@ -319,8 +325,12 @@ describe("ReaderSettings", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
 			expect(screen.getByText("Scale")).toBeInTheDocument();
-			expect(screen.getByRole("radio", { name: "Fit width" })).toBeInTheDocument();
-			expect(screen.getByRole("radio", { name: "Original" })).toBeInTheDocument();
+			expect(
+				screen.getByRole("radio", { name: "Fit width" }),
+			).toBeInTheDocument();
+			expect(
+				screen.getByRole("radio", { name: "Original" }),
+			).toBeInTheDocument();
 		});
 	});
 
@@ -341,10 +351,11 @@ describe("ReaderSettings", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
 			const switches = screen.getAllByRole("switch");
-			const autoHideSwitch = switches.find(s => {
-				const parent = s.closest('.mantine-Group-root');
-				return parent?.textContent?.includes("Auto-hide toolbar");
-			}) || switches[switches.length - 1];
+			const autoHideSwitch =
+				switches.find((s) => {
+					const parent = s.closest(".mantine-Group-root");
+					return parent?.textContent?.includes("Auto-hide toolbar");
+				}) || switches[switches.length - 1];
 			fireEvent.click(autoHideSwitch);
 
 			expect(useReaderStore.getState().settings.autoHideToolbar).toBe(false);
@@ -365,31 +376,53 @@ describe("ReaderSettings", () => {
 
 	describe("Per-series settings", () => {
 		it("should show fork button when seriesId is provided and no override exists", async () => {
-			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+			renderWithProviders(
+				<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />,
+			);
 
 			await waitFor(() => {
-				expect(screen.getByRole("button", { name: /customize settings for this series/i })).toBeInTheDocument();
+				expect(
+					screen.getByRole("button", {
+						name: /customize settings for this series/i,
+					}),
+				).toBeInTheDocument();
 			});
 		});
 
 		it("should not show fork button when no seriesId is provided", () => {
 			renderWithProviders(<ReaderSettings {...defaultProps} />);
 
-			expect(screen.queryByRole("button", { name: /customize settings for this series/i })).not.toBeInTheDocument();
+			expect(
+				screen.queryByRole("button", {
+					name: /customize settings for this series/i,
+				}),
+			).not.toBeInTheDocument();
 		});
 
 		it("should create series override when fork button is clicked", async () => {
-			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+			renderWithProviders(
+				<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />,
+			);
 
 			await waitFor(() => {
-				expect(screen.getByRole("button", { name: /customize settings for this series/i })).toBeInTheDocument();
+				expect(
+					screen.getByRole("button", {
+						name: /customize settings for this series/i,
+					}),
+				).toBeInTheDocument();
 			});
 
-			fireEvent.click(screen.getByRole("button", { name: /customize settings for this series/i }));
+			fireEvent.click(
+				screen.getByRole("button", {
+					name: /customize settings for this series/i,
+				}),
+			);
 
 			// Should now show the series banner instead of fork button
 			await waitFor(() => {
-				expect(screen.getByText(/using series-specific settings/i)).toBeInTheDocument();
+				expect(
+					screen.getByText(/using series-specific settings/i),
+				).toBeInTheDocument();
 			});
 
 			// Verify localStorage was updated
@@ -412,10 +445,14 @@ describe("ReaderSettings", () => {
 			};
 			localStorage.setItem(storageKey, JSON.stringify(override));
 
-			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+			renderWithProviders(
+				<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />,
+			);
 
 			await waitFor(() => {
-				expect(screen.getByText(/using series-specific settings/i)).toBeInTheDocument();
+				expect(
+					screen.getByText(/using series-specific settings/i),
+				).toBeInTheDocument();
 			});
 		});
 
@@ -434,10 +471,14 @@ describe("ReaderSettings", () => {
 			};
 			localStorage.setItem(storageKey, JSON.stringify(override));
 
-			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+			renderWithProviders(
+				<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />,
+			);
 
 			await waitFor(() => {
-				expect(screen.getByRole("button", { name: /reset to global/i })).toBeInTheDocument();
+				expect(
+					screen.getByRole("button", { name: /reset to global/i }),
+				).toBeInTheDocument();
 			});
 		});
 
@@ -456,17 +497,25 @@ describe("ReaderSettings", () => {
 			};
 			localStorage.setItem(storageKey, JSON.stringify(override));
 
-			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+			renderWithProviders(
+				<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />,
+			);
 
 			await waitFor(() => {
-				expect(screen.getByRole("button", { name: /reset to global/i })).toBeInTheDocument();
+				expect(
+					screen.getByRole("button", { name: /reset to global/i }),
+				).toBeInTheDocument();
 			});
 
 			fireEvent.click(screen.getByRole("button", { name: /reset to global/i }));
 
 			// Should now show the fork button instead of series banner
 			await waitFor(() => {
-				expect(screen.getByRole("button", { name: /customize settings for this series/i })).toBeInTheDocument();
+				expect(
+					screen.getByRole("button", {
+						name: /customize settings for this series/i,
+					}),
+				).toBeInTheDocument();
 			});
 
 			// Verify localStorage was cleared
@@ -488,7 +537,9 @@ describe("ReaderSettings", () => {
 			};
 			localStorage.setItem(storageKey, JSON.stringify(override));
 
-			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+			renderWithProviders(
+				<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />,
+			);
 
 			await waitFor(() => {
 				expect(screen.getByText("Series")).toBeInTheDocument();
@@ -508,7 +559,7 @@ describe("ReaderSettings", () => {
 				fitMode: "width",
 				pageLayout: "single",
 				readingDirection: "ltr",
-				backgroundColor: "gray",  // Different from global (black)
+				backgroundColor: "gray", // Different from global (black)
 				doublePageShowWideAlone: true,
 				doublePageStartOnOdd: true,
 				createdAt: Date.now(),
@@ -516,11 +567,15 @@ describe("ReaderSettings", () => {
 			};
 			localStorage.setItem(storageKey, JSON.stringify(override));
 
-			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+			renderWithProviders(
+				<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />,
+			);
 
 			// Wait for hook to load
 			await waitFor(() => {
-				expect(screen.getByText(/using series-specific settings/i)).toBeInTheDocument();
+				expect(
+					screen.getByText(/using series-specific settings/i),
+				).toBeInTheDocument();
 			});
 
 			// Gray should be selected (from series override), not Black (from global)
@@ -542,10 +597,14 @@ describe("ReaderSettings", () => {
 			};
 			localStorage.setItem(storageKey, JSON.stringify(override));
 
-			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+			renderWithProviders(
+				<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />,
+			);
 
 			await waitFor(() => {
-				expect(screen.getByText(/using series-specific settings/i)).toBeInTheDocument();
+				expect(
+					screen.getByText(/using series-specific settings/i),
+				).toBeInTheDocument();
 			});
 
 			// Change background color
@@ -576,10 +635,14 @@ describe("ReaderSettings", () => {
 			};
 			localStorage.setItem(storageKey, JSON.stringify(override));
 
-			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+			renderWithProviders(
+				<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />,
+			);
 
 			await waitFor(() => {
-				expect(screen.getByText(/using series-specific settings/i)).toBeInTheDocument();
+				expect(
+					screen.getByText(/using series-specific settings/i),
+				).toBeInTheDocument();
 			});
 
 			// Change page layout
@@ -601,10 +664,16 @@ describe("ReaderSettings", () => {
 			// Ensure no override exists initially
 			expect(localStorage.getItem(storageKey)).toBeNull();
 
-			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+			renderWithProviders(
+				<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />,
+			);
 
 			await waitFor(() => {
-				expect(screen.getByRole("button", { name: /customize settings for this series/i })).toBeInTheDocument();
+				expect(
+					screen.getByRole("button", {
+						name: /customize settings for this series/i,
+					}),
+				).toBeInTheDocument();
 			});
 
 			// Change background color - should NOT auto-create override, should update global instead
@@ -618,10 +687,16 @@ describe("ReaderSettings", () => {
 		});
 
 		it("should not show Display section background when no override exists", async () => {
-			renderWithProviders(<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />);
+			renderWithProviders(
+				<ReaderSettings {...defaultProps} seriesId={TEST_SERIES_ID} />,
+			);
 
 			await waitFor(() => {
-				expect(screen.getByRole("button", { name: /customize settings for this series/i })).toBeInTheDocument();
+				expect(
+					screen.getByRole("button", {
+						name: /customize settings for this series/i,
+					}),
+				).toBeInTheDocument();
 			});
 
 			// The Display section should not have the series-specific styling

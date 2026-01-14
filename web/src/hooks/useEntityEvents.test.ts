@@ -200,14 +200,14 @@ describe("useEntityEvents", () => {
 		expect(result.current.connectionState).toBe("connecting");
 
 		// Simulate connection established
-		capturedConnectionChange!("connected");
+		capturedConnectionChange?.("connected");
 
 		await waitFor(() => {
 			expect(result.current.connectionState).toBe("connected");
 		});
 
 		// Simulate disconnection
-		capturedConnectionChange!("disconnected");
+		capturedConnectionChange?.("disconnected");
 
 		await waitFor(() => {
 			expect(result.current.connectionState).toBe("disconnected");
@@ -378,7 +378,7 @@ describe("useEntityEvents", () => {
 
 		// Simulate an error
 		const testError = new Error("Connection failed");
-		capturedErrorHandler!(testError);
+		capturedErrorHandler?.(testError);
 
 		await waitFor(() => {
 			expect(consoleError).toHaveBeenCalledWith(

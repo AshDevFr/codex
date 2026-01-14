@@ -1,18 +1,18 @@
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
+	BOOK_FILTER_PARAM_KEYS,
 	type BookCondition,
 	type BookFilterState,
-	type FilterGroupState,
-	type FilterMode,
-	type TriState,
-	BOOK_FILTER_PARAM_KEYS,
 	bookFilterStateToCondition,
 	countActiveFilters,
 	countBookActiveFilters,
 	createEmptyBookFilterState,
+	type FilterGroupState,
+	type FilterMode,
 	parseBookFilters,
 	serializeBookFilters,
+	type TriState,
 } from "@/types";
 
 interface UseBookFilterStateReturn {
@@ -65,7 +65,10 @@ export function useBookFilterState(): UseBookFilterStateReturn {
 	const filters = useMemo(() => parseBookFilters(searchParams), [searchParams]);
 
 	// Convert to API condition
-	const condition = useMemo(() => bookFilterStateToCondition(filters), [filters]);
+	const condition = useMemo(
+		() => bookFilterStateToCondition(filters),
+		[filters],
+	);
 
 	// Helper to update URL with new filter state
 	const updateFilters = useCallback(
@@ -96,7 +99,10 @@ export function useBookFilterState(): UseBookFilterStateReturn {
 
 	// Helper to update a single group
 	const updateGroup = useCallback(
-		(group: keyof Omit<BookFilterState, "hasError">, updater: (current: FilterGroupState) => FilterGroupState) => {
+		(
+			group: keyof Omit<BookFilterState, "hasError">,
+			updater: (current: FilterGroupState) => FilterGroupState,
+		) => {
 			const newFilters = { ...filters };
 			newFilters[group] = updater(filters[group]);
 			updateFilters(newFilters);
@@ -208,7 +214,10 @@ export function useBookFilterState(): UseBookFilterStateReturn {
 		[filters],
 	);
 
-	const activeFilterCount = useMemo(() => countBookActiveFilters(filters), [filters]);
+	const activeFilterCount = useMemo(
+		() => countBookActiveFilters(filters),
+		[filters],
+	);
 
 	const hasActiveFilters = activeFilterCount > 0;
 

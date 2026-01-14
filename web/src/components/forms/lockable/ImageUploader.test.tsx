@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderWithProviders, screen, userEvent } from "@/test/utils";
-import { ImageUploader, type ImageInfo } from "./ImageUploader";
+import { type ImageInfo, ImageUploader } from "./ImageUploader";
 
 describe("ImageUploader", () => {
 	const mockImage: ImageInfo = {
@@ -12,9 +12,7 @@ describe("ImageUploader", () => {
 	};
 
 	it("renders dropzone with label", () => {
-		renderWithProviders(
-			<ImageUploader value={null} onChange={vi.fn()} />,
-		);
+		renderWithProviders(<ImageUploader value={null} onChange={vi.fn()} />);
 
 		expect(
 			screen.getByText("Choose an image - drag and drop"),
@@ -23,28 +21,20 @@ describe("ImageUploader", () => {
 
 	it("renders custom label", () => {
 		renderWithProviders(
-			<ImageUploader
-				value={null}
-				onChange={vi.fn()}
-				label="Upload poster"
-			/>,
+			<ImageUploader value={null} onChange={vi.fn()} label="Upload poster" />,
 		);
 
 		expect(screen.getByText("Upload poster")).toBeInTheDocument();
 	});
 
 	it("shows image preview when value is set", () => {
-		renderWithProviders(
-			<ImageUploader value={mockImage} onChange={vi.fn()} />,
-		);
+		renderWithProviders(<ImageUploader value={mockImage} onChange={vi.fn()} />);
 
 		expect(screen.getByAltText("Preview")).toBeInTheDocument();
 	});
 
 	it("shows image metadata", () => {
-		renderWithProviders(
-			<ImageUploader value={mockImage} onChange={vi.fn()} />,
-		);
+		renderWithProviders(<ImageUploader value={mockImage} onChange={vi.fn()} />);
 
 		expect(screen.getByText("Size: 125.8 kB")).toBeInTheDocument();
 		expect(screen.getByText("Dimensions: 460 × 651")).toBeInTheDocument();
@@ -52,9 +42,7 @@ describe("ImageUploader", () => {
 	});
 
 	it("shows delete button when image is set", () => {
-		renderWithProviders(
-			<ImageUploader value={mockImage} onChange={vi.fn()} />,
-		);
+		renderWithProviders(<ImageUploader value={mockImage} onChange={vi.fn()} />);
 
 		expect(screen.getByLabelText("Delete image")).toBeInTheDocument();
 	});
@@ -104,9 +92,7 @@ describe("ImageUploader", () => {
 	});
 
 	it("does not show refresh button when onRefresh is not provided", () => {
-		renderWithProviders(
-			<ImageUploader value={mockImage} onChange={vi.fn()} />,
-		);
+		renderWithProviders(<ImageUploader value={mockImage} onChange={vi.fn()} />);
 
 		expect(
 			screen.queryByLabelText("Reset to original"),

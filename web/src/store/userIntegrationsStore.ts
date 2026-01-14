@@ -2,12 +2,12 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
 import {
-	userIntegrationsApi,
 	type AvailableIntegrationDto,
 	type ConnectIntegrationRequest,
 	type SyncTriggerResponse,
 	type UpdateIntegrationSettingsRequest,
 	type UserIntegrationDto,
+	userIntegrationsApi,
 } from "@/api/userIntegrations";
 
 export interface UserIntegrationsState {
@@ -55,7 +55,9 @@ export interface UserIntegrationsState {
 	/**
 	 * Get an available integration by name
 	 */
-	getAvailableIntegration: (name: string) => AvailableIntegrationDto | undefined;
+	getAvailableIntegration: (
+		name: string,
+	) => AvailableIntegrationDto | undefined;
 
 	/**
 	 * Check if an integration is connected

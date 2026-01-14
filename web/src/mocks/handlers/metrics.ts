@@ -2,7 +2,7 @@
  * MSW handlers for metrics API endpoints
  */
 
-import { http, HttpResponse, delay } from "msw";
+import { delay, HttpResponse, http } from "msw";
 import {
 	createInventoryMetrics,
 	createTaskMetrics,
@@ -166,8 +166,14 @@ export const metricsHandlers = [
 		const totalExecuted = byType.reduce((sum, t) => sum + t.executed, 0);
 		const totalSucceeded = byType.reduce((sum, t) => sum + t.succeeded, 0);
 		const totalFailed = byType.reduce((sum, t) => sum + t.failed, 0);
-		const weightedDuration = byType.reduce((sum, t) => sum + t.avg_duration_ms * t.executed, 0);
-		const weightedQueueWait = byType.reduce((sum, t) => sum + t.avg_queue_wait_ms * t.executed, 0);
+		const weightedDuration = byType.reduce(
+			(sum, t) => sum + t.avg_duration_ms * t.executed,
+			0,
+		);
+		const weightedQueueWait = byType.reduce(
+			(sum, t) => sum + t.avg_queue_wait_ms * t.executed,
+			0,
+		);
 
 		const metrics = createTaskMetrics({
 			updated_at: new Date().toISOString(),
@@ -176,8 +182,10 @@ export const metricsHandlers = [
 				total_executed: totalExecuted,
 				total_succeeded: totalSucceeded,
 				total_failed: totalFailed,
-				avg_duration_ms: totalExecuted > 0 ? weightedDuration / totalExecuted : 0,
-				avg_queue_wait_ms: totalExecuted > 0 ? weightedQueueWait / totalExecuted : 0,
+				avg_duration_ms:
+					totalExecuted > 0 ? weightedDuration / totalExecuted : 0,
+				avg_queue_wait_ms:
+					totalExecuted > 0 ? weightedQueueWait / totalExecuted : 0,
 				tasks_per_minute: 12.4,
 			},
 			queue: {
@@ -196,7 +204,7 @@ export const metricsHandlers = [
 	http.get("/api/v1/metrics/tasks/history", async ({ request }) => {
 		await delay(150);
 		const url = new URL(request.url);
-		const days = parseInt(url.searchParams.get("days") || "7");
+		const days = parseInt(url.searchParams.get("days") || "7", 10);
 		const taskType = url.searchParams.get("task_type");
 		const granularity = url.searchParams.get("granularity") || "hour";
 
@@ -244,7 +252,9 @@ export const metricsHandlers = [
 		return HttpResponse.json({
 			deleted_count: Math.floor(Math.random() * 1000),
 			retention_days: "30",
-			oldest_remaining: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+			oldest_remaining: new Date(
+				Date.now() - 30 * 24 * 60 * 60 * 1000,
+			).toISOString(),
 		});
 	}),
 

@@ -6,7 +6,8 @@ import { api } from "./client";
 export type UserPreferenceDto = components["schemas"]["UserPreferenceDto"];
 export type UserPreferencesResponse =
 	components["schemas"]["UserPreferencesResponse"];
-export type SetPreferenceRequest = components["schemas"]["SetPreferenceRequest"];
+export type SetPreferenceRequest =
+	components["schemas"]["SetPreferenceRequest"];
 export type BulkSetPreferencesRequest =
 	components["schemas"]["BulkSetPreferencesRequest"];
 export type SetPreferencesResponse =
@@ -17,9 +18,8 @@ export const userPreferencesApi = {
 	 * Get all user preferences
 	 */
 	getAll: async (): Promise<UserPreferenceDto[]> => {
-		const response = await api.get<UserPreferencesResponse>(
-			"/user/preferences",
-		);
+		const response =
+			await api.get<UserPreferencesResponse>("/user/preferences");
 		return response.data.preferences;
 	},
 

@@ -44,6 +44,7 @@ const PAGE_SIZES = [20, 50, 100];
 
 export function SeriesBookList({
 	seriesId,
+	// biome-ignore lint/correctness/noUnusedFunctionParameters: Reserved for future use
 	seriesName,
 	bookCount,
 }: SeriesBookListProps) {
@@ -58,7 +59,11 @@ export function SeriesBookList({
 	);
 
 	// Fetch books for this series
-	const { data: allBooks, isLoading, error } = useQuery({
+	const {
+		data: allBooks,
+		isLoading,
+		error,
+	} = useQuery({
 		queryKey: ["series-books", seriesId, showDeletedBooks],
 		queryFn: () => seriesApi.getBooks(seriesId, showDeletedBooks),
 	});
@@ -78,10 +83,13 @@ export function SeriesBookList({
 					comparison = a.title.localeCompare(b.title);
 					break;
 				case "created_at":
-					comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+					comparison =
+						new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
 					break;
 				case "release_date":
-					comparison = new Date(a.releaseDate ?? 0).getTime() - new Date(b.releaseDate ?? 0).getTime();
+					comparison =
+						new Date(a.releaseDate ?? 0).getTime() -
+						new Date(b.releaseDate ?? 0).getTime();
 					break;
 				default:
 					comparison = 0;
@@ -96,10 +104,13 @@ export function SeriesBookList({
 		return sortedBooks.slice(start, start + pageSize);
 	}, [sortedBooks, page, pageSize]);
 
-	const data = useMemo(() => ({
-		data: paginatedBooks,
-		total: sortedBooks.length,
-	}), [paginatedBooks, sortedBooks.length]);
+	const data = useMemo(
+		() => ({
+			data: paginatedBooks,
+			total: sortedBooks.length,
+		}),
+		[paginatedBooks, sortedBooks.length],
+	);
 
 	const totalPages = data ? Math.ceil(data.total / pageSize) : 1;
 
@@ -187,8 +198,7 @@ export function SeriesBookList({
 						cols={{ base: 2, xs: 3, sm: 4, md: 5, lg: 6, xl: 7 }}
 						spacing="md"
 						style={{
-							gridTemplateColumns:
-								"repeat(auto-fill, minmax(150px, 1fr))",
+							gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
 						}}
 					>
 						{data?.data.map((book) => (

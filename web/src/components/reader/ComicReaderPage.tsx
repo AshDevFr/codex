@@ -108,7 +108,8 @@ export function ComicReaderPage({
 	}>({ src, isLoading: !isPreloaded, hasError: false });
 
 	// Reset state when src changes
-	const isLoading = loadingState.src === src ? loadingState.isLoading : !isPreloaded;
+	const isLoading =
+		loadingState.src === src ? loadingState.isLoading : !isPreloaded;
 	const hasError = loadingState.src === src ? loadingState.hasError : false;
 
 	const handleImageLoad = () => {
@@ -148,7 +149,9 @@ export function ComicReaderPage({
 				height: "100%",
 				backgroundColor: BACKGROUND_COLORS[backgroundColor],
 				overflow:
-					fitMode === "original" || fitMode === "width" || fitMode === "width-shrink"
+					fitMode === "original" ||
+					fitMode === "width" ||
+					fitMode === "width-shrink"
 						? "auto"
 						: "hidden",
 				display: "flex",

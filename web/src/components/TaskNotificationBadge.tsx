@@ -11,9 +11,7 @@ export function TaskNotificationBadge() {
 
 	// Filter to only running tasks (processing tasks are shown as running)
 	// Note: pending tasks are shown separately via pendingCounts, not from activeTasks
-	const runningTasks = activeTasks.filter(
-		(task) => task.status === "running",
-	);
+	const runningTasks = activeTasks.filter((task) => task.status === "running");
 
 	// Calculate total pending count
 	const totalPendingCount = Object.values(pendingCounts).reduce(

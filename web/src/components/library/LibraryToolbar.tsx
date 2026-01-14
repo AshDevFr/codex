@@ -1,5 +1,11 @@
 import { ActionIcon, Group, Menu, Tabs } from "@mantine/core";
-import { IconChevronDown, IconChevronUp, IconGridDots, IconSortAscending, IconSortDescending } from "@tabler/icons-react";
+import {
+	IconChevronDown,
+	IconChevronUp,
+	IconGridDots,
+	IconSortAscending,
+	IconSortDescending,
+} from "@tabler/icons-react";
 import { BookFilterPanel } from "./BookFilterPanel";
 import { FilterPanel } from "./FilterPanel";
 
@@ -44,7 +50,9 @@ export function LibraryToolbar({
 		<Group justify="space-between" align="center" wrap="nowrap">
 			<Tabs value={currentTab} onChange={onTabChange}>
 				<Tabs.List>
-					{showRecommended && <Tabs.Tab value="recommended">Recommended</Tabs.Tab>}
+					{showRecommended && (
+						<Tabs.Tab value="recommended">Recommended</Tabs.Tab>
+					)}
 					<Tabs.Tab value="series">Series</Tabs.Tab>
 					<Tabs.Tab value="books">Books</Tabs.Tab>
 				</Tabs.List>
@@ -72,17 +80,23 @@ export function LibraryToolbar({
 							<Menu.Label>Sort by</Menu.Label>
 							{sortOptions.map((option) => {
 								const currentField = sort?.split(",")[0];
-								const currentDirection = sort?.split(",")[1] as "asc" | "desc" | undefined;
+								const currentDirection = sort?.split(",")[1] as
+									| "asc"
+									| "desc"
+									| undefined;
 								const isSelected = currentField === option.field;
 
 								const handleClick = () => {
 									if (isSelected) {
 										// Toggle direction
-										const newDirection = currentDirection === "asc" ? "desc" : "asc";
+										const newDirection =
+											currentDirection === "asc" ? "desc" : "asc";
 										onSortChange?.(`${option.field},${newDirection}`);
 									} else {
 										// Use default direction for new field
-										onSortChange?.(`${option.field},${option.defaultDirection}`);
+										onSortChange?.(
+											`${option.field},${option.defaultDirection}`,
+										);
 									}
 								};
 
@@ -90,7 +104,9 @@ export function LibraryToolbar({
 									<Menu.Item
 										key={option.field}
 										onClick={handleClick}
-										bg={isSelected ? "var(--mantine-color-blue-light)" : undefined}
+										bg={
+											isSelected ? "var(--mantine-color-blue-light)" : undefined
+										}
 										rightSection={
 											isSelected ? (
 												currentDirection === "desc" ? (
@@ -126,7 +142,11 @@ export function LibraryToolbar({
 								<Menu.Item
 									key={option.value}
 									onClick={() => onPageSizeChange?.(option.value)}
-									bg={pageSize === option.value ? "var(--mantine-color-blue-light)" : undefined}
+									bg={
+										pageSize === option.value
+											? "var(--mantine-color-blue-light)"
+											: undefined
+									}
 								>
 									{option.label}
 								</Menu.Item>

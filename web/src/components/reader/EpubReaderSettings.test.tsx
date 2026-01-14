@@ -1,7 +1,7 @@
-import { renderWithProviders, screen, userEvent, waitFor } from "@/test/utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { EpubReaderSettings } from "./EpubReaderSettings";
 import { useReaderStore } from "@/store/readerStore";
+import { renderWithProviders, screen, userEvent, waitFor } from "@/test/utils";
+import { EpubReaderSettings } from "./EpubReaderSettings";
 
 // Default settings to reset store before each test
 const defaultSettings = {
@@ -39,7 +39,7 @@ describe("EpubReaderSettings", () => {
 	describe("rendering", () => {
 		it("should not render when closed", () => {
 			renderWithProviders(
-				<EpubReaderSettings opened={false} onClose={vi.fn()} />
+				<EpubReaderSettings opened={false} onClose={vi.fn()} />,
 			);
 
 			expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -47,7 +47,7 @@ describe("EpubReaderSettings", () => {
 
 		it("should render modal when opened", () => {
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			expect(screen.getByRole("dialog")).toBeInTheDocument();
@@ -56,11 +56,13 @@ describe("EpubReaderSettings", () => {
 
 		it("should display theme section with select dropdown", () => {
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			expect(screen.getByText("Theme")).toBeInTheDocument();
-			expect(screen.getByText("Background and text color theme")).toBeInTheDocument();
+			expect(
+				screen.getByText("Background and text color theme"),
+			).toBeInTheDocument();
 			// Theme select shows "Light" as the default selected value
 			// We have two textboxes - one for theme, one for font family
 			const textboxes = screen.getAllByRole("textbox");
@@ -69,7 +71,7 @@ describe("EpubReaderSettings", () => {
 
 		it("should display font size section", () => {
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			expect(screen.getByText("Font Size")).toBeInTheDocument();
@@ -81,7 +83,7 @@ describe("EpubReaderSettings", () => {
 
 		it("should display auto-hide toolbar toggle", () => {
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			expect(screen.getByText("Auto-hide Toolbar")).toBeInTheDocument();
@@ -92,16 +94,18 @@ describe("EpubReaderSettings", () => {
 
 		it("should display auto-advance toggle", () => {
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			expect(screen.getByText("Auto-advance to next book")).toBeInTheDocument();
-			expect(screen.getByText("Automatically continue to next book in series")).toBeInTheDocument();
+			expect(
+				screen.getByText("Automatically continue to next book in series"),
+			).toBeInTheDocument();
 		});
 
 		it("should display keyboard shortcuts section", () => {
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			expect(screen.getByText("Keyboard Shortcuts")).toBeInTheDocument();
@@ -121,7 +125,7 @@ describe("EpubReaderSettings", () => {
 
 		it("should display Light theme as selected by default", () => {
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			// Theme select is the first textbox
@@ -133,7 +137,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubTheme("sepia");
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			const textboxes = screen.getAllByRole("textbox");
@@ -144,7 +148,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubTheme("dark");
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			const textboxes = screen.getAllByRole("textbox");
@@ -155,7 +159,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubTheme("mint");
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			const textboxes = screen.getAllByRole("textbox");
@@ -166,7 +170,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubTheme("slate");
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			const textboxes = screen.getAllByRole("textbox");
@@ -178,7 +182,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubTheme("night");
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			const textboxes = screen.getAllByRole("textbox");
@@ -189,7 +193,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubTheme("paper");
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			const textboxes = screen.getAllByRole("textbox");
@@ -200,7 +204,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubTheme("ocean");
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			const textboxes = screen.getAllByRole("textbox");
@@ -211,7 +215,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubTheme("forest");
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			const textboxes = screen.getAllByRole("textbox");
@@ -222,7 +226,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubTheme("rose");
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			const textboxes = screen.getAllByRole("textbox");
@@ -235,7 +239,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubFontSize(120);
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			// 120% appears in the value display (not in marks, so only one instance)
@@ -244,7 +248,7 @@ describe("EpubReaderSettings", () => {
 
 		it("should show slider with correct min/max marks", () => {
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			// Marks appear on the slider
@@ -257,7 +261,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubFontSize(150);
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			// Font size slider is the first one in the modal
@@ -273,7 +277,7 @@ describe("EpubReaderSettings", () => {
 			const initialValue = useReaderStore.getState().settings.autoHideToolbar;
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			// Find the auto-hide switch (first switch)
@@ -281,14 +285,16 @@ describe("EpubReaderSettings", () => {
 			const autoHideSwitch = switches[0];
 			await user.click(autoHideSwitch);
 
-			expect(useReaderStore.getState().settings.autoHideToolbar).toBe(!initialValue);
+			expect(useReaderStore.getState().settings.autoHideToolbar).toBe(
+				!initialValue,
+			);
 		});
 
 		it("should show checked state when auto-hide is enabled", () => {
 			useReaderStore.getState().setAutoHideToolbar(true);
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			const switches = screen.getAllByRole("switch");
@@ -299,7 +305,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setAutoHideToolbar(false);
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			const switches = screen.getAllByRole("switch");
@@ -310,10 +316,11 @@ describe("EpubReaderSettings", () => {
 	describe("auto-advance to next book", () => {
 		it("should toggle auto-advance on click", async () => {
 			const user = userEvent.setup();
-			const initialValue = useReaderStore.getState().settings.autoAdvanceToNextBook;
+			const initialValue =
+				useReaderStore.getState().settings.autoAdvanceToNextBook;
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			// Find the auto-advance switch (second switch)
@@ -321,14 +328,16 @@ describe("EpubReaderSettings", () => {
 			const autoAdvanceSwitch = switches[1];
 			await user.click(autoAdvanceSwitch);
 
-			expect(useReaderStore.getState().settings.autoAdvanceToNextBook).toBe(!initialValue);
+			expect(useReaderStore.getState().settings.autoAdvanceToNextBook).toBe(
+				!initialValue,
+			);
 		});
 
 		it("should show checked state when auto-advance is enabled", () => {
 			useReaderStore.getState().setAutoAdvanceToNextBook(true);
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			const switches = screen.getAllByRole("switch");
@@ -339,7 +348,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setAutoAdvanceToNextBook(false);
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			const switches = screen.getAllByRole("switch");
@@ -353,7 +362,7 @@ describe("EpubReaderSettings", () => {
 			const onClose = vi.fn();
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={onClose} />
+				<EpubReaderSettings opened={true} onClose={onClose} />,
 			);
 
 			// Close via the X button (mantine CloseButton doesn't have accessible name)
@@ -371,7 +380,7 @@ describe("EpubReaderSettings", () => {
 			const onClose = vi.fn();
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={onClose} />
+				<EpubReaderSettings opened={true} onClose={onClose} />,
 			);
 
 			// Click the overlay (outside the modal)
@@ -395,7 +404,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setAutoHideToolbar(false);
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			// Check that the UI reflects the store state
@@ -408,14 +417,16 @@ describe("EpubReaderSettings", () => {
 			const user = userEvent.setup();
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			// Toggle auto-hide (it's true by default) - first switch
 			const switches = screen.getAllByRole("switch");
 			const wasChecked = useReaderStore.getState().settings.autoHideToolbar;
 			await user.click(switches[0]);
-			expect(useReaderStore.getState().settings.autoHideToolbar).toBe(!wasChecked);
+			expect(useReaderStore.getState().settings.autoHideToolbar).toBe(
+				!wasChecked,
+			);
 
 			// Theme change is tested via store in "theme selection" tests
 			// since Mantine Select interactions are complex in jsdom
@@ -425,16 +436,18 @@ describe("EpubReaderSettings", () => {
 	describe("font family", () => {
 		it("should display font family section", () => {
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			expect(screen.getByText("Font Family")).toBeInTheDocument();
-			expect(screen.getByText("Choose a typeface for reading")).toBeInTheDocument();
+			expect(
+				screen.getByText("Choose a typeface for reading"),
+			).toBeInTheDocument();
 		});
 
 		it("should display current font family in dropdown", () => {
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			// Font family select is the second textbox (after theme)
@@ -450,7 +463,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubFontFamily("serif");
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			// Font family select is the second textbox (after theme)
@@ -462,7 +475,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubFontFamily("sans-serif");
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			const textboxes = screen.getAllByRole("textbox");
@@ -473,7 +486,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubFontFamily("monospace");
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			const textboxes = screen.getAllByRole("textbox");
@@ -484,7 +497,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubFontFamily("dyslexic");
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			const textboxes = screen.getAllByRole("textbox");
@@ -495,18 +508,20 @@ describe("EpubReaderSettings", () => {
 	describe("line spacing", () => {
 		it("should display line spacing section", () => {
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			expect(screen.getByText("Line Spacing")).toBeInTheDocument();
-			expect(screen.getByText("Space between lines of text")).toBeInTheDocument();
+			expect(
+				screen.getByText("Space between lines of text"),
+			).toBeInTheDocument();
 		});
 
 		it("should display current line height value", () => {
 			useReaderStore.getState().setEpubLineHeight(180);
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			expect(screen.getByText("180%")).toBeInTheDocument();
@@ -514,7 +529,7 @@ describe("EpubReaderSettings", () => {
 
 		it("should show slider with correct marks", () => {
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			expect(screen.getByText("Tight")).toBeInTheDocument();
@@ -528,7 +543,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubLineHeight(200);
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			// Find the line height slider (second slider in the modal)
@@ -542,18 +557,20 @@ describe("EpubReaderSettings", () => {
 	describe("margins", () => {
 		it("should display margins section", () => {
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			expect(screen.getByText("Margins")).toBeInTheDocument();
-			expect(screen.getByText("Horizontal padding around text")).toBeInTheDocument();
+			expect(
+				screen.getByText("Horizontal padding around text"),
+			).toBeInTheDocument();
 		});
 
 		it("should display current margin value", () => {
 			useReaderStore.getState().setEpubMargin(20);
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			expect(screen.getByText("20%")).toBeInTheDocument();
@@ -561,7 +578,7 @@ describe("EpubReaderSettings", () => {
 
 		it("should show slider with correct marks", () => {
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			expect(screen.getByText("None")).toBeInTheDocument();
@@ -575,7 +592,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubMargin(25);
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			// Find the margin slider (third slider in the modal)
@@ -594,7 +611,7 @@ describe("EpubReaderSettings", () => {
 			useReaderStore.getState().setEpubMargin(25);
 
 			renderWithProviders(
-				<EpubReaderSettings opened={true} onClose={vi.fn()} />
+				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
 			// Check that the UI reflects the store state

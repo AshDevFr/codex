@@ -67,7 +67,9 @@ describe("DoublePageSpread", () => {
 				<DoublePageSpread {...defaultProps} isVisible={false} />,
 			);
 
-			expect(screen.queryByTestId("double-page-spread")).not.toBeInTheDocument();
+			expect(
+				screen.queryByTestId("double-page-spread"),
+			).not.toBeInTheDocument();
 		});
 	});
 

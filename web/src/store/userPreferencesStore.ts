@@ -3,14 +3,14 @@ import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
 import {
-	userPreferencesApi,
 	type UserPreferenceDto,
+	userPreferencesApi,
 } from "@/api/userPreferences";
 import {
+	getPreferenceDefault,
+	PREFERENCE_DEFAULTS,
 	type PreferenceKey,
 	type TypedPreferences,
-	PREFERENCE_DEFAULTS,
-	getPreferenceDefault,
 } from "@/types/preferences";
 
 // Debounce timeout for syncing to server (ms)
@@ -69,7 +69,7 @@ export interface UserPreferencesState {
  * Parse a preference value from the API response into the correct type
  */
 function parsePreferenceValue<K extends PreferenceKey>(
-	key: K,
+	_key: K,
 	dto: UserPreferenceDto,
 ): TypedPreferences[K] {
 	const value = dto.value;
@@ -114,7 +114,9 @@ export const useUserPreferencesStore = create<UserPreferencesState>()(
 				isLoaded: false,
 				loadError: null,
 
-				getPreference: <K extends PreferenceKey>(key: K): TypedPreferences[K] => {
+				getPreference: <K extends PreferenceKey>(
+					key: K,
+				): TypedPreferences[K] => {
 					const cached = get().preferences[key];
 					if (cached !== undefined) {
 						return cached as TypedPreferences[K];
@@ -167,7 +169,9 @@ export const useUserPreferencesStore = create<UserPreferencesState>()(
 						});
 					} catch (error) {
 						const message =
-							error instanceof Error ? error.message : "Failed to load preferences";
+							error instanceof Error
+								? error.message
+								: "Failed to load preferences";
 						set((state) => {
 							state.loadError = message;
 						});

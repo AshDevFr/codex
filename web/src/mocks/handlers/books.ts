@@ -59,7 +59,7 @@ export const bookHandlers = [
 		await delay(200);
 		const url = new URL(request.url);
 		const libraryId = url.searchParams.get("library_id");
-		const limit = Number.parseInt(url.searchParams.get("limit") || "50");
+		const limit = Number.parseInt(url.searchParams.get("limit") || "50", 10);
 
 		// Sort by created date (newest first)
 		const baseBooks = libraryId ? getBooksByLibrary(libraryId) : mockBooks;
@@ -78,7 +78,7 @@ export const bookHandlers = [
 		await delay(200);
 		const url = new URL(request.url);
 		const libraryId = url.searchParams.get("library_id");
-		const limit = Number.parseInt(url.searchParams.get("limit") || "50");
+		const limit = Number.parseInt(url.searchParams.get("limit") || "50", 10);
 
 		// Return books that have been read (have read progress), sorted by last read
 		const baseBooks = libraryId ? getBooksByLibrary(libraryId) : mockBooks;
@@ -198,11 +198,12 @@ export const bookHandlers = [
 	http.get("/api/v1/books", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
-		const page = Number.parseInt(url.searchParams.get("page") || "0");
+		const page = Number.parseInt(url.searchParams.get("page") || "0", 10);
 		const pageSize = Number.parseInt(
 			url.searchParams.get("page_size") ||
 				url.searchParams.get("pageSize") ||
 				"20",
+			10,
 		);
 		const libraryId = url.searchParams.get("library_id");
 		const seriesId =
@@ -357,8 +358,6 @@ export const bookHandlers = [
 				contentType = "application/pdf";
 				filename = `${book.title}.pdf`;
 				break;
-			case "cbz":
-			case "cbr":
 			default:
 				fixtureUrl = sampleCbzUrl;
 				contentType = "application/zip";
@@ -394,9 +393,10 @@ export const bookHandlers = [
 		async ({ params, request }) => {
 			await delay(200);
 			const url = new URL(request.url);
-			const page = Number.parseInt(url.searchParams.get("page") || "0");
+			const page = Number.parseInt(url.searchParams.get("page") || "0", 10);
 			const pageSize = Number.parseInt(
 				url.searchParams.get("pageSize") || "20",
+				10,
 			);
 
 			const libraryBooks = getBooksByLibrary(params.libraryId as string);
@@ -438,7 +438,7 @@ export const bookHandlers = [
 		async ({ params, request }) => {
 			await delay(200);
 			const url = new URL(request.url);
-			const limit = Number.parseInt(url.searchParams.get("limit") || "50");
+			const limit = Number.parseInt(url.searchParams.get("limit") || "50", 10);
 
 			// Get books for this library, sorted by created date
 			const libraryBooks = getBooksByLibrary(params.libraryId as string);

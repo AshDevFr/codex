@@ -1,17 +1,17 @@
 import { act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { userIntegrationsApi } from "@/api/userIntegrations";
 import {
-	useUserIntegrationsStore,
-	selectIntegrations,
 	selectAvailableIntegrations,
 	selectIntegration,
+	selectIntegrations,
 	selectIsConnected,
 	selectIsLoaded,
 	selectIsLoading,
 	selectLoadError,
 	selectOperationStatus,
+	useUserIntegrationsStore,
 } from "./userIntegrationsStore";
-import { userIntegrationsApi } from "@/api/userIntegrations";
 
 // Mock the API client
 vi.mock("@/api/userIntegrations", () => ({
@@ -139,11 +139,10 @@ describe("userIntegrationsStore", () => {
 		it("should set isLoading during load", async () => {
 			let resolveLoad: () => void;
 			const loadPromise = new Promise<{
-				integrations: typeof mockIntegration[];
-				available: typeof mockAvailableIntegration[];
+				integrations: (typeof mockIntegration)[];
+				available: (typeof mockAvailableIntegration)[];
 			}>((resolve) => {
-				resolveLoad = () =>
-					resolve({ integrations: [], available: [] });
+				resolveLoad = () => resolve({ integrations: [], available: [] });
 			});
 
 			vi.mocked(userIntegrationsApi.getAll).mockReturnValue(loadPromise);
@@ -158,7 +157,7 @@ describe("userIntegrationsStore", () => {
 
 			// Complete the load
 			await act(async () => {
-				resolveLoad!();
+				resolveLoad?.();
 				await loadOperation;
 			});
 
@@ -274,8 +273,8 @@ describe("userIntegrationsStore", () => {
 				});
 			});
 
-			expect(result!.authUrl).toBe("https://anilist.co/api/v2/oauth/authorize");
-			expect(result!.connected).toBe(false);
+			expect(result?.authUrl).toBe("https://anilist.co/api/v2/oauth/authorize");
+			expect(result?.connected).toBe(false);
 		});
 
 		it("should connect API key integration immediately", async () => {
@@ -299,8 +298,8 @@ describe("userIntegrationsStore", () => {
 				});
 			});
 
-			expect(result!.connected).toBe(true);
-			expect(result!.authUrl).toBeUndefined();
+			expect(result?.connected).toBe(true);
+			expect(result?.authUrl).toBeUndefined();
 
 			// Should add to integrations list
 			const state = useUserIntegrationsStore.getState();
@@ -342,7 +341,7 @@ describe("userIntegrationsStore", () => {
 
 			// Complete the connect
 			await act(async () => {
-				resolveConnect!({
+				resolveConnect?.({
 					authUrl: "https://anilist.co/oauth",
 					connected: false,
 					integration: null,
@@ -557,8 +556,8 @@ describe("userIntegrationsStore", () => {
 				result = await sync("anilist");
 			});
 
-			expect(result!.started).toBe(true);
-			expect(result!.message).toBe("Sync completed");
+			expect(result?.started).toBe(true);
+			expect(result?.message).toBe("Sync completed");
 		});
 	});
 

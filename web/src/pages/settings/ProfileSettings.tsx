@@ -80,10 +80,7 @@ export function ProfileSettings() {
 	});
 
 	// Fetch user integrations
-	const {
-		data: integrationsData,
-		isLoading: integrationsLoading,
-	} = useQuery({
+	const { data: integrationsData, isLoading: integrationsLoading } = useQuery({
 		queryKey: ["user-integrations"],
 		queryFn: userIntegrationsApi.getAll,
 	});
@@ -97,9 +94,7 @@ export function ProfileSettings() {
 		},
 		validate: {
 			newPassword: (value) =>
-				value.length < 8
-					? "Password must be at least 8 characters"
-					: null,
+				value.length < 8 ? "Password must be at least 8 characters" : null,
 			confirmPassword: (value, values) =>
 				value !== values.newPassword ? "Passwords do not match" : null,
 		},
@@ -112,8 +107,7 @@ export function ProfileSettings() {
 			expiresInDays: 30,
 		},
 		validate: {
-			name: (value) =>
-				value.length < 1 ? "Name is required" : null,
+			name: (value) => (value.length < 1 ? "Name is required" : null),
 		},
 	});
 
@@ -158,7 +152,8 @@ export function ProfileSettings() {
 		onError: () => {
 			notifications.show({
 				title: "Error",
-				message: "Failed to change password. Please check your current password.",
+				message:
+					"Failed to change password. Please check your current password.",
 				color: "red",
 			});
 		},
@@ -266,7 +261,10 @@ export function ProfileSettings() {
 						<Tabs.Tab value="account" leftSection={<IconUser size={16} />}>
 							Account
 						</Tabs.Tab>
-						<Tabs.Tab value="preferences" leftSection={<IconPalette size={16} />}>
+						<Tabs.Tab
+							value="preferences"
+							leftSection={<IconPalette size={16} />}
+						>
 							Preferences
 						</Tabs.Tab>
 						<Tabs.Tab value="integrations" leftSection={<IconLink size={16} />}>
@@ -485,10 +483,7 @@ export function ProfileSettings() {
 									<Card withBorder>
 										<Stack gap="md">
 											<Title order={3}>Available Integrations</Title>
-											<Alert
-												icon={<IconAlertCircle size={16} />}
-												color="blue"
-											>
+											<Alert icon={<IconAlertCircle size={16} />} color="blue">
 												Integration providers are coming soon. Connect your
 												AniList, MyAnimeList, and other accounts to sync your
 												reading progress.
@@ -523,11 +518,7 @@ export function ProfileSettings() {
 																				))}
 																			</Group>
 																		</div>
-																		<Button
-																			variant="light"
-																			disabled
-																			size="sm"
-																		>
+																		<Button variant="light" disabled size="sm">
 																			Connect
 																		</Button>
 																	</Group>
@@ -696,7 +687,7 @@ export function ProfileSettings() {
 								onChange={(value) =>
 									apiKeyForm.setFieldValue(
 										"expiresInDays",
-										Number.parseInt(value || "30"),
+										Number.parseInt(value || "30", 10),
 									)
 								}
 							/>
@@ -707,10 +698,7 @@ export function ProfileSettings() {
 								>
 									Cancel
 								</Button>
-								<Button
-									type="submit"
-									loading={createApiKeyMutation.isPending}
-								>
+								<Button type="submit" loading={createApiKeyMutation.isPending}>
 									Create Key
 								</Button>
 							</Group>

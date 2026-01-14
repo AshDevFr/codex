@@ -29,7 +29,10 @@ export function renderWithProviders(
 		return (
 			<MantineProvider theme={theme} defaultColorScheme="dark">
 				<QueryClientProvider client={queryClient}>
-					<MemoryRouter initialEntries={initialEntries} initialIndex={initialIndex}>
+					<MemoryRouter
+						initialEntries={initialEntries}
+						initialIndex={initialIndex}
+					>
 						{children}
 					</MemoryRouter>
 				</QueryClientProvider>

@@ -25,13 +25,11 @@ describe("SeriesStrategySelector", () => {
 			/>,
 		);
 
-		expect(
-			screen.getByText("Series Detection Strategy"),
-		).toBeInTheDocument();
+		expect(screen.getByText("Series Detection Strategy")).toBeInTheDocument();
 		// Mantine Select displays the label in the textbox, not the value
-		expect(
-			screen.getByRole("textbox", { hidden: true }),
-		).toHaveValue("Series-Volume (Recommended)");
+		expect(screen.getByRole("textbox", { hidden: true })).toHaveValue(
+			"Series-Volume (Recommended)",
+		);
 	});
 
 	it("displays description for selected strategy", () => {
@@ -50,7 +48,9 @@ describe("SeriesStrategySelector", () => {
 		const seriesVolumeStrategy = SERIES_STRATEGIES.find(
 			(s) => s.value === "series_volume",
 		);
-		expect(screen.getByText(seriesVolumeStrategy!.description)).toBeInTheDocument();
+		expect(
+			screen.getByText(seriesVolumeStrategy?.description),
+		).toBeInTheDocument();
 	});
 
 	it("calls onChange when strategy is changed", async () => {
@@ -237,9 +237,9 @@ describe("BookStrategySelector", () => {
 
 		expect(screen.getByText("Book Naming Strategy")).toBeInTheDocument();
 		// Mantine Select displays the label in the textbox, not the value
-		expect(
-			screen.getByRole("textbox", { hidden: true }),
-		).toHaveValue("Filename (Recommended)");
+		expect(screen.getByRole("textbox", { hidden: true })).toHaveValue(
+			"Filename (Recommended)",
+		);
 	});
 
 	it("displays description for selected strategy", () => {
@@ -252,7 +252,7 @@ describe("BookStrategySelector", () => {
 		const filenameStrategy = BOOK_STRATEGIES.find(
 			(s) => s.value === "filename",
 		);
-		expect(screen.getByText(filenameStrategy!.description)).toBeInTheDocument();
+		expect(screen.getByText(filenameStrategy?.description)).toBeInTheDocument();
 	});
 
 	it("calls onChange when strategy is changed", async () => {
@@ -318,9 +318,9 @@ describe("NumberStrategySelector", () => {
 
 		expect(screen.getByText("Book Number Strategy")).toBeInTheDocument();
 		// Mantine Select displays the label in the textbox, not the value
-		expect(
-			screen.getByRole("textbox", { hidden: true }),
-		).toHaveValue("File Order (Recommended)");
+		expect(screen.getByRole("textbox", { hidden: true })).toHaveValue(
+			"File Order (Recommended)",
+		);
 	});
 
 	it("displays description for selected strategy", () => {
@@ -333,7 +333,9 @@ describe("NumberStrategySelector", () => {
 		const fileOrderStrategy = NUMBER_STRATEGIES.find(
 			(s) => s.value === "file_order",
 		);
-		expect(screen.getByText(fileOrderStrategy!.description)).toBeInTheDocument();
+		expect(
+			screen.getByText(fileOrderStrategy?.description),
+		).toBeInTheDocument();
 	});
 
 	it("calls onChange when strategy is changed", async () => {
@@ -361,7 +363,11 @@ describe("NumberStrategySelector", () => {
 		const onChange = vi.fn();
 
 		renderWithProviders(
-			<NumberStrategySelector value="file_order" onChange={onChange} disabled />,
+			<NumberStrategySelector
+				value="file_order"
+				onChange={onChange}
+				disabled
+			/>,
 		);
 
 		const select = screen.getByRole("textbox", { hidden: true });
@@ -398,7 +404,7 @@ describe("NumberStrategySelector", () => {
 		const metadataStrategy = NUMBER_STRATEGIES.find(
 			(s) => s.value === "metadata",
 		);
-		expect(screen.getByText(metadataStrategy!.description)).toBeInTheDocument();
+		expect(screen.getByText(metadataStrategy?.description)).toBeInTheDocument();
 	});
 
 	it("displays correct description for filename strategy", () => {
@@ -411,7 +417,7 @@ describe("NumberStrategySelector", () => {
 		const filenameStrategy = NUMBER_STRATEGIES.find(
 			(s) => s.value === "filename",
 		);
-		expect(screen.getByText(filenameStrategy!.description)).toBeInTheDocument();
+		expect(screen.getByText(filenameStrategy?.description)).toBeInTheDocument();
 	});
 
 	it("displays correct description for smart strategy", () => {
@@ -421,10 +427,8 @@ describe("NumberStrategySelector", () => {
 			<NumberStrategySelector value="smart" onChange={onChange} />,
 		);
 
-		const smartStrategy = NUMBER_STRATEGIES.find(
-			(s) => s.value === "smart",
-		);
-		expect(screen.getByText(smartStrategy!.description)).toBeInTheDocument();
+		const smartStrategy = NUMBER_STRATEGIES.find((s) => s.value === "smart");
+		expect(screen.getByText(smartStrategy?.description)).toBeInTheDocument();
 	});
 });
 

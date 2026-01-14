@@ -1,7 +1,7 @@
-import { renderWithProviders, screen } from "@/test/utils";
 import { describe, expect, it } from "vitest";
-import { BookFileInfo } from "./BookFileInfo";
+import { renderWithProviders, screen } from "@/test/utils";
 import type { Book } from "@/types";
+import { BookFileInfo } from "./BookFileInfo";
 
 // Create a mock book with all required fields
 const createMockBook = (overrides?: Partial<Book>): Book => ({
@@ -30,7 +30,9 @@ describe("BookFileInfo", () => {
 	});
 
 	it("should display file format in uppercase", () => {
-		renderWithProviders(<BookFileInfo book={createMockBook({ fileFormat: "epub" })} />);
+		renderWithProviders(
+			<BookFileInfo book={createMockBook({ fileFormat: "epub" })} />,
+		);
 
 		expect(screen.getByText("Format")).toBeInTheDocument();
 		expect(screen.getByText("EPUB")).toBeInTheDocument();
@@ -70,7 +72,9 @@ describe("BookFileInfo", () => {
 	});
 
 	it("should display page count", () => {
-		renderWithProviders(<BookFileInfo book={createMockBook({ pageCount: 150 })} />);
+		renderWithProviders(
+			<BookFileInfo book={createMockBook({ pageCount: 150 })} />,
+		);
 
 		expect(screen.getByText("Pages")).toBeInTheDocument();
 		expect(screen.getByText("150")).toBeInTheDocument();
@@ -78,7 +82,9 @@ describe("BookFileInfo", () => {
 
 	it("should display truncated hash", () => {
 		const hash = "abc123def456ghi789jkl012mno345pqr678";
-		renderWithProviders(<BookFileInfo book={createMockBook({ fileHash: hash })} />);
+		renderWithProviders(
+			<BookFileInfo book={createMockBook({ fileHash: hash })} />,
+		);
 
 		expect(screen.getByText("Hash")).toBeInTheDocument();
 		// Should show first 12 characters + "..."
@@ -87,7 +93,9 @@ describe("BookFileInfo", () => {
 
 	it("should display added date formatted", () => {
 		renderWithProviders(
-			<BookFileInfo book={createMockBook({ createdAt: "2024-06-15T12:00:00Z" })} />,
+			<BookFileInfo
+				book={createMockBook({ createdAt: "2024-06-15T12:00:00Z" })}
+			/>,
 		);
 
 		expect(screen.getByText("Added")).toBeInTheDocument();
@@ -97,7 +105,9 @@ describe("BookFileInfo", () => {
 	it("should display file name from path", () => {
 		renderWithProviders(
 			<BookFileInfo
-				book={createMockBook({ filePath: "/library/comics/Series/issue-01.cbz" })}
+				book={createMockBook({
+					filePath: "/library/comics/Series/issue-01.cbz",
+				})}
 			/>,
 		);
 

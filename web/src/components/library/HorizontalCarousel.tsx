@@ -1,6 +1,6 @@
 import { ActionIcon, Box, Group, Stack, Text, Title } from "@mantine/core";
 import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import { type ReactNode, useCallback, useRef, useState } from "react";
 import classes from "./HorizontalCarousel.module.css";
 
 interface HorizontalCarouselProps {

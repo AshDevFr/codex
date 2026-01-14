@@ -64,7 +64,10 @@ export type BrowseResponse = Schemas["BrowseResponse"];
 // =============================================================================
 // Pagination types
 // =============================================================================
-export type PaginatedResponse<T> = Omit<Schemas["PaginatedResponse"], "data"> & {
+export type PaginatedResponse<T> = Omit<
+	Schemas["PaginatedResponse"],
+	"data"
+> & {
 	data: T[];
 };
 
@@ -106,9 +109,9 @@ export type TaskResponse = Schemas["TaskResponse"];
 // =============================================================================
 // Type guards for entity events
 // =============================================================================
-export function isBookEvent(
-	event: EntityEvent,
-): event is EntityEvent & { type: "book_created" | "book_updated" | "book_deleted" } {
+export function isBookEvent(event: EntityEvent): event is EntityEvent & {
+	type: "book_created" | "book_updated" | "book_deleted";
+} {
 	return (
 		event.type === "book_created" ||
 		event.type === "book_updated" ||
@@ -116,10 +119,12 @@ export function isBookEvent(
 	);
 }
 
-export function isSeriesEvent(
-	event: EntityEvent,
-): event is EntityEvent & {
-	type: "series_created" | "series_updated" | "series_deleted" | "series_bulk_purged";
+export function isSeriesEvent(event: EntityEvent): event is EntityEvent & {
+	type:
+		| "series_created"
+		| "series_updated"
+		| "series_deleted"
+		| "series_bulk_purged";
 } {
 	return (
 		event.type === "series_created" ||
@@ -142,11 +147,10 @@ export function isLibraryEvent(
 }
 
 // =============================================================================
+// Re-export the raw generated types for advanced use cases
+// =============================================================================
+export type { components, operations, paths } from "./api.generated";
+// =============================================================================
 // Filter types
 // =============================================================================
 export * from "./filters";
-
-// =============================================================================
-// Re-export the raw generated types for advanced use cases
-// =============================================================================
-export type { components, paths, operations } from "./api.generated";

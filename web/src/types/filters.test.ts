@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { FilterGroupState, SeriesCondition } from "./filters";
 import {
 	countActiveFilters,
 	createEmptyFilterGroup,
@@ -13,7 +14,6 @@ import {
 	serializeSeriesFilters,
 	seriesFilterStateToCondition,
 } from "./filters";
-import type { FilterGroupState, SeriesCondition } from "./filters";
 
 describe("Filter Types - Helper Functions", () => {
 	describe("createEmptyFilterGroup", () => {

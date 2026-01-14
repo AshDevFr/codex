@@ -64,7 +64,8 @@ describe("Login Component", () => {
 		await user.click(screen.getByRole("button", { name: /sign in/i }));
 
 		await waitFor(() => {
-			expect(authApi.login).toHaveBeenCalledWith({
+			expect(authApi.login).toHaveBeenCalled();
+			expect(vi.mocked(authApi.login).mock.calls[0][0]).toEqual({
 				username: "testuser",
 				password: "password123",
 			});

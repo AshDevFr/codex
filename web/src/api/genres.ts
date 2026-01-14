@@ -26,7 +26,10 @@ export const genresApi = {
 	/**
 	 * Set all genres for a series (replaces existing)
 	 */
-	setForSeries: async (seriesId: string, genres: string[]): Promise<Genre[]> => {
+	setForSeries: async (
+		seriesId: string,
+		genres: string[],
+	): Promise<Genre[]> => {
 		const response = await api.put<GenreListResponse>(
 			`/series/${seriesId}/genres`,
 			{ genres },

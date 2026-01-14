@@ -30,9 +30,14 @@ interface UseEpubBookmarksReturn {
 	/** All bookmarks for this book */
 	bookmarks: EpubBookmark[];
 	/** Add a new bookmark */
-	addBookmark: (bookmark: Omit<EpubBookmark, "id" | "createdAt">) => EpubBookmark;
+	addBookmark: (
+		bookmark: Omit<EpubBookmark, "id" | "createdAt">,
+	) => EpubBookmark;
 	/** Update an existing bookmark */
-	updateBookmark: (id: string, updates: Partial<Pick<EpubBookmark, "note">>) => void;
+	updateBookmark: (
+		id: string,
+		updates: Partial<Pick<EpubBookmark, "note">>,
+	) => void;
 	/** Remove a bookmark */
 	removeBookmark: (id: string) => void;
 	/** Check if current CFI location is bookmarked */
@@ -101,7 +106,7 @@ export function useEpubBookmarks({
 			setBookmarks((prev) => [...prev, newBookmark]);
 			return newBookmark;
 		},
-		[]
+		[],
 	);
 
 	// Update an existing bookmark
@@ -109,11 +114,11 @@ export function useEpubBookmarks({
 		(id: string, updates: Partial<Pick<EpubBookmark, "note">>) => {
 			setBookmarks((prev) =>
 				prev.map((bookmark) =>
-					bookmark.id === id ? { ...bookmark, ...updates } : bookmark
-				)
+					bookmark.id === id ? { ...bookmark, ...updates } : bookmark,
+				),
 			);
 		},
-		[]
+		[],
 	);
 
 	// Remove a bookmark
@@ -126,7 +131,7 @@ export function useEpubBookmarks({
 		(cfi: string): boolean => {
 			return bookmarks.some((bookmark) => bookmark.cfi === cfi);
 		},
-		[bookmarks]
+		[bookmarks],
 	);
 
 	// Get bookmark at a specific CFI location
@@ -134,7 +139,7 @@ export function useEpubBookmarks({
 		(cfi: string): EpubBookmark | undefined => {
 			return bookmarks.find((bookmark) => bookmark.cfi === cfi);
 		},
-		[bookmarks]
+		[bookmarks],
 	);
 
 	// Clear all bookmarks

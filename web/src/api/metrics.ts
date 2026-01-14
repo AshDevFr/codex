@@ -5,12 +5,17 @@ import { api } from "./client";
 export type MetricsDto = components["schemas"]["MetricsDto"];
 export type LibraryMetricsDto = components["schemas"]["LibraryMetricsDto"];
 export type TaskMetricsResponse = components["schemas"]["TaskMetricsResponse"];
-export type TaskMetricsSummaryDto = components["schemas"]["TaskMetricsSummaryDto"];
+export type TaskMetricsSummaryDto =
+	components["schemas"]["TaskMetricsSummaryDto"];
 export type TaskTypeMetricsDto = components["schemas"]["TaskTypeMetricsDto"];
-export type QueueHealthMetricsDto = components["schemas"]["QueueHealthMetricsDto"];
-export type TaskMetricsHistoryResponse = components["schemas"]["TaskMetricsHistoryResponse"];
-export type TaskMetricsDataPointDto = components["schemas"]["TaskMetricsDataPointDto"];
-export type MetricsCleanupResponse = components["schemas"]["MetricsCleanupResponse"];
+export type QueueHealthMetricsDto =
+	components["schemas"]["QueueHealthMetricsDto"];
+export type TaskMetricsHistoryResponse =
+	components["schemas"]["TaskMetricsHistoryResponse"];
+export type TaskMetricsDataPointDto =
+	components["schemas"]["TaskMetricsDataPointDto"];
+export type MetricsCleanupResponse =
+	components["schemas"]["MetricsCleanupResponse"];
 
 export const metricsApi = {
 	/**
@@ -37,13 +42,16 @@ export const metricsApi = {
 		taskType?: string;
 		granularity?: "hour" | "day";
 	}): Promise<TaskMetricsHistoryResponse> => {
-		const response = await api.get<TaskMetricsHistoryResponse>("/metrics/tasks/history", {
-			params: {
-				days: params?.days,
-				task_type: params?.taskType,
-				granularity: params?.granularity,
+		const response = await api.get<TaskMetricsHistoryResponse>(
+			"/metrics/tasks/history",
+			{
+				params: {
+					days: params?.days,
+					task_type: params?.taskType,
+					granularity: params?.granularity,
+				},
 			},
-		});
+		);
 		return response.data;
 	},
 
@@ -51,7 +59,9 @@ export const metricsApi = {
 	 * Cleanup old task metrics
 	 */
 	cleanupTaskMetrics: async (): Promise<MetricsCleanupResponse> => {
-		const response = await api.post<MetricsCleanupResponse>("/metrics/tasks/cleanup");
+		const response = await api.post<MetricsCleanupResponse>(
+			"/metrics/tasks/cleanup",
+		);
 		return response.data;
 	},
 };

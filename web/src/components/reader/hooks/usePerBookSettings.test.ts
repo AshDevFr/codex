@@ -117,7 +117,9 @@ describe("usePerBookSettings", () => {
 			// Put invalid JSON in localStorage
 			localStorage.setItem(`${STORAGE_KEY_PREFIX}book-123`, "invalid json");
 
-			const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const consoleWarn = vi
+				.spyOn(console, "warn")
+				.mockImplementation(() => {});
 
 			const { result } = renderHook(() =>
 				usePerBookSettings("book-123", "PDF"),

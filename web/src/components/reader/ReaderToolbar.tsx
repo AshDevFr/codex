@@ -127,8 +127,10 @@ export function ReaderToolbar({
 	// Icons stay visually consistent - only behavior and tooltips change
 	const onLeftClick = readingDirection === "ltr" ? prevPage : nextPage;
 	const onRightClick = readingDirection === "ltr" ? nextPage : prevPage;
-	const leftTooltip = readingDirection === "ltr" ? "Previous page" : "Next page";
-	const rightTooltip = readingDirection === "ltr" ? "Next page" : "Previous page";
+	const leftTooltip =
+		readingDirection === "ltr" ? "Previous page" : "Next page";
+	const rightTooltip =
+		readingDirection === "ltr" ? "Next page" : "Previous page";
 	const leftDisabled =
 		readingDirection === "ltr" ? currentPage <= 1 : currentPage >= totalPages;
 	const rightDisabled =
@@ -271,18 +273,27 @@ export function ReaderToolbar({
 							)}
 
 							{/* Page layout toggle - only show for paginated modes */}
-							{showPageNavigation && onTogglePageLayout && pageLayout && pageLayout !== "continuous" && (
-								<Tooltip label={`Page layout: ${pageLayout === "single" ? "Single" : "Double"}`}>
-									<ActionIcon
-										variant="subtle"
-										color={hasSeriesOverride ? "blue" : "gray"}
-										onClick={onTogglePageLayout}
-										size="lg"
+							{showPageNavigation &&
+								onTogglePageLayout &&
+								pageLayout &&
+								pageLayout !== "continuous" && (
+									<Tooltip
+										label={`Page layout: ${pageLayout === "single" ? "Single" : "Double"}`}
 									>
-										{pageLayout === "single" ? <IconFile size={20} /> : <IconBook size={20} />}
-									</ActionIcon>
-								</Tooltip>
-							)}
+										<ActionIcon
+											variant="subtle"
+											color={hasSeriesOverride ? "blue" : "gray"}
+											onClick={onTogglePageLayout}
+											size="lg"
+										>
+											{pageLayout === "single" ? (
+												<IconFile size={20} />
+											) : (
+												<IconBook size={20} />
+											)}
+										</ActionIcon>
+									</Tooltip>
+								)}
 
 							{rightActions}
 
@@ -322,7 +333,12 @@ export function ReaderToolbar({
 					{showPageNavigation && (
 						<Box px="md">
 							<Group gap="xs" align="center">
-								<Text size="xs" c="dimmed" w={40} style={{ textAlign: "right" }}>
+								<Text
+									size="xs"
+									c="dimmed"
+									w={40}
+									style={{ textAlign: "right" }}
+								>
 									{progressPercent}%
 								</Text>
 								<Slider

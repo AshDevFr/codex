@@ -1,16 +1,16 @@
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-	type FilterGroupState,
-	type FilterMode,
-	type SeriesCondition,
-	type SeriesFilterState,
-	type TriState,
 	countActiveFilters,
 	createEmptySeriesFilterState,
+	type FilterGroupState,
+	type FilterMode,
 	parseSeriesFilters,
+	type SeriesCondition,
+	type SeriesFilterState,
 	serializeSeriesFilters,
 	seriesFilterStateToCondition,
+	type TriState,
 } from "@/types";
 
 interface UseFilterStateReturn {
@@ -64,10 +64,16 @@ export function useFilterState(): UseFilterStateReturn {
 	const [searchParams, setSearchParams] = useSearchParams();
 
 	// Parse current filter state from URL
-	const filters = useMemo(() => parseSeriesFilters(searchParams), [searchParams]);
+	const filters = useMemo(
+		() => parseSeriesFilters(searchParams),
+		[searchParams],
+	);
 
 	// Convert to API condition
-	const condition = useMemo(() => seriesFilterStateToCondition(filters), [filters]);
+	const condition = useMemo(
+		() => seriesFilterStateToCondition(filters),
+		[filters],
+	);
 
 	// Helper to update URL with new filter state
 	const updateFilters = useCallback(
@@ -100,7 +106,10 @@ export function useFilterState(): UseFilterStateReturn {
 
 	// Helper to update a single group
 	const updateGroup = useCallback(
-		(group: keyof SeriesFilterState, updater: (current: FilterGroupState) => FilterGroupState) => {
+		(
+			group: keyof SeriesFilterState,
+			updater: (current: FilterGroupState) => FilterGroupState,
+		) => {
 			const newFilters = { ...filters };
 			newFilters[group] = updater(filters[group]);
 			updateFilters(newFilters);
@@ -276,7 +285,11 @@ export function useFilterState(): UseFilterStateReturn {
 	);
 
 	const activeFilterCount = useMemo(
-		() => Object.values(activeFiltersByGroup).reduce((sum, count) => sum + count, 0),
+		() =>
+			Object.values(activeFiltersByGroup).reduce(
+				(sum, count) => sum + count,
+				0,
+			),
 		[activeFiltersByGroup],
 	);
 

@@ -1,7 +1,7 @@
-import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import { describe, expect, it, vi } from "vitest";
-import { FilterGroup } from "./FilterGroup";
+import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import type { FilterGroupState } from "@/types";
+import { FilterGroup } from "./FilterGroup";
 
 describe("FilterGroup", () => {
 	const defaultOptions = [
@@ -192,7 +192,9 @@ describe("FilterGroup", () => {
 				/>,
 			);
 
-			expect(screen.queryByRole("button", { name: /clear genres/i })).not.toBeInTheDocument();
+			expect(
+				screen.queryByRole("button", { name: /clear genres/i }),
+			).not.toBeInTheDocument();
 		});
 
 		it("should show clear button when there are active filters", () => {
@@ -209,7 +211,9 @@ describe("FilterGroup", () => {
 				/>,
 			);
 
-			expect(screen.getByRole("button", { name: /clear genres/i })).toBeInTheDocument();
+			expect(
+				screen.getByRole("button", { name: /clear genres/i }),
+			).toBeInTheDocument();
 		});
 
 		it("should call onClear when clear button is clicked", async () => {
@@ -243,7 +247,9 @@ describe("FilterGroup", () => {
 				/>,
 			);
 
-			expect(screen.queryByRole("button", { name: /clear genres/i })).not.toBeInTheDocument();
+			expect(
+				screen.queryByRole("button", { name: /clear genres/i }),
+			).not.toBeInTheDocument();
 		});
 	});
 });

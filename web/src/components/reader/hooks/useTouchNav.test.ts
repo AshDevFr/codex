@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useTouchNav } from "./useTouchNav";
 import { useReaderStore } from "@/store/readerStore";
+import { useTouchNav } from "./useTouchNav";
 
 describe("useTouchNav", () => {
 	let element: HTMLDivElement;
@@ -435,10 +435,7 @@ describe("useTouchNav", () => {
 
 	describe("uses store actions when no custom handlers", () => {
 		it("should use store nextPage when no onNextPage provided", async () => {
-			const storeNextPage = vi.spyOn(
-				useReaderStore.getState(),
-				"nextPage",
-			);
+			const storeNextPage = vi.spyOn(useReaderStore.getState(), "nextPage");
 
 			useReaderStore.setState({
 				currentPage: 1,

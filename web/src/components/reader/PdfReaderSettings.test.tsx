@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, renderWithProviders, screen } from "@/test/utils";
 import { useReaderStore } from "@/store/readerStore";
-import { PdfReaderSettings } from "./PdfReaderSettings";
+import { fireEvent, renderWithProviders, screen } from "@/test/utils";
 import type { PdfZoomLevel } from "./PdfReader";
+import { PdfReaderSettings } from "./PdfReaderSettings";
 
 describe("PdfReaderSettings", () => {
 	const defaultProps = {
@@ -35,8 +35,12 @@ describe("PdfReaderSettings", () => {
 			renderWithProviders(<PdfReaderSettings {...defaultProps} />);
 
 			expect(screen.getByText("Zoom Level")).toBeInTheDocument();
-			expect(screen.getByRole("radio", { name: "Fit Page" })).toBeInTheDocument();
-			expect(screen.getByRole("radio", { name: "Fit Width" })).toBeInTheDocument();
+			expect(
+				screen.getByRole("radio", { name: "Fit Page" }),
+			).toBeInTheDocument();
+			expect(
+				screen.getByRole("radio", { name: "Fit Width" }),
+			).toBeInTheDocument();
 			expect(screen.getByRole("radio", { name: "100%" })).toBeInTheDocument();
 		});
 
@@ -98,7 +102,9 @@ describe("PdfReaderSettings", () => {
 			expect(screen.getByText("Page Spread")).toBeInTheDocument();
 			expect(screen.getByRole("radio", { name: "Single" })).toBeInTheDocument();
 			expect(screen.getByRole("radio", { name: "Double" })).toBeInTheDocument();
-			expect(screen.getByRole("radio", { name: "Double (Odd)" })).toBeInTheDocument();
+			expect(
+				screen.getByRole("radio", { name: "Double (Odd)" }),
+			).toBeInTheDocument();
 		});
 
 		it("should update store when spread mode is changed to double", () => {
@@ -114,7 +120,9 @@ describe("PdfReaderSettings", () => {
 
 			fireEvent.click(screen.getByRole("radio", { name: "Double (Odd)" }));
 
-			expect(useReaderStore.getState().settings.pdfSpreadMode).toBe("double-odd");
+			expect(useReaderStore.getState().settings.pdfSpreadMode).toBe(
+				"double-odd",
+			);
 		});
 
 		it("should show description for single mode", () => {
@@ -122,7 +130,9 @@ describe("PdfReaderSettings", () => {
 
 			renderWithProviders(<PdfReaderSettings {...defaultProps} />);
 
-			expect(screen.getByText("Display one page at a time")).toBeInTheDocument();
+			expect(
+				screen.getByText("Display one page at a time"),
+			).toBeInTheDocument();
 		});
 
 		it("should show description for double mode", () => {
@@ -130,7 +140,9 @@ describe("PdfReaderSettings", () => {
 
 			renderWithProviders(<PdfReaderSettings {...defaultProps} />);
 
-			expect(screen.getByText("Display two pages side by side")).toBeInTheDocument();
+			expect(
+				screen.getByText("Display two pages side by side"),
+			).toBeInTheDocument();
 		});
 
 		it("should show description for double-odd mode", () => {
@@ -138,7 +150,9 @@ describe("PdfReaderSettings", () => {
 
 			renderWithProviders(<PdfReaderSettings {...defaultProps} />);
 
-			expect(screen.getByText("Two pages, starting spreads on odd pages")).toBeInTheDocument();
+			expect(
+				screen.getByText("Two pages, starting spreads on odd pages"),
+			).toBeInTheDocument();
 		});
 	});
 
@@ -147,7 +161,9 @@ describe("PdfReaderSettings", () => {
 			renderWithProviders(<PdfReaderSettings {...defaultProps} />);
 
 			expect(screen.getByText("Continuous Scroll")).toBeInTheDocument();
-			expect(screen.getByText("Scroll through all pages vertically")).toBeInTheDocument();
+			expect(
+				screen.getByText("Scroll through all pages vertically"),
+			).toBeInTheDocument();
 		});
 
 		it("should toggle continuous scroll setting", () => {

@@ -19,8 +19,7 @@ export function AlternateTitles({ titles, compact }: AlternateTitlesProps) {
 					<Text key={title.id} size="xs" c="dimmed">
 						<Text component="span" tt="uppercase" fw={500}>
 							{title.label}
-						</Text>
-						{" "}
+						</Text>{" "}
 						{title.title}
 					</Text>
 				))}

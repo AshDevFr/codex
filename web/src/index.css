@@ -88,5 +88,5 @@ button:focus-visible {
 
 /* Media card hover effect - show read button overlay */
 .media-card-cover:hover .media-card-read-overlay {
-	opacity: 1 !important;
+	opacity: 1;
 }

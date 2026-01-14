@@ -7,8 +7,8 @@ import {
 	Select,
 	Stack,
 	Text,
-	TextInput,
 	Textarea,
+	TextInput,
 } from "@mantine/core";
 import { IconInfoCircle } from "@tabler/icons-react";
 import type { BookStrategy, NumberStrategy, SeriesStrategy } from "@/types";
@@ -39,8 +39,7 @@ export const SERIES_STRATEGIES: SeriesStrategyData[] = [
 		label: "Series-Volume-Chapter",
 		description:
 			"Parent folder = series, child folders = volumes/arcs, files = chapters. Best for chapter-based manga.",
-		example:
-			"/library/One Piece/Volume 01/Chapter 001.cbz → Series: One Piece",
+		example: "/library/One Piece/Volume 01/Chapter 001.cbz → Series: One Piece",
 		hasConfig: false,
 	},
 	{
@@ -258,7 +257,8 @@ function CalibreConfigEditor({
 					},
 					{
 						value: "from_metadata",
-						label: "From Metadata - Use series field from OPF/embedded metadata",
+						label:
+							"From Metadata - Use series field from OPF/embedded metadata",
 					},
 				]}
 				value={config.seriesMode || "from_metadata"}

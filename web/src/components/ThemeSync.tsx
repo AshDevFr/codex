@@ -15,7 +15,8 @@ export function ThemeSync() {
 	useEffect(() => {
 		// Map our preference value to Mantine's color scheme value
 		// Our "system" maps to Mantine's "auto"
-		const mantineScheme = themePreference === "system" ? "auto" : themePreference;
+		const mantineScheme =
+			themePreference === "system" ? "auto" : themePreference;
 		setColorScheme(mantineScheme);
 	}, [themePreference, setColorScheme]);
 

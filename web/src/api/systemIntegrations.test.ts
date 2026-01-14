@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { systemIntegrationsApi } from "./systemIntegrations";
 import { api } from "./client";
+import { systemIntegrationsApi } from "./systemIntegrations";
 
 // Mock the api client
 vi.mock("./client", () => ({
@@ -123,7 +123,11 @@ describe("systemIntegrationsApi", () => {
 			};
 
 			vi.mocked(api.post).mockResolvedValueOnce({
-				data: { ...mockIntegration, name: "test_provider", hasCredentials: false },
+				data: {
+					...mockIntegration,
+					name: "test_provider",
+					hasCredentials: false,
+				},
 			});
 
 			const result = await systemIntegrationsApi.create(createRequest);

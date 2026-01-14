@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { userIntegrationsApi } from "./userIntegrations";
 import { api } from "./client";
+import { userIntegrationsApi } from "./userIntegrations";
 
 // Mock the api client
 vi.mock("./client", () => ({
@@ -158,7 +158,9 @@ describe("userIntegrationsApi", () => {
 				redirectUri: "https://app.example.com/callback",
 			};
 
-			const error = { response: { status: 409, data: { message: "Already connected" } } };
+			const error = {
+				response: { status: 409, data: { message: "Already connected" } },
+			};
 			vi.mocked(api.post).mockRejectedValueOnce(error);
 
 			await expect(userIntegrationsApi.connect(request)).rejects.toEqual(error);

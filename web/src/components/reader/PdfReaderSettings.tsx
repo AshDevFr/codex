@@ -54,9 +54,7 @@ export function PdfReaderSettings({
 	const setBackgroundColor = useReaderStore(
 		(state) => state.setBackgroundColor,
 	);
-	const setPdfSpreadMode = useReaderStore(
-		(state) => state.setPdfSpreadMode,
-	);
+	const setPdfSpreadMode = useReaderStore((state) => state.setPdfSpreadMode);
 	const setPdfContinuousScroll = useReaderStore(
 		(state) => state.setPdfContinuousScroll,
 	);
@@ -65,7 +63,12 @@ export function PdfReaderSettings({
 	);
 
 	return (
-		<Modal opened={opened} onClose={onClose} title="PDF Reader Settings" size="md">
+		<Modal
+			opened={opened}
+			onClose={onClose}
+			title="PDF Reader Settings"
+			size="md"
+		>
 			<Stack gap="lg">
 				{/* Zoom Level */}
 				<Box>
@@ -141,9 +144,12 @@ export function PdfReaderSettings({
 						]}
 					/>
 					<Text size="xs" c="dimmed" mt="xs">
-						{settings.pdfSpreadMode === "single" && "Display one page at a time"}
-						{settings.pdfSpreadMode === "double" && "Display two pages side by side"}
-						{settings.pdfSpreadMode === "double-odd" && "Two pages, starting spreads on odd pages"}
+						{settings.pdfSpreadMode === "single" &&
+							"Display one page at a time"}
+						{settings.pdfSpreadMode === "double" &&
+							"Display two pages side by side"}
+						{settings.pdfSpreadMode === "double-odd" &&
+							"Two pages, starting spreads on odd pages"}
 					</Text>
 				</Box>
 

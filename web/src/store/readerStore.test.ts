@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-	type ForkableReaderSettings,
-	type SeriesReaderOverride,
 	createSeriesOverride,
 	extractForkableSettings,
+	type ForkableReaderSettings,
 	isSeriesReaderOverride,
+	type SeriesReaderOverride,
 	selectAdjacentBooks,
 	selectBoundaryState,
 	selectEffectiveReadingDirection,
@@ -271,7 +271,9 @@ describe("readerStore", () => {
 
 			setPdfSpreadMode("double-odd");
 
-			expect(useReaderStore.getState().settings.pdfSpreadMode).toBe("double-odd");
+			expect(useReaderStore.getState().settings.pdfSpreadMode).toBe(
+				"double-odd",
+			);
 		});
 
 		it("should set PDF continuous scroll to true", () => {
@@ -291,7 +293,9 @@ describe("readerStore", () => {
 
 			// Then disable it
 			setPdfContinuousScroll(false);
-			expect(useReaderStore.getState().settings.pdfContinuousScroll).toBe(false);
+			expect(useReaderStore.getState().settings.pdfContinuousScroll).toBe(
+				false,
+			);
 		});
 
 		it("should set auto-hide toolbar", () => {
@@ -444,7 +448,9 @@ describe("readerStore", () => {
 					readingDirectionOverride: "rtl",
 				});
 
-				const result = selectEffectiveReadingDirection(useReaderStore.getState());
+				const result = selectEffectiveReadingDirection(
+					useReaderStore.getState(),
+				);
 
 				expect(result).toBe("rtl");
 			});
@@ -458,7 +464,9 @@ describe("readerStore", () => {
 					readingDirectionOverride: null,
 				});
 
-				const result = selectEffectiveReadingDirection(useReaderStore.getState());
+				const result = selectEffectiveReadingDirection(
+					useReaderStore.getState(),
+				);
 
 				expect(result).toBe("ltr");
 			});
@@ -525,7 +533,10 @@ describe("readerStore", () => {
 
 			it("should return false when prev is null", () => {
 				useReaderStore.setState({
-					adjacentBooks: { prev: null, next: { id: "book-2", title: "Next", pageCount: 100 } },
+					adjacentBooks: {
+						prev: null,
+						next: { id: "book-2", title: "Next", pageCount: 100 },
+					},
 				});
 
 				expect(selectHasPrevBook(useReaderStore.getState())).toBe(false);
@@ -533,7 +544,10 @@ describe("readerStore", () => {
 
 			it("should return true when prev exists", () => {
 				useReaderStore.setState({
-					adjacentBooks: { prev: { id: "book-0", title: "Prev", pageCount: 50 }, next: null },
+					adjacentBooks: {
+						prev: { id: "book-0", title: "Prev", pageCount: 50 },
+						next: null,
+					},
 				});
 
 				expect(selectHasPrevBook(useReaderStore.getState())).toBe(true);
@@ -547,7 +561,10 @@ describe("readerStore", () => {
 
 			it("should return false when next is null", () => {
 				useReaderStore.setState({
-					adjacentBooks: { prev: { id: "book-0", title: "Prev", pageCount: 50 }, next: null },
+					adjacentBooks: {
+						prev: { id: "book-0", title: "Prev", pageCount: 50 },
+						next: null,
+					},
 				});
 
 				expect(selectHasNextBook(useReaderStore.getState())).toBe(false);
@@ -555,7 +572,10 @@ describe("readerStore", () => {
 
 			it("should return true when next exists", () => {
 				useReaderStore.setState({
-					adjacentBooks: { prev: null, next: { id: "book-2", title: "Next", pageCount: 100 } },
+					adjacentBooks: {
+						prev: null,
+						next: { id: "book-2", title: "Next", pageCount: 100 },
+					},
 				});
 
 				expect(selectHasNextBook(useReaderStore.getState())).toBe(true);
@@ -574,7 +594,9 @@ describe("readerStore", () => {
 				};
 				useReaderStore.setState({ adjacentBooks });
 
-				expect(selectAdjacentBooks(useReaderStore.getState())).toEqual(adjacentBooks);
+				expect(selectAdjacentBooks(useReaderStore.getState())).toEqual(
+					adjacentBooks,
+				);
 			});
 		});
 
@@ -663,9 +685,9 @@ describe("readerStore", () => {
 
 				setDoublePageShowWideAlone(true);
 
-				expect(
-					useReaderStore.getState().settings.doublePageShowWideAlone,
-				).toBe(true);
+				expect(useReaderStore.getState().settings.doublePageShowWideAlone).toBe(
+					true,
+				);
 			});
 
 			it("should set doublePageShowWideAlone to false", () => {
@@ -673,9 +695,9 @@ describe("readerStore", () => {
 
 				setDoublePageShowWideAlone(false);
 
-				expect(
-					useReaderStore.getState().settings.doublePageShowWideAlone,
-				).toBe(false);
+				expect(useReaderStore.getState().settings.doublePageShowWideAlone).toBe(
+					false,
+				);
 			});
 		});
 
@@ -888,19 +910,25 @@ describe("readerStore", () => {
 
 		describe("selectLastNavigationDirection", () => {
 			it("should return null by default", () => {
-				expect(selectLastNavigationDirection(useReaderStore.getState())).toBeNull();
+				expect(
+					selectLastNavigationDirection(useReaderStore.getState()),
+				).toBeNull();
 			});
 
 			it("should return next when set", () => {
 				useReaderStore.setState({ lastNavigationDirection: "next" });
 
-				expect(selectLastNavigationDirection(useReaderStore.getState())).toBe("next");
+				expect(selectLastNavigationDirection(useReaderStore.getState())).toBe(
+					"next",
+				);
 			});
 
 			it("should return prev when set", () => {
 				useReaderStore.setState({ lastNavigationDirection: "prev" });
 
-				expect(selectLastNavigationDirection(useReaderStore.getState())).toBe("prev");
+				expect(selectLastNavigationDirection(useReaderStore.getState())).toBe(
+					"prev",
+				);
 			});
 		});
 	});
@@ -940,7 +968,9 @@ describe("readerStore", () => {
 
 				setEpubFontFamily("default");
 
-				expect(useReaderStore.getState().settings.epubFontFamily).toBe("default");
+				expect(useReaderStore.getState().settings.epubFontFamily).toBe(
+					"default",
+				);
 			});
 
 			it("should set font family to serif", () => {
@@ -956,7 +986,9 @@ describe("readerStore", () => {
 
 				setEpubFontFamily("sans-serif");
 
-				expect(useReaderStore.getState().settings.epubFontFamily).toBe("sans-serif");
+				expect(useReaderStore.getState().settings.epubFontFamily).toBe(
+					"sans-serif",
+				);
 			});
 
 			it("should set font family to monospace", () => {
@@ -964,7 +996,9 @@ describe("readerStore", () => {
 
 				setEpubFontFamily("monospace");
 
-				expect(useReaderStore.getState().settings.epubFontFamily).toBe("monospace");
+				expect(useReaderStore.getState().settings.epubFontFamily).toBe(
+					"monospace",
+				);
 			});
 
 			it("should set font family to dyslexic", () => {
@@ -972,7 +1006,9 @@ describe("readerStore", () => {
 
 				setEpubFontFamily("dyslexic");
 
-				expect(useReaderStore.getState().settings.epubFontFamily).toBe("dyslexic");
+				expect(useReaderStore.getState().settings.epubFontFamily).toBe(
+					"dyslexic",
+				);
 			});
 		});
 
@@ -1129,7 +1165,9 @@ describe("readerStore", () => {
 
 				setAutoAdvanceToNextBook(true);
 
-				expect(useReaderStore.getState().settings.autoAdvanceToNextBook).toBe(true);
+				expect(useReaderStore.getState().settings.autoAdvanceToNextBook).toBe(
+					true,
+				);
 			});
 
 			it("should disable auto-advance", () => {
@@ -1143,11 +1181,15 @@ describe("readerStore", () => {
 				const { setAutoAdvanceToNextBook } = useReaderStore.getState();
 				setAutoAdvanceToNextBook(false);
 
-				expect(useReaderStore.getState().settings.autoAdvanceToNextBook).toBe(false);
+				expect(useReaderStore.getState().settings.autoAdvanceToNextBook).toBe(
+					false,
+				);
 			});
 
 			it("should default to false", () => {
-				expect(useReaderStore.getState().settings.autoAdvanceToNextBook).toBe(false);
+				expect(useReaderStore.getState().settings.autoAdvanceToNextBook).toBe(
+					false,
+				);
 			});
 		});
 
@@ -1162,7 +1204,9 @@ describe("readerStore", () => {
 			const { resetSession } = useReaderStore.getState();
 			resetSession();
 
-			expect(useReaderStore.getState().settings.autoAdvanceToNextBook).toBe(true);
+			expect(useReaderStore.getState().settings.autoAdvanceToNextBook).toBe(
+				true,
+			);
 		});
 	});
 
@@ -1198,8 +1242,12 @@ describe("readerStore", () => {
 			});
 
 			it("should return false for wrong version", () => {
-				expect(isSeriesReaderOverride({ ...validOverride, version: 2 })).toBe(false);
-				expect(isSeriesReaderOverride({ ...validOverride, version: 0 })).toBe(false);
+				expect(isSeriesReaderOverride({ ...validOverride, version: 2 })).toBe(
+					false,
+				);
+				expect(isSeriesReaderOverride({ ...validOverride, version: 0 })).toBe(
+					false,
+				);
 			});
 
 			it("should return false for missing createdAt", () => {
@@ -1208,55 +1256,89 @@ describe("readerStore", () => {
 			});
 
 			it("should return false for invalid fitMode", () => {
-				expect(isSeriesReaderOverride({ ...validOverride, fitMode: "invalid" })).toBe(false);
-				expect(isSeriesReaderOverride({ ...validOverride, fitMode: 123 })).toBe(false);
+				expect(
+					isSeriesReaderOverride({ ...validOverride, fitMode: "invalid" }),
+				).toBe(false);
+				expect(isSeriesReaderOverride({ ...validOverride, fitMode: 123 })).toBe(
+					false,
+				);
 			});
 
 			it("should return false for invalid pageLayout", () => {
-				expect(isSeriesReaderOverride({ ...validOverride, pageLayout: "invalid" })).toBe(false);
+				expect(
+					isSeriesReaderOverride({ ...validOverride, pageLayout: "invalid" }),
+				).toBe(false);
 			});
 
 			it("should return false for invalid readingDirection", () => {
-				expect(isSeriesReaderOverride({ ...validOverride, readingDirection: "invalid" })).toBe(false);
+				expect(
+					isSeriesReaderOverride({
+						...validOverride,
+						readingDirection: "invalid",
+					}),
+				).toBe(false);
 			});
 
 			it("should return false for invalid backgroundColor", () => {
-				expect(isSeriesReaderOverride({ ...validOverride, backgroundColor: "red" })).toBe(false);
+				expect(
+					isSeriesReaderOverride({ ...validOverride, backgroundColor: "red" }),
+				).toBe(false);
 			});
 
 			it("should return false for non-boolean doublePageShowWideAlone", () => {
-				expect(isSeriesReaderOverride({ ...validOverride, doublePageShowWideAlone: "true" })).toBe(false);
+				expect(
+					isSeriesReaderOverride({
+						...validOverride,
+						doublePageShowWideAlone: "true",
+					}),
+				).toBe(false);
 			});
 
 			it("should return false for non-boolean doublePageStartOnOdd", () => {
-				expect(isSeriesReaderOverride({ ...validOverride, doublePageStartOnOdd: 1 })).toBe(false);
+				expect(
+					isSeriesReaderOverride({ ...validOverride, doublePageStartOnOdd: 1 }),
+				).toBe(false);
 			});
 
 			it("should accept all valid fitMode values", () => {
-				const fitModes = ["screen", "width", "width-shrink", "height", "original"];
+				const fitModes = [
+					"screen",
+					"width",
+					"width-shrink",
+					"height",
+					"original",
+				];
 				for (const fitMode of fitModes) {
-					expect(isSeriesReaderOverride({ ...validOverride, fitMode })).toBe(true);
+					expect(isSeriesReaderOverride({ ...validOverride, fitMode })).toBe(
+						true,
+					);
 				}
 			});
 
 			it("should accept all valid pageLayout values", () => {
 				const layouts = ["single", "double", "continuous"];
 				for (const pageLayout of layouts) {
-					expect(isSeriesReaderOverride({ ...validOverride, pageLayout })).toBe(true);
+					expect(isSeriesReaderOverride({ ...validOverride, pageLayout })).toBe(
+						true,
+					);
 				}
 			});
 
 			it("should accept all valid readingDirection values", () => {
 				const directions = ["ltr", "rtl", "ttb", "webtoon"];
 				for (const readingDirection of directions) {
-					expect(isSeriesReaderOverride({ ...validOverride, readingDirection })).toBe(true);
+					expect(
+						isSeriesReaderOverride({ ...validOverride, readingDirection }),
+					).toBe(true);
 				}
 			});
 
 			it("should accept all valid backgroundColor values", () => {
 				const colors = ["black", "gray", "white"];
 				for (const backgroundColor of colors) {
-					expect(isSeriesReaderOverride({ ...validOverride, backgroundColor })).toBe(true);
+					expect(
+						isSeriesReaderOverride({ ...validOverride, backgroundColor }),
+					).toBe(true);
 				}
 			});
 		});
@@ -1278,7 +1360,10 @@ describe("readerStore", () => {
 
 			it("should not include non-forkable settings", () => {
 				const fullSettings = useReaderStore.getState().settings;
-				const forkable = extractForkableSettings(fullSettings) as Record<string, unknown>;
+				const forkable = extractForkableSettings(fullSettings) as Record<
+					string,
+					unknown
+				>;
 
 				// Verify non-forkable settings are not included
 				expect(forkable.autoHideToolbar).toBeUndefined();
@@ -1303,7 +1388,9 @@ describe("readerStore", () => {
 					},
 				});
 
-				const forkable = extractForkableSettings(useReaderStore.getState().settings);
+				const forkable = extractForkableSettings(
+					useReaderStore.getState().settings,
+				);
 
 				expect(forkable.fitMode).toBe("width");
 				expect(forkable.pageLayout).toBe("double");

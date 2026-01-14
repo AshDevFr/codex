@@ -134,7 +134,7 @@ describe("useSearchShortcut", () => {
 		// Create a mock element with isContentEditable set to true
 		const mockTarget = {
 			tagName: "DIV",
-			isContentEditable: true
+			isContentEditable: true,
 		};
 
 		const event = new KeyboardEvent("keydown", {
@@ -158,9 +158,7 @@ describe("useSearchShortcut", () => {
 	});
 
 	it("should remove listener on unmount", () => {
-		const { unmount } = renderHook(() =>
-			useSearchShortcut({ searchInputRef }),
-		);
+		const { unmount } = renderHook(() => useSearchShortcut({ searchInputRef }));
 
 		unmount();
 

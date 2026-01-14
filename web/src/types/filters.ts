@@ -35,7 +35,9 @@ export type FieldOperator =
 // UUID operators (matches backend UuidOperator)
 // =============================================================================
 
-export type UuidOperator = { operator: "is"; value: string } | { operator: "isNot"; value: string };
+export type UuidOperator =
+	| { operator: "is"; value: string }
+	| { operator: "isNot"; value: string };
 
 // =============================================================================
 // Boolean operators (matches backend BoolOperator)
@@ -230,10 +232,15 @@ export function getExcludedValues(group: FilterGroupState): string[] {
 /**
  * Convert a filter group to API conditions
  */
-export function filterGroupToConditions<T extends "genre" | "tag" | "status" | "readStatus" | "publisher" | "language">(
-	group: FilterGroupState,
-	field: T,
-): SeriesCondition[] {
+export function filterGroupToConditions<
+	T extends
+		| "genre"
+		| "tag"
+		| "status"
+		| "readStatus"
+		| "publisher"
+		| "language",
+>(group: FilterGroupState, field: T): SeriesCondition[] {
 	const conditions: SeriesCondition[] = [];
 	const includes = getIncludedValues(group);
 	const excludes = getExcludedValues(group);
@@ -259,7 +266,9 @@ export function filterGroupToConditions<T extends "genre" | "tag" | "status" | "
 
 	// Build exclude conditions (always AND - must not have ANY of them)
 	for (const value of excludes) {
-		conditions.push({ [field]: { operator: "isNot" as const, value } } as SeriesCondition);
+		conditions.push({
+			[field]: { operator: "isNot" as const, value },
+		} as SeriesCondition);
 	}
 
 	return conditions;
@@ -268,7 +277,9 @@ export function filterGroupToConditions<T extends "genre" | "tag" | "status" | "
 /**
  * Convert UI filter state to API condition
  */
-export function seriesFilterStateToCondition(state: SeriesFilterState): SeriesCondition | undefined {
+export function seriesFilterStateToCondition(
+	state: SeriesFilterState,
+): SeriesCondition | undefined {
 	const allConditions: SeriesCondition[] = [];
 
 	// Add genre conditions
@@ -281,7 +292,9 @@ export function seriesFilterStateToCondition(state: SeriesFilterState): SeriesCo
 	allConditions.push(...filterGroupToConditions(state.status, "status"));
 
 	// Add read status conditions
-	allConditions.push(...filterGroupToConditions(state.readStatus, "readStatus"));
+	allConditions.push(
+		...filterGroupToConditions(state.readStatus, "readStatus"),
+	);
 
 	// Add publisher conditions
 	allConditions.push(...filterGroupToConditions(state.publisher, "publisher"));
@@ -302,10 +315,9 @@ export function seriesFilterStateToCondition(state: SeriesFilterState): SeriesCo
 /**
  * Convert a book filter group to API conditions
  */
-export function bookFilterGroupToConditions<T extends "genre" | "tag" | "readStatus">(
-	group: FilterGroupState,
-	field: T,
-): BookCondition[] {
+export function bookFilterGroupToConditions<
+	T extends "genre" | "tag" | "readStatus",
+>(group: FilterGroupState, field: T): BookCondition[] {
 	const conditions: BookCondition[] = [];
 	const includes = getIncludedValues(group);
 	const excludes = getExcludedValues(group);
@@ -331,7 +343,9 @@ export function bookFilterGroupToConditions<T extends "genre" | "tag" | "readSta
 
 	// Build exclude conditions (always AND - must not have ANY of them)
 	for (const value of excludes) {
-		conditions.push({ [field]: { operator: "isNot" as const, value } } as BookCondition);
+		conditions.push({
+			[field]: { operator: "isNot" as const, value },
+		} as BookCondition);
 	}
 
 	return conditions;
@@ -340,7 +354,9 @@ export function bookFilterGroupToConditions<T extends "genre" | "tag" | "readSta
 /**
  * Convert UI book filter state to API condition
  */
-export function bookFilterStateToCondition(state: BookFilterState): BookCondition | undefined {
+export function bookFilterStateToCondition(
+	state: BookFilterState,
+): BookCondition | undefined {
 	const allConditions: BookCondition[] = [];
 
 	// Add genre conditions
@@ -350,7 +366,9 @@ export function bookFilterStateToCondition(state: BookFilterState): BookConditio
 	allConditions.push(...bookFilterGroupToConditions(state.tags, "tag"));
 
 	// Add read status conditions
-	allConditions.push(...bookFilterGroupToConditions(state.readStatus, "readStatus"));
+	allConditions.push(
+		...bookFilterGroupToConditions(state.readStatus, "readStatus"),
+	);
 
 	// Add hasError condition
 	if (state.hasError === "include") {
@@ -474,7 +492,9 @@ export const FILTER_PARAM_KEYS = {
 /**
  * Serialize series filter state to URL search params
  */
-export function serializeSeriesFilters(state: SeriesFilterState): URLSearchParams {
+export function serializeSeriesFilters(
+	state: SeriesFilterState,
+): URLSearchParams {
 	const params = new URLSearchParams();
 
 	const genreParam = serializeFilterGroup(state.genres);
@@ -487,7 +507,8 @@ export function serializeSeriesFilters(state: SeriesFilterState): URLSearchParam
 	if (statusParam) params.set(FILTER_PARAM_KEYS.status, statusParam);
 
 	const readStatusParam = serializeFilterGroup(state.readStatus);
-	if (readStatusParam) params.set(FILTER_PARAM_KEYS.readStatus, readStatusParam);
+	if (readStatusParam)
+		params.set(FILTER_PARAM_KEYS.readStatus, readStatusParam);
 
 	const publisherParam = serializeFilterGroup(state.publisher);
 	if (publisherParam) params.set(FILTER_PARAM_KEYS.publisher, publisherParam);
@@ -535,7 +556,8 @@ export function serializeBookFilters(state: BookFilterState): URLSearchParams {
 	if (tagParam) params.set(BOOK_FILTER_PARAM_KEYS.tags, tagParam);
 
 	const readStatusParam = serializeFilterGroup(state.readStatus);
-	if (readStatusParam) params.set(BOOK_FILTER_PARAM_KEYS.readStatus, readStatusParam);
+	if (readStatusParam)
+		params.set(BOOK_FILTER_PARAM_KEYS.readStatus, readStatusParam);
 
 	if (state.hasError !== "neutral") {
 		params.set(BOOK_FILTER_PARAM_KEYS.hasError, state.hasError);
@@ -553,6 +575,9 @@ export function parseBookFilters(params: URLSearchParams): BookFilterState {
 		genres: parseFilterGroup(params.get(BOOK_FILTER_PARAM_KEYS.genres)),
 		tags: parseFilterGroup(params.get(BOOK_FILTER_PARAM_KEYS.tags)),
 		readStatus: parseFilterGroup(params.get(BOOK_FILTER_PARAM_KEYS.readStatus)),
-		hasError: hasErrorParam === "include" || hasErrorParam === "exclude" ? hasErrorParam : "neutral",
+		hasError:
+			hasErrorParam === "include" || hasErrorParam === "exclude"
+				? hasErrorParam
+				: "neutral",
 	};
 }

@@ -144,7 +144,9 @@ export function useEpubProgress({
 					});
 					queryClient.invalidateQueries({ queryKey: ["book", currentBookId] });
 					queryClient.invalidateQueries({ queryKey: ["books", "in-progress"] });
-					queryClient.invalidateQueries({ queryKey: ["books", "recently-read"] });
+					queryClient.invalidateQueries({
+						queryKey: ["books", "recently-read"],
+					});
 				})
 				.catch((error) => {
 					console.error("Failed to save EPUB reading progress:", error);

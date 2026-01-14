@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderWithProviders, screen, userEvent } from "@/test/utils";
-import { LockableListEditor, type ListItem, type FieldConfig } from "./LockableListEditor";
+import {
+	type FieldConfig,
+	type ListItem,
+	LockableListEditor,
+} from "./LockableListEditor";
 
 describe("LockableListEditor", () => {
 	const fields: FieldConfig[] = [
@@ -9,8 +13,16 @@ describe("LockableListEditor", () => {
 	];
 
 	const mockItems: ListItem[] = [
-		{ id: "1", values: { label: "Link 1", url: "https://example.com" }, locked: false },
-		{ id: "2", values: { label: "Link 2", url: "https://test.com" }, locked: true },
+		{
+			id: "1",
+			values: { label: "Link 1", url: "https://example.com" },
+			locked: false,
+		},
+		{
+			id: "2",
+			values: { label: "Link 2", url: "https://test.com" },
+			locked: true,
+		},
 	];
 
 	it("renders list items", () => {
@@ -57,9 +69,7 @@ describe("LockableListEditor", () => {
 		const lockButton = screen.getByLabelText("Lock row");
 		await user.click(lockButton);
 
-		expect(onChange).toHaveBeenCalledWith([
-			{ ...mockItems[0], locked: true },
-		]);
+		expect(onChange).toHaveBeenCalledWith([{ ...mockItems[0], locked: true }]);
 	});
 
 	it("updates field value when typing", async () => {

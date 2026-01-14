@@ -2,7 +2,10 @@ import { MantineProvider } from "@mantine/core";
 import { act, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getSlideDirection, PageTransitionWrapper } from "./PageTransitionWrapper";
+import {
+	getSlideDirection,
+	PageTransitionWrapper,
+} from "./PageTransitionWrapper";
 
 function Wrapper({ children }: { children: ReactNode }) {
 	return <MantineProvider>{children}</MantineProvider>;

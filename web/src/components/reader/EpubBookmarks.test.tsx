@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -7,7 +7,9 @@ import { renderWithProviders } from "@/test/utils";
 import { EpubBookmarks } from "./EpubBookmarks";
 import type { EpubBookmark } from "./hooks/useEpubBookmarks";
 
-const createBookmark = (overrides: Partial<EpubBookmark> = {}): EpubBookmark => ({
+const createBookmark = (
+	overrides: Partial<EpubBookmark> = {},
+): EpubBookmark => ({
 	id: `bookmark-${Math.random().toString(36).substring(7)}`,
 	cfi: "epubcfi(/6/4!/4/2/1:0)",
 	percentage: 0.25,
@@ -32,7 +34,7 @@ describe("EpubBookmarks", () => {
 	describe("bookmark toggle button", () => {
 		it("should render add bookmark button when not bookmarked", () => {
 			renderWithProviders(
-				<EpubBookmarks {...defaultProps} isCurrentLocationBookmarked={false} />
+				<EpubBookmarks {...defaultProps} isCurrentLocationBookmarked={false} />,
 			);
 
 			expect(screen.getByLabelText("Add bookmark")).toBeInTheDocument();
@@ -40,7 +42,7 @@ describe("EpubBookmarks", () => {
 
 		it("should render remove bookmark button when bookmarked", () => {
 			renderWithProviders(
-				<EpubBookmarks {...defaultProps} isCurrentLocationBookmarked={true} />
+				<EpubBookmarks {...defaultProps} isCurrentLocationBookmarked={true} />,
 			);
 
 			expect(screen.getByLabelText("Remove bookmark")).toBeInTheDocument();
@@ -55,7 +57,7 @@ describe("EpubBookmarks", () => {
 					{...defaultProps}
 					isCurrentLocationBookmarked={false}
 					onAddBookmark={onAddBookmark}
-				/>
+				/>,
 			);
 
 			await user.click(screen.getByLabelText("Add bookmark"));
@@ -72,7 +74,7 @@ describe("EpubBookmarks", () => {
 					{...defaultProps}
 					isCurrentLocationBookmarked={true}
 					onRemoveCurrentBookmark={onRemoveCurrentBookmark}
-				/>
+				/>,
 			);
 
 			await user.click(screen.getByLabelText("Remove bookmark"));
@@ -92,7 +94,7 @@ describe("EpubBookmarks", () => {
 			const bookmarks = [createBookmark()];
 
 			renderWithProviders(
-				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} />
+				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} />,
 			);
 
 			expect(screen.getByLabelText("View bookmarks")).toBeInTheDocument();
@@ -107,7 +109,7 @@ describe("EpubBookmarks", () => {
 			];
 
 			renderWithProviders(
-				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} />
+				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} />,
 			);
 
 			expect(screen.getByText("3")).toBeInTheDocument();
@@ -123,7 +125,7 @@ describe("EpubBookmarks", () => {
 					{...defaultProps}
 					bookmarks={bookmarks}
 					onToggle={onToggle}
-				/>
+				/>,
 			);
 
 			await user.click(screen.getByLabelText("View bookmarks"));
@@ -137,7 +139,7 @@ describe("EpubBookmarks", () => {
 			const bookmarks = [createBookmark({ note: "Test note" })];
 
 			renderWithProviders(
-				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} opened={true} />
+				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} opened={true} />,
 			);
 
 			expect(screen.getByRole("dialog")).toBeInTheDocument();
@@ -146,11 +148,13 @@ describe("EpubBookmarks", () => {
 
 		it("should show empty state when no bookmarks", () => {
 			renderWithProviders(
-				<EpubBookmarks {...defaultProps} bookmarks={[]} opened={true} />
+				<EpubBookmarks {...defaultProps} bookmarks={[]} opened={true} />,
 			);
 
 			expect(
-				screen.getByText("No bookmarks yet. Click the bookmark icon to add one.")
+				screen.getByText(
+					"No bookmarks yet. Click the bookmark icon to add one.",
+				),
 			).toBeInTheDocument();
 		});
 
@@ -158,7 +162,7 @@ describe("EpubBookmarks", () => {
 			const bookmarks = [createBookmark({ chapterTitle: "Chapter 1" })];
 
 			renderWithProviders(
-				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} opened={true} />
+				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} opened={true} />,
 			);
 
 			expect(screen.getByText("Chapter 1")).toBeInTheDocument();
@@ -168,7 +172,7 @@ describe("EpubBookmarks", () => {
 			const bookmarks = [createBookmark({ percentage: 0.42 })];
 
 			renderWithProviders(
-				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} opened={true} />
+				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} opened={true} />,
 			);
 
 			expect(screen.getByText(/42%/)).toBeInTheDocument();
@@ -178,7 +182,7 @@ describe("EpubBookmarks", () => {
 			const bookmarks = [createBookmark({ excerpt: "This is a test excerpt" })];
 
 			renderWithProviders(
-				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} opened={true} />
+				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} opened={true} />,
 			);
 
 			expect(screen.getByText(/"This is a test excerpt"/)).toBeInTheDocument();
@@ -188,7 +192,7 @@ describe("EpubBookmarks", () => {
 			const bookmarks = [createBookmark({ note: "My important note" })];
 
 			renderWithProviders(
-				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} opened={true} />
+				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} opened={true} />,
 			);
 
 			expect(screen.getByText("My important note")).toBeInTheDocument();
@@ -198,11 +202,11 @@ describe("EpubBookmarks", () => {
 			const bookmarks = [
 				createBookmark({ id: "1", percentage: 0.75, chapterTitle: "Later" }),
 				createBookmark({ id: "2", percentage: 0.25, chapterTitle: "Earlier" }),
-				createBookmark({ id: "3", percentage: 0.50, chapterTitle: "Middle" }),
+				createBookmark({ id: "3", percentage: 0.5, chapterTitle: "Middle" }),
 			];
 
 			renderWithProviders(
-				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} opened={true} />
+				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} opened={true} />,
 			);
 
 			const items = screen.getAllByText(/Chapter|Earlier|Middle|Later/);
@@ -229,7 +233,7 @@ describe("EpubBookmarks", () => {
 					bookmarks={bookmarks}
 					opened={true}
 					onNavigate={onNavigate}
-				/>
+				/>,
 			);
 
 			await user.click(screen.getByText("Chapter 1"));
@@ -248,7 +252,7 @@ describe("EpubBookmarks", () => {
 					bookmarks={bookmarks}
 					opened={true}
 					onToggle={onToggle}
-				/>
+				/>,
 			);
 
 			await user.click(screen.getByText("Chapter 1"));
@@ -269,7 +273,7 @@ describe("EpubBookmarks", () => {
 					bookmarks={bookmarks}
 					opened={true}
 					onRemoveBookmark={onRemoveBookmark}
-				/>
+				/>,
 			);
 
 			await user.click(screen.getByLabelText("Remove bookmark"));
@@ -283,7 +287,7 @@ describe("EpubBookmarks", () => {
 			const bookmarks = [createBookmark()];
 
 			renderWithProviders(
-				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} opened={true} />
+				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} opened={true} />,
 			);
 
 			expect(screen.getByLabelText("Edit note")).toBeInTheDocument();
@@ -294,7 +298,7 @@ describe("EpubBookmarks", () => {
 			const bookmarks = [createBookmark({ note: "Existing note" })];
 
 			renderWithProviders(
-				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} opened={true} />
+				<EpubBookmarks {...defaultProps} bookmarks={bookmarks} opened={true} />,
 			);
 
 			await user.click(screen.getByLabelText("Edit note"));
@@ -314,7 +318,7 @@ describe("EpubBookmarks", () => {
 					bookmarks={bookmarks}
 					opened={true}
 					onUpdateNote={onUpdateNote}
-				/>
+				/>,
 			);
 
 			await user.click(screen.getByLabelText("Edit note"));
@@ -335,7 +339,7 @@ describe("EpubBookmarks", () => {
 					bookmarks={bookmarks}
 					opened={true}
 					onUpdateNote={onUpdateNote}
-				/>
+				/>,
 			);
 
 			await user.click(screen.getByLabelText("Edit note"));

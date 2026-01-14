@@ -47,28 +47,30 @@ interface ReaderSettingsProps {
  * Supports per-series settings override. When viewing a series, users can
  * customize settings that will only apply to that series.
  */
-export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProps) {
+export function ReaderSettings({
+	opened,
+	onClose,
+	seriesId,
+}: ReaderSettingsProps) {
 	const queryClient = useQueryClient();
 	const globalSettings = useReaderStore((state) => state.settings);
-	const effectiveReadingDirection = useReaderStore(selectEffectiveReadingDirection);
+	const effectiveReadingDirection = useReaderStore(
+		selectEffectiveReadingDirection,
+	);
 
 	// Global-only settings (not forkable per-series)
 	const setAutoHideToolbar = useReaderStore(
 		(state) => state.setAutoHideToolbar,
 	);
 	const setPreloadPages = useReaderStore((state) => state.setPreloadPages);
-	const setPageTransition = useReaderStore(
-		(state) => state.setPageTransition,
-	);
+	const setPageTransition = useReaderStore((state) => state.setPageTransition);
 	const setTransitionDuration = useReaderStore(
 		(state) => state.setTransitionDuration,
 	);
 	const setWebtoonSidePadding = useReaderStore(
 		(state) => state.setWebtoonSidePadding,
 	);
-	const setWebtoonPageGap = useReaderStore(
-		(state) => state.setWebtoonPageGap,
-	);
+	const setWebtoonPageGap = useReaderStore((state) => state.setWebtoonPageGap);
 	const setAutoAdvanceToNextBook = useReaderStore(
 		(state) => state.setAutoAdvanceToNextBook,
 	);
@@ -100,7 +102,9 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 		},
 		onSuccess: () => {
 			if (seriesId) {
-				queryClient.invalidateQueries({ queryKey: ["seriesMetadata", seriesId] });
+				queryClient.invalidateQueries({
+					queryKey: ["seriesMetadata", seriesId],
+				});
 			}
 		},
 	});
@@ -114,12 +118,18 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 			updateSetting("readingDirection", direction);
 
 			// Auto-adjust fit mode for webtoon
-			if (direction === "webtoon" && !["width", "original"].includes(effectiveSettings.fitMode)) {
+			if (
+				direction === "webtoon" &&
+				!["width", "original"].includes(effectiveSettings.fitMode)
+			) {
 				updateSetting("fitMode", "width");
 			}
 		} else {
 			// No series override - adjust fit mode in global store if needed
-			if (direction === "webtoon" && !["width", "original"].includes(globalSettings.fitMode)) {
+			if (
+				direction === "webtoon" &&
+				!["width", "original"].includes(globalSettings.fitMode)
+			) {
 				setGlobalFitMode("width");
 			}
 		}
@@ -178,7 +188,9 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 	// Determine which settings to use for display
 	const displaySettings = seriesId ? effectiveSettings : globalSettings;
 
-	const isContinuousMode = displaySettings.pageLayout === "continuous" || effectiveReadingDirection === "webtoon";
+	const isContinuousMode =
+		displaySettings.pageLayout === "continuous" ||
+		effectiveReadingDirection === "webtoon";
 
 	return (
 		<Modal opened={opened} onClose={onClose} title="Reader Settings" size="lg">
@@ -219,7 +231,9 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 					</Text>
 					<Select
 						value={effectiveReadingDirection}
-						onChange={(value) => value && handleReadingModeChange(value as ReadingDirection)}
+						onChange={(value) =>
+							value && handleReadingModeChange(value as ReadingDirection)
+						}
 						data={[
 							{ label: "Left to Right", value: "ltr" },
 							{ label: "Right to Left (Manga)", value: "rtl" },
@@ -233,7 +247,9 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 				</Box>
 
 				<Group justify="space-between">
-					<Text size="sm" fw={500}>Auto-hide toolbar</Text>
+					<Text size="sm" fw={500}>
+						Auto-hide toolbar
+					</Text>
 					<Switch
 						size="sm"
 						checked={globalSettings.autoHideToolbar}
@@ -243,8 +259,12 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 
 				<Group justify="space-between">
 					<Box>
-						<Text size="sm" fw={500}>Auto-advance to next book</Text>
-						<Text size="xs" c="dimmed">Automatically continue to next book in series</Text>
+						<Text size="sm" fw={500}>
+							Auto-advance to next book
+						</Text>
+						<Text size="xs" c="dimmed">
+							Automatically continue to next book in series
+						</Text>
 					</Box>
 					<Switch
 						size="sm"
@@ -262,9 +282,10 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 						<Box
 							p="sm"
 							style={{
-								backgroundColor: seriesId && hasSeriesOverride
-									? "var(--mantine-color-blue-light)"
-									: undefined,
+								backgroundColor:
+									seriesId && hasSeriesOverride
+										? "var(--mantine-color-blue-light)"
+										: undefined,
 								borderRadius: "var(--mantine-radius-sm)",
 								marginInline: "calc(-1 * var(--mantine-spacing-sm))",
 							}}
@@ -275,7 +296,9 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 										Display
 									</Title>
 									{seriesId && hasSeriesOverride && (
-										<Text size="xs" c="blue">Series</Text>
+										<Text size="xs" c="blue">
+											Series
+										</Text>
 									)}
 								</Group>
 
@@ -287,8 +310,15 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 									{isContinuousMode ? (
 										<SegmentedControl
 											fullWidth
-											value={displaySettings.fitMode === "width" || displaySettings.fitMode === "original" ? displaySettings.fitMode : "width"}
-											onChange={(value) => handleFitModeChange(value as FitMode)}
+											value={
+												displaySettings.fitMode === "width" ||
+												displaySettings.fitMode === "original"
+													? displaySettings.fitMode
+													: "width"
+											}
+											onChange={(value) =>
+												handleFitModeChange(value as FitMode)
+											}
 											data={[
 												{ label: "Fit width", value: "width" },
 												{ label: "Original", value: "original" },
@@ -297,11 +327,16 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 									) : (
 										<Select
 											value={displaySettings.fitMode}
-											onChange={(value) => value && handleFitModeChange(value as FitMode)}
+											onChange={(value) =>
+												value && handleFitModeChange(value as FitMode)
+											}
 											data={[
 												{ label: "Fit screen", value: "screen" },
 												{ label: "Fit width", value: "width" },
-												{ label: "Fit width (shrink only)", value: "width-shrink" },
+												{
+													label: "Fit width (shrink only)",
+													value: "width-shrink",
+												},
 												{ label: "Fit height", value: "height" },
 												{ label: "Original", value: "original" },
 											]}
@@ -317,7 +352,9 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 									<SegmentedControl
 										fullWidth
 										value={displaySettings.backgroundColor}
-										onChange={(value) => handleBackgroundChange(value as BackgroundColor)}
+										onChange={(value) =>
+											handleBackgroundChange(value as BackgroundColor)
+										}
 										data={[
 											{ label: "Black", value: "black" },
 											{ label: "Gray", value: "gray" },
@@ -334,8 +371,14 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 										</Text>
 										<SegmentedControl
 											fullWidth
-											value={displaySettings.pageLayout === "continuous" ? "single" : displaySettings.pageLayout}
-											onChange={(value) => handlePageLayoutChange(value as PageLayout)}
+											value={
+												displaySettings.pageLayout === "continuous"
+													? "single"
+													: displaySettings.pageLayout
+											}
+											onChange={(value) =>
+												handlePageLayoutChange(value as PageLayout)
+											}
 											data={[
 												{ label: "Single", value: "single" },
 												{ label: "Double", value: "double" },
@@ -345,34 +388,43 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 								)}
 
 								{/* Double Page Options */}
-								{!isContinuousMode && displaySettings.pageLayout === "double" && (
-									<Box
-										p="sm"
-										style={{
-											backgroundColor: "var(--mantine-color-dark-7)",
-											borderRadius: "var(--mantine-radius-sm)",
-										}}
-									>
-										<Stack gap="xs">
-											<Group justify="space-between">
-												<Text size="sm">Wide pages alone</Text>
-												<Switch
-													size="sm"
-													checked={displaySettings.doublePageShowWideAlone}
-													onChange={(e) => handleDoublePageWideAloneChange(e.currentTarget.checked)}
-												/>
-											</Group>
-											<Group justify="space-between">
-												<Text size="sm">Start on odd page</Text>
-												<Switch
-													size="sm"
-													checked={displaySettings.doublePageStartOnOdd}
-													onChange={(e) => handleDoublePageStartOnOddChange(e.currentTarget.checked)}
-												/>
-											</Group>
-										</Stack>
-									</Box>
-								)}
+								{!isContinuousMode &&
+									displaySettings.pageLayout === "double" && (
+										<Box
+											p="sm"
+											style={{
+												backgroundColor: "var(--mantine-color-dark-7)",
+												borderRadius: "var(--mantine-radius-sm)",
+											}}
+										>
+											<Stack gap="xs">
+												<Group justify="space-between">
+													<Text size="sm">Wide pages alone</Text>
+													<Switch
+														size="sm"
+														checked={displaySettings.doublePageShowWideAlone}
+														onChange={(e) =>
+															handleDoublePageWideAloneChange(
+																e.currentTarget.checked,
+															)
+														}
+													/>
+												</Group>
+												<Group justify="space-between">
+													<Text size="sm">Start on odd page</Text>
+													<Switch
+														size="sm"
+														checked={displaySettings.doublePageStartOnOdd}
+														onChange={(e) =>
+															handleDoublePageStartOnOddChange(
+																e.currentTarget.checked,
+															)
+														}
+													/>
+												</Group>
+											</Stack>
+										</Box>
+									)}
 							</Stack>
 						</Box>
 					</Grid.Col>
@@ -382,13 +434,19 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 						<Stack gap="lg">
 							{isContinuousMode ? (
 								<>
-									<Title order={6} c="dimmed">Scroll Options</Title>
+									<Title order={6} c="dimmed">
+										Scroll Options
+									</Title>
 
 									{/* Side Padding */}
 									<Box pb="md">
 										<Group justify="space-between" mb="xs">
-											<Text size="sm" fw={500}>Side padding</Text>
-											<Text size="xs" c="dimmed">{globalSettings.webtoonSidePadding}%</Text>
+											<Text size="sm" fw={500}>
+												Side padding
+											</Text>
+											<Text size="xs" c="dimmed">
+												{globalSettings.webtoonSidePadding}%
+											</Text>
 										</Group>
 										<Slider
 											value={globalSettings.webtoonSidePadding}
@@ -407,8 +465,12 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 									{/* Page Gap */}
 									<Box pb="md">
 										<Group justify="space-between" mb="xs">
-											<Text size="sm" fw={500}>Page gap</Text>
-											<Text size="xs" c="dimmed">{globalSettings.webtoonPageGap}px</Text>
+											<Text size="sm" fw={500}>
+												Page gap
+											</Text>
+											<Text size="xs" c="dimmed">
+												{globalSettings.webtoonPageGap}px
+											</Text>
 										</Group>
 										<Slider
 											value={globalSettings.webtoonPageGap}
@@ -426,7 +488,9 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 								</>
 							) : (
 								<>
-									<Title order={6} c="dimmed">Transitions</Title>
+									<Title order={6} c="dimmed">
+										Transitions
+									</Title>
 
 									{/* Page Transitions */}
 									<Box>
@@ -436,7 +500,9 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 										<SegmentedControl
 											fullWidth
 											value={globalSettings.pageTransition}
-											onChange={(value) => setPageTransition(value as PageTransition)}
+											onChange={(value) =>
+												setPageTransition(value as PageTransition)
+											}
 											data={[
 												{ label: "None", value: "none" },
 												{ label: "Fade", value: "fade" },
@@ -449,8 +515,12 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 									{globalSettings.pageTransition !== "none" && (
 										<Box pb="md">
 											<Group justify="space-between" mb="xs">
-												<Text size="sm" fw={500}>Speed</Text>
-												<Text size="xs" c="dimmed">{globalSettings.transitionDuration}ms</Text>
+												<Text size="sm" fw={500}>
+													Speed
+												</Text>
+												<Text size="xs" c="dimmed">
+													{globalSettings.transitionDuration}ms
+												</Text>
 											</Group>
 											<Slider
 												value={globalSettings.transitionDuration}
@@ -471,9 +541,15 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 							{/* Preload - common to both */}
 							<Box pb="md">
 								<Group justify="space-between" mb="xs">
-									<Text size="sm" fw={500}>Preload pages</Text>
-									<Text size="xs" c="dimmed" visibleFrom="sm">(Doubled for double-page layout)</Text>
-									<Text size="xs" c="dimmed">{globalSettings.preloadPages}</Text>
+									<Text size="sm" fw={500}>
+										Preload pages
+									</Text>
+									<Text size="xs" c="dimmed" visibleFrom="sm">
+										(Doubled for double-page layout)
+									</Text>
+									<Text size="xs" c="dimmed">
+										{globalSettings.preloadPages}
+									</Text>
 								</Group>
 								<Slider
 									value={globalSettings.preloadPages}
@@ -487,7 +563,6 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 									]}
 								/>
 							</Box>
-
 						</Stack>
 					</Grid.Col>
 				</Grid>
@@ -521,24 +596,42 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 				<Group justify="space-between" gap="xl" visibleFrom="sm">
 					<Group gap="lg">
 						<Text size="xs" c="dimmed">
-							<Text span fw={500}>← → ↑ ↓</Text> {isContinuousMode ? "Scroll" : "Navigate"}
+							<Text span fw={500}>
+								← → ↑ ↓
+							</Text>{" "}
+							{isContinuousMode ? "Scroll" : "Navigate"}
 						</Text>
 						<Text size="xs" c="dimmed">
-							<Text span fw={500}>Home/End</Text> First/Last
+							<Text span fw={500}>
+								Home/End
+							</Text>{" "}
+							First/Last
 						</Text>
 						<Text size="xs" c="dimmed">
-							<Text span fw={500}>F</Text> Fullscreen
+							<Text span fw={500}>
+								F
+							</Text>{" "}
+							Fullscreen
 						</Text>
 					</Group>
 					<Group gap="lg">
 						<Text size="xs" c="dimmed">
-							<Text span fw={500}>T</Text> Toolbar
+							<Text span fw={500}>
+								T
+							</Text>{" "}
+							Toolbar
 						</Text>
 						<Text size="xs" c="dimmed">
-							<Text span fw={500}>M</Text> Cycle scale
+							<Text span fw={500}>
+								M
+							</Text>{" "}
+							Cycle scale
 						</Text>
 						<Text size="xs" c="dimmed">
-							<Text span fw={500}>Esc</Text> Close
+							<Text span fw={500}>
+								Esc
+							</Text>{" "}
+							Close
 						</Text>
 					</Group>
 				</Group>

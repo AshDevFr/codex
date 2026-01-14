@@ -87,9 +87,7 @@ export function useTaskProgress() {
 				setActiveTasks((prev) => {
 					const next = new Map(prev);
 					// Create a set of current processing task IDs
-					const currentProcessingIds = new Set(
-						tasks.map((task) => task.id),
-					);
+					const currentProcessingIds = new Set(tasks.map((task) => task.id));
 
 					// Remove tasks that were previously "running" (from processing)
 					// but are no longer in the processing list
@@ -137,9 +135,7 @@ export function useTaskProgress() {
 					setActiveTasks((prev) => {
 						const next = new Map(prev);
 						// Create a set of current processing task IDs
-						const currentProcessingIds = new Set(
-							tasks.map((task) => task.id),
-						);
+						const currentProcessingIds = new Set(tasks.map((task) => task.id));
 
 						// Remove tasks that were previously "running" (from processing)
 						// but are no longer in the processing list

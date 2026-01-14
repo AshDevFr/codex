@@ -114,10 +114,7 @@ function BookmarkItem({
 			}}
 		>
 			<Group justify="space-between" mb={bookmark.note || isEditing ? "xs" : 0}>
-				<Box
-					style={{ flex: 1, cursor: "pointer" }}
-					onClick={handleNavigate}
-				>
+				<Box style={{ flex: 1, cursor: "pointer" }} onClick={handleNavigate}>
 					{bookmark.chapterTitle && (
 						<Text size="sm" fw={500} lineClamp={1}>
 							{bookmark.chapterTitle}
@@ -207,7 +204,7 @@ export function EpubBookmarks({
 }: EpubBookmarksProps) {
 	// Sort bookmarks by percentage (position in book)
 	const sortedBookmarks = [...bookmarks].sort(
-		(a, b) => a.percentage - b.percentage
+		(a, b) => a.percentage - b.percentage,
 	);
 
 	const handleBookmarkToggle = () => {

@@ -22,7 +22,6 @@ import { notifications } from "@mantine/notifications";
 import {
 	IconAlertCircle,
 	IconEdit,
-	IconPlus,
 	IconTrash,
 	IconUser,
 	IconUserPlus,
@@ -356,12 +355,13 @@ export function UsersSettings() {
 				title={`Edit User: ${selectedUser?.username}`}
 			>
 				<form
-					onSubmit={editForm.onSubmit((values) =>
-						selectedUser &&
-						updateUserMutation.mutate({
-							userId: selectedUser.id,
-							data: values,
-						}),
+					onSubmit={editForm.onSubmit(
+						(values) =>
+							selectedUser &&
+							updateUserMutation.mutate({
+								userId: selectedUser.id,
+								data: values,
+							}),
 					)}
 				>
 					<Stack gap="md">
@@ -399,7 +399,10 @@ export function UsersSettings() {
 							</Alert>
 						)}
 						<Group justify="flex-end">
-							<Button variant="subtle" onClick={() => setEditModalOpened(false)}>
+							<Button
+								variant="subtle"
+								onClick={() => setEditModalOpened(false)}
+							>
 								Cancel
 							</Button>
 							<Button type="submit" loading={updateUserMutation.isPending}>
@@ -426,7 +429,8 @@ export function UsersSettings() {
 					</Text>
 					<Text size="sm" c="dimmed">
 						This action cannot be undone. All data associated with this user
-						(reading progress, ratings, preferences) will be permanently deleted.
+						(reading progress, ratings, preferences) will be permanently
+						deleted.
 					</Text>
 					<Group justify="flex-end">
 						<Button

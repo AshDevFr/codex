@@ -2,8 +2,8 @@
  * MSW handlers for task queue API endpoints
  */
 
-import { http, HttpResponse, delay } from "msw";
-import { createTask, createTaskStats, createList, createPaginatedResponse } from "../data/factories";
+import { delay, HttpResponse, http } from "msw";
+import { createList, createTask, createTaskStats } from "../data/factories";
 
 // Generate mock tasks
 let mockTasks = createList(() => createTask(), 50);
@@ -13,8 +13,8 @@ export const tasksHandlers = [
 	http.get("/api/v1/tasks", async ({ request }) => {
 		await delay(100);
 		const url = new URL(request.url);
-		const page = parseInt(url.searchParams.get("page") || "0");
-		const pageSize = parseInt(url.searchParams.get("pageSize") || "20");
+		const page = parseInt(url.searchParams.get("page") || "0", 10);
+		const pageSize = parseInt(url.searchParams.get("pageSize") || "20", 10);
 		const status = url.searchParams.get("status");
 		const taskType = url.searchParams.get("task_type");
 
@@ -56,7 +56,11 @@ export const tasksHandlers = [
 	// Create task
 	http.post("/api/v1/tasks", async ({ request }) => {
 		await delay(100);
-		const body = await request.json() as { task_type: string; library_id?: string; book_id?: string };
+		const body = (await request.json()) as {
+			task_type: string;
+			library_id?: string;
+			book_id?: string;
+		};
 
 		const newTask = createTask({
 			task_type: body.task_type,

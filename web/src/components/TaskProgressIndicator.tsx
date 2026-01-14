@@ -114,9 +114,7 @@ export function TaskProgressIndicator() {
 
 	// Show only running tasks (processing tasks are converted to running in the hook)
 	// Note: pending tasks are not shown here as they're represented by pendingCounts in the badge
-	const visibleTasks = activeTasks.filter(
-		(task) => task.status === "running",
-	);
+	const visibleTasks = activeTasks.filter((task) => task.status === "running");
 
 	if (visibleTasks.length === 0) {
 		return null;

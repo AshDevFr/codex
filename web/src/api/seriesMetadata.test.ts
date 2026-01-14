@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { seriesMetadataApi } from "./seriesMetadata";
 import { api } from "./client";
+import { seriesMetadataApi } from "./seriesMetadata";
 
 // Mock the api client
 vi.mock("./client", () => ({
@@ -32,9 +32,15 @@ describe("seriesMetadataApi", () => {
 				},
 				genres: [{ id: "genre-1", name: "Action", seriesCount: 10 }],
 				tags: [{ id: "tag-1", name: "Favorite", seriesCount: 5 }],
-				alternateTitles: [{ id: "alt-1", title: "Alt Title", label: "Japanese" }],
-				externalRatings: [{ id: "er-1", sourceName: "MAL", rating: 85, voteCount: 1000 }],
-				externalLinks: [{ id: "el-1", sourceName: "MAL", url: "https://myanimelist.net/..." }],
+				alternateTitles: [
+					{ id: "alt-1", title: "Alt Title", label: "Japanese" },
+				],
+				externalRatings: [
+					{ id: "er-1", sourceName: "MAL", rating: 85, voteCount: 1000 },
+				],
+				externalLinks: [
+					{ id: "el-1", sourceName: "MAL", url: "https://myanimelist.net/..." },
+				],
 				locks: { name: false, summary: true },
 			};
 
@@ -79,10 +85,13 @@ describe("seriesMetadataApi", () => {
 				summary: true,
 			});
 
-			expect(api.put).toHaveBeenCalledWith("/series/series-123/metadata/locks", {
-				name: true,
-				summary: true,
-			});
+			expect(api.put).toHaveBeenCalledWith(
+				"/series/series-123/metadata/locks",
+				{
+					name: true,
+					summary: true,
+				},
+			);
 			expect(result).toEqual(mockLocks);
 		});
 	});
@@ -149,7 +158,9 @@ describe("seriesMetadataApi", () => {
 
 				const result = await seriesMetadataApi.getAlternateTitles("series-123");
 
-				expect(api.get).toHaveBeenCalledWith("/series/series-123/alternate-titles");
+				expect(api.get).toHaveBeenCalledWith(
+					"/series/series-123/alternate-titles",
+				);
 				expect(result).toEqual(mockResponse.titles);
 			});
 		});
@@ -170,10 +181,13 @@ describe("seriesMetadataApi", () => {
 					"Korean",
 				);
 
-				expect(api.post).toHaveBeenCalledWith("/series/series-123/alternate-titles", {
-					title: "New Alt Title",
-					label: "Korean",
-				});
+				expect(api.post).toHaveBeenCalledWith(
+					"/series/series-123/alternate-titles",
+					{
+						title: "New Alt Title",
+						label: "Korean",
+					},
+				);
 				expect(result).toEqual(mockTitle);
 			});
 		});
@@ -195,10 +209,13 @@ describe("seriesMetadataApi", () => {
 					"Updated Label",
 				);
 
-				expect(api.patch).toHaveBeenCalledWith("/series/series-123/alternate-titles/alt-1", {
-					title: "Updated Title",
-					label: "Updated Label",
-				});
+				expect(api.patch).toHaveBeenCalledWith(
+					"/series/series-123/alternate-titles/alt-1",
+					{
+						title: "Updated Title",
+						label: "Updated Label",
+					},
+				);
 				expect(result).toEqual(mockTitle);
 			});
 		});
@@ -209,7 +226,9 @@ describe("seriesMetadataApi", () => {
 
 				await seriesMetadataApi.deleteAlternateTitle("series-123", "alt-1");
 
-				expect(api.delete).toHaveBeenCalledWith("/series/series-123/alternate-titles/alt-1");
+				expect(api.delete).toHaveBeenCalledWith(
+					"/series/series-123/alternate-titles/alt-1",
+				);
 			});
 		});
 	});
@@ -228,7 +247,9 @@ describe("seriesMetadataApi", () => {
 
 				const result = await seriesMetadataApi.getExternalRatings("series-123");
 
-				expect(api.get).toHaveBeenCalledWith("/series/series-123/external-ratings");
+				expect(api.get).toHaveBeenCalledWith(
+					"/series/series-123/external-ratings",
+				);
 				expect(result).toEqual(mockResponse.ratings);
 			});
 		});
@@ -251,11 +272,14 @@ describe("seriesMetadataApi", () => {
 					2000,
 				);
 
-				expect(api.post).toHaveBeenCalledWith("/series/series-123/external-ratings", {
-					source_name: "Goodreads",
-					rating: 78,
-					vote_count: 2000,
-				});
+				expect(api.post).toHaveBeenCalledWith(
+					"/series/series-123/external-ratings",
+					{
+						source_name: "Goodreads",
+						rating: 78,
+						vote_count: 2000,
+					},
+				);
 				expect(result).toEqual(mockRating);
 			});
 
@@ -275,11 +299,14 @@ describe("seriesMetadataApi", () => {
 					90,
 				);
 
-				expect(api.post).toHaveBeenCalledWith("/series/series-123/external-ratings", {
-					source_name: "Custom",
-					rating: 90,
-					vote_count: undefined,
-				});
+				expect(api.post).toHaveBeenCalledWith(
+					"/series/series-123/external-ratings",
+					{
+						source_name: "Custom",
+						rating: 90,
+						vote_count: undefined,
+					},
+				);
 				expect(result).toEqual(mockRating);
 			});
 		});
@@ -290,7 +317,9 @@ describe("seriesMetadataApi", () => {
 
 				await seriesMetadataApi.deleteExternalRating("series-123", "er-1");
 
-				expect(api.delete).toHaveBeenCalledWith("/series/series-123/external-ratings/er-1");
+				expect(api.delete).toHaveBeenCalledWith(
+					"/series/series-123/external-ratings/er-1",
+				);
 			});
 		});
 	});
@@ -300,8 +329,18 @@ describe("seriesMetadataApi", () => {
 			it("should fetch external links for a series", async () => {
 				const mockResponse = {
 					links: [
-						{ id: "el-1", sourceName: "MAL", url: "https://myanimelist.net/manga/1", externalId: "1" },
-						{ id: "el-2", sourceName: "AniList", url: "https://anilist.co/manga/1", externalId: "1" },
+						{
+							id: "el-1",
+							sourceName: "MAL",
+							url: "https://myanimelist.net/manga/1",
+							externalId: "1",
+						},
+						{
+							id: "el-2",
+							sourceName: "AniList",
+							url: "https://anilist.co/manga/1",
+							externalId: "1",
+						},
 					],
 				};
 
@@ -309,7 +348,9 @@ describe("seriesMetadataApi", () => {
 
 				const result = await seriesMetadataApi.getExternalLinks("series-123");
 
-				expect(api.get).toHaveBeenCalledWith("/series/series-123/external-links");
+				expect(api.get).toHaveBeenCalledWith(
+					"/series/series-123/external-links",
+				);
 				expect(result).toEqual(mockResponse.links);
 			});
 		});
@@ -332,11 +373,14 @@ describe("seriesMetadataApi", () => {
 					"xyz",
 				);
 
-				expect(api.post).toHaveBeenCalledWith("/series/series-123/external-links", {
-					source_name: "MangaUpdates",
-					url: "https://mangaupdates.com/series/xyz",
-					external_id: "xyz",
-				});
+				expect(api.post).toHaveBeenCalledWith(
+					"/series/series-123/external-links",
+					{
+						source_name: "MangaUpdates",
+						url: "https://mangaupdates.com/series/xyz",
+						external_id: "xyz",
+					},
+				);
 				expect(result).toEqual(mockLink);
 			});
 
@@ -356,11 +400,14 @@ describe("seriesMetadataApi", () => {
 					"https://example.com/series",
 				);
 
-				expect(api.post).toHaveBeenCalledWith("/series/series-123/external-links", {
-					source_name: "Custom",
-					url: "https://example.com/series",
-					external_id: undefined,
-				});
+				expect(api.post).toHaveBeenCalledWith(
+					"/series/series-123/external-links",
+					{
+						source_name: "Custom",
+						url: "https://example.com/series",
+						external_id: undefined,
+					},
+				);
 				expect(result).toEqual(mockLink);
 			});
 		});
@@ -371,7 +418,9 @@ describe("seriesMetadataApi", () => {
 
 				await seriesMetadataApi.deleteExternalLink("series-123", "el-1");
 
-				expect(api.delete).toHaveBeenCalledWith("/series/series-123/external-links/el-1");
+				expect(api.delete).toHaveBeenCalledWith(
+					"/series/series-123/external-links/el-1",
+				);
 			});
 		});
 	});
@@ -401,7 +450,9 @@ describe("seriesMetadataApi", () => {
 
 				await seriesMetadataApi.selectCover("series-123", "cover-2");
 
-				expect(api.put).toHaveBeenCalledWith("/series/series-123/covers/cover-2/select");
+				expect(api.put).toHaveBeenCalledWith(
+					"/series/series-123/covers/cover-2/select",
+				);
 			});
 		});
 
@@ -411,7 +462,9 @@ describe("seriesMetadataApi", () => {
 
 				await seriesMetadataApi.deleteCover("series-123", "cover-1");
 
-				expect(api.delete).toHaveBeenCalledWith("/series/series-123/covers/cover-1");
+				expect(api.delete).toHaveBeenCalledWith(
+					"/series/series-123/covers/cover-1",
+				);
 			});
 		});
 	});

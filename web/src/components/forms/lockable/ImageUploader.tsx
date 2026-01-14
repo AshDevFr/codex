@@ -64,6 +64,14 @@ export function ImageUploader({
 	const [error, setError] = useState<string | null>(null);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
+	const formatBytes = useCallback((bytes: number): string => {
+		if (bytes === 0) return "0 Bytes";
+		const k = 1024;
+		const sizes = ["Bytes", "kB", "MB", "GB"];
+		const i = Math.floor(Math.log(bytes) / Math.log(k));
+		return `${Number.parseFloat((bytes / k ** i).toFixed(1))} ${sizes[i]}`;
+	}, []);
+
 	const handleDrop = useCallback(
 		(files: File[]) => {
 			setError(null);
@@ -100,7 +108,7 @@ export function ImageUploader({
 			};
 			img.src = url;
 		},
-		[maxSize, onChange],
+		[maxSize, onChange, formatBytes],
 	);
 
 	const handleReject = useCallback(() => {
@@ -122,14 +130,6 @@ export function ImageUploader({
 		}
 		onRefresh?.();
 	}, [previewUrl, onRefresh]);
-
-	const formatBytes = (bytes: number): string => {
-		if (bytes === 0) return "0 Bytes";
-		const k = 1024;
-		const sizes = ["Bytes", "kB", "MB", "GB"];
-		const i = Math.floor(Math.log(bytes) / Math.log(k));
-		return `${Number.parseFloat((bytes / k ** i).toFixed(1))} ${sizes[i]}`;
-	};
 
 	return (
 		<Stack gap="md">

@@ -1,5 +1,5 @@
-import { renderWithProviders, screen, userEvent, waitFor } from "@/test/utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { renderWithProviders, screen, userEvent, waitFor } from "@/test/utils";
 import { SearchInput } from "./SearchInput";
 
 // Mock useSearch hook
@@ -162,7 +162,9 @@ describe("SearchInput", () => {
 			const user = userEvent.setup();
 			renderWithProviders(<SearchInput />);
 
-			const input = screen.getByPlaceholderText("Search...") as HTMLInputElement;
+			const input = screen.getByPlaceholderText(
+				"Search...",
+			) as HTMLInputElement;
 			await user.type(input, "test");
 
 			await waitFor(() => {

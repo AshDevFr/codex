@@ -2,12 +2,17 @@
  * MSW handlers for user management API endpoints
  */
 
-import { http, HttpResponse, delay } from "msw";
-import { createUser, createList } from "../data/factories";
+import { delay, HttpResponse, http } from "msw";
+import { createList, createUser } from "../data/factories";
 
 // Generate mock users
 const mockUsers = [
-	createUser({ id: "admin-user-id", username: "admin", email: "admin@example.com", isAdmin: true }),
+	createUser({
+		id: "admin-user-id",
+		username: "admin",
+		email: "admin@example.com",
+		isAdmin: true,
+	}),
 	...createList(() => createUser(), 9),
 ];
 
@@ -34,7 +39,12 @@ export const usersHandlers = [
 	// Create user
 	http.post("/api/v1/users", async ({ request }) => {
 		await delay(100);
-		const body = await request.json() as { username: string; email: string; password: string; isAdmin?: boolean };
+		const body = (await request.json()) as {
+			username: string;
+			email: string;
+			password: string;
+			isAdmin?: boolean;
+		};
 
 		const newUser = createUser({
 			username: body.username,
@@ -50,7 +60,12 @@ export const usersHandlers = [
 	http.patch("/api/v1/users/:userId", async ({ params, request }) => {
 		await delay(100);
 		const { userId } = params;
-		const body = await request.json() as Partial<{ username: string; email: string; isAdmin: boolean; isActive: boolean }>;
+		const body = (await request.json()) as Partial<{
+			username: string;
+			email: string;
+			isAdmin: boolean;
+			isActive: boolean;
+		}>;
 
 		const userIndex = mockUsers.findIndex((u) => u.id === userId);
 		if (userIndex === -1) {

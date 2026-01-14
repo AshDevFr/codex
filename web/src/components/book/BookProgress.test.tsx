@@ -1,5 +1,5 @@
-import { renderWithProviders, screen } from "@/test/utils";
 import { describe, expect, it } from "vitest";
+import { renderWithProviders, screen } from "@/test/utils";
 import { BookProgress } from "./BookProgress";
 
 describe("BookProgress", () => {
@@ -114,6 +114,8 @@ describe("BookProgress", () => {
 
 		renderWithProviders(<BookProgress progress={progress} pageCount={100} />);
 
-		expect(document.querySelector('[role="progressbar"]')).not.toBeInTheDocument();
+		expect(
+			document.querySelector('[role="progressbar"]'),
+		).not.toBeInTheDocument();
 	});
 });

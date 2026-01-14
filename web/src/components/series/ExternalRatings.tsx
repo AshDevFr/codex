@@ -54,7 +54,10 @@ export function ExternalRatings({ ratings }: ExternalRatingsProps) {
 						position="top"
 					>
 						<Group gap={4}>
-							<IconStar size={14} style={{ color: "var(--mantine-color-yellow-5)" }} />
+							<IconStar
+								size={14}
+								style={{ color: "var(--mantine-color-yellow-5)" }}
+							/>
 							<Text size="sm" fw={500}>
 								{displayName}: {displayRating}
 							</Text>

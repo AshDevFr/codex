@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { seriesApi } from "./series";
 import { api } from "./client";
+import { seriesApi } from "./series";
 
 // Mock the api client
 vi.mock("./client", () => ({
@@ -58,7 +58,13 @@ describe("seriesApi", () => {
 		});
 
 		it("should include filter parameters", async () => {
-			const mockResponse = { items: [], total: 0, page: 1, pageSize: 10, totalPages: 0 };
+			const mockResponse = {
+				items: [],
+				total: 0,
+				page: 1,
+				pageSize: 10,
+				totalPages: 0,
+			};
 
 			vi.mocked(api.get).mockResolvedValueOnce({ data: mockResponse });
 
@@ -107,7 +113,9 @@ describe("seriesApi", () => {
 
 			const result = await seriesApi.getInProgress("library-123");
 
-			expect(api.get).toHaveBeenCalledWith("/series/in-progress?library_id=library-123");
+			expect(api.get).toHaveBeenCalledWith(
+				"/series/in-progress?library_id=library-123",
+			);
 			expect(result).toEqual(mockSeries);
 		});
 
@@ -141,8 +149,12 @@ describe("seriesApi", () => {
 
 			const result = await seriesApi.analyzeUnanalyzed("series-123");
 
-			expect(api.post).toHaveBeenCalledWith("/series/series-123/analyze-unanalyzed");
-			expect(result).toEqual({ message: "Analysis queued for unanalyzed books" });
+			expect(api.post).toHaveBeenCalledWith(
+				"/series/series-123/analyze-unanalyzed",
+			);
+			expect(result).toEqual({
+				message: "Analysis queued for unanalyzed books",
+			});
 		});
 	});
 
@@ -168,7 +180,10 @@ describe("seriesApi", () => {
 			const result = await seriesApi.markAsUnread("series-123");
 
 			expect(api.post).toHaveBeenCalledWith("/series/series-123/unread");
-			expect(result).toEqual({ count: 10, message: "Marked 10 books as unread" });
+			expect(result).toEqual({
+				count: 10,
+				message: "Marked 10 books as unread",
+			});
 		});
 	});
 
@@ -180,7 +195,9 @@ describe("seriesApi", () => {
 
 			const result = await seriesApi.getRecentlyAdded("library-123");
 
-			expect(api.get).toHaveBeenCalledWith("/series/recently-added?library_id=library-123&limit=50");
+			expect(api.get).toHaveBeenCalledWith(
+				"/series/recently-added?library_id=library-123&limit=50",
+			);
 			expect(result).toEqual(mockSeries);
 		});
 
@@ -201,7 +218,9 @@ describe("seriesApi", () => {
 
 			const result = await seriesApi.getRecentlyUpdated("library-123");
 
-			expect(api.get).toHaveBeenCalledWith("/series/recently-updated?library_id=library-123&limit=50");
+			expect(api.get).toHaveBeenCalledWith(
+				"/series/recently-updated?library_id=library-123&limit=50",
+			);
 			expect(result).toEqual(mockSeries);
 		});
 
@@ -226,7 +245,9 @@ describe("seriesApi", () => {
 		};
 
 		it("should search series without any condition for 'all' library", async () => {
-			vi.mocked(api.post).mockResolvedValueOnce({ data: mockPaginatedResponse });
+			vi.mocked(api.post).mockResolvedValueOnce({
+				data: mockPaginatedResponse,
+			});
 
 			const result = await seriesApi.search("all", {
 				page: 0,
@@ -244,7 +265,9 @@ describe("seriesApi", () => {
 		});
 
 		it("should add library condition when libraryId is specified", async () => {
-			vi.mocked(api.post).mockResolvedValueOnce({ data: mockPaginatedResponse });
+			vi.mocked(api.post).mockResolvedValueOnce({
+				data: mockPaginatedResponse,
+			});
 
 			await seriesApi.search("library-123", {
 				page: 0,
@@ -263,9 +286,13 @@ describe("seriesApi", () => {
 		});
 
 		it("should combine library condition with existing condition", async () => {
-			vi.mocked(api.post).mockResolvedValueOnce({ data: mockPaginatedResponse });
+			vi.mocked(api.post).mockResolvedValueOnce({
+				data: mockPaginatedResponse,
+			});
 
-			const genreCondition = { genre: { operator: "is" as const, value: "Action" } };
+			const genreCondition = {
+				genre: { operator: "is" as const, value: "Action" },
+			};
 
 			await seriesApi.search("library-123", {
 				condition: genreCondition,
@@ -288,7 +315,9 @@ describe("seriesApi", () => {
 		});
 
 		it("should pass through search and sort parameters", async () => {
-			vi.mocked(api.post).mockResolvedValueOnce({ data: mockPaginatedResponse });
+			vi.mocked(api.post).mockResolvedValueOnce({
+				data: mockPaginatedResponse,
+			});
 
 			await seriesApi.search("all", {
 				search: "naruto",
@@ -307,7 +336,9 @@ describe("seriesApi", () => {
 		});
 
 		it("should handle complex nested conditions", async () => {
-			vi.mocked(api.post).mockResolvedValueOnce({ data: mockPaginatedResponse });
+			vi.mocked(api.post).mockResolvedValueOnce({
+				data: mockPaginatedResponse,
+			});
 
 			const complexCondition = {
 				allOf: [

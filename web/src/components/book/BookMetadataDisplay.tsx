@@ -55,7 +55,12 @@ function CreatorList({ label, creators }: CreatorListProps) {
 				{label}:
 			</Text>
 			{creators.map((creator, index) => (
-				<Badge key={`${creator}-${index}`} variant="light" size="sm">
+				<Badge
+					// biome-ignore lint/suspicious/noArrayIndexKey: Index needed for duplicate creator names
+					key={`${creator}-${index}`}
+					variant="light"
+					size="sm"
+				>
 					{creator}
 				</Badge>
 			))}
@@ -97,7 +102,8 @@ export function BookMetadataDisplay({ metadata }: BookMetadataDisplayProps) {
 		{ label: "Editors", creators: metadata.editors || [] },
 	].filter((list) => list.creators.length > 0);
 
-	const hasContent = items.length > 0 || creatorLists.length > 0 || metadata.summary;
+	const hasContent =
+		items.length > 0 || creatorLists.length > 0 || metadata.summary;
 
 	if (!hasContent) {
 		return null;
@@ -110,10 +116,7 @@ export function BookMetadataDisplay({ metadata }: BookMetadataDisplayProps) {
 			{items.length > 0 && (
 				<Grid gutter="sm">
 					{items.map((item) => (
-						<Grid.Col
-							key={item.label}
-							span={{ base: 6, sm: 4, md: 3, lg: 2 }}
-						>
+						<Grid.Col key={item.label} span={{ base: 6, sm: 4, md: 3, lg: 2 }}>
 							<MetadataItem label={item.label} value={item.value} />
 						</Grid.Col>
 					))}

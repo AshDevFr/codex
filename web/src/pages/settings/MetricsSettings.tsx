@@ -34,13 +34,13 @@ import {
 	IconUsers,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { metricsApi } from "@/api/metrics";
 import type {
 	LibraryMetricsDto,
 	MetricsDto,
 	TaskMetricsResponse,
 	TaskTypeMetricsDto,
 } from "@/api/metrics";
+import { metricsApi } from "@/api/metrics";
 
 // Helper to format bytes
 function formatBytes(bytes: number): string {
@@ -141,13 +141,14 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
 
 	return (
 		<>
-			<Table.Tr
-				onClick={toggle}
-				style={{ cursor: "pointer" }}
-			>
+			<Table.Tr onClick={toggle} style={{ cursor: "pointer" }}>
 				<Table.Td>
 					<Group gap="xs">
-						{opened ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+						{opened ? (
+							<IconChevronDown size={14} />
+						) : (
+							<IconChevronRight size={14} />
+						)}
 						<Text fw={500} size="sm">
 							{metrics.task_type.replace(/_/g, " ")}
 						</Text>
@@ -160,7 +161,13 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
 					<Group gap="xs">
 						<Progress
 							value={Number.parseFloat(successRate)}
-							color={Number.parseFloat(successRate) >= 95 ? "green" : Number.parseFloat(successRate) >= 80 ? "yellow" : "red"}
+							color={
+								Number.parseFloat(successRate) >= 95
+									? "green"
+									: Number.parseFloat(successRate) >= 80
+										? "yellow"
+										: "red"
+							}
 							size="sm"
 							w={60}
 						/>
@@ -173,7 +180,8 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
 				<Table.Td>
 					<Tooltip label="Median / 95th percentile">
 						<Text size="sm" c="dimmed">
-							{formatDuration(metrics.p50_duration_ms)} / {formatDuration(metrics.p95_duration_ms)}
+							{formatDuration(metrics.p50_duration_ms)} /{" "}
+							{formatDuration(metrics.p95_duration_ms)}
 						</Text>
 					</Tooltip>
 				</Table.Td>
@@ -183,7 +191,12 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
 				<Table.Td>
 					{metrics.last_error ? (
 						<Tooltip label={metrics.last_error}>
-							<Badge color="red" size="sm" variant="light" leftSection={<IconAlertCircle size={12} />}>
+							<Badge
+								color="red"
+								size="sm"
+								variant="light"
+								leftSection={<IconAlertCircle size={12} />}
+							>
 								{metrics.failed} errors
 							</Badge>
 						</Tooltip>
@@ -211,7 +224,11 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
 									<Text size="xs" c="dimmed" tt="uppercase" fw={600}>
 										Failed
 									</Text>
-									<Text size="sm" fw={500} c={metrics.failed > 0 ? "red" : undefined}>
+									<Text
+										size="sm"
+										fw={500}
+										c={metrics.failed > 0 ? "red" : undefined}
+									>
 										{metrics.failed.toLocaleString()}
 									</Text>
 								</div>
@@ -219,7 +236,11 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
 									<Text size="xs" c="dimmed" tt="uppercase" fw={600}>
 										Retried
 									</Text>
-									<Text size="sm" fw={500} c={metrics.retried > 0 ? "yellow" : undefined}>
+									<Text
+										size="sm"
+										fw={500}
+										c={metrics.retried > 0 ? "yellow" : undefined}
+									>
 										{metrics.retried.toLocaleString()}
 									</Text>
 								</div>
@@ -227,7 +248,17 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
 									<Text size="xs" c="dimmed" tt="uppercase" fw={600}>
 										Error Rate
 									</Text>
-									<Text size="sm" fw={500} c={metrics.error_rate_pct > 5 ? "red" : metrics.error_rate_pct > 1 ? "yellow" : undefined}>
+									<Text
+										size="sm"
+										fw={500}
+										c={
+											metrics.error_rate_pct > 5
+												? "red"
+												: metrics.error_rate_pct > 1
+													? "yellow"
+													: undefined
+										}
+									>
 										{metrics.error_rate_pct.toFixed(2)}%
 									</Text>
 								</div>
@@ -299,9 +330,17 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
 								)}
 							</SimpleGrid>
 							{metrics.last_error && (
-								<Box mt="md" p="sm" bg="var(--mantine-color-red-light)" style={{ borderRadius: 4 }}>
+								<Box
+									mt="md"
+									p="sm"
+									bg="var(--mantine-color-red-light)"
+									style={{ borderRadius: 4 }}
+								>
 									<Group gap="xs" mb={4}>
-										<IconAlertCircle size={14} color="var(--mantine-color-red-filled)" />
+										<IconAlertCircle
+											size={14}
+											color="var(--mantine-color-red-filled)"
+										/>
 										<Text size="xs" fw={600} c="red">
 											Last Error
 										</Text>
@@ -403,9 +442,10 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
 
 	// Calculate aggregates from by_type data
 	const totalRetried = byType.reduce((sum, t) => sum + (t.retried ?? 0), 0);
-	const successRate = summary.total_executed > 0
-		? ((summary.total_succeeded ?? 0) / summary.total_executed * 100)
-		: 0;
+	const successRate =
+		summary.total_executed > 0
+			? ((summary.total_succeeded ?? 0) / summary.total_executed) * 100
+			: 0;
 
 	return (
 		<Stack gap="lg">
@@ -431,7 +471,11 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
 					<Text c="dimmed" size="xs" tt="uppercase" fw={700}>
 						Failed
 					</Text>
-					<Text fw={700} size="xl" c={(summary.total_failed ?? 0) > 0 ? "red" : undefined}>
+					<Text
+						fw={700}
+						size="xl"
+						c={(summary.total_failed ?? 0) > 0 ? "red" : undefined}
+					>
 						{(summary.total_failed ?? 0).toLocaleString()}
 					</Text>
 				</Paper>
@@ -448,7 +492,17 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
 						Success Rate
 					</Text>
 					<Group gap="xs" align="baseline">
-						<Text fw={700} size="xl" c={successRate >= 95 ? "green" : successRate >= 80 ? "yellow" : "red"}>
+						<Text
+							fw={700}
+							size="xl"
+							c={
+								successRate >= 95
+									? "green"
+									: successRate >= 80
+										? "yellow"
+										: "red"
+							}
+						>
 							{successRate.toFixed(1)}%
 						</Text>
 					</Group>
@@ -557,7 +611,10 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
 						</Table.Thead>
 						<Table.Tbody>
 							{byType.map((taskMetrics) => (
-								<TaskTypeRow key={taskMetrics.task_type} metrics={taskMetrics} />
+								<TaskTypeRow
+									key={taskMetrics.task_type}
+									metrics={taskMetrics}
+								/>
 							))}
 						</Table.Tbody>
 					</Table>
@@ -627,7 +684,10 @@ export function MetricsSettings() {
 			<Center h={400}>
 				<Stack align="center" gap="md">
 					<Text c="red">Failed to load metrics</Text>
-					<Button onClick={handleRefresh} leftSection={<IconRefresh size={16} />}>
+					<Button
+						onClick={handleRefresh}
+						leftSection={<IconRefresh size={16} />}
+					>
 						Retry
 					</Button>
 				</Stack>

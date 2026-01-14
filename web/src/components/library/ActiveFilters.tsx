@@ -72,8 +72,18 @@ export function ActiveFilters() {
 		...renderGroupChips(filters.genres, "genres", "Genre", setGenreState),
 		...renderGroupChips(filters.tags, "tags", "Tag", setTagState),
 		...renderGroupChips(filters.status, "status", "Status", setStatusState),
-		...renderGroupChips(filters.publisher, "publisher", "Publisher", setPublisherState),
-		...renderGroupChips(filters.language, "language", "Language", setLanguageState),
+		...renderGroupChips(
+			filters.publisher,
+			"publisher",
+			"Publisher",
+			setPublisherState,
+		),
+		...renderGroupChips(
+			filters.language,
+			"language",
+			"Language",
+			setLanguageState,
+		),
 	];
 
 	return (

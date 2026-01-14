@@ -46,14 +46,16 @@ describe("EpubSearch", () => {
 			renderWithProviders(<EpubSearch {...defaultProps} opened={true} />);
 
 			expect(screen.getByRole("dialog")).toBeInTheDocument();
-			expect(screen.getByPlaceholderText("Search in book...")).toBeInTheDocument();
+			expect(
+				screen.getByPlaceholderText("Search in book..."),
+			).toBeInTheDocument();
 		});
 
 		it("should show initial prompt when no search performed", () => {
 			renderWithProviders(<EpubSearch {...defaultProps} opened={true} />);
 
 			expect(
-				screen.getByText("Enter a search term to find text in the book")
+				screen.getByText("Enter a search term to find text in the book"),
 			).toBeInTheDocument();
 		});
 
@@ -70,7 +72,7 @@ describe("EpubSearch", () => {
 			const onSearch = vi.fn().mockResolvedValue([]);
 
 			renderWithProviders(
-				<EpubSearch {...defaultProps} opened={true} onSearch={onSearch} />
+				<EpubSearch {...defaultProps} opened={true} onSearch={onSearch} />,
 			);
 
 			await user.type(screen.getByPlaceholderText("Search in book..."), "test");
@@ -93,7 +95,7 @@ describe("EpubSearch", () => {
 			const onSearch = vi.fn().mockReturnValue(searchPromise);
 
 			renderWithProviders(
-				<EpubSearch {...defaultProps} opened={true} onSearch={onSearch} />
+				<EpubSearch {...defaultProps} opened={true} onSearch={onSearch} />,
 			);
 
 			await user.type(screen.getByPlaceholderText("Search in book..."), "test");
@@ -106,16 +108,20 @@ describe("EpubSearch", () => {
 			expect(onSearch).toHaveBeenCalled();
 
 			// Should show loader - Mantine Loader has class mantine-Loader-root
-			expect(document.querySelector(".mantine-Loader-root")).toBeInTheDocument();
+			expect(
+				document.querySelector(".mantine-Loader-root"),
+			).toBeInTheDocument();
 
 			// Resolve the search
 			await act(async () => {
-				resolveSearch!([]);
+				resolveSearch?.([]);
 			});
 
 			// Loader should disappear
 			await waitFor(() => {
-				expect(document.querySelector(".mantine-Loader-root")).not.toBeInTheDocument();
+				expect(
+					document.querySelector(".mantine-Loader-root"),
+				).not.toBeInTheDocument();
 			});
 		});
 
@@ -124,7 +130,7 @@ describe("EpubSearch", () => {
 			const onSearch = vi.fn().mockResolvedValue([]);
 
 			renderWithProviders(
-				<EpubSearch {...defaultProps} opened={true} onSearch={onSearch} />
+				<EpubSearch {...defaultProps} opened={true} onSearch={onSearch} />,
 			);
 
 			await user.type(screen.getByPlaceholderText("Search in book..."), "xyz");
@@ -134,7 +140,9 @@ describe("EpubSearch", () => {
 			});
 
 			await waitFor(() => {
-				expect(screen.getByText(/No results found for "xyz"/)).toBeInTheDocument();
+				expect(
+					screen.getByText(/No results found for "xyz"/),
+				).toBeInTheDocument();
 			});
 		});
 
@@ -159,7 +167,7 @@ describe("EpubSearch", () => {
 			const onSearch = vi.fn().mockReturnValue(searchPromise);
 
 			renderWithProviders(
-				<EpubSearch {...defaultProps} opened={true} onSearch={onSearch} />
+				<EpubSearch {...defaultProps} opened={true} onSearch={onSearch} />,
 			);
 
 			await user.type(screen.getByPlaceholderText("Search in book..."), "test");
@@ -199,7 +207,7 @@ describe("EpubSearch", () => {
 			const onSearch = vi.fn().mockReturnValue(searchPromise);
 
 			renderWithProviders(
-				<EpubSearch {...defaultProps} opened={true} onSearch={onSearch} />
+				<EpubSearch {...defaultProps} opened={true} onSearch={onSearch} />,
 			);
 
 			await user.type(screen.getByPlaceholderText("Search in book..."), "test");
@@ -243,7 +251,7 @@ describe("EpubSearch", () => {
 					opened={true}
 					onSearch={onSearch}
 					onNavigate={onNavigate}
-				/>
+				/>,
 			);
 
 			await user.type(screen.getByPlaceholderText("Search in book..."), "test");
@@ -288,7 +296,7 @@ describe("EpubSearch", () => {
 					opened={true}
 					onSearch={onSearch}
 					onToggle={onToggle}
-				/>
+				/>,
 			);
 
 			await user.type(screen.getByPlaceholderText("Search in book..."), "test");
@@ -357,7 +365,7 @@ describe("EpubSearch", () => {
 			const onSearch = vi.fn().mockReturnValue(searchPromise);
 
 			renderWithProviders(
-				<EpubSearch {...defaultProps} opened={true} onSearch={onSearch} />
+				<EpubSearch {...defaultProps} opened={true} onSearch={onSearch} />,
 			);
 
 			await user.type(screen.getByPlaceholderText("Search in book..."), "test");
@@ -379,7 +387,7 @@ describe("EpubSearch", () => {
 			await user.click(screen.getByLabelText("Clear search"));
 
 			expect(
-				screen.getByText("Enter a search term to find text in the book")
+				screen.getByText("Enter a search term to find text in the book"),
 			).toBeInTheDocument();
 		});
 	});
@@ -400,7 +408,7 @@ describe("EpubSearch", () => {
 			const onSearch = vi.fn().mockReturnValue(searchPromise);
 
 			renderWithProviders(
-				<EpubSearch {...defaultProps} opened={true} onSearch={onSearch} />
+				<EpubSearch {...defaultProps} opened={true} onSearch={onSearch} />,
 			);
 
 			await user.type(screen.getByPlaceholderText("Search in book..."), "test");
@@ -439,7 +447,7 @@ describe("EpubSearch", () => {
 			const onSearch = vi.fn().mockReturnValue(searchPromise);
 
 			renderWithProviders(
-				<EpubSearch {...defaultProps} opened={true} onSearch={onSearch} />
+				<EpubSearch {...defaultProps} opened={true} onSearch={onSearch} />,
 			);
 
 			await user.type(screen.getByPlaceholderText("Search in book..."), "test");

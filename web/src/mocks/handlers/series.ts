@@ -160,11 +160,12 @@ export const seriesHandlers = [
 	http.get("/api/v1/series", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
-		const page = Number.parseInt(url.searchParams.get("page") || "0");
+		const page = Number.parseInt(url.searchParams.get("page") || "0", 10);
 		const pageSize = Number.parseInt(
 			url.searchParams.get("page_size") ||
 				url.searchParams.get("pageSize") ||
 				"20",
+			10,
 		);
 		// Support both library_id (new) and libraryId (legacy)
 		const libraryId =
@@ -193,7 +194,7 @@ export const seriesHandlers = [
 		await delay(200);
 		const url = new URL(request.url);
 		const libraryId = url.searchParams.get("library_id");
-		const limit = Number.parseInt(url.searchParams.get("limit") || "50");
+		const limit = Number.parseInt(url.searchParams.get("limit") || "50", 10);
 
 		const baseSeries = libraryId ? getSeriesByLibrary(libraryId) : mockSeries;
 		// Sort by createdAt desc and limit
@@ -213,7 +214,7 @@ export const seriesHandlers = [
 		await delay(200);
 		const url = new URL(request.url);
 		const libraryId = url.searchParams.get("library_id");
-		const limit = Number.parseInt(url.searchParams.get("limit") || "50");
+		const limit = Number.parseInt(url.searchParams.get("limit") || "50", 10);
 
 		const baseSeries = libraryId ? getSeriesByLibrary(libraryId) : mockSeries;
 		// Sort by updatedAt desc and limit
@@ -337,9 +338,10 @@ export const seriesHandlers = [
 		async ({ params, request }) => {
 			await delay(200);
 			const url = new URL(request.url);
-			const page = Number.parseInt(url.searchParams.get("page") || "0");
+			const page = Number.parseInt(url.searchParams.get("page") || "0", 10);
 			const pageSize = Number.parseInt(
 				url.searchParams.get("pageSize") || "20",
+				10,
 			);
 
 			const filteredSeries = getSeriesByLibrary(params.libraryId as string);

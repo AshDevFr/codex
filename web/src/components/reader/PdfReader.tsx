@@ -118,9 +118,7 @@ export function PdfReader({
 	const backgroundColor = useReaderStore(
 		(state) => state.settings.backgroundColor,
 	);
-	const pdfSpreadMode = useReaderStore(
-		(state) => state.settings.pdfSpreadMode,
-	);
+	const pdfSpreadMode = useReaderStore((state) => state.settings.pdfSpreadMode);
 	const pdfContinuousScroll = useReaderStore(
 		(state) => state.settings.pdfContinuousScroll,
 	);
@@ -168,7 +166,8 @@ export function PdfReader({
 		const toolbarHeight = 64;
 		const padding = 40;
 		const availableWidth = containerDimensions.width - padding;
-		const availableHeight = containerDimensions.height - toolbarHeight - padding;
+		const availableHeight =
+			containerDimensions.height - toolbarHeight - padding;
 
 		switch (zoomLevel) {
 			case "fit-page":
@@ -320,7 +319,9 @@ export function PdfReader({
 	const setPageContainerRef = useCallback(
 		(element: HTMLDivElement | null) => {
 			// Update the regular ref
-			(pageContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = element;
+			(
+				pageContainerRef as React.MutableRefObject<HTMLDivElement | null>
+			).current = element;
 			// Update touch ref
 			touchRef(element);
 		},
@@ -389,7 +390,10 @@ export function PdfReader({
 	const pdfUrl = useMemo(() => `/api/v1/books/${bookId}/file`, [bookId]);
 
 	// Page dimensions for rendering
-	const pageDimensions = useMemo(() => getPageDimensions(), [getPageDimensions]);
+	const pageDimensions = useMemo(
+		() => getPageDimensions(),
+		[getPageDimensions],
+	);
 
 	// Calculate spread page dimensions (half width for double page modes)
 	const spreadPageDimensions = useMemo(() => {
@@ -398,7 +402,10 @@ export function PdfReader({
 		}
 		// For double modes, halve the width to fit two pages
 		if ("width" in pageDimensions && pageDimensions.width !== undefined) {
-			return { ...pageDimensions, width: Math.floor(pageDimensions.width / 2) - 10 };
+			return {
+				...pageDimensions,
+				width: Math.floor(pageDimensions.width / 2) - 10,
+			};
 		}
 		if ("scale" in pageDimensions && pageDimensions.scale !== undefined) {
 			return { ...pageDimensions, scale: pageDimensions.scale * 0.5 };
@@ -411,7 +418,10 @@ export function PdfReader({
 	}, [pageDimensions, pdfSpreadMode]);
 
 	// Calculate which pages to display based on spread mode
-	const spreadPages = useMemo((): { left: number | null; right: number | null } => {
+	const spreadPages = useMemo((): {
+		left: number | null;
+		right: number | null;
+	} => {
 		if (pdfSpreadMode === "single") {
 			return { left: currentPage, right: null };
 		}
@@ -503,7 +513,9 @@ export function PdfReader({
 	// Loading state
 	if (progressLoading && numPages === 0) {
 		return (
-			<Center style={{ width: "100vw", height: "100vh", backgroundColor: "#000" }}>
+			<Center
+				style={{ width: "100vw", height: "100vh", backgroundColor: "#000" }}
+			>
 				<Loader size="lg" color="gray" />
 			</Center>
 		);
@@ -631,12 +643,24 @@ export function PdfReader({
 								{spreadPages.left && (
 									<Page
 										pageNumber={spreadPages.left}
-										width={pdfSpreadMode === "single" ? pageDimensions.width : spreadPageDimensions.width}
-										height={pdfSpreadMode === "single" ? pageDimensions.height : spreadPageDimensions.height}
+										width={
+											pdfSpreadMode === "single"
+												? pageDimensions.width
+												: spreadPageDimensions.width
+										}
+										height={
+											pdfSpreadMode === "single"
+												? pageDimensions.height
+												: spreadPageDimensions.height
+										}
 										scale={
 											pdfSpreadMode === "single"
-												? ("scale" in pageDimensions ? pageDimensions.scale : undefined)
-												: ("scale" in spreadPageDimensions ? spreadPageDimensions.scale : undefined)
+												? "scale" in pageDimensions
+													? pageDimensions.scale
+													: undefined
+												: "scale" in spreadPageDimensions
+													? spreadPageDimensions.scale
+													: undefined
 										}
 										renderTextLayer={true}
 										renderAnnotationLayer={true}
@@ -672,7 +696,11 @@ export function PdfReader({
 										pageNumber={spreadPages.right}
 										width={spreadPageDimensions.width}
 										height={spreadPageDimensions.height}
-										scale={"scale" in spreadPageDimensions ? spreadPageDimensions.scale : undefined}
+										scale={
+											"scale" in spreadPageDimensions
+												? spreadPageDimensions.scale
+												: undefined
+										}
 										renderTextLayer={true}
 										renderAnnotationLayer={true}
 										loading={

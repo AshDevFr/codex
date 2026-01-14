@@ -36,9 +36,8 @@ export const userIntegrationsApi = {
 	 * Get all user integrations (connected and available)
 	 */
 	getAll: async (): Promise<UserIntegrationsListResponse> => {
-		const response = await api.get<UserIntegrationsListResponse>(
-			"/user/integrations",
-		);
+		const response =
+			await api.get<UserIntegrationsListResponse>("/user/integrations");
 		return response.data;
 	},
 

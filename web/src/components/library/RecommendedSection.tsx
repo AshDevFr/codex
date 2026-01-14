@@ -55,11 +55,11 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 
 	const onDeckBooks = (onDeckResponse?.data ?? []).slice(
 		0,
-		MAX_ITEMS_PER_SECTION
+		MAX_ITEMS_PER_SECTION,
 	);
 	const limitedInProgressBooks = (inProgressBooks?.data ?? []).slice(
 		0,
-		MAX_ITEMS_PER_SECTION
+		MAX_ITEMS_PER_SECTION,
 	);
 
 	const isLoading =
@@ -72,7 +72,7 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 
 	const limitedRecentlyAddedBooks = (recentlyAddedBooks?.data ?? []).slice(
 		0,
-		MAX_ITEMS_PER_SECTION
+		MAX_ITEMS_PER_SECTION,
 	);
 
 	const hasContent =

@@ -20,7 +20,11 @@ export function BoundaryNotification({
 	type,
 }: BoundaryNotificationProps) {
 	return (
-		<Transition mounted={visible && !!message} transition="slide-down" duration={200}>
+		<Transition
+			mounted={visible && !!message}
+			transition="slide-down"
+			duration={200}
+		>
 			{(styles) => (
 				<Box
 					style={{
@@ -39,15 +43,11 @@ export function BoundaryNotification({
 						maxWidth: "90%",
 					}}
 				>
-					{type === "at-start" && (
-						<IconChevronLeft size={18} color="white" />
-					)}
+					{type === "at-start" && <IconChevronLeft size={18} color="white" />}
 					<Text size="sm" c="white" style={{ whiteSpace: "nowrap" }}>
 						{message}
 					</Text>
-					{type === "at-end" && (
-						<IconChevronRight size={18} color="white" />
-					)}
+					{type === "at-end" && <IconChevronRight size={18} color="white" />}
 				</Box>
 			)}
 		</Transition>

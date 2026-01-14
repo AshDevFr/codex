@@ -64,7 +64,8 @@ export function SeriesDetail() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const [summaryOpened, { toggle: toggleSummary }] = useDisclosure(false);
-	const [editModalOpened, { open: openEditModal, close: closeEditModal }] = useDisclosure(false);
+	const [editModalOpened, { open: openEditModal, close: closeEditModal }] =
+		useDisclosure(false);
 
 	// Fetch series basic info
 	const {
@@ -285,13 +286,19 @@ export function SeriesDetail() {
 										</Title>
 										{metadata?.publisher && (
 											<Text size="sm" c="dimmed">
-												in {(series as { libraryName?: string }).libraryName || "Library"}
+												in{" "}
+												{(series as { libraryName?: string }).libraryName ||
+													"Library"}
 											</Text>
 										)}
 									</Group>
 									<Group gap="xs" mt={4}>
 										{status && (
-											<Badge size="sm" variant="filled" color={status === "Ended" ? "green" : "blue"}>
+											<Badge
+												size="sm"
+												variant="filled"
+												color={status === "Ended" ? "green" : "blue"}
+											>
 												{status}
 											</Badge>
 										)}
@@ -367,9 +374,10 @@ export function SeriesDetail() {
 							</Text>
 
 							{/* Alternate titles inline */}
-							{metadata?.alternateTitles && metadata.alternateTitles.length > 0 && (
-								<AlternateTitles titles={metadata.alternateTitles} compact />
-							)}
+							{metadata?.alternateTitles &&
+								metadata.alternateTitles.length > 0 && (
+									<AlternateTitles titles={metadata.alternateTitles} compact />
+								)}
 
 							{/* Download button */}
 							<Group gap="sm" mt="xs">
@@ -395,16 +403,26 @@ export function SeriesDetail() {
 										{metadata.summary}
 									</Text>
 									{/* Only show READ MORE if summary is long enough (roughly > 150 chars or has newlines) */}
-									{(metadata.summary.length > 150 || metadata.summary.includes("\n")) && (
+									{(metadata.summary.length > 150 ||
+										metadata.summary.includes("\n")) && (
 										<Text
 											size="sm"
 											c="dimmed"
-											style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+											style={{
+												cursor: "pointer",
+												display: "inline-flex",
+												alignItems: "center",
+												gap: 4,
+											}}
 											onClick={toggleSummary}
 											mt={4}
 										>
 											{summaryOpened ? "READ LESS" : "READ MORE"}
-											{summaryOpened ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />}
+											{summaryOpened ? (
+												<IconChevronUp size={14} />
+											) : (
+												<IconChevronDown size={14} />
+											)}
 										</Text>
 									)}
 								</Box>
@@ -418,38 +436,56 @@ export function SeriesDetail() {
 					{/* Publisher */}
 					{metadata?.publisher && (
 						<Group gap="md">
-							<Text size="sm" c="dimmed" w={100}>PUBLISHER</Text>
-							<Badge variant="outline" size="sm">{metadata.publisher}</Badge>
+							<Text size="sm" c="dimmed" w={100}>
+								PUBLISHER
+							</Text>
+							<Badge variant="outline" size="sm">
+								{metadata.publisher}
+							</Badge>
 						</Group>
 					)}
 
 					{/* Genres */}
 					{metadata && (metadata.genres?.length ?? 0) > 0 && (
 						<Group gap="md" align="flex-start">
-							<Text size="sm" c="dimmed" w={100}>GENRE</Text>
-							<GenreTagChips genres={metadata.genres} libraryId={series.libraryId} />
+							<Text size="sm" c="dimmed" w={100}>
+								GENRE
+							</Text>
+							<GenreTagChips
+								genres={metadata.genres}
+								libraryId={series.libraryId}
+							/>
 						</Group>
 					)}
 
 					{/* Tags */}
 					{metadata && (metadata.tags?.length ?? 0) > 0 && (
 						<Group gap="md" align="flex-start">
-							<Text size="sm" c="dimmed" w={100}>TAGS</Text>
-							<GenreTagChips tags={metadata.tags} libraryId={series.libraryId} />
+							<Text size="sm" c="dimmed" w={100}>
+								TAGS
+							</Text>
+							<GenreTagChips
+								tags={metadata.tags}
+								libraryId={series.libraryId}
+							/>
 						</Group>
 					)}
 
 					{/* External Links */}
 					{metadata?.externalLinks && metadata.externalLinks.length > 0 && (
 						<Group gap="md" align="flex-start">
-							<Text size="sm" c="dimmed" w={100}>LINKS</Text>
+							<Text size="sm" c="dimmed" w={100}>
+								LINKS
+							</Text>
 							<ExternalLinks links={metadata.externalLinks} />
 						</Group>
 					)}
 
 					{/* User Rating - compact */}
 					<Group gap="md" align="center">
-						<Text size="sm" c="dimmed" w={100}>YOUR RATING</Text>
+						<Text size="sm" c="dimmed" w={100}>
+							YOUR RATING
+						</Text>
 						<SeriesRating seriesId={series.id} />
 					</Group>
 				</Stack>

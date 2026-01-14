@@ -1,6 +1,6 @@
+import { describe, expect, it, vi } from "vitest";
 import { createBook, createReadProgress } from "@/mocks/data/factories";
 import { renderWithProviders, screen, userEvent } from "@/test/utils";
-import { describe, expect, it, vi } from "vitest";
 import { MediaCard } from "./MediaCard";
 
 const mockNavigate = vi.fn();
@@ -112,7 +112,9 @@ describe("MediaCard", () => {
 			renderWithProviders(<MediaCard type="book" data={book} />);
 
 			// Read button should not be present for deleted books
-			expect(screen.queryByRole("button", { name: "Read book" })).not.toBeInTheDocument();
+			expect(
+				screen.queryByRole("button", { name: "Read book" }),
+			).not.toBeInTheDocument();
 		});
 
 		it("should navigate to reader on read button click", async () => {
@@ -129,8 +131,15 @@ describe("MediaCard", () => {
 
 		it("should navigate to reader with current page when book has progress", async () => {
 			const user = userEvent.setup();
-			const progress = createReadProgress({ current_page: 15, completed: false });
-			const book = createBook({ id: "book-456", deleted: false, readProgress: progress });
+			const progress = createReadProgress({
+				current_page: 15,
+				completed: false,
+			});
+			const book = createBook({
+				id: "book-456",
+				deleted: false,
+				readProgress: progress,
+			});
 
 			renderWithProviders(<MediaCard type="book" data={book} />);
 
@@ -141,7 +150,10 @@ describe("MediaCard", () => {
 		});
 
 		it("should display progress bar for books with in-progress reading", () => {
-			const progress = createReadProgress({ current_page: 10, completed: false });
+			const progress = createReadProgress({
+				current_page: 10,
+				completed: false,
+			});
 			const book = createBook({ pageCount: 50, readProgress: progress });
 
 			renderWithProviders(<MediaCard type="book" data={book} />);
@@ -153,7 +165,10 @@ describe("MediaCard", () => {
 		});
 
 		it("should not display progress bar for completed books", () => {
-			const progress = createReadProgress({ current_page: 50, completed: true });
+			const progress = createReadProgress({
+				current_page: 50,
+				completed: true,
+			});
 			const book = createBook({ pageCount: 50, readProgress: progress });
 
 			renderWithProviders(<MediaCard type="book" data={book} />);

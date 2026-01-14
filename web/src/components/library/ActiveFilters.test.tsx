@@ -1,12 +1,18 @@
-import { describe, expect, it, vi } from "vitest";
+import { MantineProvider } from "@mantine/core";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { MantineProvider } from "@mantine/core";
+import { describe, expect, it } from "vitest";
 import { ActiveFilters } from "./ActiveFilters";
 
 // Wrapper component that provides required context
-function TestWrapper({ children, initialRoute = "/" }: { children: React.ReactNode; initialRoute?: string }) {
+function TestWrapper({
+	children,
+	initialRoute = "/",
+}: {
+	children: React.ReactNode;
+	initialRoute?: string;
+}) {
 	return (
 		<MemoryRouter initialEntries={[initialRoute]}>
 			<MantineProvider>{children}</MantineProvider>
@@ -100,7 +106,9 @@ describe("ActiveFilters", () => {
 			</TestWrapper>,
 		);
 
-		const removeButton = screen.getByRole("button", { name: /Remove Action filter/i });
+		const removeButton = screen.getByRole("button", {
+			name: /Remove Action filter/i,
+		});
 		expect(removeButton).toBeInTheDocument();
 	});
 
@@ -118,7 +126,9 @@ describe("ActiveFilters", () => {
 		expect(screen.getByText(/Genre: Comedy/)).toBeInTheDocument();
 
 		// Click remove on Action
-		const removeButton = screen.getByRole("button", { name: /Remove Action filter/i });
+		const removeButton = screen.getByRole("button", {
+			name: /Remove Action filter/i,
+		});
 		await user.click(removeButton);
 
 		// After clicking, the URL would update and component would re-render

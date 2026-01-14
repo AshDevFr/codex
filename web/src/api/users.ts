@@ -5,7 +5,8 @@ import { api } from "./client";
 export type UserDto = components["schemas"]["UserDto"];
 export type CreateUserRequest = components["schemas"]["CreateUserRequest"];
 export type UpdateUserRequest = components["schemas"]["UpdateUserRequest"];
-export type PaginatedUsersResponse = components["schemas"]["PaginatedResponse_UserDto"];
+export type PaginatedUsersResponse =
+	components["schemas"]["PaginatedResponse_UserDto"];
 
 export const usersApi = {
 	/**
@@ -35,7 +36,10 @@ export const usersApi = {
 	/**
 	 * Update a user (admin only)
 	 */
-	update: async (userId: string, request: UpdateUserRequest): Promise<UserDto> => {
+	update: async (
+		userId: string,
+		request: UpdateUserRequest,
+	): Promise<UserDto> => {
 		const response = await api.patch<UserDto>(`/users/${userId}`, request);
 		return response.data;
 	},

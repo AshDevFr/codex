@@ -57,9 +57,15 @@ const mockMetadata = {
 describe("SeriesMetadataEditModal", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		(seriesMetadataApi.getFullMetadata as ReturnType<typeof vi.fn>).mockResolvedValue(mockMetadata);
-		(seriesMetadataApi.patchMetadata as ReturnType<typeof vi.fn>).mockResolvedValue({});
-		(seriesMetadataApi.updateLocks as ReturnType<typeof vi.fn>).mockResolvedValue({});
+		(
+			seriesMetadataApi.getFullMetadata as ReturnType<typeof vi.fn>
+		).mockResolvedValue(mockMetadata);
+		(
+			seriesMetadataApi.patchMetadata as ReturnType<typeof vi.fn>
+		).mockResolvedValue({});
+		(
+			seriesMetadataApi.updateLocks as ReturnType<typeof vi.fn>
+		).mockResolvedValue({});
 	});
 
 	it("renders modal with title", async () => {
@@ -99,7 +105,9 @@ describe("SeriesMetadataEditModal", () => {
 		);
 
 		await waitFor(() => {
-			expect(seriesMetadataApi.getFullMetadata).toHaveBeenCalledWith("test-series-id");
+			expect(seriesMetadataApi.getFullMetadata).toHaveBeenCalledWith(
+				"test-series-id",
+			);
 		});
 
 		// Wait for form to load

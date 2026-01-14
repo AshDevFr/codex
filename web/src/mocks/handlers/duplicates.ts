@@ -2,7 +2,7 @@
  * MSW handlers for duplicates API endpoints
  */
 
-import { http, HttpResponse, delay } from "msw";
+import { delay, HttpResponse, http } from "msw";
 import { createDuplicateGroup, createList } from "../data/factories";
 
 // Generate mock duplicate groups
@@ -13,16 +13,16 @@ export const duplicatesHandlers = [
 	http.get("/api/v1/duplicates", async ({ request }) => {
 		await delay(100);
 		const url = new URL(request.url);
-		const libraryId = url.searchParams.get("library_id");
+		const _libraryId = url.searchParams.get("library_id");
 
-		let filteredDuplicates = mockDuplicates;
+		const filteredDuplicates = mockDuplicates;
 
 		// In a real implementation, we'd filter by library_id
 		// For now, just return all duplicates
 
 		const totalDuplicateBooks = filteredDuplicates.reduce(
 			(sum, group) => sum + group.duplicate_count,
-			0
+			0,
 		);
 
 		return HttpResponse.json({

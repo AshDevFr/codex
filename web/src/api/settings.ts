@@ -4,7 +4,8 @@ import { api } from "./client";
 // Re-export generated types for convenience
 export type SettingDto = components["schemas"]["SettingDto"];
 export type SettingHistoryDto = components["schemas"]["SettingHistoryDto"];
-export type UpdateSettingRequest = components["schemas"]["UpdateSettingRequest"];
+export type UpdateSettingRequest =
+	components["schemas"]["UpdateSettingRequest"];
 export type BulkUpdateSettingsRequest =
 	components["schemas"]["BulkUpdateSettingsRequest"];
 export type BulkUpdateSettingsResponse =

@@ -31,7 +31,11 @@ interface MediaCardProps {
 	hideSeriesName?: boolean;
 }
 
-export function MediaCard({ type, data, hideSeriesName = false }: MediaCardProps) {
+export function MediaCard({
+	type,
+	data,
+	hideSeriesName = false,
+}: MediaCardProps) {
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 
@@ -86,7 +90,7 @@ export function MediaCard({ type, data, hideSeriesName = false }: MediaCardProps
 
 	// Calculate progress percentage for books
 	const progressPercentage =
-		book && book.readProgress && book.pageCount
+		book?.readProgress && book.pageCount
 			? (book.readProgress.current_page / book.pageCount) * 100
 			: 0;
 
@@ -380,7 +384,12 @@ export function MediaCard({ type, data, hideSeriesName = false }: MediaCardProps
 					>
 						<Menu position="top-end" shadow="md" withinPortal>
 							<Menu.Target>
-								<ActionIcon variant="filled" color="dark" size="sm" style={{ opacity: 0.8 }}>
+								<ActionIcon
+									variant="filled"
+									color="dark"
+									size="sm"
+									style={{ opacity: 0.8 }}
+								>
 									<IconDotsVertical size={16} />
 								</ActionIcon>
 							</Menu.Target>
@@ -397,7 +406,9 @@ export function MediaCard({ type, data, hideSeriesName = false }: MediaCardProps
 												}}
 												disabled={bookMarkAsReadMutation.isPending}
 											>
-												{bookMarkAsReadMutation.isPending ? "Marking..." : "Mark as Read"}
+												{bookMarkAsReadMutation.isPending
+													? "Marking..."
+													: "Mark as Read"}
 											</Menu.Item>
 										)}
 										{/* Show Mark as Unread if book has progress */}
@@ -410,7 +421,9 @@ export function MediaCard({ type, data, hideSeriesName = false }: MediaCardProps
 												}}
 												disabled={bookMarkAsUnreadMutation.isPending}
 											>
-												{bookMarkAsUnreadMutation.isPending ? "Marking..." : "Mark as Unread"}
+												{bookMarkAsUnreadMutation.isPending
+													? "Marking..."
+													: "Mark as Unread"}
 											</Menu.Item>
 										)}
 										<Menu.Item
@@ -421,7 +434,9 @@ export function MediaCard({ type, data, hideSeriesName = false }: MediaCardProps
 											}}
 											disabled={bookAnalyzeMutation.isPending}
 										>
-											{bookAnalyzeMutation.isPending ? "Analyzing..." : "Force Analyze"}
+											{bookAnalyzeMutation.isPending
+												? "Analyzing..."
+												: "Force Analyze"}
 										</Menu.Item>
 									</>
 								) : (
@@ -436,22 +451,27 @@ export function MediaCard({ type, data, hideSeriesName = false }: MediaCardProps
 												}}
 												disabled={seriesMarkAsReadMutation.isPending}
 											>
-												{seriesMarkAsReadMutation.isPending ? "Marking..." : "Mark as Read"}
+												{seriesMarkAsReadMutation.isPending
+													? "Marking..."
+													: "Mark as Read"}
 											</Menu.Item>
 										)}
 										{/* Show Mark as Unread if series has any read books */}
-										{series && (series.bookCount ?? 0) > (series.unreadCount ?? 0) && (
-											<Menu.Item
-												leftSection={<IconBookOff size={14} />}
-												onClick={(e: React.MouseEvent) => {
-													e.stopPropagation();
-													seriesMarkAsUnreadMutation.mutate();
-												}}
-												disabled={seriesMarkAsUnreadMutation.isPending}
-											>
-												{seriesMarkAsUnreadMutation.isPending ? "Marking..." : "Mark as Unread"}
-											</Menu.Item>
-										)}
+										{series &&
+											(series.bookCount ?? 0) > (series.unreadCount ?? 0) && (
+												<Menu.Item
+													leftSection={<IconBookOff size={14} />}
+													onClick={(e: React.MouseEvent) => {
+														e.stopPropagation();
+														seriesMarkAsUnreadMutation.mutate();
+													}}
+													disabled={seriesMarkAsUnreadMutation.isPending}
+												>
+													{seriesMarkAsUnreadMutation.isPending
+														? "Marking..."
+														: "Mark as Unread"}
+												</Menu.Item>
+											)}
 										<Menu.Item
 											leftSection={<IconAnalyze size={14} />}
 											onClick={(e: React.MouseEvent) => {
@@ -460,7 +480,9 @@ export function MediaCard({ type, data, hideSeriesName = false }: MediaCardProps
 											}}
 											disabled={seriesAnalyzeMutation.isPending}
 										>
-											{seriesAnalyzeMutation.isPending ? "Analyzing..." : "Force Analyze All"}
+											{seriesAnalyzeMutation.isPending
+												? "Analyzing..."
+												: "Force Analyze All"}
 										</Menu.Item>
 										<Menu.Item
 											leftSection={<IconAnalyze size={14} />}
@@ -513,50 +535,76 @@ export function MediaCard({ type, data, hideSeriesName = false }: MediaCardProps
 						</div>
 					)}
 					{/* Progress bar - shows at bottom of cover for books with progress */}
-					{type === "book" && book?.readProgress && !book.readProgress.completed && progressPercentage > 0 && (
-						<Progress
-							value={progressPercentage}
-							size="sm"
-							color="red"
-							style={{
-								position: "absolute",
-								bottom: 0,
-								left: 0,
-								right: 0,
-								zIndex: 4,
-								borderRadius: 0,
-							}}
-						/>
-					)}
+					{type === "book" &&
+						book?.readProgress &&
+						!book.readProgress.completed &&
+						progressPercentage > 0 && (
+							<Progress
+								value={progressPercentage}
+								size="sm"
+								color="red"
+								style={{
+									position: "absolute",
+									bottom: 0,
+									left: 0,
+									right: 0,
+									zIndex: 4,
+									borderRadius: 0,
+								}}
+							/>
+						)}
 				</div>
 				{/* Card Content - Fixed height section (Komga: 94px = 5.875rem at 16px base) */}
-				<Stack gap={4} p="sm" style={{ flexShrink: 0, height: "5.875rem", minHeight: "5.875rem", overflow: "visible" }}>
-					{!hideSeriesName && type === "book" && book?.seriesName && book.seriesName.trim() !== "" && book.seriesName.trim() !== "-" && (
-						<Tooltip label={book.seriesName} openDelay={500} multiline maw={300}>
-							<Text
-								fw={500}
-								lineClamp={1}
-								c="dimmed"
-								size="xs"
-								onClick={(e: React.MouseEvent) => {
-									e.stopPropagation();
-									navigate(`/series/${book.seriesId}`);
-								}}
-								style={{
-									overflow: "hidden",
-									textOverflow: "ellipsis",
-									whiteSpace: "nowrap",
-									display: "block",
-									cursor: "pointer",
-								}}
-								className="hover-underline"
+				<Stack
+					gap={4}
+					p="sm"
+					style={{
+						flexShrink: 0,
+						height: "5.875rem",
+						minHeight: "5.875rem",
+						overflow: "visible",
+					}}
+				>
+					{!hideSeriesName &&
+						type === "book" &&
+						book?.seriesName &&
+						book.seriesName.trim() !== "" &&
+						book.seriesName.trim() !== "-" && (
+							<Tooltip
+								label={book.seriesName}
+								openDelay={500}
+								multiline
+								maw={300}
 							>
-								{book.seriesName}
-							</Text>
-						</Tooltip>
-					)}
+								<Text
+									fw={500}
+									lineClamp={1}
+									c="dimmed"
+									size="xs"
+									onClick={(e: React.MouseEvent) => {
+										e.stopPropagation();
+										navigate(`/series/${book.seriesId}`);
+									}}
+									style={{
+										overflow: "hidden",
+										textOverflow: "ellipsis",
+										whiteSpace: "nowrap",
+										display: "block",
+										cursor: "pointer",
+									}}
+									className="hover-underline"
+								>
+									{book.seriesName}
+								</Text>
+							</Tooltip>
+						)}
 					<Tooltip label={title} openDelay={500} multiline maw={300}>
-						<Text fw={600} lineClamp={hideSeriesName ? 2 : 1} size="sm" style={{ overflow: "hidden" }}>
+						<Text
+							fw={600}
+							lineClamp={hideSeriesName ? 2 : 1}
+							size="sm"
+							style={{ overflow: "hidden" }}
+						>
 							{title}
 						</Text>
 					</Tooltip>

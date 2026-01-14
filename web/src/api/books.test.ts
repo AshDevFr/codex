@@ -58,7 +58,13 @@ describe("booksApi", () => {
 		});
 
 		it("should include filter parameters", async () => {
-			const mockResponse = { items: [], total: 0, page: 1, pageSize: 10, totalPages: 0 };
+			const mockResponse = {
+				items: [],
+				total: 0,
+				page: 1,
+				pageSize: 10,
+				totalPages: 0,
+			};
 
 			vi.mocked(api.get).mockResolvedValueOnce({ data: mockResponse });
 
@@ -206,7 +212,11 @@ describe("booksApi", () => {
 		it("should fetch in-progress books for a library", async () => {
 			const mockResponse = {
 				data: [
-					{ id: "book-1", title: "Reading Book 1", readProgress: { currentPage: 50, totalPages: 200 } },
+					{
+						id: "book-1",
+						title: "Reading Book 1",
+						readProgress: { currentPage: 50, totalPages: 200 },
+					},
 				],
 				total: 1,
 			};
@@ -215,12 +225,16 @@ describe("booksApi", () => {
 
 			const result = await booksApi.getInProgress("library-123");
 
-			expect(api.get).toHaveBeenCalledWith("/books/in-progress?library_id=library-123");
+			expect(api.get).toHaveBeenCalledWith(
+				"/books/in-progress?library_id=library-123",
+			);
 			expect(result).toEqual(mockResponse);
 		});
 
 		it("should fetch all in-progress books when libraryId is 'all'", async () => {
-			vi.mocked(api.get).mockResolvedValueOnce({ data: { data: [], total: 0 } });
+			vi.mocked(api.get).mockResolvedValueOnce({
+				data: { data: [], total: 0 },
+			});
 
 			await booksApi.getInProgress("all");
 
@@ -239,7 +253,9 @@ describe("booksApi", () => {
 
 			const result = await booksApi.getOnDeck("library-123");
 
-			expect(api.get).toHaveBeenCalledWith("/books/on-deck?library_id=library-123");
+			expect(api.get).toHaveBeenCalledWith(
+				"/books/on-deck?library_id=library-123",
+			);
 			expect(result).toEqual(mockResponse);
 		});
 	});
@@ -255,16 +271,22 @@ describe("booksApi", () => {
 
 			const result = await booksApi.getRecentlyAdded("library-123");
 
-			expect(api.get).toHaveBeenCalledWith("/books/recently-added?library_id=library-123&page_size=50");
+			expect(api.get).toHaveBeenCalledWith(
+				"/books/recently-added?library_id=library-123&page_size=50",
+			);
 			expect(result).toEqual(mockResponse);
 		});
 
 		it("should fetch recently added books with custom limit", async () => {
-			vi.mocked(api.get).mockResolvedValueOnce({ data: { data: [], total: 0 } });
+			vi.mocked(api.get).mockResolvedValueOnce({
+				data: { data: [], total: 0 },
+			});
 
 			await booksApi.getRecentlyAdded("all", 10);
 
-			expect(api.get).toHaveBeenCalledWith("/books/recently-added?page_size=10");
+			expect(api.get).toHaveBeenCalledWith(
+				"/books/recently-added?page_size=10",
+			);
 		});
 	});
 
@@ -276,7 +298,9 @@ describe("booksApi", () => {
 
 			const result = await booksApi.getRecentlyRead("library-123", 20);
 
-			expect(api.get).toHaveBeenCalledWith("/books/recently-read?library_id=library-123&limit=20");
+			expect(api.get).toHaveBeenCalledWith(
+				"/books/recently-read?library_id=library-123&limit=20",
+			);
 			expect(result).toEqual(mockBooks);
 		});
 	});
@@ -302,7 +326,9 @@ describe("booksApi", () => {
 
 			const result = await booksApi.analyzeUnanalyzed("book-123");
 
-			expect(api.post).toHaveBeenCalledWith("/books/book-123/analyze-unanalyzed");
+			expect(api.post).toHaveBeenCalledWith(
+				"/books/book-123/analyze-unanalyzed",
+			);
 			expect(result).toEqual({ message: "Analysis queued" });
 		});
 	});

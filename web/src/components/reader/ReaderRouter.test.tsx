@@ -1,11 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { renderWithProviders, screen, waitFor } from "@/test/utils";
 import { useReaderStore } from "@/store/readerStore";
+import { renderWithProviders, screen } from "@/test/utils";
 
 // Mock the reader components
 vi.mock("./ComicReader", () => ({
-	ComicReader: ({ bookId, seriesId, format }: { bookId: string; seriesId: string | null; format: string }) => (
-		<div data-testid="comic-reader" data-book-id={bookId} data-series-id={seriesId ?? ""} data-format={format}>
+	ComicReader: ({
+		bookId,
+		seriesId,
+		format,
+	}: {
+		bookId: string;
+		seriesId: string | null;
+		format: string;
+	}) => (
+		<div
+			data-testid="comic-reader"
+			data-book-id={bookId}
+			data-series-id={seriesId ?? ""}
+			data-format={format}
+		>
 			Comic Reader
 		</div>
 	),
@@ -115,7 +128,11 @@ describe("ReaderRouter", () => {
 
 			const largeFileSize = 150 * 1024 * 1024; // 150MB
 			renderWithProviders(
-				<ReaderRouter {...defaultProps} format="PDF" fileSize={largeFileSize} />,
+				<ReaderRouter
+					{...defaultProps}
+					format="PDF"
+					fileSize={largeFileSize}
+				/>,
 			);
 
 			expect(screen.getByTestId("comic-reader")).toBeInTheDocument();
@@ -126,7 +143,11 @@ describe("ReaderRouter", () => {
 
 			const smallFileSize = 50 * 1024 * 1024; // 50MB
 			renderWithProviders(
-				<ReaderRouter {...defaultProps} format="PDF" fileSize={smallFileSize} />,
+				<ReaderRouter
+					{...defaultProps}
+					format="PDF"
+					fileSize={smallFileSize}
+				/>,
 			);
 
 			expect(screen.getByTestId("pdf-reader")).toBeInTheDocument();
@@ -157,9 +178,7 @@ describe("ReaderRouter", () => {
 		});
 
 		it("should handle null seriesId", () => {
-			renderWithProviders(
-				<ReaderRouter {...defaultProps} seriesId={null} />,
-			);
+			renderWithProviders(<ReaderRouter {...defaultProps} seriesId={null} />);
 
 			expect(screen.getByTestId("comic-reader")).toHaveAttribute(
 				"data-series-id",

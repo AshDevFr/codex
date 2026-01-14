@@ -15,11 +15,11 @@ import {
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { IconAdjustments, IconX } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { FilterGroup } from "./FilterGroup";
-import { useBookFilterState } from "@/hooks/useBookFilterState";
 import { genresApi } from "@/api/genres";
 import { tagsApi } from "@/api/tags";
+import { useBookFilterState } from "@/hooks/useBookFilterState";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
+import { FilterGroup } from "./FilterGroup";
 import classes from "./FilterPanel.module.css";
 
 // Read status options (user's reading progress)
@@ -107,7 +107,12 @@ export function BookFilterPanel() {
 			>
 				<IconAdjustments size={20} />
 				{filterState.hasActiveFilters && (
-					<Badge size="xs" variant="filled" color="red" className={classes.filterBadge}>
+					<Badge
+						size="xs"
+						variant="filled"
+						color="red"
+						className={classes.filterBadge}
+					>
 						{filterState.activeFilterCount}
 					</Badge>
 				)}
@@ -175,7 +180,11 @@ export function BookFilterPanel() {
 										checked={filterState.filters.hasError === "include"}
 										indeterminate={filterState.filters.hasError === "neutral"}
 										onChange={handleHasErrorToggle}
-										color={filterState.filters.hasError === "include" ? "red" : "blue"}
+										color={
+											filterState.filters.hasError === "include"
+												? "red"
+												: "blue"
+										}
 										label={
 											filterState.filters.hasError === "neutral"
 												? "All"
@@ -192,7 +201,10 @@ export function BookFilterPanel() {
 									<Switch
 										checked={showDeletedBooks}
 										onChange={(e) =>
-											setPreference("library.show_deleted_books", e.currentTarget.checked)
+											setPreference(
+												"library.show_deleted_books",
+												e.currentTarget.checked,
+											)
 										}
 										color="red"
 									/>
@@ -235,8 +247,8 @@ export function BookFilterPanel() {
 								{/* Empty state hint when no metadata */}
 								{!hasMetadataFilters && (
 									<Text size="sm" c="dimmed" fs="italic" mt="md">
-										Genre and tag filters will appear here once your library has metadata. Books
-										inherit genres and tags from their series.
+										Genre and tag filters will appear here once your library has
+										metadata. Books inherit genres and tags from their series.
 									</Text>
 								)}
 							</Stack>

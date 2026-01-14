@@ -52,7 +52,9 @@ export function useSeriesNavigation(
 	// Store state
 	const adjacentBooks = useReaderStore((state) => state.adjacentBooks);
 	const boundaryState = useReaderStore((state) => state.boundaryState);
-	const autoAdvance = useReaderStore((state) => state.settings.autoAdvanceToNextBook);
+	const autoAdvance = useReaderStore(
+		(state) => state.settings.autoAdvanceToNextBook,
+	);
 	const isFirstPage = useReaderStore(selectIsFirstPage);
 	const isLastPage = useReaderStore(selectIsLastPage);
 

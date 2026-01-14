@@ -1,5 +1,5 @@
-import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import { describe, expect, it, vi } from "vitest";
+import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import { LibraryToolbar, type SortOption } from "./LibraryToolbar";
 
 // Series sort options with new interface
@@ -24,7 +24,9 @@ describe("LibraryToolbar", () => {
 	];
 
 	it("should render tabs without recommended when showRecommended is false", () => {
-		renderWithProviders(<LibraryToolbar {...defaultProps} showRecommended={false} />);
+		renderWithProviders(
+			<LibraryToolbar {...defaultProps} showRecommended={false} />,
+		);
 
 		expect(screen.queryByText("Recommended")).not.toBeInTheDocument();
 		expect(screen.getByText("Series")).toBeInTheDocument();
@@ -32,7 +34,9 @@ describe("LibraryToolbar", () => {
 	});
 
 	it("should render tabs with recommended when showRecommended is true", () => {
-		renderWithProviders(<LibraryToolbar {...defaultProps} showRecommended={true} />);
+		renderWithProviders(
+			<LibraryToolbar {...defaultProps} showRecommended={true} />,
+		);
 
 		expect(screen.getByText("Recommended")).toBeInTheDocument();
 		expect(screen.getByText("Series")).toBeInTheDocument();
@@ -66,7 +70,9 @@ describe("LibraryToolbar", () => {
 		);
 
 		expect(screen.queryByLabelText("Sort options")).not.toBeInTheDocument();
-		expect(screen.queryByLabelText("Page size options")).not.toBeInTheDocument();
+		expect(
+			screen.queryByLabelText("Page size options"),
+		).not.toBeInTheDocument();
 	});
 
 	it("should show controls on series tab", () => {

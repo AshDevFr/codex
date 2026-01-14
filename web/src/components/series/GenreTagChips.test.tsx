@@ -1,5 +1,5 @@
-import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import { describe, expect, it, vi } from "vitest";
+import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import { GenreTagChips } from "./GenreTagChips";
 
 // Mock useNavigate
@@ -73,7 +73,11 @@ describe("GenreTagChips", () => {
 		const user = userEvent.setup();
 
 		renderWithProviders(
-			<GenreTagChips genres={mockGenres} libraryId="lib-123" clickable={true} />,
+			<GenreTagChips
+				genres={mockGenres}
+				libraryId="lib-123"
+				clickable={true}
+			/>,
 		);
 
 		await user.click(screen.getByText("Action"));

@@ -1,4 +1,10 @@
-import type { Book, BookCondition, BookListRequest, PaginatedResponse, components } from "@/types";
+import type {
+	Book,
+	BookCondition,
+	BookListRequest,
+	components,
+	PaginatedResponse,
+} from "@/types";
 import { api } from "./client";
 
 export type BookDetailResponse = components["schemas"]["BookDetailResponse"];
@@ -57,8 +63,7 @@ export const booksApi = {
 		}
 
 		if (filters?.page) params.set("page", filters.page.toString());
-		if (filters?.pageSize)
-			params.set("page_size", filters.pageSize.toString());
+		if (filters?.pageSize) params.set("page_size", filters.pageSize.toString());
 		if (filters?.sort) params.set("sort", filters.sort);
 		if (filters?.series_id) params.set("series_id", filters.series_id);
 		if (filters?.genre) params.set("genre", filters.genre);
@@ -84,7 +89,9 @@ export const booksApi = {
 	},
 
 	// Get books with reading progress (incomplete reads)
-	getInProgress: async (libraryId: string): Promise<PaginatedResponse<Book>> => {
+	getInProgress: async (
+		libraryId: string,
+	): Promise<PaginatedResponse<Book>> => {
 		const params = new URLSearchParams();
 		if (libraryId !== "all") {
 			params.set("library_id", libraryId);
@@ -229,13 +236,18 @@ export const booksApi = {
 			includeDeleted: request.includeDeleted,
 		};
 
-		const response = await api.post<PaginatedResponse<Book>>("/books/list", body);
+		const response = await api.post<PaginatedResponse<Book>>(
+			"/books/list",
+			body,
+		);
 		return response.data;
 	},
 
 	// Get book metadata locks
 	getMetadataLocks: async (bookId: string): Promise<BookMetadataLocks> => {
-		const response = await api.get<BookMetadataLocks>(`/books/${bookId}/metadata/locks`);
+		const response = await api.get<BookMetadataLocks>(
+			`/books/${bookId}/metadata/locks`,
+		);
 		return response.data;
 	},
 
@@ -244,7 +256,10 @@ export const booksApi = {
 		bookId: string,
 		locks: UpdateBookMetadataLocksRequest,
 	): Promise<BookMetadataLocks> => {
-		const response = await api.put<BookMetadataLocks>(`/books/${bookId}/metadata/locks`, locks);
+		const response = await api.put<BookMetadataLocks>(
+			`/books/${bookId}/metadata/locks`,
+			locks,
+		);
 		return response.data;
 	},
 
@@ -253,10 +268,9 @@ export const booksApi = {
 		bookId: string,
 		metadata: components["schemas"]["PatchBookMetadataRequest"],
 	): Promise<components["schemas"]["BookMetadataResponse"]> => {
-		const response = await api.patch<components["schemas"]["BookMetadataResponse"]>(
-			`/books/${bookId}/metadata`,
-			metadata,
-		);
+		const response = await api.patch<
+			components["schemas"]["BookMetadataResponse"]
+		>(`/books/${bookId}/metadata`, metadata);
 		return response.data;
 	},
 
@@ -283,7 +297,12 @@ export const booksApi = {
 	patch: async (
 		bookId: string,
 		data: { title?: string | null; number?: number | null },
-	): Promise<{ id: string; title: string | null; number: number | null; updatedAt: string }> => {
+	): Promise<{
+		id: string;
+		title: string | null;
+		number: number | null;
+		updatedAt: string;
+	}> => {
 		const response = await api.patch<{
 			id: string;
 			title: string | null;

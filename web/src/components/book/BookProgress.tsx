@@ -7,7 +7,11 @@ interface BookProgressProps {
 	fileFormat?: string;
 }
 
-export function BookProgress({ progress, pageCount, fileFormat }: BookProgressProps) {
+export function BookProgress({
+	progress,
+	pageCount,
+	fileFormat,
+}: BookProgressProps) {
 	if (!progress) {
 		return (
 			<Text size="sm" c="dimmed">

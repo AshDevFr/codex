@@ -78,10 +78,16 @@ const mockLocks = {
 describe("BookMetadataEditModal", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		(booksApi.getDetail as ReturnType<typeof vi.fn>).mockResolvedValue(mockBookDetail);
-		(booksApi.getMetadataLocks as ReturnType<typeof vi.fn>).mockResolvedValue(mockLocks);
+		(booksApi.getDetail as ReturnType<typeof vi.fn>).mockResolvedValue(
+			mockBookDetail,
+		);
+		(booksApi.getMetadataLocks as ReturnType<typeof vi.fn>).mockResolvedValue(
+			mockLocks,
+		);
 		(booksApi.patchMetadata as ReturnType<typeof vi.fn>).mockResolvedValue({});
-		(booksApi.updateMetadataLocks as ReturnType<typeof vi.fn>).mockResolvedValue({});
+		(
+			booksApi.updateMetadataLocks as ReturnType<typeof vi.fn>
+		).mockResolvedValue({});
 	});
 
 	it("renders modal with title", async () => {

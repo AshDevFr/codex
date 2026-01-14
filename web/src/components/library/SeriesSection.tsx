@@ -17,7 +17,20 @@ import { MediaCard } from "@/components/library/MediaCard";
 import { useFilterState } from "@/hooks/useFilterState";
 
 /** Fixed skeleton IDs to avoid array index keys */
-const SKELETON_IDS = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "s12"];
+const SKELETON_IDS = [
+	"s1",
+	"s2",
+	"s3",
+	"s4",
+	"s5",
+	"s6",
+	"s7",
+	"s8",
+	"s9",
+	"s10",
+	"s11",
+	"s12",
+];
 
 /** Skeleton placeholder for loading state */
 function SeriesGridSkeleton({ count = 12 }: { count?: number }) {
@@ -197,4 +210,3 @@ export function SeriesSection({
 		</Stack>
 	);
 }
-

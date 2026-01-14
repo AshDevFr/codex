@@ -1,4 +1,10 @@
-import type { Book, PaginatedResponse, Series, SeriesCondition, SeriesListRequest } from "@/types";
+import type {
+	Book,
+	PaginatedResponse,
+	Series,
+	SeriesCondition,
+	SeriesListRequest,
+} from "@/types";
 import { api } from "./client";
 
 export interface SeriesFilters {
@@ -26,8 +32,7 @@ export const seriesApi = {
 		}
 
 		if (filters?.page) params.set("page", filters.page.toString());
-		if (filters?.pageSize)
-			params.set("page_size", filters.pageSize.toString());
+		if (filters?.pageSize) params.set("page_size", filters.pageSize.toString());
 		if (filters?.sort) params.set("sort", filters.sort);
 		if (filters?.genres) params.set("genres", filters.genres);
 		if (filters?.tags) params.set("tags", filters.tags);
@@ -78,7 +83,9 @@ export const seriesApi = {
 	},
 
 	// Generate thumbnails for all books in series
-	generateThumbnails: async (seriesId: string): Promise<{ message: string }> => {
+	generateThumbnails: async (
+		seriesId: string,
+	): Promise<{ message: string }> => {
 		const response = await api.post<{ message: string }>(
 			`/series/${seriesId}/thumbnails`,
 		);
@@ -86,7 +93,9 @@ export const seriesApi = {
 	},
 
 	// Mark all books in a series as read
-	markAsRead: async (seriesId: string): Promise<{ count: number; message: string }> => {
+	markAsRead: async (
+		seriesId: string,
+	): Promise<{ count: number; message: string }> => {
 		const response = await api.post<{ count: number; message: string }>(
 			`/series/${seriesId}/read`,
 		);
@@ -94,7 +103,9 @@ export const seriesApi = {
 	},
 
 	// Mark all books in a series as unread
-	markAsUnread: async (seriesId: string): Promise<{ count: number; message: string }> => {
+	markAsUnread: async (
+		seriesId: string,
+	): Promise<{ count: number; message: string }> => {
 		const response = await api.post<{ count: number; message: string }>(
 			`/series/${seriesId}/unread`,
 		);
@@ -102,7 +113,10 @@ export const seriesApi = {
 	},
 
 	// Get recently added series
-	getRecentlyAdded: async (libraryId: string, limit = 50): Promise<Series[]> => {
+	getRecentlyAdded: async (
+		libraryId: string,
+		limit = 50,
+	): Promise<Series[]> => {
 		const params = new URLSearchParams();
 		if (libraryId !== "all") {
 			params.set("library_id", libraryId);
@@ -116,7 +130,10 @@ export const seriesApi = {
 	},
 
 	// Get recently updated series
-	getRecentlyUpdated: async (libraryId: string, limit = 50): Promise<Series[]> => {
+	getRecentlyUpdated: async (
+		libraryId: string,
+		limit = 50,
+	): Promise<Series[]> => {
 		const params = new URLSearchParams();
 		if (libraryId !== "all") {
 			params.set("library_id", libraryId);
@@ -130,7 +147,10 @@ export const seriesApi = {
 	},
 
 	// Get books in a series
-	getBooks: async (seriesId: string, includeDeleted = false): Promise<Book[]> => {
+	getBooks: async (
+		seriesId: string,
+		includeDeleted = false,
+	): Promise<Book[]> => {
 		const params = new URLSearchParams();
 		if (includeDeleted) {
 			params.set("include_deleted", "true");
@@ -156,7 +176,9 @@ export const seriesApi = {
 	 */
 	search: async (
 		libraryId: string,
-		request: Omit<SeriesListRequest, "condition"> & { condition?: SeriesCondition },
+		request: Omit<SeriesListRequest, "condition"> & {
+			condition?: SeriesCondition;
+		},
 	): Promise<PaginatedResponse<Series>> => {
 		// Build the full condition including library filter
 		let finalCondition: SeriesCondition | undefined = request.condition;
@@ -185,7 +207,10 @@ export const seriesApi = {
 			sort: request.sort,
 		};
 
-		const response = await api.post<PaginatedResponse<Series>>("/series/list", body);
+		const response = await api.post<PaginatedResponse<Series>>(
+			"/series/list",
+			body,
+		);
 		return response.data;
 	},
 

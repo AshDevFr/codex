@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { renderWithProviders, screen, waitFor } from "@/test/utils";
-
 import { useReaderStore } from "@/store/readerStore";
+import { renderWithProviders, screen, waitFor } from "@/test/utils";
 import { ComicReader } from "./ComicReader";
 
 // Store the mock implementations so we can change them per test
@@ -42,7 +41,8 @@ vi.mock("./hooks", () => ({
 	useKeyboardNav: vi.fn(),
 	useReadProgress: (...args: unknown[]) => mockUseReadProgress(...args),
 	useSeriesNavigation: (...args: unknown[]) => mockUseSeriesNavigation(...args),
-	useSeriesReaderSettings: (...args: unknown[]) => mockUseSeriesReaderSettings(...args),
+	useSeriesReaderSettings: (...args: unknown[]) =>
+		mockUseSeriesReaderSettings(...args),
 	useTouchNav: vi.fn(() => ({
 		touchRef: vi.fn(),
 	})),
@@ -161,7 +161,9 @@ describe("ComicReader", () => {
 			renderWithProviders(<ComicReader {...defaultProps} />);
 
 			// Find the img element by its src attribute
-			const image = document.querySelector('img[src*="/api/v1/books/book-123/pages/"]');
+			const image = document.querySelector(
+				'img[src*="/api/v1/books/book-123/pages/"]',
+			);
 			expect(image).toBeInTheDocument();
 		});
 
@@ -175,7 +177,7 @@ describe("ComicReader", () => {
 
 			// Should show loader
 			expect(
-				document.querySelector(".mantine-Loader-root")
+				document.querySelector(".mantine-Loader-root"),
 			).toBeInTheDocument();
 		});
 
@@ -216,13 +218,11 @@ describe("ComicReader", () => {
 
 		it("should apply reading direction override from props", async () => {
 			renderWithProviders(
-				<ComicReader {...defaultProps} readingDirectionOverride="rtl" />
+				<ComicReader {...defaultProps} readingDirectionOverride="rtl" />,
 			);
 
 			await waitFor(() => {
-				expect(useReaderStore.getState().readingDirectionOverride).toBe(
-					"rtl"
-				);
+				expect(useReaderStore.getState().readingDirectionOverride).toBe("rtl");
 			});
 		});
 	});
@@ -269,13 +269,17 @@ describe("ComicReader", () => {
 				readingDirectionOverride: "webtoon",
 			});
 
-			renderWithProviders(<ComicReader {...defaultProps} readingDirectionOverride="webtoon" />);
+			renderWithProviders(
+				<ComicReader {...defaultProps} readingDirectionOverride="webtoon" />,
+			);
 
 			// Verify the reader renders
 			const container = document.querySelector('[style*="100vw"]');
 			expect(container).toBeInTheDocument();
 			// Verify the reading direction is set
-			expect(useReaderStore.getState().readingDirectionOverride).toBe("webtoon");
+			expect(useReaderStore.getState().readingDirectionOverride).toBe(
+				"webtoon",
+			);
 		});
 	});
 
@@ -303,7 +307,7 @@ describe("ComicReader", () => {
 	describe("cleanup", () => {
 		it("should reset session on unmount", async () => {
 			const { unmount } = renderWithProviders(
-				<ComicReader {...defaultProps} />
+				<ComicReader {...defaultProps} />,
 			);
 
 			// Wait for initialization
@@ -416,7 +420,9 @@ describe("ComicReader", () => {
 
 	describe("per-series settings integration", () => {
 		it("should call useSeriesReaderSettings with seriesId", () => {
-			renderWithProviders(<ComicReader {...defaultProps} seriesId="series-123" />);
+			renderWithProviders(
+				<ComicReader {...defaultProps} seriesId="series-123" />,
+			);
 
 			expect(mockUseSeriesReaderSettings).toHaveBeenCalledWith("series-123");
 		});
@@ -448,7 +454,9 @@ describe("ComicReader", () => {
 			renderWithProviders(<ComicReader {...defaultProps} />);
 
 			// Should show loader
-			expect(document.querySelector(".mantine-Loader-root")).toBeInTheDocument();
+			expect(
+				document.querySelector(".mantine-Loader-root"),
+			).toBeInTheDocument();
 		});
 
 		it("should use series-specific fitMode from effectiveSettings", () => {

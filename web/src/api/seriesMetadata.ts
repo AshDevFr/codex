@@ -79,10 +79,9 @@ export const seriesMetadataApi = {
 
 	// Alternate titles
 	getAlternateTitles: async (seriesId: string): Promise<AlternateTitle[]> => {
-		const response =
-			await api.get<components["schemas"]["AlternateTitleListResponse"]>(
-				`/series/${seriesId}/alternate-titles`,
-			);
+		const response = await api.get<
+			components["schemas"]["AlternateTitleListResponse"]
+		>(`/series/${seriesId}/alternate-titles`);
 		return response.data.titles;
 	},
 
@@ -120,10 +119,9 @@ export const seriesMetadataApi = {
 
 	// External ratings
 	getExternalRatings: async (seriesId: string): Promise<ExternalRating[]> => {
-		const response =
-			await api.get<components["schemas"]["ExternalRatingListResponse"]>(
-				`/series/${seriesId}/external-ratings`,
-			);
+		const response = await api.get<
+			components["schemas"]["ExternalRatingListResponse"]
+		>(`/series/${seriesId}/external-ratings`);
 		return response.data.ratings;
 	},
 
@@ -149,10 +147,9 @@ export const seriesMetadataApi = {
 
 	// External links
 	getExternalLinks: async (seriesId: string): Promise<ExternalLink[]> => {
-		const response =
-			await api.get<components["schemas"]["ExternalLinkListResponse"]>(
-				`/series/${seriesId}/external-links`,
-			);
+		const response = await api.get<
+			components["schemas"]["ExternalLinkListResponse"]
+		>(`/series/${seriesId}/external-links`);
 		return response.data.links;
 	},
 
@@ -178,10 +175,9 @@ export const seriesMetadataApi = {
 
 	// Cover management
 	listCovers: async (seriesId: string): Promise<SeriesCover[]> => {
-		const response =
-			await api.get<components["schemas"]["SeriesCoverListResponse"]>(
-				`/series/${seriesId}/covers`,
-			);
+		const response = await api.get<
+			components["schemas"]["SeriesCoverListResponse"]
+		>(`/series/${seriesId}/covers`);
 		return response.data.covers;
 	},
 

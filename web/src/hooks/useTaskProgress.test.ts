@@ -6,7 +6,12 @@ import type { TaskProgressEvent, TaskResponse } from "@/types";
 import { useTaskProgress } from "./useTaskProgress";
 
 // Helper to create a complete TaskResponse with defaults
-function createMockTask(overrides: { id: string; task_type: string; status: string; library_id?: string }): TaskResponse {
+function createMockTask(overrides: {
+	id: string;
+	task_type: string;
+	status: string;
+	library_id?: string;
+}): TaskResponse {
 	return {
 		id: overrides.id,
 		task_type: overrides.task_type,
@@ -56,7 +61,9 @@ describe("useTaskProgress", () => {
 		vi.mocked(tasksApi.fetchTasksByStatus).mockResolvedValue([]);
 
 		// Mock subscribeToTaskProgress to return unsubscribe function
-		vi.mocked(tasksApi.subscribeToTaskProgress).mockReturnValue(mockUnsubscribe);
+		vi.mocked(tasksApi.subscribeToTaskProgress).mockReturnValue(
+			mockUnsubscribe,
+		);
 
 		vi.useFakeTimers();
 	});
@@ -134,7 +141,7 @@ describe("useTaskProgress", () => {
 		};
 
 		act(() => {
-			capturedCallback!(taskEvent);
+			capturedCallback?.(taskEvent);
 		});
 
 		expect(result.current.activeTasks).toHaveLength(1);
@@ -167,7 +174,7 @@ describe("useTaskProgress", () => {
 		};
 
 		act(() => {
-			capturedCallback!(completedTask);
+			capturedCallback?.(completedTask);
 		});
 
 		expect(result.current.activeTasks).toHaveLength(1);
@@ -206,7 +213,7 @@ describe("useTaskProgress", () => {
 		};
 
 		act(() => {
-			capturedCallback!(failedTask);
+			capturedCallback?.(failedTask);
 		});
 
 		expect(result.current.activeTasks).toHaveLength(1);
@@ -235,7 +242,7 @@ describe("useTaskProgress", () => {
 
 		// Add multiple tasks with different statuses
 		act(() => {
-			capturedCallback!({
+			capturedCallback?.({
 				task_id: "task-1",
 				task_type: "analyze_book",
 				status: "pending",
@@ -244,7 +251,7 @@ describe("useTaskProgress", () => {
 				started_at: "2026-01-07T12:00:00Z",
 				library_id: "lib-1",
 			});
-			capturedCallback!({
+			capturedCallback?.({
 				task_id: "task-2",
 				task_type: "analyze_book",
 				status: "running",
@@ -253,7 +260,7 @@ describe("useTaskProgress", () => {
 				started_at: "2026-01-07T12:01:00Z",
 				library_id: "lib-1",
 			});
-			capturedCallback!({
+			capturedCallback?.({
 				task_id: "task-3",
 				task_type: "analyze_book",
 				status: "completed",
@@ -289,7 +296,7 @@ describe("useTaskProgress", () => {
 
 		// Add tasks for different libraries
 		act(() => {
-			capturedCallback!({
+			capturedCallback?.({
 				task_id: "task-1",
 				task_type: "analyze_book",
 				status: "running",
@@ -298,7 +305,7 @@ describe("useTaskProgress", () => {
 				started_at: "2026-01-07T12:00:00Z",
 				library_id: "lib-1",
 			});
-			capturedCallback!({
+			capturedCallback?.({
 				task_id: "task-2",
 				task_type: "analyze_book",
 				status: "running",
@@ -343,7 +350,7 @@ describe("useTaskProgress", () => {
 		};
 
 		act(() => {
-			capturedCallback!(taskEvent);
+			capturedCallback?.(taskEvent);
 		});
 
 		const task = result.current.getTask("task-unique");
@@ -373,7 +380,7 @@ describe("useTaskProgress", () => {
 
 		// Simulate connection established
 		act(() => {
-			capturedConnectionChange!("connected");
+			capturedConnectionChange?.("connected");
 		});
 
 		expect(result.current.connectionState).toBe("connected");
@@ -399,7 +406,7 @@ describe("useTaskProgress", () => {
 		// Simulate an error
 		const testError = new Error("Connection failed");
 		act(() => {
-			capturedErrorHandler!(testError);
+			capturedErrorHandler?.(testError);
 		});
 
 		expect(consoleError).toHaveBeenCalledWith(
@@ -426,7 +433,7 @@ describe("useTaskProgress", () => {
 
 		// Add initial task
 		act(() => {
-			capturedCallback!({
+			capturedCallback?.({
 				task_id: "task-1",
 				task_type: "analyze_book",
 				status: "running",
@@ -441,7 +448,7 @@ describe("useTaskProgress", () => {
 
 		// Update task progress
 		act(() => {
-			capturedCallback!({
+			capturedCallback?.({
 				task_id: "task-1",
 				task_type: "analyze_book",
 				status: "running",
@@ -613,7 +620,7 @@ describe("useTaskProgress", () => {
 
 		// Simulate SSE event marking task as completed
 		act(() => {
-			capturedCallback!({
+			capturedCallback?.({
 				task_id: "task-1",
 				task_type: "analyze_book",
 				status: "completed",
@@ -698,7 +705,7 @@ describe("useTaskProgress", () => {
 
 		// Simulate SSE event with progress
 		act(() => {
-			capturedCallback!({
+			capturedCallback?.({
 				task_id: "task-1",
 				task_type: "analyze_book",
 				status: "running",

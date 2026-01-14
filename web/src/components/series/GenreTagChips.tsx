@@ -36,10 +36,7 @@ export function GenreTagChips({
 		? tags.slice(0, Math.max(0, maxDisplay - genres.length))
 		: tags;
 	const hiddenCount =
-		genres.length +
-		tags.length -
-		displayGenres.length -
-		displayTags.length;
+		genres.length + tags.length - displayGenres.length - displayTags.length;
 
 	if (genres.length === 0 && tags.length === 0) {
 		return null;

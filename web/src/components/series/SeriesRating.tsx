@@ -49,7 +49,12 @@ export function SeriesRating({ seriesId }: SeriesRatingProps) {
 							{displayValue?.toFixed(1)}
 						</Text>
 						{existingRating.notes && (
-							<Text size="xs" c="dimmed" lineClamp={1} style={{ maxWidth: 200 }}>
+							<Text
+								size="xs"
+								c="dimmed"
+								lineClamp={1}
+								style={{ maxWidth: 200 }}
+							>
 								{existingRating.notes}
 							</Text>
 						)}

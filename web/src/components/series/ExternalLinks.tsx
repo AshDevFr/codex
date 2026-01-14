@@ -30,11 +30,10 @@ export function ExternalLinks({ links }: ExternalLinksProps) {
 	return (
 		<Group gap="xs">
 			{links.map((link) => {
-				const config =
-					SOURCE_CONFIG[link.sourceName.toLowerCase()] || {
-						name: link.sourceName,
-						color: "gray",
-					};
+				const config = SOURCE_CONFIG[link.sourceName.toLowerCase()] || {
+					name: link.sourceName,
+					color: "gray",
+				};
 
 				return (
 					<Tooltip key={link.id} label={config.name} position="top">

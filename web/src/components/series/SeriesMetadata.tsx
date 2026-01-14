@@ -69,9 +69,7 @@ export function SeriesMetadata({ metadata }: SeriesMetadataProps) {
 	const languageDisplay = metadata.language
 		? LANGUAGE_DISPLAY[metadata.language] || metadata.language
 		: null;
-	const ageRatingDisplay = metadata.ageRating
-		? `${metadata.ageRating}+`
-		: null;
+	const ageRatingDisplay = metadata.ageRating ? `${metadata.ageRating}+` : null;
 
 	// Count how many items we have to display
 	const items = [

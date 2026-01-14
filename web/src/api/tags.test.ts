@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { tagsApi } from "./tags";
 import { api } from "./client";
+import { tagsApi } from "./tags";
 
 // Mock the api client
 vi.mock("./client", () => ({
@@ -77,7 +77,10 @@ describe("tagsApi", () => {
 
 			vi.mocked(api.put).mockResolvedValueOnce({ data: mockResponse });
 
-			const result = await tagsApi.setForSeries("series-123", ["Reading", "New Tag"]);
+			const result = await tagsApi.setForSeries("series-123", [
+				"Reading",
+				"New Tag",
+			]);
 
 			expect(api.put).toHaveBeenCalledWith("/series/series-123/tags", {
 				tags: ["Reading", "New Tag"],

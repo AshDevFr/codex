@@ -1,8 +1,8 @@
 import { MantineProvider } from "@mantine/core";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type React from "react";
 import { describe, expect, it, vi } from "vitest";
-import userEvent from "@testing-library/user-event";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import type { TaskProgressEvent } from "@/types";
 import { TaskNotificationBadge } from "./TaskNotificationBadge";

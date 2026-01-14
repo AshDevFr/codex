@@ -7,7 +7,6 @@ import {
 	Card,
 	Group,
 	Loader,
-	Modal,
 	Stack,
 	Table,
 	Text,
@@ -144,7 +143,9 @@ export function DuplicatesSettings() {
 	});
 
 	// Fetch book details for a group
-	const fetchBooksForGroup = async (group: DuplicateGroup): Promise<BookDto[]> => {
+	const fetchBooksForGroup = async (
+		group: DuplicateGroup,
+	): Promise<BookDto[]> => {
 		const cached = bookDetailsCache.get(group.id);
 		if (cached) return cached;
 
@@ -224,10 +225,8 @@ export function DuplicatesSettings() {
 		},
 	});
 
-	const totalDuplicates = duplicates?.reduce(
-		(sum, group) => sum + group.duplicate_count,
-		0,
-	) || 0;
+	const totalDuplicates =
+		duplicates?.reduce((sum, group) => sum + group.duplicate_count, 0) || 0;
 
 	return (
 		<Box py="xl" px="md">
@@ -292,8 +291,8 @@ export function DuplicatesSettings() {
 				{/* Info Alert */}
 				<Alert icon={<IconAlertCircle size={16} />} color="blue">
 					Duplicates are detected by comparing file hashes (SHA-256). Files with
-					identical content are grouped together. Deleting a duplicate group only
-					removes the tracking record - the actual files are not deleted.
+					identical content are grouped together. Deleting a duplicate group
+					only removes the tracking record - the actual files are not deleted.
 				</Alert>
 
 				{/* Duplicate Groups */}

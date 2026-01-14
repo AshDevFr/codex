@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { userPreferencesApi } from "./userPreferences";
 import { api } from "./client";
+import { userPreferencesApi } from "./userPreferences";
 
 // Mock the api client
 vi.mock("./client", () => ({

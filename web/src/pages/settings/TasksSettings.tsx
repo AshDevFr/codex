@@ -9,12 +9,10 @@ import {
 	Loader,
 	Modal,
 	Progress,
-	RingProgress,
 	Select,
 	SimpleGrid,
 	Stack,
 	Table,
-	Tabs,
 	Text,
 	Title,
 	Tooltip,
@@ -26,14 +24,12 @@ import {
 	IconClock,
 	IconPlayerPlay,
 	IconRefresh,
-	IconTrash,
 	IconX,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { api } from "@/api/client";
 import {
-	type TaskStats,
 	fetchTaskStats,
 	fetchTasksByStatus,
 	subscribeToTaskProgress,
@@ -81,13 +77,14 @@ function TaskRow({
 	onRetry: () => void;
 	onUnlock: () => void;
 }) {
-	const statusColor = {
-		pending: "yellow",
-		processing: "blue",
-		completed: "green",
-		failed: "red",
-		cancelled: "gray",
-	}[task.status] || "gray";
+	const statusColor =
+		{
+			pending: "yellow",
+			processing: "blue",
+			completed: "green",
+			failed: "red",
+			cancelled: "gray",
+		}[task.status] || "gray";
 
 	return (
 		<Table.Tr>
@@ -325,7 +322,8 @@ export function TasksSettings() {
 	});
 
 	const totalTasks = stats?.total || 0;
-	const completedPercent = totalTasks > 0 ? ((stats?.completed || 0) / totalTasks) * 100 : 0;
+	const _completedPercent =
+		totalTasks > 0 ? ((stats?.completed || 0) / totalTasks) * 100 : 0;
 
 	return (
 		<Box py="xl" px="md">
@@ -493,7 +491,7 @@ export function TasksSettings() {
 				</Card>
 
 				{/* Task Type Breakdown */}
-				{stats && stats.by_type && Object.keys(stats.by_type).length > 0 && (
+				{stats?.by_type && Object.keys(stats.by_type).length > 0 && (
 					<Card withBorder>
 						<Stack gap="md">
 							<Title order={3}>By Task Type</Title>

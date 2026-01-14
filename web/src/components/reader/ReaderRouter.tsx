@@ -66,7 +66,9 @@ export function ReaderRouter({
 	// This ensures the correct PDF mode is applied from the start
 	if (!perBookSettingsLoaded && normalizedFormat === "PDF") {
 		return (
-			<Center style={{ width: "100vw", height: "100vh", backgroundColor: "#000" }}>
+			<Center
+				style={{ width: "100vw", height: "100vh", backgroundColor: "#000" }}
+			>
 				<Loader size="lg" color="gray" />
 			</Center>
 		);

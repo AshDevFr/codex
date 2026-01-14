@@ -1,13 +1,13 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-	useUserPreferencesHydrated,
-	useUserPreferencesStore,
-	selectPreference,
-	selectIsLoaded,
-} from "./userPreferencesStore";
 import { userPreferencesApi } from "@/api/userPreferences";
 import { PREFERENCE_DEFAULTS } from "@/types/preferences";
+import {
+	selectIsLoaded,
+	selectPreference,
+	useUserPreferencesHydrated,
+	useUserPreferencesStore,
+} from "./userPreferencesStore";
 
 // Mock the API client
 vi.mock("@/api/userPreferences", () => ({
@@ -221,7 +221,9 @@ describe("userPreferencesStore", () => {
 				await loadFromServer();
 			});
 
-			expect(useUserPreferencesStore.getState().loadError).toBe("Network error");
+			expect(useUserPreferencesStore.getState().loadError).toBe(
+				"Network error",
+			);
 
 			consoleErrorSpy.mockRestore();
 		});

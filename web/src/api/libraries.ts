@@ -60,7 +60,9 @@ export const librariesApi = {
 	},
 
 	// Preview scan to detect series before creating library
-	previewScan: async (request: PreviewScanRequest): Promise<PreviewScanResponse> => {
+	previewScan: async (
+		request: PreviewScanRequest,
+	): Promise<PreviewScanResponse> => {
 		const response = await api.post<PreviewScanResponse>(
 			"/libraries/preview-scan",
 			request,

@@ -1,6 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders, userEvent } from "@/test/utils";
 import { CronInput } from "./CronInput";
 
@@ -123,7 +123,9 @@ describe("CronInput", () => {
 
 		// Find any call with the complete value "0 0 * * *"
 		// The onChange is called for each character, so we need to find the one with the full string
-		const completeValueCall = calls.find(call => call && call[0] === "0 0 * * *");
+		const completeValueCall = calls.find(
+			(call) => call && call[0] === "0 0 * * *",
+		);
 
 		// Verify that the complete value was passed to onChange
 		expect(completeValueCall).toBeDefined();
@@ -276,30 +278,35 @@ describe("CronInput", () => {
 		// The description should not be shown for invalid expressions
 		// We check by looking for the Group that contains the description
 		// (it has blue text and shows the description)
-		await waitFor(() => {
-			// Look for elements that might be the description
-			// The description is in a Group with a Text element that has blue color
-			// Error messages are in a different structure
-			const errorElement = screen.queryByText(/Invalid cron expression/i);
-			expect(errorElement).toBeInTheDocument(); // Error should be shown
+		await waitFor(
+			() => {
+				// Look for elements that might be the description
+				// The description is in a Group with a Text element that has blue color
+				// Error messages are in a different structure
+				const errorElement = screen.queryByText(/Invalid cron expression/i);
+				expect(errorElement).toBeInTheDocument(); // Error should be shown
 
-			// Check that there's no description Group (which would contain blue text with "At" or "Every")
-			// The description Group is a sibling of the TextInput, not in the error area
-			const inputWrapper = input.closest(".mantine-InputWrapper-root");
-			if (inputWrapper) {
-				// Look for Group elements that might contain the description
-				const groups = inputWrapper.querySelectorAll('[class*="Group"]');
-				const hasDescriptionGroup = Array.from(groups).some((group) => {
-					const text = group.textContent || "";
-					// Description groups contain text starting with "At " or "Every "
-					return /^(At |Every )/i.test(text.trim());
-				});
-				expect(hasDescriptionGroup).toBe(false);
-			}
+				// Check that there's no description Group (which would contain blue text with "At" or "Every")
+				// The description Group is a sibling of the TextInput, not in the error area
+				const inputWrapper = input.closest(".mantine-InputWrapper-root");
+				if (inputWrapper) {
+					// Look for Group elements that might contain the description
+					const groups = inputWrapper.querySelectorAll('[class*="Group"]');
+					const hasDescriptionGroup = Array.from(groups).some((group) => {
+						const text = group.textContent || "";
+						// Description groups contain text starting with "At " or "Every "
+						return /^(At |Every )/i.test(text.trim());
+					});
+					expect(hasDescriptionGroup).toBe(false);
+				}
 
-			// Should not show next run (only shown for valid cron)
-			const nextRun = screen.queryByText(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
-			expect(nextRun).not.toBeInTheDocument();
-		}, { timeout: 1000 });
+				// Should not show next run (only shown for valid cron)
+				const nextRun = screen.queryByText(
+					/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/,
+				);
+				expect(nextRun).not.toBeInTheDocument();
+			},
+			{ timeout: 1000 },
+		);
 	});
 });

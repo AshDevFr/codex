@@ -29,7 +29,10 @@ export function Header({
 
 	const toggleColorScheme = () => {
 		// Toggle between light and dark (not system) for explicit user action
-		setPreference("ui.theme", computedColorScheme === "dark" ? "light" : "dark");
+		setPreference(
+			"ui.theme",
+			computedColorScheme === "dark" ? "light" : "dark",
+		);
 	};
 
 	return (

@@ -7,7 +7,12 @@ import { PdfContinuousScrollReader } from "./PdfContinuousScrollReader";
 
 // Mock react-pdf
 vi.mock("react-pdf", () => ({
-	Document: ({ children, onLoadSuccess, file, loading }: {
+	Document: ({
+		children,
+		onLoadSuccess,
+		file,
+		loading,
+	}: {
 		children: React.ReactNode;
 		onLoadSuccess?: (pdf: { numPages: number }) => void;
 		file: string;
@@ -17,9 +22,21 @@ vi.mock("react-pdf", () => ({
 		setTimeout(() => {
 			onLoadSuccess?.({ numPages: 10 });
 		}, 10);
-		return <div data-testid="pdf-document" data-file={file}>{loading}{children}</div>;
+		return (
+			<div data-testid="pdf-document" data-file={file}>
+				{loading}
+				{children}
+			</div>
+		);
 	},
-	Page: ({ pageNumber, width, height, scale, renderTextLayer, renderAnnotationLayer }: {
+	Page: ({
+		pageNumber,
+		width,
+		height,
+		scale,
+		renderTextLayer,
+		renderAnnotationLayer,
+	}: {
 		pageNumber: number;
 		width?: number;
 		height?: number;
@@ -92,14 +109,19 @@ describe("PdfContinuousScrollReader", () => {
 		it("should render the container with correct test id", () => {
 			renderWithProviders(<PdfContinuousScrollReader {...defaultProps} />);
 
-			expect(screen.getByTestId("pdf-continuous-scroll-container")).toBeInTheDocument();
+			expect(
+				screen.getByTestId("pdf-continuous-scroll-container"),
+			).toBeInTheDocument();
 		});
 
 		it("should render the PDF Document with correct file URL", () => {
 			renderWithProviders(<PdfContinuousScrollReader {...defaultProps} />);
 
 			const document = screen.getByTestId("pdf-document");
-			expect(document).toHaveAttribute("data-file", `/api/v1/books/${defaultProps.bookId}/file`);
+			expect(document).toHaveAttribute(
+				"data-file",
+				`/api/v1/books/${defaultProps.bookId}/file`,
+			);
 		});
 
 		it("should render page placeholders for all pages", async () => {
@@ -107,12 +129,16 @@ describe("PdfContinuousScrollReader", () => {
 
 			// Should have containers for all 10 pages
 			for (let i = 1; i <= 10; i++) {
-				expect(screen.getByTestId(`pdf-page-container-${i}`)).toBeInTheDocument();
+				expect(
+					screen.getByTestId(`pdf-page-container-${i}`),
+				).toBeInTheDocument();
 			}
 		});
 
 		it("should show empty state when totalPages is 0", () => {
-			renderWithProviders(<PdfContinuousScrollReader {...defaultProps} totalPages={0} />);
+			renderWithProviders(
+				<PdfContinuousScrollReader {...defaultProps} totalPages={0} />,
+			);
 
 			expect(screen.getByText("This PDF has no pages")).toBeInTheDocument();
 		});
@@ -120,21 +146,27 @@ describe("PdfContinuousScrollReader", () => {
 
 	describe("Background Colors", () => {
 		it("should apply black background color", () => {
-			renderWithProviders(<PdfContinuousScrollReader {...defaultProps} backgroundColor="black" />);
+			renderWithProviders(
+				<PdfContinuousScrollReader {...defaultProps} backgroundColor="black" />,
+			);
 
 			const container = screen.getByTestId("pdf-continuous-scroll-container");
 			expect(container).toHaveStyle({ backgroundColor: "#000000" });
 		});
 
 		it("should apply gray background color", () => {
-			renderWithProviders(<PdfContinuousScrollReader {...defaultProps} backgroundColor="gray" />);
+			renderWithProviders(
+				<PdfContinuousScrollReader {...defaultProps} backgroundColor="gray" />,
+			);
 
 			const container = screen.getByTestId("pdf-continuous-scroll-container");
 			expect(container).toHaveStyle({ backgroundColor: "#1a1a1a" });
 		});
 
 		it("should apply white background color", () => {
-			renderWithProviders(<PdfContinuousScrollReader {...defaultProps} backgroundColor="white" />);
+			renderWithProviders(
+				<PdfContinuousScrollReader {...defaultProps} backgroundColor="white" />,
+			);
 
 			const container = screen.getByTestId("pdf-continuous-scroll-container");
 			expect(container).toHaveStyle({ backgroundColor: "#ffffff" });
@@ -148,7 +180,7 @@ describe("PdfContinuousScrollReader", () => {
 					{...defaultProps}
 					initialPage={5}
 					preloadBuffer={2}
-				/>
+				/>,
 			);
 
 			// With preloadBuffer=2, pages 3-7 should be rendered (5 ± 2)
@@ -161,10 +193,7 @@ describe("PdfContinuousScrollReader", () => {
 
 		it("should use default preload buffer of 2 pages", async () => {
 			renderWithProviders(
-				<PdfContinuousScrollReader
-					{...defaultProps}
-					initialPage={5}
-				/>
+				<PdfContinuousScrollReader {...defaultProps} initialPage={5} />,
 			);
 
 			// Default buffer is 2, so pages 3-7 should be in render range
@@ -184,14 +213,18 @@ describe("PdfContinuousScrollReader", () => {
 		});
 
 		it("should use custom page gap when provided", () => {
-			renderWithProviders(<PdfContinuousScrollReader {...defaultProps} pageGap={24} />);
+			renderWithProviders(
+				<PdfContinuousScrollReader {...defaultProps} pageGap={24} />,
+			);
 
 			const inner = screen.getByTestId("pdf-continuous-scroll-inner");
 			expect(inner).toHaveStyle({ gap: "24px" });
 		});
 
 		it("should handle zero page gap", () => {
-			renderWithProviders(<PdfContinuousScrollReader {...defaultProps} pageGap={0} />);
+			renderWithProviders(
+				<PdfContinuousScrollReader {...defaultProps} pageGap={0} />,
+			);
 
 			const inner = screen.getByTestId("pdf-continuous-scroll-inner");
 			expect(inner).toHaveStyle({ gap: "0" });
@@ -205,7 +238,7 @@ describe("PdfContinuousScrollReader", () => {
 				<PdfContinuousScrollReader
 					{...defaultProps}
 					onDocumentLoadSuccess={onLoadSuccess}
-				/>
+				/>,
 			);
 
 			await waitFor(() => {
@@ -223,11 +256,13 @@ describe("PdfContinuousScrollReader", () => {
 				<PdfContinuousScrollReader
 					{...defaultProps}
 					onDocumentLoadError={onLoadError}
-				/>
+				/>,
 			);
 
 			// Verify component renders without crashing
-			expect(screen.getByTestId("pdf-continuous-scroll-container")).toBeInTheDocument();
+			expect(
+				screen.getByTestId("pdf-continuous-scroll-container"),
+			).toBeInTheDocument();
 		});
 
 		it("should call onPageChange when page changes", async () => {
@@ -236,37 +271,56 @@ describe("PdfContinuousScrollReader", () => {
 				<PdfContinuousScrollReader
 					{...defaultProps}
 					onPageChange={onPageChange}
-				/>
+				/>,
 			);
 
 			// Page change is triggered by IntersectionObserver
 			// This verifies the callback prop is accepted without error
-			expect(screen.getByTestId("pdf-continuous-scroll-container")).toBeInTheDocument();
+			expect(
+				screen.getByTestId("pdf-continuous-scroll-container"),
+			).toBeInTheDocument();
 		});
 	});
 
 	describe("Zoom Levels", () => {
 		it("should handle fit-width zoom level", () => {
-			renderWithProviders(<PdfContinuousScrollReader {...defaultProps} zoomLevel="fit-width" />);
+			renderWithProviders(
+				<PdfContinuousScrollReader {...defaultProps} zoomLevel="fit-width" />,
+			);
 
 			// Component should render without error
-			expect(screen.getByTestId("pdf-continuous-scroll-container")).toBeInTheDocument();
+			expect(
+				screen.getByTestId("pdf-continuous-scroll-container"),
+			).toBeInTheDocument();
 		});
 
 		it("should handle fit-page zoom level", () => {
-			renderWithProviders(<PdfContinuousScrollReader {...defaultProps} zoomLevel="fit-page" />);
+			renderWithProviders(
+				<PdfContinuousScrollReader {...defaultProps} zoomLevel="fit-page" />,
+			);
 
-			expect(screen.getByTestId("pdf-continuous-scroll-container")).toBeInTheDocument();
+			expect(
+				screen.getByTestId("pdf-continuous-scroll-container"),
+			).toBeInTheDocument();
 		});
 
 		it("should handle percentage zoom levels", () => {
-			const zoomLevels = ["50%", "75%", "100%", "125%", "150%", "200%"] as const;
+			const zoomLevels = [
+				"50%",
+				"75%",
+				"100%",
+				"125%",
+				"150%",
+				"200%",
+			] as const;
 
 			for (const zoom of zoomLevels) {
 				const { unmount } = renderWithProviders(
-					<PdfContinuousScrollReader {...defaultProps} zoomLevel={zoom} />
+					<PdfContinuousScrollReader {...defaultProps} zoomLevel={zoom} />,
 				);
-				expect(screen.getByTestId("pdf-continuous-scroll-container")).toBeInTheDocument();
+				expect(
+					screen.getByTestId("pdf-continuous-scroll-container"),
+				).toBeInTheDocument();
 				unmount();
 			}
 		});
@@ -276,7 +330,9 @@ describe("PdfContinuousScrollReader", () => {
 		it("should render without search text", () => {
 			renderWithProviders(<PdfContinuousScrollReader {...defaultProps} />);
 
-			expect(screen.getByTestId("pdf-continuous-scroll-container")).toBeInTheDocument();
+			expect(
+				screen.getByTestId("pdf-continuous-scroll-container"),
+			).toBeInTheDocument();
 		});
 
 		it("should accept search text prop", () => {
@@ -284,23 +340,24 @@ describe("PdfContinuousScrollReader", () => {
 				<PdfContinuousScrollReader
 					{...defaultProps}
 					searchText="test search"
-				/>
+				/>,
 			);
 
-			expect(screen.getByTestId("pdf-continuous-scroll-container")).toBeInTheDocument();
+			expect(
+				screen.getByTestId("pdf-continuous-scroll-container"),
+			).toBeInTheDocument();
 		});
 	});
 
 	describe("Initial Page", () => {
 		it("should accept initial page prop", () => {
 			renderWithProviders(
-				<PdfContinuousScrollReader
-					{...defaultProps}
-					initialPage={5}
-				/>
+				<PdfContinuousScrollReader {...defaultProps} initialPage={5} />,
 			);
 
-			expect(screen.getByTestId("pdf-continuous-scroll-container")).toBeInTheDocument();
+			expect(
+				screen.getByTestId("pdf-continuous-scroll-container"),
+			).toBeInTheDocument();
 		});
 
 		it("should default to page 1 when not specified", () => {
@@ -310,10 +367,12 @@ describe("PdfContinuousScrollReader", () => {
 					totalPages={10}
 					zoomLevel="fit-width"
 					backgroundColor="black"
-				/>
+				/>,
 			);
 
-			expect(screen.getByTestId("pdf-continuous-scroll-container")).toBeInTheDocument();
+			expect(
+				screen.getByTestId("pdf-continuous-scroll-container"),
+			).toBeInTheDocument();
 		});
 	});
 
@@ -332,7 +391,9 @@ describe("PdfContinuousScrollReader", () => {
 		});
 
 		it("should disconnect observer on unmount", () => {
-			const { unmount } = renderWithProviders(<PdfContinuousScrollReader {...defaultProps} />);
+			const { unmount } = renderWithProviders(
+				<PdfContinuousScrollReader {...defaultProps} />,
+			);
 
 			unmount();
 
@@ -364,7 +425,9 @@ describe("PdfContinuousScrollReader", () => {
 
 	describe("Edge Cases", () => {
 		it("should handle single page PDF", () => {
-			renderWithProviders(<PdfContinuousScrollReader {...defaultProps} totalPages={1} />);
+			renderWithProviders(
+				<PdfContinuousScrollReader {...defaultProps} totalPages={1} />,
+			);
 
 			expect(screen.getByTestId("pdf-page-container-1")).toBeInTheDocument();
 		});
@@ -376,11 +439,13 @@ describe("PdfContinuousScrollReader", () => {
 					totalPages={1000}
 					initialPage={500}
 					preloadBuffer={2}
-				/>
+				/>,
 			);
 
 			// Should render without crashing
-			expect(screen.getByTestId("pdf-continuous-scroll-container")).toBeInTheDocument();
+			expect(
+				screen.getByTestId("pdf-continuous-scroll-container"),
+			).toBeInTheDocument();
 		});
 
 		it("should clamp initial page to valid range", () => {
@@ -391,10 +456,12 @@ describe("PdfContinuousScrollReader", () => {
 					totalPages={10}
 					initialPage={100}
 					preloadBuffer={2}
-				/>
+				/>,
 			);
 
-			expect(screen.getByTestId("pdf-continuous-scroll-container")).toBeInTheDocument();
+			expect(
+				screen.getByTestId("pdf-continuous-scroll-container"),
+			).toBeInTheDocument();
 		});
 	});
 });

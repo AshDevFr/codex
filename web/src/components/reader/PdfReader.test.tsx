@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, renderWithProviders, screen, waitFor } from "@/test/utils";
 import { useReaderStore } from "@/store/readerStore";
+import { fireEvent, renderWithProviders, screen, waitFor } from "@/test/utils";
 
 // Mock react-pdf since it requires Web Workers which aren't available in tests
 vi.mock("react-pdf", () => ({
@@ -8,7 +8,9 @@ vi.mock("react-pdf", () => ({
 		children,
 		file,
 		onLoadSuccess,
+		// biome-ignore lint/correctness/noUnusedFunctionParameters: Mock function parameters
 		onLoadError,
+		// biome-ignore lint/correctness/noUnusedFunctionParameters: Mock function parameters
 		loading,
 	}: {
 		children: React.ReactNode;
@@ -34,7 +36,9 @@ vi.mock("react-pdf", () => ({
 		scale,
 		renderTextLayer,
 		renderAnnotationLayer,
+		// biome-ignore lint/correctness/noUnusedFunctionParameters: Mock function parameters
 		loading,
+		// biome-ignore lint/correctness/noUnusedFunctionParameters: Mock function parameters
 		customTextRenderer,
 	}: {
 		pageNumber: number;
@@ -204,6 +208,7 @@ describe("PdfReader", () => {
 
 	describe("click zones", () => {
 		it("should navigate on left zone click", async () => {
+			// biome-ignore lint/correctness/noUnusedVariables: Import validates hook availability
 			const { handlePrevPage } = await import("./hooks").then((m) =>
 				m.useSeriesNavigation(),
 			);

@@ -1,9 +1,9 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { librariesApi } from "@/api/libraries";
 import { renderWithProviders } from "@/test/utils";
 import { PreviewScanPanel } from "./PreviewScanPanel";
-import { librariesApi } from "@/api/libraries";
 
 // Mock the libraries API
 vi.mock("@/api/libraries", () => ({
@@ -40,7 +40,9 @@ describe("PreviewScanPanel", () => {
 			/>,
 		);
 
-		expect(screen.getByRole("button", { name: /preview/i })).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: /preview/i }),
+		).toBeInTheDocument();
 	});
 
 	it("shows placeholder when no scan has been performed", () => {
@@ -87,7 +89,10 @@ describe("PreviewScanPanel", () => {
 		const mockPreviewScan = vi.mocked(librariesApi.previewScan);
 
 		// Create a promise that we can control
-		let resolvePromise: (value: { detectedSeries: []; totalFiles: number }) => void;
+		let resolvePromise: (value: {
+			detectedSeries: [];
+			totalFiles: number;
+		}) => void;
 		mockPreviewScan.mockImplementation(
 			() =>
 				new Promise((resolve) => {
@@ -108,7 +113,7 @@ describe("PreviewScanPanel", () => {
 		expect(screen.getByText(/scanning folder structure/i)).toBeInTheDocument();
 
 		// Resolve the promise
-		resolvePromise!({ detectedSeries: [], totalFiles: 0 });
+		resolvePromise?.({ detectedSeries: [], totalFiles: 0 });
 
 		await waitFor(() => {
 			expect(
@@ -166,7 +171,11 @@ describe("PreviewScanPanel", () => {
 					name: "Batman",
 					path: "/media/comics/Batman",
 					bookCount: 10,
-					sampleBooks: ["Batman #001.cbz", "Batman #002.cbz", "Batman #003.cbz"],
+					sampleBooks: [
+						"Batman #001.cbz",
+						"Batman #002.cbz",
+						"Batman #003.cbz",
+					],
 				},
 			],
 			totalFiles: 10,
@@ -211,9 +220,7 @@ describe("PreviewScanPanel", () => {
 		await user.click(screen.getByRole("button", { name: /preview/i }));
 
 		await waitFor(() => {
-			expect(
-				screen.getByText(/no series detected/i),
-			).toBeInTheDocument();
+			expect(screen.getByText(/no series detected/i)).toBeInTheDocument();
 		});
 	});
 
@@ -283,7 +290,9 @@ describe("PreviewScanPanel", () => {
 		await user.click(screen.getByRole("button", { name: /preview/i }));
 
 		await waitFor(() => {
-			expect(screen.getByRole("button", { name: /rescan/i })).toBeInTheDocument();
+			expect(
+				screen.getByRole("button", { name: /rescan/i }),
+			).toBeInTheDocument();
 		});
 	});
 

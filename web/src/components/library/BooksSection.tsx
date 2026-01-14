@@ -1,4 +1,12 @@
-import { Box, Card, Group, Pagination, Skeleton, Stack, Text } from "@mantine/core";
+import {
+	Box,
+	Card,
+	Group,
+	Pagination,
+	Skeleton,
+	Stack,
+	Text,
+} from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
@@ -9,7 +17,20 @@ import { useBookFilterState } from "@/hooks/useBookFilterState";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
 
 /** Fixed skeleton IDs to avoid array index keys */
-const SKELETON_IDS = ["b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9", "b10", "b11", "b12"];
+const SKELETON_IDS = [
+	"b1",
+	"b2",
+	"b3",
+	"b4",
+	"b5",
+	"b6",
+	"b7",
+	"b8",
+	"b9",
+	"b10",
+	"b11",
+	"b12",
+];
 
 /** Skeleton placeholder for loading state */
 function BooksGridSkeleton({ count = 12 }: { count?: number }) {
@@ -39,7 +60,11 @@ interface BooksSectionProps {
 	onTotalChange?: (total: number) => void;
 }
 
-export function BooksSection({ libraryId, searchParams, onTotalChange }: BooksSectionProps) {
+export function BooksSection({
+	libraryId,
+	searchParams,
+	onTotalChange,
+}: BooksSectionProps) {
 	const navigate = useNavigate();
 	const filterState = useBookFilterState();
 
@@ -65,7 +90,16 @@ export function BooksSection({ libraryId, searchParams, onTotalChange }: BooksSe
 
 	// Fetch books data using the search endpoint with conditions
 	const { data: booksData, isLoading } = useQuery({
-		queryKey: ["books", "search", libraryId, page, pageSize, sort, conditionKey, debouncedIncludeDeleted],
+		queryKey: [
+			"books",
+			"search",
+			libraryId,
+			page,
+			pageSize,
+			sort,
+			conditionKey,
+			debouncedIncludeDeleted,
+		],
 		queryFn: () =>
 			booksApi.search(libraryId, {
 				condition: debouncedCondition,
@@ -102,7 +136,9 @@ export function BooksSection({ libraryId, searchParams, onTotalChange }: BooksSe
 		handleFilterChange({ page: newPage });
 	};
 
-	const totalPages = booksData ? Math.ceil(booksData.total / booksData.pageSize) : 1;
+	const totalPages = booksData
+		? Math.ceil(booksData.total / booksData.pageSize)
+		: 1;
 
 	const showPagination = booksData ? booksData.total > pageSize : false;
 
@@ -123,7 +159,11 @@ export function BooksSection({ libraryId, searchParams, onTotalChange }: BooksSe
 					{/* Top Pagination */}
 					{showPagination && (
 						<Group justify="center">
-							<Pagination value={page} onChange={handlePageChange} total={totalPages} />
+							<Pagination
+								value={page}
+								onChange={handlePageChange}
+								total={totalPages}
+							/>
 						</Group>
 					)}
 
@@ -143,14 +183,19 @@ export function BooksSection({ libraryId, searchParams, onTotalChange }: BooksSe
 					{/* Bottom Pagination */}
 					{showPagination && (
 						<Group justify="center" mt="xl">
-							<Pagination value={page} onChange={handlePageChange} total={totalPages} />
+							<Pagination
+								value={page}
+								onChange={handlePageChange}
+								total={totalPages}
+							/>
 						</Group>
 					)}
 
 					{/* Results info */}
 					<Text size="sm" c="dimmed" ta="center">
-						Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, booksData.total)} of{" "}
-						{booksData.total} books
+						Showing {(page - 1) * pageSize + 1} to{" "}
+						{Math.min(page * pageSize, booksData.total)} of {booksData.total}{" "}
+						books
 					</Text>
 				</>
 			) : (

@@ -405,7 +405,10 @@ describe("useReadProgress", () => {
 
 			// Wait for the async update
 			await waitFor(() => {
-				const cachedData = queryClient.getQueryData(["readProgress", "test-book"]);
+				const cachedData = queryClient.getQueryData([
+					"readProgress",
+					"test-book",
+				]);
 				expect(cachedData).toEqual({
 					book_id: "test-book",
 					current_page: 50,

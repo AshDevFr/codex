@@ -74,7 +74,7 @@ export function BookFileInfo({ book }: BookFileInfoProps) {
 		{ label: "Pages", value: book.pageCount },
 		{
 			label: "Hash",
-			value: book.fileHash.substring(0, 12) + "...",
+			value: `${book.fileHash.substring(0, 12)}...`,
 			tooltip: book.fileHash,
 		},
 		{ label: "Added", value: formatDate(book.createdAt) },

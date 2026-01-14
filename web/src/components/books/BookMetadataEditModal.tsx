@@ -21,16 +21,15 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import {
-	booksApi,
 	type BookDetailResponse,
 	type BookMetadataLocks,
+	booksApi,
 } from "@/api/books";
 import {
+	type ImageInfo,
 	ImageUploader,
 	LockableInput,
-	LockableSelect,
 	LockableTextarea,
-	type ImageInfo,
 } from "@/components/forms/lockable";
 
 export interface BookMetadataEditModalProps {
@@ -98,7 +97,9 @@ interface LocksState {
 	isbns: boolean;
 }
 
-function initializeFormState(detail: BookDetailResponse | undefined): FormState {
+function initializeFormState(
+	detail: BookDetailResponse | undefined,
+): FormState {
 	const metadata = detail?.metadata;
 	return {
 		title: detail?.book.title || "",
@@ -129,7 +130,9 @@ function initializeFormState(detail: BookDetailResponse | undefined): FormState 
 	};
 }
 
-function initializeLocksState(locks: BookMetadataLocks | undefined): LocksState {
+function initializeLocksState(
+	locks: BookMetadataLocks | undefined,
+): LocksState {
 	return {
 		summary: locks?.summaryLock || false,
 		writer: locks?.writerLock || false,
@@ -164,9 +167,15 @@ export function BookMetadataEditModal({
 }: BookMetadataEditModalProps) {
 	const queryClient = useQueryClient();
 	const [activeTab, setActiveTab] = useState<string | null>("general");
-	const [formState, setFormState] = useState<FormState>(initializeFormState(undefined));
-	const [locksState, setLocksState] = useState<LocksState>(initializeLocksState(undefined));
-	const [originalFormState, setOriginalFormState] = useState<FormState | null>(null);
+	const [formState, setFormState] = useState<FormState>(
+		initializeFormState(undefined),
+	);
+	const [locksState, setLocksState] = useState<LocksState>(
+		initializeLocksState(undefined),
+	);
+	const [originalFormState, setOriginalFormState] = useState<FormState | null>(
+		null,
+	);
 	const [posterImage, setPosterImage] = useState<ImageInfo | null>(null);
 
 	// Fetch book detail
@@ -201,20 +210,20 @@ export function BookMetadataEditModal({
 	}, [locks]);
 
 	// Update field helper
-	const updateField = useCallback(<K extends keyof FormState>(
-		field: K,
-		value: FormState[K],
-	) => {
-		setFormState((prev) => ({ ...prev, [field]: value }));
-	}, []);
+	const updateField = useCallback(
+		<K extends keyof FormState>(field: K, value: FormState[K]) => {
+			setFormState((prev) => ({ ...prev, [field]: value }));
+		},
+		[],
+	);
 
 	// Update lock helper
-	const updateLock = useCallback(<K extends keyof LocksState>(
-		field: K,
-		value: boolean,
-	) => {
-		setLocksState((prev) => ({ ...prev, [field]: value }));
-	}, []);
+	const updateLock = useCallback(
+		<K extends keyof LocksState>(field: K, value: boolean) => {
+			setLocksState((prev) => ({ ...prev, [field]: value }));
+		},
+		[],
+	);
 
 	// Save mutation
 	const saveMutation = useMutation({
@@ -229,7 +238,9 @@ export function BookMetadataEditModal({
 					patchData.title = formState.title || null;
 				}
 				if (numberChanged) {
-					patchData.number = formState.number ? Number.parseFloat(formState.number) : null;
+					patchData.number = formState.number
+						? Number.parseFloat(formState.number)
+						: null;
 				}
 				await booksApi.patch(bookId, patchData);
 			}
@@ -251,9 +262,15 @@ export function BookMetadataEditModal({
 				formatDetail: formState.formatDetail || null,
 				blackAndWhite: formState.blackAndWhite,
 				manga: formState.manga,
-				year: formState.releaseYear ? Number.parseInt(formState.releaseYear, 10) : null,
-				month: formState.releaseMonth ? Number.parseInt(formState.releaseMonth, 10) : null,
-				day: formState.releaseDay ? Number.parseInt(formState.releaseDay, 10) : null,
+				year: formState.releaseYear
+					? Number.parseInt(formState.releaseYear, 10)
+					: null,
+				month: formState.releaseMonth
+					? Number.parseInt(formState.releaseMonth, 10)
+					: null,
+				day: formState.releaseDay
+					? Number.parseInt(formState.releaseDay, 10)
+					: null,
 				volume: formState.volume ? Number.parseInt(formState.volume, 10) : null,
 				count: formState.count ? Number.parseInt(formState.count, 10) : null,
 				isbns: formState.isbn || null,
@@ -549,7 +566,9 @@ export function BookMetadataEditModal({
 				<Switch
 					label="Black and White"
 					checked={formState.blackAndWhite ?? false}
-					onChange={(e) => updateField("blackAndWhite", e.currentTarget.checked)}
+					onChange={(e) =>
+						updateField("blackAndWhite", e.currentTarget.checked)
+					}
 				/>
 				<Switch
 					label="Manga"

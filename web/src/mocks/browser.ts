@@ -17,14 +17,14 @@ export const worker = setupWorker(...handlers);
 
 // Export for conditional startup
 export async function startMockServiceWorker() {
-  if (import.meta.env.VITE_MOCK_API === "true") {
-    console.log("[MSW] Mock API enabled");
-    return worker.start({
-      onUnhandledRequest: "bypass", // Don't warn for unhandled requests (static assets, etc.)
-      serviceWorker: {
-        url: "/mockServiceWorker.js",
-      },
-    });
-  }
-  return Promise.resolve();
+	if (import.meta.env.VITE_MOCK_API === "true") {
+		console.log("[MSW] Mock API enabled");
+		return worker.start({
+			onUnhandledRequest: "bypass", // Don't warn for unhandled requests (static assets, etc.)
+			serviceWorker: {
+				url: "/mockServiceWorker.js",
+			},
+		});
+	}
+	return Promise.resolve();
 }

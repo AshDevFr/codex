@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { filesystemApi } from "@/api/filesystem";
 import { librariesApi } from "@/api/libraries";
@@ -476,6 +476,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 		// Find the select input - Mantine Select renders as a button/combobox
 		// Try to find by the displayed text first (most reliable)
+		// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
 		let selectInput;
 		try {
 			// Mantine Select shows the selected value as text
@@ -518,6 +519,7 @@ describe("LibraryModal (Add Mode)", () => {
 		// Cron input should appear
 		await waitFor(() => {
 			// Try multiple ways to find the CronInput
+			// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
 			let cronInput;
 			try {
 				cronInput = modalContent.getByLabelText("Cron Schedule");
@@ -588,6 +590,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 		// Select auto scan strategy
 		// Mantine Select renders as a button/combobox - find by displayed text first
+		// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
 		let selectInput;
 		try {
 			// Mantine Select shows the selected value as text
@@ -625,6 +628,7 @@ describe("LibraryModal (Add Mode)", () => {
 		// Wait for cron input and verify it has default value
 		await waitFor(() => {
 			// Try multiple ways to find the CronInput
+			// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
 			let cronInput;
 			try {
 				cronInput = modalContent.getByLabelText("Cron Schedule");
@@ -692,6 +696,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 		// Select auto scan strategy
 		// Mantine Select renders as a button/combobox - find by displayed text first
+		// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
 		let selectInput;
 		try {
 			// Mantine Select shows the selected value as text
@@ -1019,6 +1024,9 @@ describe("LibraryModal (Add Mode)", () => {
 
 		expect(mockOnClose).toHaveBeenCalled();
 
+		// Clean up the first render before re-rendering
+		cleanup();
+
 		// Reopen modal - formats should be reset to all
 		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
@@ -1054,7 +1062,9 @@ describe("LibraryModal (Add Mode)", () => {
 			});
 
 			// Strategy tab should be visible in add mode
-			expect(screen.getByRole("tab", { name: /strategy/i })).toBeInTheDocument();
+			expect(
+				screen.getByRole("tab", { name: /strategy/i }),
+			).toBeInTheDocument();
 		});
 
 		it("should show series strategy selector when Strategy tab is clicked", async () => {
@@ -1070,7 +1080,9 @@ describe("LibraryModal (Add Mode)", () => {
 			await user.click(strategyTab);
 
 			await waitFor(() => {
-				expect(screen.getByText("Series Detection Strategy")).toBeInTheDocument();
+				expect(
+					screen.getByText("Series Detection Strategy"),
+				).toBeInTheDocument();
 				expect(screen.getByText("Book Naming Strategy")).toBeInTheDocument();
 			});
 		});
@@ -1089,7 +1101,9 @@ describe("LibraryModal (Add Mode)", () => {
 
 			await waitFor(() => {
 				expect(screen.getByText(/permanent/i)).toBeInTheDocument();
-				expect(screen.getByText(/cannot be changed after library creation/i)).toBeInTheDocument();
+				expect(
+					screen.getByText(/cannot be changed after library creation/i),
+				).toBeInTheDocument();
 			});
 		});
 
@@ -1228,7 +1242,9 @@ describe("LibraryModal (Add Mode)", () => {
 			await user.click(strategyTab);
 
 			await waitFor(() => {
-				expect(screen.getByText("Series Detection Strategy")).toBeInTheDocument();
+				expect(
+					screen.getByText("Series Detection Strategy"),
+				).toBeInTheDocument();
 			});
 
 			// Change series strategy to series_volume_chapter
@@ -1324,7 +1340,9 @@ describe("LibraryModal (Add Mode)", () => {
 			await user.click(strategyTab);
 
 			await waitFor(() => {
-				expect(screen.getByText("Series Detection Strategy")).toBeInTheDocument();
+				expect(
+					screen.getByText("Series Detection Strategy"),
+				).toBeInTheDocument();
 				expect(screen.getByText("Book Naming Strategy")).toBeInTheDocument();
 				expect(screen.getByText("Book Number Strategy")).toBeInTheDocument();
 			});

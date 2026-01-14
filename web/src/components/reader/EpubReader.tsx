@@ -240,13 +240,19 @@ export function EpubReader({
 	const [toc, setToc] = useState<NavItem[]>([]);
 	const [currentHref, setCurrentHref] = useState<string | undefined>();
 	const [currentCfi, setCurrentCfi] = useState<string | null>(null);
-	const [currentChapterTitle, setCurrentChapterTitle] = useState<string | undefined>();
+	const [currentChapterTitle, setCurrentChapterTitle] = useState<
+		string | undefined
+	>();
 
 	// EPUB-specific settings from store
 	const epubTheme = useReaderStore((state) => state.settings.epubTheme);
 	const epubFontSize = useReaderStore((state) => state.settings.epubFontSize);
-	const epubFontFamily = useReaderStore((state) => state.settings.epubFontFamily);
-	const epubLineHeight = useReaderStore((state) => state.settings.epubLineHeight);
+	const epubFontFamily = useReaderStore(
+		(state) => state.settings.epubFontFamily,
+	);
+	const epubLineHeight = useReaderStore(
+		(state) => state.settings.epubLineHeight,
+	);
 	const epubMargin = useReaderStore((state) => state.settings.epubMargin);
 
 	// Use refs for initial styles to avoid re-creating handleGetRendition
@@ -283,7 +289,8 @@ export function EpubReader({
 	const epubUrl = `/api/v1/books/${bookId}/file`;
 
 	// Track if we need to wait for startPercent navigation before showing content
-	const needsStartPercentNavigation = startPercent != null && startPercent >= 0 && startPercent <= 1;
+	const needsStartPercentNavigation =
+		startPercent != null && startPercent >= 0 && startPercent <= 1;
 	const startPercentAppliedRef = useRef(!needsStartPercentNavigation);
 
 	// Handle location change (CFI-based progress)
@@ -314,7 +321,8 @@ export function EpubReader({
 	// Apply font family to rendition
 	useEffect(() => {
 		if (renditionRef.current?.themes) {
-			const fontFamily = EPUB_FONT_FAMILIES[epubFontFamily] ?? EPUB_FONT_FAMILIES.default;
+			const fontFamily =
+				EPUB_FONT_FAMILIES[epubFontFamily] ?? EPUB_FONT_FAMILIES.default;
 			renditionRef.current.themes.override("font-family", fontFamily);
 		}
 	}, [epubFontFamily]);
@@ -380,7 +388,14 @@ export function EpubReader({
 			}
 			setHasAppliedApiProgress(true);
 		}
-	}, [locationsReady, isLoadingProgress, initialPercentage, hasAppliedApiProgress, hasAppliedStartPercent, startPercent]);
+	}, [
+		locationsReady,
+		isLoadingProgress,
+		initialPercentage,
+		hasAppliedApiProgress,
+		hasAppliedStartPercent,
+		startPercent,
+	]);
 
 	// Ref for onClose to keep handleGetRendition stable
 	const onCloseRef = useRef(onClose);
@@ -404,7 +419,9 @@ export function EpubReader({
 			rendition.themes.override("color", theme.body.color);
 			rendition.themes.fontSize(`${epubFontSizeRef.current}%`);
 			// Apply font family
-			const fontFamily = EPUB_FONT_FAMILIES[epubFontFamilyRef.current] ?? EPUB_FONT_FAMILIES.default;
+			const fontFamily =
+				EPUB_FONT_FAMILIES[epubFontFamilyRef.current] ??
+				EPUB_FONT_FAMILIES.default;
 			rendition.themes.override("font-family", fontFamily);
 			// Apply line height
 			rendition.themes.override("line-height", `${epubLineHeightRef.current}%`);
@@ -484,7 +501,6 @@ export function EpubReader({
 			// Note: percentage can be 0 at the start of the book, which is valid
 			saveLocationRef.current(cfi, percentage);
 		});
-
 	}, []);
 
 	// Handle TOC navigation
@@ -498,7 +514,9 @@ export function EpubReader({
 	}, []);
 
 	// Check if current location is bookmarked
-	const isCurrentLocationBookmarked = currentCfi ? isBookmarked(currentCfi) : false;
+	const isCurrentLocationBookmarked = currentCfi
+		? isBookmarked(currentCfi)
+		: false;
 
 	// Handle adding bookmark at current location
 	const handleAddBookmark = useCallback(() => {
@@ -511,7 +529,9 @@ export function EpubReader({
 			const rendition = renditionRef.current as Rendition & {
 				manager?: { getContents?: () => Array<{ window?: Window }> };
 			};
-			const selection = rendition?.manager?.getContents?.()?.[0]?.window?.getSelection?.();
+			const selection = rendition?.manager
+				?.getContents?.()?.[0]
+				?.window?.getSelection?.();
 			if (selection?.toString().trim()) {
 				excerpt = selection.toString().trim().substring(0, 100);
 			}
@@ -544,7 +564,11 @@ export function EpubReader({
 		} else {
 			handleAddBookmark();
 		}
-	}, [isCurrentLocationBookmarked, handleAddBookmark, handleRemoveCurrentBookmark]);
+	}, [
+		isCurrentLocationBookmarked,
+		handleAddBookmark,
+		handleRemoveCurrentBookmark,
+	]);
 
 	// Handle search within EPUB
 	const handleSearch = useCallback(
@@ -558,7 +582,9 @@ export function EpubReader({
 				// epub.js search method exists but isn't in TypeScript types
 				// Use type assertion to access it
 				const bookWithSearch = book as typeof book & {
-					search: (query: string) => Promise<Array<{ cfi: string; excerpt: string }>>;
+					search: (
+						query: string,
+					) => Promise<Array<{ cfi: string; excerpt: string }>>;
 				};
 
 				// epub.js search returns an array of results with cfi and excerpt
@@ -574,7 +600,7 @@ export function EpubReader({
 							const navItem = toc.find(
 								(item) =>
 									section.href === item.href ||
-									section.href.startsWith(item.href.split("#")[0])
+									section.href.startsWith(item.href.split("#")[0]),
 							);
 							if (navItem) {
 								chapter = navItem.label;
@@ -595,7 +621,7 @@ export function EpubReader({
 				return [];
 			}
 		},
-		[toc]
+		[toc],
 	);
 
 	// Handle search result navigation
@@ -666,7 +692,17 @@ export function EpubReader({
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [settingsOpened, tocOpened, bookmarksOpened, searchOpened, onClose, toggleToolbar, isFullscreen, setFullscreen, handleToggleBookmark]);
+	}, [
+		settingsOpened,
+		tocOpened,
+		bookmarksOpened,
+		searchOpened,
+		onClose,
+		toggleToolbar,
+		isFullscreen,
+		setFullscreen,
+		handleToggleBookmark,
+	]);
 
 	// Fullscreen handling
 	useEffect(() => {

@@ -133,7 +133,10 @@ export function PdfContinuousScrollReader({
 		}
 	}, [containerWidth, zoomLevel]);
 
-	const pageDimensions = useMemo(() => getPageDimensions(), [getPageDimensions]);
+	const pageDimensions = useMemo(
+		() => getPageDimensions(),
+		[getPageDimensions],
+	);
 
 	// Determine which pages should be rendered (visible + buffer)
 	const pagesToRender = useMemo(() => {
@@ -367,7 +370,11 @@ export function PdfContinuousScrollReader({
 										pageNumber={pageNumber}
 										width={pageDimensions.width}
 										height={pageDimensions.height}
-										scale={"scale" in pageDimensions ? pageDimensions.scale : undefined}
+										scale={
+											"scale" in pageDimensions
+												? pageDimensions.scale
+												: undefined
+										}
 										renderTextLayer={true}
 										renderAnnotationLayer={true}
 										loading={

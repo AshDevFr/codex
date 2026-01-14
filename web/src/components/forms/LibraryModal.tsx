@@ -34,8 +34,8 @@ import {
 	IconWand,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
 import { capitalize } from "es-toolkit/string";
+import { useEffect, useState } from "react";
 import { filesystemApi } from "@/api/filesystem";
 import { librariesApi } from "@/api/libraries";
 import type {
@@ -141,7 +141,9 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 			if (library.scanningConfig) {
 				setCronSchedule(library.scanningConfig.cronSchedule || "0 0 * * *");
 				setScanOnStart(library.scanningConfig.scanOnStart ?? false);
-				setPurgeDeletedOnScan(library.scanningConfig.purgeDeletedOnScan ?? false);
+				setPurgeDeletedOnScan(
+					library.scanningConfig.purgeDeletedOnScan ?? false,
+				);
 			}
 
 			setAllowedFormats(
@@ -153,9 +155,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 
 			// Initialize strategy state from library (series strategy is read-only in edit mode)
 			setSeriesStrategy(library.seriesStrategy || "series_volume");
-			setSeriesConfig(
-				(library.seriesConfig as Record<string, unknown>) || {},
-			);
+			setSeriesConfig((library.seriesConfig as Record<string, unknown>) || {});
 			setBookStrategy(library.bookStrategy || "filename");
 			setNumberStrategy(library.numberStrategy || "file_order");
 		} else if (!isEditMode) {
@@ -634,11 +634,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 				comboboxProps={{ zIndex: 1001 }}
 			/>
 
-			<Alert
-				icon={<IconInfoCircle size={16} />}
-				color="blue"
-				variant="light"
-			>
+			<Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
 				{scanStrategy === "manual" &&
 					"Trigger normal or deep scans manually from the library dashboard. No automatic scanning will occur."}
 				{scanStrategy === "auto" &&
@@ -779,12 +775,9 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 								>
 									General
 								</Tabs.Tab>
-								<Tabs.Tab
-								value="strategy"
-								leftSection={<IconWand size={16} />}
-							>
-								Strategy
-							</Tabs.Tab>
+								<Tabs.Tab value="strategy" leftSection={<IconWand size={16} />}>
+									Strategy
+								</Tabs.Tab>
 								<Tabs.Tab
 									value="formats"
 									leftSection={<IconFilter size={16} />}

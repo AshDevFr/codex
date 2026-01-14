@@ -1,5 +1,5 @@
-import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import { describe, expect, it, vi } from "vitest";
+import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import { TriStateChip } from "./TriStateChip";
 
 describe("TriStateChip", () => {
@@ -13,7 +13,12 @@ describe("TriStateChip", () => {
 
 	it("should render with count when provided", () => {
 		renderWithProviders(
-			<TriStateChip label="Action" state="neutral" onChange={vi.fn()} count={42} />,
+			<TriStateChip
+				label="Action"
+				state="neutral"
+				onChange={vi.fn()}
+				count={42}
+			/>,
 		);
 
 		expect(screen.getByText("Action")).toBeInTheDocument();
@@ -64,7 +69,12 @@ describe("TriStateChip", () => {
 		const onChange = vi.fn();
 
 		renderWithProviders(
-			<TriStateChip label="Action" state="neutral" onChange={onChange} disabled />,
+			<TriStateChip
+				label="Action"
+				state="neutral"
+				onChange={onChange}
+				disabled
+			/>,
 		);
 
 		await user.click(screen.getByText("Action"));

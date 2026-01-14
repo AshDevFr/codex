@@ -1,49 +1,53 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { renderWithProviders, screen, waitFor } from "@/test/utils";
-
 import { useReaderStore } from "@/store/readerStore";
+import { renderWithProviders, screen } from "@/test/utils";
 import { EpubReader } from "./EpubReader";
 
 // Mock react-reader since it's a complex library that requires actual EPUB files
 vi.mock("react-reader", () => ({
-	ReactReader: vi.fn(({ url, location, locationChanged, getRendition, showToc }) => {
-		// Simulate getting rendition on mount
-		const mockRendition = {
-			themes: {
-				override: vi.fn(),
-				fontSize: vi.fn(),
-			},
-			book: {
-				loaded: {
-					navigation: Promise.resolve({ toc: [] }),
+	ReactReader: vi.fn(
+		// biome-ignore lint/correctness/noUnusedFunctionParameters: Mock function parameters
+		({ url, location, locationChanged, getRendition, showToc }) => {
+			// Simulate getting rendition on mount
+			const mockRendition = {
+				themes: {
+					override: vi.fn(),
+					fontSize: vi.fn(),
 				},
-				ready: Promise.resolve(),
-				locations: {
-					generate: vi.fn().mockResolvedValue([]),
-					percentageFromCfi: vi.fn().mockReturnValue(0.5),
-					cfiFromPercentage: vi.fn().mockReturnValue("epubcfi(/6/2[chapter1]!/4/2)"),
+				book: {
+					loaded: {
+						navigation: Promise.resolve({ toc: [] }),
+					},
+					ready: Promise.resolve(),
+					locations: {
+						generate: vi.fn().mockResolvedValue([]),
+						percentageFromCfi: vi.fn().mockReturnValue(0.5),
+						cfiFromPercentage: vi
+							.fn()
+							.mockReturnValue("epubcfi(/6/2[chapter1]!/4/2)"),
+					},
+					spine: {
+						get: vi.fn(),
+					},
 				},
-				spine: {
-					get: vi.fn(),
-				},
-			},
-			on: vi.fn(),
-			display: vi.fn(),
-		};
+				on: vi.fn(),
+				display: vi.fn(),
+			};
 
-		// Call getRendition callback if provided
-		if (getRendition) {
-			setTimeout(() => getRendition(mockRendition), 0);
-		}
+			// Call getRendition callback if provided
+			if (getRendition) {
+				setTimeout(() => getRendition(mockRendition), 0);
+			}
 
-		return (
-			<div data-testid="react-reader-mock">
-				<div>Mock ReactReader</div>
-				<div data-testid="epub-url">{url}</div>
-				<div data-testid="show-toc">{String(showToc)}</div>
-			</div>
-		);
-	}),
+			return (
+				<div data-testid="react-reader-mock">
+					<div>Mock ReactReader</div>
+					<div data-testid="epub-url">{url}</div>
+					<div data-testid="show-toc">{String(showToc)}</div>
+				</div>
+			);
+		},
+	),
 	ReactReaderStyle: {
 		readerArea: {},
 		arrow: {},
@@ -162,7 +166,7 @@ describe("EpubReader", () => {
 
 			// Check that the URL is correctly passed
 			expect(screen.getByTestId("epub-url")).toHaveTextContent(
-				"/api/v1/books/book-123/file"
+				"/api/v1/books/book-123/file",
 			);
 		});
 
@@ -268,27 +272,21 @@ describe("EpubReader", () => {
 
 	describe("URL parameters", () => {
 		it("should handle startPercent parameter", () => {
-			renderWithProviders(
-				<EpubReader {...defaultProps} startPercent={0.5} />
-			);
+			renderWithProviders(<EpubReader {...defaultProps} startPercent={0.5} />);
 
 			// Reader should render with the start percent
 			expect(screen.getByTestId("react-reader-mock")).toBeInTheDocument();
 		});
 
 		it("should ignore invalid startPercent (negative)", () => {
-			renderWithProviders(
-				<EpubReader {...defaultProps} startPercent={-0.5} />
-			);
+			renderWithProviders(<EpubReader {...defaultProps} startPercent={-0.5} />);
 
 			// Should still render without error
 			expect(screen.getByTestId("react-reader-mock")).toBeInTheDocument();
 		});
 
 		it("should ignore invalid startPercent (greater than 1)", () => {
-			renderWithProviders(
-				<EpubReader {...defaultProps} startPercent={1.5} />
-			);
+			renderWithProviders(<EpubReader {...defaultProps} startPercent={1.5} />);
 
 			// Should still render without error
 			expect(screen.getByTestId("react-reader-mock")).toBeInTheDocument();
@@ -319,9 +317,7 @@ describe("EpubReader", () => {
 		it("should have close button that calls onClose", async () => {
 			const onClose = vi.fn();
 
-			renderWithProviders(
-				<EpubReader {...defaultProps} onClose={onClose} />
-			);
+			renderWithProviders(<EpubReader {...defaultProps} onClose={onClose} />);
 
 			// Close button should be present
 			const buttons = screen.getAllByRole("button");

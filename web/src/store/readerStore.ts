@@ -20,15 +20,35 @@ enableMapSet();
  * - "height": Scale to viewport height (may need horizontal scroll)
  * - "original": Display at native resolution (1:1 pixels)
  */
-export type FitMode = "screen" | "width" | "width-shrink" | "height" | "original";
+export type FitMode =
+	| "screen"
+	| "width"
+	| "width-shrink"
+	| "height"
+	| "original";
 export type PageLayout = "single" | "double" | "continuous";
 export type ReadingDirection = "ltr" | "rtl" | "ttb" | "webtoon";
 export type BackgroundColor = "black" | "gray" | "white";
 export type PdfMode = "streaming" | "native";
 /** PDF spread mode for native PDF reader */
 export type PdfSpreadMode = "single" | "double" | "double-odd";
-export type EpubTheme = "light" | "sepia" | "dark" | "mint" | "slate" | "night" | "paper" | "ocean" | "forest" | "rose";
-export type EpubFontFamily = "default" | "serif" | "sans-serif" | "monospace" | "dyslexic";
+export type EpubTheme =
+	| "light"
+	| "sepia"
+	| "dark"
+	| "mint"
+	| "slate"
+	| "night"
+	| "paper"
+	| "ocean"
+	| "forest"
+	| "rose";
+export type EpubFontFamily =
+	| "default"
+	| "serif"
+	| "sans-serif"
+	| "monospace"
+	| "dyslexic";
 export type BoundaryState = "none" | "at-start" | "at-end";
 export type PageTransition = "none" | "fade" | "slide";
 export type NavigationDirection = "next" | "prev" | null;
@@ -55,14 +75,15 @@ export interface ForkableReaderSettings {
  * List of setting keys that can be forked per-series.
  * Used for type-safe operations on forkable settings.
  */
-export const FORKABLE_SETTING_KEYS: readonly (keyof ForkableReaderSettings)[] = [
-	"fitMode",
-	"pageLayout",
-	"readingDirection",
-	"backgroundColor",
-	"doublePageShowWideAlone",
-	"doublePageStartOnOdd",
-] as const;
+export const FORKABLE_SETTING_KEYS: readonly (keyof ForkableReaderSettings)[] =
+	[
+		"fitMode",
+		"pageLayout",
+		"readingDirection",
+		"backgroundColor",
+		"doublePageShowWideAlone",
+		"doublePageStartOnOdd",
+	] as const;
 
 /**
  * Stored series override in localStorage.
@@ -78,7 +99,9 @@ export interface SeriesReaderOverride extends ForkableReaderSettings {
 /**
  * Type guard to check if a value is a valid SeriesReaderOverride.
  */
-export function isSeriesReaderOverride(value: unknown): value is SeriesReaderOverride {
+export function isSeriesReaderOverride(
+	value: unknown,
+): value is SeriesReaderOverride {
 	if (typeof value !== "object" || value === null) return false;
 	const obj = value as Record<string, unknown>;
 
@@ -91,7 +114,9 @@ export function isSeriesReaderOverride(value: unknown): value is SeriesReaderOve
 	// Check all forkable settings exist with correct types
 	if (
 		typeof obj.fitMode !== "string" ||
-		!["screen", "width", "width-shrink", "height", "original"].includes(obj.fitMode)
+		!["screen", "width", "width-shrink", "height", "original"].includes(
+			obj.fitMode,
+		)
 	) {
 		return false;
 	}
@@ -126,7 +151,9 @@ export function isSeriesReaderOverride(value: unknown): value is SeriesReaderOve
 /**
  * Extract forkable settings from full reader settings.
  */
-export function extractForkableSettings(settings: ReaderSettings): ForkableReaderSettings {
+export function extractForkableSettings(
+	settings: ReaderSettings,
+): ForkableReaderSettings {
 	return {
 		fitMode: settings.fitMode,
 		pageLayout: settings.pageLayout,
@@ -140,7 +167,9 @@ export function extractForkableSettings(settings: ReaderSettings): ForkableReade
 /**
  * Create a series override from forkable settings.
  */
-export function createSeriesOverride(settings: ForkableReaderSettings): SeriesReaderOverride {
+export function createSeriesOverride(
+	settings: ForkableReaderSettings,
+): SeriesReaderOverride {
 	return {
 		...settings,
 		createdAt: Date.now(),
@@ -299,14 +328,19 @@ export interface ReaderState {
 	// ==========================================================================
 	// Actions - Series Navigation
 	// ==========================================================================
-	setAdjacentBooks: (books: { prev: AdjacentBook | null; next: AdjacentBook | null } | null) => void;
+	setAdjacentBooks: (
+		books: { prev: AdjacentBook | null; next: AdjacentBook | null } | null,
+	) => void;
 	setBoundaryState: (state: BoundaryState) => void;
 	clearBoundaryState: () => void;
 
 	// ==========================================================================
 	// Actions - Page Orientation
 	// ==========================================================================
-	setPageOrientation: (pageNumber: number, orientation: PageOrientation) => void;
+	setPageOrientation: (
+		pageNumber: number,
+		orientation: PageOrientation,
+	) => void;
 	clearPageOrientations: () => void;
 
 	// ==========================================================================
@@ -469,7 +503,10 @@ export const useReaderStore = create<ReaderState>()(
 				setEpubLineHeight: (height) =>
 					set((state) => {
 						// Clamp line height between 100% and 250%
-						state.settings.epubLineHeight = Math.max(100, Math.min(250, height));
+						state.settings.epubLineHeight = Math.max(
+							100,
+							Math.min(250, height),
+						);
 					}),
 
 				setEpubMargin: (margin) =>
@@ -502,13 +539,19 @@ export const useReaderStore = create<ReaderState>()(
 				setTransitionDuration: (duration) =>
 					set((state) => {
 						// Clamp duration between 50ms and 500ms
-						state.settings.transitionDuration = Math.max(50, Math.min(500, duration));
+						state.settings.transitionDuration = Math.max(
+							50,
+							Math.min(500, duration),
+						);
 					}),
 
 				setWebtoonSidePadding: (padding) =>
 					set((state) => {
 						// Clamp padding between 0% and 40%
-						state.settings.webtoonSidePadding = Math.max(0, Math.min(40, padding));
+						state.settings.webtoonSidePadding = Math.max(
+							0,
+							Math.min(40, padding),
+						);
 					}),
 
 				setWebtoonPageGap: (gap) =>

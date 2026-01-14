@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
 	selectEffectiveReadingDirection,
 	useReaderStore,
@@ -174,7 +174,10 @@ export function useTouchNav({
 			if (elementRef.current) {
 				elementRef.current.removeEventListener("touchstart", handleTouchStart);
 				elementRef.current.removeEventListener("touchend", handleTouchEnd);
-				elementRef.current.removeEventListener("touchcancel", handleTouchCancel);
+				elementRef.current.removeEventListener(
+					"touchcancel",
+					handleTouchCancel,
+				);
 			}
 
 			elementRef.current = element;
@@ -199,7 +202,10 @@ export function useTouchNav({
 			if (elementRef.current) {
 				elementRef.current.removeEventListener("touchstart", handleTouchStart);
 				elementRef.current.removeEventListener("touchend", handleTouchEnd);
-				elementRef.current.removeEventListener("touchcancel", handleTouchCancel);
+				elementRef.current.removeEventListener(
+					"touchcancel",
+					handleTouchCancel,
+				);
 			}
 		};
 	}, [handleTouchStart, handleTouchEnd, handleTouchCancel]);

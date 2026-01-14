@@ -70,7 +70,8 @@ export function BookDetail() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const [summaryOpened, { toggle: toggleSummary }] = useDisclosure(false);
-	const [editModalOpened, { open: openEditModal, close: closeEditModal }] = useDisclosure(false);
+	const [editModalOpened, { open: openEditModal, close: closeEditModal }] =
+		useDisclosure(false);
 
 	// Fetch book details
 	const {
@@ -218,7 +219,8 @@ export function BookDetail() {
 
 	// Calculate reading progress (current_page is 1-indexed)
 	const currentPage = book.readProgress ? book.readProgress.current_page : 0;
-	const percentage = book.pageCount > 0 ? (currentPage / book.pageCount) * 100 : 0;
+	const percentage =
+		book.pageCount > 0 ? (currentPage / book.pageCount) * 100 : 0;
 
 	// Extract metadata values
 	const languageDisplay = metadata?.languageIso
@@ -284,7 +286,10 @@ export function BookDetail() {
 								>
 									<IconTrash
 										size={48}
-										style={{ color: "var(--mantine-color-red-6)", opacity: 0.7 }}
+										style={{
+											color: "var(--mantine-color-red-6)",
+											opacity: 0.7,
+										}}
 									/>
 									<Text size="sm" fw={500} c="red" mt="xs">
 										Deleted
@@ -315,7 +320,12 @@ export function BookDetail() {
 									</Group>
 									<Group gap="xs" mt={4}>
 										{book.deleted && (
-											<Badge size="sm" variant="filled" color="red" leftSection={<IconTrash size={12} />}>
+											<Badge
+												size="sm"
+												variant="filled"
+												color="red"
+												leftSection={<IconTrash size={12} />}
+											>
 												Deleted
 											</Badge>
 										)}
@@ -451,16 +461,26 @@ export function BookDetail() {
 									>
 										{metadata.summary}
 									</Text>
-									{(metadata.summary.length > 150 || metadata.summary.includes("\n")) && (
+									{(metadata.summary.length > 150 ||
+										metadata.summary.includes("\n")) && (
 										<Text
 											size="sm"
 											c="dimmed"
-											style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+											style={{
+												cursor: "pointer",
+												display: "inline-flex",
+												alignItems: "center",
+												gap: 4,
+											}}
 											onClick={toggleSummary}
 											mt={4}
 										>
 											{summaryOpened ? "READ LESS" : "READ MORE"}
-											{summaryOpened ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />}
+											{summaryOpened ? (
+												<IconChevronUp size={14} />
+											) : (
+												<IconChevronDown size={14} />
+											)}
 										</Text>
 									)}
 								</Box>
@@ -488,35 +508,49 @@ export function BookDetail() {
 				<Stack gap="xs">
 					{/* File Info */}
 					<Group gap="md" align="center">
-						<Text size="sm" c="dimmed" w={100}>SIZE</Text>
+						<Text size="sm" c="dimmed" w={100}>
+							SIZE
+						</Text>
 						<Text size="sm">{formatFileSize(book.fileSize)}</Text>
 					</Group>
 
 					<Group gap="md" align="center">
-						<Text size="sm" c="dimmed" w={100}>PAGES</Text>
+						<Text size="sm" c="dimmed" w={100}>
+							PAGES
+						</Text>
 						<Text size="sm">{book.pageCount}</Text>
 					</Group>
 
 					{/* Publisher */}
 					{metadata?.publisher && (
 						<Group gap="md" align="center">
-							<Text size="sm" c="dimmed" w={100}>PUBLISHER</Text>
-							<Badge variant="outline" size="sm">{metadata.publisher}</Badge>
+							<Text size="sm" c="dimmed" w={100}>
+								PUBLISHER
+							</Text>
+							<Badge variant="outline" size="sm">
+								{metadata.publisher}
+							</Badge>
 						</Group>
 					)}
 
 					{/* Imprint */}
 					{metadata?.imprint && (
 						<Group gap="md" align="center">
-							<Text size="sm" c="dimmed" w={100}>IMPRINT</Text>
-							<Badge variant="outline" size="sm">{metadata.imprint}</Badge>
+							<Text size="sm" c="dimmed" w={100}>
+								IMPRINT
+							</Text>
+							<Badge variant="outline" size="sm">
+								{metadata.imprint}
+							</Badge>
 						</Group>
 					)}
 
 					{/* Release Year */}
 					{releaseYear && (
 						<Group gap="md" align="center">
-							<Text size="sm" c="dimmed" w={100}>YEAR</Text>
+							<Text size="sm" c="dimmed" w={100}>
+								YEAR
+							</Text>
 							<Text size="sm">{releaseYear}</Text>
 						</Group>
 					)}
@@ -524,7 +558,9 @@ export function BookDetail() {
 					{/* Language */}
 					{languageDisplay && (
 						<Group gap="md" align="center">
-							<Text size="sm" c="dimmed" w={100}>LANGUAGE</Text>
+							<Text size="sm" c="dimmed" w={100}>
+								LANGUAGE
+							</Text>
 							<Text size="sm">{languageDisplay}</Text>
 						</Group>
 					)}
@@ -532,15 +568,21 @@ export function BookDetail() {
 					{/* Genre */}
 					{metadata?.genre && (
 						<Group gap="md" align="center">
-							<Text size="sm" c="dimmed" w={100}>GENRE</Text>
-							<Badge variant="light" size="sm">{metadata.genre}</Badge>
+							<Text size="sm" c="dimmed" w={100}>
+								GENRE
+							</Text>
+							<Badge variant="light" size="sm">
+								{metadata.genre}
+							</Badge>
 						</Group>
 					)}
 
 					{/* Creators */}
 					{creators.map(({ role, names }) => (
 						<Group key={role} gap="md" align="flex-start">
-							<Text size="sm" c="dimmed" w={100}>{role}</Text>
+							<Text size="sm" c="dimmed" w={100}>
+								{role}
+							</Text>
 							<Group gap="xs">
 								{names.map((name) => (
 									<Badge key={`${role}-${name}`} variant="light" size="sm">
@@ -553,7 +595,9 @@ export function BookDetail() {
 
 					{/* File Path */}
 					<Group gap="md" align="center">
-						<Text size="sm" c="dimmed" w={100}>FILE</Text>
+						<Text size="sm" c="dimmed" w={100}>
+							FILE
+						</Text>
 						<Tooltip label={book.filePath} position="top" multiline maw={400}>
 							<Text size="sm" style={{ cursor: "help" }}>
 								{book.filePath.split("/").pop() || book.filePath}
@@ -563,7 +607,9 @@ export function BookDetail() {
 
 					{/* Hash */}
 					<Group gap="md" align="center">
-						<Text size="sm" c="dimmed" w={100}>HASH</Text>
+						<Text size="sm" c="dimmed" w={100}>
+							HASH
+						</Text>
 						<Tooltip label={book.fileHash} position="top">
 							<Text size="sm" style={{ cursor: "help" }}>
 								{book.fileHash.substring(0, 16)}...

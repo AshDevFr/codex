@@ -3,7 +3,6 @@ import {
 	Box,
 	Center,
 	Drawer,
-	Group,
 	Loader,
 	ScrollArea,
 	Stack,
@@ -41,17 +40,24 @@ interface EpubSearchProps {
 function highlightText(text: string, query: string): React.ReactNode {
 	if (!query.trim()) return text;
 
-	const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+	const regex = new RegExp(
+		`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
+		"gi",
+	);
 	const parts = text.split(regex);
 
 	return parts.map((part, index) =>
 		regex.test(part) ? (
-			<mark key={index} style={{ backgroundColor: "var(--mantine-color-yellow-3)", padding: 0 }}>
+			<mark
+				// biome-ignore lint/suspicious/noArrayIndexKey: Split string parts have stable order
+				key={index}
+				style={{ backgroundColor: "var(--mantine-color-yellow-3)", padding: 0 }}
+			>
 				{part}
 			</mark>
 		) : (
 			part
-		)
+		),
 	);
 }
 
@@ -100,7 +106,7 @@ export function EpubSearch({
 			setQuery(value);
 			debouncedSearch(value);
 		},
-		[debouncedSearch]
+		[debouncedSearch],
 	);
 
 	const handleClearQuery = useCallback(() => {
@@ -114,7 +120,7 @@ export function EpubSearch({
 			onNavigate(cfi);
 			onToggle(); // Close drawer after navigation
 		},
-		[onNavigate, onToggle]
+		[onNavigate, onToggle],
 	);
 
 	return (

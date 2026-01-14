@@ -14,10 +14,10 @@ import {
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { IconAdjustments, IconX } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { FilterGroup } from "./FilterGroup";
-import { useFilterState } from "@/hooks/useFilterState";
 import { genresApi } from "@/api/genres";
 import { tagsApi } from "@/api/tags";
+import { useFilterState } from "@/hooks/useFilterState";
+import { FilterGroup } from "./FilterGroup";
 import classes from "./FilterPanel.module.css";
 
 // Read status options (user's reading progress)
@@ -96,7 +96,12 @@ export function FilterPanel() {
 			>
 				<IconAdjustments size={20} />
 				{filterState.hasActiveFilters && (
-					<Badge size="xs" variant="filled" color="red" className={classes.filterBadge}>
+					<Badge
+						size="xs"
+						variant="filled"
+						color="red"
+						className={classes.filterBadge}
+					>
 						{filterState.activeFilterCount}
 					</Badge>
 				)}
@@ -205,8 +210,9 @@ export function FilterPanel() {
 								{/* Empty state hint when no metadata */}
 								{!hasMetadataFilters && (
 									<Text size="sm" c="dimmed" fs="italic" mt="md">
-										Genre and tag filters will appear here once your library has metadata. You can
-										add genres and tags to series from the series detail page.
+										Genre and tag filters will appear here once your library has
+										metadata. You can add genres and tags to series from the
+										series detail page.
 									</Text>
 								)}
 							</Stack>

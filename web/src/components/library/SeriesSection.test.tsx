@@ -1,5 +1,5 @@
-import { renderWithProviders } from "@/test/utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { renderWithProviders } from "@/test/utils";
 import { SeriesSection } from "./SeriesSection";
 
 // Mock the API - never resolves to keep loading state
@@ -45,10 +45,7 @@ describe("SeriesSection", () => {
 
 	const renderComponent = (searchParams = new URLSearchParams()) => {
 		return renderWithProviders(
-			<SeriesSection
-				libraryId="test-library-id"
-				searchParams={searchParams}
-			/>,
+			<SeriesSection libraryId="test-library-id" searchParams={searchParams} />,
 		);
 	};
 
@@ -68,7 +65,9 @@ describe("SeriesSection", () => {
 
 			// Count skeleton elements
 			// With pageSize=6, should have 6 skeleton boxes with 2 skeletons each
-			const skeletonContainers = container.querySelectorAll(".mantine-Skeleton-root");
+			const skeletonContainers = container.querySelectorAll(
+				".mantine-Skeleton-root",
+			);
 			// Each item has 2 skeletons (image + title), so 6 items = 12 skeletons
 			expect(skeletonContainers.length).toBe(12);
 		});
@@ -78,7 +77,9 @@ describe("SeriesSection", () => {
 			const { container } = renderComponent(searchParams);
 
 			// Even with pageSize=50, should cap at 12 skeleton items (24 skeleton elements)
-			const skeletonContainers = container.querySelectorAll(".mantine-Skeleton-root");
+			const skeletonContainers = container.querySelectorAll(
+				".mantine-Skeleton-root",
+			);
 			expect(skeletonContainers.length).toBe(24); // 12 items * 2 skeletons each
 		});
 	});

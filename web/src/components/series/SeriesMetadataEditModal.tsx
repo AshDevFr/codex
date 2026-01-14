@@ -1,12 +1,12 @@
 import {
 	Button,
+	Center,
 	Group,
 	Loader,
 	Modal,
 	Stack,
 	Tabs,
 	Text,
-	Center,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import {
@@ -19,23 +19,21 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
-import {
-	seriesMetadataApi,
-	type FullSeriesMetadata,
-	type MetadataLocks,
-	type AlternateTitle,
-	type ExternalLink,
-} from "@/api/seriesMetadata";
 import { seriesApi } from "@/api/series";
 import {
-	LockableInput,
-	LockableTextarea,
-	LockableSelect,
-	LockableChipInput,
-	LockableListEditor,
+	type FullSeriesMetadata,
+	type MetadataLocks,
+	seriesMetadataApi,
+} from "@/api/seriesMetadata";
+import {
+	type ImageInfo,
 	ImageUploader,
 	type ListItem,
-	type ImageInfo,
+	LockableChipInput,
+	LockableInput,
+	LockableListEditor,
+	LockableSelect,
+	LockableTextarea,
 } from "@/components/forms/lockable";
 
 export interface SeriesMetadataEditModalProps {
@@ -92,7 +90,7 @@ const READING_DIRECTION_OPTIONS = [
 	{ value: "webtoon", label: "Webtoon" },
 ];
 
-const ALTERNATE_TITLE_LABELS = [
+const _ALTERNATE_TITLE_LABELS = [
 	{ value: "native", label: "Native" },
 	{ value: "roman", label: "Roman" },
 	{ value: "english", label: "English" },
@@ -102,7 +100,9 @@ const ALTERNATE_TITLE_LABELS = [
 	{ value: "other", label: "Other" },
 ];
 
-function initializeFormState(metadata: FullSeriesMetadata | undefined): FormState {
+function initializeFormState(
+	metadata: FullSeriesMetadata | undefined,
+): FormState {
 	return {
 		title: metadata?.title || "",
 		titleSort: metadata?.sortName || "",
@@ -156,9 +156,15 @@ export function SeriesMetadataEditModal({
 }: SeriesMetadataEditModalProps) {
 	const queryClient = useQueryClient();
 	const [activeTab, setActiveTab] = useState<string | null>("general");
-	const [formState, setFormState] = useState<FormState>(initializeFormState(undefined));
-	const [locksState, setLocksState] = useState<LocksState>(initializeLocksState(undefined));
-	const [originalFormState, setOriginalFormState] = useState<FormState | null>(null);
+	const [formState, setFormState] = useState<FormState>(
+		initializeFormState(undefined),
+	);
+	const [locksState, setLocksState] = useState<LocksState>(
+		initializeLocksState(undefined),
+	);
+	const [originalFormState, setOriginalFormState] = useState<FormState | null>(
+		null,
+	);
 	const [posterImage, setPosterImage] = useState<ImageInfo | null>(null);
 
 	// Fetch full metadata
@@ -179,20 +185,20 @@ export function SeriesMetadataEditModal({
 	}, [metadata]);
 
 	// Update field helper
-	const updateField = useCallback(<K extends keyof FormState>(
-		field: K,
-		value: FormState[K],
-	) => {
-		setFormState((prev) => ({ ...prev, [field]: value }));
-	}, []);
+	const updateField = useCallback(
+		<K extends keyof FormState>(field: K, value: FormState[K]) => {
+			setFormState((prev) => ({ ...prev, [field]: value }));
+		},
+		[],
+	);
 
 	// Update lock helper
-	const updateLock = useCallback(<K extends keyof LocksState>(
-		field: K,
-		value: boolean,
-	) => {
-		setLocksState((prev) => ({ ...prev, [field]: value }));
-	}, []);
+	const updateLock = useCallback(
+		<K extends keyof LocksState>(field: K, value: boolean) => {
+			setLocksState((prev) => ({ ...prev, [field]: value }));
+		},
+		[],
+	);
 
 	// Save mutation
 	const saveMutation = useMutation({
@@ -227,7 +233,9 @@ export function SeriesMetadataEditModal({
 				originalFormState?.alternateTitles.map((t) => t.id) || [],
 			);
 			const currentTitleIds = new Set(
-				formState.alternateTitles.filter((t) => !t.id.startsWith("new-")).map((t) => t.id),
+				formState.alternateTitles
+					.filter((t) => !t.id.startsWith("new-"))
+					.map((t) => t.id),
 			);
 
 			// Delete removed titles
@@ -267,11 +275,13 @@ export function SeriesMetadataEditModal({
 			}
 
 			// Handle external links changes
-			const originalLinkIds = new Set(
+			const _originalLinkIds = new Set(
 				originalFormState?.externalLinks.map((l) => l.id) || [],
 			);
 			const currentLinkIds = new Set(
-				formState.externalLinks.filter((l) => !l.id.startsWith("new-")).map((l) => l.id),
+				formState.externalLinks
+					.filter((l) => !l.id.startsWith("new-"))
+					.map((l) => l.id),
 			);
 
 			// Delete removed links
@@ -432,7 +442,8 @@ export function SeriesMetadataEditModal({
 	const renderAlternateTitlesTab = () => (
 		<Stack gap="md">
 			<Text size="sm" c="dimmed">
-				Add alternate titles for this series (e.g., native title, romanized title).
+				Add alternate titles for this series (e.g., native title, romanized
+				title).
 			</Text>
 
 			<LockableListEditor

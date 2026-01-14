@@ -66,7 +66,7 @@ describe("useEpubBookmarks", () => {
 			localStorage.setItem(storageKey, JSON.stringify(savedBookmarks));
 
 			const { result } = renderHook(() =>
-				useEpubBookmarks({ bookId, enabled: false })
+				useEpubBookmarks({ bookId, enabled: false }),
 			);
 
 			expect(result.current.bookmarks).toEqual([]);
@@ -103,13 +103,13 @@ describe("useEpubBookmarks", () => {
 				});
 				result.current.addBookmark({
 					cfi: "epubcfi(/6/4!/4/2/2:0)",
-					percentage: 0.50,
+					percentage: 0.5,
 					note: "",
 				});
 			});
 
 			expect(result.current.bookmarks[0].id).not.toBe(
-				result.current.bookmarks[1].id
+				result.current.bookmarks[1].id,
 			);
 		});
 
@@ -127,7 +127,7 @@ describe("useEpubBookmarks", () => {
 
 			const after = Date.now();
 			expect(result.current.bookmarks[0].createdAt).toBeGreaterThanOrEqual(
-				before
+				before,
 			);
 			expect(result.current.bookmarks[0].createdAt).toBeLessThanOrEqual(after);
 		});
@@ -144,8 +144,8 @@ describe("useEpubBookmarks", () => {
 				});
 			});
 
-			expect(createdBookmark!.id).toBeDefined();
-			expect(createdBookmark!.cfi).toBe("epubcfi(/6/4!/4/2/1:0)");
+			expect(createdBookmark?.id).toBeDefined();
+			expect(createdBookmark?.cfi).toBe("epubcfi(/6/4!/4/2/1:0)");
 		});
 
 		it("should persist to localStorage", () => {
@@ -178,7 +178,7 @@ describe("useEpubBookmarks", () => {
 			});
 
 			act(() => {
-				result.current.updateBookmark(bookmark!.id, { note: "Updated note" });
+				result.current.updateBookmark(bookmark?.id, { note: "Updated note" });
 			});
 
 			expect(result.current.bookmarks[0].note).toBe("Updated note");
@@ -196,13 +196,13 @@ describe("useEpubBookmarks", () => {
 				});
 				result.current.addBookmark({
 					cfi: "epubcfi(/6/4!/4/2/2:0)",
-					percentage: 0.50,
+					percentage: 0.5,
 					note: "Note 2",
 				});
 			});
 
 			act(() => {
-				result.current.updateBookmark(bookmark1!.id, { note: "Updated" });
+				result.current.updateBookmark(bookmark1?.id, { note: "Updated" });
 			});
 
 			expect(result.current.bookmarks[0].note).toBe("Updated");
@@ -224,7 +224,7 @@ describe("useEpubBookmarks", () => {
 			});
 
 			act(() => {
-				result.current.removeBookmark(bookmark!.id);
+				result.current.removeBookmark(bookmark?.id);
 			});
 
 			expect(result.current.bookmarks).toHaveLength(0);
@@ -242,17 +242,17 @@ describe("useEpubBookmarks", () => {
 				});
 				result.current.addBookmark({
 					cfi: "epubcfi(/6/4!/4/2/2:0)",
-					percentage: 0.50,
+					percentage: 0.5,
 					note: "",
 				});
 			});
 
 			act(() => {
-				result.current.removeBookmark(bookmark1!.id);
+				result.current.removeBookmark(bookmark1?.id);
 			});
 
 			expect(result.current.bookmarks).toHaveLength(1);
-			expect(result.current.bookmarks[0].percentage).toBe(0.50);
+			expect(result.current.bookmarks[0].percentage).toBe(0.5);
 		});
 	});
 
@@ -308,7 +308,9 @@ describe("useEpubBookmarks", () => {
 		it("should return undefined for non-existent CFI", () => {
 			const { result } = renderHook(() => useEpubBookmarks({ bookId }));
 
-			const bookmark = result.current.getBookmarkByCfi("epubcfi(/6/4!/4/2/1:0)");
+			const bookmark = result.current.getBookmarkByCfi(
+				"epubcfi(/6/4!/4/2/1:0)",
+			);
 			expect(bookmark).toBeUndefined();
 		});
 	});
@@ -325,7 +327,7 @@ describe("useEpubBookmarks", () => {
 				});
 				result.current.addBookmark({
 					cfi: "epubcfi(/6/4!/4/2/2:0)",
-					percentage: 0.50,
+					percentage: 0.5,
 					note: "",
 				});
 			});
@@ -363,7 +365,7 @@ describe("useEpubBookmarks", () => {
 	describe("persistence", () => {
 		it("should persist bookmarks across hook remounts", () => {
 			const { result, unmount } = renderHook(() =>
-				useEpubBookmarks({ bookId })
+				useEpubBookmarks({ bookId }),
 			);
 
 			act(() => {
@@ -377,7 +379,7 @@ describe("useEpubBookmarks", () => {
 			unmount();
 
 			const { result: newResult } = renderHook(() =>
-				useEpubBookmarks({ bookId })
+				useEpubBookmarks({ bookId }),
 			);
 
 			expect(newResult.current.bookmarks).toHaveLength(1);
@@ -386,10 +388,10 @@ describe("useEpubBookmarks", () => {
 
 		it("should use separate storage for different books", () => {
 			const { result: result1 } = renderHook(() =>
-				useEpubBookmarks({ bookId: "book-1" })
+				useEpubBookmarks({ bookId: "book-1" }),
 			);
 			const { result: result2 } = renderHook(() =>
-				useEpubBookmarks({ bookId: "book-2" })
+				useEpubBookmarks({ bookId: "book-2" }),
 			);
 
 			act(() => {

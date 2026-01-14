@@ -1,8 +1,16 @@
-import { ActionIcon, Box, Group, SegmentedControl, Stack, Text, Tooltip } from "@mantine/core";
+import {
+	ActionIcon,
+	Box,
+	Group,
+	SegmentedControl,
+	Stack,
+	Text,
+	Tooltip,
+} from "@mantine/core";
 import { IconX } from "@tabler/icons-react";
-import { TriStateChip } from "./TriStateChip";
 import type { FilterGroupState, FilterMode, TriState } from "@/types";
 import classes from "./FilterGroup.module.css";
+import { TriStateChip } from "./TriStateChip";
 
 interface FilterOption {
 	value: string;

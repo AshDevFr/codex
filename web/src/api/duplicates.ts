@@ -21,9 +21,8 @@ export const duplicatesApi = {
 	 * Trigger a duplicate scan
 	 */
 	scan: async (): Promise<TriggerDuplicateScanResponse> => {
-		const response = await api.post<TriggerDuplicateScanResponse>(
-			"/duplicates/scan",
-		);
+		const response =
+			await api.post<TriggerDuplicateScanResponse>("/duplicates/scan");
 		return response.data;
 	},
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { genresApi } from "./genres";
 import { api } from "./client";
+import { genresApi } from "./genres";
 
 // Mock the api client
 vi.mock("./client", () => ({
@@ -77,7 +77,10 @@ describe("genresApi", () => {
 
 			vi.mocked(api.put).mockResolvedValueOnce({ data: mockResponse });
 
-			const result = await genresApi.setForSeries("series-123", ["Action", "Sci-Fi"]);
+			const result = await genresApi.setForSeries("series-123", [
+				"Action",
+				"Sci-Fi",
+			]);
 
 			expect(api.put).toHaveBeenCalledWith("/series/series-123/genres", {
 				genres: ["Action", "Sci-Fi"],
@@ -118,7 +121,9 @@ describe("genresApi", () => {
 
 			await genresApi.removeFromSeries("series-123", "genre-1");
 
-			expect(api.delete).toHaveBeenCalledWith("/series/series-123/genres/genre-1");
+			expect(api.delete).toHaveBeenCalledWith(
+				"/series/series-123/genres/genre-1",
+			);
 		});
 	});
 

@@ -60,7 +60,11 @@ export function PreviewScanPanel({
 
 	if (!path.trim()) {
 		return (
-			<Alert icon={<IconAlertCircle size={16} />} color="yellow" variant="light">
+			<Alert
+				icon={<IconAlertCircle size={16} />}
+				color="yellow"
+				variant="light"
+			>
 				<Text size="sm">
 					Select a library path first to preview series detection.
 				</Text>
@@ -142,7 +146,11 @@ function PreviewResults({ data }: PreviewResultsProps) {
 			</Group>
 
 			{detectedSeries.length === 0 ? (
-				<Alert icon={<IconAlertCircle size={16} />} color="yellow" variant="light">
+				<Alert
+					icon={<IconAlertCircle size={16} />}
+					color="yellow"
+					variant="light"
+				>
 					<Text size="sm">
 						No series detected. Try a different strategy or check your folder
 						structure.
@@ -152,7 +160,10 @@ function PreviewResults({ data }: PreviewResultsProps) {
 				<ScrollArea h={300} type="auto">
 					<Stack gap="xs">
 						{detectedSeries.map((series, index) => (
-							<SeriesPreviewCard key={`${series.name}-${index}`} series={series} />
+							<SeriesPreviewCard
+								key={`${series.name}-${index}`}
+								series={series}
+							/>
 						))}
 					</Stack>
 				</ScrollArea>
@@ -211,7 +222,11 @@ function SeriesPreviewCard({ series }: SeriesPreviewCardProps) {
 							Sample books:
 						</Text>
 						{sampleBooks.slice(0, 3).map((book, idx) => (
-							<Code key={idx} style={{ fontSize: "11px" }}>
+							<Code
+								// biome-ignore lint/suspicious/noArrayIndexKey: Static list, index is safe
+								key={idx}
+								style={{ fontSize: "11px" }}
+							>
 								{book}
 							</Code>
 						))}
