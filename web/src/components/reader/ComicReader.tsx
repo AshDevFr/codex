@@ -1,6 +1,7 @@
 import { Box, Center, Loader, Text } from "@mantine/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+	type FitMode,
 	type PageOrientation,
 	selectEffectiveReadingDirection,
 	useReaderStore,
@@ -76,7 +77,12 @@ export function ComicReader({
 	const [boundaryNotification, setBoundaryNotification] = useState<string | null>(null);
 
 	// Per-series settings (forkable settings with series overrides)
-	const { effectiveSettings, isLoaded: seriesSettingsLoaded } = useSeriesReaderSettings(seriesId);
+	const {
+		effectiveSettings,
+		isLoaded: seriesSettingsLoaded,
+		hasSeriesOverride,
+		updateSetting: updateSeriesSetting,
+	} = useSeriesReaderSettings(seriesId);
 
 	// Extract forkable settings from effective settings
 	const {
@@ -134,6 +140,8 @@ export function ComicReader({
 		(state) => state.setLastNavigationDirection,
 	);
 	const addPreloadedImage = useReaderStore((state) => state.addPreloadedImage);
+	const setGlobalFitMode = useReaderStore((state) => state.setFitMode);
+	const setGlobalPageLayout = useReaderStore((state) => state.setPageLayout);
 
 	// Fetch adjacent books for series navigation
 	useAdjacentBooks({ bookId, enabled: true });
@@ -274,6 +282,31 @@ export function ComicReader({
 		setLastNavigationDirection("prev");
 		handlePrevPage();
 	}, [setLastNavigationDirection, handlePrevPage]);
+
+	// Cycle fit mode - respects series settings if override exists
+	const FIT_MODE_CYCLE: FitMode[] = ["screen", "width", "width-shrink", "height", "original"];
+	const handleCycleFitMode = useCallback(() => {
+		const currentIndex = FIT_MODE_CYCLE.indexOf(fitMode);
+		const nextIndex = (currentIndex + 1) % FIT_MODE_CYCLE.length;
+		const nextMode = FIT_MODE_CYCLE[nextIndex];
+
+		if (hasSeriesOverride) {
+			updateSeriesSetting("fitMode", nextMode);
+		} else {
+			setGlobalFitMode(nextMode);
+		}
+	}, [fitMode, hasSeriesOverride, updateSeriesSetting, setGlobalFitMode]);
+
+	// Toggle page layout - respects series settings if override exists
+	const handleTogglePageLayout = useCallback(() => {
+		const newLayout = pageLayout === "single" ? "double" : "single";
+
+		if (hasSeriesOverride) {
+			updateSeriesSetting("pageLayout", newLayout);
+		} else {
+			setGlobalPageLayout(newLayout);
+		}
+	}, [pageLayout, hasSeriesOverride, updateSeriesSetting, setGlobalPageLayout]);
 
 	// Handle click zones for single-page navigation
 	const handleSinglePageClick = useCallback(
@@ -504,6 +537,11 @@ export function ComicReader({
 				nextBook={adjacentBooks?.next}
 				onPrevBook={canGoPrevBook ? goToPrevBook : undefined}
 				onNextBook={canGoNextBook ? goToNextBook : undefined}
+				fitMode={fitMode}
+				onCycleFitMode={handleCycleFitMode}
+				pageLayout={pageLayout}
+				onTogglePageLayout={handleTogglePageLayout}
+				hasSeriesOverride={hasSeriesOverride}
 			/>
 
 			{/* Boundary notification */}

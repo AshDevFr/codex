@@ -10,6 +10,7 @@ import { useReaderStore } from "@/store/readerStore";
 import { detectPageOrientation } from "./utils/spreadCalculation";
 
 interface PageState {
+	src: string;
 	isLoading: boolean;
 	hasError: boolean;
 }
@@ -171,27 +172,32 @@ export function DoublePageSpread({
 	onClick,
 	onPageOrientationDetected,
 }: DoublePageSpreadProps) {
-	// Get preloaded images to check if pages are already loaded
+	// Subscribe to preloadedImages changes
+	// When the Set reference changes (due to Immer), we re-render
 	const preloadedImages = useReaderStore((state) => state.preloadedImages);
 
 	// Track loading/error state for each page independently
 	// Store includes the page src to detect when pages change
-	const [pageStates, setPageStates] = useState<Record<string, PageState & { src: string }>>({});
+	const [pageStates, setPageStates] = useState<Record<number, PageState>>({});
 
 	// Helper to get effective loading state - considers both stored state and preload status
-	const getPageState = (pageNumber: number, src: string): PageState => {
-		const stored = pageStates[pageNumber];
-		// If we have state for this exact src, use it
-		if (stored && stored.src === src) {
-			return { isLoading: stored.isLoading, hasError: stored.hasError };
-		}
-		// Otherwise, check if preloaded
-		if (preloadedImages.has(src)) {
-			return { isLoading: false, hasError: false };
-		}
-		// Default to loading
-		return { isLoading: true, hasError: false };
-	};
+	// This is called during render, so it always gets the current preloadedImages
+	const getPageLoadState = useCallback(
+		(pageNumber: number, src: string): { isLoading: boolean; hasError: boolean } => {
+			const stored = pageStates[pageNumber];
+			// If we have state for this exact src, use it
+			if (stored && stored.src === src) {
+				return { isLoading: stored.isLoading, hasError: stored.hasError };
+			}
+			// Otherwise, check if preloaded
+			if (preloadedImages.has(src)) {
+				return { isLoading: false, hasError: false };
+			}
+			// Default to loading
+			return { isLoading: true, hasError: false };
+		},
+		[pageStates, preloadedImages],
+	);
 
 	const handleImageLoad = useCallback(
 		(pageNumber: number, src: string, event: React.SyntheticEvent<HTMLImageElement>) => {
@@ -273,7 +279,7 @@ export function DoublePageSpread({
 			data-testid="double-page-spread"
 		>
 			{displayPages.map((page, index) => {
-				const state = getPageState(page.pageNumber, page.src);
+				const state = getPageLoadState(page.pageNumber, page.src);
 				const { hasError } = state;
 
 				// For double-page spread, align pages toward each other (left page to right edge, right page to left edge)

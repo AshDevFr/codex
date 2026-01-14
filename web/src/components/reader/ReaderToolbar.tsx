@@ -14,8 +14,10 @@ import {
 	IconArrowsMaximize,
 	IconArrowsMinimize,
 	IconAspectRatio,
+	IconBook,
 	IconChevronLeft,
 	IconChevronRight,
+	IconFile,
 	IconPhoto,
 	IconPlayerSkipBack,
 	IconPlayerSkipForward,
@@ -24,6 +26,7 @@ import {
 } from "@tabler/icons-react";
 import {
 	type FitMode,
+	type PageLayout,
 	selectEffectiveReadingDirection,
 	selectProgressPercent,
 	useReaderStore,
@@ -52,6 +55,16 @@ interface ReaderToolbarProps {
 	onPrevBook?: () => void;
 	/** Callback when next book button is clicked */
 	onNextBook?: () => void;
+	/** Current fit mode (uses global store if not provided) */
+	fitMode?: FitMode;
+	/** Callback when fit mode button is clicked (uses global cycleFitMode if not provided) */
+	onCycleFitMode?: () => void;
+	/** Current page layout */
+	pageLayout?: PageLayout;
+	/** Callback when page layout button is clicked */
+	onTogglePageLayout?: () => void;
+	/** Whether series-specific settings are active (shows blue tint on buttons) */
+	hasSeriesOverride?: boolean;
 }
 
 const FIT_MODE_LABELS: Record<FitMode, string> = {
@@ -85,11 +98,16 @@ export function ReaderToolbar({
 	nextBook,
 	onPrevBook,
 	onNextBook,
+	fitMode: fitModeProp,
+	onCycleFitMode,
+	pageLayout,
+	onTogglePageLayout,
+	hasSeriesOverride = false,
 }: ReaderToolbarProps) {
 	const currentPage = useReaderStore((state) => state.currentPage);
 	const totalPages = useReaderStore((state) => state.totalPages);
 	const isFullscreen = useReaderStore((state) => state.isFullscreen);
-	const fitMode = useReaderStore((state) => state.settings.fitMode);
+	const globalFitMode = useReaderStore((state) => state.settings.fitMode);
 	const progressPercent = useReaderStore(selectProgressPercent);
 	const readingDirection = useReaderStore(selectEffectiveReadingDirection);
 
@@ -97,7 +115,11 @@ export function ReaderToolbar({
 	const nextPage = useReaderStore((state) => state.nextPage);
 	const prevPage = useReaderStore((state) => state.prevPage);
 	const toggleFullscreen = useReaderStore((state) => state.toggleFullscreen);
-	const cycleFitMode = useReaderStore((state) => state.cycleFitMode);
+	const globalCycleFitMode = useReaderStore((state) => state.cycleFitMode);
+
+	// Use prop values if provided, otherwise fall back to global store
+	const fitMode = fitModeProp ?? globalFitMode;
+	const cycleFitMode = onCycleFitMode ?? globalCycleFitMode;
 
 	// Adjust navigation based on reading direction
 	// In RTL mode, clicking the left chevron goes forward (next page)
@@ -231,7 +253,7 @@ export function ReaderToolbar({
 								<Tooltip label={`Fit mode: ${FIT_MODE_LABELS[fitMode]} (M)`}>
 									<ActionIcon
 										variant="subtle"
-										color="gray"
+										color={hasSeriesOverride ? "blue" : "gray"}
 										onClick={cycleFitMode}
 										size="lg"
 									>
@@ -244,6 +266,20 @@ export function ReaderToolbar({
 											<IconArrowAutofitHeight size={20} />
 										)}
 										{fitMode === "original" && <IconPhoto size={20} />}
+									</ActionIcon>
+								</Tooltip>
+							)}
+
+							{/* Page layout toggle - only show for paginated modes */}
+							{showPageNavigation && onTogglePageLayout && pageLayout && pageLayout !== "continuous" && (
+								<Tooltip label={`Page layout: ${pageLayout === "single" ? "Single" : "Double"}`}>
+									<ActionIcon
+										variant="subtle"
+										color={hasSeriesOverride ? "blue" : "gray"}
+										onClick={onTogglePageLayout}
+										size="lg"
+									>
+										{pageLayout === "single" ? <IconFile size={20} /> : <IconBook size={20} />}
 									</ActionIcon>
 								</Tooltip>
 							)}

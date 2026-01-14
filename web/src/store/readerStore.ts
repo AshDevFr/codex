@@ -1,7 +1,12 @@
+import { enableMapSet } from "immer";
 import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
+
+// Enable Immer support for Map and Set
+// This is required for proper immutable updates to preloadedImages (Set)
+enableMapSet();
 
 // =============================================================================
 // Types

@@ -109,27 +109,30 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 		// Update the reading direction override in global store for immediate effect
 		setReadingDirectionOverride(direction);
 
-		// If we have series context, also save to series-specific settings
-		if (seriesId) {
+		// If we have series context with an existing override, save to series-specific settings
+		if (seriesId && hasSeriesOverride) {
 			updateSetting("readingDirection", direction);
 
 			// Auto-adjust fit mode for webtoon
 			if (direction === "webtoon" && !["width", "original"].includes(effectiveSettings.fitMode)) {
 				updateSetting("fitMode", "width");
 			}
-
-			// Persist to backend
-			updateSeriesReadingDirection.mutate(direction);
 		} else {
-			// No series context - just adjust fit mode in global store if needed
+			// No series override - adjust fit mode in global store if needed
 			if (direction === "webtoon" && !["width", "original"].includes(globalSettings.fitMode)) {
 				setGlobalFitMode("width");
 			}
 		}
+
+		// Persist to backend if we have series context (always, regardless of override)
+		if (seriesId) {
+			updateSeriesReadingDirection.mutate(direction);
+		}
 	};
 
 	const handleFitModeChange = (fitMode: FitMode) => {
-		if (seriesId) {
+		// Only save to series override if one already exists (explicitly forked)
+		if (seriesId && hasSeriesOverride) {
 			updateSetting("fitMode", fitMode);
 		} else {
 			setGlobalFitMode(fitMode);
@@ -137,7 +140,8 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 	};
 
 	const handleBackgroundChange = (bg: BackgroundColor) => {
-		if (seriesId) {
+		// Only save to series override if one already exists (explicitly forked)
+		if (seriesId && hasSeriesOverride) {
 			updateSetting("backgroundColor", bg);
 		} else {
 			useReaderStore.getState().setBackgroundColor(bg);
@@ -145,7 +149,8 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 	};
 
 	const handlePageLayoutChange = (layout: PageLayout) => {
-		if (seriesId) {
+		// Only save to series override if one already exists (explicitly forked)
+		if (seriesId && hasSeriesOverride) {
 			updateSetting("pageLayout", layout);
 		} else {
 			useReaderStore.getState().setPageLayout(layout);
@@ -153,7 +158,8 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 	};
 
 	const handleDoublePageWideAloneChange = (checked: boolean) => {
-		if (seriesId) {
+		// Only save to series override if one already exists (explicitly forked)
+		if (seriesId && hasSeriesOverride) {
 			updateSetting("doublePageShowWideAlone", checked);
 		} else {
 			useReaderStore.getState().setDoublePageShowWideAlone(checked);
@@ -161,7 +167,8 @@ export function ReaderSettings({ opened, onClose, seriesId }: ReaderSettingsProp
 	};
 
 	const handleDoublePageStartOnOddChange = (checked: boolean) => {
-		if (seriesId) {
+		// Only save to series override if one already exists (explicitly forked)
+		if (seriesId && hasSeriesOverride) {
 			updateSetting("doublePageStartOnOdd", checked);
 		} else {
 			useReaderStore.getState().setDoublePageStartOnOdd(checked);

@@ -595,7 +595,7 @@ describe("ReaderSettings", () => {
 			expect(useReaderStore.getState().settings.pageLayout).toBe("single");
 		});
 
-		it("should create series override when changing settings if none exists", async () => {
+		it("should update global settings when changing settings without explicit fork", async () => {
 			const storageKey = getSeriesStorageKey(TEST_USER_ID, TEST_SERIES_ID);
 
 			// Ensure no override exists initially
@@ -607,15 +607,14 @@ describe("ReaderSettings", () => {
 				expect(screen.getByRole("button", { name: /customize settings for this series/i })).toBeInTheDocument();
 			});
 
-			// Change background color (should auto-create override)
+			// Change background color - should NOT auto-create override, should update global instead
 			fireEvent.click(screen.getByRole("radio", { name: "Gray" }));
 
-			// Verify override was created
-			await waitFor(() => {
-				const stored = JSON.parse(localStorage.getItem(storageKey) || "{}");
-				expect(stored.backgroundColor).toBe("gray");
-				expect(stored.version).toBe(1);
-			});
+			// Verify no series override was created
+			expect(localStorage.getItem(storageKey)).toBeNull();
+
+			// Global store should be updated
+			expect(useReaderStore.getState().settings.backgroundColor).toBe("gray");
 		});
 
 		it("should not show Display section background when no override exists", async () => {

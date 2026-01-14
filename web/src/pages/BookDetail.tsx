@@ -401,9 +401,11 @@ export function BookDetail() {
 							{/* Reading progress */}
 							{hasProgress && !isCompleted && (
 								<Group gap="sm" align="center">
-									<Text size="sm">
-										Page {currentPage} of {book.pageCount}
-									</Text>
+									{book.fileFormat !== "epub" && (
+										<Text size="sm">
+											Page {currentPage} of {book.pageCount}
+										</Text>
+									)}
 									<Progress
 										value={percentage}
 										size="sm"

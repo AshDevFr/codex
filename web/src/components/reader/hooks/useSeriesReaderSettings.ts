@@ -22,6 +22,9 @@ export const SERIES_KEY_SUFFIX = "-series-";
 /** Anonymous user fallback ID */
 const ANONYMOUS_USER_ID = "anonymous";
 
+/** Custom event name for series settings updates */
+const SERIES_SETTINGS_UPDATE_EVENT = "codex-series-settings-update";
+
 // =============================================================================
 // Storage Key Utilities
 // =============================================================================
@@ -72,10 +75,15 @@ function readSeriesOverride(storageKey: string): SeriesReaderOverride | null {
 /**
  * Write a series override to localStorage.
  * Returns true on success, false on failure.
+ * Dispatches a custom event to notify other hook instances.
  */
 function writeSeriesOverride(storageKey: string, override: SeriesReaderOverride): boolean {
 	try {
 		localStorage.setItem(storageKey, JSON.stringify(override));
+		// Dispatch custom event to sync other hook instances
+		window.dispatchEvent(
+			new CustomEvent(SERIES_SETTINGS_UPDATE_EVENT, { detail: { storageKey } }),
+		);
 		return true;
 	} catch (error) {
 		// Handle quota exceeded or other storage errors
@@ -86,10 +94,15 @@ function writeSeriesOverride(storageKey: string, override: SeriesReaderOverride)
 
 /**
  * Remove a series override from localStorage.
+ * Dispatches a custom event to notify other hook instances.
  */
 function removeSeriesOverride(storageKey: string): void {
 	try {
 		localStorage.removeItem(storageKey);
+		// Dispatch custom event to sync other hook instances
+		window.dispatchEvent(
+			new CustomEvent(SERIES_SETTINGS_UPDATE_EVENT, { detail: { storageKey } }),
+		);
 	} catch (error) {
 		console.warn(`Failed to remove series override from localStorage: ${storageKey}`, error);
 	}
@@ -165,6 +178,20 @@ export function useSeriesReaderSettings(
 		const override = readSeriesOverride(storageKey);
 		setSeriesOverride(override);
 		setIsLoaded(true);
+
+		// Listen for updates from other hook instances
+		const handleSettingsUpdate = (event: Event) => {
+			const customEvent = event as CustomEvent<{ storageKey: string }>;
+			if (customEvent.detail?.storageKey === storageKey) {
+				const updatedOverride = readSeriesOverride(storageKey);
+				setSeriesOverride(updatedOverride);
+			}
+		};
+
+		window.addEventListener(SERIES_SETTINGS_UPDATE_EVENT, handleSettingsUpdate);
+		return () => {
+			window.removeEventListener(SERIES_SETTINGS_UPDATE_EVENT, handleSettingsUpdate);
+		};
 	}, [storageKey]);
 
 	// Compute effective settings (series override merged with global)

@@ -4,9 +4,10 @@ import type { ReadProgress } from "@/types";
 interface BookProgressProps {
 	progress: ReadProgress | null | undefined;
 	pageCount: number;
+	fileFormat?: string;
 }
 
-export function BookProgress({ progress, pageCount }: BookProgressProps) {
+export function BookProgress({ progress, pageCount, fileFormat }: BookProgressProps) {
 	if (!progress) {
 		return (
 			<Text size="sm" c="dimmed">
@@ -35,9 +36,13 @@ export function BookProgress({ progress, pageCount }: BookProgressProps) {
 
 	return (
 		<Group gap="md" style={{ flex: 1 }}>
-			<Text size="sm">
-				Page {currentPage} of {pageCount} ({Math.round(percentage)}%)
-			</Text>
+			{fileFormat !== "epub" ? (
+				<Text size="sm">
+					Page {currentPage} of {pageCount} ({Math.round(percentage)}%)
+				</Text>
+			) : (
+				<Text size="sm">{Math.round(percentage)}%</Text>
+			)}
 			<Progress
 				value={percentage}
 				size="sm"
