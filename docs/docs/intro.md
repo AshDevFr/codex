@@ -6,6 +6,8 @@ slug: /
 
 **Codex** is a next-generation digital library server for comics, manga, and ebooks built in Rust. Designed to scale horizontally while remaining simple for homelab deployments, Codex provides a powerful self-hosted solution for managing and reading your digital media collections.
 
+![Codex Home Page](./screenshots/home.png)
+
 ## Key Features
 
 ### Multi-Format Support
@@ -74,38 +76,6 @@ Full-featured REST API for integration:
 - OpenAPI documentation with Scalar
 - Multiple authentication methods (JWT, API Keys, Basic Auth)
 - Fine-grained permission system
-
-## Quick Start
-
-Get Codex running in minutes:
-
-### Using Docker (Recommended)
-
-```bash
-# Clone the repository
-git clone https://github.com/AshDevFr/codex.git
-cd codex
-
-# Start with Docker Compose (PostgreSQL + Codex)
-docker compose --profile prod up -d
-
-# Create your admin user
-docker compose exec codex codex seed --config /app/config/config.docker.yaml
-```
-
-Access Codex at `http://localhost:8080`
-
-### Using Pre-built Binary
-
-```bash
-# Download and run
-./codex serve --config codex.yaml
-
-# Create admin user
-./codex seed --config codex.yaml
-```
-
-See the [Installation Guide](./installation) for detailed instructions.
 
 ## Architecture Overview
 
@@ -179,7 +149,9 @@ Codex is released under the MIT License.
 
 ## Next Steps
 
-- [Install Codex](./installation)
-- [Configure your server](./configuration)
-- [Create your first library](./getting-started)
-- [Explore the API](./api)
+Ready to get started? Head to the [Getting Started guide](./getting-started) to have Codex running in minutes.
+
+For more details, see:
+- [Configuration](./configuration) - All configuration options
+- [Deployment](./deployment) - Docker Compose, systemd, Kubernetes
+- [API Reference](/docs/api/codex-api) - REST API documentation

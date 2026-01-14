@@ -30,6 +30,10 @@ Settings can come from multiple sources, with this priority (highest to lowest):
 
 Codex supports both SQLite and PostgreSQL databases.
 
+:::tip
+For detailed database setup instructions including installation, user creation, and troubleshooting, see the [Database Setup guide](./deployment/database).
+:::
+
 ### SQLite (Recommended for Simple Setups)
 
 Best for single-user or small deployments with fewer than 10,000 books.

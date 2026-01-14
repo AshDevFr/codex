@@ -1,0 +1,32 @@
+```yaml
+services:
+  codex:
+    image: ghcr.io/ashdevfr/codex:main
+    container_name: codex
+    ports:
+      - "8080:8080"
+    volumes:
+      # Your media library (read-only)
+      - /path/to/your/library:/library:ro
+      # Codex data: SQLite database, thumbnails, uploads
+      - codex-data:/app/data
+    environment:
+      # Generate with: openssl rand -base64 32
+      CODEX_AUTH_JWT_SECRET: "your-secure-secret-here"
+    restart: unless-stopped
+
+volumes:
+  codex-data:
+```
+
+Then start Codex:
+
+```bash
+# Start Codex
+docker compose up -d
+
+# View logs
+docker compose logs -f codex
+```
+
+Access Codex at `http://localhost:8080`. On first launch, you'll be guided through a setup wizard to create your admin account.

@@ -1,6 +1,7 @@
 import {
 	Box,
 	Divider,
+	Grid,
 	Group,
 	Modal,
 	Select,
@@ -76,125 +77,124 @@ export function EpubReaderSettings({
 	);
 
 	return (
-		<Modal opened={opened} onClose={onClose} title="Reader Settings" size="md">
-			<Stack gap="lg">
-				{/* Theme */}
-				<Box>
-					<Text size="sm" fw={500} mb="xs">
-						Theme
-					</Text>
-					<Select
-						value={settings.epubTheme}
-						onChange={(value) => value && setEpubTheme(value as EpubTheme)}
-						data={THEME_OPTIONS}
-						allowDeselect={false}
-					/>
-					<Text size="xs" c="dimmed" mt="xs">
-						Background and text color theme
-					</Text>
-				</Box>
+		<Modal opened={opened} onClose={onClose} title="Reader Settings" size="lg">
+			<Stack gap="md">
+				{/* Two-column layout */}
+				<Grid gutter="xl">
+					{/* Left Column: Appearance */}
+					<Grid.Col span={{ base: 12, sm: 6 }}>
+						<Stack gap="md">
+							{/* Theme */}
+							<Box>
+								<Text size="sm" fw={500} mb="xs">
+									Theme
+								</Text>
+								<Select
+									value={settings.epubTheme}
+									onChange={(value) =>
+										value && setEpubTheme(value as EpubTheme)
+									}
+									data={THEME_OPTIONS}
+									allowDeselect={false}
+								/>
+							</Box>
 
-				{/* Font Family */}
-				<Box>
-					<Text size="sm" fw={500} mb="xs">
-						Font Family
-					</Text>
-					<Select
-						value={settings.epubFontFamily}
-						onChange={(value) =>
-							value && setEpubFontFamily(value as EpubFontFamily)
-						}
-						data={FONT_FAMILY_OPTIONS}
-						allowDeselect={false}
-					/>
-					<Text size="xs" c="dimmed" mt="xs">
-						Choose a typeface for reading
-					</Text>
-				</Box>
+							{/* Font Family */}
+							<Box>
+								<Text size="sm" fw={500} mb="xs">
+									Font Family
+								</Text>
+								<Select
+									value={settings.epubFontFamily}
+									onChange={(value) =>
+										value && setEpubFontFamily(value as EpubFontFamily)
+									}
+									data={FONT_FAMILY_OPTIONS}
+									allowDeselect={false}
+								/>
+							</Box>
 
-				{/* Font Size */}
-				<Box>
-					<Group justify="space-between" mb="xs">
-						<Text size="sm" fw={500}>
-							Font Size
-						</Text>
-						<Text size="sm" c="dimmed">
-							{settings.epubFontSize}%
-						</Text>
-					</Group>
-					<Slider
-						value={settings.epubFontSize}
-						onChange={setEpubFontSize}
-						min={50}
-						max={200}
-						step={10}
-						marks={[
-							{ value: 50, label: "50%" },
-							{ value: 100, label: "100%" },
-							{ value: 150, label: "150%" },
-							{ value: 200, label: "200%" },
-						]}
-					/>
-					<Text size="xs" c="dimmed" mt="lg">
-						Adjust text size for comfortable reading
-					</Text>
-				</Box>
+							{/* Font Size */}
+							<Box pb="md">
+								<Group justify="space-between" mb="xs">
+									<Text size="sm" fw={500}>
+										Font Size
+									</Text>
+									<Text size="xs" c="dimmed">
+										{settings.epubFontSize}%
+									</Text>
+								</Group>
+								<Slider
+									value={settings.epubFontSize}
+									onChange={setEpubFontSize}
+									min={50}
+									max={200}
+									step={10}
+									marks={[
+										{ value: 50, label: "50%" },
+										{ value: 100, label: "100%" },
+										{ value: 200, label: "200%" },
+									]}
+								/>
+							</Box>
+						</Stack>
+					</Grid.Col>
 
-				{/* Line Height */}
-				<Box>
-					<Group justify="space-between" mb="xs">
-						<Text size="sm" fw={500}>
-							Line Spacing
-						</Text>
-						<Text size="sm" c="dimmed">
-							{settings.epubLineHeight}%
-						</Text>
-					</Group>
-					<Slider
-						value={settings.epubLineHeight}
-						onChange={setEpubLineHeight}
-						min={100}
-						max={250}
-						step={10}
-						marks={[
-							{ value: 100, label: "Tight" },
-							{ value: 140, label: "Normal" },
-							{ value: 200, label: "Relaxed" },
-							{ value: 250, label: "Loose" },
-						]}
-					/>
-					<Text size="xs" c="dimmed" mt="lg">
-						Space between lines of text
-					</Text>
-				</Box>
+					{/* Right Column: Typography & Layout */}
+					<Grid.Col span={{ base: 12, sm: 6 }}>
+						<Stack gap="md">
+							{/* Line Height */}
+							<Box pb="md">
+								<Group justify="space-between" mb="xs">
+									<Text size="sm" fw={500}>
+										Line Spacing
+									</Text>
+									<Text size="xs" c="dimmed">
+										{settings.epubLineHeight}%
+									</Text>
+								</Group>
+								<Slider
+									value={settings.epubLineHeight}
+									onChange={setEpubLineHeight}
+									min={100}
+									max={250}
+									step={10}
+									marks={[
+										{ value: 100, label: "Tight" },
+										{ value: 175, label: "Normal" },
+										{ value: 250, label: "Loose" },
+									]}
+								/>
+							</Box>
 
-				{/* Margins */}
-				<Box>
-					<Group justify="space-between" mb="xs">
-						<Text size="sm" fw={500}>
-							Margins
-						</Text>
-						<Text size="sm" c="dimmed">
-							{settings.epubMargin}%
-						</Text>
-					</Group>
-					<Slider
-						value={settings.epubMargin}
-						onChange={setEpubMargin}
-						min={0}
-						max={30}
-						step={5}
-						marks={[
-							{ value: 0, label: "None" },
-							{ value: 10, label: "Normal" },
-							{ value: 20, label: "Wide" },
-							{ value: 30, label: "Max" },
-						]}
-					/>
-					<Text size="xs" c="dimmed" mt="lg">
-						Horizontal padding around text
-					</Text>
-				</Box>
+							{/* Margins */}
+							<Box pb="md">
+								<Group justify="space-between" mb="xs">
+									<Text size="sm" fw={500}>
+										Margins
+									</Text>
+									<Text size="xs" c="dimmed">
+										{settings.epubMargin}%
+									</Text>
+								</Group>
+								<Slider
+									value={settings.epubMargin}
+									onChange={setEpubMargin}
+									min={0}
+									max={30}
+									step={5}
+									marks={[
+										{ value: 0, label: "None" },
+										{ value: 15, label: "Normal" },
+										{ value: 30, label: "Max" },
+									]}
+								/>
+							</Box>
+						</Stack>
+					</Grid.Col>
+				</Grid>
+
+				<Divider />
 
 				{/* Auto-hide Toolbar */}
 				<Group justify="space-between">
@@ -228,52 +228,44 @@ export function EpubReaderSettings({
 					/>
 				</Group>
 
-				<Divider />
-
-				{/* Keyboard shortcuts info */}
-				<Box
-					p="sm"
-					style={{
-						backgroundColor: "var(--mantine-color-dark-6)",
-						borderRadius: "var(--mantine-radius-sm)",
-					}}
-				>
-					<Text size="sm" fw={500} mb="xs">
-						Keyboard Shortcuts
-					</Text>
-					<Stack gap={4}>
-						<Group justify="space-between">
-							<Text size="xs" c="dimmed">
-								Previous/Next page
-							</Text>
-							<Text size="xs">Arrow keys</Text>
-						</Group>
-						<Group justify="space-between">
-							<Text size="xs" c="dimmed">
-								Table of contents
-							</Text>
-							<Text size="xs">T</Text>
-						</Group>
-						<Group justify="space-between">
-							<Text size="xs" c="dimmed">
-								Toggle fullscreen
-							</Text>
-							<Text size="xs">F</Text>
-						</Group>
-						<Group justify="space-between">
-							<Text size="xs" c="dimmed">
-								Toggle toolbar
-							</Text>
-							<Text size="xs">Space</Text>
-						</Group>
-						<Group justify="space-between">
-							<Text size="xs" c="dimmed">
-								Close reader
-							</Text>
-							<Text size="xs">Esc</Text>
-						</Group>
-					</Stack>
-				</Box>
+				{/* Keyboard shortcuts - desktop only, compact */}
+				<Divider visibleFrom="sm" />
+				<Group justify="space-between" gap="xl" visibleFrom="sm">
+					<Group gap="lg">
+						<Text size="xs" c="dimmed">
+							<Text span fw={500}>
+								← →
+							</Text>{" "}
+							Navigate
+						</Text>
+						<Text size="xs" c="dimmed">
+							<Text span fw={500}>
+								T
+							</Text>{" "}
+							Contents
+						</Text>
+						<Text size="xs" c="dimmed">
+							<Text span fw={500}>
+								F
+							</Text>{" "}
+							Fullscreen
+						</Text>
+					</Group>
+					<Group gap="lg">
+						<Text size="xs" c="dimmed">
+							<Text span fw={500}>
+								Space
+							</Text>{" "}
+							Toolbar
+						</Text>
+						<Text size="xs" c="dimmed">
+							<Text span fw={500}>
+								Esc
+							</Text>{" "}
+							Close
+						</Text>
+					</Group>
+				</Group>
 			</Stack>
 		</Modal>
 	);

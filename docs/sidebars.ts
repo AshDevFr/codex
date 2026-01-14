@@ -8,7 +8,7 @@ const sidebars: SidebarsConfig = {
       type: "category",
       label: "Getting Started",
       collapsed: false,
-      items: ["installation", "getting-started", "configuration"],
+      items: ["getting-started", "configuration"],
     },
     {
       type: "category",
@@ -40,6 +40,7 @@ const sidebars: SidebarsConfig = {
           ],
         },
         "opds",
+        "reader-settings",
       ],
     },
     {
@@ -52,6 +53,7 @@ const sidebars: SidebarsConfig = {
         "deployment/systemd",
         "deployment/reverse-proxy",
         "deployment/database",
+        "deployment/performance",
         "deployment/operations",
       ],
     },

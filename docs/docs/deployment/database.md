@@ -6,6 +6,10 @@ sidebar_position: 6
 
 Codex supports PostgreSQL and SQLite databases.
 
+:::tip
+For quick configuration examples and all database-related settings, see the [Configuration guide](../configuration#database-configuration).
+:::
+
 ## Database Comparison
 
 | Feature | PostgreSQL | SQLite |

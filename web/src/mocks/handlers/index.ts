@@ -25,13 +25,46 @@ const utilityHandlers = [
 		return HttpResponse.json({ status: "ok" });
 	}),
 
-	// Setup status (assume setup is complete)
+	// Setup status - configurable via VITE_MOCK_SETUP_REQUIRED env var
 	http.get("/api/v1/setup/status", async () => {
 		await delay(50);
+		const setupRequired = import.meta.env.VITE_MOCK_SETUP_REQUIRED === "true";
 		return HttpResponse.json({
-			isSetupComplete: true,
-			hasAdmin: true,
-			hasLibraries: true,
+			setupRequired,
+			hasUsers: !setupRequired,
+		});
+	}),
+
+	// Setup initialize - create admin user
+	http.post("/api/v1/setup/initialize", async ({ request }) => {
+		await delay(500);
+		const body = (await request.json()) as {
+			username: string;
+			email: string;
+			password: string;
+		};
+
+		return HttpResponse.json({
+			accessToken:
+				"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ",
+			tokenType: "Bearer",
+			expiresIn: 86400,
+			user: {
+				id: "admin-user-id",
+				username: body.username,
+				email: body.email,
+				isAdmin: true,
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+			},
+		});
+	}),
+
+	// Setup configure settings
+	http.patch("/api/v1/setup/settings", async () => {
+		await delay(300);
+		return HttpResponse.json({
+			message: "Settings configured successfully",
 		});
 	}),
 

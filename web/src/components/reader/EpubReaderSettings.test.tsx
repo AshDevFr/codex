@@ -60,9 +60,6 @@ describe("EpubReaderSettings", () => {
 			);
 
 			expect(screen.getByText("Theme")).toBeInTheDocument();
-			expect(
-				screen.getByText("Background and text color theme"),
-			).toBeInTheDocument();
 			// Theme select shows "Light" as the default selected value
 			// We have two textboxes - one for theme, one for font family
 			const textboxes = screen.getAllByRole("textbox");
@@ -103,18 +100,17 @@ describe("EpubReaderSettings", () => {
 			).toBeInTheDocument();
 		});
 
-		it("should display keyboard shortcuts section", () => {
+		it("should display keyboard shortcuts inline (desktop only)", () => {
 			renderWithProviders(
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
-			expect(screen.getByText("Keyboard Shortcuts")).toBeInTheDocument();
-			expect(screen.getByText("Previous/Next page")).toBeInTheDocument();
-			expect(screen.getByText("Arrow keys")).toBeInTheDocument();
-			expect(screen.getByText("Table of contents")).toBeInTheDocument();
-			expect(screen.getByText("Toggle fullscreen")).toBeInTheDocument();
-			expect(screen.getByText("Toggle toolbar")).toBeInTheDocument();
-			expect(screen.getByText("Close reader")).toBeInTheDocument();
+			// Keyboard shortcuts are now inline and use compact format
+			expect(screen.getByText("Navigate")).toBeInTheDocument();
+			expect(screen.getByText("Contents")).toBeInTheDocument();
+			expect(screen.getByText("Fullscreen")).toBeInTheDocument();
+			expect(screen.getByText("Toolbar")).toBeInTheDocument();
+			expect(screen.getByText("Close")).toBeInTheDocument();
 		});
 	});
 
@@ -251,9 +247,9 @@ describe("EpubReaderSettings", () => {
 				<EpubReaderSettings opened={true} onClose={vi.fn()} />,
 			);
 
-			// Marks appear on the slider
+			// Marks appear on the slider (50%, 100%, 200%)
 			expect(screen.getAllByText("50%").length).toBeGreaterThanOrEqual(1);
-			expect(screen.getAllByText("150%").length).toBeGreaterThanOrEqual(1);
+			expect(screen.getAllByText("100%").length).toBeGreaterThanOrEqual(1);
 			expect(screen.getAllByText("200%").length).toBeGreaterThanOrEqual(1);
 		});
 
@@ -440,9 +436,6 @@ describe("EpubReaderSettings", () => {
 			);
 
 			expect(screen.getByText("Font Family")).toBeInTheDocument();
-			expect(
-				screen.getByText("Choose a typeface for reading"),
-			).toBeInTheDocument();
 		});
 
 		it("should display current font family in dropdown", () => {
@@ -512,9 +505,6 @@ describe("EpubReaderSettings", () => {
 			);
 
 			expect(screen.getByText("Line Spacing")).toBeInTheDocument();
-			expect(
-				screen.getByText("Space between lines of text"),
-			).toBeInTheDocument();
 		});
 
 		it("should display current line height value", () => {
@@ -535,7 +525,6 @@ describe("EpubReaderSettings", () => {
 			expect(screen.getByText("Tight")).toBeInTheDocument();
 			// "Normal" appears in both line spacing and margins slider marks
 			expect(screen.getAllByText("Normal").length).toBeGreaterThanOrEqual(1);
-			expect(screen.getByText("Relaxed")).toBeInTheDocument();
 			expect(screen.getByText("Loose")).toBeInTheDocument();
 		});
 
@@ -561,9 +550,6 @@ describe("EpubReaderSettings", () => {
 			);
 
 			expect(screen.getByText("Margins")).toBeInTheDocument();
-			expect(
-				screen.getByText("Horizontal padding around text"),
-			).toBeInTheDocument();
 		});
 
 		it("should display current margin value", () => {
@@ -584,7 +570,6 @@ describe("EpubReaderSettings", () => {
 			expect(screen.getByText("None")).toBeInTheDocument();
 			// "Normal" appears twice (line spacing and margins)
 			expect(screen.getAllByText("Normal").length).toBeGreaterThanOrEqual(1);
-			expect(screen.getByText("Wide")).toBeInTheDocument();
 			expect(screen.getByText("Max")).toBeInTheDocument();
 		});
 

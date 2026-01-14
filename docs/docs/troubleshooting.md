@@ -318,15 +318,20 @@ This was fixed in recent versions. If you experience this:
 1. **Check library size**:
    Large libraries (10,000+ books) take time on first scan.
 
-2. **Use normal scan** for updates:
+2. **Monitor the Task Queue**:
+   Go to **Settings** > **Tasks** to view active and pending tasks.
+
+   ![Task Queue](./screenshots/settings-task-queue.png)
+
+3. **Use normal scan** for updates:
    Deep scans re-process everything.
 
-3. **Check disk I/O**:
+4. **Check disk I/O**:
    ```bash
    iostat -x 1
    ```
 
-4. **Reduce concurrent scans**:
+5. **Reduce concurrent scans**:
    ```yaml
    scanner:
      max_concurrent_scans: 1
@@ -588,6 +593,14 @@ This was fixed in recent versions. If you experience this:
 ## Getting Help
 
 If you're still experiencing issues:
+
+### Check Server Metrics
+
+Go to **Settings** > **Metrics** to view server statistics including inventory counts and task history.
+
+![Server Metrics - Inventory](./screenshots/settings-metrics-inventory.png)
+
+![Server Metrics - Tasks](./screenshots/settings-metrics-tasks.png)
 
 ### Gather Information
 

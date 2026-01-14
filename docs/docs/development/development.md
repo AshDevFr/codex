@@ -168,6 +168,28 @@ npm run dev
 
 The frontend is a React/TypeScript application using Vite, Mantine UI, and TanStack Query.
 
+#### Mock API Mode
+
+For frontend-only development without a backend, you can use the mock API:
+
+```bash
+cd web
+VITE_MOCK_API=true npm run dev
+```
+
+**Environment variables for mock mode:**
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VITE_MOCK_API` | Enable mock API mode | `false` |
+| `VITE_MOCK_SETUP_REQUIRED` | Show the setup wizard instead of login | `false` |
+
+Example to test the setup wizard:
+
+```bash
+VITE_MOCK_API=true VITE_MOCK_SETUP_REQUIRED=true npm run dev
+```
+
 ### Code Formatting
 
 ```bash

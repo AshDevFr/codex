@@ -54,12 +54,21 @@ Codex supports multiple scanning strategies for different organizational pattern
 ### Via Web Interface
 
 1. Log in as an admin
-2. Go to **Settings** > **Libraries**
-3. Click **Add Library**
-4. Fill in the details:
+2. Click **Libraries** in the sidebar, then click **+** to add a library
+3. Configure the **General** tab:
    - **Name**: Display name for the library
    - **Path**: Filesystem path to the folder
-   - **Scanning Options**: Configure automatic scanning
+   - **Default Reading Direction**: Based on content type
+
+![New Library - General Settings](./screenshots/new-library-general.png)
+
+4. Configure the **Strategy** tab for series and book detection
+
+![New Library - Strategy Settings](./screenshots/new-library-strategy.png)
+
+5. Configure **Scanning** options (manual or automatic with cron)
+
+![New Library - Scanning Settings](./screenshots/new-library-scanning-cron.png)
 
 ### Via API
 
@@ -292,9 +301,15 @@ If you move files:
 
 ## Duplicate Detection
 
-Codex can detect duplicate books across libraries:
+Codex can detect duplicate books across libraries using file hashes (SHA-256).
+
+![Duplicate Detection](./screenshots/settings-duplicate-detection.png)
 
 ### Enable Duplicate Scanning
+
+Via the web interface, go to **Settings** > **Duplicates** and click **Scan for Duplicates**.
+
+Or via the API:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/duplicates/scan \

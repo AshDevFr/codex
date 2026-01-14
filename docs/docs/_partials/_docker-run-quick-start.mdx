@@ -1,0 +1,11 @@
+```bash
+docker run -d \
+  --name codex \
+  -p 8080:8080 \
+  -v /path/to/your/library:/library:ro \
+  -v codex-data:/app/data \
+  -e CODEX_AUTH_JWT_SECRET="$(openssl rand -base64 32)" \
+  ghcr.io/ashdevfr/codex:main
+```
+
+Access Codex at `http://localhost:8080`. On first launch, you'll be guided through a setup wizard to create your admin account.

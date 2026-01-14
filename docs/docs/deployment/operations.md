@@ -126,79 +126,348 @@ groups:
 
 ### What to Backup
 
-| Data | Location | Priority |
-|------|----------|----------|
-| Database | PostgreSQL/SQLite | Critical |
-| Configuration | `codex.yaml` | Critical |
-| Thumbnails | `/app/data/thumbnails` | Low (can regenerate) |
-| Media files | Library paths | External to Codex |
+| Data | Location | Priority | Recovery |
+|------|----------|----------|----------|
+| Database | PostgreSQL/SQLite | Critical | Required for operation |
+| Configuration | `codex.yaml` | Critical | Required for operation |
+| Thumbnails | `data/thumbnails` | Low | Can regenerate via scan |
+| Uploads | `data/uploads` | Medium | User-uploaded covers |
+| Media files | Library paths | External | Managed outside Codex |
 
 ### PostgreSQL Backups
 
+#### Manual Backup
+
 ```bash
-# Manual backup
+# Plain SQL backup
 pg_dump -U codex codex > backup_$(date +%Y%m%d).sql
 
-# Compressed
+# Compressed backup (recommended)
 pg_dump -U codex codex | gzip > backup_$(date +%Y%m%d).sql.gz
 
-# Restore
+# Custom format (allows parallel restore)
+pg_dump -U codex -Fc codex > backup_$(date +%Y%m%d).dump
+```
+
+#### Restore from Backup
+
+```bash
+# From plain SQL
 psql -U codex codex < backup_20240101.sql
+
+# From compressed SQL
+gunzip -c backup_20240101.sql.gz | psql -U codex codex
+
+# From custom format (parallel restore)
+pg_restore -U codex -d codex -j 4 backup_20240101.dump
+```
+
+#### Docker Backup
+
+```bash
+# Backup from container
+docker exec codex-postgres pg_dump -U codex codex | gzip > backup_$(date +%Y%m%d).sql.gz
+
+# Restore to container
+gunzip -c backup_20240101.sql.gz | docker exec -i codex-postgres psql -U codex codex
 ```
 
 ### SQLite Backups
 
+#### Safe Backup Methods
+
+:::warning SQLite Backup Safety
+Never copy a SQLite database while Codex is writing to it. Use one of these safe methods:
+:::
+
+**Method 1: Stop Codex (safest)**
 ```bash
-# Simple copy (ensure Codex is stopped or use WAL mode)
+# Stop Codex
+sudo systemctl stop codex
+
+# Copy database and WAL files
 cp /opt/codex/data/codex.db /backup/codex_$(date +%Y%m%d).db
+cp /opt/codex/data/codex.db-wal /backup/codex_$(date +%Y%m%d).db-wal 2>/dev/null || true
+cp /opt/codex/data/codex.db-shm /backup/codex_$(date +%Y%m%d).db-shm 2>/dev/null || true
+
+# Restart Codex
+sudo systemctl start codex
 ```
+
+**Method 2: SQLite Online Backup (no downtime)**
+```bash
+# Uses SQLite's backup API - safe during operation
+sqlite3 /opt/codex/data/codex.db ".backup '/backup/codex_$(date +%Y%m%d).db'"
+```
+
+**Method 3: VACUUM INTO (creates standalone copy)**
+```bash
+# Creates a fresh, compacted backup
+sqlite3 /opt/codex/data/codex.db "VACUUM INTO '/backup/codex_$(date +%Y%m%d).db'"
+```
+
+#### Restore SQLite
+
+```bash
+# Stop Codex
+sudo systemctl stop codex
+
+# Replace database
+cp /backup/codex_20240101.db /opt/codex/data/codex.db
+
+# Remove WAL files (will be recreated)
+rm -f /opt/codex/data/codex.db-wal /opt/codex/data/codex.db-shm
+
+# Start Codex
+sudo systemctl start codex
+```
+
+### Configuration Backup
+
+Store configuration in version control:
+
+```bash
+# Initialize backup repository
+mkdir -p /backup/codex-config
+cd /backup/codex-config
+git init
+
+# Copy and commit configuration
+cp /opt/codex/codex.yaml .
+git add codex.yaml
+git commit -m "Backup $(date +%Y-%m-%d)"
+
+# Push to remote (optional)
+git remote add origin git@github.com:youruser/codex-config.git
+git push -u origin main
+```
+
+:::danger Secrets in Configuration
+Never commit secrets (JWT secret, database passwords) to version control. Use environment variables for sensitive values:
+
+```yaml
+# codex.yaml - reference environment variables
+auth:
+  jwt_secret: ${JWT_SECRET}
+database:
+  postgres:
+    password: ${DB_PASSWORD}
+```
+:::
 
 ### Automated Backups
 
-```bash
-# Cron job for daily backups
-# /etc/cron.d/codex-backup
-0 2 * * * postgres pg_dump -U codex codex | gzip > /backup/codex_$(date +\%Y\%m\%d).sql.gz
+#### Cron-based Backup Script
 
-# Retention (keep 30 days)
-0 3 * * * find /backup -name "codex_*.sql.gz" -mtime +30 -delete
+Create `/opt/codex/backup.sh`:
+
+```bash
+#!/bin/bash
+set -e
+
+BACKUP_DIR="/backup/codex"
+RETENTION_DAYS=30
+DATE=$(date +%Y%m%d)
+
+# Create backup directory
+mkdir -p "$BACKUP_DIR"
+
+# Backup PostgreSQL
+pg_dump -U codex codex | gzip > "$BACKUP_DIR/db_$DATE.sql.gz"
+
+# Backup configuration
+cp /opt/codex/codex.yaml "$BACKUP_DIR/config_$DATE.yaml"
+
+# Backup uploads (user-uploaded covers)
+tar -czf "$BACKUP_DIR/uploads_$DATE.tar.gz" -C /opt/codex/data uploads 2>/dev/null || true
+
+# Remove old backups
+find "$BACKUP_DIR" -name "db_*.sql.gz" -mtime +$RETENTION_DAYS -delete
+find "$BACKUP_DIR" -name "config_*.yaml" -mtime +$RETENTION_DAYS -delete
+find "$BACKUP_DIR" -name "uploads_*.tar.gz" -mtime +$RETENTION_DAYS -delete
+
+echo "Backup completed: $DATE"
+```
+
+Schedule with cron:
+
+```bash
+# /etc/cron.d/codex-backup
+# Run daily at 2 AM
+0 2 * * * root /opt/codex/backup.sh >> /var/log/codex-backup.log 2>&1
+```
+
+#### Docker Compose Backup
+
+Add a backup service to your `docker-compose.yml`:
+
+```yaml
+services:
+  backup:
+    image: postgres:16
+    volumes:
+      - ./backups:/backups
+      - codex_data:/data:ro
+    environment:
+      PGPASSWORD: your-password
+    entrypoint: /bin/sh
+    command: >
+      -c "pg_dump -h postgres -U codex codex | gzip > /backups/db_$$(date +%Y%m%d).sql.gz &&
+          find /backups -name 'db_*.sql.gz' -mtime +30 -delete"
+    depends_on:
+      - postgres
+    profiles:
+      - backup
+```
+
+Run backup manually:
+```bash
+docker compose --profile backup run --rm backup
 ```
 
 ### Backup Verification
 
-Regularly test restores:
+**Always verify backups can be restored!**
+
+#### PostgreSQL Verification
 
 ```bash
 # Create test database
-createdb codex_test
+createdb codex_backup_test
 
 # Restore backup
-psql -U codex codex_test < backup.sql
+gunzip -c backup_20240101.sql.gz | psql -U codex codex_backup_test
 
-# Verify
-psql -U codex codex_test -c "SELECT COUNT(*) FROM books"
+# Verify data integrity
+psql -U codex codex_backup_test << 'EOF'
+SELECT 'books' as table_name, COUNT(*) as count FROM books
+UNION ALL SELECT 'series', COUNT(*) FROM series
+UNION ALL SELECT 'libraries', COUNT(*) FROM libraries
+UNION ALL SELECT 'users', COUNT(*) FROM users;
+EOF
 
-# Cleanup
-dropdb codex_test
+# Cleanup test database
+dropdb codex_backup_test
+```
+
+#### SQLite Verification
+
+```bash
+# Check database integrity
+sqlite3 /backup/codex_20240101.db "PRAGMA integrity_check"
+
+# Verify row counts
+sqlite3 /backup/codex_20240101.db << 'EOF'
+SELECT 'books' as table_name, COUNT(*) as count FROM books
+UNION ALL SELECT 'series', COUNT(*) FROM series
+UNION ALL SELECT 'libraries', COUNT(*) FROM libraries;
+EOF
+```
+
+### Off-site Backup
+
+For disaster recovery, store backups off-site:
+
+#### AWS S3
+
+```bash
+# Install AWS CLI
+pip install awscli
+
+# Upload backup
+aws s3 cp /backup/codex/db_20240101.sql.gz s3://your-bucket/codex-backups/
+
+# Sync backup directory
+aws s3 sync /backup/codex s3://your-bucket/codex-backups/ --delete
+```
+
+#### Restic (encrypted backups)
+
+```bash
+# Initialize repository
+restic init --repo s3:s3.amazonaws.com/your-bucket/codex-backups
+
+# Backup
+restic backup /backup/codex --repo s3:s3.amazonaws.com/your-bucket/codex-backups
+
+# Prune old backups (keep 30 daily, 12 monthly)
+restic forget --keep-daily 30 --keep-monthly 12 --prune
 ```
 
 ## Disaster Recovery
 
-### Recovery Steps
+### Recovery Checklist
 
-1. **Deploy fresh Codex instance**
-2. **Restore database from backup**
-3. **Verify configuration**
-4. **Run health checks**
-5. **Trigger library scan** (optional, to verify file access)
+1. **Assess the situation**
+   - What failed? (Server, storage, database)
+   - What's the most recent backup?
+   - Is media storage accessible?
 
-### Recovery Time Objective (RTO)
+2. **Deploy fresh Codex instance**
+   ```bash
+   # Docker
+   docker compose up -d
 
-| Component | Recovery Method | Typical RTO |
-|-----------|-----------------|-------------|
-| Database | Restore from backup | 5-30 minutes |
-| Configuration | Version control | Minutes |
-| Thumbnails | Regenerate via scan | Hours |
+   # Or systemd
+   sudo systemctl start codex
+   ```
+
+3. **Restore database from backup**
+   ```bash
+   # PostgreSQL
+   gunzip -c backup_latest.sql.gz | psql -U codex codex
+
+   # SQLite
+   cp backup_latest.db /opt/codex/data/codex.db
+   ```
+
+4. **Restore configuration**
+   ```bash
+   cp /backup/codex-config/codex.yaml /opt/codex/
+   ```
+
+5. **Restore uploads (if backed up)**
+   ```bash
+   tar -xzf uploads_latest.tar.gz -C /opt/codex/data/
+   ```
+
+6. **Verify health**
+   ```bash
+   curl http://localhost:8080/health
+   ```
+
+7. **Regenerate thumbnails (optional)**
+   - Trigger a library scan via the UI
+   - Or wait for scheduled scan
+
+8. **Verify media access**
+   - Check library paths are mounted
+   - Test opening a book
+
+### Recovery Time Objectives (RTO)
+
+| Component | Recovery Method | Typical Time |
+|-----------|-----------------|--------------|
+| Application | Deploy container/binary | 5 minutes |
+| Database (small) | Restore < 1GB backup | 5-10 minutes |
+| Database (large) | Restore > 10GB backup | 30-60 minutes |
+| Configuration | Copy from backup/VCS | 2 minutes |
+| Thumbnails | Regenerate via scan | Hours (varies by library size) |
+| Uploads | Restore from backup | 5-10 minutes |
+
+### Recovery Point Objective (RPO)
+
+Your RPO depends on backup frequency:
+
+| Backup Schedule | Maximum Data Loss |
+|-----------------|-------------------|
+| Hourly | Up to 1 hour |
+| Daily | Up to 24 hours |
+| Weekly | Up to 7 days |
+
+:::tip
+For critical deployments, consider PostgreSQL streaming replication for near-zero RPO.
+:::
 
 ## Maintenance
 

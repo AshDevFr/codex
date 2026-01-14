@@ -42,9 +42,8 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
-          // Please change this to your repo.
-          // Remove this to remove the "edit this page" links.
-          editUrl: undefined,
+          // Enable "edit this page" links
+          editUrl: 'https://github.com/AshDevFr/codex/edit/main/docs/',
           docItemComponent: '@theme/ApiItem',
         },
         blog: false,
@@ -141,10 +140,6 @@ const config: Config = {
             {
               label: 'Getting Started',
               to: '/docs/getting-started',
-            },
-            {
-              label: 'Installation',
-              to: '/docs/installation',
             },
             {
               label: 'API Reference',
