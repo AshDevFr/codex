@@ -1,37 +1,119 @@
 use anyhow::Result;
 use chrono::Utc;
+use clap::Subcommand;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter};
-use std::time::Duration;
+use std::path::PathBuf;
 use uuid::Uuid;
 
+use crate::commands::common::{init_database, load_config};
 use crate::db::entities::prelude::Tasks;
 use crate::db::entities::tasks;
 use crate::db::repositories::TaskRepository;
-use crate::tasks::TaskWorker;
 
-/// Start a task worker
-pub async fn worker_command(db: DatabaseConnection, poll_interval: u64) -> Result<()> {
-    println!("Starting task worker (press Ctrl+C to stop)...");
+/// Task queue management subcommands
+#[derive(Subcommand, Debug)]
+pub enum TasksSubcommand {
+    /// List tasks in the queue
+    List {
+        /// Filter by status (pending, processing, completed, failed, cancelled)
+        #[arg(short, long)]
+        status: Option<String>,
 
-    let worker = TaskWorker::new(db).with_poll_interval(Duration::from_secs(poll_interval));
-    let (mut worker, shutdown_tx) = worker.with_shutdown();
+        /// Filter by task type
+        #[arg(short = 't', long)]
+        task_type: Option<String>,
 
-    // Spawn worker in background
-    let worker_handle = tokio::spawn(async move { worker.run().await });
+        /// Maximum number of tasks to show
+        #[arg(short, long, default_value = "20")]
+        limit: u64,
+    },
 
-    // Wait for Ctrl+C
-    tokio::signal::ctrl_c().await?;
-    println!("\nShutting down worker...");
+    /// Get details of a specific task
+    Get {
+        /// Task ID (UUID)
+        #[arg(value_name = "TASK_ID")]
+        task_id: Uuid,
+    },
 
-    // Signal shutdown
-    let _ = shutdown_tx.send(());
+    /// Show queue statistics
+    Stats,
 
-    // Wait for worker to finish (with timeout)
-    match tokio::time::timeout(Duration::from_secs(30), worker_handle).await {
-        Ok(Ok(Ok(()))) => println!("Worker stopped gracefully"),
-        Ok(Ok(Err(e))) => eprintln!("Worker error: {}", e),
-        Ok(Err(e)) => eprintln!("Worker task error: {}", e),
-        Err(_) => eprintln!("Worker shutdown timeout"),
+    /// Cancel a pending or processing task
+    Cancel {
+        /// Task ID (UUID)
+        #[arg(value_name = "TASK_ID")]
+        task_id: Uuid,
+    },
+
+    /// Unlock a stuck task (resets to pending)
+    Unlock {
+        /// Task ID (UUID)
+        #[arg(value_name = "TASK_ID")]
+        task_id: Uuid,
+    },
+
+    /// Retry a failed task
+    Retry {
+        /// Task ID (UUID)
+        #[arg(value_name = "TASK_ID")]
+        task_id: Uuid,
+    },
+
+    /// Purge old completed/failed/cancelled tasks
+    Purge {
+        /// Delete tasks older than this many days
+        #[arg(short, long, default_value = "30")]
+        days: i64,
+
+        /// Actually delete the tasks (without this flag, only shows what would be deleted)
+        #[arg(long)]
+        confirm: bool,
+    },
+
+    /// Delete ALL tasks from the queue (dangerous!)
+    Nuke {
+        /// Must be "yes" to actually delete all tasks
+        #[arg(long, default_value = "no")]
+        confirm: String,
+    },
+}
+
+/// Main task command handler - routes to specific subcommands
+pub async fn tasks_command(config_path: PathBuf, subcommand: TasksSubcommand) -> Result<()> {
+    // Load configuration and initialize database
+    let (config, _) = load_config(config_path)?;
+    let db = init_database(&config).await?;
+    let conn = db.sea_orm_connection();
+
+    match subcommand {
+        TasksSubcommand::List {
+            status,
+            task_type,
+            limit,
+        } => {
+            list_tasks(conn, status, task_type, limit).await?;
+        }
+        TasksSubcommand::Get { task_id } => {
+            get_task(conn, task_id).await?;
+        }
+        TasksSubcommand::Stats => {
+            stats_command(conn).await?;
+        }
+        TasksSubcommand::Cancel { task_id } => {
+            cancel_task(conn, task_id).await?;
+        }
+        TasksSubcommand::Unlock { task_id } => {
+            unlock_task(conn, task_id).await?;
+        }
+        TasksSubcommand::Retry { task_id } => {
+            retry_task(conn, task_id).await?;
+        }
+        TasksSubcommand::Purge { days, confirm } => {
+            purge_tasks(conn, days, confirm).await?;
+        }
+        TasksSubcommand::Nuke { confirm } => {
+            nuke_tasks(conn, &confirm).await?;
+        }
     }
 
     Ok(())

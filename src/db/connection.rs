@@ -1,3 +1,9 @@
+//! Unified database connection wrapper
+//!
+//! TODO: Remove allow(dead_code) once all connection features are fully integrated
+
+#![allow(dead_code)]
+
 use anyhow::{Context, Result};
 use sea_orm::{ConnectionTrait, Database as SeaDatabase, DatabaseConnection};
 use std::path::Path;

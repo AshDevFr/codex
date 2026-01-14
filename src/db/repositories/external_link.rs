@@ -1,4 +1,8 @@
 //! Repository for series_external_links table operations
+//!
+//! TODO: Remove allow(dead_code) when external link features are fully integrated
+
+#![allow(dead_code)]
 
 use anyhow::Result;
 use chrono::Utc;

@@ -1,3 +1,9 @@
+//! Task types supported by the distributed task queue
+//!
+//! TODO: Remove allow(dead_code) once all task features are fully integrated
+
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -142,8 +148,7 @@ impl TaskType {
         let book_id = self.book_id();
         let params = self.params();
 
-        let params_value = if params.is_null() || params.as_object().is_some_and(|o| o.is_empty())
-        {
+        let params_value = if params.is_null() || params.as_object().is_some_and(|o| o.is_empty()) {
             None
         } else {
             Some(params)

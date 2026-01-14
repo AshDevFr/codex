@@ -37,12 +37,18 @@ async fn library_to_dto(db: &DatabaseConnection, library: libraries::Model) -> L
         .and_then(|json| serde_json::from_str::<Vec<String>>(&json).ok());
 
     // Parse strategy fields
-    let series_strategy =
-        SeriesStrategy::from_str(&library.series_strategy).unwrap_or(SeriesStrategy::SeriesVolume);
-    let book_strategy =
-        BookStrategy::from_str(&library.book_strategy).unwrap_or(BookStrategy::Filename);
-    let number_strategy =
-        NumberStrategy::from_str(&library.number_strategy).unwrap_or(NumberStrategy::FileOrder);
+    let series_strategy = library
+        .series_strategy
+        .parse::<SeriesStrategy>()
+        .unwrap_or(SeriesStrategy::SeriesVolume);
+    let book_strategy = library
+        .book_strategy
+        .parse::<BookStrategy>()
+        .unwrap_or(BookStrategy::Filename);
+    let number_strategy = library
+        .number_strategy
+        .parse::<NumberStrategy>()
+        .unwrap_or(NumberStrategy::FileOrder);
 
     // Extract config values (already serde_json::Value)
     let series_config = library.series_config;

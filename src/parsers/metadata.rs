@@ -1,5 +1,12 @@
+//! Metadata types for parsed book content
+//!
+//! TODO: Remove allow(dead_code) once all metadata features are fully integrated
+
+#![allow(dead_code)]
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 /// File format type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,22 +45,25 @@ pub enum ReadingDirection {
     TopToBottom,
 }
 
-
 impl ReadingDirection {
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_uppercase().as_str() {
-            "LEFT_TO_RIGHT" | "LTR" => Some(ReadingDirection::LeftToRight),
-            "RIGHT_TO_LEFT" | "RTL" => Some(ReadingDirection::RightToLeft),
-            "TOP_TO_BOTTOM" | "TTB" | "VERTICAL" => Some(ReadingDirection::TopToBottom),
-            _ => None,
-        }
-    }
-
     pub fn as_str(&self) -> &'static str {
         match self {
             ReadingDirection::LeftToRight => "LEFT_TO_RIGHT",
             ReadingDirection::RightToLeft => "RIGHT_TO_LEFT",
             ReadingDirection::TopToBottom => "TOP_TO_BOTTOM",
+        }
+    }
+}
+
+impl FromStr for ReadingDirection {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_uppercase().as_str() {
+            "LEFT_TO_RIGHT" | "LTR" => Ok(ReadingDirection::LeftToRight),
+            "RIGHT_TO_LEFT" | "RTL" => Ok(ReadingDirection::RightToLeft),
+            "TOP_TO_BOTTOM" | "TTB" | "VERTICAL" => Ok(ReadingDirection::TopToBottom),
+            _ => Err(format!("Unknown reading direction: {}", s)),
         }
     }
 }
@@ -250,51 +260,51 @@ mod tests {
     fn test_reading_direction_from_str() {
         // Test standard formats
         assert_eq!(
-            ReadingDirection::from_str("LEFT_TO_RIGHT"),
-            Some(ReadingDirection::LeftToRight)
+            "LEFT_TO_RIGHT".parse::<ReadingDirection>().unwrap(),
+            ReadingDirection::LeftToRight
         );
         assert_eq!(
-            ReadingDirection::from_str("RIGHT_TO_LEFT"),
-            Some(ReadingDirection::RightToLeft)
+            "RIGHT_TO_LEFT".parse::<ReadingDirection>().unwrap(),
+            ReadingDirection::RightToLeft
         );
         assert_eq!(
-            ReadingDirection::from_str("TOP_TO_BOTTOM"),
-            Some(ReadingDirection::TopToBottom)
+            "TOP_TO_BOTTOM".parse::<ReadingDirection>().unwrap(),
+            ReadingDirection::TopToBottom
         );
 
         // Test short forms
         assert_eq!(
-            ReadingDirection::from_str("LTR"),
-            Some(ReadingDirection::LeftToRight)
+            "LTR".parse::<ReadingDirection>().unwrap(),
+            ReadingDirection::LeftToRight
         );
         assert_eq!(
-            ReadingDirection::from_str("RTL"),
-            Some(ReadingDirection::RightToLeft)
+            "RTL".parse::<ReadingDirection>().unwrap(),
+            ReadingDirection::RightToLeft
         );
         assert_eq!(
-            ReadingDirection::from_str("TTB"),
-            Some(ReadingDirection::TopToBottom)
+            "TTB".parse::<ReadingDirection>().unwrap(),
+            ReadingDirection::TopToBottom
         );
 
         // Test aliases
         assert_eq!(
-            ReadingDirection::from_str("VERTICAL"),
-            Some(ReadingDirection::TopToBottom)
+            "VERTICAL".parse::<ReadingDirection>().unwrap(),
+            ReadingDirection::TopToBottom
         );
 
         // Test case insensitivity
         assert_eq!(
-            ReadingDirection::from_str("left_to_right"),
-            Some(ReadingDirection::LeftToRight)
+            "left_to_right".parse::<ReadingDirection>().unwrap(),
+            ReadingDirection::LeftToRight
         );
         assert_eq!(
-            ReadingDirection::from_str("ltr"),
-            Some(ReadingDirection::LeftToRight)
+            "ltr".parse::<ReadingDirection>().unwrap(),
+            ReadingDirection::LeftToRight
         );
 
         // Test invalid input
-        assert_eq!(ReadingDirection::from_str("invalid"), None);
-        assert_eq!(ReadingDirection::from_str(""), None);
+        assert!("invalid".parse::<ReadingDirection>().is_err());
+        assert!("".parse::<ReadingDirection>().is_err());
     }
 
     #[test]

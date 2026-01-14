@@ -6,6 +6,7 @@ use axum::{
 };
 use futures::stream::Stream;
 use std::convert::Infallible;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use uuid::Uuid;

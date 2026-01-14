@@ -1,10 +1,12 @@
-mod config;
 mod env_override;
 mod loader;
+mod types;
 
-pub use config::{
-    ApiConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, EmailConfig,
-    FilesConfig, TaskConfig,
+// Re-export all config types for external use (used by integration tests)
+#[allow(unused_imports)]
+pub use types::{
+    ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, EmailConfig,
+    FilesConfig, LoggingConfig, PostgresConfig, SQLiteConfig, ScannerConfig, TaskConfig,
 };
 
 pub use env_override::EnvOverride;

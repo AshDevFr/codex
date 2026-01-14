@@ -1,6 +1,10 @@
 //! Common types shared across scanning strategies
 //!
 //! This module contains types used by both series detection and book naming strategies.
+//!
+//! TODO: Remove allow(dead_code) once all scanning strategy features are fully integrated
+
+#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::path::PathBuf;

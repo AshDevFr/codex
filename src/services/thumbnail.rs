@@ -1,3 +1,9 @@
+//! Thumbnail service for generating and managing cover images
+//!
+//! TODO: Remove allow(dead_code) once all thumbnail features are fully integrated
+
+#![allow(dead_code)]
+
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use image::imageops::FilterType;

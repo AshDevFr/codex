@@ -1,6 +1,10 @@
 //! User Preferences Repository
 //!
 //! Provides CRUD operations for per-user key-value settings storage.
+//!
+//! TODO: Remove allow(dead_code) once user preferences feature is fully implemented
+
+#![allow(dead_code)]
 
 use crate::db::entities::{user_preferences, user_preferences::Entity as UserPreferences};
 use anyhow::{anyhow, Result};

@@ -1,3 +1,9 @@
+//! Error types for the Codex application
+//!
+//! TODO: Remove allow(dead_code) once all error variants are used
+
+#![allow(dead_code)]
+
 use thiserror::Error;
 
 #[derive(Error, Debug)]

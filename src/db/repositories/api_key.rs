@@ -1,3 +1,9 @@
+//! Repository for API key operations
+//!
+//! TODO: Remove allow(dead_code) when API key management is fully integrated
+
+#![allow(dead_code)]
+
 use crate::db::entities::{api_keys, api_keys::Entity as ApiKey};
 use anyhow::Result;
 use chrono::Utc;

@@ -1,4 +1,4 @@
-use super::config::Config;
+use super::types::Config;
 use anyhow::Result;
 use std::fs;
 use std::path::Path;

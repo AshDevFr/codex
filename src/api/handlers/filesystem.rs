@@ -110,28 +110,26 @@ pub async fn browse_filesystem(
 
     match fs::read_dir(&path) {
         Ok(read_dir) => {
-            for entry_result in read_dir {
-                if let Ok(entry) = entry_result {
-                    let entry_path = entry.path();
-                    let is_directory = entry_path.is_dir();
+            for entry in read_dir.flatten() {
+                let entry_path = entry.path();
+                let is_directory = entry_path.is_dir();
 
-                    // Skip hidden files (starting with .)
-                    if let Some(name) = entry_path.file_name() {
-                        let name_str = name.to_string_lossy();
-                        if name_str.starts_with('.') {
-                            continue;
-                        }
-
-                        entries.push(FileSystemEntry {
-                            name: name_str.to_string(),
-                            path: entry_path.to_string_lossy().to_string(),
-                            is_directory,
-                            is_readable: entry_path
-                                .metadata()
-                                .map(|m| !m.permissions().readonly())
-                                .unwrap_or(false),
-                        });
+                // Skip hidden files (starting with .)
+                if let Some(name) = entry_path.file_name() {
+                    let name_str = name.to_string_lossy();
+                    if name_str.starts_with('.') {
+                        continue;
                     }
+
+                    entries.push(FileSystemEntry {
+                        name: name_str.to_string(),
+                        path: entry_path.to_string_lossy().to_string(),
+                        is_directory,
+                        is_readable: entry_path
+                            .metadata()
+                            .map(|m| !m.permissions().readonly())
+                            .unwrap_or(false),
+                    });
                 }
             }
         }

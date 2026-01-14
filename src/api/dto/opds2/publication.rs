@@ -72,6 +72,7 @@ impl ReadingProgress {
     }
 }
 
+#[allow(dead_code)] // Public API for OPDS 2.0 publication building
 impl Publication {
     /// Create a new publication with metadata
     pub fn new(metadata: PublicationMetadata) -> Self {
@@ -135,6 +136,7 @@ pub struct ImageLink {
     pub height: Option<i32>,
 }
 
+#[allow(dead_code)] // Public API for OPDS 2.0 image link building
 impl ImageLink {
     /// Create a new image link
     pub fn new(href: impl Into<String>, media_type: impl Into<String>) -> Self {

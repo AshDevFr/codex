@@ -1,8 +1,13 @@
 //! User preferences entity for per-user key-value settings storage
+//!
+//! TODO: Remove allow(dead_code) once user preferences feature is fully implemented
+
+#![allow(dead_code)]
 
 use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
@@ -59,15 +64,19 @@ impl ValueType {
             ValueType::Json => "json",
         }
     }
+}
 
-    pub fn from_str(s: &str) -> Option<Self> {
+impl FromStr for ValueType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "string" => Some(ValueType::String),
-            "integer" => Some(ValueType::Integer),
-            "float" => Some(ValueType::Float),
-            "boolean" => Some(ValueType::Boolean),
-            "json" => Some(ValueType::Json),
-            _ => None,
+            "string" => Ok(ValueType::String),
+            "integer" => Ok(ValueType::Integer),
+            "float" => Ok(ValueType::Float),
+            "boolean" => Ok(ValueType::Boolean),
+            "json" => Ok(ValueType::Json),
+            _ => Err(format!("Unknown value type: {}", s)),
         }
     }
 }

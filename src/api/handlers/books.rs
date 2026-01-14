@@ -726,7 +726,7 @@ pub async fn patch_book(
         let mut active: book_metadata::ActiveModel = existing.into();
 
         // Update title if provided (also lock it when set to non-null)
-        if let Some(opt) = request.title.to_active_value() {
+        if let Some(opt) = request.title.into_nested_option() {
             active.title = Set(opt.clone());
             if opt.is_some() {
                 active.title_lock = Set(true);
@@ -735,7 +735,7 @@ pub async fn patch_book(
         }
 
         // Update number if provided (convert f64 to Decimal, also lock when set)
-        if let Some(opt) = request.number.to_active_value() {
+        if let Some(opt) = request.number.into_nested_option() {
             let decimal_opt = opt.and_then(Decimal::from_f64_retain);
             active.number = Set(decimal_opt);
             if opt.is_some() {
@@ -1759,154 +1759,154 @@ pub async fn patch_book_metadata(
         // Partial update existing record with auto-locking
         let mut active: book_metadata::ActiveModel = existing.into();
 
-        if let Some(opt) = request.summary.to_active_value() {
+        if let Some(opt) = request.summary.into_nested_option() {
             active.summary = Set(opt.clone());
             if opt.is_some() {
                 active.summary_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.writer.to_active_value() {
+        if let Some(opt) = request.writer.into_nested_option() {
             active.writer = Set(opt.clone());
             if opt.is_some() {
                 active.writer_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.penciller.to_active_value() {
+        if let Some(opt) = request.penciller.into_nested_option() {
             active.penciller = Set(opt.clone());
             if opt.is_some() {
                 active.penciller_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.inker.to_active_value() {
+        if let Some(opt) = request.inker.into_nested_option() {
             active.inker = Set(opt.clone());
             if opt.is_some() {
                 active.inker_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.colorist.to_active_value() {
+        if let Some(opt) = request.colorist.into_nested_option() {
             active.colorist = Set(opt.clone());
             if opt.is_some() {
                 active.colorist_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.letterer.to_active_value() {
+        if let Some(opt) = request.letterer.into_nested_option() {
             active.letterer = Set(opt.clone());
             if opt.is_some() {
                 active.letterer_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.cover_artist.to_active_value() {
+        if let Some(opt) = request.cover_artist.into_nested_option() {
             active.cover_artist = Set(opt.clone());
             if opt.is_some() {
                 active.cover_artist_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.editor.to_active_value() {
+        if let Some(opt) = request.editor.into_nested_option() {
             active.editor = Set(opt.clone());
             if opt.is_some() {
                 active.editor_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.publisher.to_active_value() {
+        if let Some(opt) = request.publisher.into_nested_option() {
             active.publisher = Set(opt.clone());
             if opt.is_some() {
                 active.publisher_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.imprint.to_active_value() {
+        if let Some(opt) = request.imprint.into_nested_option() {
             active.imprint = Set(opt.clone());
             if opt.is_some() {
                 active.imprint_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.genre.to_active_value() {
+        if let Some(opt) = request.genre.into_nested_option() {
             active.genre = Set(opt.clone());
             if opt.is_some() {
                 active.genre_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.web.to_active_value() {
+        if let Some(opt) = request.web.into_nested_option() {
             active.web = Set(opt.clone());
             if opt.is_some() {
                 active.web_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.language_iso.to_active_value() {
+        if let Some(opt) = request.language_iso.into_nested_option() {
             active.language_iso = Set(opt.clone());
             if opt.is_some() {
                 active.language_iso_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.format_detail.to_active_value() {
+        if let Some(opt) = request.format_detail.into_nested_option() {
             active.format_detail = Set(opt.clone());
             if opt.is_some() {
                 active.format_detail_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.black_and_white.to_active_value() {
+        if let Some(opt) = request.black_and_white.into_nested_option() {
             active.black_and_white = Set(opt);
             if opt.is_some() {
                 active.black_and_white_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.manga.to_active_value() {
+        if let Some(opt) = request.manga.into_nested_option() {
             active.manga = Set(opt);
             if opt.is_some() {
                 active.manga_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.year.to_active_value() {
+        if let Some(opt) = request.year.into_nested_option() {
             active.year = Set(opt);
             if opt.is_some() {
                 active.year_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.month.to_active_value() {
+        if let Some(opt) = request.month.into_nested_option() {
             active.month = Set(opt);
             if opt.is_some() {
                 active.month_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.day.to_active_value() {
+        if let Some(opt) = request.day.into_nested_option() {
             active.day = Set(opt);
             if opt.is_some() {
                 active.day_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.volume.to_active_value() {
+        if let Some(opt) = request.volume.into_nested_option() {
             active.volume = Set(opt);
             if opt.is_some() {
                 active.volume_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.count.to_active_value() {
+        if let Some(opt) = request.count.into_nested_option() {
             active.count = Set(opt);
             if opt.is_some() {
                 active.count_lock = Set(true);
             }
             has_changes = true;
         }
-        if let Some(opt) = request.isbns.to_active_value() {
+        if let Some(opt) = request.isbns.into_nested_option() {
             active.isbns = Set(opt.clone());
             if opt.is_some() {
                 active.isbns_lock = Set(true);

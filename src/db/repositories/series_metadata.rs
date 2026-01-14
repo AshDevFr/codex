@@ -1,4 +1,8 @@
 //! Repository for series_metadata table operations
+//!
+//! TODO: Remove allow(dead_code) when all metadata features are fully integrated
+
+#![allow(dead_code)]
 
 use anyhow::Result;
 use chrono::Utc;

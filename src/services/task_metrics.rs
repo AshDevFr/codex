@@ -231,6 +231,7 @@ impl TaskMetricsService {
     }
 
     /// Record a task completion
+    #[allow(clippy::too_many_arguments)] // All fields describe a single task completion - maps 1:1 to internal TaskCompletion struct
     pub async fn record(
         &self,
         task_type: String,
@@ -350,9 +351,7 @@ impl TaskMetricsService {
             let mut task_aggregates: HashMap<String, DbTaskAggregate> = HashMap::new();
 
             for record in db_records {
-                let entry = task_aggregates
-                    .entry(record.task_type.clone())
-                    .or_default();
+                let entry = task_aggregates.entry(record.task_type.clone()).or_default();
 
                 entry.count += record.count as u64;
                 entry.succeeded += record.succeeded as u64;
@@ -372,9 +371,7 @@ impl TaskMetricsService {
 
                 // Extract and merge duration_samples
                 if let Some(ref samples_json) = record.duration_samples {
-                    if let Ok(samples) =
-                        serde_json::from_value::<Vec<i64>>(samples_json.clone())
-                    {
+                    if let Ok(samples) = serde_json::from_value::<Vec<i64>>(samples_json.clone()) {
                         entry.duration_samples.extend(samples);
                     }
                 }

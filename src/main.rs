@@ -14,8 +14,8 @@ mod web;
 
 use clap::{Parser, Subcommand};
 use commands::{
-    migrate_command, openapi_command, scan_command, seed_command, serve_command,
-    wait_for_migrations_command, worker_command, OpenApiFormat,
+    migrate_command, openapi_command, scan_command, seed_command, serve_command, tasks_command,
+    wait_for_migrations_command, worker_command, OpenApiFormat, TasksSubcommand,
 };
 use std::path::PathBuf;
 
@@ -101,6 +101,16 @@ enum Commands {
         #[arg(short, long, default_value = "json")]
         format: OpenApiFormat,
     },
+
+    /// Task queue management commands
+    Tasks {
+        /// Path to configuration file
+        #[arg(short, long, default_value = "codex.yaml")]
+        config: PathBuf,
+
+        #[command(subcommand)]
+        command: TasksSubcommand,
+    },
 }
 
 #[tokio::main]
@@ -137,6 +147,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Openapi { output, format } => {
             openapi_command(output, format)?;
+        }
+        Commands::Tasks { config, command } => {
+            tasks_command(config, command).await?;
         }
     }
 

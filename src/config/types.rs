@@ -225,7 +225,6 @@ pub enum DatabaseType {
     SQLite,
 }
 
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct PostgresConfig {
@@ -401,10 +400,8 @@ impl Default for EmailConfig {
             smtp_host: env_string_opt("CODEX_EMAIL_SMTP_HOST")
                 .unwrap_or_else(|| "localhost".to_string()),
             smtp_port: env_or("CODEX_EMAIL_SMTP_PORT", 587),
-            smtp_username: env_string_opt("CODEX_EMAIL_SMTP_USERNAME")
-                .unwrap_or_default(),
-            smtp_password: env_string_opt("CODEX_EMAIL_SMTP_PASSWORD")
-                .unwrap_or_default(),
+            smtp_username: env_string_opt("CODEX_EMAIL_SMTP_USERNAME").unwrap_or_default(),
+            smtp_password: env_string_opt("CODEX_EMAIL_SMTP_PASSWORD").unwrap_or_default(),
             smtp_from_email: env_string_opt("CODEX_EMAIL_SMTP_FROM_EMAIL")
                 .unwrap_or_else(|| "noreply@example.com".to_string()),
             smtp_from_name: env_string_opt("CODEX_EMAIL_SMTP_FROM_NAME")

@@ -1,3 +1,9 @@
+//! Repository for BookDuplicates operations
+//!
+//! TODO: Remove allow(dead_code) when duplicate detection features are fully integrated
+
+#![allow(dead_code)]
+
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{

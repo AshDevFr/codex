@@ -126,9 +126,12 @@ pub async fn connect_integration(
     let user_id = auth.user_id;
 
     // Validate integration name
-    let provider = IntegrationProvider::from_str(&request.integration_name).ok_or_else(|| {
-        ApiError::BadRequest(format!("Unknown integration: {}", request.integration_name))
-    })?;
+    let provider = request
+        .integration_name
+        .parse::<IntegrationProvider>()
+        .map_err(|_| {
+            ApiError::BadRequest(format!("Unknown integration: {}", request.integration_name))
+        })?;
 
     // Check if already connected
     let is_connected =
@@ -231,8 +234,9 @@ pub async fn oauth_callback(
     let user_id = auth.user_id;
 
     // Validate integration name
-    let provider = IntegrationProvider::from_str(&name)
-        .ok_or_else(|| ApiError::BadRequest(format!("Unknown integration: {}", name)))?;
+    let provider = name
+        .parse::<IntegrationProvider>()
+        .map_err(|_| ApiError::BadRequest(format!("Unknown integration: {}", name)))?;
 
     // Verify this is an OAuth provider
     if provider.auth_type() != "oauth2" {

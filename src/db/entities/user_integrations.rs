@@ -1,8 +1,13 @@
 //! User integrations entity for per-user external service connections
+//!
+//! TODO: Remove allow(dead_code) once integration features are implemented
+
+#![allow(dead_code)]
 
 use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
@@ -66,14 +71,18 @@ impl SyncStatus {
             SyncStatus::RateLimited => "rate_limited",
         }
     }
+}
 
-    pub fn from_str(s: &str) -> Option<Self> {
+impl FromStr for SyncStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "idle" => Some(SyncStatus::Idle),
-            "syncing" => Some(SyncStatus::Syncing),
-            "error" => Some(SyncStatus::Error),
-            "rate_limited" => Some(SyncStatus::RateLimited),
-            _ => None,
+            "idle" => Ok(SyncStatus::Idle),
+            "syncing" => Ok(SyncStatus::Syncing),
+            "error" => Ok(SyncStatus::Error),
+            "rate_limited" => Ok(SyncStatus::RateLimited),
+            _ => Err(format!("Unknown sync status: {}", s)),
         }
     }
 }
@@ -103,17 +112,6 @@ impl IntegrationProvider {
             IntegrationProvider::Kitsu => "kitsu",
             IntegrationProvider::MangaDex => "mangadex",
             IntegrationProvider::Kavita => "kavita",
-        }
-    }
-
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "anilist" => Some(IntegrationProvider::Anilist),
-            "myanimelist" => Some(IntegrationProvider::MyAnimeList),
-            "kitsu" => Some(IntegrationProvider::Kitsu),
-            "mangadex" => Some(IntegrationProvider::MangaDex),
-            "kavita" => Some(IntegrationProvider::Kavita),
-            _ => None,
         }
     }
 
@@ -165,6 +163,21 @@ impl IntegrationProvider {
             IntegrationProvider::MangaDex,
             IntegrationProvider::Kavita,
         ]
+    }
+}
+
+impl FromStr for IntegrationProvider {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "anilist" => Ok(IntegrationProvider::Anilist),
+            "myanimelist" => Ok(IntegrationProvider::MyAnimeList),
+            "kitsu" => Ok(IntegrationProvider::Kitsu),
+            "mangadex" => Ok(IntegrationProvider::MangaDex),
+            "kavita" => Ok(IntegrationProvider::Kavita),
+            _ => Err(format!("Unknown integration provider: {}", s)),
+        }
     }
 }
 

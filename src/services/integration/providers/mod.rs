@@ -4,4 +4,3 @@
 //! external service integrations.
 
 pub mod traits;
-

@@ -4,6 +4,7 @@ use utoipa::{IntoParams, ToSchema};
 /// Pagination parameters for list endpoints
 #[derive(Debug, Deserialize, IntoParams)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // Public API - fields read by serde deserialization
 pub struct PaginationParams {
     /// Page number (0-indexed)
     #[serde(default)]
@@ -27,6 +28,7 @@ impl Default for PaginationParams {
     }
 }
 
+#[allow(dead_code)] // Public API - used for pagination in list endpoints
 impl PaginationParams {
     /// Validate and clamp pagination parameters
     pub fn validate(mut self, max_page_size: u64) -> Self {

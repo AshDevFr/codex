@@ -101,6 +101,7 @@ impl Default for SeriesSortParam {
     }
 }
 
+#[allow(dead_code)] // Public API for series sorting - used in query parsing
 impl SeriesSortParam {
     pub fn new(field: SeriesSortField, direction: SortDirection) -> Self {
         Self { field, direction }
@@ -178,14 +179,6 @@ pub struct SeriesDto {
 
 /// Series list response
 pub type SeriesListResponse = PaginatedResponse<SeriesDto>;
-
-/// Series filter for list queries
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct SeriesFilter {
-    /// Optional library filter
-    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
-    pub library_id: Option<uuid::Uuid>,
-}
 
 /// Search series request
 #[derive(Debug, Serialize, Deserialize, ToSchema)]

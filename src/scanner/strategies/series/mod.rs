@@ -2,6 +2,10 @@
 //!
 //! Series strategies determine how files are organized into series based on
 //! the library's folder structure, metadata, or custom patterns.
+//!
+//! TODO: Remove allow(dead_code) once all series strategy features are fully integrated
+
+#![allow(dead_code)]
 
 mod calibre;
 mod custom;

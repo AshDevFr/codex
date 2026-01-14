@@ -44,6 +44,7 @@ use uuid::Uuid;
         (name = "System Integrations", description = "Admin-managed external service integrations")
     )
 )]
+#[allow(dead_code)] // OpenAPI documentation struct - referenced by utoipa derive macros
 pub struct SystemIntegrationsApi;
 
 /// List all system integrations
@@ -123,9 +124,10 @@ pub async fn create_system_integration(
     }
 
     // Check if name already exists
-    if let Some(_) = SystemIntegrationsRepository::get_by_name(&state.db, &request.name)
+    if SystemIntegrationsRepository::get_by_name(&state.db, &request.name)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to check existing: {}", e)))?
+        .is_some()
     {
         return Err(ApiError::Conflict(format!(
             "Integration with name '{}' already exists",

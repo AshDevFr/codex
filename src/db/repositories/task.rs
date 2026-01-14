@@ -536,9 +536,7 @@ impl TaskRepository {
 
         for task in all_tasks {
             let is_stale = task.status == "processing"
-                && task
-                    .locked_until
-                    .is_some_and(|until| until < stale_cutoff);
+                && task.locked_until.is_some_and(|until| until < stale_cutoff);
 
             // Update aggregates
             match task.status.as_str() {

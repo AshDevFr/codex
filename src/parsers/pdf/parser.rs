@@ -7,6 +7,9 @@ use image::GenericImageView;
 use lopdf::Document;
 use std::path::Path;
 
+/// Extracted PDF image data: (data bytes, format, width, height, size)
+type PdfImageData = (Vec<u8>, ImageFormat, u32, u32, u64);
+
 pub struct PdfParser;
 
 impl PdfParser {
@@ -57,10 +60,7 @@ impl PdfParser {
     }
 
     /// Extract images from a PDF page
-    fn extract_images_from_page(
-        doc: &Document,
-        page_num: u32,
-    ) -> Result<Vec<(Vec<u8>, ImageFormat, u32, u32, u64)>> {
+    fn extract_images_from_page(doc: &Document, page_num: u32) -> Result<Vec<PdfImageData>> {
         let mut images = Vec::new();
 
         // Get the page dictionary

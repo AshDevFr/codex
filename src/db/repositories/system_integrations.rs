@@ -2,6 +2,10 @@
 //!
 //! Provides CRUD operations for app-wide external service connections.
 //! Credentials are encrypted at rest using AES-256-GCM.
+//!
+//! TODO: Remove allow(dead_code) once integration features are implemented
+
+#![allow(dead_code)]
 
 use crate::db::entities::{system_integrations, system_integrations::Entity as SystemIntegrations};
 use crate::services::CredentialEncryption;
@@ -81,6 +85,7 @@ impl SystemIntegrationsRepository {
     }
 
     /// Create a new system integration
+    #[allow(clippy::too_many_arguments)] // All fields are required for integration creation - matches database schema
     pub async fn create(
         db: &DatabaseConnection,
         name: &str,

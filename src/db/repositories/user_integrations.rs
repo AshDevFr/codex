@@ -2,6 +2,10 @@
 //!
 //! Provides CRUD operations for per-user external service connections.
 //! Credentials are encrypted at rest using AES-256-GCM.
+//!
+//! TODO: Remove allow(dead_code) once integration features are implemented
+
+#![allow(dead_code)]
 
 use crate::db::entities::{user_integrations, user_integrations::Entity as UserIntegrations};
 use crate::services::CredentialEncryption;
@@ -91,6 +95,7 @@ impl UserIntegrationsRepository {
     }
 
     /// Create a new user integration
+    #[allow(clippy::too_many_arguments)] // All fields are required for integration creation - matches database schema
     pub async fn create(
         db: &DatabaseConnection,
         user_id: Uuid,

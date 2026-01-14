@@ -61,6 +61,7 @@ pub struct OpdsFeed {
     pub start_index: Option<u32>,
 }
 
+#[allow(dead_code)] // Public API for OPDS feed building
 impl OpdsFeed {
     /// Create a new OPDS feed
     pub fn new(

@@ -1,5 +1,12 @@
+//! Data models for library organization strategies
+//!
+//! TODO: Remove allow(dead_code) once all strategy features are fully integrated
+
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::str::FromStr;
 use utoipa::ToSchema;
 
 // ============================================================================
@@ -51,19 +58,6 @@ impl SeriesStrategy {
         }
     }
 
-    /// Parse from string representation
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "series_volume" | "default" => Some(Self::SeriesVolume),
-            "series_volume_chapter" => Some(Self::SeriesVolumeChapter),
-            "flat" => Some(Self::Flat),
-            "publisher_hierarchy" => Some(Self::PublisherHierarchy),
-            "calibre" => Some(Self::Calibre),
-            "custom" => Some(Self::Custom),
-            _ => None,
-        }
-    }
-
     /// Get all available strategies
     pub fn all() -> Vec<Self> {
         vec![
@@ -87,6 +81,22 @@ impl SeriesStrategy {
             Self::PublisherHierarchy => "Skip organizational levels (publisher/year) before series",
             Self::Calibre => "Calibre library structure (Author/Book folders)",
             Self::Custom => "Custom regex patterns for series detection",
+        }
+    }
+}
+
+impl FromStr for SeriesStrategy {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "series_volume" | "default" => Ok(Self::SeriesVolume),
+            "series_volume_chapter" => Ok(Self::SeriesVolumeChapter),
+            "flat" => Ok(Self::Flat),
+            "publisher_hierarchy" => Ok(Self::PublisherHierarchy),
+            "calibre" => Ok(Self::Calibre),
+            "custom" => Ok(Self::Custom),
+            _ => Err(format!("Unknown series strategy: {}", s)),
         }
     }
 }
@@ -136,18 +146,6 @@ impl BookStrategy {
         }
     }
 
-    /// Parse from string representation
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "filename" => Some(Self::Filename),
-            "metadata_first" => Some(Self::MetadataFirst),
-            "smart" => Some(Self::Smart),
-            "series_name" => Some(Self::SeriesName),
-            "custom" => Some(Self::Custom),
-            _ => None,
-        }
-    }
-
     /// Get all available strategies
     pub fn all() -> Vec<Self> {
         vec![
@@ -167,6 +165,21 @@ impl BookStrategy {
             Self::Smart => "Use metadata if meaningful, ignore generic titles like 'Vol. 3'",
             Self::SeriesName => "Generate uniform titles: 'Series v.01' or 'Series v.01 c.001'",
             Self::Custom => "User-defined regex for title, volume, and chapter extraction",
+        }
+    }
+}
+
+impl FromStr for BookStrategy {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "filename" => Ok(Self::Filename),
+            "metadata_first" => Ok(Self::MetadataFirst),
+            "smart" => Ok(Self::Smart),
+            "series_name" => Ok(Self::SeriesName),
+            "custom" => Ok(Self::Custom),
+            _ => Err(format!("Unknown book strategy: {}", s)),
         }
     }
 }
@@ -213,17 +226,6 @@ impl NumberStrategy {
         }
     }
 
-    /// Parse from string representation
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "file_order" => Some(Self::FileOrder),
-            "metadata" => Some(Self::Metadata),
-            "filename" => Some(Self::Filename),
-            "smart" => Some(Self::Smart),
-            _ => None,
-        }
-    }
-
     /// Get all available strategies
     pub fn all() -> Vec<Self> {
         vec![Self::FileOrder, Self::Metadata, Self::Filename, Self::Smart]
@@ -236,6 +238,20 @@ impl NumberStrategy {
             Self::Metadata => "Use ComicInfo/metadata number field only",
             Self::Filename => "Parse number from filename patterns (#001, v01, c001, etc.)",
             Self::Smart => "Smart fallback: metadata → filename → file order",
+        }
+    }
+}
+
+impl FromStr for NumberStrategy {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "file_order" => Ok(Self::FileOrder),
+            "metadata" => Ok(Self::Metadata),
+            "filename" => Ok(Self::Filename),
+            "smart" => Ok(Self::Smart),
+            _ => Err(format!("Unknown number strategy: {}", s)),
         }
     }
 }
@@ -401,7 +417,6 @@ pub struct SmartBookConfig {
     pub additional_generic_patterns: Vec<String>,
 }
 
-
 /// Configuration for custom book naming strategy
 ///
 /// Allows user-defined regex patterns for extracting title, volume, and chapter
@@ -466,12 +481,15 @@ impl ScanningStrategy {
             Self::Default => "default",
         }
     }
+}
 
-    /// Parse from string representation
-    pub fn from_str(s: &str) -> Option<Self> {
+impl FromStr for ScanningStrategy {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "default" => Some(Self::Default),
-            _ => None,
+            "default" => Ok(Self::Default),
+            _ => Err(format!("Unknown scanning strategy: {}", s)),
         }
     }
 }
@@ -490,8 +508,8 @@ mod tests {
     fn test_series_strategy_roundtrip() {
         for strategy in SeriesStrategy::all() {
             let s = strategy.as_str();
-            let parsed = SeriesStrategy::from_str(s);
-            assert_eq!(parsed, Some(strategy), "Failed roundtrip for {}", s);
+            let parsed: SeriesStrategy = s.parse().unwrap();
+            assert_eq!(parsed, strategy, "Failed roundtrip for {}", s);
         }
     }
 
@@ -499,8 +517,8 @@ mod tests {
     fn test_series_strategy_default_compatibility() {
         // "default" should map to SeriesVolume for backward compatibility
         assert_eq!(
-            SeriesStrategy::from_str("default"),
-            Some(SeriesStrategy::SeriesVolume)
+            "default".parse::<SeriesStrategy>().unwrap(),
+            SeriesStrategy::SeriesVolume
         );
     }
 
@@ -508,8 +526,8 @@ mod tests {
     fn test_book_strategy_roundtrip() {
         for strategy in BookStrategy::all() {
             let s = strategy.as_str();
-            let parsed = BookStrategy::from_str(s);
-            assert_eq!(parsed, Some(strategy), "Failed roundtrip for {}", s);
+            let parsed: BookStrategy = s.parse().unwrap();
+            assert_eq!(parsed, strategy, "Failed roundtrip for {}", s);
         }
     }
 
@@ -553,8 +571,8 @@ mod tests {
     fn test_number_strategy_roundtrip() {
         for strategy in NumberStrategy::all() {
             let s = strategy.as_str();
-            let parsed = NumberStrategy::from_str(s);
-            assert_eq!(parsed, Some(strategy), "Failed roundtrip for {}", s);
+            let parsed: NumberStrategy = s.parse().unwrap();
+            assert_eq!(parsed, strategy, "Failed roundtrip for {}", s);
         }
     }
 

@@ -37,6 +37,7 @@ use uuid::Uuid;
         (name = "Reading Progress", description = "Reading progress tracking endpoints")
     )
 )]
+#[allow(dead_code)] // OpenAPI documentation struct - referenced by utoipa derive macros
 pub struct ReadProgressApi;
 
 /// Update reading progress for a book

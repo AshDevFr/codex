@@ -1,3 +1,9 @@
+//! Traits for file format parsers
+//!
+//! TODO: Remove allow(dead_code) once all parser features are fully integrated
+
+#![allow(dead_code)]
+
 use crate::parsers::BookMetadata;
 use crate::utils::Result;
 use std::path::Path;

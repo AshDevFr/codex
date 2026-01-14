@@ -1,8 +1,13 @@
 //! System integrations entity for app-wide external service connections
+//!
+//! TODO: Remove allow(dead_code) once integration features are implemented
+
+#![allow(dead_code)]
 
 use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
@@ -68,14 +73,18 @@ impl IntegrationType {
             IntegrationType::Sync => "sync",
         }
     }
+}
 
-    pub fn from_str(s: &str) -> Option<Self> {
+impl FromStr for IntegrationType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "metadata_provider" => Some(IntegrationType::MetadataProvider),
-            "notification" => Some(IntegrationType::Notification),
-            "storage" => Some(IntegrationType::Storage),
-            "sync" => Some(IntegrationType::Sync),
-            _ => None,
+            "metadata_provider" => Ok(IntegrationType::MetadataProvider),
+            "notification" => Ok(IntegrationType::Notification),
+            "storage" => Ok(IntegrationType::Storage),
+            "sync" => Ok(IntegrationType::Sync),
+            _ => Err(format!("Unknown integration type: {}", s)),
         }
     }
 }
@@ -107,15 +116,19 @@ impl HealthStatus {
             HealthStatus::Disabled => "disabled",
         }
     }
+}
 
-    pub fn from_str(s: &str) -> Option<Self> {
+impl FromStr for HealthStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "unknown" => Some(HealthStatus::Unknown),
-            "healthy" => Some(HealthStatus::Healthy),
-            "degraded" => Some(HealthStatus::Degraded),
-            "unhealthy" => Some(HealthStatus::Unhealthy),
-            "disabled" => Some(HealthStatus::Disabled),
-            _ => None,
+            "unknown" => Ok(HealthStatus::Unknown),
+            "healthy" => Ok(HealthStatus::Healthy),
+            "degraded" => Ok(HealthStatus::Degraded),
+            "unhealthy" => Ok(HealthStatus::Unhealthy),
+            "disabled" => Ok(HealthStatus::Disabled),
+            _ => Err(format!("Unknown health status: {}", s)),
         }
     }
 }

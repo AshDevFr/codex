@@ -218,30 +218,3 @@ pub struct SyncTriggerResponse {
     /// Updated integration state
     pub integration: UserIntegrationDto,
 }
-
-/// Integration sync status
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct IntegrationSyncStatus {
-    /// Current sync status
-    #[schema(example = "syncing")]
-    pub status: String,
-
-    /// Progress percentage (0-100) if available
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(example = 45)]
-    pub progress: Option<u8>,
-
-    /// Status message
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(example = "Syncing reading progress...")]
-    pub message: Option<String>,
-
-    /// Last sync timestamp
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_sync_at: Option<DateTime<Utc>>,
-
-    /// Last error message
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_error: Option<String>,
-}

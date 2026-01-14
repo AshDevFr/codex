@@ -2,6 +2,10 @@
 //!
 //! All sensitive credentials (API keys, OAuth tokens) are encrypted at rest
 //! using AES-256-GCM with a 96-bit nonce prepended to the ciphertext.
+//!
+//! TODO: Remove allow(dead_code) once integration features are fully implemented
+
+#![allow(dead_code)]
 
 use aes_gcm::{
     aead::{Aead, KeyInit},

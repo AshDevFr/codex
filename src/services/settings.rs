@@ -1,3 +1,9 @@
+//! Settings service for managing runtime configuration
+//!
+//! TODO: Remove allow(dead_code) once all settings features are fully integrated
+
+#![allow(dead_code)]
+
 use crate::db::repositories::SettingsRepository;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -13,7 +19,6 @@ use uuid::Uuid;
 struct CachedSetting {
     value: String,
     value_type: String,
-    updated_at: DateTime<Utc>,
 }
 
 #[derive(Clone)]
@@ -127,7 +132,6 @@ impl SettingsService {
             CachedSetting {
                 value: updated.value,
                 value_type: updated.value_type,
-                updated_at: updated.updated_at,
             },
         );
 
@@ -147,7 +151,6 @@ impl SettingsService {
                 CachedSetting {
                     value: setting.value,
                     value_type: setting.value_type,
-                    updated_at: setting.updated_at,
                 },
             );
         }

@@ -15,6 +15,8 @@ pub struct AuthContext {
     pub username: String,
     pub is_admin: bool,
     pub permissions: Vec<Permission>,
+    /// How the user was authenticated - used for audit logging
+    #[allow(dead_code)]
     pub auth_method: AuthMethod,
 }
 
@@ -32,6 +34,7 @@ impl AuthContext {
     }
 
     /// Check if the user has any of the specified permissions
+    #[allow(dead_code)] // Public API for permission checking
     pub fn has_any_permission(&self, permissions: &[Permission]) -> bool {
         if self.is_admin {
             return true;
@@ -69,6 +72,8 @@ pub struct AppState {
     pub auth_config: Arc<crate::config::AuthConfig>,
     pub email_service: Arc<crate::services::email::EmailService>,
     pub event_broadcaster: Arc<crate::events::EventBroadcaster>,
+    /// Settings service - used for runtime configuration
+    #[allow(dead_code)]
     pub settings_service: Arc<crate::services::SettingsService>,
     pub thumbnail_service: Arc<crate::services::ThumbnailService>,
     /// Task metrics service for collecting task performance data

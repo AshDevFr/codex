@@ -1,3 +1,9 @@
+//! Repository for ReadProgress operations
+//!
+//! TODO: Remove allow(dead_code) when all reading progress features are fully integrated
+
+#![allow(dead_code)]
+
 use crate::db::entities::{read_progress, read_progress::Entity as ReadProgress};
 use anyhow::Result;
 use chrono::Utc;

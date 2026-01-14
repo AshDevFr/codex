@@ -1,9 +1,16 @@
+//! Repository for TaskMetrics operations
+//!
+//! TODO: Remove allow(dead_code) once task metrics features are fully integrated
+
+#![allow(dead_code)]
+
 use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Timelike, Utc};
 use sea_orm::{
     entity::prelude::*, ActiveModelTrait, ColumnTrait, DatabaseConnection, DbBackend, EntityTrait,
     QueryFilter, QueryOrder, Set, Statement,
 };
+use std::str::FromStr;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
@@ -26,12 +33,16 @@ impl PeriodType {
             PeriodType::Day => "day",
         }
     }
+}
 
-    pub fn from_str(s: &str) -> Option<Self> {
+impl FromStr for PeriodType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "hour" => Some(PeriodType::Hour),
-            "day" => Some(PeriodType::Day),
-            _ => None,
+            "hour" => Ok(PeriodType::Hour),
+            "day" => Ok(PeriodType::Day),
+            _ => Err(format!("Unknown period type: {}", s)),
         }
     }
 }

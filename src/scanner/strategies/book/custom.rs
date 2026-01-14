@@ -24,7 +24,10 @@ impl CustomStrategy {
         let pattern = Regex::new(&config.pattern).ok();
 
         // Parse fallback strategy, default to Filename if invalid
-        let fallback = BookStrategy::from_str(&config.fallback).unwrap_or(BookStrategy::Filename);
+        let fallback = config
+            .fallback
+            .parse::<BookStrategy>()
+            .unwrap_or(BookStrategy::Filename);
 
         // Prevent infinite recursion: Custom cannot fallback to Custom
         let fallback = if fallback == BookStrategy::Custom {

@@ -357,7 +357,7 @@ pub async fn patch_series(
         let mut active: series_metadata::ActiveModel = existing.clone().into();
 
         // Update title (name) if provided
-        if let Some(Some(name)) = request.name.to_active_value() {
+        if let Some(Some(name)) = request.name.into_nested_option() {
             active.title = Set(name.clone());
             active.title_lock = Set(true); // Auto-lock when user edits
             has_changes = true;
@@ -374,7 +374,7 @@ pub async fn patch_series(
         }
     } else {
         // Create new metadata record with provided name
-        if let Some(Some(name)) = request.name.to_active_value() {
+        if let Some(Some(name)) = request.name.into_nested_option() {
             has_changes = true;
             updated_name = name.clone();
 
@@ -1855,27 +1855,27 @@ pub async fn patch_series_metadata(
     let mut has_series_changes = false;
     let mut custom_metadata_value: Option<String> = existing_series.custom_metadata.clone();
 
-    if let Some(opt) = request.sort_name.to_active_value() {
+    if let Some(opt) = request.sort_name.into_nested_option() {
         metadata_active.title_sort = Set(opt);
         has_metadata_changes = true;
     }
-    if let Some(opt) = request.summary.to_active_value() {
+    if let Some(opt) = request.summary.into_nested_option() {
         metadata_active.summary = Set(opt);
         has_metadata_changes = true;
     }
-    if let Some(opt) = request.publisher.to_active_value() {
+    if let Some(opt) = request.publisher.into_nested_option() {
         metadata_active.publisher = Set(opt);
         has_metadata_changes = true;
     }
-    if let Some(opt) = request.year.to_active_value() {
+    if let Some(opt) = request.year.into_nested_option() {
         metadata_active.year = Set(opt);
         has_metadata_changes = true;
     }
-    if let Some(opt) = request.reading_direction.to_active_value() {
+    if let Some(opt) = request.reading_direction.into_nested_option() {
         metadata_active.reading_direction = Set(opt);
         has_metadata_changes = true;
     }
-    if let Some(opt) = request.custom_metadata.to_active_value() {
+    if let Some(opt) = request.custom_metadata.into_nested_option() {
         custom_metadata_value = opt.clone();
         has_series_changes = true;
     }

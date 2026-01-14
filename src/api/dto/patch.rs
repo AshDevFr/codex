@@ -34,13 +34,13 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// In your handler, use `into_active_value()` to convert directly to SeaORM's ActiveValue:
 /// ```text
 /// // For optional database fields
-/// series.summary = request.summary.into_active_value();
+/// series.summary = request.summary.into_nested_option();
 /// ```
 ///
 /// Or use `to_active_value()` for manual handling:
 /// ```text
 /// use sea_orm::Set;
-/// if let Some(opt) = request.summary.to_active_value() {
+/// if let Some(opt) = request.summary.into_nested_option() {
 ///     series.summary = Set(opt);
 /// }
 /// ```
@@ -55,6 +55,7 @@ pub enum PatchValue<T> {
     Value(T),
 }
 
+#[allow(dead_code)] // Public API for PATCH request handling - used in tests and planned PATCH endpoints
 impl<T> PatchValue<T> {
     /// Returns true if the field was absent (not included in JSON)
     pub fn is_absent(&self) -> bool {
@@ -87,12 +88,12 @@ impl<T> PatchValue<T> {
         }
     }
 
-    /// Convert to Option<Option<T>> for SeaORM ActiveValue
+    /// Convert to Option<Option<T>> for conditional field updates
     ///
     /// - Absent -> None (don't set the field)
     /// - Null -> Some(None) (set field to null)
     /// - Value(v) -> Some(Some(v)) (set field to value)
-    pub fn to_active_value(self) -> Option<Option<T>> {
+    pub fn into_nested_option(self) -> Option<Option<T>> {
         match self {
             PatchValue::Absent => None,
             PatchValue::Null => Some(None),
@@ -110,6 +111,7 @@ impl<T> PatchValue<T> {
     }
 }
 
+#[allow(dead_code)] // Public API for PATCH request handling - converts to SeaORM ActiveValue
 impl<T> PatchValue<T>
 where
     T: Clone + Into<sea_orm::Value> + sea_orm::sea_query::Nullable,
@@ -212,9 +214,9 @@ mod tests {
         let null: PatchValue<String> = PatchValue::Null;
         let value: PatchValue<String> = PatchValue::Value("test".to_string());
 
-        assert_eq!(absent.to_active_value(), None);
-        assert_eq!(null.to_active_value(), Some(None));
-        assert_eq!(value.to_active_value(), Some(Some("test".to_string())));
+        assert_eq!(absent.into_nested_option(), None);
+        assert_eq!(null.into_nested_option(), Some(None));
+        assert_eq!(value.into_nested_option(), Some(Some("test".to_string())));
     }
 
     #[test]

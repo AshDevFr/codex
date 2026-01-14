@@ -1,3 +1,9 @@
+//! Repository for series operations
+//!
+//! TODO: Remove allow(dead_code) once all series features are fully integrated
+
+#![allow(dead_code)]
+
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
@@ -22,7 +28,8 @@ pub struct SeriesWithAggregates {
     pub custom_metadata: Option<String>,
     pub created_at: chrono::DateTime<Utc>,
     pub updated_at: chrono::DateTime<Utc>,
-    // Aggregated field for date_read sort
+    /// Aggregated field for date_read sort - used for SQL ORDER BY mapping
+    #[allow(dead_code)]
     pub last_read_at: Option<chrono::DateTime<Utc>>,
 }
 

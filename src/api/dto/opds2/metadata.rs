@@ -31,6 +31,7 @@ pub struct FeedMetadata {
     pub current_page: Option<i32>,
 }
 
+#[allow(dead_code)] // Public API for OPDS 2.0 feed metadata building
 impl FeedMetadata {
     /// Create new feed metadata with just a title
     pub fn new(title: impl Into<String>) -> Self {
@@ -123,6 +124,7 @@ pub struct PublicationMetadata {
     pub belongs_to: Option<BelongsTo>,
 }
 
+#[allow(dead_code)] // Public API for OPDS 2.0 publication metadata building
 impl PublicationMetadata {
     /// Create new publication metadata with a title
     pub fn new(title: impl Into<String>) -> Self {
@@ -223,6 +225,7 @@ pub struct Contributor {
     pub sort_as: Option<String>,
 }
 
+#[allow(dead_code)] // Public API for OPDS 2.0 metadata building
 impl Contributor {
     /// Create a new contributor
     pub fn new(name: impl Into<String>) -> Self {

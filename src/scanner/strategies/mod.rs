@@ -9,19 +9,18 @@ pub mod number;
 pub mod series;
 
 // Re-export book naming types
-pub use book::{
-    create_book_strategy, BookMetadata, BookNamingContext,
-    BookNamingStrategy,
-};
+// BookNamingStrategy is public API for external strategy implementations
+#[allow(unused_imports)]
+pub use book::{create_book_strategy, BookMetadata, BookNamingContext, BookNamingStrategy};
 
-// Re-export common types
+// Re-export common types for external strategy implementations
+#[allow(unused_imports)]
 pub use common::{DetectedBook, DetectedSeries};
 
 // Re-export number strategy types
 pub use number::{create_number_strategy, NumberContext, NumberMetadata};
 
 // Re-export series strategy types
-pub use series::{
-    create_strategy,
-    ScanningStrategyImpl,
-};
+// ScanningStrategyImpl is public API for external strategy implementations
+#[allow(unused_imports)]
+pub use series::{create_strategy, ScanningStrategyImpl};

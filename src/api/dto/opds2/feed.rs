@@ -43,6 +43,7 @@ pub struct Group {
     pub publications: Option<Vec<Publication>>,
 }
 
+#[allow(dead_code)] // Public API for OPDS 2.0 feed building
 impl Opds2Feed {
     /// Create a navigation feed
     pub fn navigation(
@@ -129,6 +130,7 @@ impl Opds2Feed {
     }
 }
 
+#[allow(dead_code)] // Public API for OPDS 2.0 feed building
 impl Group {
     /// Create a new navigation group
     pub fn navigation(title: impl Into<String>, nav: Vec<Opds2Link>) -> Self {

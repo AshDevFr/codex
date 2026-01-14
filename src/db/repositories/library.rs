@@ -1,3 +1,9 @@
+//! Repository for library operations
+//!
+//! TODO: Remove allow(dead_code) once all library features are fully integrated
+
+#![allow(dead_code)]
+
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
@@ -215,17 +221,26 @@ impl LibraryRepository {
 
     /// Get the series strategy for a library
     pub fn get_series_strategy(library: &libraries::Model) -> SeriesStrategy {
-        SeriesStrategy::from_str(&library.series_strategy).unwrap_or_default()
+        library
+            .series_strategy
+            .parse::<SeriesStrategy>()
+            .unwrap_or_default()
     }
 
     /// Get the book strategy for a library
     pub fn get_book_strategy(library: &libraries::Model) -> BookStrategy {
-        BookStrategy::from_str(&library.book_strategy).unwrap_or_default()
+        library
+            .book_strategy
+            .parse::<BookStrategy>()
+            .unwrap_or_default()
     }
 
     /// Get the number strategy for a library
     pub fn get_number_strategy(library: &libraries::Model) -> NumberStrategy {
-        NumberStrategy::from_str(&library.number_strategy).unwrap_or_default()
+        library
+            .number_strategy
+            .parse::<NumberStrategy>()
+            .unwrap_or_default()
     }
 }
 

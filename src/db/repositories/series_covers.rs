@@ -1,4 +1,8 @@
 //! Repository for series_covers table operations
+//!
+//! TODO: Remove allow(dead_code) when all cover features are fully integrated
+
+#![allow(dead_code)]
 
 use anyhow::Result;
 use chrono::Utc;

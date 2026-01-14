@@ -1,6 +1,10 @@
 //! Integration Provider Traits
 //!
 //! Defines the traits for metadata providers and user sync providers.
+//!
+//! TODO: Remove allow(dead_code) once integration features are fully implemented
+
+#![allow(dead_code)]
 
 use anyhow::Result;
 use axum::async_trait;

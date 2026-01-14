@@ -1,3 +1,9 @@
+//! Filter service for evaluating conditions against series/books
+//!
+//! TODO: Remove allow(dead_code) once all filter features are fully integrated
+
+#![allow(dead_code)]
+
 use crate::api::dto::{BookCondition, BoolOperator, FieldOperator, SeriesCondition, UuidOperator};
 use crate::db::repositories::{GenreRepository, TagRepository};
 use anyhow::Result;
@@ -775,23 +781,13 @@ impl FilterService {
             let total_books = book_ids.len();
             let mut read_count = 0;
             let mut in_progress_count = 0;
-            let mut unread_count = 0;
 
             for book_id in &book_ids {
-                match progress_map.get(book_id) {
-                    Some(progress) => {
-                        if progress.completed {
-                            read_count += 1;
-                        } else if progress.current_page > 0 {
-                            in_progress_count += 1;
-                        } else {
-                            // Has progress record but current_page=0 and not completed
-                            unread_count += 1;
-                        }
-                    }
-                    None => {
-                        // No progress record means unread
-                        unread_count += 1;
+                if let Some(progress) = progress_map.get(book_id) {
+                    if progress.completed {
+                        read_count += 1;
+                    } else if progress.current_page > 0 {
+                        in_progress_count += 1;
                     }
                 }
             }

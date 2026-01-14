@@ -83,10 +83,6 @@ impl Default for BookSortParam {
 }
 
 impl BookSortParam {
-    pub fn new(field: BookSortField, direction: SortDirection) -> Self {
-        Self { field, direction }
-    }
-
     /// Parse from "field,direction" format (e.g., "title,asc")
     pub fn parse(s: &str) -> Self {
         let parts: Vec<&str> = s.split(',').collect();

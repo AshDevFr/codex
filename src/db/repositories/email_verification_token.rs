@@ -1,3 +1,9 @@
+//! Repository for email verification tokens
+//!
+//! TODO: Remove allow(dead_code) once email verification is fully integrated
+
+#![allow(dead_code)]
+
 use crate::db::entities::{
     email_verification_tokens, email_verification_tokens::Entity as EmailVerificationToken,
 };
@@ -87,16 +93,6 @@ impl EmailVerificationTokenRepository {
             .exec(db)
             .await?;
         Ok(())
-    }
-
-    /// Delete expired tokens (cleanup)
-    pub async fn delete_expired(db: &DatabaseConnection) -> Result<u64> {
-        let now = Utc::now();
-        let result = EmailVerificationToken::delete_many()
-            .filter(email_verification_tokens::Column::ExpiresAt.lt(now))
-            .exec(db)
-            .await?;
-        Ok(result.rows_affected)
     }
 
     /// Get token by user ID (latest one)

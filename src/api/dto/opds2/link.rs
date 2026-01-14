@@ -40,6 +40,7 @@ pub struct LinkProperties {
     pub number_of_items: Option<i64>,
 }
 
+#[allow(dead_code)] // Public API for OPDS 2.0 link building
 impl Opds2Link {
     /// Create a new link with just an href
     pub fn new(href: impl Into<String>) -> Self {

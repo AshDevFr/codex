@@ -1,7 +1,14 @@
+//! Scanner types for library scanning operations
+//!
+//! TODO: Remove allow(dead_code) once all scanner features are fully integrated
+
+#![allow(dead_code)]
+
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::str::FromStr;
 use uuid::Uuid;
 
 /// Scan mode determines how the scanner processes files
@@ -23,9 +30,10 @@ impl fmt::Display for ScanMode {
     }
 }
 
-impl ScanMode {
-    /// Parse scan mode from string
-    pub fn from_str(s: &str) -> Result<Self, String> {
+impl FromStr for ScanMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "normal" => Ok(ScanMode::Normal),
             "deep" => Ok(ScanMode::Deep),

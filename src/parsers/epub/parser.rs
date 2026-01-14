@@ -119,7 +119,9 @@ impl EpubParser {
                 // Extract id
                 let id = if let Some(id_start) = item_tag.find("id=\"") {
                     let id_value_start = id_start + 4;
-                    item_tag[id_value_start..].find('"').map(|id_end| &item_tag[id_value_start..id_value_start + id_end])
+                    item_tag[id_value_start..]
+                        .find('"')
+                        .map(|id_end| &item_tag[id_value_start..id_value_start + id_end])
                 } else {
                     None
                 };
@@ -127,7 +129,9 @@ impl EpubParser {
                 // Extract href
                 let href = if let Some(href_start) = item_tag.find("href=\"") {
                     let href_value_start = href_start + 6;
-                    item_tag[href_value_start..].find('"').map(|href_end| &item_tag[href_value_start..href_value_start + href_end])
+                    item_tag[href_value_start..]
+                        .find('"')
+                        .map(|href_end| &item_tag[href_value_start..href_value_start + href_end])
                 } else {
                     None
                 };

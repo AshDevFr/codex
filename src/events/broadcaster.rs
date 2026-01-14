@@ -1,3 +1,9 @@
+//! Event broadcaster for entity change notifications
+//!
+//! TODO: Remove allow(dead_code) once event broadcasting features are fully integrated
+
+#![allow(dead_code)]
+
 use super::types::{EntityChangeEvent, EntityEvent, TaskProgressEvent};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -120,7 +126,7 @@ impl EventBroadcaster {
     pub fn emit_task(
         &self,
         event: TaskProgressEvent,
-    ) -> Result<usize, broadcast::error::SendError<TaskProgressEvent>> {
+    ) -> Result<usize, Box<broadcast::error::SendError<TaskProgressEvent>>> {
         match self.task_sender.send(event.clone()) {
             Ok(count) => {
                 debug!(
@@ -131,7 +137,7 @@ impl EventBroadcaster {
             }
             Err(e) => {
                 warn!("Failed to broadcast task event: {:?}", e);
-                Err(e)
+                Err(Box::new(e))
             }
         }
     }

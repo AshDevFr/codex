@@ -1,3 +1,9 @@
+//! JWT token generation and validation service
+//!
+//! TODO: Remove allow(dead_code) once all JWT features are fully integrated
+
+#![allow(dead_code)]
+
 use anyhow::{Context, Result};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};

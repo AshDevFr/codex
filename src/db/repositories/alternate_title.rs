@@ -1,4 +1,8 @@
 //! Repository for series_alternate_titles table operations
+//!
+//! TODO: Remove allow(dead_code) when alternate title features are fully integrated
+
+#![allow(dead_code)]
 
 use anyhow::Result;
 use chrono::Utc;

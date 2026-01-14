@@ -42,6 +42,7 @@ pub enum Permission {
     SystemAdmin,
 }
 
+#[allow(dead_code)] // Public API for permission string representation
 impl Permission {
     /// Convert permission to string format: "resource:action"
     pub fn as_str(&self) -> &'static str {
@@ -101,6 +102,7 @@ impl FromStr for Permission {
 }
 
 /// Parse permissions from JSON string
+#[allow(dead_code)] // Public API for permission parsing
 pub fn parse_permissions(json: &str) -> Result<HashSet<Permission>, serde_json::Error> {
     let perms: Vec<Permission> = serde_json::from_str(json)?;
     Ok(perms.into_iter().collect())

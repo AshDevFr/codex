@@ -145,7 +145,7 @@ pub async fn get_task_metrics_history(
         .as_ref()
         .ok_or_else(|| ApiError::Internal("Task metrics service not available".to_string()))?;
 
-    let days = query.days.unwrap_or(7).min(180).max(1);
+    let days = query.days.unwrap_or(7).clamp(1, 180);
     let granularity = query.granularity.as_deref().unwrap_or("hour");
     let task_type = query.task_type.as_deref();
 

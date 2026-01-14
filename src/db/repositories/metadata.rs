@@ -1,3 +1,9 @@
+//! Repository for BookMetadata operations
+//!
+//! TODO: Remove allow(dead_code) when all metadata features are fully integrated
+
+#![allow(dead_code)]
+
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};

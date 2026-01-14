@@ -2,6 +2,10 @@
 //!
 //! Book naming strategies determine how individual book titles are resolved
 //! from filesystem paths and metadata.
+//!
+//! TODO: Remove allow(dead_code) once all book strategy features are fully integrated
+
+#![allow(dead_code)]
 
 mod custom;
 mod filename;

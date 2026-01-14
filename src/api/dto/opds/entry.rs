@@ -41,6 +41,7 @@ pub struct OpdsEntry {
     pub category: Vec<OpdsCategory>,
 }
 
+#[allow(dead_code)] // Public API for OPDS feed building
 impl OpdsEntry {
     /// Create a new entry with required fields
     pub fn new(id: impl Into<String>, title: impl Into<String>, updated: DateTime<Utc>) -> Self {

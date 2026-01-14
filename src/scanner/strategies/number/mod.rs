@@ -3,6 +3,10 @@
 //! Book number strategies determine how individual book numbers are resolved
 //! for sorting and display. Unlike book naming strategies (which determine titles),
 //! number strategies determine the numeric ordering within a series.
+//!
+//! TODO: Remove allow(dead_code) once all number strategy features are fully integrated
+
+#![allow(dead_code)]
 
 mod file_order;
 mod filename;

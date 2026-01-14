@@ -1,4 +1,4 @@
-use super::config::{
+use super::types::{
     ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, LogLevel,
     LoggingConfig, PostgresConfig, SQLiteConfig, ScannerConfig, TaskConfig,
 };

@@ -205,7 +205,10 @@ async fn scan_normal(
     }
 
     // Create scanning strategy based on library configuration
-    let series_strategy = SeriesStrategy::from_str(&library.series_strategy).unwrap_or_default();
+    let series_strategy = library
+        .series_strategy
+        .parse::<SeriesStrategy>()
+        .unwrap_or_default();
     let series_config_str = library.series_config.as_ref().map(|v| v.to_string());
     let strategy = create_strategy(series_strategy, series_config_str.as_deref())?;
     info!(
@@ -366,7 +369,10 @@ async fn scan_deep(
     );
 
     // Create scanning strategy based on library configuration
-    let series_strategy = SeriesStrategy::from_str(&library.series_strategy).unwrap_or_default();
+    let series_strategy = library
+        .series_strategy
+        .parse::<SeriesStrategy>()
+        .unwrap_or_default();
     let series_config_str = library.series_config.as_ref().map(|v| v.to_string());
     let strategy = create_strategy(series_strategy, series_config_str.as_deref())?;
     info!(
@@ -432,152 +438,8 @@ async fn scan_deep(
     Ok(result)
 }
 
-/// Process a single series with its files
-async fn process_series(
-    db: &DatabaseConnection,
-    library: &crate::db::entities::libraries::Model,
-    series_name: &str,
-    file_paths: &[PathBuf],
-    existing_books: &HashMap<String, (String, books::Model)>,
-    mode: ScanMode,
-    progress: &mut ScanProgress,
-    progress_tx: &Option<mpsc::Sender<ScanProgress>>,
-    result: &mut ScanResult,
-    event_broadcaster: Option<&Arc<EventBroadcaster>>,
-) -> Result<()> {
-    // Calculate series fingerprint from file paths
-    let file_refs: Vec<&PathBuf> = file_paths.iter().collect();
-    let fingerprint = calculate_series_fingerprint(&file_refs);
-
-    // Extract series path (relative to library root)
-    let series_path = if !file_paths.is_empty() {
-        let library_path = Path::new(&library.path);
-        let first_file = &file_paths[0];
-        if let Ok(relative) = first_file.strip_prefix(library_path) {
-            // Get the parent directory (series folder)
-            relative
-                .parent()
-                .and_then(|p| p.components().next())
-                .map(|c| c.as_os_str().to_string_lossy().to_string())
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    // Find or create series with fingerprint
-    let series_model = find_or_create_series(
-        db,
-        library.id,
-        series_name,
-        Some(&fingerprint),
-        series_path.as_deref(),
-        event_broadcaster,
-    )
-    .await?;
-
-    let is_new_series = existing_books
-        .values()
-        .all(|(_, book)| book.series_id != series_model.id);
-
-    if is_new_series {
-        result.series_created += 1;
-        progress.increment_series();
-    }
-
-    // Process each file in the series
-    let file_count = file_paths.len();
-    let mut file_processed = 0;
-    let mut last_progress_log = Instant::now();
-    const PROGRESS_LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
-
-    for file_path in file_paths {
-        file_processed += 1;
-        let file_start = Instant::now();
-
-        match process_file(
-            db,
-            &series_model,
-            file_path,
-            existing_books,
-            mode,
-            progress,
-            result,
-            event_broadcaster,
-        )
-        .await
-        {
-            Ok(_) => {
-                result.files_processed += 1;
-                progress.files_processed += 1;
-
-                let file_duration = file_start.elapsed();
-                if file_duration.as_millis() > 1000 {
-                    // Log slow files (>1s)
-                    debug!(
-                        "Processed file {}/{} in {:?}: {}",
-                        file_processed,
-                        file_count,
-                        file_duration,
-                        file_path.file_name().unwrap_or_default().to_string_lossy()
-                    );
-                }
-
-                // Send progress update every file (for real-time updates)
-                send_progress(progress_tx, progress).await;
-
-                // Log progress periodically
-                if last_progress_log.elapsed() >= PROGRESS_LOG_INTERVAL {
-                    let elapsed_duration = Utc::now()
-                        .signed_duration_since(progress.started_at)
-                        .to_std()
-                        .unwrap_or(std::time::Duration::ZERO);
-                    let elapsed_secs = elapsed_duration.as_secs_f64();
-                    let files_per_sec = if elapsed_secs > 0.0 {
-                        progress.files_processed as f64 / elapsed_secs
-                    } else {
-                        0.0
-                    };
-                    let remaining = if files_per_sec > 0.0
-                        && progress.files_total > progress.files_processed
-                    {
-                        let remaining_files = progress.files_total - progress.files_processed;
-                        std::time::Duration::from_secs_f64(remaining_files as f64 / files_per_sec)
-                    } else {
-                        std::time::Duration::ZERO
-                    };
-
-                    info!(
-                        "Scan progress: {}/{} files ({:.1}%), {:.2} files/sec, ~{:?} remaining",
-                        progress.files_processed,
-                        progress.files_total,
-                        if progress.files_total > 0 {
-                            (progress.files_processed as f64 / progress.files_total as f64) * 100.0
-                        } else {
-                            0.0
-                        },
-                        files_per_sec,
-                        remaining
-                    );
-                    last_progress_log = Instant::now();
-                }
-            }
-            Err(e) => {
-                let error_msg = format!("Error processing file '{}': {}", file_path.display(), e);
-                error!("{} (took {:?})", error_msg, file_start.elapsed());
-                result.errors.push(error_msg);
-            }
-        }
-
-        // Yield to the runtime after each file to allow other tasks to run
-        tokio::task::yield_now().await;
-    }
-
-    Ok(())
-}
-
 /// Process a single series with detected series information from strategy
+#[allow(clippy::too_many_arguments)] // Internal scanner function - context params needed for recursive book processing
 async fn process_series_with_detected(
     db: &DatabaseConnection,
     library: &crate::db::entities::libraries::Model,
@@ -724,6 +586,7 @@ async fn process_series_with_detected(
 
 /// Process a single file - FAST DETECTION PHASE (no analysis)
 /// Only calculates hash and creates/updates database record without analyzing content
+#[allow(clippy::too_many_arguments)] // Internal scanner function - context params needed for book creation
 async fn process_file(
     db: &DatabaseConnection,
     series_model: &series::Model,
@@ -1065,43 +928,6 @@ fn discover_files(
     Ok(files)
 }
 
-/// Organize files by series based on folder structure
-/// Strategy: Direct child folders of library = series
-fn organize_by_series(files: &[PathBuf], library_path: &str) -> HashMap<String, Vec<PathBuf>> {
-    let mut series_map: HashMap<String, Vec<PathBuf>> = HashMap::new();
-    let library_path = Path::new(library_path);
-
-    for file_path in files {
-        // Get the series name from folder structure
-        let series_name = extract_series_name(file_path, library_path);
-
-        series_map
-            .entry(series_name)
-            .or_default()
-            .push(file_path.clone());
-    }
-
-    series_map
-}
-
-/// Extract series name from file path based on library root
-/// Direct child folder of library = series name
-fn extract_series_name(file_path: &Path, library_path: &Path) -> String {
-    // Get relative path from library root
-    let relative = file_path.strip_prefix(library_path).unwrap_or(file_path);
-
-    // Get first component (direct child folder)
-    let components: Vec<_> = relative.components().collect();
-
-    if components.len() > 1 {
-        // Use first folder as series name
-        components[0].as_os_str().to_string_lossy().to_string()
-    } else {
-        // File is directly in library root
-        "Unsorted".to_string()
-    }
-}
-
 /// Send progress update through channel
 async fn send_progress(progress_tx: &Option<mpsc::Sender<ScanProgress>>, progress: &ScanProgress) {
     if let Some(tx) = progress_tx {
@@ -1115,40 +941,6 @@ async fn send_progress(progress_tx: &Option<mpsc::Sender<ScanProgress>>, progres
 mod tests {
     use super::*;
     use std::path::PathBuf;
-
-    #[test]
-    fn test_extract_series_name() {
-        let library = Path::new("/library");
-
-        // File in series folder
-        let path = PathBuf::from("/library/Batman/issue1.cbz");
-        assert_eq!(extract_series_name(&path, library), "Batman");
-
-        // File in nested folder
-        let path = PathBuf::from("/library/Batman/Year One/issue1.cbz");
-        assert_eq!(extract_series_name(&path, library), "Batman");
-
-        // File directly in library
-        let path = PathBuf::from("/library/standalone.cbz");
-        assert_eq!(extract_series_name(&path, library), "Unsorted");
-    }
-
-    #[test]
-    fn test_organize_by_series() {
-        let files = vec![
-            PathBuf::from("/library/Batman/issue1.cbz"),
-            PathBuf::from("/library/Batman/issue2.cbz"),
-            PathBuf::from("/library/Superman/issue1.cbz"),
-            PathBuf::from("/library/standalone.cbz"),
-        ];
-
-        let series_map = organize_by_series(&files, "/library");
-
-        assert_eq!(series_map.len(), 3);
-        assert_eq!(series_map.get("Batman").unwrap().len(), 2);
-        assert_eq!(series_map.get("Superman").unwrap().len(), 1);
-        assert_eq!(series_map.get("Unsorted").unwrap().len(), 1);
-    }
 
     #[test]
     fn test_calculate_series_fingerprint_consistency() {

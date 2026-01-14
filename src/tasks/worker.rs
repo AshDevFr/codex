@@ -1,3 +1,9 @@
+//! Task worker that processes tasks from the queue
+//!
+//! TODO: Remove allow(dead_code) once all task worker features are fully integrated
+
+#![allow(dead_code)]
+
 use anyhow::Result;
 use chrono::Utc;
 use sea_orm::DatabaseConnection;

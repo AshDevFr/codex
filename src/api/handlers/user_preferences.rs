@@ -38,6 +38,7 @@ use utoipa::OpenApi;
         (name = "User Preferences", description = "Per-user settings and preferences")
     )
 )]
+#[allow(dead_code)] // OpenAPI documentation struct - referenced by utoipa derive macros
 pub struct UserPreferencesApi;
 
 /// Get all preferences for the authenticated user

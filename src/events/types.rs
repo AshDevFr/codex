@@ -1,3 +1,9 @@
+//! Event types for entity change notifications and task progress
+//!
+//! TODO: Remove allow(dead_code) once event features are fully integrated
+
+#![allow(dead_code)]
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -190,6 +196,7 @@ impl TaskProgressEvent {
     }
 
     /// Create a task progress update event
+    #[allow(clippy::too_many_arguments)] // All fields are needed to construct a complete progress event
     pub fn progress(
         task_id: Uuid,
         task_type: impl Into<String>,

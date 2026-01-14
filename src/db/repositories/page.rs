@@ -1,3 +1,9 @@
+//! Repository for Page operations
+//!
+//! TODO: Remove allow(dead_code) when all page features are fully integrated
+
+#![allow(dead_code)]
+
 use anyhow::{Context, Result};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,

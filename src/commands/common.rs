@@ -10,14 +10,6 @@ use std::time::Duration;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
-/// Result of initializing common services
-pub struct CommonServices {
-    pub db: Database,
-    pub settings_service: Arc<SettingsService>,
-    pub event_broadcaster: Arc<EventBroadcaster>,
-    pub log_guard: Option<tracing_appender::non_blocking::WorkerGuard>,
-}
-
 /// Load and apply configuration
 pub fn load_config(config_path: PathBuf) -> anyhow::Result<(Config, bool)> {
     // Check if config file exists, if not create a default one

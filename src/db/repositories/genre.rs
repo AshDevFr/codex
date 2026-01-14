@@ -1,4 +1,8 @@
 //! Repository for genres and series_genres table operations
+//!
+//! TODO: Remove allow(dead_code) when genre features are fully integrated
+
+#![allow(dead_code)]
 
 use anyhow::Result;
 use chrono::Utc;

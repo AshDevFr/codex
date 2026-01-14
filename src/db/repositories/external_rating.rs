@@ -1,4 +1,8 @@
 //! Repository for series_external_ratings table operations
+//!
+//! TODO: Remove allow(dead_code) when external rating features are fully integrated
+
+#![allow(dead_code)]
 
 use anyhow::Result;
 use chrono::Utc;

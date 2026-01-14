@@ -787,8 +787,10 @@ async fn resolve_book_title(
     };
 
     // Parse book strategy from library
-    let book_strategy =
-        BookStrategy::from_str(&library.book_strategy).unwrap_or(BookStrategy::Filename);
+    let book_strategy = library
+        .book_strategy
+        .parse::<BookStrategy>()
+        .unwrap_or(BookStrategy::Filename);
     let book_config_str = library.book_config.as_ref().map(|v| v.to_string());
     let strategy = create_book_strategy(book_strategy, book_config_str.as_deref());
 
@@ -860,8 +862,10 @@ async fn resolve_book_number(
     };
 
     // Parse number strategy from library
-    let number_strategy =
-        NumberStrategy::from_str(&library.number_strategy).unwrap_or(NumberStrategy::FileOrder);
+    let number_strategy = library
+        .number_strategy
+        .parse::<NumberStrategy>()
+        .unwrap_or(NumberStrategy::FileOrder);
     let number_config_str = library.number_config.as_ref().map(|v| v.to_string());
     let strategy = create_number_strategy(number_strategy, number_config_str.as_deref());
 

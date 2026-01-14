@@ -13,5 +13,6 @@ pub use openapi::{openapi_command, OpenApiFormat};
 pub use scan::scan_command;
 pub use seed::seed_command;
 pub use serve::serve_command;
+pub use tasks::{tasks_command, TasksSubcommand};
 pub use wait_for_migrations::wait_for_migrations_command;
 pub use worker::worker_command;

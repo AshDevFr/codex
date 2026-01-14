@@ -11,6 +11,8 @@ mod broadcaster;
 mod types;
 
 pub use broadcaster::{EventBroadcaster, RecordedEvent};
+// TaskProgress is part of the public API for task progress reporting
+#[allow(unused_imports)]
 pub use types::{
-    EntityChangeEvent, EntityEvent, EntityType, TaskProgressEvent, TaskStatus,
+    EntityChangeEvent, EntityEvent, EntityType, TaskProgress, TaskProgressEvent, TaskStatus,
 };

@@ -317,7 +317,7 @@ async fn test_library_book_strategy_retrieval() {
         .unwrap();
 
     // Parse the strategy
-    let book_strategy = BookStrategy::from_str(&retrieved.book_strategy).unwrap();
+    let book_strategy: BookStrategy = retrieved.book_strategy.parse().unwrap();
     assert_eq!(book_strategy, BookStrategy::SeriesName);
 }
 

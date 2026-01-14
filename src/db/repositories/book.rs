@@ -1,3 +1,9 @@
+//! Repository for Book operations
+//!
+//! TODO: Remove allow(dead_code) when all book features are fully integrated
+
+#![allow(dead_code)]
+
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
