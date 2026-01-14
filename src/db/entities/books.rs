@@ -31,8 +31,8 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_one = "super::book_metadata_records::Entity")]
-    BookMetadataRecords,
+    #[sea_orm(has_one = "super::book_metadata::Entity")]
+    BookMetadata,
     #[sea_orm(has_many = "super::pages::Entity")]
     Pages,
     #[sea_orm(has_many = "super::read_progress::Entity")]
@@ -55,9 +55,9 @@ pub enum Relation {
     Libraries,
 }
 
-impl Related<super::book_metadata_records::Entity> for Entity {
+impl Related<super::book_metadata::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::BookMetadataRecords.def()
+        Relation::BookMetadata.def()
     }
 }
 

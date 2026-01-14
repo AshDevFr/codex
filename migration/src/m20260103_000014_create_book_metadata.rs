@@ -1,0 +1,275 @@
+use sea_orm_migration::{prelude::*, schema::*};
+
+#[derive(DeriveMigrationName)]
+pub struct Migration;
+
+#[async_trait::async_trait]
+impl MigrationTrait for Migration {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .create_table(
+                Table::create()
+                    .table(BookMetadata::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(BookMetadata::Id)
+                            .uuid()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::BookId)
+                            .uuid()
+                            .not_null()
+                            .unique_key(),
+                    )
+                    // Content fields
+                    .col(ColumnDef::new(BookMetadata::Summary).text())
+                    .col(ColumnDef::new(BookMetadata::Writer).string())
+                    .col(ColumnDef::new(BookMetadata::Penciller).string())
+                    .col(ColumnDef::new(BookMetadata::Inker).string())
+                    .col(ColumnDef::new(BookMetadata::Colorist).string())
+                    .col(ColumnDef::new(BookMetadata::Letterer).string())
+                    .col(ColumnDef::new(BookMetadata::CoverArtist).string())
+                    .col(ColumnDef::new(BookMetadata::Editor).string())
+                    .col(ColumnDef::new(BookMetadata::Publisher).string())
+                    .col(ColumnDef::new(BookMetadata::Imprint).string())
+                    .col(ColumnDef::new(BookMetadata::Genre).string())
+                    .col(ColumnDef::new(BookMetadata::Web).string())
+                    .col(ColumnDef::new(BookMetadata::LanguageIso).string())
+                    .col(ColumnDef::new(BookMetadata::FormatDetail).string())
+                    .col(ColumnDef::new(BookMetadata::BlackAndWhite).boolean())
+                    .col(ColumnDef::new(BookMetadata::Manga).boolean())
+                    .col(ColumnDef::new(BookMetadata::Year).integer())
+                    .col(ColumnDef::new(BookMetadata::Month).integer())
+                    .col(ColumnDef::new(BookMetadata::Day).integer())
+                    .col(ColumnDef::new(BookMetadata::Volume).integer())
+                    .col(ColumnDef::new(BookMetadata::Count).integer())
+                    .col(ColumnDef::new(BookMetadata::Isbns).string())
+                    // Lock fields - prevent auto-refresh from overwriting user edits
+                    .col(
+                        ColumnDef::new(BookMetadata::SummaryLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::WriterLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::PencillerLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::InkerLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::ColoristLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::LettererLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::CoverArtistLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::EditorLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::PublisherLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::ImprintLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::GenreLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::WebLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::LanguageIsoLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::FormatDetailLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::BlackAndWhiteLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::MangaLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::YearLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::MonthLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::DayLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::VolumeLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::CountLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::IsbnsLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    // Timestamps
+                    .col(
+                        ColumnDef::new(BookMetadata::CreatedAt)
+                            .timestamp_with_time_zone()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BookMetadata::UpdatedAt)
+                            .timestamp_with_time_zone()
+                            .not_null(),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk_book_metadata_book_id")
+                            .from(BookMetadata::Table, BookMetadata::BookId)
+                            .to(Books::Table, Books::Id)
+                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_update(ForeignKeyAction::NoAction),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_table(Table::drop().table(BookMetadata::Table).to_owned())
+            .await
+    }
+}
+
+#[derive(DeriveIden)]
+enum BookMetadata {
+    Table,
+    Id,
+    BookId,
+    // Content fields
+    Summary,
+    Writer,
+    Penciller,
+    Inker,
+    Colorist,
+    Letterer,
+    CoverArtist,
+    Editor,
+    Publisher,
+    Imprint,
+    Genre,
+    Web,
+    LanguageIso,
+    FormatDetail,
+    BlackAndWhite,
+    Manga,
+    Year,
+    Month,
+    Day,
+    Volume,
+    Count,
+    Isbns,
+    // Lock fields
+    SummaryLock,
+    WriterLock,
+    PencillerLock,
+    InkerLock,
+    ColoristLock,
+    LettererLock,
+    CoverArtistLock,
+    EditorLock,
+    PublisherLock,
+    ImprintLock,
+    GenreLock,
+    WebLock,
+    LanguageIsoLock,
+    FormatDetailLock,
+    BlackAndWhiteLock,
+    MangaLock,
+    YearLock,
+    MonthLock,
+    DayLock,
+    VolumeLock,
+    CountLock,
+    IsbnsLock,
+    // Timestamps
+    CreatedAt,
+    UpdatedAt,
+}
+
+#[derive(DeriveIden)]
+enum Books {
+    Table,
+    Id,
+}

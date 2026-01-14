@@ -155,7 +155,7 @@ async fn cleanup_test_data(db: &sea_orm::DatabaseConnection) -> Result<(), sea_o
         .await?;
     db.execute_unprepared("TRUNCATE TABLE books CASCADE")
         .await?;
-    db.execute_unprepared("TRUNCATE TABLE book_metadata_records CASCADE")
+    db.execute_unprepared("TRUNCATE TABLE book_metadata CASCADE")
         .await?;
     db.execute_unprepared("TRUNCATE TABLE series CASCADE")
         .await?;

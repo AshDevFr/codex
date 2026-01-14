@@ -8,9 +8,7 @@ use tokio::time::{interval, Duration as TokioDuration};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::db::repositories::task_metrics::{
-    AggregatedTaskMetrics, TaskCompletionData, TaskMetricsRepository,
-};
+use crate::db::repositories::task_metrics::{TaskCompletionData, TaskMetricsRepository};
 use crate::services::SettingsService;
 
 /// Number of recent completions to keep for percentile calculation
@@ -100,6 +98,42 @@ impl RunningAggregate {
         let index = ((sorted.len() as f64 - 1.0) * p / 100.0).round() as usize;
         Some(sorted[index.min(sorted.len() - 1)])
     }
+}
+
+/// Helper struct for aggregating DB records by task type
+#[derive(Debug, Default)]
+struct DbTaskAggregate {
+    count: u64,
+    succeeded: u64,
+    failed: u64,
+    retried: u64,
+    total_duration_ms: i64,
+    min_duration_ms: Option<i64>,
+    max_duration_ms: Option<i64>,
+    total_queue_wait_ms: i64,
+    items_processed: u64,
+    bytes_processed: u64,
+    duration_samples: Vec<i64>,
+    last_error: Option<String>,
+    last_error_at: Option<DateTime<Utc>>,
+}
+
+/// Calculate p50 and p95 percentiles from a slice of duration samples
+fn calculate_percentiles_from_samples(samples: &[i64]) -> (u64, u64) {
+    if samples.is_empty() {
+        return (0, 0);
+    }
+
+    let mut sorted: Vec<i64> = samples.to_vec();
+    sorted.sort();
+
+    let p50_index = ((sorted.len() as f64 - 1.0) * 0.50).round() as usize;
+    let p95_index = ((sorted.len() as f64 - 1.0) * 0.95).round() as usize;
+
+    let p50 = sorted[p50_index.min(sorted.len() - 1)] as u64;
+    let p95 = sorted[p95_index.min(sorted.len() - 1)] as u64;
+
+    (p50, p95)
 }
 
 /// In-memory metrics collector
@@ -308,46 +342,91 @@ impl TaskMetricsService {
     pub async fn get_current_aggregates(&self) -> HashMap<String, TaskTypeMetrics> {
         let mut result = HashMap::new();
 
-        // First, get database aggregates from the last 24 hours
-        let from = Utc::now() - Duration::hours(24);
-        let to = Utc::now();
+        // First, get full database records from the last 24 hours
+        // We use get_current_aggregates (which returns full Model records) instead of
+        // get_aggregated_by_type (which only returns SUMs) so we can access duration_samples
+        if let Ok(db_records) = TaskMetricsRepository::get_current_aggregates(&self.db).await {
+            // Group records by task_type and aggregate manually
+            let mut task_aggregates: HashMap<String, DbTaskAggregate> = HashMap::new();
 
-        if let Ok(db_aggregates) =
-            TaskMetricsRepository::get_aggregated_by_type(&self.db, from, to).await
-        {
-            for agg in db_aggregates {
-                let count = agg.total_count as u64;
+            for record in db_records {
+                let entry = task_aggregates
+                    .entry(record.task_type.clone())
+                    .or_insert_with(DbTaskAggregate::default);
+
+                entry.count += record.count as u64;
+                entry.succeeded += record.succeeded as u64;
+                entry.failed += record.failed as u64;
+                entry.retried += record.retried as u64;
+                entry.total_duration_ms += record.total_duration_ms;
+                entry.total_queue_wait_ms += record.total_queue_wait_ms;
+                entry.items_processed += record.items_processed as u64;
+                entry.bytes_processed += record.bytes_processed as u64;
+
+                if let Some(min) = record.min_duration_ms {
+                    entry.min_duration_ms = Some(entry.min_duration_ms.map_or(min, |m| m.min(min)));
+                }
+                if let Some(max) = record.max_duration_ms {
+                    entry.max_duration_ms = Some(entry.max_duration_ms.map_or(max, |m| m.max(max)));
+                }
+
+                // Extract and merge duration_samples
+                if let Some(ref samples_json) = record.duration_samples {
+                    if let Ok(samples) =
+                        serde_json::from_value::<Vec<i64>>(samples_json.clone().into())
+                    {
+                        entry.duration_samples.extend(samples);
+                    }
+                }
+
+                // Track most recent error
+                if let Some(ref error_at) = record.last_error_at {
+                    if entry
+                        .last_error_at
+                        .map_or(true, |existing| error_at > &existing)
+                    {
+                        entry.last_error = record.last_error.clone();
+                        entry.last_error_at = Some(*error_at);
+                    }
+                }
+            }
+
+            // Convert aggregates to TaskTypeMetrics
+            for (task_type, agg) in task_aggregates {
+                let count = agg.count;
+                let (p50, p95) = calculate_percentiles_from_samples(&agg.duration_samples);
+
                 result.insert(
-                    agg.task_type,
+                    task_type,
                     TaskTypeMetrics {
                         executed: count,
-                        succeeded: agg.total_succeeded as u64,
-                        failed: agg.total_failed as u64,
-                        retried: agg.total_retried as u64,
+                        succeeded: agg.succeeded,
+                        failed: agg.failed,
+                        retried: agg.retried,
                         avg_duration_ms: if count > 0 {
-                            agg.sum_duration_ms as f64 / count as f64
+                            agg.total_duration_ms as f64 / count as f64
                         } else {
                             0.0
                         },
                         min_duration_ms: agg.min_duration_ms.unwrap_or(0) as u64,
                         max_duration_ms: agg.max_duration_ms.unwrap_or(0) as u64,
-                        p50_duration_ms: 0, // Not available from aggregated DB data
-                        p95_duration_ms: 0, // Not available from aggregated DB data
+                        p50_duration_ms: p50,
+                        p95_duration_ms: p95,
                         avg_queue_wait_ms: if count > 0 {
-                            agg.sum_queue_wait_ms as f64 / count as f64
+                            agg.total_queue_wait_ms as f64 / count as f64
                         } else {
                             0.0
                         },
-                        items_processed: agg.total_items as u64,
-                        bytes_processed: agg.total_bytes as u64,
+                        items_processed: agg.items_processed,
+                        bytes_processed: agg.bytes_processed,
                         throughput_per_sec: 0.0, // Calculated later with time window
                         error_rate_pct: if count > 0 {
-                            (agg.total_failed as f64 / count as f64) * 100.0
+                            (agg.failed as f64 / count as f64) * 100.0
                         } else {
                             0.0
                         },
-                        last_error: None, // Would need additional query
-                        last_error_at: None,
+                        last_error: agg.last_error,
+                        last_error_at: agg.last_error_at,
                     },
                 );
             }
@@ -857,5 +936,61 @@ mod tests {
         // P95 should be around 900-1000
         assert!(metrics.p95_duration_ms >= 900);
         assert!(metrics.p95_duration_ms <= 1000);
+    }
+
+    #[tokio::test]
+    async fn test_percentile_calculation_from_db() {
+        let service = create_test_service().await;
+
+        // Record completions with varying durations
+        let durations = vec![100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
+        for d in durations {
+            service
+                .record(
+                    "db_percentile_test".to_string(),
+                    None,
+                    true,
+                    false,
+                    d,
+                    10,
+                    1,
+                    100,
+                    None,
+                )
+                .await;
+        }
+
+        // Flush to database - this moves data from in-memory to DB
+        let flushed = service.flush().await.expect("Flush failed");
+        assert_eq!(flushed, 10);
+
+        // Get aggregates - this should retrieve data from DB and calculate percentiles
+        // from the duration_samples stored in the DB
+        let aggregates = service.get_current_aggregates().await;
+        let metrics = &aggregates["db_percentile_test"];
+
+        // P50 should be around 500-600 (NOT 0 as it was before the fix)
+        assert!(
+            metrics.p50_duration_ms >= 500,
+            "P50 should be >= 500, but got {}",
+            metrics.p50_duration_ms
+        );
+        assert!(
+            metrics.p50_duration_ms <= 600,
+            "P50 should be <= 600, but got {}",
+            metrics.p50_duration_ms
+        );
+
+        // P95 should be around 900-1000 (NOT 0 as it was before the fix)
+        assert!(
+            metrics.p95_duration_ms >= 900,
+            "P95 should be >= 900, but got {}",
+            metrics.p95_duration_ms
+        );
+        assert!(
+            metrics.p95_duration_ms <= 1000,
+            "P95 should be <= 1000, but got {}",
+            metrics.p95_duration_ms
+        );
     }
 }

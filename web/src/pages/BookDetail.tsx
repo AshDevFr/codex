@@ -29,12 +29,14 @@ import {
 	IconChevronUp,
 	IconDotsVertical,
 	IconDownload,
+	IconEdit,
 	IconPhoto,
 	IconTrash,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { booksApi } from "@/api/books";
+import { BookMetadataEditModal } from "@/components/books/BookMetadataEditModal";
 
 // Language code mapping
 const LANGUAGE_DISPLAY: Record<string, string> = {
@@ -68,6 +70,7 @@ export function BookDetail() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const [summaryOpened, { toggle: toggleSummary }] = useDisclosure(false);
+	const [editModalOpened, { open: openEditModal, close: closeEditModal }] = useDisclosure(false);
 
 	// Fetch book details
 	const {
@@ -372,6 +375,13 @@ export function BookDetail() {
 										>
 											Generate Thumbnail
 										</Menu.Item>
+										<Menu.Divider />
+										<Menu.Item
+											leftSection={<IconEdit size={14} />}
+											onClick={openEditModal}
+										>
+											Edit Metadata
+										</Menu.Item>
 									</Menu.Dropdown>
 								</Menu>
 							</Group>
@@ -598,6 +608,14 @@ export function BookDetail() {
 					)}
 				</Group>
 			</Stack>
+
+			{/* Edit Metadata Modal */}
+			<BookMetadataEditModal
+				opened={editModalOpened}
+				onClose={closeEditModal}
+				bookId={book.id}
+				bookTitle={book.title}
+			/>
 		</Box>
 	);
 }

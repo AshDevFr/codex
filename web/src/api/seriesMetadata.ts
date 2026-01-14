@@ -185,6 +185,26 @@ export const seriesMetadataApi = {
 		return response.data.covers;
 	},
 
+	/**
+	 * Upload a custom cover image for a series
+	 * The cover will be automatically selected after upload
+	 */
+	uploadCover: async (seriesId: string, file: File): Promise<SeriesCover> => {
+		const formData = new FormData();
+		formData.append("cover", file);
+
+		const response = await api.post<SeriesCover>(
+			`/series/${seriesId}/cover`,
+			formData,
+			{
+				headers: {
+					"Content-Type": "multipart/form-data",
+				},
+			},
+		);
+		return response.data;
+	},
+
 	selectCover: async (seriesId: string, coverId: string): Promise<void> => {
 		await api.put(`/series/${seriesId}/covers/${coverId}/select`);
 	},

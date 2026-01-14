@@ -25,6 +25,7 @@ import {
 	IconChevronUp,
 	IconDotsVertical,
 	IconDownload,
+	IconEdit,
 	IconPhoto,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -36,6 +37,7 @@ import {
 	ExternalLinks,
 	GenreTagChips,
 	SeriesBookList,
+	SeriesMetadataEditModal,
 	SeriesRating,
 } from "@/components/series";
 
@@ -62,6 +64,7 @@ export function SeriesDetail() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const [summaryOpened, { toggle: toggleSummary }] = useDisclosure(false);
+	const [editModalOpened, { open: openEditModal, close: closeEditModal }] = useDisclosure(false);
 
 	// Fetch series basic info
 	const {
@@ -347,6 +350,13 @@ export function SeriesDetail() {
 										>
 											Generate Thumbnails
 										</Menu.Item>
+										<Menu.Divider />
+										<Menu.Item
+											leftSection={<IconEdit size={14} />}
+											onClick={openEditModal}
+										>
+											Edit Metadata
+										</Menu.Item>
 									</Menu.Dropdown>
 								</Menu>
 							</Group>
@@ -451,6 +461,14 @@ export function SeriesDetail() {
 					bookCount={series.bookCount ?? 0}
 				/>
 			</Stack>
+
+			{/* Edit Metadata Modal */}
+			<SeriesMetadataEditModal
+				opened={editModalOpened}
+				onClose={closeEditModal}
+				seriesId={series.id}
+				seriesTitle={series.name}
+			/>
 		</Box>
 	);
 }

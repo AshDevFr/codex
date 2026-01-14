@@ -6,6 +6,34 @@ export type BookMetadata = components["schemas"]["BookMetadataDto"];
 export type AdjacentBooksResponse =
 	components["schemas"]["AdjacentBooksResponse"];
 
+// Book metadata lock types
+export interface BookMetadataLocks {
+	summaryLock: boolean;
+	writerLock: boolean;
+	pencillerLock: boolean;
+	inkerLock: boolean;
+	coloristLock: boolean;
+	lettererLock: boolean;
+	coverArtistLock: boolean;
+	editorLock: boolean;
+	publisherLock: boolean;
+	imprintLock: boolean;
+	genreLock: boolean;
+	webLock: boolean;
+	languageIsoLock: boolean;
+	formatDetailLock: boolean;
+	blackAndWhiteLock: boolean;
+	mangaLock: boolean;
+	yearLock: boolean;
+	monthLock: boolean;
+	dayLock: boolean;
+	volumeLock: boolean;
+	countLock: boolean;
+	isbnsLock: boolean;
+}
+
+export type UpdateBookMetadataLocksRequest = Partial<BookMetadataLocks>;
+
 export interface BookFilters {
 	page?: number;
 	pageSize?: number;
@@ -203,5 +231,47 @@ export const booksApi = {
 
 		const response = await api.post<PaginatedResponse<Book>>("/books/list", body);
 		return response.data;
+	},
+
+	// Get book metadata locks
+	getMetadataLocks: async (bookId: string): Promise<BookMetadataLocks> => {
+		const response = await api.get<BookMetadataLocks>(`/books/${bookId}/metadata/locks`);
+		return response.data;
+	},
+
+	// Update book metadata locks
+	updateMetadataLocks: async (
+		bookId: string,
+		locks: UpdateBookMetadataLocksRequest,
+	): Promise<BookMetadataLocks> => {
+		const response = await api.put<BookMetadataLocks>(`/books/${bookId}/metadata/locks`, locks);
+		return response.data;
+	},
+
+	// Patch book metadata
+	patchMetadata: async (
+		bookId: string,
+		metadata: components["schemas"]["PatchBookMetadataRequest"],
+	): Promise<components["schemas"]["BookMetadataResponse"]> => {
+		const response = await api.patch<components["schemas"]["BookMetadataResponse"]>(
+			`/books/${bookId}/metadata`,
+			metadata,
+		);
+		return response.data;
+	},
+
+	/**
+	 * Upload a custom cover image for a book
+	 * The cover will be stored and used as the book's thumbnail
+	 */
+	uploadCover: async (bookId: string, file: File): Promise<void> => {
+		const formData = new FormData();
+		formData.append("cover", file);
+
+		await api.post(`/books/${bookId}/cover`, formData, {
+			headers: {
+				"Content-Type": "multipart/form-data",
+			},
+		});
 	},
 };

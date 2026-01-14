@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::db::entities::{book_metadata_records, books, pages};
+use crate::db::entities::{book_metadata, books, pages};
 use crate::db::repositories::{
     BookMetadataRepository, BookRepository, LibraryRepository, PageRepository,
     SeriesMetadataRepository, SeriesRepository, TaskRepository,
@@ -295,40 +295,208 @@ async fn analyze_single_book(
                 _ => None,
             });
 
-        // Check if metadata already exists to preserve the ID
+        // Check if metadata already exists to preserve the ID and respect locks
         let existing_metadata = BookMetadataRepository::get_by_book_id(db, book.id).await?;
         let metadata_id = existing_metadata
             .as_ref()
             .map(|m| m.id)
             .unwrap_or_else(Uuid::new_v4);
 
-        let metadata_record = book_metadata_records::Model {
-            id: metadata_id,
-            book_id: book.id,
-            summary: comic_info.summary.clone(),
-            writer: comic_info.writer.clone(),
-            penciller: comic_info.penciller.clone(),
-            inker: comic_info.inker.clone(),
-            colorist: comic_info.colorist.clone(),
-            letterer: comic_info.letterer.clone(),
-            cover_artist: comic_info.cover_artist.clone(),
-            editor: comic_info.editor.clone(),
-            publisher: comic_info.publisher.clone(),
-            imprint: comic_info.imprint.clone(),
-            genre: comic_info.genre.clone(),
-            web: comic_info.web.clone(),
-            language_iso: comic_info.language_iso.clone(),
-            format_detail: comic_info.format.clone(),
-            black_and_white,
-            manga,
-            year: comic_info.year,
-            month: comic_info.month,
-            day: comic_info.day,
-            volume: comic_info.volume,
-            count: comic_info.count,
-            isbns: isbns_json,
-            created_at: now,
-            updated_at: now,
+        // Build metadata record, respecting locks on existing fields
+        let metadata_record = if let Some(ref existing) = existing_metadata {
+            // Only update fields that are not locked
+            book_metadata::Model {
+                id: metadata_id,
+                book_id: book.id,
+                summary: if existing.summary_lock {
+                    existing.summary.clone()
+                } else {
+                    comic_info.summary.clone()
+                },
+                writer: if existing.writer_lock {
+                    existing.writer.clone()
+                } else {
+                    comic_info.writer.clone()
+                },
+                penciller: if existing.penciller_lock {
+                    existing.penciller.clone()
+                } else {
+                    comic_info.penciller.clone()
+                },
+                inker: if existing.inker_lock {
+                    existing.inker.clone()
+                } else {
+                    comic_info.inker.clone()
+                },
+                colorist: if existing.colorist_lock {
+                    existing.colorist.clone()
+                } else {
+                    comic_info.colorist.clone()
+                },
+                letterer: if existing.letterer_lock {
+                    existing.letterer.clone()
+                } else {
+                    comic_info.letterer.clone()
+                },
+                cover_artist: if existing.cover_artist_lock {
+                    existing.cover_artist.clone()
+                } else {
+                    comic_info.cover_artist.clone()
+                },
+                editor: if existing.editor_lock {
+                    existing.editor.clone()
+                } else {
+                    comic_info.editor.clone()
+                },
+                publisher: if existing.publisher_lock {
+                    existing.publisher.clone()
+                } else {
+                    comic_info.publisher.clone()
+                },
+                imprint: if existing.imprint_lock {
+                    existing.imprint.clone()
+                } else {
+                    comic_info.imprint.clone()
+                },
+                genre: if existing.genre_lock {
+                    existing.genre.clone()
+                } else {
+                    comic_info.genre.clone()
+                },
+                web: if existing.web_lock {
+                    existing.web.clone()
+                } else {
+                    comic_info.web.clone()
+                },
+                language_iso: if existing.language_iso_lock {
+                    existing.language_iso.clone()
+                } else {
+                    comic_info.language_iso.clone()
+                },
+                format_detail: if existing.format_detail_lock {
+                    existing.format_detail.clone()
+                } else {
+                    comic_info.format.clone()
+                },
+                black_and_white: if existing.black_and_white_lock {
+                    existing.black_and_white
+                } else {
+                    black_and_white
+                },
+                manga: if existing.manga_lock {
+                    existing.manga
+                } else {
+                    manga
+                },
+                year: if existing.year_lock {
+                    existing.year
+                } else {
+                    comic_info.year
+                },
+                month: if existing.month_lock {
+                    existing.month
+                } else {
+                    comic_info.month
+                },
+                day: if existing.day_lock {
+                    existing.day
+                } else {
+                    comic_info.day
+                },
+                volume: if existing.volume_lock {
+                    existing.volume
+                } else {
+                    comic_info.volume
+                },
+                count: if existing.count_lock {
+                    existing.count
+                } else {
+                    comic_info.count
+                },
+                isbns: if existing.isbns_lock {
+                    existing.isbns.clone()
+                } else {
+                    isbns_json.clone()
+                },
+                // Preserve existing lock states
+                summary_lock: existing.summary_lock,
+                writer_lock: existing.writer_lock,
+                penciller_lock: existing.penciller_lock,
+                inker_lock: existing.inker_lock,
+                colorist_lock: existing.colorist_lock,
+                letterer_lock: existing.letterer_lock,
+                cover_artist_lock: existing.cover_artist_lock,
+                editor_lock: existing.editor_lock,
+                publisher_lock: existing.publisher_lock,
+                imprint_lock: existing.imprint_lock,
+                genre_lock: existing.genre_lock,
+                web_lock: existing.web_lock,
+                language_iso_lock: existing.language_iso_lock,
+                format_detail_lock: existing.format_detail_lock,
+                black_and_white_lock: existing.black_and_white_lock,
+                manga_lock: existing.manga_lock,
+                year_lock: existing.year_lock,
+                month_lock: existing.month_lock,
+                day_lock: existing.day_lock,
+                volume_lock: existing.volume_lock,
+                count_lock: existing.count_lock,
+                isbns_lock: existing.isbns_lock,
+                created_at: existing.created_at,
+                updated_at: now,
+            }
+        } else {
+            // No existing metadata, create new with all locks set to false
+            book_metadata::Model {
+                id: metadata_id,
+                book_id: book.id,
+                summary: comic_info.summary.clone(),
+                writer: comic_info.writer.clone(),
+                penciller: comic_info.penciller.clone(),
+                inker: comic_info.inker.clone(),
+                colorist: comic_info.colorist.clone(),
+                letterer: comic_info.letterer.clone(),
+                cover_artist: comic_info.cover_artist.clone(),
+                editor: comic_info.editor.clone(),
+                publisher: comic_info.publisher.clone(),
+                imprint: comic_info.imprint.clone(),
+                genre: comic_info.genre.clone(),
+                web: comic_info.web.clone(),
+                language_iso: comic_info.language_iso.clone(),
+                format_detail: comic_info.format.clone(),
+                black_and_white,
+                manga,
+                year: comic_info.year,
+                month: comic_info.month,
+                day: comic_info.day,
+                volume: comic_info.volume,
+                count: comic_info.count,
+                isbns: isbns_json,
+                // All locks default to false for new records
+                summary_lock: false,
+                writer_lock: false,
+                penciller_lock: false,
+                inker_lock: false,
+                colorist_lock: false,
+                letterer_lock: false,
+                cover_artist_lock: false,
+                editor_lock: false,
+                publisher_lock: false,
+                imprint_lock: false,
+                genre_lock: false,
+                web_lock: false,
+                language_iso_lock: false,
+                format_detail_lock: false,
+                black_and_white_lock: false,
+                manga_lock: false,
+                year_lock: false,
+                month_lock: false,
+                day_lock: false,
+                volume_lock: false,
+                count_lock: false,
+                isbns_lock: false,
+                created_at: now,
+                updated_at: now,
+            }
         };
 
         BookMetadataRepository::upsert(db, &metadata_record).await?;
@@ -583,7 +751,7 @@ async fn get_book_position_in_series(
 }
 
 /// Helper function to count non-null fields in metadata for logging
-fn count_non_null_fields(metadata: &book_metadata_records::Model) -> usize {
+fn count_non_null_fields(metadata: &book_metadata::Model) -> usize {
     let mut count = 0;
     if metadata.summary.is_some() {
         count += 1;
@@ -660,7 +828,7 @@ mod tests {
 
     #[test]
     fn test_count_non_null_fields() {
-        let metadata = book_metadata_records::Model {
+        let metadata = book_metadata::Model {
             id: Uuid::new_v4(),
             book_id: Uuid::new_v4(),
             summary: Some("Test summary".to_string()),
@@ -685,6 +853,29 @@ mod tests {
             volume: None,
             count: None,
             isbns: None,
+            // All locks default to false
+            summary_lock: false,
+            writer_lock: false,
+            penciller_lock: false,
+            inker_lock: false,
+            colorist_lock: false,
+            letterer_lock: false,
+            cover_artist_lock: false,
+            editor_lock: false,
+            publisher_lock: false,
+            imprint_lock: false,
+            genre_lock: false,
+            web_lock: false,
+            language_iso_lock: false,
+            format_detail_lock: false,
+            black_and_white_lock: false,
+            manga_lock: false,
+            year_lock: false,
+            month_lock: false,
+            day_lock: false,
+            volume_lock: false,
+            count_lock: false,
+            isbns_lock: false,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };

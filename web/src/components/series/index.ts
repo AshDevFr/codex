@@ -4,5 +4,6 @@ export { ExternalRatings } from "./ExternalRatings";
 export { GenreTagChips } from "./GenreTagChips";
 export { SeriesBookList } from "./SeriesBookList";
 export { SeriesMetadata } from "./SeriesMetadata";
+export { SeriesMetadataEditModal } from "./SeriesMetadataEditModal";
 export { SeriesRating } from "./SeriesRating";
 export { SeriesRatingModal } from "./SeriesRatingModal";

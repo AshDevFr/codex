@@ -1300,7 +1300,7 @@ pub async fn get_book_file(
 // ============================================================================
 
 use crate::api::dto::{BookMetadataResponse, PatchBookMetadataRequest, ReplaceBookMetadataRequest};
-use crate::db::entities::book_metadata_records;
+use crate::db::entities::book_metadata;
 use crate::events::{EntityChangeEvent, EntityEvent};
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, Set};
@@ -1349,22 +1349,23 @@ pub async fn replace_book_metadata(
     let now = Utc::now();
     let updated = if let Some(existing) = existing {
         // Update existing record - full replacement
-        let mut active: book_metadata_records::ActiveModel = existing.into();
+        // Auto-lock fields that are being set to non-null values
+        let mut active: book_metadata::ActiveModel = existing.into();
 
-        active.summary = Set(request.summary);
-        active.writer = Set(request.writer);
-        active.penciller = Set(request.penciller);
-        active.inker = Set(request.inker);
-        active.colorist = Set(request.colorist);
-        active.letterer = Set(request.letterer);
-        active.cover_artist = Set(request.cover_artist);
-        active.editor = Set(request.editor);
-        active.publisher = Set(request.publisher);
-        active.imprint = Set(request.imprint);
-        active.genre = Set(request.genre);
-        active.web = Set(request.web);
-        active.language_iso = Set(request.language_iso);
-        active.format_detail = Set(request.format_detail);
+        active.summary = Set(request.summary.clone());
+        active.writer = Set(request.writer.clone());
+        active.penciller = Set(request.penciller.clone());
+        active.inker = Set(request.inker.clone());
+        active.colorist = Set(request.colorist.clone());
+        active.letterer = Set(request.letterer.clone());
+        active.cover_artist = Set(request.cover_artist.clone());
+        active.editor = Set(request.editor.clone());
+        active.publisher = Set(request.publisher.clone());
+        active.imprint = Set(request.imprint.clone());
+        active.genre = Set(request.genre.clone());
+        active.web = Set(request.web.clone());
+        active.language_iso = Set(request.language_iso.clone());
+        active.format_detail = Set(request.format_detail.clone());
         active.black_and_white = Set(request.black_and_white);
         active.manga = Set(request.manga);
         active.year = Set(request.year);
@@ -1372,7 +1373,76 @@ pub async fn replace_book_metadata(
         active.day = Set(request.day);
         active.volume = Set(request.volume);
         active.count = Set(request.count);
-        active.isbns = Set(request.isbns);
+        active.isbns = Set(request.isbns.clone());
+
+        // Auto-lock fields that are being set to non-null values
+        if request.summary.is_some() {
+            active.summary_lock = Set(true);
+        }
+        if request.writer.is_some() {
+            active.writer_lock = Set(true);
+        }
+        if request.penciller.is_some() {
+            active.penciller_lock = Set(true);
+        }
+        if request.inker.is_some() {
+            active.inker_lock = Set(true);
+        }
+        if request.colorist.is_some() {
+            active.colorist_lock = Set(true);
+        }
+        if request.letterer.is_some() {
+            active.letterer_lock = Set(true);
+        }
+        if request.cover_artist.is_some() {
+            active.cover_artist_lock = Set(true);
+        }
+        if request.editor.is_some() {
+            active.editor_lock = Set(true);
+        }
+        if request.publisher.is_some() {
+            active.publisher_lock = Set(true);
+        }
+        if request.imprint.is_some() {
+            active.imprint_lock = Set(true);
+        }
+        if request.genre.is_some() {
+            active.genre_lock = Set(true);
+        }
+        if request.web.is_some() {
+            active.web_lock = Set(true);
+        }
+        if request.language_iso.is_some() {
+            active.language_iso_lock = Set(true);
+        }
+        if request.format_detail.is_some() {
+            active.format_detail_lock = Set(true);
+        }
+        if request.black_and_white.is_some() {
+            active.black_and_white_lock = Set(true);
+        }
+        if request.manga.is_some() {
+            active.manga_lock = Set(true);
+        }
+        if request.year.is_some() {
+            active.year_lock = Set(true);
+        }
+        if request.month.is_some() {
+            active.month_lock = Set(true);
+        }
+        if request.day.is_some() {
+            active.day_lock = Set(true);
+        }
+        if request.volume.is_some() {
+            active.volume_lock = Set(true);
+        }
+        if request.count.is_some() {
+            active.count_lock = Set(true);
+        }
+        if request.isbns.is_some() {
+            active.isbns_lock = Set(true);
+        }
+
         active.updated_at = Set(now);
 
         active
@@ -1380,24 +1450,24 @@ pub async fn replace_book_metadata(
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to update metadata: {}", e)))?
     } else {
-        // Create new record
-        let active = book_metadata_records::ActiveModel {
+        // Create new record with locks set for non-null fields
+        let active = book_metadata::ActiveModel {
             id: Set(Uuid::new_v4()),
             book_id: Set(book_id),
-            summary: Set(request.summary),
-            writer: Set(request.writer),
-            penciller: Set(request.penciller),
-            inker: Set(request.inker),
-            colorist: Set(request.colorist),
-            letterer: Set(request.letterer),
-            cover_artist: Set(request.cover_artist),
-            editor: Set(request.editor),
-            publisher: Set(request.publisher),
-            imprint: Set(request.imprint),
-            genre: Set(request.genre),
-            web: Set(request.web),
-            language_iso: Set(request.language_iso),
-            format_detail: Set(request.format_detail),
+            summary: Set(request.summary.clone()),
+            writer: Set(request.writer.clone()),
+            penciller: Set(request.penciller.clone()),
+            inker: Set(request.inker.clone()),
+            colorist: Set(request.colorist.clone()),
+            letterer: Set(request.letterer.clone()),
+            cover_artist: Set(request.cover_artist.clone()),
+            editor: Set(request.editor.clone()),
+            publisher: Set(request.publisher.clone()),
+            imprint: Set(request.imprint.clone()),
+            genre: Set(request.genre.clone()),
+            web: Set(request.web.clone()),
+            language_iso: Set(request.language_iso.clone()),
+            format_detail: Set(request.format_detail.clone()),
             black_and_white: Set(request.black_and_white),
             manga: Set(request.manga),
             year: Set(request.year),
@@ -1405,7 +1475,30 @@ pub async fn replace_book_metadata(
             day: Set(request.day),
             volume: Set(request.volume),
             count: Set(request.count),
-            isbns: Set(request.isbns),
+            isbns: Set(request.isbns.clone()),
+            // Set locks for non-null fields
+            summary_lock: Set(request.summary.is_some()),
+            writer_lock: Set(request.writer.is_some()),
+            penciller_lock: Set(request.penciller.is_some()),
+            inker_lock: Set(request.inker.is_some()),
+            colorist_lock: Set(request.colorist.is_some()),
+            letterer_lock: Set(request.letterer.is_some()),
+            cover_artist_lock: Set(request.cover_artist.is_some()),
+            editor_lock: Set(request.editor.is_some()),
+            publisher_lock: Set(request.publisher.is_some()),
+            imprint_lock: Set(request.imprint.is_some()),
+            genre_lock: Set(request.genre.is_some()),
+            web_lock: Set(request.web.is_some()),
+            language_iso_lock: Set(request.language_iso.is_some()),
+            format_detail_lock: Set(request.format_detail.is_some()),
+            black_and_white_lock: Set(request.black_and_white.is_some()),
+            manga_lock: Set(request.manga.is_some()),
+            year_lock: Set(request.year.is_some()),
+            month_lock: Set(request.month.is_some()),
+            day_lock: Set(request.day.is_some()),
+            volume_lock: Set(request.volume.is_some()),
+            count_lock: Set(request.count.is_some()),
+            isbns_lock: Set(request.isbns.is_some()),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -1503,95 +1596,161 @@ pub async fn patch_book_metadata(
     let mut has_changes = false;
 
     let updated = if let Some(existing) = existing {
-        // Partial update existing record
-        let mut active: book_metadata_records::ActiveModel = existing.into();
+        // Partial update existing record with auto-locking
+        let mut active: book_metadata::ActiveModel = existing.into();
 
         if let Some(opt) = request.summary.to_active_value() {
-            active.summary = Set(opt);
+            active.summary = Set(opt.clone());
+            if opt.is_some() {
+                active.summary_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.writer.to_active_value() {
-            active.writer = Set(opt);
+            active.writer = Set(opt.clone());
+            if opt.is_some() {
+                active.writer_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.penciller.to_active_value() {
-            active.penciller = Set(opt);
+            active.penciller = Set(opt.clone());
+            if opt.is_some() {
+                active.penciller_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.inker.to_active_value() {
-            active.inker = Set(opt);
+            active.inker = Set(opt.clone());
+            if opt.is_some() {
+                active.inker_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.colorist.to_active_value() {
-            active.colorist = Set(opt);
+            active.colorist = Set(opt.clone());
+            if opt.is_some() {
+                active.colorist_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.letterer.to_active_value() {
-            active.letterer = Set(opt);
+            active.letterer = Set(opt.clone());
+            if opt.is_some() {
+                active.letterer_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.cover_artist.to_active_value() {
-            active.cover_artist = Set(opt);
+            active.cover_artist = Set(opt.clone());
+            if opt.is_some() {
+                active.cover_artist_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.editor.to_active_value() {
-            active.editor = Set(opt);
+            active.editor = Set(opt.clone());
+            if opt.is_some() {
+                active.editor_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.publisher.to_active_value() {
-            active.publisher = Set(opt);
+            active.publisher = Set(opt.clone());
+            if opt.is_some() {
+                active.publisher_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.imprint.to_active_value() {
-            active.imprint = Set(opt);
+            active.imprint = Set(opt.clone());
+            if opt.is_some() {
+                active.imprint_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.genre.to_active_value() {
-            active.genre = Set(opt);
+            active.genre = Set(opt.clone());
+            if opt.is_some() {
+                active.genre_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.web.to_active_value() {
-            active.web = Set(opt);
+            active.web = Set(opt.clone());
+            if opt.is_some() {
+                active.web_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.language_iso.to_active_value() {
-            active.language_iso = Set(opt);
+            active.language_iso = Set(opt.clone());
+            if opt.is_some() {
+                active.language_iso_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.format_detail.to_active_value() {
-            active.format_detail = Set(opt);
+            active.format_detail = Set(opt.clone());
+            if opt.is_some() {
+                active.format_detail_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.black_and_white.to_active_value() {
             active.black_and_white = Set(opt);
+            if opt.is_some() {
+                active.black_and_white_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.manga.to_active_value() {
             active.manga = Set(opt);
+            if opt.is_some() {
+                active.manga_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.year.to_active_value() {
             active.year = Set(opt);
+            if opt.is_some() {
+                active.year_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.month.to_active_value() {
             active.month = Set(opt);
+            if opt.is_some() {
+                active.month_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.day.to_active_value() {
             active.day = Set(opt);
+            if opt.is_some() {
+                active.day_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.volume.to_active_value() {
             active.volume = Set(opt);
+            if opt.is_some() {
+                active.volume_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.count.to_active_value() {
             active.count = Set(opt);
+            if opt.is_some() {
+                active.count_lock = Set(true);
+            }
             has_changes = true;
         }
         if let Some(opt) = request.isbns.to_active_value() {
-            active.isbns = Set(opt);
+            active.isbns = Set(opt.clone());
+            if opt.is_some() {
+                active.isbns_lock = Set(true);
+            }
             has_changes = true;
         }
 
@@ -1604,33 +1763,79 @@ pub async fn patch_book_metadata(
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to update metadata: {}", e)))?
     } else {
-        // Create new record with provided fields
+        // Create new record with provided fields and auto-locking
         has_changes = true;
-        let active = book_metadata_records::ActiveModel {
+        let summary_opt = request.summary.into_option();
+        let writer_opt = request.writer.into_option();
+        let penciller_opt = request.penciller.into_option();
+        let inker_opt = request.inker.into_option();
+        let colorist_opt = request.colorist.into_option();
+        let letterer_opt = request.letterer.into_option();
+        let cover_artist_opt = request.cover_artist.into_option();
+        let editor_opt = request.editor.into_option();
+        let publisher_opt = request.publisher.into_option();
+        let imprint_opt = request.imprint.into_option();
+        let genre_opt = request.genre.into_option();
+        let web_opt = request.web.into_option();
+        let language_iso_opt = request.language_iso.into_option();
+        let format_detail_opt = request.format_detail.into_option();
+        let black_and_white_opt = request.black_and_white.into_option();
+        let manga_opt = request.manga.into_option();
+        let year_opt = request.year.into_option();
+        let month_opt = request.month.into_option();
+        let day_opt = request.day.into_option();
+        let volume_opt = request.volume.into_option();
+        let count_opt = request.count.into_option();
+        let isbns_opt = request.isbns.into_option();
+
+        let active = book_metadata::ActiveModel {
             id: Set(Uuid::new_v4()),
             book_id: Set(book_id),
-            summary: Set(request.summary.into_option()),
-            writer: Set(request.writer.into_option()),
-            penciller: Set(request.penciller.into_option()),
-            inker: Set(request.inker.into_option()),
-            colorist: Set(request.colorist.into_option()),
-            letterer: Set(request.letterer.into_option()),
-            cover_artist: Set(request.cover_artist.into_option()),
-            editor: Set(request.editor.into_option()),
-            publisher: Set(request.publisher.into_option()),
-            imprint: Set(request.imprint.into_option()),
-            genre: Set(request.genre.into_option()),
-            web: Set(request.web.into_option()),
-            language_iso: Set(request.language_iso.into_option()),
-            format_detail: Set(request.format_detail.into_option()),
-            black_and_white: Set(request.black_and_white.into_option()),
-            manga: Set(request.manga.into_option()),
-            year: Set(request.year.into_option()),
-            month: Set(request.month.into_option()),
-            day: Set(request.day.into_option()),
-            volume: Set(request.volume.into_option()),
-            count: Set(request.count.into_option()),
-            isbns: Set(request.isbns.into_option()),
+            summary: Set(summary_opt.clone()),
+            writer: Set(writer_opt.clone()),
+            penciller: Set(penciller_opt.clone()),
+            inker: Set(inker_opt.clone()),
+            colorist: Set(colorist_opt.clone()),
+            letterer: Set(letterer_opt.clone()),
+            cover_artist: Set(cover_artist_opt.clone()),
+            editor: Set(editor_opt.clone()),
+            publisher: Set(publisher_opt.clone()),
+            imprint: Set(imprint_opt.clone()),
+            genre: Set(genre_opt.clone()),
+            web: Set(web_opt.clone()),
+            language_iso: Set(language_iso_opt.clone()),
+            format_detail: Set(format_detail_opt.clone()),
+            black_and_white: Set(black_and_white_opt),
+            manga: Set(manga_opt),
+            year: Set(year_opt),
+            month: Set(month_opt),
+            day: Set(day_opt),
+            volume: Set(volume_opt),
+            count: Set(count_opt),
+            isbns: Set(isbns_opt.clone()),
+            // Set locks for non-null fields
+            summary_lock: Set(summary_opt.is_some()),
+            writer_lock: Set(writer_opt.is_some()),
+            penciller_lock: Set(penciller_opt.is_some()),
+            inker_lock: Set(inker_opt.is_some()),
+            colorist_lock: Set(colorist_opt.is_some()),
+            letterer_lock: Set(letterer_opt.is_some()),
+            cover_artist_lock: Set(cover_artist_opt.is_some()),
+            editor_lock: Set(editor_opt.is_some()),
+            publisher_lock: Set(publisher_opt.is_some()),
+            imprint_lock: Set(imprint_opt.is_some()),
+            genre_lock: Set(genre_opt.is_some()),
+            web_lock: Set(web_opt.is_some()),
+            language_iso_lock: Set(language_iso_opt.is_some()),
+            format_detail_lock: Set(format_detail_opt.is_some()),
+            black_and_white_lock: Set(black_and_white_opt.is_some()),
+            manga_lock: Set(manga_opt.is_some()),
+            year_lock: Set(year_opt.is_some()),
+            month_lock: Set(month_opt.is_some()),
+            day_lock: Set(day_opt.is_some()),
+            volume_lock: Set(volume_opt.is_some()),
+            count_lock: Set(count_opt.is_some()),
+            isbns_lock: Set(isbns_opt.is_some()),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -1682,4 +1887,343 @@ pub async fn patch_book_metadata(
         isbns: updated.isbns,
         updated_at: updated.updated_at,
     }))
+}
+
+// ============================================================================
+// Book Metadata Lock Endpoints
+// ============================================================================
+
+use crate::api::dto::{BookMetadataLocks, UpdateBookMetadataLocksRequest};
+
+/// Get book metadata lock states
+///
+/// Returns which metadata fields are locked (protected from automatic updates).
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/{book_id}/metadata/locks",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    responses(
+        (status = 200, description = "Lock states retrieved successfully", body = BookMetadataLocks),
+        (status = 404, description = "Book or metadata not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn get_book_metadata_locks(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+) -> Result<Json<BookMetadataLocks>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Verify book exists
+    BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Get metadata record
+    let metadata = BookMetadataRepository::get_by_book_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book metadata not found".to_string()))?;
+
+    Ok(Json(BookMetadataLocks {
+        summary_lock: metadata.summary_lock,
+        writer_lock: metadata.writer_lock,
+        penciller_lock: metadata.penciller_lock,
+        inker_lock: metadata.inker_lock,
+        colorist_lock: metadata.colorist_lock,
+        letterer_lock: metadata.letterer_lock,
+        cover_artist_lock: metadata.cover_artist_lock,
+        editor_lock: metadata.editor_lock,
+        publisher_lock: metadata.publisher_lock,
+        imprint_lock: metadata.imprint_lock,
+        genre_lock: metadata.genre_lock,
+        web_lock: metadata.web_lock,
+        language_iso_lock: metadata.language_iso_lock,
+        format_detail_lock: metadata.format_detail_lock,
+        black_and_white_lock: metadata.black_and_white_lock,
+        manga_lock: metadata.manga_lock,
+        year_lock: metadata.year_lock,
+        month_lock: metadata.month_lock,
+        day_lock: metadata.day_lock,
+        volume_lock: metadata.volume_lock,
+        count_lock: metadata.count_lock,
+        isbns_lock: metadata.isbns_lock,
+    }))
+}
+
+/// Update book metadata lock states
+///
+/// Updates which metadata fields are locked. Only provided fields will be updated.
+#[utoipa::path(
+    put,
+    path = "/api/v1/books/{book_id}/metadata/locks",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    request_body = UpdateBookMetadataLocksRequest,
+    responses(
+        (status = 200, description = "Lock states updated successfully", body = BookMetadataLocks),
+        (status = 404, description = "Book or metadata not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn update_book_metadata_locks(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+    Json(request): Json<UpdateBookMetadataLocksRequest>,
+) -> Result<Json<BookMetadataLocks>, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Get existing metadata
+    let existing = BookMetadataRepository::get_by_book_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book metadata not found".to_string()))?;
+
+    // Update locks
+    let now = Utc::now();
+    let mut active: book_metadata::ActiveModel = existing.into();
+
+    if let Some(v) = request.summary_lock {
+        active.summary_lock = Set(v);
+    }
+    if let Some(v) = request.writer_lock {
+        active.writer_lock = Set(v);
+    }
+    if let Some(v) = request.penciller_lock {
+        active.penciller_lock = Set(v);
+    }
+    if let Some(v) = request.inker_lock {
+        active.inker_lock = Set(v);
+    }
+    if let Some(v) = request.colorist_lock {
+        active.colorist_lock = Set(v);
+    }
+    if let Some(v) = request.letterer_lock {
+        active.letterer_lock = Set(v);
+    }
+    if let Some(v) = request.cover_artist_lock {
+        active.cover_artist_lock = Set(v);
+    }
+    if let Some(v) = request.editor_lock {
+        active.editor_lock = Set(v);
+    }
+    if let Some(v) = request.publisher_lock {
+        active.publisher_lock = Set(v);
+    }
+    if let Some(v) = request.imprint_lock {
+        active.imprint_lock = Set(v);
+    }
+    if let Some(v) = request.genre_lock {
+        active.genre_lock = Set(v);
+    }
+    if let Some(v) = request.web_lock {
+        active.web_lock = Set(v);
+    }
+    if let Some(v) = request.language_iso_lock {
+        active.language_iso_lock = Set(v);
+    }
+    if let Some(v) = request.format_detail_lock {
+        active.format_detail_lock = Set(v);
+    }
+    if let Some(v) = request.black_and_white_lock {
+        active.black_and_white_lock = Set(v);
+    }
+    if let Some(v) = request.manga_lock {
+        active.manga_lock = Set(v);
+    }
+    if let Some(v) = request.year_lock {
+        active.year_lock = Set(v);
+    }
+    if let Some(v) = request.month_lock {
+        active.month_lock = Set(v);
+    }
+    if let Some(v) = request.day_lock {
+        active.day_lock = Set(v);
+    }
+    if let Some(v) = request.volume_lock {
+        active.volume_lock = Set(v);
+    }
+    if let Some(v) = request.count_lock {
+        active.count_lock = Set(v);
+    }
+    if let Some(v) = request.isbns_lock {
+        active.isbns_lock = Set(v);
+    }
+
+    active.updated_at = Set(now);
+
+    let updated = active
+        .update(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to update locks: {}", e)))?;
+
+    // Emit update event
+    let event = EntityChangeEvent {
+        event: EntityEvent::BookUpdated {
+            book_id,
+            series_id: book.series_id,
+            library_id: book.library_id,
+            fields: Some(vec!["metadata_locks".to_string()]),
+        },
+        timestamp: now,
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    Ok(Json(BookMetadataLocks {
+        summary_lock: updated.summary_lock,
+        writer_lock: updated.writer_lock,
+        penciller_lock: updated.penciller_lock,
+        inker_lock: updated.inker_lock,
+        colorist_lock: updated.colorist_lock,
+        letterer_lock: updated.letterer_lock,
+        cover_artist_lock: updated.cover_artist_lock,
+        editor_lock: updated.editor_lock,
+        publisher_lock: updated.publisher_lock,
+        imprint_lock: updated.imprint_lock,
+        genre_lock: updated.genre_lock,
+        web_lock: updated.web_lock,
+        language_iso_lock: updated.language_iso_lock,
+        format_detail_lock: updated.format_detail_lock,
+        black_and_white_lock: updated.black_and_white_lock,
+        manga_lock: updated.manga_lock,
+        year_lock: updated.year_lock,
+        month_lock: updated.month_lock,
+        day_lock: updated.day_lock,
+        volume_lock: updated.volume_lock,
+        count_lock: updated.count_lock,
+        isbns_lock: updated.isbns_lock,
+    }))
+}
+
+// ============================================================================
+// Book Cover Upload Endpoint
+// ============================================================================
+
+use crate::events::EntityType;
+use axum::extract::Multipart;
+use tokio::fs;
+use tokio::io::AsyncWriteExt;
+
+/// Upload a custom cover image for a book
+///
+/// Accepts a multipart form with an image file. The image will be stored
+/// in the uploads directory and used as the book's cover/thumbnail.
+#[utoipa::path(
+    post,
+    path = "/api/v1/books/{book_id}/cover",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    request_body(content_type = "multipart/form-data"),
+    responses(
+        (status = 200, description = "Cover uploaded successfully"),
+        (status = 400, description = "Bad request - no image file provided or invalid image"),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn upload_book_cover(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+    mut multipart: Multipart,
+) -> Result<StatusCode, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists and get its library_id/series_id
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Get the uploaded file from multipart form
+    let mut image_data: Option<Vec<u8>> = None;
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::BadRequest(format!("Failed to read multipart field: {}", e)))?
+    {
+        let name = field.name().unwrap_or("").to_string();
+
+        if name == "cover" || name == "file" || name == "image" {
+            let data = field
+                .bytes()
+                .await
+                .map_err(|e| ApiError::BadRequest(format!("Failed to read file data: {}", e)))?;
+            image_data = Some(data.to_vec());
+            break;
+        }
+    }
+
+    let image_data = image_data
+        .ok_or_else(|| ApiError::BadRequest("No image file provided in request".to_string()))?;
+
+    // Validate that it's a valid image
+    image::load_from_memory(&image_data)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid image file: {}", e)))?;
+
+    // Create covers directory within uploads dir if it doesn't exist
+    let covers_dir = state
+        .thumbnail_service
+        .get_uploads_dir()
+        .join("covers")
+        .join("books");
+    fs::create_dir_all(&covers_dir)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to create covers directory: {}", e)))?;
+
+    // Save the image with a unique filename
+    let filename = format!("{}.jpg", book_id);
+    let filepath = covers_dir.join(&filename);
+
+    let mut file = fs::File::create(&filepath)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to create cover file: {}", e)))?;
+
+    file.write_all(&image_data)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to write cover file: {}", e)))?;
+
+    // Emit cover updated event
+    let event = EntityChangeEvent {
+        event: EntityEvent::CoverUpdated {
+            entity_type: EntityType::Book,
+            entity_id: book_id,
+            library_id: Some(book.library_id),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    Ok(StatusCode::OK)
 }

@@ -390,8 +390,8 @@ impl Database {
     /// Create or update book metadata
     pub async fn upsert_book_metadata(
         &self,
-        metadata: &entities::book_metadata_records::Model,
-    ) -> Result<entities::book_metadata_records::Model> {
+        metadata: &entities::book_metadata::Model,
+    ) -> Result<entities::book_metadata::Model> {
         BookMetadataRepository::upsert(&self.conn, metadata).await
     }
 
@@ -399,14 +399,14 @@ impl Database {
     pub async fn get_book_metadata(
         &self,
         book_id: Uuid,
-    ) -> Result<Option<entities::book_metadata_records::Model>> {
+    ) -> Result<Option<entities::book_metadata::Model>> {
         BookMetadataRepository::get_by_book_id(&self.conn, book_id).await
     }
 
     /// Update book metadata
     pub async fn update_book_metadata(
         &self,
-        metadata: &entities::book_metadata_records::Model,
+        metadata: &entities::book_metadata::Model,
     ) -> Result<()> {
         BookMetadataRepository::update(&self.conn, metadata).await
     }

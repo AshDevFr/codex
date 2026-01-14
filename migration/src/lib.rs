@@ -18,7 +18,7 @@ mod m20260103_000012_create_series_covers;
 mod m20260103_000013_create_user_series_ratings;
 
 // Book metadata and metadata sources
-mod m20260103_000014_create_book_metadata_records;
+mod m20260103_000014_create_book_metadata;
 mod m20260103_000015_create_metadata_sources;
 
 // User-related tables
@@ -67,7 +67,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260103_000012_create_series_covers::Migration),
             Box::new(m20260103_000013_create_user_series_ratings::Migration),
             // Book metadata and metadata sources
-            Box::new(m20260103_000014_create_book_metadata_records::Migration),
+            Box::new(m20260103_000014_create_book_metadata::Migration),
             Box::new(m20260103_000015_create_metadata_sources::Migration),
             // User-related tables
             Box::new(m20260103_000016_create_read_progress::Migration),

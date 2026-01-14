@@ -423,6 +423,7 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/books/:book_id/thumbnail",
             get(handlers::get_book_thumbnail),
         )
+        .route("/books/:book_id/cover", post(handlers::upload_book_cover))
         .route(
             "/books/:book_id/analyze",
             post(handlers::trigger_book_analysis),
@@ -439,6 +440,15 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route(
             "/books/:book_id/metadata",
             patch(handlers::patch_book_metadata),
+        )
+        // Book metadata lock routes (protected)
+        .route(
+            "/books/:book_id/metadata/locks",
+            get(handlers::get_book_metadata_locks),
+        )
+        .route(
+            "/books/:book_id/metadata/locks",
+            put(handlers::update_book_metadata_locks),
         )
         // Book collection routes (protected)
         .route("/books/in-progress", get(handlers::list_in_progress_books))

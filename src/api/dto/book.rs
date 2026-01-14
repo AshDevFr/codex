@@ -529,6 +529,134 @@ pub struct BookMetadataResponse {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Book metadata lock states
+///
+/// Indicates which metadata fields are locked (protected from automatic updates).
+/// When a field is locked, the scanner will not overwrite user-edited values.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BookMetadataLocks {
+    /// Whether summary is locked
+    #[schema(example = false)]
+    pub summary_lock: bool,
+    /// Whether writer is locked
+    #[schema(example = false)]
+    pub writer_lock: bool,
+    /// Whether penciller is locked
+    #[schema(example = false)]
+    pub penciller_lock: bool,
+    /// Whether inker is locked
+    #[schema(example = false)]
+    pub inker_lock: bool,
+    /// Whether colorist is locked
+    #[schema(example = false)]
+    pub colorist_lock: bool,
+    /// Whether letterer is locked
+    #[schema(example = false)]
+    pub letterer_lock: bool,
+    /// Whether cover artist is locked
+    #[schema(example = false)]
+    pub cover_artist_lock: bool,
+    /// Whether editor is locked
+    #[schema(example = false)]
+    pub editor_lock: bool,
+    /// Whether publisher is locked
+    #[schema(example = true)]
+    pub publisher_lock: bool,
+    /// Whether imprint is locked
+    #[schema(example = false)]
+    pub imprint_lock: bool,
+    /// Whether genre is locked
+    #[schema(example = false)]
+    pub genre_lock: bool,
+    /// Whether web URL is locked
+    #[schema(example = false)]
+    pub web_lock: bool,
+    /// Whether language_iso is locked
+    #[schema(example = false)]
+    pub language_iso_lock: bool,
+    /// Whether format_detail is locked
+    #[schema(example = false)]
+    pub format_detail_lock: bool,
+    /// Whether black_and_white is locked
+    #[schema(example = false)]
+    pub black_and_white_lock: bool,
+    /// Whether manga is locked
+    #[schema(example = false)]
+    pub manga_lock: bool,
+    /// Whether year is locked
+    #[schema(example = true)]
+    pub year_lock: bool,
+    /// Whether month is locked
+    #[schema(example = false)]
+    pub month_lock: bool,
+    /// Whether day is locked
+    #[schema(example = false)]
+    pub day_lock: bool,
+    /// Whether volume is locked
+    #[schema(example = false)]
+    pub volume_lock: bool,
+    /// Whether count is locked
+    #[schema(example = false)]
+    pub count_lock: bool,
+    /// Whether isbns is locked
+    #[schema(example = false)]
+    pub isbns_lock: bool,
+}
+
+/// Request to update book metadata locks
+///
+/// All fields are optional. Only provided fields will be updated.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateBookMetadataLocksRequest {
+    /// Whether to lock summary
+    #[schema(example = true)]
+    pub summary_lock: Option<bool>,
+    /// Whether to lock writer
+    pub writer_lock: Option<bool>,
+    /// Whether to lock penciller
+    pub penciller_lock: Option<bool>,
+    /// Whether to lock inker
+    pub inker_lock: Option<bool>,
+    /// Whether to lock colorist
+    pub colorist_lock: Option<bool>,
+    /// Whether to lock letterer
+    pub letterer_lock: Option<bool>,
+    /// Whether to lock cover artist
+    pub cover_artist_lock: Option<bool>,
+    /// Whether to lock editor
+    pub editor_lock: Option<bool>,
+    /// Whether to lock publisher
+    pub publisher_lock: Option<bool>,
+    /// Whether to lock imprint
+    pub imprint_lock: Option<bool>,
+    /// Whether to lock genre
+    pub genre_lock: Option<bool>,
+    /// Whether to lock web URL
+    pub web_lock: Option<bool>,
+    /// Whether to lock language_iso
+    pub language_iso_lock: Option<bool>,
+    /// Whether to lock format_detail
+    pub format_detail_lock: Option<bool>,
+    /// Whether to lock black_and_white
+    pub black_and_white_lock: Option<bool>,
+    /// Whether to lock manga
+    pub manga_lock: Option<bool>,
+    /// Whether to lock year
+    pub year_lock: Option<bool>,
+    /// Whether to lock month
+    pub month_lock: Option<bool>,
+    /// Whether to lock day
+    pub day_lock: Option<bool>,
+    /// Whether to lock volume
+    pub volume_lock: Option<bool>,
+    /// Whether to lock count
+    pub count_lock: Option<bool>,
+    /// Whether to lock isbns
+    pub isbns_lock: Option<bool>,
+}
+
 /// Response containing adjacent books in the same series
 ///
 /// Returns the previous and next books relative to the requested book,

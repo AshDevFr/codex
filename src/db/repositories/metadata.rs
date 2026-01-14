@@ -3,18 +3,18 @@ use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 use uuid::Uuid;
 
-use crate::db::entities::{book_metadata_records, prelude::*};
+use crate::db::entities::{book_metadata, prelude::*};
 
-/// Repository for BookMetadataRecord operations
+/// Repository for BookMetadata operations
 pub struct BookMetadataRepository;
 
 impl BookMetadataRepository {
     /// Create or update metadata for a book
     pub async fn upsert(
         db: &DatabaseConnection,
-        metadata_model: &book_metadata_records::Model,
-    ) -> Result<book_metadata_records::Model> {
-        let metadata = book_metadata_records::ActiveModel {
+        metadata_model: &book_metadata::Model,
+    ) -> Result<book_metadata::Model> {
+        let metadata = book_metadata::ActiveModel {
             id: Set(metadata_model.id),
             book_id: Set(metadata_model.book_id),
             summary: Set(metadata_model.summary.clone()),
@@ -39,13 +39,37 @@ impl BookMetadataRepository {
             volume: Set(metadata_model.volume),
             count: Set(metadata_model.count),
             isbns: Set(metadata_model.isbns.clone()),
+            // Lock fields
+            summary_lock: Set(metadata_model.summary_lock),
+            writer_lock: Set(metadata_model.writer_lock),
+            penciller_lock: Set(metadata_model.penciller_lock),
+            inker_lock: Set(metadata_model.inker_lock),
+            colorist_lock: Set(metadata_model.colorist_lock),
+            letterer_lock: Set(metadata_model.letterer_lock),
+            cover_artist_lock: Set(metadata_model.cover_artist_lock),
+            editor_lock: Set(metadata_model.editor_lock),
+            publisher_lock: Set(metadata_model.publisher_lock),
+            imprint_lock: Set(metadata_model.imprint_lock),
+            genre_lock: Set(metadata_model.genre_lock),
+            web_lock: Set(metadata_model.web_lock),
+            language_iso_lock: Set(metadata_model.language_iso_lock),
+            format_detail_lock: Set(metadata_model.format_detail_lock),
+            black_and_white_lock: Set(metadata_model.black_and_white_lock),
+            manga_lock: Set(metadata_model.manga_lock),
+            year_lock: Set(metadata_model.year_lock),
+            month_lock: Set(metadata_model.month_lock),
+            day_lock: Set(metadata_model.day_lock),
+            volume_lock: Set(metadata_model.volume_lock),
+            count_lock: Set(metadata_model.count_lock),
+            isbns_lock: Set(metadata_model.isbns_lock),
+            // Timestamps
             created_at: Set(metadata_model.created_at),
             updated_at: Set(Utc::now()),
         };
 
         // Try to find existing record
-        let existing = BookMetadataRecords::find()
-            .filter(book_metadata_records::Column::BookId.eq(metadata_model.book_id))
+        let existing = BookMetadata::find()
+            .filter(book_metadata::Column::BookId.eq(metadata_model.book_id))
             .one(db)
             .await
             .context("Failed to check for existing metadata")?;
@@ -71,9 +95,9 @@ impl BookMetadataRepository {
     pub async fn get_by_book_id(
         db: &DatabaseConnection,
         book_id: Uuid,
-    ) -> Result<Option<book_metadata_records::Model>> {
-        BookMetadataRecords::find()
-            .filter(book_metadata_records::Column::BookId.eq(book_id))
+    ) -> Result<Option<book_metadata::Model>> {
+        BookMetadata::find()
+            .filter(book_metadata::Column::BookId.eq(book_id))
             .one(db)
             .await
             .context("Failed to get metadata by book ID")
@@ -82,9 +106,9 @@ impl BookMetadataRepository {
     /// Update metadata
     pub async fn update(
         db: &DatabaseConnection,
-        metadata_model: &book_metadata_records::Model,
+        metadata_model: &book_metadata::Model,
     ) -> Result<()> {
-        let active = book_metadata_records::ActiveModel {
+        let active = book_metadata::ActiveModel {
             id: Set(metadata_model.id),
             book_id: Set(metadata_model.book_id),
             summary: Set(metadata_model.summary.clone()),
@@ -109,6 +133,30 @@ impl BookMetadataRepository {
             volume: Set(metadata_model.volume),
             count: Set(metadata_model.count),
             isbns: Set(metadata_model.isbns.clone()),
+            // Lock fields
+            summary_lock: Set(metadata_model.summary_lock),
+            writer_lock: Set(metadata_model.writer_lock),
+            penciller_lock: Set(metadata_model.penciller_lock),
+            inker_lock: Set(metadata_model.inker_lock),
+            colorist_lock: Set(metadata_model.colorist_lock),
+            letterer_lock: Set(metadata_model.letterer_lock),
+            cover_artist_lock: Set(metadata_model.cover_artist_lock),
+            editor_lock: Set(metadata_model.editor_lock),
+            publisher_lock: Set(metadata_model.publisher_lock),
+            imprint_lock: Set(metadata_model.imprint_lock),
+            genre_lock: Set(metadata_model.genre_lock),
+            web_lock: Set(metadata_model.web_lock),
+            language_iso_lock: Set(metadata_model.language_iso_lock),
+            format_detail_lock: Set(metadata_model.format_detail_lock),
+            black_and_white_lock: Set(metadata_model.black_and_white_lock),
+            manga_lock: Set(metadata_model.manga_lock),
+            year_lock: Set(metadata_model.year_lock),
+            month_lock: Set(metadata_model.month_lock),
+            day_lock: Set(metadata_model.day_lock),
+            volume_lock: Set(metadata_model.volume_lock),
+            count_lock: Set(metadata_model.count_lock),
+            isbns_lock: Set(metadata_model.isbns_lock),
+            // Timestamps
             created_at: Set(metadata_model.created_at),
             updated_at: Set(Utc::now()),
         };
@@ -123,8 +171,8 @@ impl BookMetadataRepository {
 
     /// Delete metadata by book ID
     pub async fn delete_by_book_id(db: &DatabaseConnection, book_id: Uuid) -> Result<()> {
-        BookMetadataRecords::delete_many()
-            .filter(book_metadata_records::Column::BookId.eq(book_id))
+        BookMetadata::delete_many()
+            .filter(book_metadata::Column::BookId.eq(book_id))
             .exec(db)
             .await
             .context("Failed to delete metadata by book ID")?;
@@ -185,9 +233,9 @@ mod tests {
             .unwrap()
     }
 
-    /// Helper to create a test metadata model
-    fn create_metadata_model(book_id: Uuid) -> book_metadata_records::Model {
-        book_metadata_records::Model {
+    /// Helper to create a test metadata model with all lock fields set to false
+    fn create_metadata_model(book_id: Uuid) -> book_metadata::Model {
+        book_metadata::Model {
             id: Uuid::new_v4(),
             book_id,
             summary: None,
@@ -212,6 +260,29 @@ mod tests {
             volume: None,
             count: None,
             isbns: None,
+            // All locks default to false
+            summary_lock: false,
+            writer_lock: false,
+            penciller_lock: false,
+            inker_lock: false,
+            colorist_lock: false,
+            letterer_lock: false,
+            cover_artist_lock: false,
+            editor_lock: false,
+            publisher_lock: false,
+            imprint_lock: false,
+            genre_lock: false,
+            web_lock: false,
+            language_iso_lock: false,
+            format_detail_lock: false,
+            black_and_white_lock: false,
+            manga_lock: false,
+            year_lock: false,
+            month_lock: false,
+            day_lock: false,
+            volume_lock: false,
+            count_lock: false,
+            isbns_lock: false,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }
@@ -357,5 +428,33 @@ mod tests {
             .unwrap();
 
         assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_lock_fields_persistence() {
+        let (db, _temp_dir) = create_test_db().await;
+        let book = create_test_book(&db).await;
+
+        let mut metadata = create_metadata_model(book.id);
+        metadata.summary = Some("Test summary".to_string());
+        metadata.summary_lock = true;
+        metadata.writer_lock = true;
+        metadata.year_lock = true;
+
+        BookMetadataRepository::upsert(db.sea_orm_connection(), &metadata)
+            .await
+            .unwrap();
+
+        let retrieved = BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert!(retrieved.summary_lock);
+        assert!(retrieved.writer_lock);
+        assert!(retrieved.year_lock);
+        // Others should still be false
+        assert!(!retrieved.penciller_lock);
+        assert!(!retrieved.publisher_lock);
     }
 }
