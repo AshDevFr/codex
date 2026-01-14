@@ -25,7 +25,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "@/api/client";
 import { type DuplicateGroup, duplicatesApi } from "@/api/duplicates";
-import type { BookDto } from "@/types";
+import type { Book } from "@/types";
 
 // Duplicate group card component
 function DuplicateGroupCard({
@@ -35,7 +35,7 @@ function DuplicateGroupCard({
 	isDeleting,
 }: {
 	group: DuplicateGroup;
-	books: BookDto[];
+	books: Book[];
 	onDelete: () => void;
 	isDeleting: boolean;
 }) {
@@ -92,7 +92,7 @@ function DuplicateGroupCard({
 							<Table.Tr key={book.id}>
 								<Table.Td>
 									<Text size="sm" fw={500}>
-										{book.title || book.fileName}
+										{book.title}
 									</Text>
 								</Table.Td>
 								<Table.Td>
@@ -128,9 +128,9 @@ function DuplicateGroupCard({
 export function DuplicatesSettings() {
 	const queryClient = useQueryClient();
 	const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
-	const [bookDetailsCache, setBookDetailsCache] = useState<
-		Map<string, BookDto[]>
-	>(new Map());
+	const [bookDetailsCache, setBookDetailsCache] = useState<Map<string, Book[]>>(
+		new Map(),
+	);
 
 	// Fetch duplicates
 	const {
@@ -143,16 +143,14 @@ export function DuplicatesSettings() {
 	});
 
 	// Fetch book details for a group
-	const fetchBooksForGroup = async (
-		group: DuplicateGroup,
-	): Promise<BookDto[]> => {
+	const fetchBooksForGroup = async (group: DuplicateGroup): Promise<Book[]> => {
 		const cached = bookDetailsCache.get(group.id);
 		if (cached) return cached;
 
-		const books: BookDto[] = [];
+		const books: Book[] = [];
 		for (const bookId of group.book_ids) {
 			try {
-				const response = await api.get<BookDto>(`/books/${bookId}`);
+				const response = await api.get<Book>(`/books/${bookId}`);
 				books.push(response.data);
 			} catch {
 				// Book might have been deleted
@@ -167,9 +165,9 @@ export function DuplicatesSettings() {
 	const { data: groupBooks } = useQuery({
 		queryKey: ["duplicate-books", duplicates?.map((d) => d.id).join(",")],
 		queryFn: async () => {
-			if (!duplicates) return new Map<string, BookDto[]>();
+			if (!duplicates) return new Map<string, Book[]>();
 
-			const results = new Map<string, BookDto[]>();
+			const results = new Map<string, Book[]>();
 			for (const group of duplicates) {
 				const books = await fetchBooksForGroup(group);
 				results.set(group.id, books);

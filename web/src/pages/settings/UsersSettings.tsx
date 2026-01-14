@@ -92,7 +92,7 @@ export function UsersSettings() {
 				username: data.username,
 				email: data.email,
 				password: data.password,
-				is_admin: data.isAdmin,
+				isAdmin: data.isAdmin,
 			});
 		},
 		onSuccess: () => {
@@ -132,8 +132,8 @@ export function UsersSettings() {
 				username: data.username,
 				email: data.email,
 				password: data.password || undefined,
-				is_admin: data.isAdmin,
-				is_active: data.isActive,
+				isAdmin: data.isAdmin,
+				isActive: data.isActive,
 			});
 		},
 		onSuccess: () => {
@@ -355,14 +355,14 @@ export function UsersSettings() {
 				title={`Edit User: ${selectedUser?.username}`}
 			>
 				<form
-					onSubmit={editForm.onSubmit(
-						(values) =>
-							selectedUser &&
+					onSubmit={editForm.onSubmit((values) => {
+						if (selectedUser) {
 							updateUserMutation.mutate({
 								userId: selectedUser.id,
 								data: values,
-							}),
-					)}
+							});
+						}
+					})}
 				>
 					<Stack gap="md">
 						<TextInput

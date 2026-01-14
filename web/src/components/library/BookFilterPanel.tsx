@@ -178,7 +178,6 @@ export function BookFilterPanel() {
 									<Text size="sm">Show books with errors</Text>
 									<Switch
 										checked={filterState.filters.hasError === "include"}
-										indeterminate={filterState.filters.hasError === "neutral"}
 										onChange={handleHasErrorToggle}
 										color={
 											filterState.filters.hasError === "include"

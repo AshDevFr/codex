@@ -1360,10 +1360,9 @@ describe("readerStore", () => {
 
 			it("should not include non-forkable settings", () => {
 				const fullSettings = useReaderStore.getState().settings;
-				const forkable = extractForkableSettings(fullSettings) as Record<
-					string,
-					unknown
-				>;
+				const forkable = extractForkableSettings(
+					fullSettings,
+				) as unknown as Record<string, unknown>;
 
 				// Verify non-forkable settings are not included
 				expect(forkable.autoHideToolbar).toBeUndefined();

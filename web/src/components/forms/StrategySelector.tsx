@@ -384,7 +384,7 @@ export function SeriesStrategySelector({
 				return (
 					<FlatConfigEditor
 						config={config as FlatStrategyConfig}
-						onChange={onConfigChange}
+						onChange={onConfigChange as (config: FlatStrategyConfig) => void}
 						disabled={disabled}
 					/>
 				);
@@ -392,7 +392,9 @@ export function SeriesStrategySelector({
 				return (
 					<PublisherHierarchyConfigEditor
 						config={config as PublisherHierarchyConfig}
-						onChange={onConfigChange}
+						onChange={
+							onConfigChange as (config: PublisherHierarchyConfig) => void
+						}
 						disabled={disabled}
 					/>
 				);
@@ -400,7 +402,7 @@ export function SeriesStrategySelector({
 				return (
 					<CalibreConfigEditor
 						config={config as CalibreStrategyConfig}
-						onChange={onConfigChange}
+						onChange={onConfigChange as (config: CalibreStrategyConfig) => void}
 						disabled={disabled}
 					/>
 				);
@@ -408,7 +410,7 @@ export function SeriesStrategySelector({
 				return (
 					<CustomConfigEditor
 						config={config as CustomStrategyConfig}
-						onChange={onConfigChange}
+						onChange={onConfigChange as (config: CustomStrategyConfig) => void}
 						disabled={disabled}
 					/>
 				);

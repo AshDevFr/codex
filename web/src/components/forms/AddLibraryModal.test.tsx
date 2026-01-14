@@ -3,11 +3,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { filesystemApi } from "@/api/filesystem";
 import { librariesApi } from "@/api/libraries";
 import { renderWithProviders, userEvent } from "@/test/utils";
-import type { BrowseResponse, FileSystemEntry } from "@/types";
+import type { BrowseResponse, FileSystemEntry, Library } from "@/types";
 import { LibraryModal } from "./LibraryModal";
 
 vi.mock("@/api/filesystem");
 vi.mock("@/api/libraries");
+
+// Helper to create a complete Library mock with all required fields
+const createMockLibrary = (overrides?: Partial<Library>): Library => ({
+	id: "1",
+	name: "Test Library",
+	path: "/home/user/Comics",
+	isActive: true,
+	createdAt: "2024-01-01T00:00:00Z",
+	updatedAt: "2024-01-01T00:00:00Z",
+	seriesStrategy: "series_volume",
+	bookStrategy: "filename",
+	numberStrategy: "file_order",
+	defaultReadingDirection: "ltr",
+	...overrides,
+});
 
 const mockDrives: FileSystemEntry[] = [
 	{
@@ -268,14 +283,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 	it("should create library with valid inputs", async () => {
 		const user = userEvent.setup();
-		const mockLibrary = {
-			id: "1",
-			name: "Test Library",
-			path: "/home/user/Comics",
-			isActive: true,
-			createdAt: "2024-01-01T00:00:00Z",
-			updatedAt: "2024-01-01T00:00:00Z",
-		};
+		const mockLibrary = createMockLibrary();
 
 		vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
@@ -329,14 +337,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 	it("should call onClose with created library on successful creation", async () => {
 		const user = userEvent.setup();
-		const mockLibrary = {
-			id: "123",
-			name: "Test Library",
-			path: "/home/user/Comics",
-			isActive: true,
-			createdAt: "2024-01-01T00:00:00Z",
-			updatedAt: "2024-01-01T00:00:00Z",
-		};
+		const mockLibrary = createMockLibrary({ id: "123" });
 
 		vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
@@ -552,14 +553,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 	it("should create library with cron schedule when auto scan is enabled", async () => {
 		const user = userEvent.setup();
-		const mockLibrary = {
-			id: "1",
-			name: "Test Library",
-			path: "/home/user/Comics",
-			isActive: true,
-			createdAt: "2024-01-01T00:00:00Z",
-			updatedAt: "2024-01-01T00:00:00Z",
-		};
+		const mockLibrary = createMockLibrary();
 
 		vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
@@ -803,14 +797,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 	it("should submit with all formats by default", async () => {
 		const user = userEvent.setup();
-		const mockLibrary = {
-			id: "1",
-			name: "Test Library",
-			path: "/home/user/Comics",
-			isActive: true,
-			createdAt: "2024-01-01T00:00:00Z",
-			updatedAt: "2024-01-01T00:00:00Z",
-		};
+		const mockLibrary = createMockLibrary();
 
 		vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
@@ -861,14 +848,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 	it("should submit with selected formats when some are deselected", async () => {
 		const user = userEvent.setup();
-		const mockLibrary = {
-			id: "1",
-			name: "Test Library",
-			path: "/home/user/Comics",
-			isActive: true,
-			createdAt: "2024-01-01T00:00:00Z",
-			updatedAt: "2024-01-01T00:00:00Z",
-		};
+		const mockLibrary = createMockLibrary();
 
 		vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
@@ -1136,17 +1116,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 		it("should include strategy in create request with default values", async () => {
 			const user = userEvent.setup();
-			const mockLibrary = {
-				id: "1",
-				name: "Test Library",
-				path: "/home/user/Comics",
-				isActive: true,
-				createdAt: "2024-01-01T00:00:00Z",
-				updatedAt: "2024-01-01T00:00:00Z",
-				seriesStrategy: "series_volume" as const,
-				bookStrategy: "filename" as const,
-				defaultReadingDirection: "ltr",
-			};
+			const mockLibrary = createMockLibrary();
 
 			vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
@@ -1198,17 +1168,13 @@ describe("LibraryModal (Add Mode)", () => {
 
 		it("should include selected strategy in create request", async () => {
 			const user = userEvent.setup();
-			const mockLibrary = {
-				id: "1",
+			const mockLibrary = createMockLibrary({
 				name: "Manga Library",
 				path: "/home/user/Manga",
-				isActive: true,
-				createdAt: "2024-01-01T00:00:00Z",
-				updatedAt: "2024-01-01T00:00:00Z",
-				seriesStrategy: "series_volume_chapter" as const,
-				bookStrategy: "smart" as const,
+				seriesStrategy: "series_volume_chapter",
+				bookStrategy: "smart",
 				defaultReadingDirection: "rtl",
-			};
+			});
 
 			vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
@@ -1372,18 +1338,7 @@ describe("LibraryModal (Add Mode)", () => {
 
 		it("should include number strategy in create request with default value", async () => {
 			const user = userEvent.setup();
-			const mockLibrary = {
-				id: "1",
-				name: "Test Library",
-				path: "/home/user/Comics",
-				isActive: true,
-				createdAt: "2024-01-01T00:00:00Z",
-				updatedAt: "2024-01-01T00:00:00Z",
-				seriesStrategy: "series_volume" as const,
-				bookStrategy: "filename" as const,
-				numberStrategy: "file_order" as const,
-				defaultReadingDirection: "ltr",
-			};
+			const mockLibrary = createMockLibrary();
 
 			vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
@@ -1436,18 +1391,14 @@ describe("LibraryModal (Add Mode)", () => {
 
 		it("should include selected number strategy in create request", async () => {
 			const user = userEvent.setup();
-			const mockLibrary = {
-				id: "1",
+			const mockLibrary = createMockLibrary({
 				name: "Manga Library",
 				path: "/home/user/Manga",
-				isActive: true,
-				createdAt: "2024-01-01T00:00:00Z",
-				updatedAt: "2024-01-01T00:00:00Z",
-				seriesStrategy: "series_volume_chapter" as const,
-				bookStrategy: "smart" as const,
-				numberStrategy: "smart" as const,
+				seriesStrategy: "series_volume_chapter",
+				bookStrategy: "smart",
+				numberStrategy: "smart",
 				defaultReadingDirection: "rtl",
-			};
+			});
 
 			vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 

@@ -53,6 +53,10 @@ describe("LibraryPage", () => {
 			isActive: true,
 			createdAt: "2024-01-01",
 			updatedAt: "2024-01-01",
+			bookStrategy: "filename" as const,
+			defaultReadingDirection: "ltr",
+			numberStrategy: "filename" as const,
+			seriesStrategy: "flat" as const,
 		};
 
 		vi.mocked(librariesApi.getById).mockResolvedValue(mockLibrary);
@@ -80,6 +84,10 @@ describe("LibraryPage", () => {
 			isActive: true,
 			createdAt: "2024-01-01",
 			updatedAt: "2024-01-01",
+			bookStrategy: "filename" as const,
+			defaultReadingDirection: "ltr",
+			numberStrategy: "filename" as const,
+			seriesStrategy: "flat" as const,
 		};
 
 		vi.mocked(librariesApi.getById).mockResolvedValue(mockLibrary);
@@ -135,6 +143,10 @@ describe("LibraryPage", () => {
 			isActive: true,
 			createdAt: "2024-01-01",
 			updatedAt: "2024-01-01",
+			bookStrategy: "filename" as const,
+			defaultReadingDirection: "ltr",
+			numberStrategy: "filename" as const,
+			seriesStrategy: "flat" as const,
 		};
 
 		vi.mocked(librariesApi.getById).mockResolvedValue(mockLibrary);

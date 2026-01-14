@@ -1,6 +1,7 @@
 import { Badge, Group, Text } from "@mantine/core";
 import { useNavigate } from "react-router-dom";
-import type { Genre, Tag } from "@/api/genres";
+import type { Genre } from "@/api/genres";
+import type { Tag } from "@/api/tags";
 
 interface GenreTagChipsProps {
 	genres?: Genre[];

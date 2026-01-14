@@ -48,8 +48,9 @@ describe("SeriesStrategySelector", () => {
 		const seriesVolumeStrategy = SERIES_STRATEGIES.find(
 			(s) => s.value === "series_volume",
 		);
+		expect(seriesVolumeStrategy).toBeDefined();
 		expect(
-			screen.getByText(seriesVolumeStrategy?.description),
+			screen.getByText(seriesVolumeStrategy?.description ?? ""),
 		).toBeInTheDocument();
 	});
 
@@ -252,7 +253,10 @@ describe("BookStrategySelector", () => {
 		const filenameStrategy = BOOK_STRATEGIES.find(
 			(s) => s.value === "filename",
 		);
-		expect(screen.getByText(filenameStrategy?.description)).toBeInTheDocument();
+		expect(filenameStrategy).toBeDefined();
+		expect(
+			screen.getByText(filenameStrategy?.description ?? ""),
+		).toBeInTheDocument();
 	});
 
 	it("calls onChange when strategy is changed", async () => {
@@ -333,8 +337,9 @@ describe("NumberStrategySelector", () => {
 		const fileOrderStrategy = NUMBER_STRATEGIES.find(
 			(s) => s.value === "file_order",
 		);
+		expect(fileOrderStrategy).toBeDefined();
 		expect(
-			screen.getByText(fileOrderStrategy?.description),
+			screen.getByText(fileOrderStrategy?.description ?? ""),
 		).toBeInTheDocument();
 	});
 
@@ -404,7 +409,10 @@ describe("NumberStrategySelector", () => {
 		const metadataStrategy = NUMBER_STRATEGIES.find(
 			(s) => s.value === "metadata",
 		);
-		expect(screen.getByText(metadataStrategy?.description)).toBeInTheDocument();
+		expect(metadataStrategy).toBeDefined();
+		expect(
+			screen.getByText(metadataStrategy?.description ?? ""),
+		).toBeInTheDocument();
 	});
 
 	it("displays correct description for filename strategy", () => {
@@ -417,7 +425,10 @@ describe("NumberStrategySelector", () => {
 		const filenameStrategy = NUMBER_STRATEGIES.find(
 			(s) => s.value === "filename",
 		);
-		expect(screen.getByText(filenameStrategy?.description)).toBeInTheDocument();
+		expect(filenameStrategy).toBeDefined();
+		expect(
+			screen.getByText(filenameStrategy?.description ?? ""),
+		).toBeInTheDocument();
 	});
 
 	it("displays correct description for smart strategy", () => {
@@ -428,7 +439,10 @@ describe("NumberStrategySelector", () => {
 		);
 
 		const smartStrategy = NUMBER_STRATEGIES.find((s) => s.value === "smart");
-		expect(screen.getByText(smartStrategy?.description)).toBeInTheDocument();
+		expect(smartStrategy).toBeDefined();
+		expect(
+			screen.getByText(smartStrategy?.description ?? ""),
+		).toBeInTheDocument();
 	});
 });
 

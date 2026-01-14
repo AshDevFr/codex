@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@/store/authStore";
 import {
+	type BackgroundColor,
 	createSeriesOverride,
 	extractForkableSettings,
+	type FitMode,
 	type ForkableReaderSettings,
 	isSeriesReaderOverride,
+	type PageLayout,
+	type ReadingDirection,
 	type SeriesReaderOverride,
 	useReaderStore,
 } from "@/store/readerStore";
@@ -260,20 +264,27 @@ export function useSeriesReaderSettings(
 		) => {
 			if (!storageKey) {
 				// No series context - update global store directly
-				const setters: Record<
-					keyof ForkableReaderSettings,
-					(v: unknown) => void
-				> = {
-					fitMode: useReaderStore.getState().setFitMode,
-					pageLayout: useReaderStore.getState().setPageLayout,
-					readingDirection: useReaderStore.getState().setReadingDirection,
-					backgroundColor: useReaderStore.getState().setBackgroundColor,
-					doublePageShowWideAlone:
-						useReaderStore.getState().setDoublePageShowWideAlone,
-					doublePageStartOnOdd:
-						useReaderStore.getState().setDoublePageStartOnOdd,
-				};
-				setters[key](value);
+				const state = useReaderStore.getState();
+				switch (key) {
+					case "fitMode":
+						state.setFitMode(value as FitMode);
+						break;
+					case "pageLayout":
+						state.setPageLayout(value as PageLayout);
+						break;
+					case "readingDirection":
+						state.setReadingDirection(value as ReadingDirection);
+						break;
+					case "backgroundColor":
+						state.setBackgroundColor(value as BackgroundColor);
+						break;
+					case "doublePageShowWideAlone":
+						state.setDoublePageShowWideAlone(value as boolean);
+						break;
+					case "doublePageStartOnOdd":
+						state.setDoublePageStartOnOdd(value as boolean);
+						break;
+				}
 				return;
 			}
 

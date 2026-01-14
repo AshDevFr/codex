@@ -19,12 +19,12 @@ let mockUseSeriesNavigation = vi.fn(() => ({
 }));
 
 let mockUseSeriesReaderSettings = vi.fn(() => ({
-	hasSeriesOverride: false,
+	hasSeriesOverride: false as boolean,
 	effectiveSettings: {
-		fitMode: "screen" as const,
-		pageLayout: "single" as const,
-		readingDirection: "ltr" as const,
-		backgroundColor: "black" as const,
+		fitMode: "screen" as string,
+		pageLayout: "single" as string,
+		readingDirection: "ltr" as string,
+		backgroundColor: "black" as string,
 		doublePageShowWideAlone: true,
 		doublePageStartOnOdd: true,
 	},
@@ -39,10 +39,13 @@ let mockUseSeriesReaderSettings = vi.fn(() => ({
 vi.mock("./hooks", () => ({
 	useAdjacentBooks: vi.fn(),
 	useKeyboardNav: vi.fn(),
-	useReadProgress: (...args: unknown[]) => mockUseReadProgress(...args),
-	useSeriesNavigation: (...args: unknown[]) => mockUseSeriesNavigation(...args),
-	useSeriesReaderSettings: (...args: unknown[]) =>
-		mockUseSeriesReaderSettings(...args),
+	useReadProgress: (...args: Parameters<typeof mockUseReadProgress>) =>
+		mockUseReadProgress(...args),
+	useSeriesNavigation: (...args: Parameters<typeof mockUseSeriesNavigation>) =>
+		mockUseSeriesNavigation(...args),
+	useSeriesReaderSettings: (
+		...args: Parameters<typeof mockUseSeriesReaderSettings>
+	) => mockUseSeriesReaderSettings(...args),
 	useTouchNav: vi.fn(() => ({
 		touchRef: vi.fn(),
 	})),
@@ -72,6 +75,9 @@ const defaultSettings = {
 	toolbarHideDelay: 3000,
 	epubTheme: "light" as const,
 	epubFontSize: 100,
+	epubFontFamily: "default" as const,
+	epubLineHeight: 150,
+	epubMargin: 10,
 	preloadPages: 1,
 	doublePageShowWideAlone: true,
 	doublePageStartOnOdd: true,
@@ -79,6 +85,7 @@ const defaultSettings = {
 	transitionDuration: 200,
 	webtoonSidePadding: 0,
 	webtoonPageGap: 0,
+	autoAdvanceToNextBook: false,
 };
 
 const defaultSessionState = {

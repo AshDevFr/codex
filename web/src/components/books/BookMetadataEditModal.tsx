@@ -104,7 +104,7 @@ function initializeFormState(
 	return {
 		title: detail?.book.title || "",
 		number: detail?.book.number?.toString() || "",
-		sortNumber: detail?.book.sortNumber?.toString() || "",
+		sortNumber: "", // sortNumber is a form-only field, not from API
 		summary: metadata?.summary || "",
 		releaseYear: "",
 		releaseMonth: "",

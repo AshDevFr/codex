@@ -4,15 +4,7 @@ import { fireEvent, renderWithProviders, screen, waitFor } from "@/test/utils";
 
 // Mock react-pdf since it requires Web Workers which aren't available in tests
 vi.mock("react-pdf", () => ({
-	Document: ({
-		children,
-		file,
-		onLoadSuccess,
-		// biome-ignore lint/correctness/noUnusedFunctionParameters: Mock function parameters
-		onLoadError,
-		// biome-ignore lint/correctness/noUnusedFunctionParameters: Mock function parameters
-		loading,
-	}: {
+	Document: (props: {
 		children: React.ReactNode;
 		file: string;
 		onLoadSuccess?: (pdf: { numPages: number }) => void;
@@ -20,27 +12,16 @@ vi.mock("react-pdf", () => ({
 		loading?: React.ReactNode;
 	}) => {
 		// Simulate successful load after a tick
-		if (onLoadSuccess) {
-			setTimeout(() => onLoadSuccess({ numPages: 10 }), 0);
+		if (props.onLoadSuccess) {
+			setTimeout(() => props.onLoadSuccess?.({ numPages: 10 }), 0);
 		}
 		return (
-			<div data-testid="pdf-document" data-file={file}>
-				{children}
+			<div data-testid="pdf-document" data-file={props.file}>
+				{props.children}
 			</div>
 		);
 	},
-	Page: ({
-		pageNumber,
-		width,
-		height,
-		scale,
-		renderTextLayer,
-		renderAnnotationLayer,
-		// biome-ignore lint/correctness/noUnusedFunctionParameters: Mock function parameters
-		loading,
-		// biome-ignore lint/correctness/noUnusedFunctionParameters: Mock function parameters
-		customTextRenderer,
-	}: {
+	Page: (props: {
 		pageNumber: number;
 		width?: number;
 		height?: number;
@@ -52,14 +33,14 @@ vi.mock("react-pdf", () => ({
 	}) => (
 		<div
 			data-testid="pdf-page"
-			data-page-number={pageNumber}
-			data-width={width}
-			data-height={height}
-			data-scale={scale}
-			data-render-text-layer={renderTextLayer}
-			data-render-annotation-layer={renderAnnotationLayer}
+			data-page-number={props.pageNumber}
+			data-width={props.width}
+			data-height={props.height}
+			data-scale={props.scale}
+			data-render-text-layer={props.renderTextLayer}
+			data-render-annotation-layer={props.renderAnnotationLayer}
 		>
-			PDF Page {pageNumber}
+			PDF Page {props.pageNumber}
 		</div>
 	),
 	pdfjs: {
@@ -208,10 +189,9 @@ describe("PdfReader", () => {
 
 	describe("click zones", () => {
 		it("should navigate on left zone click", async () => {
-			// biome-ignore lint/correctness/noUnusedVariables: Import validates hook availability
-			const { handlePrevPage } = await import("./hooks").then((m) =>
-				m.useSeriesNavigation(),
-			);
+			// Validate hook availability for click zone navigation
+			const hooks = await import("./hooks");
+			expect(hooks.useSeriesNavigation).toBeDefined();
 
 			renderWithProviders(<PdfReader {...defaultProps} />);
 

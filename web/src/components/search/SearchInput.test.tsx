@@ -56,7 +56,16 @@ describe("SearchInput", () => {
 	it("should show dropdown when typing 2+ characters with results", async () => {
 		vi.mocked(useSearch).mockReturnValue({
 			results: {
-				series: [{ id: "1", name: "Test Series", bookCount: 5 }],
+				series: [
+					{
+						id: "1",
+						name: "Test Series",
+						bookCount: 5,
+						createdAt: "2024-01-01T00:00:00Z",
+						libraryId: "lib-1",
+						updatedAt: "2024-01-01T00:00:00Z",
+					},
+				],
 				books: [],
 			},
 			isLoading: false,
@@ -77,7 +86,16 @@ describe("SearchInput", () => {
 	it("should not show dropdown when typing less than 2 characters", async () => {
 		vi.mocked(useSearch).mockReturnValue({
 			results: {
-				series: [{ id: "1", name: "Test Series", bookCount: 5 }],
+				series: [
+					{
+						id: "1",
+						name: "Test Series",
+						bookCount: 5,
+						createdAt: "2024-01-01T00:00:00Z",
+						libraryId: "lib-1",
+						updatedAt: "2024-01-01T00:00:00Z",
+					},
+				],
 				books: [],
 			},
 			isLoading: false,
@@ -96,12 +114,52 @@ describe("SearchInput", () => {
 	describe("keyboard navigation", () => {
 		const mockResults = {
 			series: [
-				{ id: "s1", name: "Alpha Series", bookCount: 3 },
-				{ id: "s2", name: "Beta Series", bookCount: 5 },
+				{
+					id: "s1",
+					name: "Alpha Series",
+					bookCount: 3,
+					createdAt: "2024-01-01T00:00:00Z",
+					libraryId: "lib-1",
+					updatedAt: "2024-01-01T00:00:00Z",
+				},
+				{
+					id: "s2",
+					name: "Beta Series",
+					bookCount: 5,
+					createdAt: "2024-01-01T00:00:00Z",
+					libraryId: "lib-1",
+					updatedAt: "2024-01-01T00:00:00Z",
+				},
 			],
 			books: [
-				{ id: "b1", title: "First Book", seriesName: "Gamma Series" },
-				{ id: "b2", title: "Second Book", seriesName: "Delta Series" },
+				{
+					id: "b1",
+					title: "First Book",
+					seriesName: "Gamma Series",
+					seriesId: "s1",
+					filePath: "/path/first.cbz",
+					fileSize: 1000,
+					fileHash: "hash1",
+					fileFormat: "cbz",
+					pageCount: 100,
+					createdAt: "2024-01-01T00:00:00Z",
+					updatedAt: "2024-01-01T00:00:00Z",
+					deleted: false,
+				},
+				{
+					id: "b2",
+					title: "Second Book",
+					seriesName: "Delta Series",
+					seriesId: "s2",
+					filePath: "/path/second.cbz",
+					fileSize: 1000,
+					fileHash: "hash2",
+					fileFormat: "cbz",
+					pageCount: 100,
+					createdAt: "2024-01-01T00:00:00Z",
+					updatedAt: "2024-01-01T00:00:00Z",
+					deleted: false,
+				},
 			],
 		};
 

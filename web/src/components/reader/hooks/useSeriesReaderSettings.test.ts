@@ -55,7 +55,13 @@ describe("useSeriesReaderSettings", () => {
 
 		// Set up authenticated user
 		useAuthStore.setState({
-			user: { id: TEST_USER_ID, username: "testuser", role: "user" },
+			user: {
+				id: TEST_USER_ID,
+				username: "testuser",
+				email: "test@example.com",
+				emailVerified: true,
+				isAdmin: false,
+			},
 			token: "test-token",
 			isAuthenticated: true,
 		});
@@ -535,7 +541,13 @@ describe("useSeriesReaderSettings", () => {
 
 			// Login as user 1
 			useAuthStore.setState({
-				user: { id: "user-1", username: "user1", role: "user" },
+				user: {
+					id: "user-1",
+					username: "user1",
+					email: "user1@example.com",
+					emailVerified: true,
+					isAdmin: false,
+				},
 			});
 
 			const { result: result1 } = renderHook(() =>
@@ -551,7 +563,13 @@ describe("useSeriesReaderSettings", () => {
 
 			// Login as user 2
 			useAuthStore.setState({
-				user: { id: "user-2", username: "user2", role: "user" },
+				user: {
+					id: "user-2",
+					username: "user2",
+					email: "user2@example.com",
+					emailVerified: true,
+					isAdmin: false,
+				},
 			});
 
 			const { result: result2 } = renderHook(() =>
@@ -611,7 +629,13 @@ describe("useSeriesReaderSettings", () => {
 
 			// Login as user 1
 			useAuthStore.setState({
-				user: { id: "user-1", username: "user1", role: "user" },
+				user: {
+					id: "user-1",
+					username: "user1",
+					email: "user1@example.com",
+					emailVerified: true,
+					isAdmin: false,
+				},
 				token: "token-1",
 				isAuthenticated: true,
 			});
@@ -629,7 +653,13 @@ describe("useSeriesReaderSettings", () => {
 
 			// Switch to user 2 (no override for this series)
 			useAuthStore.setState({
-				user: { id: "user-2", username: "user2", role: "user" },
+				user: {
+					id: "user-2",
+					username: "user2",
+					email: "user2@example.com",
+					emailVerified: true,
+					isAdmin: false,
+				},
 				token: "token-2",
 				isAuthenticated: true,
 			});

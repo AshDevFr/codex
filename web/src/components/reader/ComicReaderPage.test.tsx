@@ -6,7 +6,7 @@ describe("ComicReaderPage", () => {
 	const defaultProps = {
 		src: "/api/v1/books/book-123/pages/1",
 		alt: "Page 1 of Test Book",
-		fitMode: "contain" as const,
+		fitMode: "screen" as const,
 		backgroundColor: "black" as const,
 	};
 
@@ -124,9 +124,9 @@ describe("ComicReaderPage", () => {
 	});
 
 	describe("fit modes", () => {
-		it("should apply contain fit mode styles", () => {
+		it("should apply screen fit mode styles", () => {
 			renderWithProviders(
-				<ComicReaderPage {...defaultProps} fitMode="contain" />,
+				<ComicReaderPage {...defaultProps} fitMode="screen" />,
 			);
 
 			const img = screen.getByRole("img", { hidden: true });

@@ -74,22 +74,22 @@ describe("seriesMetadataApi", () => {
 	describe("updateLocks", () => {
 		it("should update metadata locks for a series", async () => {
 			const mockLocks = {
-				name: true,
 				summary: true,
+				publisher: true,
 			};
 
 			vi.mocked(api.put).mockResolvedValueOnce({ data: mockLocks });
 
 			const result = await seriesMetadataApi.updateLocks("series-123", {
-				name: true,
 				summary: true,
+				publisher: true,
 			});
 
 			expect(api.put).toHaveBeenCalledWith(
 				"/series/series-123/metadata/locks",
 				{
-					name: true,
 					summary: true,
+					publisher: true,
 				},
 			);
 			expect(result).toEqual(mockLocks);
@@ -101,7 +101,7 @@ describe("seriesMetadataApi", () => {
 			const mockResponse = {
 				metadata: {
 					id: "series-123",
-					name: "Updated Series",
+					sortName: "Updated Series",
 					summary: "Updated summary",
 				},
 			};
@@ -109,12 +109,12 @@ describe("seriesMetadataApi", () => {
 			vi.mocked(api.put).mockResolvedValueOnce({ data: mockResponse });
 
 			const result = await seriesMetadataApi.replaceMetadata("series-123", {
-				name: "Updated Series",
+				sortName: "Updated Series",
 				summary: "Updated summary",
 			});
 
 			expect(api.put).toHaveBeenCalledWith("/series/series-123/metadata", {
-				name: "Updated Series",
+				sortName: "Updated Series",
 				summary: "Updated summary",
 			});
 			expect(result).toEqual(mockResponse);

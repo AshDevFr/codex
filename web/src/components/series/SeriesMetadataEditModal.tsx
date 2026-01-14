@@ -90,7 +90,8 @@ const READING_DIRECTION_OPTIONS = [
 	{ value: "webtoon", label: "Webtoon" },
 ];
 
-const _ALTERNATE_TITLE_LABELS = [
+// Reserved for future use in alternate title type selection
+export const ALTERNATE_TITLE_LABELS = [
 	{ value: "native", label: "Native" },
 	{ value: "roman", label: "Roman" },
 	{ value: "english", label: "English" },
@@ -105,7 +106,7 @@ function initializeFormState(
 ): FormState {
 	return {
 		title: metadata?.title || "",
-		titleSort: metadata?.sortName || "",
+		titleSort: metadata?.titleSort || "",
 		summary: metadata?.summary || "",
 		status: metadata?.status || null,
 		language: metadata?.language || "",
@@ -210,11 +211,11 @@ export function SeriesMetadataEditModal({
 			}
 
 			// Update metadata
+			// Note: status is not supported in PatchSeriesMetadataRequest yet
 			await seriesMetadataApi.patchMetadata(seriesId, {
 				sortName: formState.titleSort || null,
 				summary: formState.summary || null,
-				status: formState.status || undefined,
-				language: formState.language || null,
+				// status: formState.status || undefined, // Not yet in API
 				readingDirection: formState.readingDirection || undefined,
 				publisher: formState.publisher || null,
 				year: formState.year ? Number.parseInt(formState.year, 10) : null,
@@ -275,9 +276,10 @@ export function SeriesMetadataEditModal({
 			}
 
 			// Handle external links changes
-			const _originalLinkIds = new Set(
+			const originalLinkIds = new Set(
 				originalFormState?.externalLinks.map((l) => l.id) || [],
 			);
+			void originalLinkIds; // Reserved for future link update logic
 			const currentLinkIds = new Set(
 				formState.externalLinks
 					.filter((l) => !l.id.startsWith("new-"))

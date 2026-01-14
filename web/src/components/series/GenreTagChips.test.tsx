@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import { GenreTagChips } from "./GenreTagChips";
 
@@ -18,14 +18,39 @@ describe("GenreTagChips", () => {
 	});
 
 	const mockGenres = [
-		{ id: "genre-1", name: "Action", seriesCount: 10 },
-		{ id: "genre-2", name: "Adventure", seriesCount: 5 },
-		{ id: "genre-3", name: "Comedy", seriesCount: 8 },
+		{
+			id: "genre-1",
+			name: "Action",
+			seriesCount: 10,
+			createdAt: "2024-01-01T00:00:00Z",
+		},
+		{
+			id: "genre-2",
+			name: "Adventure",
+			seriesCount: 5,
+			createdAt: "2024-01-01T00:00:00Z",
+		},
+		{
+			id: "genre-3",
+			name: "Comedy",
+			seriesCount: 8,
+			createdAt: "2024-01-01T00:00:00Z",
+		},
 	];
 
 	const mockTags = [
-		{ id: "tag-1", name: "Favorite", seriesCount: 15 },
-		{ id: "tag-2", name: "Completed", seriesCount: 20 },
+		{
+			id: "tag-1",
+			name: "Favorite",
+			seriesCount: 15,
+			createdAt: "2024-01-01T00:00:00Z",
+		},
+		{
+			id: "tag-2",
+			name: "Completed",
+			seriesCount: 20,
+			createdAt: "2024-01-01T00:00:00Z",
+		},
 	];
 
 	it("should render nothing when no genres or tags", () => {
@@ -132,7 +157,12 @@ describe("GenreTagChips", () => {
 	it("should encode special characters in genre name for URL", async () => {
 		const user = userEvent.setup();
 		const genresWithSpecialChars = [
-			{ id: "genre-1", name: "Sci-Fi & Fantasy", seriesCount: 5 },
+			{
+				id: "genre-1",
+				name: "Sci-Fi & Fantasy",
+				seriesCount: 5,
+				createdAt: "2024-01-01T00:00:00Z",
+			},
 		];
 
 		renderWithProviders(
@@ -147,7 +177,14 @@ describe("GenreTagChips", () => {
 	});
 
 	it("should show tags when genres don't fill maxDisplay", () => {
-		const singleGenre = [{ id: "genre-1", name: "Action", seriesCount: 10 }];
+		const singleGenre = [
+			{
+				id: "genre-1",
+				name: "Action",
+				seriesCount: 10,
+				createdAt: "2024-01-01T00:00:00Z",
+			},
+		];
 
 		renderWithProviders(
 			<GenreTagChips genres={singleGenre} tags={mockTags} maxDisplay={3} />,
@@ -160,8 +197,22 @@ describe("GenreTagChips", () => {
 	});
 
 	it("should not show '+X more' when all items are displayed", () => {
-		const singleGenre = [{ id: "genre-1", name: "Action", seriesCount: 10 }];
-		const singleTag = [{ id: "tag-1", name: "Favorite", seriesCount: 15 }];
+		const singleGenre = [
+			{
+				id: "genre-1",
+				name: "Action",
+				seriesCount: 10,
+				createdAt: "2024-01-01T00:00:00Z",
+			},
+		];
+		const singleTag = [
+			{
+				id: "tag-1",
+				name: "Favorite",
+				seriesCount: 15,
+				createdAt: "2024-01-01T00:00:00Z",
+			},
+		];
 
 		renderWithProviders(
 			<GenreTagChips genres={singleGenre} tags={singleTag} maxDisplay={5} />,

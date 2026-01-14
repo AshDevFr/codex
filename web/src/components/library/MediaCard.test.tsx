@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createBook, createReadProgress } from "@/mocks/data/factories";
 import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import { MediaCard } from "./MediaCard";

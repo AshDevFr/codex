@@ -160,7 +160,9 @@ export const useUserPreferencesStore = create<UserPreferencesState>()(
 								const key = dto.key as PreferenceKey;
 								// Only process known preference keys
 								if (key in PREFERENCE_DEFAULTS) {
-									state.preferences[key] = parsePreferenceValue(key, dto);
+									// Type assertion needed because TypeScript can't narrow the generic type
+									(state.preferences as Record<string, unknown>)[key] =
+										parsePreferenceValue(key, dto);
 								}
 							}
 

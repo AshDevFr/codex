@@ -810,7 +810,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 						</Tabs>
 
 						<Group justify="flex-end" mt="md">
-							<Button variant="subtle" onClick={handleClose}>
+							<Button variant="subtle" onClick={() => handleClose()}>
 								Cancel
 							</Button>
 							<Button

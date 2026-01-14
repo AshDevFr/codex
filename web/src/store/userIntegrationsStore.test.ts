@@ -265,7 +265,7 @@ describe("userIntegrationsStore", () => {
 
 			const { connect } = useUserIntegrationsStore.getState();
 
-			let result: { authUrl?: string; connected: boolean };
+			let result!: { authUrl?: string; connected: boolean };
 			await act(async () => {
 				result = await connect({
 					integrationName: "anilist",
@@ -273,8 +273,8 @@ describe("userIntegrationsStore", () => {
 				});
 			});
 
-			expect(result?.authUrl).toBe("https://anilist.co/api/v2/oauth/authorize");
-			expect(result?.connected).toBe(false);
+			expect(result.authUrl).toBe("https://anilist.co/api/v2/oauth/authorize");
+			expect(result.connected).toBe(false);
 		});
 
 		it("should connect API key integration immediately", async () => {
@@ -290,7 +290,7 @@ describe("userIntegrationsStore", () => {
 
 			const { connect } = useUserIntegrationsStore.getState();
 
-			let result: { authUrl?: string; connected: boolean };
+			let result!: { authUrl?: string; connected: boolean };
 			await act(async () => {
 				result = await connect({
 					integrationName: "mangadex",
@@ -298,8 +298,8 @@ describe("userIntegrationsStore", () => {
 				});
 			});
 
-			expect(result?.connected).toBe(true);
-			expect(result?.authUrl).toBeUndefined();
+			expect(result.connected).toBe(true);
+			expect(result.authUrl).toBeUndefined();
 
 			// Should add to integrations list
 			const state = useUserIntegrationsStore.getState();
@@ -551,13 +551,13 @@ describe("userIntegrationsStore", () => {
 
 			const { sync } = useUserIntegrationsStore.getState();
 
-			let result: { started: boolean; message: string };
+			let result!: { started: boolean; message: string };
 			await act(async () => {
 				result = await sync("anilist");
 			});
 
-			expect(result?.started).toBe(true);
-			expect(result?.message).toBe("Sync completed");
+			expect(result.started).toBe(true);
+			expect(result.message).toBe("Sync completed");
 		});
 	});
 

@@ -13,12 +13,12 @@ export const duplicatesHandlers = [
 	http.get("/api/v1/duplicates", async ({ request }) => {
 		await delay(100);
 		const url = new URL(request.url);
-		const _libraryId = url.searchParams.get("library_id");
-
-		const filteredDuplicates = mockDuplicates;
+		const libraryId = url.searchParams.get("library_id");
 
 		// In a real implementation, we'd filter by library_id
-		// For now, just return all duplicates
+		// For now, just return all duplicates (libraryId filtering not implemented yet)
+		void libraryId;
+		const filteredDuplicates = mockDuplicates;
 
 		const totalDuplicateBooks = filteredDuplicates.reduce(
 			(sum, group) => sum + group.duplicate_count,

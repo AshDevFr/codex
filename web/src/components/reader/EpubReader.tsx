@@ -185,7 +185,7 @@ export function EpubReader({
 	} = useEpubBookmarks({ bookId });
 
 	// Series navigation - fetch adjacent books and handle boundary navigation
-	useAdjacentBooks(bookId, seriesId);
+	useAdjacentBooks({ bookId, enabled: seriesId !== null });
 
 	// State for boundary notification message
 	const [boundaryMessage, setBoundaryMessage] = useState<string | null>(null);
@@ -849,7 +849,7 @@ export function EpubReader({
 			<BoundaryNotification
 				visible={boundaryState !== "none" && boundaryMessage !== null}
 				message={boundaryMessage}
-				type={boundaryState === "at-end" ? "end" : "start"}
+				type={boundaryState}
 			/>
 
 			{/* Loading overlay */}

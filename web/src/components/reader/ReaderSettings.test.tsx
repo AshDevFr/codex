@@ -31,7 +31,13 @@ describe("ReaderSettings", () => {
 
 		// Set up authenticated user for series settings tests
 		useAuthStore.setState({
-			user: { id: TEST_USER_ID, username: "testuser", role: "user" },
+			user: {
+				id: TEST_USER_ID,
+				username: "testuser",
+				email: "test@example.com",
+				emailVerified: true,
+				isAdmin: false,
+			},
 			token: "test-token",
 			isAuthenticated: true,
 		});

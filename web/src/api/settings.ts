@@ -8,8 +8,8 @@ export type UpdateSettingRequest =
 	components["schemas"]["UpdateSettingRequest"];
 export type BulkUpdateSettingsRequest =
 	components["schemas"]["BulkUpdateSettingsRequest"];
-export type BulkUpdateSettingsResponse =
-	components["schemas"]["BulkUpdateSettingsResponse"];
+// Bulk update returns an array of SettingDto
+export type BulkUpdateSettingsResponse = SettingDto[];
 
 export const settingsApi = {
 	/**

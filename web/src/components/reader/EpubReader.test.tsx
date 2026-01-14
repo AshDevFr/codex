@@ -6,8 +6,13 @@ import { EpubReader } from "./EpubReader";
 // Mock react-reader since it's a complex library that requires actual EPUB files
 vi.mock("react-reader", () => ({
 	ReactReader: vi.fn(
-		// biome-ignore lint/correctness/noUnusedFunctionParameters: Mock function parameters
-		({ url, location, locationChanged, getRendition, showToc }) => {
+		({
+			url,
+			location: _location,
+			locationChanged: _locationChanged,
+			getRendition,
+			showToc,
+		}) => {
 			// Simulate getting rendition on mount
 			const mockRendition = {
 				themes: {
@@ -100,6 +105,9 @@ const defaultSettings = {
 	toolbarHideDelay: 3000,
 	epubTheme: "light" as const,
 	epubFontSize: 100,
+	epubFontFamily: "default" as const,
+	epubLineHeight: 150,
+	epubMargin: 10,
 	preloadPages: 1,
 	doublePageShowWideAlone: true,
 	doublePageStartOnOdd: true,
@@ -107,6 +115,7 @@ const defaultSettings = {
 	transitionDuration: 200,
 	webtoonSidePadding: 0,
 	webtoonPageGap: 0,
+	autoAdvanceToNextBook: false,
 };
 
 const defaultSessionState = {
@@ -126,6 +135,7 @@ const defaultSessionState = {
 
 const defaultProps = {
 	bookId: "book-123",
+	seriesId: "series-123" as string | null,
 	title: "Test EPUB Book",
 	totalPages: 100,
 	onClose: vi.fn(),

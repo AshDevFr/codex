@@ -44,8 +44,7 @@ const PAGE_SIZES = [20, 50, 100];
 
 export function SeriesBookList({
 	seriesId,
-	// biome-ignore lint/correctness/noUnusedFunctionParameters: Reserved for future use
-	seriesName,
+	seriesName: _seriesName,
 	bookCount,
 }: SeriesBookListProps) {
 	const navigate = useNavigate();
@@ -87,9 +86,9 @@ export function SeriesBookList({
 						new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
 					break;
 				case "release_date":
+					// Fall back to createdAt since releaseDate is not in BookDto
 					comparison =
-						new Date(a.releaseDate ?? 0).getTime() -
-						new Date(b.releaseDate ?? 0).getTime();
+						new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
 					break;
 				default:
 					comparison = 0;

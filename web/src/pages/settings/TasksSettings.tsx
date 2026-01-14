@@ -322,8 +322,8 @@ export function TasksSettings() {
 	});
 
 	const totalTasks = stats?.total || 0;
-	const _completedPercent =
-		totalTasks > 0 ? ((stats?.completed || 0) / totalTasks) * 100 : 0;
+	// Reserved for future use
+	void totalTasks;
 
 	return (
 		<Box py="xl" px="md">
@@ -403,27 +403,29 @@ export function TasksSettings() {
 					<Card withBorder>
 						<Stack gap="md">
 							<Title order={3}>Active Tasks</Title>
-							{Array.from(activeProgress.values()).map((progress) => (
-								<div key={progress.task_id}>
+							{Array.from(activeProgress.values()).map((event) => (
+								<div key={event.task_id}>
 									<Group justify="space-between" mb="xs">
 										<Group gap="xs">
-											<Badge variant="light">{progress.task_type}</Badge>
+											<Badge variant="light">{event.task_type}</Badge>
 											<Text size="sm">
-												{progress.message || "Processing..."}
+												{event.progress?.message || "Processing..."}
 											</Text>
 										</Group>
-										{progress.progress !== undefined &&
-											progress.total !== undefined && (
+										{event.progress?.current !== undefined &&
+											event.progress?.total !== undefined && (
 												<Text size="sm" c="dimmed">
-													{progress.progress} / {progress.total}
+													{event.progress.current} / {event.progress.total}
 												</Text>
 											)}
 									</Group>
-									{progress.progress !== undefined &&
-										progress.total !== undefined &&
-										progress.total > 0 && (
+									{event.progress?.current !== undefined &&
+										event.progress?.total !== undefined &&
+										event.progress.total > 0 && (
 											<Progress
-												value={(progress.progress / progress.total) * 100}
+												value={
+													(event.progress.current / event.progress.total) * 100
+												}
 												size="sm"
 												animated
 											/>

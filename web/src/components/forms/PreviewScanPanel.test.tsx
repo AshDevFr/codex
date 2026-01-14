@@ -89,7 +89,7 @@ describe("PreviewScanPanel", () => {
 		const mockPreviewScan = vi.mocked(librariesApi.previewScan);
 
 		// Create a promise that we can control
-		let resolvePromise: (value: {
+		let resolvePromise!: (value: {
 			detectedSeries: [];
 			totalFiles: number;
 		}) => void;
@@ -113,7 +113,7 @@ describe("PreviewScanPanel", () => {
 		expect(screen.getByText(/scanning folder structure/i)).toBeInTheDocument();
 
 		// Resolve the promise
-		resolvePromise?.({ detectedSeries: [], totalFiles: 0 });
+		resolvePromise({ detectedSeries: [], totalFiles: 0 });
 
 		await waitFor(() => {
 			expect(

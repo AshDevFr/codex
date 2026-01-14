@@ -7,7 +7,12 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["**", "!src/types/api.generated.ts", "!openapi.json"]
+		"includes": [
+			"**",
+			"!src/types/api.generated.ts",
+			"!openapi.json",
+			"!public/mockServiceWorker.js"
+		]
 	},
 	"formatter": {
 		"enabled": true,

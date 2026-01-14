@@ -135,7 +135,7 @@ describe("useEpubBookmarks", () => {
 		it("should return the created bookmark", () => {
 			const { result } = renderHook(() => useEpubBookmarks({ bookId }));
 
-			let createdBookmark: ReturnType<typeof result.current.addBookmark>;
+			let createdBookmark!: ReturnType<typeof result.current.addBookmark>;
 			act(() => {
 				createdBookmark = result.current.addBookmark({
 					cfi: "epubcfi(/6/4!/4/2/1:0)",

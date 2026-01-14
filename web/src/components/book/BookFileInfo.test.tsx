@@ -19,6 +19,7 @@ const createMockBook = (overrides?: Partial<Book>): Book => ({
 	analysisError: null,
 	number: 1,
 	readProgress: null,
+	deleted: false,
 	...overrides,
 });
 

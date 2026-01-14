@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { readProgressApi } from "@/api/readProgress";
 import { useReaderStore } from "@/store/readerStore";
@@ -18,6 +18,29 @@ vi.mock("@/api/readProgress", () => ({
 
 const mockGet = vi.mocked(readProgressApi.get);
 const mockUpdate = vi.mocked(readProgressApi.update);
+
+// Helper to create a complete ReadProgressResponse
+const createProgress = (
+	overrides: Partial<{
+		id: string;
+		book_id: string;
+		user_id: string;
+		current_page: number;
+		completed: boolean;
+		completed_at: string | null;
+		started_at: string;
+		updated_at: string;
+	}>,
+) => ({
+	id: "progress-123",
+	book_id: "test-book",
+	user_id: "user-123",
+	current_page: 1,
+	completed: false,
+	started_at: "2024-01-01T00:00:00Z",
+	updated_at: "2024-01-01T00:00:00Z",
+	...overrides,
+});
 
 describe("useReadProgress", () => {
 	let queryClient: QueryClient;
@@ -46,17 +69,9 @@ describe("useReadProgress", () => {
 		});
 
 		// Default mock implementations
-		mockGet.mockResolvedValue({
-			book_id: "test-book",
-			current_page: 1,
-			completed: false,
-		});
+		mockGet.mockResolvedValue(createProgress({}));
 
-		mockUpdate.mockResolvedValue({
-			book_id: "test-book",
-			current_page: 1,
-			completed: false,
-		});
+		mockUpdate.mockResolvedValue(createProgress({}));
 	});
 
 	describe("initial state", () => {
@@ -74,11 +89,7 @@ describe("useReadProgress", () => {
 		});
 
 		it("should fetch progress from API", async () => {
-			mockGet.mockResolvedValue({
-				book_id: "test-book",
-				current_page: 42,
-				completed: false,
-			});
+			mockGet.mockResolvedValue(createProgress({ current_page: 42 }));
 
 			const { result } = renderHook(
 				() =>
@@ -117,11 +128,7 @@ describe("useReadProgress", () => {
 		});
 
 		it("should clamp initialPage to totalPages", async () => {
-			mockGet.mockResolvedValue({
-				book_id: "test-book",
-				current_page: 150,
-				completed: false,
-			});
+			mockGet.mockResolvedValue(createProgress({ current_page: 150 }));
 
 			const { result } = renderHook(
 				() =>
@@ -140,11 +147,9 @@ describe("useReadProgress", () => {
 		});
 
 		it("should return completed status from API", async () => {
-			mockGet.mockResolvedValue({
-				book_id: "test-book",
-				current_page: 100,
-				completed: true,
-			});
+			mockGet.mockResolvedValue(
+				createProgress({ current_page: 100, completed: true }),
+			);
 
 			const { result } = renderHook(
 				() =>
@@ -380,11 +385,7 @@ describe("useReadProgress", () => {
 
 	describe("query cache", () => {
 		it("should update cache on successful save", async () => {
-			mockUpdate.mockResolvedValue({
-				book_id: "test-book",
-				current_page: 50,
-				completed: false,
-			});
+			mockUpdate.mockResolvedValue(createProgress({ current_page: 50 }));
 
 			const { result } = renderHook(
 				() =>
@@ -409,11 +410,7 @@ describe("useReadProgress", () => {
 					"readProgress",
 					"test-book",
 				]);
-				expect(cachedData).toEqual({
-					book_id: "test-book",
-					current_page: 50,
-					completed: false,
-				});
+				expect(cachedData).toEqual(createProgress({ current_page: 50 }));
 			});
 		});
 	});
