@@ -10,7 +10,7 @@ use crate::api::{
 };
 use crate::db::repositories::{
     BookMetadataRepository, BookRepository, LibraryRepository, ReadProgressRepository,
-    SeriesMetadataRepository, SeriesRepository,
+    SeriesMetadataRepository,
 };
 use crate::require_permission;
 use crate::services::FilterService;
@@ -736,7 +736,7 @@ pub async fn patch_book(
 
         // Update number if provided (convert f64 to Decimal, also lock when set)
         if let Some(opt) = request.number.to_active_value() {
-            let decimal_opt = opt.and_then(|f| Decimal::from_f64_retain(f));
+            let decimal_opt = opt.and_then(Decimal::from_f64_retain);
             active.number = Set(decimal_opt);
             if opt.is_some() {
                 active.number_lock = Set(true);
@@ -757,7 +757,7 @@ pub async fn patch_book(
         has_changes = true;
         let title_opt = request.title.into_option();
         let number_opt = request.number.into_option();
-        let decimal_opt = number_opt.and_then(|f| Decimal::from_f64_retain(f));
+        let decimal_opt = number_opt.and_then(Decimal::from_f64_retain);
 
         let active = book_metadata::ActiveModel {
             id: Set(Uuid::new_v4()),

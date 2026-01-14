@@ -12,6 +12,12 @@ use crate::tasks::types::{TaskResult, TaskType};
 
 pub struct AnalyzeSeriesHandler;
 
+impl Default for AnalyzeSeriesHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AnalyzeSeriesHandler {
     pub fn new() -> Self {
         Self

@@ -13,6 +13,12 @@ use super::TaskHandler;
 /// Handler for finding duplicate books
 pub struct FindDuplicatesHandler;
 
+impl Default for FindDuplicatesHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FindDuplicatesHandler {
     pub fn new() -> Self {
         Self

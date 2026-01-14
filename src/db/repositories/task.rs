@@ -30,7 +30,7 @@ impl TaskRepository {
 
         // Check if a task already exists for this entity
         if let Some(existing_task) =
-            Self::find_existing_task(db, &type_str, library_id, series_id, book_id).await?
+            Self::find_existing_task(db, type_str, library_id, series_id, book_id).await?
         {
             info!(
                 "Task already exists: {} ({}) - skipping duplicate",
@@ -76,7 +76,7 @@ impl TaskRepository {
                     // Race condition: another task was inserted between our check and insert
                     // Find and return the existing task
                     if let Some(existing_task) =
-                        Self::find_existing_task(db, &type_str, library_id, series_id, book_id)
+                        Self::find_existing_task(db, type_str, library_id, series_id, book_id)
                             .await?
                     {
                         info!(
@@ -538,7 +538,7 @@ impl TaskRepository {
             let is_stale = task.status == "processing"
                 && task
                     .locked_until
-                    .map_or(false, |until| until < stale_cutoff);
+                    .is_some_and(|until| until < stale_cutoff);
 
             // Update aggregates
             match task.status.as_str() {

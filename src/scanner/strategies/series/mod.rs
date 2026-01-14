@@ -26,7 +26,7 @@ use crate::models::{
     SeriesStrategy,
 };
 
-use super::common::{DetectedBook, DetectedSeries};
+use super::common::DetectedSeries;
 
 /// Trait for implementing scanning strategies
 ///

@@ -103,9 +103,9 @@ pub async fn get_task_metrics(
         },
         by_type,
         queue: QueueHealthMetricsDto {
-            pending_count: queue_stats.pending as u64,
-            processing_count: queue_stats.processing as u64,
-            stale_count: queue_stats.stale as u64,
+            pending_count: queue_stats.pending,
+            processing_count: queue_stats.processing,
+            stale_count: queue_stats.stale,
             oldest_pending_age_ms,
         },
     }))

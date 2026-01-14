@@ -78,9 +78,10 @@ jobs:
           cargo fmt -- --check
 
       - name: Clippy check
-        continue-on-error: true
-        run: |
-          cargo clippy --features rar -- -D warnings
+        run:
+          cargo clippy --features rar
+          # To fail on warnings, uncomment the following line
+          # cargo clippy --features rar -- -D warnings
 
   # Stage 1: Run frontend checks in parallel with tests and lint
   frontend:

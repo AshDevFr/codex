@@ -10,18 +10,18 @@ pub mod series;
 
 // Re-export book naming types
 pub use book::{
-    create_book_strategy, filename_without_extension, BookMetadata, BookNamingContext,
-    BookNamingStrategy, FilenameStrategy, MetadataFirstStrategy, SeriesNameStrategy, SmartStrategy,
+    create_book_strategy, BookMetadata, BookNamingContext,
+    BookNamingStrategy,
 };
 
 // Re-export common types
-pub use common::{DetectedBook, DetectedSeries, SeriesMetadata};
+pub use common::{DetectedBook, DetectedSeries};
 
 // Re-export number strategy types
-pub use number::{create_number_strategy, BookNumberStrategy, NumberContext, NumberMetadata};
+pub use number::{create_number_strategy, NumberContext, NumberMetadata};
 
 // Re-export series strategy types
 pub use series::{
-    create_strategy, CalibreStrategy, CustomStrategy, FlatStrategy, PublisherHierarchyStrategy,
-    ScanningStrategyImpl, SeriesVolumeChapterStrategy, SeriesVolumeStrategy,
+    create_strategy,
+    ScanningStrategyImpl,
 };

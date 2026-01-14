@@ -148,7 +148,7 @@ pub async fn connect_integration(
         "oauth2" => {
             // For OAuth2, we need to redirect the user to the provider's authorization URL
             // For now, return a placeholder - actual OAuth implementation will be in Phase 4
-            let redirect_uri = request.redirect_uri.ok_or_else(|| {
+            let _redirect_uri = request.redirect_uri.ok_or_else(|| {
                 ApiError::BadRequest("redirect_uri is required for OAuth integrations".to_string())
             })?;
 

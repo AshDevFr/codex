@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 /// File format type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[allow(clippy::upper_case_acronyms)]
 pub enum FileFormat {
     CBZ,
     CBR,
@@ -26,8 +27,10 @@ impl FileFormat {
 /// Reading direction for books and series
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[derive(Default)]
 pub enum ReadingDirection {
     /// Left to right (Western comics, most books)
+    #[default]
     LeftToRight,
     /// Right to left (Manga, some Asian comics)
     RightToLeft,
@@ -35,11 +38,6 @@ pub enum ReadingDirection {
     TopToBottom,
 }
 
-impl Default for ReadingDirection {
-    fn default() -> Self {
-        ReadingDirection::LeftToRight
-    }
-}
 
 impl ReadingDirection {
     pub fn from_str(s: &str) -> Option<Self> {
@@ -63,6 +61,7 @@ impl ReadingDirection {
 /// Image format type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[allow(clippy::upper_case_acronyms)]
 pub enum ImageFormat {
     JPEG,
     PNG,

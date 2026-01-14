@@ -17,7 +17,7 @@ use crate::db::repositories::{BookRepository, LibraryRepository, SeriesRepositor
 use crate::events::EventBroadcaster;
 use crate::models::SeriesStrategy;
 
-use super::strategies::{create_strategy, DetectedSeries, ScanningStrategyImpl};
+use super::strategies::{create_strategy, DetectedSeries};
 use super::types::{ScanMode, ScanProgress, ScanResult, ScanStatus};
 
 const SUPPORTED_EXTENSIONS: &[&str] = &["cbz", "cbr", "epub", "pdf"];
@@ -894,7 +894,7 @@ async fn process_file(
 /// to detect series renames across scans.
 fn calculate_series_fingerprint(file_paths: &[&PathBuf]) -> String {
     // Sort file paths by filename for consistency
-    let mut sorted_paths: Vec<&PathBuf> = file_paths.iter().copied().collect();
+    let mut sorted_paths: Vec<&PathBuf> = file_paths.to_vec();
     sorted_paths.sort_by(|a, b| {
         let a_name = a.file_name().unwrap_or_default();
         let b_name = b.file_name().unwrap_or_default();
@@ -1077,7 +1077,7 @@ fn organize_by_series(files: &[PathBuf], library_path: &str) -> HashMap<String, 
 
         series_map
             .entry(series_name)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(file_path.clone());
     }
 

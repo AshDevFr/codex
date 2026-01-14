@@ -51,7 +51,7 @@ pub enum ProviderError {
     NetworkError(String),
 
     #[error("Provider error: {0}")]
-    ProviderError(String),
+    Internal(String),
 
     #[error("Serialization error: {0}")]
     SerializationError(String),

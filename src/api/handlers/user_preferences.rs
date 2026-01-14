@@ -12,7 +12,6 @@ use crate::api::{
 use crate::db::repositories::UserPreferencesRepository;
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
     Json,
 };
 use std::sync::Arc;

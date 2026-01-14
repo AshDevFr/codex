@@ -1598,7 +1598,7 @@ pub async fn download_series(
     require_permission!(auth, Permission::BooksRead)?;
 
     // Fetch series to verify it exists
-    let series = SeriesRepository::get_by_id(&state.db, series_id)
+    let _series = SeriesRepository::get_by_id(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;

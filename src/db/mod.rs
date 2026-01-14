@@ -8,10 +8,8 @@ pub mod test_helpers;
 pub use connection::Database;
 
 // Re-export SeaORM entities for use throughout the application
-pub use entities::{book_metadata, books, libraries, pages, prelude::*, series};
 
 // Re-export scanning strategies for convenience
-pub use crate::models::{BookStrategy, ScanningStrategy, SeriesStrategy};
+pub use crate::models::ScanningStrategy;
 
 // Re-export CreateLibraryParams for convenience
-pub use repositories::library::CreateLibraryParams;

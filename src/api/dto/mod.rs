@@ -30,9 +30,9 @@ pub use filter::*;
 pub use library::*;
 pub use metrics::*;
 pub use opds::*;
-pub use opds2::*;
+// opds2 not glob re-exported to avoid name conflicts with opds (feed, link)
+// Use dto::opds2::* directly when needed
 pub use page::*;
-pub use patch::*;
 pub use read_progress::*;
 pub use scan::*;
 pub use series::*;

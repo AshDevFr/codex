@@ -103,8 +103,8 @@ pub async fn root_catalog(
 
     let feed = OpdsFeed::new("urn:uuid:codex-root", "Codex OPDS Catalog", now, false)
         .with_subtitle("Digital library server for comics, manga, and ebooks")
-        .add_link(OpdsLink::self_link(format!("{}", base_url)))
-        .add_link(OpdsLink::start_link(format!("{}", base_url)))
+        .add_link(OpdsLink::self_link(base_url.to_string()))
+        .add_link(OpdsLink::start_link(base_url.to_string()))
         .add_link(OpdsLink::search_link(format!("{}/search.xml", base_url)))
         // Navigation entries
         .add_entry(
@@ -163,8 +163,8 @@ pub async fn opds_list_libraries(
 
     let mut feed = OpdsFeed::new("urn:uuid:codex-libraries", "All Libraries", now, false)
         .add_link(OpdsLink::self_link(format!("{}/libraries", base_url)))
-        .add_link(OpdsLink::start_link(format!("{}", base_url)))
-        .add_link(OpdsLink::up_link(format!("{}", base_url), "Home"));
+        .add_link(OpdsLink::start_link(base_url.to_string()))
+        .add_link(OpdsLink::up_link(base_url.to_string(), "Home"));
 
     // Add library entries
     for library in libraries {
@@ -250,7 +250,7 @@ pub async fn opds_library_series(
         "{}/libraries/{}?page={}&page_size={}",
         base_url, library_id, pagination.page, pagination.page_size
     )))
-    .add_link(OpdsLink::start_link(format!("{}", base_url)))
+    .add_link(OpdsLink::start_link(base_url.to_string()))
     .add_link(OpdsLink::up_link(
         format!("{}/libraries", base_url),
         "All Libraries",
@@ -381,7 +381,7 @@ pub async fn opds_series_books(
         "{}/series/{}",
         base_url, series_id
     )))
-    .add_link(OpdsLink::start_link(format!("{}", base_url)))
+    .add_link(OpdsLink::start_link(base_url.to_string()))
     .add_link(OpdsLink::up_link(
         format!("{}/libraries/{}", base_url, series.library_id),
         "Library",

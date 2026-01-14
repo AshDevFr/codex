@@ -22,7 +22,6 @@ pub mod user_integrations;
 pub mod user_preferences;
 pub mod users;
 
-pub use api_keys::*;
 pub use auth::*;
 pub use books::*;
 pub use duplicates::*;
@@ -31,13 +30,12 @@ pub use filesystem::*;
 pub use health::*;
 pub use libraries::*;
 pub use metrics::*;
-pub use opds::*;
-pub use opds2::*;
+// opds2 not glob re-exported to avoid name conflicts with opds (catalog, routes, search)
+// Use handlers::opds2::* directly when needed
 pub use pages::*;
 pub use read_progress::*;
 pub use scan::*;
 pub use series::*;
-pub use setup::*;
 pub use users::*;
 
 // Re-export AppState for convenience

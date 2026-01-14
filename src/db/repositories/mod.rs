@@ -45,7 +45,6 @@ pub use settings::SettingsRepository;
 pub use system_integrations::SystemIntegrationsRepository;
 pub use tag::TagRepository;
 pub use task::TaskRepository;
-pub use task_metrics::TaskMetricsRepository;
 pub use user::UserRepository;
 pub use user_integrations::UserIntegrationsRepository;
 pub use user_preferences::UserPreferencesRepository;

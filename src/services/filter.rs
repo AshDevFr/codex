@@ -498,7 +498,7 @@ impl FilterService {
                 query.filter(series_metadata::Column::Status.contains(value.clone()))
             }
             FieldOperator::DoesNotContain { value } => {
-                query.filter(series_metadata::Column::Status.not_like(&format!("%{}%", value)))
+                query.filter(series_metadata::Column::Status.not_like(format!("%{}%", value)))
             }
             FieldOperator::BeginsWith { value } => {
                 query.filter(series_metadata::Column::Status.starts_with(value.clone()))
@@ -552,7 +552,7 @@ impl FilterService {
                 query.filter(series_metadata::Column::Publisher.contains(value.clone()))
             }
             FieldOperator::DoesNotContain { value } => {
-                query.filter(series_metadata::Column::Publisher.not_like(&format!("%{}%", value)))
+                query.filter(series_metadata::Column::Publisher.not_like(format!("%{}%", value)))
             }
             FieldOperator::BeginsWith { value } => {
                 query.filter(series_metadata::Column::Publisher.starts_with(value.clone()))
@@ -606,7 +606,7 @@ impl FilterService {
                 query.filter(series_metadata::Column::Language.contains(value.clone()))
             }
             FieldOperator::DoesNotContain { value } => {
-                query.filter(series_metadata::Column::Language.not_like(&format!("%{}%", value)))
+                query.filter(series_metadata::Column::Language.not_like(format!("%{}%", value)))
             }
             FieldOperator::BeginsWith { value } => {
                 query.filter(series_metadata::Column::Language.starts_with(value.clone()))
@@ -666,7 +666,7 @@ impl FilterService {
                 query.filter(series_metadata::Column::Title.contains(value.clone()))
             }
             FieldOperator::DoesNotContain { value } => {
-                query.filter(series_metadata::Column::Title.not_like(&format!("%{}%", value)))
+                query.filter(series_metadata::Column::Title.not_like(format!("%{}%", value)))
             }
             FieldOperator::BeginsWith { value } => {
                 query.filter(series_metadata::Column::Title.starts_with(value.clone()))
@@ -1162,7 +1162,7 @@ impl FilterService {
                 query.filter(book_metadata::Column::Title.contains(value.clone()))
             }
             FieldOperator::DoesNotContain { value } => {
-                query.filter(book_metadata::Column::Title.not_like(&format!("%{}%", value)))
+                query.filter(book_metadata::Column::Title.not_like(format!("%{}%", value)))
             }
             FieldOperator::BeginsWith { value } => {
                 query.filter(book_metadata::Column::Title.starts_with(value.clone()))

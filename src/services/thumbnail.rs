@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
-use image::{imageops::FilterType, ImageFormat};
+use image::imageops::FilterType;
 use sea_orm::{ActiveModelTrait, DatabaseConnection, Set};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -10,7 +10,7 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::config::FilesConfig;
-use crate::db::entities::{books, prelude::*};
+use crate::db::entities::books;
 use crate::db::repositories::{BookRepository, SeriesRepository, SettingsRepository};
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
 

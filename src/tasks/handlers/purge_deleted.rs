@@ -12,6 +12,12 @@ use crate::tasks::types::TaskResult;
 
 pub struct PurgeDeletedHandler;
 
+impl Default for PurgeDeletedHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PurgeDeletedHandler {
     pub fn new() -> Self {
         Self

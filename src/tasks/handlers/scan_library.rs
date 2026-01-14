@@ -13,6 +13,12 @@ use crate::tasks::types::{TaskResult, TaskType};
 
 pub struct ScanLibraryHandler;
 
+impl Default for ScanLibraryHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScanLibraryHandler {
     pub fn new() -> Self {
         Self

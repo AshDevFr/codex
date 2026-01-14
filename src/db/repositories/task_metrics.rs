@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Timelike, Utc};
 use sea_orm::{
     entity::prelude::*, ActiveModelTrait, ColumnTrait, DatabaseConnection, DbBackend, EntityTrait,
-    QueryFilter, QueryOrder, QuerySelect, Set, Statement,
+    QueryFilter, QueryOrder, Set, Statement,
 };
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -571,7 +571,7 @@ impl TaskMetricsRepository {
             if let Some(ref error_at) = r.last_error_at {
                 if result
                     .last_error_at
-                    .map_or(true, |existing| error_at > &existing)
+                    .is_none_or(|existing| error_at > &existing)
                 {
                     result.last_error = r.last_error.clone();
                     result.last_error_at = Some(*error_at);
@@ -658,7 +658,7 @@ impl TaskMetricsRepository {
             .await
             .context("Failed to get last error")?;
 
-        Ok(record.and_then(|r| r.last_error.zip(r.last_error_at).map(|(e, t)| (e, t))))
+        Ok(record.and_then(|r| r.last_error.zip(r.last_error_at)))
     }
 }
 

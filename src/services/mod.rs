@@ -10,7 +10,5 @@ pub use filter::FilterService;
 pub use integration::CredentialEncryption;
 pub use settings::SettingsService;
 pub use task_listener::TaskListener;
-pub use task_metrics::{
-    TaskMetricsDataPoint, TaskMetricsService, TaskMetricsSummary, TaskTypeMetrics,
-};
-pub use thumbnail::{GenerationStats, ThumbnailService, ThumbnailSettings};
+pub use task_metrics::TaskMetricsService;
+pub use thumbnail::ThumbnailService;

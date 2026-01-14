@@ -65,7 +65,7 @@ pub async fn trigger_scan(
         .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
 
     // Parse scan mode
-    let mode = ScanMode::from_str(&params.mode).map_err(|e| ApiError::BadRequest(e))?;
+    let mode = ScanMode::from_str(&params.mode).map_err(ApiError::BadRequest)?;
 
     // Check if there's already a pending/processing scan for this library
     use crate::db::entities::{prelude::*, tasks};
@@ -167,7 +167,7 @@ pub async fn get_scan_status(
         series_found: 0,
         books_found: 0,
         errors: vec![],
-        started_at: task.started_at.unwrap_or_else(|| Utc::now()),
+        started_at: task.started_at.unwrap_or_else(Utc::now),
         completed_at: task.completed_at,
     };
 
@@ -273,7 +273,7 @@ pub async fn list_active_scans(
                 series_found: 0,
                 books_found: 0,
                 errors: vec![],
-                started_at: task.started_at.unwrap_or_else(|| Utc::now()),
+                started_at: task.started_at.unwrap_or_else(Utc::now),
                 completed_at: task.completed_at,
             })
         })

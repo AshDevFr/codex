@@ -53,8 +53,8 @@ pub async fn list_tasks(
 
     // Print as table
     println!(
-        "{:<36} {:<20} {:<12} {:<8} {:<20} {:<3} {}",
-        "ID", "Type", "Status", "Priority", "Scheduled", "Att", "Locked By"
+        "{:<36} {:<20} {:<12} {:<8} {:<20} {:<3} Locked By",
+        "ID", "Type", "Status", "Priority", "Scheduled", "Att"
     );
     println!("{}", "-".repeat(120));
 

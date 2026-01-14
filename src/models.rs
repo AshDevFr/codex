@@ -394,19 +394,13 @@ impl CustomStrategyConfig {
 /// Configuration for smart book naming strategy
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub struct SmartBookConfig {
     /// Additional patterns to consider as "generic" titles (beyond defaults)
     #[serde(default)]
     pub additional_generic_patterns: Vec<String>,
 }
 
-impl Default for SmartBookConfig {
-    fn default() -> Self {
-        Self {
-            additional_generic_patterns: vec![],
-        }
-    }
-}
 
 /// Configuration for custom book naming strategy
 ///

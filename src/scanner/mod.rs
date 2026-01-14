@@ -9,8 +9,4 @@ pub use analyzer::analyze_file;
 pub use analyzer_queue::{analyze_book, AnalysisResult};
 pub use detector::detect_format;
 pub use library_scanner::scan_library;
-pub use strategies::{
-    create_book_strategy, create_strategy, BookMetadata, BookNamingContext, BookNamingStrategy,
-    DetectedBook, DetectedSeries, ScanningStrategyImpl,
-};
-pub use types::{ScanMode, ScanProgress, ScanResult, ScanStatus, ScanningConfig};
+pub use types::{ScanMode, ScanProgress, ScanningConfig};

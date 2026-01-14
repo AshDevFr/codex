@@ -5,7 +5,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{interval, Duration as TokioDuration};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error};
 use uuid::Uuid;
 
 use crate::db::repositories::task_metrics::{TaskCompletionData, TaskMetricsRepository};
@@ -352,7 +352,7 @@ impl TaskMetricsService {
             for record in db_records {
                 let entry = task_aggregates
                     .entry(record.task_type.clone())
-                    .or_insert_with(DbTaskAggregate::default);
+                    .or_default();
 
                 entry.count += record.count as u64;
                 entry.succeeded += record.succeeded as u64;
@@ -373,7 +373,7 @@ impl TaskMetricsService {
                 // Extract and merge duration_samples
                 if let Some(ref samples_json) = record.duration_samples {
                     if let Ok(samples) =
-                        serde_json::from_value::<Vec<i64>>(samples_json.clone().into())
+                        serde_json::from_value::<Vec<i64>>(samples_json.clone())
                     {
                         entry.duration_samples.extend(samples);
                     }
@@ -383,7 +383,7 @@ impl TaskMetricsService {
                 if let Some(ref error_at) = record.last_error_at {
                     if entry
                         .last_error_at
-                        .map_or(true, |existing| error_at > &existing)
+                        .is_none_or(|existing| error_at > &existing)
                     {
                         entry.last_error = record.last_error.clone();
                         entry.last_error_at = Some(*error_at);

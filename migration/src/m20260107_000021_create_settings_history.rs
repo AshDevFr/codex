@@ -1,4 +1,4 @@
-use sea_orm_migration::{prelude::*, schema::*};
+use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -143,12 +143,6 @@ enum SettingsHistory {
 
 #[derive(DeriveIden)]
 enum Settings {
-    Table,
-    Id,
-}
-
-#[derive(DeriveIden)]
-enum Users {
     Table,
     Id,
 }

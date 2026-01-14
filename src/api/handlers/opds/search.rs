@@ -137,7 +137,7 @@ pub async fn opds_search(
         "{}/search?q={}",
         base_url, query
     )))
-    .add_link(OpdsLink::start_link(format!("{}", base_url)));
+    .add_link(OpdsLink::start_link(base_url.to_string()));
 
     // Search series by name
     let series_list = SeriesRepository::search_by_name(&state.db, query)

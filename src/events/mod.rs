@@ -12,5 +12,5 @@ mod types;
 
 pub use broadcaster::{EventBroadcaster, RecordedEvent};
 pub use types::{
-    EntityChangeEvent, EntityEvent, EntityType, TaskProgress, TaskProgressEvent, TaskStatus,
+    EntityChangeEvent, EntityEvent, EntityType, TaskProgressEvent, TaskStatus,
 };

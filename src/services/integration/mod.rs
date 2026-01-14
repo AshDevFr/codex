@@ -10,4 +10,3 @@ pub mod encryption;
 pub mod providers;
 
 pub use encryption::CredentialEncryption;
-pub use providers::*;

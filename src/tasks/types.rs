@@ -142,7 +142,7 @@ impl TaskType {
         let book_id = self.book_id();
         let params = self.params();
 
-        let params_value = if params.is_null() || params.as_object().map_or(false, |o| o.is_empty())
+        let params_value = if params.is_null() || params.as_object().is_some_and(|o| o.is_empty())
         {
             None
         } else {

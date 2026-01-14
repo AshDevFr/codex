@@ -139,12 +139,12 @@ impl Database {
     /// so it's safe to call multiple times - it will only run pending migrations.
     pub async fn run_migrations(&self) -> Result<()> {
         // Check migration status for logging
-        let status = Migrator::status(&self.conn)
+        Migrator::status(&self.conn)
             .await
             .context("Failed to check migration status")?;
 
         // Log migration status
-        info!("Migration status: {:?}", status);
+        info!("Migration status: {:?}", ());
 
         // Apply all pending migrations
         info!("Running database migrations...");

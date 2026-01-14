@@ -87,7 +87,7 @@ pub async fn opds_book_pages(
         "{}/books/{}/pages",
         base_url, book_id
     )))
-    .add_link(OpdsLink::start_link(format!("{}", base_url)))
+    .add_link(OpdsLink::start_link(base_url.to_string()))
     .add_link(OpdsLink::up_link(
         format!("{}/series/{}", base_url, book.series_id),
         "Series",

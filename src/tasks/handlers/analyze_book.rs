@@ -12,6 +12,12 @@ use crate::tasks::types::TaskResult;
 
 pub struct AnalyzeBookHandler;
 
+impl Default for AnalyzeBookHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AnalyzeBookHandler {
     pub fn new() -> Self {
         Self
