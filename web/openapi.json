@@ -12603,7 +12603,7 @@
               "required": [
                 "id",
                 "libraryId",
-                "name",
+                "title",
                 "bookCount",
                 "createdAt",
                 "updatedAt"
@@ -12618,13 +12618,6 @@
                   "type": "string",
                   "format": "date-time",
                   "example": "2024-01-01T00:00:00Z"
-                },
-                "description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "example": "The definitive origin story of Batman, following Bruce Wayne's first year as a vigilante."
                 },
                 "hasCustomCover": {
                   "type": [
@@ -12642,10 +12635,6 @@
                   "type": "string",
                   "format": "uuid",
                   "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "name": {
-                  "type": "string",
-                  "example": "Batman: Year One"
                 },
                 "path": {
                   "type": [
@@ -12668,11 +12657,25 @@
                   ],
                   "example": "first_book"
                 },
-                "sortName": {
+                "summary": {
                   "type": [
                     "string",
                     "null"
                   ],
+                  "description": "Summary/description from series_metadata",
+                  "example": "The definitive origin story of Batman, following Bruce Wayne's first year as a vigilante."
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Series title from series_metadata",
+                  "example": "Batman: Year One"
+                },
+                "titleSort": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Sort title from series_metadata (for ordering)",
                   "example": "batman year one"
                 },
                 "unreadCount": {
@@ -13028,6 +13031,15 @@
         "type": "object",
         "description": "PATCH request for partial update of series metadata\n\nOnly provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared.",
         "properties": {
+          "ageRating": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Age rating (e.g., 13, 16, 18)",
+            "example": 16
+          },
           "customMetadata": {
             "type": [
               "string",
@@ -13035,6 +13047,22 @@
             ],
             "description": "Custom JSON metadata for extensions",
             "example": "{\"myField\": \"value\"}"
+          },
+          "imprint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Imprint (sub-publisher)",
+            "example": "Vertigo"
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Language (BCP47 format: \"en\", \"ja\", \"ko\")",
+            "example": "en"
           },
           "publisher": {
             "type": [
@@ -13052,13 +13080,13 @@
             "description": "Reading direction (ltr, rtl, ttb or webtoon)",
             "example": "ltr"
           },
-          "sortName": {
+          "status": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Custom sort name for ordering",
-            "example": "Batman Year One"
+            "description": "Series status (ongoing, ended, hiatus, abandoned, unknown)",
+            "example": "ended"
           },
           "summary": {
             "type": [
@@ -13067,6 +13095,31 @@
             ],
             "description": "Series description/summary",
             "example": "The definitive origin story of Batman."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Series title/name",
+            "example": "Batman: Year One"
+          },
+          "titleSort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Custom sort name for ordering",
+            "example": "Batman Year One"
+          },
+          "totalBookCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Expected total book count (for ongoing series)",
+            "example": 4
           },
           "year": {
             "type": [
@@ -13753,6 +13806,15 @@
         "type": "object",
         "description": "PUT request for full replacement of series metadata\n\nAll metadata fields will be replaced with the values in this request.\nOmitting a field (or setting it to null) will clear that field.",
         "properties": {
+          "ageRating": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Age rating (e.g., 13, 16, 18)",
+            "example": 16
+          },
           "customMetadata": {
             "type": [
               "string",
@@ -13760,6 +13822,22 @@
             ],
             "description": "Custom JSON metadata for extensions",
             "example": "{\"myField\": \"value\"}"
+          },
+          "imprint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Imprint (sub-publisher)",
+            "example": "Vertigo"
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Language (BCP47 format: \"en\", \"ja\", \"ko\")",
+            "example": "en"
           },
           "publisher": {
             "type": [
@@ -13777,13 +13855,13 @@
             "description": "Reading direction (ltr, rtl, ttb or webtoon)",
             "example": "ltr"
           },
-          "sortName": {
+          "status": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Custom sort name for ordering (e.g., \"Batman Year One\" instead of \"The Batman Year One\")",
-            "example": "Batman Year One"
+            "description": "Series status (ongoing, ended, hiatus, abandoned, unknown)",
+            "example": "ended"
           },
           "summary": {
             "type": [
@@ -13792,6 +13870,31 @@
             ],
             "description": "Series description/summary",
             "example": "The definitive origin story of Batman."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Series title/name",
+            "example": "Batman: Year One"
+          },
+          "titleSort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Custom sort name for ordering (e.g., \"Batman Year One\" instead of \"The Batman Year One\")",
+            "example": "Batman Year One"
+          },
+          "totalBookCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Expected total book count (for ongoing series)",
+            "example": 4
           },
           "year": {
             "type": [
@@ -14204,7 +14307,7 @@
         "required": [
           "id",
           "libraryId",
-          "name",
+          "title",
           "bookCount",
           "createdAt",
           "updatedAt"
@@ -14219,13 +14322,6 @@
             "type": "string",
             "format": "date-time",
             "example": "2024-01-01T00:00:00Z"
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "example": "The definitive origin story of Batman, following Bruce Wayne's first year as a vigilante."
           },
           "hasCustomCover": {
             "type": [
@@ -14243,10 +14339,6 @@
             "type": "string",
             "format": "uuid",
             "example": "550e8400-e29b-41d4-a716-446655440000"
-          },
-          "name": {
-            "type": "string",
-            "example": "Batman: Year One"
           },
           "path": {
             "type": [
@@ -14269,11 +14361,25 @@
             ],
             "example": "first_book"
           },
-          "sortName": {
+          "summary": {
             "type": [
               "string",
               "null"
             ],
+            "description": "Summary/description from series_metadata",
+            "example": "The definitive origin story of Batman, following Bruce Wayne's first year as a vigilante."
+          },
+          "title": {
+            "type": "string",
+            "description": "Series title from series_metadata",
+            "example": "Batman: Year One"
+          },
+          "titleSort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Sort title from series_metadata (for ordering)",
             "example": "batman year one"
           },
           "unreadCount": {
@@ -14364,15 +14470,25 @@
         "description": "Response containing series metadata",
         "required": [
           "id",
+          "title",
           "updatedAt"
         ],
         "properties": {
+          "ageRating": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Age rating (e.g., 13, 16, 18)",
+            "example": 16
+          },
           "customMetadata": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Custom JSON metadata",
+            "description": "Custom JSON metadata for extensions",
             "example": "{\"myField\": \"value\"}"
           },
           "id": {
@@ -14380,6 +14496,22 @@
             "format": "uuid",
             "description": "Series ID",
             "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "imprint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Imprint (sub-publisher)",
+            "example": "Vertigo"
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Language (BCP47 format: \"en\", \"ja\", \"ko\")",
+            "example": "en"
           },
           "publisher": {
             "type": [
@@ -14394,16 +14526,16 @@
               "string",
               "null"
             ],
-            "description": "Reading direction",
+            "description": "Reading direction (ltr, rtl, ttb or webtoon)",
             "example": "ltr"
           },
-          "sortName": {
+          "status": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Custom sort name for ordering",
-            "example": "Batman Year One"
+            "description": "Series status (ongoing, ended, hiatus, abandoned, unknown)",
+            "example": "ended"
           },
           "summary": {
             "type": [
@@ -14412,6 +14544,28 @@
             ],
             "description": "Series description/summary",
             "example": "The definitive origin story of Batman."
+          },
+          "title": {
+            "type": "string",
+            "description": "Series title/name",
+            "example": "Batman: Year One"
+          },
+          "titleSort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Custom sort name for ordering",
+            "example": "Batman Year One"
+          },
+          "totalBookCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Expected total book count (for ongoing series)",
+            "example": 4
           },
           "updatedAt": {
             "type": "string",

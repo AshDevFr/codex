@@ -127,7 +127,7 @@ describe("searchApi", () => {
 
 	describe("search", () => {
 		it("should search both series and books in parallel", async () => {
-			const mockSeries = [{ id: "series-1", name: "Batman", bookCount: 10 }];
+			const mockSeries = [{ id: "series-1", title: "Batman", bookCount: 10 }];
 			const mockBooks = [{ id: "book-1", title: "Batman Year One" }];
 			const mockBooksResponse = {
 				data: mockBooks,
@@ -175,7 +175,7 @@ describe("searchApi", () => {
 		it("should limit results to specified limit", async () => {
 			const mockSeries = Array.from({ length: 20 }, (_, i) => ({
 				id: `series-${i}`,
-				name: `Series ${i}`,
+				title: `Series ${i}`,
 				bookCount: i,
 			}));
 

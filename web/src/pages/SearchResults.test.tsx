@@ -125,7 +125,7 @@ describe("SearchResults Page", () => {
 			series: [
 				{
 					id: "series-1",
-					name: "Batman",
+					title: "Batman",
 					bookCount: 10,
 					libraryId: "lib-1",
 					path: "/path",
@@ -134,7 +134,7 @@ describe("SearchResults Page", () => {
 				},
 				{
 					id: "series-2",
-					name: "Batman Beyond",
+					title: "Batman Beyond",
 					bookCount: 5,
 					libraryId: "lib-1",
 					path: "/path",
@@ -196,7 +196,7 @@ describe("SearchResults Page", () => {
 			series: [
 				{
 					id: "series-1",
-					name: "Batman",
+					title: "Batman",
 					bookCount: 10,
 					libraryId: "lib-1",
 					createdAt: "2024-01-01",
@@ -236,7 +236,7 @@ describe("SearchResults Page", () => {
 			series: [
 				{
 					id: "series-1",
-					name: "Batman",
+					title: "Batman",
 					bookCount: 10,
 					libraryId: "lib-1",
 					path: "/path",
@@ -245,7 +245,7 @@ describe("SearchResults Page", () => {
 				},
 				{
 					id: "series-2",
-					name: "Batman Beyond",
+					title: "Batman Beyond",
 					bookCount: 5,
 					libraryId: "lib-1",
 					path: "/path",

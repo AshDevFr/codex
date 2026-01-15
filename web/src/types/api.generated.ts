@@ -4983,8 +4983,6 @@ export interface components {
                  * @example 2024-01-01T00:00:00Z
                  */
                 createdAt: string;
-                /** @example The definitive origin story of Batman, following Bruce Wayne's first year as a vigilante. */
-                description?: string | null;
                 /** @example false */
                 hasCustomCover?: boolean | null;
                 /**
@@ -4997,16 +4995,27 @@ export interface components {
                  * @example 550e8400-e29b-41d4-a716-446655440000
                  */
                 libraryId: string;
-                /** @example Batman: Year One */
-                name: string;
                 /** @example /media/comics/Batman - Year One */
                 path?: string | null;
                 /** @example DC Comics */
                 publisher?: string | null;
                 /** @example first_book */
                 selectedCoverSource?: string | null;
-                /** @example batman year one */
-                sortName?: string | null;
+                /**
+                 * @description Summary/description from series_metadata
+                 * @example The definitive origin story of Batman, following Bruce Wayne's first year as a vigilante.
+                 */
+                summary?: string | null;
+                /**
+                 * @description Series title from series_metadata
+                 * @example Batman: Year One
+                 */
+                title: string;
+                /**
+                 * @description Sort title from series_metadata (for ordering)
+                 * @example batman year one
+                 */
+                titleSort?: string | null;
                 /**
                  * Format: int64
                  * @example 2
@@ -5253,10 +5262,26 @@ export interface components {
          */
         PatchSeriesMetadataRequest: {
             /**
+             * Format: int32
+             * @description Age rating (e.g., 13, 16, 18)
+             * @example 16
+             */
+            ageRating?: number | null;
+            /**
              * @description Custom JSON metadata for extensions
              * @example {"myField": "value"}
              */
             customMetadata?: string | null;
+            /**
+             * @description Imprint (sub-publisher)
+             * @example Vertigo
+             */
+            imprint?: string | null;
+            /**
+             * @description Language (BCP47 format: "en", "ja", "ko")
+             * @example en
+             */
+            language?: string | null;
             /**
              * @description Publisher name
              * @example DC Comics
@@ -5268,15 +5293,31 @@ export interface components {
              */
             readingDirection?: string | null;
             /**
-             * @description Custom sort name for ordering
-             * @example Batman Year One
+             * @description Series status (ongoing, ended, hiatus, abandoned, unknown)
+             * @example ended
              */
-            sortName?: string | null;
+            status?: string | null;
             /**
              * @description Series description/summary
              * @example The definitive origin story of Batman.
              */
             summary?: string | null;
+            /**
+             * @description Series title/name
+             * @example Batman: Year One
+             */
+            title?: string | null;
+            /**
+             * @description Custom sort name for ordering
+             * @example Batman Year One
+             */
+            titleSort?: string | null;
+            /**
+             * Format: int32
+             * @description Expected total book count (for ongoing series)
+             * @example 4
+             */
+            totalBookCount?: number | null;
             /**
              * Format: int32
              * @description Release year
@@ -5674,10 +5715,26 @@ export interface components {
          */
         ReplaceSeriesMetadataRequest: {
             /**
+             * Format: int32
+             * @description Age rating (e.g., 13, 16, 18)
+             * @example 16
+             */
+            ageRating?: number | null;
+            /**
              * @description Custom JSON metadata for extensions
              * @example {"myField": "value"}
              */
             customMetadata?: string | null;
+            /**
+             * @description Imprint (sub-publisher)
+             * @example Vertigo
+             */
+            imprint?: string | null;
+            /**
+             * @description Language (BCP47 format: "en", "ja", "ko")
+             * @example en
+             */
+            language?: string | null;
             /**
              * @description Publisher name
              * @example DC Comics
@@ -5689,15 +5746,31 @@ export interface components {
              */
             readingDirection?: string | null;
             /**
-             * @description Custom sort name for ordering (e.g., "Batman Year One" instead of "The Batman Year One")
-             * @example Batman Year One
+             * @description Series status (ongoing, ended, hiatus, abandoned, unknown)
+             * @example ended
              */
-            sortName?: string | null;
+            status?: string | null;
             /**
              * @description Series description/summary
              * @example The definitive origin story of Batman.
              */
             summary?: string | null;
+            /**
+             * @description Series title/name
+             * @example Batman: Year One
+             */
+            title?: string | null;
+            /**
+             * @description Custom sort name for ordering (e.g., "Batman Year One" instead of "The Batman Year One")
+             * @example Batman Year One
+             */
+            titleSort?: string | null;
+            /**
+             * Format: int32
+             * @description Expected total book count (for ongoing series)
+             * @example 4
+             */
+            totalBookCount?: number | null;
             /**
              * Format: int32
              * @description Release year
@@ -5914,8 +5987,6 @@ export interface components {
              * @example 2024-01-01T00:00:00Z
              */
             createdAt: string;
-            /** @example The definitive origin story of Batman, following Bruce Wayne's first year as a vigilante. */
-            description?: string | null;
             /** @example false */
             hasCustomCover?: boolean | null;
             /**
@@ -5928,16 +5999,27 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             libraryId: string;
-            /** @example Batman: Year One */
-            name: string;
             /** @example /media/comics/Batman - Year One */
             path?: string | null;
             /** @example DC Comics */
             publisher?: string | null;
             /** @example first_book */
             selectedCoverSource?: string | null;
-            /** @example batman year one */
-            sortName?: string | null;
+            /**
+             * @description Summary/description from series_metadata
+             * @example The definitive origin story of Batman, following Bruce Wayne's first year as a vigilante.
+             */
+            summary?: string | null;
+            /**
+             * @description Series title from series_metadata
+             * @example Batman: Year One
+             */
+            title: string;
+            /**
+             * @description Sort title from series_metadata (for ordering)
+             * @example batman year one
+             */
+            titleSort?: string | null;
             /**
              * Format: int64
              * @example 2
@@ -5986,7 +6068,13 @@ export interface components {
         /** @description Response containing series metadata */
         SeriesMetadataResponse: {
             /**
-             * @description Custom JSON metadata
+             * Format: int32
+             * @description Age rating (e.g., 13, 16, 18)
+             * @example 16
+             */
+            ageRating?: number | null;
+            /**
+             * @description Custom JSON metadata for extensions
              * @example {"myField": "value"}
              */
             customMetadata?: string | null;
@@ -5997,25 +6085,51 @@ export interface components {
              */
             id: string;
             /**
+             * @description Imprint (sub-publisher)
+             * @example Vertigo
+             */
+            imprint?: string | null;
+            /**
+             * @description Language (BCP47 format: "en", "ja", "ko")
+             * @example en
+             */
+            language?: string | null;
+            /**
              * @description Publisher name
              * @example DC Comics
              */
             publisher?: string | null;
             /**
-             * @description Reading direction
+             * @description Reading direction (ltr, rtl, ttb or webtoon)
              * @example ltr
              */
             readingDirection?: string | null;
             /**
-             * @description Custom sort name for ordering
-             * @example Batman Year One
+             * @description Series status (ongoing, ended, hiatus, abandoned, unknown)
+             * @example ended
              */
-            sortName?: string | null;
+            status?: string | null;
             /**
              * @description Series description/summary
              * @example The definitive origin story of Batman.
              */
             summary?: string | null;
+            /**
+             * @description Series title/name
+             * @example Batman: Year One
+             */
+            title: string;
+            /**
+             * @description Custom sort name for ordering
+             * @example Batman Year One
+             */
+            titleSort?: string | null;
+            /**
+             * Format: int32
+             * @description Expected total book count (for ongoing series)
+             * @example 4
+             */
+            totalBookCount?: number | null;
             /**
              * Format: date-time
              * @description Last update timestamp

@@ -25,7 +25,6 @@ pub struct SeriesWithAggregates {
     pub library_id: Uuid,
     pub fingerprint: Option<String>,
     pub path: Option<String>,
-    pub custom_metadata: Option<String>,
     pub created_at: chrono::DateTime<Utc>,
     pub updated_at: chrono::DateTime<Utc>,
     /// Aggregated field for date_read sort - used for SQL ORDER BY mapping
@@ -40,7 +39,6 @@ impl From<SeriesWithAggregates> for series::Model {
             library_id: s.library_id,
             fingerprint: s.fingerprint,
             path: s.path,
-            custom_metadata: s.custom_metadata,
             created_at: s.created_at,
             updated_at: s.updated_at,
         }
@@ -90,7 +88,6 @@ impl SeriesRepository {
             library_id: Set(library_id),
             fingerprint: Set(fingerprint),
             path: Set(path),
-            custom_metadata: Set(None),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -111,6 +108,7 @@ impl SeriesRepository {
             reading_direction: Set(None),
             year: Set(None),
             total_book_count: Set(None),
+            custom_metadata: Set(None),
             // Lock fields default to false
             total_book_count_lock: Set(false),
             title_lock: Set(false),
@@ -500,7 +498,6 @@ impl SeriesRepository {
             library_id: Set(series_model.library_id),
             fingerprint: Set(series_model.fingerprint.clone()),
             path: Set(series_model.path.clone()),
-            custom_metadata: Set(series_model.custom_metadata.clone()),
             created_at: Set(series_model.created_at),
             updated_at: Set(Utc::now()),
         };

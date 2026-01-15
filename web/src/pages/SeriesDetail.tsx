@@ -232,7 +232,7 @@ export function SeriesDetail() {
 	}
 
 	breadcrumbItems.push({
-		title: series.name,
+		title: series.title,
 		href: `/series/${series.id}`,
 	});
 
@@ -267,7 +267,7 @@ export function SeriesDetail() {
 					<Grid.Col span={{ base: 4, xs: 3, sm: 2 }}>
 						<Image
 							src={coverUrl}
-							alt={series.name}
+							alt={series.title}
 							radius="sm"
 							fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='212'%3E%3Crect fill='%23333' width='150' height='212'/%3E%3Ctext fill='%23666' font-family='sans-serif' font-size='12' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Cover%3C/text%3E%3C/svg%3E"
 							style={{ aspectRatio: "150/212.125" }}
@@ -282,7 +282,7 @@ export function SeriesDetail() {
 								<Box style={{ flex: 1, minWidth: 0 }}>
 									<Group gap="sm" align="center" wrap="wrap">
 										<Title order={2} style={{ wordBreak: "break-word" }}>
-											{series.name}
+											{series.title}
 										</Title>
 										{metadata?.publisher && (
 											<Text size="sm" c="dimmed">
@@ -493,7 +493,7 @@ export function SeriesDetail() {
 				{/* Books list */}
 				<SeriesBookList
 					seriesId={series.id}
-					seriesName={series.name}
+					seriesName={series.title}
 					bookCount={series.bookCount ?? 0}
 				/>
 			</Stack>
@@ -503,7 +503,7 @@ export function SeriesDetail() {
 				opened={editModalOpened}
 				onClose={closeEditModal}
 				seriesId={series.id}
-				seriesTitle={series.name}
+				seriesTitle={series.title}
 			/>
 		</Box>
 	);

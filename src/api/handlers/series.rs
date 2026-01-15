@@ -129,9 +129,9 @@ async fn series_to_dto(
     Ok(SeriesDto {
         id: series.id,
         library_id: series.library_id,
-        name,
-        sort_name: metadata.as_ref().and_then(|m| m.title_sort.clone()),
-        description: metadata.as_ref().and_then(|m| m.summary.clone()),
+        title: name,
+        title_sort: metadata.as_ref().and_then(|m| m.title_sort.clone()),
+        summary: metadata.as_ref().and_then(|m| m.summary.clone()),
         publisher: metadata.as_ref().and_then(|m| m.publisher.clone()),
         year: metadata.as_ref().and_then(|m| m.year),
         book_count,
@@ -350,20 +350,20 @@ pub async fn patch_series(
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
-    let updated_name: String;
+    let updated_title: String;
 
     if let Some(existing) = existing_meta {
         // Update existing metadata record
         let mut active: series_metadata::ActiveModel = existing.clone().into();
 
-        // Update title (name) if provided
-        if let Some(Some(name)) = request.name.into_nested_option() {
-            active.title = Set(name.clone());
+        // Update title if provided
+        if let Some(Some(title)) = request.title.into_nested_option() {
+            active.title = Set(title.clone());
             active.title_lock = Set(true); // Auto-lock when user edits
             has_changes = true;
-            updated_name = name;
+            updated_title = title;
         } else {
-            updated_name = existing.title.clone();
+            updated_title = existing.title.clone();
         }
 
         if has_changes {
@@ -373,14 +373,14 @@ pub async fn patch_series(
             })?;
         }
     } else {
-        // Create new metadata record with provided name
-        if let Some(Some(name)) = request.name.into_nested_option() {
+        // Create new metadata record with provided title
+        if let Some(Some(title)) = request.title.into_nested_option() {
             has_changes = true;
-            updated_name = name.clone();
+            updated_title = title.clone();
 
             let active = series_metadata::ActiveModel {
                 series_id: Set(series_id),
-                title: Set(name),
+                title: Set(title),
                 title_sort: Set(None),
                 summary: Set(None),
                 publisher: Set(None),
@@ -391,6 +391,7 @@ pub async fn patch_series(
                 reading_direction: Set(None),
                 year: Set(None),
                 total_book_count: Set(None),
+                custom_metadata: Set(None),
                 total_book_count_lock: Set(false),
                 title_lock: Set(true), // Auto-lock when user edits
                 title_sort_lock: Set(false),
@@ -412,8 +413,8 @@ pub async fn patch_series(
                 ApiError::Internal(format!("Failed to create series metadata: {}", e))
             })?;
         } else {
-            // No name provided and no existing metadata - return current state
-            updated_name = "Unknown Series".to_string();
+            // No title provided and no existing metadata - return current state
+            updated_title = "Unknown Series".to_string();
         }
     }
 
@@ -423,7 +424,7 @@ pub async fn patch_series(
             event: EntityEvent::SeriesUpdated {
                 series_id,
                 library_id: series_model.library_id,
-                fields: Some(vec!["name".to_string()]),
+                fields: Some(vec!["title".to_string()]),
             },
             timestamp: now,
             user_id: Some(auth.user_id),
@@ -433,7 +434,7 @@ pub async fn patch_series(
 
     Ok(Json(SeriesUpdateResponse {
         id: series_id,
-        name: updated_name,
+        title: updated_title,
         updated_at: now,
     }))
 }
@@ -1747,11 +1748,22 @@ pub async fn replace_series_metadata(
     use sea_orm::{ActiveModelTrait, Set};
     let mut active: series_metadata::ActiveModel = existing_metadata.into();
 
-    active.title_sort = Set(request.sort_name);
-    active.summary = Set(request.summary);
-    active.publisher = Set(request.publisher);
+    // Update title if provided, otherwise keep existing
+    if let Some(title) = request.title.clone() {
+        active.title = Set(title);
+        active.title_lock = Set(true); // Auto-lock when user edits
+    }
+    active.title_sort = Set(request.title_sort.clone());
+    active.summary = Set(request.summary.clone());
+    active.publisher = Set(request.publisher.clone());
+    active.imprint = Set(request.imprint.clone());
+    active.status = Set(request.status.clone());
+    active.age_rating = Set(request.age_rating);
+    active.language = Set(request.language.clone());
+    active.reading_direction = Set(request.reading_direction.clone());
     active.year = Set(request.year);
-    active.reading_direction = Set(request.reading_direction);
+    active.total_book_count = Set(request.total_book_count);
+    active.custom_metadata = Set(request.custom_metadata.clone());
     active.updated_at = Set(Utc::now());
 
     let updated_metadata = active
@@ -1759,33 +1771,23 @@ pub async fn replace_series_metadata(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to update series metadata: {}", e)))?;
 
-    // Update custom_metadata on series table if provided
-    if request.custom_metadata.is_some() || request.custom_metadata.is_none() {
-        let mut series_active: series::ActiveModel = existing_series.into();
-        series_active.custom_metadata = Set(request.custom_metadata.clone());
-        series_active.updated_at = Set(Utc::now());
-        series_active
-            .update(&state.db)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to update series: {}", e)))?;
-    }
-
     // Emit update event
     let event = EntityChangeEvent {
         event: EntityEvent::SeriesUpdated {
             series_id,
-            library_id: SeriesRepository::get_by_id(&state.db, series_id)
-                .await
-                .ok()
-                .flatten()
-                .map(|s| s.library_id)
-                .unwrap_or_default(),
+            library_id: existing_series.library_id,
             fields: Some(vec![
-                "sort_name".to_string(),
+                "title".to_string(),
+                "title_sort".to_string(),
                 "summary".to_string(),
                 "publisher".to_string(),
-                "year".to_string(),
+                "imprint".to_string(),
+                "status".to_string(),
+                "age_rating".to_string(),
+                "language".to_string(),
                 "reading_direction".to_string(),
+                "year".to_string(),
+                "total_book_count".to_string(),
                 "custom_metadata".to_string(),
             ]),
         },
@@ -1796,12 +1798,18 @@ pub async fn replace_series_metadata(
 
     Ok(Json(SeriesMetadataResponse {
         id: series_id,
-        sort_name: updated_metadata.title_sort,
+        title: updated_metadata.title,
+        title_sort: updated_metadata.title_sort,
         summary: updated_metadata.summary,
         publisher: updated_metadata.publisher,
-        year: updated_metadata.year,
+        imprint: updated_metadata.imprint,
+        status: updated_metadata.status,
+        age_rating: updated_metadata.age_rating,
+        language: updated_metadata.language,
         reading_direction: updated_metadata.reading_direction,
-        custom_metadata: request.custom_metadata,
+        year: updated_metadata.year,
+        total_book_count: updated_metadata.total_book_count,
+        custom_metadata: updated_metadata.custom_metadata,
         updated_at: updated_metadata.updated_at,
     }))
 }
@@ -1851,37 +1859,63 @@ pub async fn patch_series_metadata(
     // Partial update - only set fields that were provided
     use sea_orm::{ActiveModelTrait, Set};
     let mut metadata_active: series_metadata::ActiveModel = existing_metadata.clone().into();
-    let mut has_metadata_changes = false;
-    let mut has_series_changes = false;
-    let mut custom_metadata_value: Option<String> = existing_series.custom_metadata.clone();
+    let mut has_changes = false;
 
-    if let Some(opt) = request.sort_name.into_nested_option() {
+    // Handle title update with auto-lock
+    if let Some(opt) = request.title.into_nested_option() {
+        if let Some(title) = opt {
+            metadata_active.title = Set(title);
+            metadata_active.title_lock = Set(true); // Auto-lock when user edits
+            has_changes = true;
+        }
+    }
+    if let Some(opt) = request.title_sort.into_nested_option() {
         metadata_active.title_sort = Set(opt);
-        has_metadata_changes = true;
+        has_changes = true;
     }
     if let Some(opt) = request.summary.into_nested_option() {
         metadata_active.summary = Set(opt);
-        has_metadata_changes = true;
+        has_changes = true;
     }
     if let Some(opt) = request.publisher.into_nested_option() {
         metadata_active.publisher = Set(opt);
-        has_metadata_changes = true;
+        has_changes = true;
     }
-    if let Some(opt) = request.year.into_nested_option() {
-        metadata_active.year = Set(opt);
-        has_metadata_changes = true;
+    if let Some(opt) = request.imprint.into_nested_option() {
+        metadata_active.imprint = Set(opt);
+        has_changes = true;
+    }
+    if let Some(opt) = request.status.into_nested_option() {
+        metadata_active.status = Set(opt);
+        has_changes = true;
+    }
+    if let Some(opt) = request.age_rating.into_nested_option() {
+        metadata_active.age_rating = Set(opt);
+        has_changes = true;
+    }
+    if let Some(opt) = request.language.into_nested_option() {
+        metadata_active.language = Set(opt);
+        has_changes = true;
     }
     if let Some(opt) = request.reading_direction.into_nested_option() {
         metadata_active.reading_direction = Set(opt);
-        has_metadata_changes = true;
+        has_changes = true;
+    }
+    if let Some(opt) = request.year.into_nested_option() {
+        metadata_active.year = Set(opt);
+        has_changes = true;
+    }
+    if let Some(opt) = request.total_book_count.into_nested_option() {
+        metadata_active.total_book_count = Set(opt);
+        has_changes = true;
     }
     if let Some(opt) = request.custom_metadata.into_nested_option() {
-        custom_metadata_value = opt.clone();
-        has_series_changes = true;
+        metadata_active.custom_metadata = Set(opt);
+        has_changes = true;
     }
 
     // Update metadata table if needed
-    let updated_metadata = if has_metadata_changes {
+    let updated_metadata = if has_changes {
         metadata_active.updated_at = Set(Utc::now());
         metadata_active
             .update(&state.db)
@@ -1891,28 +1925,12 @@ pub async fn patch_series_metadata(
         existing_metadata
     };
 
-    // Update series table for custom_metadata if needed
-    if has_series_changes {
-        let mut series_active: series::ActiveModel = existing_series.into();
-        series_active.custom_metadata = Set(custom_metadata_value.clone());
-        series_active.updated_at = Set(Utc::now());
-        series_active
-            .update(&state.db)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to update series: {}", e)))?;
-    }
-
     // Emit update event
-    if has_metadata_changes || has_series_changes {
+    if has_changes {
         let event = EntityChangeEvent {
             event: EntityEvent::SeriesUpdated {
                 series_id,
-                library_id: SeriesRepository::get_by_id(&state.db, series_id)
-                    .await
-                    .ok()
-                    .flatten()
-                    .map(|s| s.library_id)
-                    .unwrap_or_default(),
+                library_id: existing_series.library_id,
                 fields: None, // PATCH updates only changed fields
             },
             timestamp: Utc::now(),
@@ -1923,12 +1941,18 @@ pub async fn patch_series_metadata(
 
     Ok(Json(SeriesMetadataResponse {
         id: series_id,
-        sort_name: updated_metadata.title_sort,
+        title: updated_metadata.title,
+        title_sort: updated_metadata.title_sort,
         summary: updated_metadata.summary,
         publisher: updated_metadata.publisher,
-        year: updated_metadata.year,
+        imprint: updated_metadata.imprint,
+        status: updated_metadata.status,
+        age_rating: updated_metadata.age_rating,
+        language: updated_metadata.language,
         reading_direction: updated_metadata.reading_direction,
-        custom_metadata: custom_metadata_value,
+        year: updated_metadata.year,
+        total_book_count: updated_metadata.total_book_count,
+        custom_metadata: updated_metadata.custom_metadata,
         updated_at: updated_metadata.updated_at,
     }))
 }
@@ -1961,8 +1985,8 @@ pub async fn get_full_series_metadata(
 ) -> Result<Json<FullSeriesMetadataResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    // Verify series exists and get custom_metadata
-    let series = SeriesRepository::get_by_id(&state.db, series_id)
+    // Verify series exists
+    let _series = SeriesRepository::get_by_id(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
@@ -2069,7 +2093,7 @@ pub async fn get_full_series_metadata(
         reading_direction: metadata.reading_direction,
         year: metadata.year,
         total_book_count: metadata.total_book_count,
-        custom_metadata: series.custom_metadata,
+        custom_metadata: metadata.custom_metadata,
         locks: MetadataLocks {
             title: metadata.title_lock,
             title_sort: metadata.title_sort_lock,

@@ -87,7 +87,7 @@ for (const library of mockLibraries) {
 	for (const name of seriesNames) {
 		const series = createSeries({
 			libraryId: library.id,
-			name,
+			title: name,
 		});
 		// Add library name for UI convenience (not in API schema)
 		series.libraryName = library.name;
@@ -104,7 +104,7 @@ for (let seriesIndex = 0; seriesIndex < mockSeries.length; seriesIndex++) {
 		const hasProgress = seriesIndex < 8 && i < 2;
 		const book = createBook({
 			seriesId: series.id,
-			seriesName: series.name,
+			seriesName: series.title,
 			libraryId: series.libraryId,
 			number: i + 1,
 		});
@@ -162,7 +162,7 @@ export const resetMockData = () => {
 		for (const name of seriesNames) {
 			const series = createSeries({
 				libraryId: library.id,
-				name,
+				title: name,
 			});
 			// Add library name for UI convenience (not in API schema)
 			series.libraryName = library.name;
@@ -178,7 +178,7 @@ export const resetMockData = () => {
 			const hasProgress = seriesIndex < 8 && i < 2;
 			const book = createBook({
 				seriesId: series.id,
-				seriesName: series.name,
+				seriesName: series.title,
 				libraryId: series.libraryId,
 				number: i + 1,
 			});

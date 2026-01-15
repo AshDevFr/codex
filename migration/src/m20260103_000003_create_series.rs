@@ -17,7 +17,6 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Series::LibraryId).uuid().not_null())
                     .col(ColumnDef::new(Series::Fingerprint).string_len(64))
                     .col(ColumnDef::new(Series::Path).text())
-                    .col(ColumnDef::new(Series::CustomMetadata).text()) // JSON escape hatch for user-defined fields
                     .col(
                         ColumnDef::new(Series::CreatedAt)
                             .timestamp_with_time_zone()
@@ -68,7 +67,6 @@ pub enum Series {
     LibraryId,
     Fingerprint,
     Path,
-    CustomMetadata,
     CreatedAt,
     UpdatedAt,
 }

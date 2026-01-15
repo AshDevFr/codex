@@ -947,3 +947,367 @@ async fn test_series_metadata_respects_manual_changes() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_series_title_sort_populated_from_title() -> Result<()> {
+    // Create test database and library
+    let (db, temp_dir) = setup_test_db_wrapper().await;
+    let library_path = temp_dir.path().join("library");
+    fs::create_dir_all(&library_path)?;
+
+    let library = LibraryRepository::create(
+        db.sea_orm_connection(),
+        "Test Library",
+        library_path.to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await?;
+
+    // Create a series
+    let series = SeriesRepository::create(
+        db.sea_orm_connection(),
+        library.id,
+        "Amazing Spider-Man",
+        None,
+    )
+    .await?;
+
+    // Verify series metadata has title but no title_sort initially
+    let metadata = SeriesMetadataRepository::get_by_series_id(db.sea_orm_connection(), series.id)
+        .await?
+        .expect("Metadata should exist");
+    assert_eq!(metadata.title, "Amazing Spider-Man".to_string());
+    assert_eq!(metadata.title_sort, None);
+
+    // Create a book
+    let file_path = temp_dir.path().join("book1.cbz");
+    let file = fs::File::create(&file_path)?;
+    let mut zip = ZipWriter::new(file);
+
+    let comic_info_xml = r#"<?xml version="1.0"?>
+<ComicInfo>
+    <Title>Test Book 1</Title>
+    <Series>Amazing Spider-Man</Series>
+    <Number>1</Number>
+</ComicInfo>"#;
+
+    zip.start_file("ComicInfo.xml", SimpleFileOptions::default())?;
+    zip.write_all(comic_info_xml.as_bytes())?;
+
+    zip.start_file("page001.png", SimpleFileOptions::default())?;
+    zip.write_all(&create_test_png(10, 10))?;
+
+    zip.finish()?;
+
+    // Create book directly attached to our series
+    let now = Utc::now();
+    let book = books::Model {
+        id: Uuid::new_v4(),
+        series_id: series.id,
+        library_id: library.id,
+        file_path: file_path.to_string_lossy().to_string(),
+        file_name: "book1.cbz".to_string(),
+        file_size: 0,
+        file_hash: "test_hash".to_string(),
+        partial_hash: String::new(),
+        format: "cbz".to_string(),
+        page_count: 0,
+        deleted: false,
+        analyzed: false,
+        analysis_error: None,
+        modified_at: now,
+        created_at: now,
+        updated_at: now,
+        thumbnail_path: None,
+        thumbnail_generated_at: None,
+    };
+
+    BookRepository::create(db.sea_orm_connection(), &book, None).await?;
+    analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
+
+    // Verify series title_sort was populated from title
+    let metadata = SeriesMetadataRepository::get_by_series_id(db.sea_orm_connection(), series.id)
+        .await?
+        .expect("Metadata should exist");
+
+    assert_eq!(
+        metadata.title_sort,
+        Some("Amazing Spider-Man".to_string()),
+        "title_sort should be populated from title during analysis"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_series_title_sort_respects_lock() -> Result<()> {
+    // Create test database and library
+    let (db, temp_dir) = setup_test_db_wrapper().await;
+    let library_path = temp_dir.path().join("library");
+    fs::create_dir_all(&library_path)?;
+
+    let library = LibraryRepository::create(
+        db.sea_orm_connection(),
+        "Test Library",
+        library_path.to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await?;
+
+    // Create a series
+    let series = SeriesRepository::create(
+        db.sea_orm_connection(),
+        library.id,
+        "The Amazing Spider-Man",
+        None,
+    )
+    .await?;
+
+    // Lock the title_sort field (simulating user wanting to keep it empty or set their own)
+    SeriesMetadataRepository::set_lock(db.sea_orm_connection(), series.id, "title_sort", true)
+        .await?;
+
+    // Verify title_sort is None and locked
+    let metadata = SeriesMetadataRepository::get_by_series_id(db.sea_orm_connection(), series.id)
+        .await?
+        .expect("Metadata should exist");
+    assert_eq!(metadata.title_sort, None);
+    assert!(metadata.title_sort_lock);
+
+    // Create a book
+    let file_path = temp_dir.path().join("book1.cbz");
+    let file = fs::File::create(&file_path)?;
+    let mut zip = ZipWriter::new(file);
+
+    let comic_info_xml = r#"<?xml version="1.0"?>
+<ComicInfo>
+    <Title>Test Book 1</Title>
+    <Series>The Amazing Spider-Man</Series>
+    <Number>1</Number>
+</ComicInfo>"#;
+
+    zip.start_file("ComicInfo.xml", SimpleFileOptions::default())?;
+    zip.write_all(comic_info_xml.as_bytes())?;
+
+    zip.start_file("page001.png", SimpleFileOptions::default())?;
+    zip.write_all(&create_test_png(10, 10))?;
+
+    zip.finish()?;
+
+    // Create book directly attached to our series
+    let now = Utc::now();
+    let book = books::Model {
+        id: Uuid::new_v4(),
+        series_id: series.id,
+        library_id: library.id,
+        file_path: file_path.to_string_lossy().to_string(),
+        file_name: "book1.cbz".to_string(),
+        file_size: 0,
+        file_hash: "test_hash".to_string(),
+        partial_hash: String::new(),
+        format: "cbz".to_string(),
+        page_count: 0,
+        deleted: false,
+        analyzed: false,
+        analysis_error: None,
+        modified_at: now,
+        created_at: now,
+        updated_at: now,
+        thumbnail_path: None,
+        thumbnail_generated_at: None,
+    };
+
+    BookRepository::create(db.sea_orm_connection(), &book, None).await?;
+    analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
+
+    // Verify series title_sort was NOT updated because it's locked
+    let metadata = SeriesMetadataRepository::get_by_series_id(db.sea_orm_connection(), series.id)
+        .await?
+        .expect("Metadata should exist");
+
+    assert_eq!(
+        metadata.title_sort, None,
+        "title_sort should remain None when locked"
+    );
+    assert!(metadata.title_sort_lock, "lock should still be set");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_series_title_sort_not_overwritten_if_already_set() -> Result<()> {
+    // Create test database and library
+    let (db, temp_dir) = setup_test_db_wrapper().await;
+    let library_path = temp_dir.path().join("library");
+    fs::create_dir_all(&library_path)?;
+
+    let library = LibraryRepository::create(
+        db.sea_orm_connection(),
+        "Test Library",
+        library_path.to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await?;
+
+    // Create a series
+    let series = SeriesRepository::create(
+        db.sea_orm_connection(),
+        library.id,
+        "The Amazing Spider-Man",
+        None,
+    )
+    .await?;
+
+    // Set a custom title_sort
+    SeriesMetadataRepository::update_title(
+        db.sea_orm_connection(),
+        series.id,
+        "The Amazing Spider-Man".to_string(),
+        Some("Amazing Spider-Man, The".to_string()),
+    )
+    .await?;
+
+    // Verify title_sort is set
+    let metadata = SeriesMetadataRepository::get_by_series_id(db.sea_orm_connection(), series.id)
+        .await?
+        .expect("Metadata should exist");
+    assert_eq!(
+        metadata.title_sort,
+        Some("Amazing Spider-Man, The".to_string())
+    );
+
+    // Create a book
+    let file_path = temp_dir.path().join("book1.cbz");
+    let file = fs::File::create(&file_path)?;
+    let mut zip = ZipWriter::new(file);
+
+    let comic_info_xml = r#"<?xml version="1.0"?>
+<ComicInfo>
+    <Title>Test Book 1</Title>
+    <Series>The Amazing Spider-Man</Series>
+    <Number>1</Number>
+</ComicInfo>"#;
+
+    zip.start_file("ComicInfo.xml", SimpleFileOptions::default())?;
+    zip.write_all(comic_info_xml.as_bytes())?;
+
+    zip.start_file("page001.png", SimpleFileOptions::default())?;
+    zip.write_all(&create_test_png(10, 10))?;
+
+    zip.finish()?;
+
+    // Create book directly attached to our series
+    let now = Utc::now();
+    let book = books::Model {
+        id: Uuid::new_v4(),
+        series_id: series.id,
+        library_id: library.id,
+        file_path: file_path.to_string_lossy().to_string(),
+        file_name: "book1.cbz".to_string(),
+        file_size: 0,
+        file_hash: "test_hash".to_string(),
+        partial_hash: String::new(),
+        format: "cbz".to_string(),
+        page_count: 0,
+        deleted: false,
+        analyzed: false,
+        analysis_error: None,
+        modified_at: now,
+        created_at: now,
+        updated_at: now,
+        thumbnail_path: None,
+        thumbnail_generated_at: None,
+    };
+
+    BookRepository::create(db.sea_orm_connection(), &book, None).await?;
+    analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
+
+    // Verify series title_sort was NOT overwritten
+    let metadata = SeriesMetadataRepository::get_by_series_id(db.sea_orm_connection(), series.id)
+        .await?
+        .expect("Metadata should exist");
+
+    assert_eq!(
+        metadata.title_sort,
+        Some("Amazing Spider-Man, The".to_string()),
+        "title_sort should not be overwritten if already set"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_series_title_sort_populated_without_comic_info() -> Result<()> {
+    // Create test database and library
+    let (db, temp_dir) = setup_test_db_wrapper().await;
+    let library_path = temp_dir.path().join("library");
+    fs::create_dir_all(&library_path)?;
+
+    let library = LibraryRepository::create(
+        db.sea_orm_connection(),
+        "Test Library",
+        library_path.to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await?;
+
+    // Create a series
+    let series =
+        SeriesRepository::create(db.sea_orm_connection(), library.id, "Batman", None).await?;
+
+    // Verify title_sort is None initially
+    let metadata = SeriesMetadataRepository::get_by_series_id(db.sea_orm_connection(), series.id)
+        .await?
+        .expect("Metadata should exist");
+    assert_eq!(metadata.title_sort, None);
+
+    // Create a book WITHOUT ComicInfo.xml
+    let file_path = temp_dir.path().join("book1.cbz");
+    let file = fs::File::create(&file_path)?;
+    let mut zip = ZipWriter::new(file);
+
+    // Only add image pages, no ComicInfo.xml
+    zip.start_file("page001.png", SimpleFileOptions::default())?;
+    zip.write_all(&create_test_png(10, 10))?;
+
+    zip.finish()?;
+
+    // Create book directly attached to our series
+    let now = Utc::now();
+    let book = books::Model {
+        id: Uuid::new_v4(),
+        series_id: series.id,
+        library_id: library.id,
+        file_path: file_path.to_string_lossy().to_string(),
+        file_name: "book1.cbz".to_string(),
+        file_size: 0,
+        file_hash: "test_hash".to_string(),
+        partial_hash: String::new(),
+        format: "cbz".to_string(),
+        page_count: 0,
+        deleted: false,
+        analyzed: false,
+        analysis_error: None,
+        modified_at: now,
+        created_at: now,
+        updated_at: now,
+        thumbnail_path: None,
+        thumbnail_generated_at: None,
+    };
+
+    BookRepository::create(db.sea_orm_connection(), &book, None).await?;
+    analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
+
+    // Verify series title_sort was populated from title even without ComicInfo
+    let metadata = SeriesMetadataRepository::get_by_series_id(db.sea_orm_connection(), series.id)
+        .await?
+        .expect("Metadata should exist");
+
+    assert_eq!(
+        metadata.title_sort,
+        Some("Batman".to_string()),
+        "title_sort should be populated from title even without ComicInfo"
+    );
+
+    Ok(())
+}

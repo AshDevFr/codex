@@ -114,8 +114,8 @@ export const createSeries = (
 		"Viz Media",
 		"Kodansha",
 	];
-	const name =
-		overrides.name ||
+	const title =
+		overrides.title ||
 		faker.helpers.arrayElement([
 			"Batman: Year One",
 			"Spider-Man",
@@ -128,13 +128,13 @@ export const createSeries = (
 	return {
 		id: faker.string.uuid(),
 		libraryId: overrides.libraryId || faker.string.uuid(),
-		name,
-		sortName: name.toLowerCase().replace(/^the\s+/, ""),
-		description: faker.lorem.paragraph(),
+		title,
+		titleSort: title.toLowerCase().replace(/^the\s+/, ""),
+		summary: faker.lorem.paragraph(),
 		publisher: faker.helpers.arrayElement(publishers),
 		year: faker.number.int({ min: 1980, max: 2024 }),
 		bookCount: faker.number.int({ min: 1, max: 100 }),
-		path: `/media/comics/${name.replace(/[:\s]+/g, "-")}`,
+		path: `/media/comics/${title.replace(/[:\s]+/g, "-")}`,
 		selectedCoverSource: "first_book",
 		hasCustomCover: false,
 		unreadCount: faker.number.int({ min: 0, max: 10 }),

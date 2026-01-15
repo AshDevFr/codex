@@ -59,7 +59,7 @@ describe("SearchInput", () => {
 				series: [
 					{
 						id: "1",
-						name: "Test Series",
+						title: "Test Series",
 						bookCount: 5,
 						createdAt: "2024-01-01T00:00:00Z",
 						libraryId: "lib-1",
@@ -89,7 +89,7 @@ describe("SearchInput", () => {
 				series: [
 					{
 						id: "1",
-						name: "Test Series",
+						title: "Test Series",
 						bookCount: 5,
 						createdAt: "2024-01-01T00:00:00Z",
 						libraryId: "lib-1",
@@ -116,7 +116,7 @@ describe("SearchInput", () => {
 			series: [
 				{
 					id: "s1",
-					name: "Alpha Series",
+					title: "Alpha Series",
 					bookCount: 3,
 					createdAt: "2024-01-01T00:00:00Z",
 					libraryId: "lib-1",
@@ -124,7 +124,7 @@ describe("SearchInput", () => {
 				},
 				{
 					id: "s2",
-					name: "Beta Series",
+					title: "Beta Series",
 					bookCount: 5,
 					createdAt: "2024-01-01T00:00:00Z",
 					libraryId: "lib-1",

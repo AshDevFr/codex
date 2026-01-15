@@ -560,7 +560,6 @@ async fn create_test_series(db: &sea_orm::DatabaseConnection, library_id: Uuid) 
         library_id: Set(library_id),
         fingerprint: Set(Some(format!("test-series-{}", series_id))),
         path: Set(Some("/test/series".to_string())),
-        custom_metadata: Set(None),
         created_at: Set(now),
         updated_at: Set(now),
     };

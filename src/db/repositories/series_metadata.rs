@@ -46,6 +46,7 @@ impl SeriesMetadataRepository {
             reading_direction: Set(None),
             year: Set(None),
             total_book_count: Set(None),
+            custom_metadata: Set(None),
             total_book_count_lock: Set(false),
             title_lock: Set(false),
             title_sort_lock: Set(false),

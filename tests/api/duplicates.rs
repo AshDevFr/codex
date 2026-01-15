@@ -130,7 +130,6 @@ async fn test_list_duplicates_with_data() {
         library_id: Set(library.id),
         fingerprint: Set(Some(format!("test-series-{}", series_id))),
         path: Set(Some("/test/series".to_string())),
-        custom_metadata: Set(None),
         created_at: Set(now),
         updated_at: Set(now),
     };
@@ -248,7 +247,6 @@ async fn test_delete_duplicate_group() {
         library_id: Set(library.id),
         fingerprint: Set(Some(format!("test-series-{}", series_id))),
         path: Set(Some("/test/series".to_string())),
-        custom_metadata: Set(None),
         created_at: Set(now),
         updated_at: Set(now),
     };
@@ -337,7 +335,6 @@ async fn test_duplicates_after_book_deletion() {
         library_id: Set(library.id),
         fingerprint: Set(Some(format!("test-series-{}", series_id))),
         path: Set(Some("/test/series".to_string())),
-        custom_metadata: Set(None),
         created_at: Set(now),
         updated_at: Set(now),
     };
@@ -396,7 +393,6 @@ async fn test_duplicates_exclude_soft_deleted_books() {
         library_id: Set(library.id),
         fingerprint: Set(Some(format!("test-series-{}", series_id))),
         path: Set(Some("/test/series".to_string())),
-        custom_metadata: Set(None),
         created_at: Set(now),
         updated_at: Set(now),
     };

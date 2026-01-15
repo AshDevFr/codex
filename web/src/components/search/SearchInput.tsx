@@ -131,7 +131,7 @@ export const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
 				<Group gap="sm" wrap="nowrap">
 					<Image
 						src={`/api/v1/series/${series.id}/thumbnail`}
-						alt={series.name}
+						alt={series.title}
 						w={40}
 						h={56}
 						fit="cover"
@@ -140,7 +140,7 @@ export const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
 					/>
 					<Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
 						<Text size="sm" fw={500} lineClamp={1}>
-							{series.name}
+							{series.title}
 						</Text>
 						<Text size="xs" c="dimmed">
 							{series.bookCount} book{series.bookCount !== 1 ? "s" : ""}

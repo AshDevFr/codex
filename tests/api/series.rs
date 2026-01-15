@@ -194,9 +194,9 @@ async fn test_list_library_series_sort_by_name_asc() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 3);
-    assert_eq!(series_list.data[0].name, "Apple");
-    assert_eq!(series_list.data[1].name, "Mango");
-    assert_eq!(series_list.data[2].name, "Zebra");
+    assert_eq!(series_list.data[0].title, "Apple");
+    assert_eq!(series_list.data[1].title, "Mango");
+    assert_eq!(series_list.data[2].title, "Zebra");
 }
 
 #[tokio::test]
@@ -231,9 +231,9 @@ async fn test_list_library_series_sort_by_name_desc() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 3);
-    assert_eq!(series_list.data[0].name, "Zebra");
-    assert_eq!(series_list.data[1].name, "Mango");
-    assert_eq!(series_list.data[2].name, "Apple");
+    assert_eq!(series_list.data[0].title, "Zebra");
+    assert_eq!(series_list.data[1].title, "Mango");
+    assert_eq!(series_list.data[2].title, "Apple");
 }
 
 #[tokio::test]
@@ -367,8 +367,8 @@ async fn test_list_library_series_sort_with_pagination() {
     let page1 = response.unwrap();
     assert_eq!(page1.data.len(), 2);
     assert_eq!(page1.total, 5);
-    assert_eq!(page1.data[0].name, "Alpha");
-    assert_eq!(page1.data[1].name, "Beta");
+    assert_eq!(page1.data[0].title, "Alpha");
+    assert_eq!(page1.data[1].title, "Beta");
 
     // Get second page
     let request = get_request_with_auth(
@@ -384,8 +384,8 @@ async fn test_list_library_series_sort_with_pagination() {
     assert_eq!(status, StatusCode::OK);
     let page2 = response.unwrap();
     assert_eq!(page2.data.len(), 2);
-    assert_eq!(page2.data[0].name, "Charlie");
-    assert_eq!(page2.data[1].name, "Delta");
+    assert_eq!(page2.data[0].title, "Charlie");
+    assert_eq!(page2.data[1].title, "Delta");
 }
 
 #[tokio::test]
@@ -422,8 +422,8 @@ async fn test_list_library_series_sort_invalid_field_uses_default() {
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 2);
     // Should be sorted by name (default)
-    assert_eq!(series_list.data[0].name, "Series A");
-    assert_eq!(series_list.data[1].name, "Series B");
+    assert_eq!(series_list.data[0].title, "Series A");
+    assert_eq!(series_list.data[1].title, "Series B");
 }
 
 // ============================================================================
@@ -452,7 +452,7 @@ async fn test_get_series_by_id() {
     assert_eq!(status, StatusCode::OK);
     let retrieved = response.unwrap();
     assert_eq!(retrieved.id, series.id);
-    assert_eq!(retrieved.name, "Test Series");
+    assert_eq!(retrieved.title, "Test Series");
 }
 
 #[tokio::test]
@@ -510,7 +510,7 @@ async fn test_search_series_by_name() {
     assert_eq!(status, StatusCode::OK);
     let series = response.unwrap();
     assert_eq!(series.len(), 2);
-    assert!(series.iter().all(|s| s.name.contains("Batman")));
+    assert!(series.iter().all(|s| s.title.contains("Batman")));
 }
 
 #[tokio::test]
@@ -869,7 +869,7 @@ async fn test_list_library_series() {
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 3);
     assert_eq!(series_list.total, 3);
-    assert!(series_list.data.iter().all(|s| s.name.starts_with("Lib1")));
+    assert!(series_list.data.iter().all(|s| s.title.starts_with("Lib1")));
 
     // Request series from library 2
     let request =
@@ -883,7 +883,7 @@ async fn test_list_library_series() {
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 2);
     assert_eq!(series_list.total, 2);
-    assert!(series_list.data.iter().all(|s| s.name.starts_with("Lib2")));
+    assert!(series_list.data.iter().all(|s| s.title.starts_with("Lib2")));
 }
 
 #[tokio::test]
@@ -1293,7 +1293,7 @@ async fn test_list_library_recently_added_series() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.len(), 2);
-    assert!(series_list.iter().all(|s| s.name.starts_with("Lib1")));
+    assert!(series_list.iter().all(|s| s.title.starts_with("Lib1")));
 }
 
 // ============================================================================
@@ -1319,13 +1319,13 @@ async fn test_list_recently_updated_series() {
         .await
         .unwrap();
 
-    // Update series1 and series3 to change their updated_at (update custom_metadata field which is on series model)
+    // Update series1 and series3 to change their updated_at (update path field which is on series model)
     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-    series3.custom_metadata = Some(r#"{"note": "updated"}"#.to_string());
+    series3.path = Some("/updated/path3".to_string());
     SeriesRepository::update(&db, &series3, None).await.unwrap();
 
     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-    series1.custom_metadata = Some(r#"{"note": "another update"}"#.to_string());
+    series1.path = Some("/updated/path1".to_string());
     SeriesRepository::update(&db, &series1, None).await.unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
@@ -1361,7 +1361,7 @@ async fn test_list_library_recently_updated_series() {
         .await
         .unwrap();
     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-    series1.custom_metadata = Some(r#"{"note": "updated"}"#.to_string());
+    series1.path = Some("/updated/lib1/path".to_string());
     SeriesRepository::update(&db, &series1, None).await.unwrap();
 
     // Create series in library 2 (not updated)
@@ -1791,11 +1791,17 @@ async fn test_replace_series_metadata_success() {
     let app = create_test_router(state).await;
 
     let request_body = ReplaceSeriesMetadataRequest {
-        sort_name: Some("Test Sort Name".to_string()),
+        title: Some("Updated Title".to_string()),
+        title_sort: Some("Test Sort Name".to_string()),
         summary: Some("A great series".to_string()),
         publisher: Some("DC Comics".to_string()),
+        imprint: None,
+        status: None,
+        age_rating: None,
+        language: None,
         year: Some(2020),
         reading_direction: Some("ltr".to_string()),
+        total_book_count: None,
         custom_metadata: Some(r#"{"tag": "value"}"#.to_string()),
     };
 
@@ -1810,7 +1816,8 @@ async fn test_replace_series_metadata_success() {
     assert_eq!(status, StatusCode::OK);
     let metadata = response.unwrap();
     assert_eq!(metadata.id, series.id);
-    assert_eq!(metadata.sort_name, Some("Test Sort Name".to_string()));
+    assert_eq!(metadata.title, "Updated Title".to_string());
+    assert_eq!(metadata.title_sort, Some("Test Sort Name".to_string()));
     assert_eq!(metadata.summary, Some("A great series".to_string()));
     assert_eq!(metadata.publisher, Some("DC Comics".to_string()));
     assert_eq!(metadata.year, Some(2020));
@@ -1856,11 +1863,17 @@ async fn test_replace_series_metadata_clears_omitted_fields() {
 
     // PUT with only some fields - omitted fields should be cleared
     let request_body = ReplaceSeriesMetadataRequest {
-        sort_name: None,
+        title: None, // Keep existing title
+        title_sort: None,
         summary: Some("New summary".to_string()),
         publisher: None, // Should clear publisher
-        year: None,      // Should clear year
+        imprint: None,
+        status: None,
+        age_rating: None,
+        language: None,
+        year: None, // Should clear year
         reading_direction: None,
+        total_book_count: None,
         custom_metadata: None,
     };
 
@@ -1890,11 +1903,17 @@ async fn test_replace_series_metadata_not_found() {
 
     let fake_id = uuid::Uuid::new_v4();
     let request_body = ReplaceSeriesMetadataRequest {
-        sort_name: None,
+        title: None,
+        title_sort: None,
         summary: Some("Summary".to_string()),
         publisher: None,
+        imprint: None,
+        status: None,
+        age_rating: None,
+        language: None,
         year: None,
         reading_direction: None,
+        total_book_count: None,
         custom_metadata: None,
     };
 
@@ -1929,11 +1948,17 @@ async fn test_replace_series_metadata_without_auth() {
     let app = create_test_router(state).await;
 
     let request_body = ReplaceSeriesMetadataRequest {
-        sort_name: None,
+        title: None,
+        title_sort: None,
         summary: Some("Summary".to_string()),
         publisher: None,
+        imprint: None,
+        status: None,
+        age_rating: None,
+        language: None,
         year: None,
         reading_direction: None,
+        total_book_count: None,
         custom_metadata: None,
     };
 
@@ -2077,7 +2102,7 @@ async fn test_patch_series_metadata_multiple_fields() {
     let request = patch_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata", series.id),
         &serde_json::json!({
-            "sortName": "Sort Name",
+            "titleSort": "Sort Name",
             "summary": "A great summary",
             "publisher": "Marvel",
             "year": 2024,
@@ -2090,7 +2115,7 @@ async fn test_patch_series_metadata_multiple_fields() {
 
     assert_eq!(status, StatusCode::OK);
     let metadata = response.unwrap();
-    assert_eq!(metadata.sort_name, Some("Sort Name".to_string()));
+    assert_eq!(metadata.title_sort, Some("Sort Name".to_string()));
     assert_eq!(metadata.summary, Some("A great summary".to_string()));
     assert_eq!(metadata.publisher, Some("Marvel".to_string()));
     assert_eq!(metadata.year, Some(2024));
@@ -2729,7 +2754,7 @@ async fn test_list_series_filtered_by_library_id() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 2);
-    assert!(series_list.data.iter().all(|s| s.name.starts_with("Lib1")));
+    assert!(series_list.data.iter().all(|s| s.title.starts_with("Lib1")));
 }
 
 #[tokio::test]
@@ -2851,7 +2876,7 @@ async fn test_list_series_filtered_all_of() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 1);
-    assert_eq!(series_list.data[0].name, "Action Comedy");
+    assert_eq!(series_list.data[0].title, "Action Comedy");
 }
 
 #[tokio::test]
@@ -3054,7 +3079,7 @@ async fn test_list_series_filtered_by_name() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 1);
-    assert_eq!(series_list.data[0].name, "Naruto");
+    assert_eq!(series_list.data[0].title, "Naruto");
 
     // Filter by name "Contains"
     let request_body = SeriesListRequest {
@@ -3089,7 +3114,7 @@ async fn test_list_series_filtered_by_name() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 1);
-    assert_eq!(series_list.data[0].name, "One Piece");
+    assert_eq!(series_list.data[0].title, "One Piece");
 }
 
 #[tokio::test]
@@ -3143,7 +3168,7 @@ async fn test_list_series_filtered_by_status() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 1);
-    assert_eq!(series_list.data[0].name, "Ongoing Series");
+    assert_eq!(series_list.data[0].title, "Ongoing Series");
 
     // Filter by status != "ended"
     let request_body = SeriesListRequest {
@@ -3212,7 +3237,7 @@ async fn test_list_series_filtered_by_publisher() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 1);
-    assert_eq!(series_list.data[0].name, "Shueisha Series");
+    assert_eq!(series_list.data[0].title, "Shueisha Series");
 
     // Filter by publisher IsNull (no publisher set)
     let request_body = SeriesListRequest {
@@ -3228,7 +3253,7 @@ async fn test_list_series_filtered_by_publisher() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 1);
-    assert_eq!(series_list.data[0].name, "No Publisher Series");
+    assert_eq!(series_list.data[0].title, "No Publisher Series");
 
     // Filter by publisher IsNotNull (has publisher)
     let request_body = SeriesListRequest {
@@ -3297,7 +3322,7 @@ async fn test_list_series_filtered_by_language() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 1);
-    assert_eq!(series_list.data[0].name, "Japanese Series");
+    assert_eq!(series_list.data[0].title, "Japanese Series");
 
     // Filter by language != "en"
     let request_body = SeriesListRequest {
@@ -3387,7 +3412,7 @@ async fn test_list_series_filtered_combined_metadata() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 1);
-    assert_eq!(series_list.data[0].name, "My Hero Academia");
+    assert_eq!(series_list.data[0].title, "My Hero Academia");
 }
 
 // ============================================================================
@@ -3490,7 +3515,7 @@ async fn test_list_series_filtered_by_read_status_unread() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 1);
-    assert_eq!(series_list.data[0].name, "Unread Series");
+    assert_eq!(series_list.data[0].title, "Unread Series");
 }
 
 #[tokio::test]
@@ -3584,7 +3609,7 @@ async fn test_list_series_filtered_by_read_status_in_progress() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 1);
-    assert_eq!(series_list.data[0].name, "In Progress Series");
+    assert_eq!(series_list.data[0].title, "In Progress Series");
 }
 
 #[tokio::test]
@@ -3678,7 +3703,7 @@ async fn test_list_series_filtered_by_read_status_read() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 1);
-    assert_eq!(series_list.data[0].name, "Read Series");
+    assert_eq!(series_list.data[0].title, "Read Series");
 }
 
 #[tokio::test]
@@ -3772,7 +3797,7 @@ async fn test_list_series_filtered_by_read_status_not_read() {
     assert_eq!(status, StatusCode::OK);
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 2);
-    let names: Vec<_> = series_list.data.iter().map(|s| s.name.as_str()).collect();
+    let names: Vec<_> = series_list.data.iter().map(|s| s.title.as_str()).collect();
     assert!(names.contains(&"Unread Series"));
     assert!(names.contains(&"In Progress Series"));
 }

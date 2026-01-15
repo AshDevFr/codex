@@ -264,8 +264,8 @@ export function MediaCard({
 
 	const title = book
 		? `${book.number !== undefined && book.number !== null ? `${book.number} - ` : ""}${book.title}`
-		: series?.name || "";
-	const altText = book ? book.title : series?.name || "";
+		: series?.title || "";
+	const altText = book ? book.title : series?.title || "";
 
 	return (
 		<Card

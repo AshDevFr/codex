@@ -23,8 +23,8 @@ describe("seriesApi", () => {
 		it("should fetch series for a specific library", async () => {
 			const mockResponse = {
 				items: [
-					{ id: "series-1", name: "Series 1", bookCount: 5 },
-					{ id: "series-2", name: "Series 2", bookCount: 3 },
+					{ id: "series-1", title: "Series 1", bookCount: 5 },
+					{ id: "series-2", title: "Series 2", bookCount: 3 },
 				],
 				total: 2,
 				page: 1,
@@ -42,7 +42,7 @@ describe("seriesApi", () => {
 
 		it("should fetch all series when libraryId is 'all'", async () => {
 			const mockResponse = {
-				items: [{ id: "series-1", name: "Series 1" }],
+				items: [{ id: "series-1", title: "Series 1" }],
 				total: 1,
 				page: 1,
 				pageSize: 20,
@@ -89,7 +89,7 @@ describe("seriesApi", () => {
 		it("should fetch a series by ID", async () => {
 			const mockSeries = {
 				id: "series-123",
-				name: "Test Series",
+				title: "Test Series",
 				bookCount: 10,
 				libraryId: "library-1",
 			};
@@ -106,7 +106,7 @@ describe("seriesApi", () => {
 	describe("getInProgress", () => {
 		it("should fetch in-progress series for a library", async () => {
 			const mockSeries = [
-				{ id: "series-1", name: "Reading Series 1", bookCount: 10 },
+				{ id: "series-1", title: "Reading Series 1", bookCount: 10 },
 			];
 
 			vi.mocked(api.get).mockResolvedValueOnce({ data: mockSeries });
@@ -189,7 +189,7 @@ describe("seriesApi", () => {
 
 	describe("getRecentlyAdded", () => {
 		it("should fetch recently added series with default limit", async () => {
-			const mockSeries = [{ id: "series-new", name: "New Series" }];
+			const mockSeries = [{ id: "series-new", title: "New Series" }];
 
 			vi.mocked(api.get).mockResolvedValueOnce({ data: mockSeries });
 
@@ -212,7 +212,7 @@ describe("seriesApi", () => {
 
 	describe("getRecentlyUpdated", () => {
 		it("should fetch recently updated series with default limit", async () => {
-			const mockSeries = [{ id: "series-1", name: "Updated Series" }];
+			const mockSeries = [{ id: "series-1", title: "Updated Series" }];
 
 			vi.mocked(api.get).mockResolvedValueOnce({ data: mockSeries });
 
@@ -236,8 +236,8 @@ describe("seriesApi", () => {
 	describe("search", () => {
 		const mockPaginatedResponse = {
 			data: [
-				{ id: "series-1", name: "Action Series", bookCount: 5 },
-				{ id: "series-2", name: "Comedy Series", bookCount: 3 },
+				{ id: "series-1", title: "Action Series", bookCount: 5 },
+				{ id: "series-2", title: "Comedy Series", bookCount: 3 },
 			],
 			total: 2,
 			page: 0,

@@ -24,6 +24,7 @@ pub struct Model {
     pub reading_direction: Option<String>, // ltr, rtl, ttb
     pub year: Option<i32>,
     pub total_book_count: Option<i32>, // Expected total (for ongoing series)
+    pub custom_metadata: Option<String>, // JSON escape hatch for user-defined fields
     // Lock fields
     pub total_book_count_lock: bool,
     pub title_lock: bool,

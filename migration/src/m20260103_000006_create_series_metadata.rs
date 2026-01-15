@@ -42,6 +42,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(SeriesMetadata::ReadingDirection).string_len(10)) // ltr, rtl, ttb, webtoon
                     .col(ColumnDef::new(SeriesMetadata::Year).integer())
                     .col(ColumnDef::new(SeriesMetadata::TotalBookCount).integer()) // Expected total (for ongoing series)
+                    .col(ColumnDef::new(SeriesMetadata::CustomMetadata).text()) // JSON escape hatch for user-defined fields
                     // Lock fields (prevent auto-refresh from overwriting user edits)
                     .col(
                         ColumnDef::new(SeriesMetadata::TotalBookCountLock)
@@ -169,6 +170,7 @@ pub enum SeriesMetadata {
     ReadingDirection,
     Year,
     TotalBookCount,
+    CustomMetadata,
     // Lock fields
     TotalBookCountLock,
     TitleLock,

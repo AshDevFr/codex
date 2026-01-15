@@ -537,7 +537,23 @@ async fn analyze_single_book(
         if let Ok(Some(series_metadata_model)) =
             SeriesMetadataRepository::get_by_series_id(db, book.series_id).await
         {
-            // Only populate if series metadata doesn't have summary, publisher, or year yet
+            use crate::db::entities::series_metadata;
+            use sea_orm::{ActiveModelTrait, Set};
+
+            let series_title = series_metadata_model.title.clone();
+            let mut needs_update = false;
+            let mut metadata_active: series_metadata::ActiveModel =
+                series_metadata_model.clone().into();
+
+            // Update title_sort with title if not set and not locked
+            if series_metadata_model.title_sort.is_none() && !series_metadata_model.title_sort_lock
+            {
+                metadata_active.title_sort = Set(Some(series_title.clone()));
+                needs_update = true;
+                debug!("Setting title_sort to '{}' for series", series_title);
+            }
+
+            // Only populate other fields if series metadata doesn't have summary, publisher, or year yet
             // and the fields are not locked
             let should_populate = series_metadata_model.summary.is_none()
                 && series_metadata_model.publisher.is_none()
@@ -552,13 +568,6 @@ async fn analyze_single_book(
                     || comic_info.year.is_some())
             {
                 // Populate series metadata from book's ComicInfo
-                use crate::db::entities::series_metadata;
-                use sea_orm::{ActiveModelTrait, Set};
-
-                let series_title = series_metadata_model.title.clone();
-                let mut metadata_active: series_metadata::ActiveModel =
-                    series_metadata_model.into();
-
                 if let Some(ref summary) = comic_info.summary {
                     metadata_active.summary = Set(Some(summary.clone()));
                 }
@@ -568,11 +577,14 @@ async fn analyze_single_book(
                 if let Some(year) = comic_info.year {
                     metadata_active.year = Set(Some(year));
                 }
-                metadata_active.updated_at = Set(Utc::now());
+                needs_update = true;
+            }
 
+            if needs_update {
+                metadata_active.updated_at = Set(Utc::now());
                 metadata_active.update(db).await?;
                 info!(
-                    "Populated series '{}' metadata from book: {}",
+                    "Updated series '{}' metadata from book: {}",
                     series_title, book.file_path
                 );
             }
@@ -718,6 +730,28 @@ async fn analyze_single_book(
             "Saved metadata for book (no ComicInfo): {} - title: {:?}",
             book.file_path, metadata_record.title
         );
+
+        // Update series title_sort if not set and not locked (even without ComicInfo)
+        if let Ok(Some(series_metadata_model)) =
+            SeriesMetadataRepository::get_by_series_id(db, book.series_id).await
+        {
+            if series_metadata_model.title_sort.is_none() && !series_metadata_model.title_sort_lock
+            {
+                use crate::db::entities::series_metadata;
+                use sea_orm::{ActiveModelTrait, Set};
+
+                let series_title = series_metadata_model.title.clone();
+                let mut metadata_active: series_metadata::ActiveModel =
+                    series_metadata_model.into();
+                metadata_active.title_sort = Set(Some(series_title.clone()));
+                metadata_active.updated_at = Set(Utc::now());
+                metadata_active.update(db).await?;
+                debug!(
+                    "Setting title_sort to '{}' for series (no ComicInfo)",
+                    series_title
+                );
+            }
+        }
     }
 
     // Save page information to pages table

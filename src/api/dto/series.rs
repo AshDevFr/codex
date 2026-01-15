@@ -41,7 +41,7 @@ impl FromStr for SortDirection {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SeriesSortField {
-    /// Sort by series name (uses sort_name if available, otherwise name)
+    /// Sort by series name (uses title_sort if available, otherwise title)
     #[default]
     Name,
     /// Sort by date added to library
@@ -145,14 +145,17 @@ pub struct SeriesDto {
     pub id: uuid::Uuid,
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub library_id: uuid::Uuid,
+    /// Series title from series_metadata
     #[schema(example = "Batman: Year One")]
-    pub name: String,
+    pub title: String,
+    /// Sort title from series_metadata (for ordering)
     #[schema(example = "batman year one")]
-    pub sort_name: Option<String>,
+    pub title_sort: Option<String>,
+    /// Summary/description from series_metadata
     #[schema(
         example = "The definitive origin story of Batman, following Bruce Wayne's first year as a vigilante."
     )]
-    pub description: Option<String>,
+    pub summary: Option<String>,
     #[schema(example = "DC Comics")]
     pub publisher: Option<String>,
     #[schema(example = 1987)]
@@ -200,9 +203,13 @@ pub struct SearchSeriesRequest {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplaceSeriesMetadataRequest {
+    /// Series title/name
+    #[schema(example = "Batman: Year One")]
+    pub title: Option<String>,
+
     /// Custom sort name for ordering (e.g., "Batman Year One" instead of "The Batman Year One")
     #[schema(example = "Batman Year One")]
-    pub sort_name: Option<String>,
+    pub title_sort: Option<String>,
 
     /// Series description/summary
     #[schema(example = "The definitive origin story of Batman.")]
@@ -212,13 +219,33 @@ pub struct ReplaceSeriesMetadataRequest {
     #[schema(example = "DC Comics")]
     pub publisher: Option<String>,
 
-    /// Release year
-    #[schema(example = 1987)]
-    pub year: Option<i32>,
+    /// Imprint (sub-publisher)
+    #[schema(example = "Vertigo")]
+    pub imprint: Option<String>,
+
+    /// Series status (ongoing, ended, hiatus, abandoned, unknown)
+    #[schema(example = "ended")]
+    pub status: Option<String>,
+
+    /// Age rating (e.g., 13, 16, 18)
+    #[schema(example = 16)]
+    pub age_rating: Option<i32>,
+
+    /// Language (BCP47 format: "en", "ja", "ko")
+    #[schema(example = "en")]
+    pub language: Option<String>,
 
     /// Reading direction (ltr, rtl, ttb or webtoon)
     #[schema(example = "ltr")]
     pub reading_direction: Option<String>,
+
+    /// Release year
+    #[schema(example = 1987)]
+    pub year: Option<i32>,
+
+    /// Expected total book count (for ongoing series)
+    #[schema(example = 4)]
+    pub total_book_count: Option<i32>,
 
     /// Custom JSON metadata for extensions
     #[schema(example = "{\"myField\": \"value\"}")]
@@ -232,10 +259,15 @@ pub struct ReplaceSeriesMetadataRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PatchSeriesMetadataRequest {
+    /// Series title/name
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "Batman: Year One", nullable = true)]
+    pub title: super::patch::PatchValue<String>,
+
     /// Custom sort name for ordering
     #[serde(default)]
     #[schema(value_type = Option<String>, example = "Batman Year One", nullable = true)]
-    pub sort_name: super::patch::PatchValue<String>,
+    pub title_sort: super::patch::PatchValue<String>,
 
     /// Series description/summary
     #[serde(default)]
@@ -247,15 +279,40 @@ pub struct PatchSeriesMetadataRequest {
     #[schema(value_type = Option<String>, example = "DC Comics", nullable = true)]
     pub publisher: super::patch::PatchValue<String>,
 
-    /// Release year
+    /// Imprint (sub-publisher)
     #[serde(default)]
-    #[schema(value_type = Option<i32>, example = 1987, nullable = true)]
-    pub year: super::patch::PatchValue<i32>,
+    #[schema(value_type = Option<String>, example = "Vertigo", nullable = true)]
+    pub imprint: super::patch::PatchValue<String>,
+
+    /// Series status (ongoing, ended, hiatus, abandoned, unknown)
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "ended", nullable = true)]
+    pub status: super::patch::PatchValue<String>,
+
+    /// Age rating (e.g., 13, 16, 18)
+    #[serde(default)]
+    #[schema(value_type = Option<i32>, example = 16, nullable = true)]
+    pub age_rating: super::patch::PatchValue<i32>,
+
+    /// Language (BCP47 format: "en", "ja", "ko")
+    #[serde(default)]
+    #[schema(value_type = Option<String>, example = "en", nullable = true)]
+    pub language: super::patch::PatchValue<String>,
 
     /// Reading direction (ltr, rtl, ttb or webtoon)
     #[serde(default)]
     #[schema(value_type = Option<String>, example = "ltr", nullable = true)]
     pub reading_direction: super::patch::PatchValue<String>,
+
+    /// Release year
+    #[serde(default)]
+    #[schema(value_type = Option<i32>, example = 1987, nullable = true)]
+    pub year: super::patch::PatchValue<i32>,
+
+    /// Expected total book count (for ongoing series)
+    #[serde(default)]
+    #[schema(value_type = Option<i32>, example = 4, nullable = true)]
+    pub total_book_count: super::patch::PatchValue<i32>,
 
     /// Custom JSON metadata for extensions
     #[serde(default)]
@@ -271,9 +328,13 @@ pub struct SeriesMetadataResponse {
     #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]
     pub id: uuid::Uuid,
 
+    /// Series title/name
+    #[schema(example = "Batman: Year One")]
+    pub title: String,
+
     /// Custom sort name for ordering
     #[schema(example = "Batman Year One")]
-    pub sort_name: Option<String>,
+    pub title_sort: Option<String>,
 
     /// Series description/summary
     #[schema(example = "The definitive origin story of Batman.")]
@@ -283,15 +344,35 @@ pub struct SeriesMetadataResponse {
     #[schema(example = "DC Comics")]
     pub publisher: Option<String>,
 
+    /// Imprint (sub-publisher)
+    #[schema(example = "Vertigo")]
+    pub imprint: Option<String>,
+
+    /// Series status (ongoing, ended, hiatus, abandoned, unknown)
+    #[schema(example = "ended")]
+    pub status: Option<String>,
+
+    /// Age rating (e.g., 13, 16, 18)
+    #[schema(example = 16)]
+    pub age_rating: Option<i32>,
+
+    /// Language (BCP47 format: "en", "ja", "ko")
+    #[schema(example = "en")]
+    pub language: Option<String>,
+
+    /// Reading direction (ltr, rtl, ttb or webtoon)
+    #[schema(example = "ltr")]
+    pub reading_direction: Option<String>,
+
     /// Release year
     #[schema(example = 1987)]
     pub year: Option<i32>,
 
-    /// Reading direction
-    #[schema(example = "ltr")]
-    pub reading_direction: Option<String>,
+    /// Expected total book count (for ongoing series)
+    #[schema(example = 4)]
+    pub total_book_count: Option<i32>,
 
-    /// Custom JSON metadata
+    /// Custom JSON metadata for extensions
     #[schema(example = "{\"myField\": \"value\"}")]
     pub custom_metadata: Option<String>,
 
@@ -943,17 +1024,17 @@ pub struct SeriesCoverListResponse {
 // Series Update DTOs
 // ============================================================================
 
-/// PATCH request for updating series core fields (name)
+/// PATCH request for updating series title
 ///
 /// Only provided fields will be updated. Absent fields are unchanged.
 /// Explicitly null fields will be cleared (where applicable).
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PatchSeriesRequest {
-    /// Series name/title
+    /// Series title (stored in series_metadata.title)
     #[serde(default)]
     #[schema(value_type = Option<String>, example = "Batman: Year One", nullable = true)]
-    pub name: super::patch::PatchValue<String>,
+    pub title: super::patch::PatchValue<String>,
 }
 
 /// Response for series update
@@ -964,9 +1045,9 @@ pub struct SeriesUpdateResponse {
     #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]
     pub id: uuid::Uuid,
 
-    /// Updated name
+    /// Updated title
     #[schema(example = "Batman: Year One")]
-    pub name: String,
+    pub title: String,
 
     /// Last update timestamp
     #[schema(example = "2024-01-15T10:30:00Z")]

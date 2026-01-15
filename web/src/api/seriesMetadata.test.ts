@@ -27,7 +27,7 @@ describe("seriesMetadataApi", () => {
 			const mockMetadata = {
 				metadata: {
 					id: "series-123",
-					name: "Test Series",
+					title: "Test Series",
 					summary: "A test series",
 				},
 				genres: [{ id: "genre-1", name: "Action", seriesCount: 10 }],
@@ -41,7 +41,7 @@ describe("seriesMetadataApi", () => {
 				externalLinks: [
 					{ id: "el-1", sourceName: "MAL", url: "https://myanimelist.net/..." },
 				],
-				locks: { name: false, summary: true },
+				locks: { title: false, summary: true },
 			};
 
 			vi.mocked(api.get).mockResolvedValueOnce({ data: mockMetadata });
@@ -56,7 +56,7 @@ describe("seriesMetadataApi", () => {
 	describe("getLocks", () => {
 		it("should fetch metadata locks for a series", async () => {
 			const mockLocks = {
-				name: true,
+				title: true,
 				summary: false,
 				publisher: true,
 				year: false,
@@ -101,7 +101,7 @@ describe("seriesMetadataApi", () => {
 			const mockResponse = {
 				metadata: {
 					id: "series-123",
-					sortName: "Updated Series",
+					titleSort: "Updated Series",
 					summary: "Updated summary",
 				},
 			};
@@ -109,12 +109,12 @@ describe("seriesMetadataApi", () => {
 			vi.mocked(api.put).mockResolvedValueOnce({ data: mockResponse });
 
 			const result = await seriesMetadataApi.replaceMetadata("series-123", {
-				sortName: "Updated Series",
+				titleSort: "Updated Series",
 				summary: "Updated summary",
 			});
 
 			expect(api.put).toHaveBeenCalledWith("/series/series-123/metadata", {
-				sortName: "Updated Series",
+				titleSort: "Updated Series",
 				summary: "Updated summary",
 			});
 			expect(result).toEqual(mockResponse);
@@ -126,7 +126,7 @@ describe("seriesMetadataApi", () => {
 			const mockResponse = {
 				metadata: {
 					id: "series-123",
-					name: "Original Name",
+					title: "Original Name",
 					summary: "Patched summary",
 				},
 			};

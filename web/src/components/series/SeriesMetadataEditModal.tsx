@@ -19,12 +19,14 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
+import { genresApi } from "@/api/genres";
 import { seriesApi } from "@/api/series";
 import {
 	type FullSeriesMetadata,
 	type MetadataLocks,
 	seriesMetadataApi,
 } from "@/api/seriesMetadata";
+import { tagsApi } from "@/api/tags";
 import {
 	type ImageInfo,
 	ImageUploader,
@@ -207,13 +209,13 @@ export function SeriesMetadataEditModal({
 			// Update series name if changed
 			const titleChanged = formState.title !== originalFormState?.title;
 			if (titleChanged && formState.title) {
-				await seriesApi.patch(seriesId, { name: formState.title });
+				await seriesApi.patch(seriesId, { title: formState.title });
 			}
 
 			// Update metadata
 			// Note: status is not supported in PatchSeriesMetadataRequest yet
 			await seriesMetadataApi.patchMetadata(seriesId, {
-				sortName: formState.titleSort || null,
+				titleSort: formState.titleSort || null,
 				summary: formState.summary || null,
 				// status: formState.status || undefined, // Not yet in API
 				readingDirection: formState.readingDirection || undefined,
@@ -223,6 +225,22 @@ export function SeriesMetadataEditModal({
 
 			// Update locks
 			await seriesMetadataApi.updateLocks(seriesId, locksState);
+
+			// Update genres if changed
+			const genresChanged =
+				JSON.stringify(formState.genres.slice().sort()) !==
+				JSON.stringify((originalFormState?.genres || []).slice().sort());
+			if (genresChanged) {
+				await genresApi.setForSeries(seriesId, formState.genres);
+			}
+
+			// Update tags if changed
+			const tagsChanged =
+				JSON.stringify(formState.tags.slice().sort()) !==
+				JSON.stringify((originalFormState?.tags || []).slice().sort());
+			if (tagsChanged) {
+				await tagsApi.setForSeries(seriesId, formState.tags);
+			}
 
 			// Upload poster image if selected
 			if (posterImage?.file) {

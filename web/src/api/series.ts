@@ -215,17 +215,17 @@ export const seriesApi = {
 	},
 
 	/**
-	 * Update series core fields (name)
+	 * Update series core fields (title)
 	 * @param seriesId - Series ID
-	 * @param data - Fields to update (name)
+	 * @param data - Fields to update (title)
 	 */
 	patch: async (
 		seriesId: string,
-		data: { name?: string },
-	): Promise<{ id: string; name: string; updatedAt: string }> => {
+		data: { title?: string },
+	): Promise<{ id: string; title: string; updatedAt: string }> => {
 		const response = await api.patch<{
 			id: string;
-			name: string;
+			title: string;
 			updatedAt: string;
 		}>(`/series/${seriesId}`, data);
 		return response.data;

@@ -19,7 +19,7 @@ export const seriesHandlers = [
 		const libraryId = url.searchParams.get("libraryId");
 
 		let results = mockSeries.filter((s) =>
-			s.name.toLowerCase().includes(query),
+			s.title.toLowerCase().includes(query),
 		);
 
 		if (libraryId) {
@@ -43,7 +43,7 @@ export const seriesHandlers = [
 
 		const query = body.query?.toLowerCase() || "";
 		let results = mockSeries.filter((s) =>
-			s.name.toLowerCase().includes(query),
+			s.title.toLowerCase().includes(query),
 		);
 
 		if (body.libraryId) {
@@ -107,7 +107,7 @@ export const seriesHandlers = [
 		if (body.search) {
 			const searchLower = body.search.toLowerCase();
 			results = results.filter((s) =>
-				s.name.toLowerCase().includes(searchLower),
+				s.title.toLowerCase().includes(searchLower),
 			);
 		}
 
@@ -240,15 +240,15 @@ export const seriesHandlers = [
 		// Return full metadata response
 		return HttpResponse.json({
 			seriesId: seriesItem.id,
-			title: seriesItem.name,
-			summary: `Summary for ${seriesItem.name}`,
+			title: seriesItem.title,
+			summary: `Summary for ${seriesItem.title}`,
 			publisher: "Mock Publisher",
 			imprint: null,
 			ageRating: 13,
 			language: "en",
 			status: "ongoing",
 			readingDirection: "ltr",
-			titleSort: seriesItem.name.toLowerCase(),
+			titleSort: seriesItem.title.toLowerCase(),
 			customMetadata: null,
 			createdAt: seriesItem.createdAt,
 			updatedAt: seriesItem.updatedAt,

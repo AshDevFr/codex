@@ -16,7 +16,6 @@ pub struct Model {
     pub library_id: Uuid,
     pub fingerprint: Option<String>,
     pub path: Option<String>,
-    pub custom_metadata: Option<String>, // JSON escape hatch for user-defined fields
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
