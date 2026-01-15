@@ -1,22 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import { GenreTagChips } from "./GenreTagChips";
 
-// Mock useNavigate
-const mockNavigate = vi.fn();
-vi.mock("react-router-dom", async () => {
-	const actual = await vi.importActual("react-router-dom");
-	return {
-		...actual,
-		useNavigate: () => mockNavigate,
-	};
-});
-
 describe("GenreTagChips", () => {
-	beforeEach(() => {
-		mockNavigate.mockClear();
-	});
-
 	const mockGenres = [
 		{
 			id: "genre-1",
@@ -82,21 +68,17 @@ describe("GenreTagChips", () => {
 		expect(screen.getByText("Favorite")).toBeInTheDocument();
 	});
 
-	it("should navigate on genre click when clickable", async () => {
-		const user = userEvent.setup();
-
+	it("should have correct href on genre link when clickable", () => {
 		renderWithProviders(<GenreTagChips genres={mockGenres} clickable={true} />);
 
-		await user.click(screen.getByText("Action"));
-
-		expect(mockNavigate).toHaveBeenCalledWith(
+		const actionLink = screen.getByText("Action").closest("a");
+		expect(actionLink).toHaveAttribute(
+			"href",
 			"/libraries/all/series?gf=any:Action",
 		);
 	});
 
-	it("should navigate with libraryId in path when provided", async () => {
-		const user = userEvent.setup();
-
+	it("should have href with libraryId in path when provided", () => {
 		renderWithProviders(
 			<GenreTagChips
 				genres={mockGenres}
@@ -105,36 +87,40 @@ describe("GenreTagChips", () => {
 			/>,
 		);
 
-		await user.click(screen.getByText("Action"));
-
-		expect(mockNavigate).toHaveBeenCalledWith(
+		const actionLink = screen.getByText("Action").closest("a");
+		expect(actionLink).toHaveAttribute(
+			"href",
 			"/libraries/lib-123/series?gf=any:Action",
 		);
 	});
 
-	it("should navigate on tag click when clickable", async () => {
-		const user = userEvent.setup();
-
+	it("should have correct href on tag link when clickable", () => {
 		renderWithProviders(<GenreTagChips tags={mockTags} clickable={true} />);
 
-		await user.click(screen.getByText("Favorite"));
-
-		expect(mockNavigate).toHaveBeenCalledWith(
+		const favoriteLink = screen.getByText("Favorite").closest("a");
+		expect(favoriteLink).toHaveAttribute(
+			"href",
 			"/libraries/all/series?tf=any:Favorite",
 		);
 	});
 
-	it("should not navigate when clickable is false", async () => {
+	it("should not render as links when clickable is false", async () => {
 		const user = userEvent.setup();
 
 		renderWithProviders(
 			<GenreTagChips genres={mockGenres} tags={mockTags} clickable={false} />,
 		);
 
-		await user.click(screen.getByText("Action"));
-		await user.click(screen.getByText("Favorite"));
+		// Badges should not be links
+		const actionBadge = screen.getByText("Action");
+		expect(actionBadge.closest("a")).not.toBeInTheDocument();
 
-		expect(mockNavigate).not.toHaveBeenCalled();
+		const favoriteBadge = screen.getByText("Favorite");
+		expect(favoriteBadge.closest("a")).not.toBeInTheDocument();
+
+		// Clicking should not cause errors (no navigation)
+		await user.click(actionBadge);
+		await user.click(favoriteBadge);
 	});
 
 	it("should limit display items with maxDisplay", () => {
@@ -154,8 +140,7 @@ describe("GenreTagChips", () => {
 		expect(screen.getByText("+2 more")).toBeInTheDocument();
 	});
 
-	it("should encode special characters in genre name for URL", async () => {
-		const user = userEvent.setup();
+	it("should encode special characters in genre name for URL", () => {
 		const genresWithSpecialChars = [
 			{
 				id: "genre-1",
@@ -169,9 +154,9 @@ describe("GenreTagChips", () => {
 			<GenreTagChips genres={genresWithSpecialChars} clickable={true} />,
 		);
 
-		await user.click(screen.getByText("Sci-Fi & Fantasy"));
-
-		expect(mockNavigate).toHaveBeenCalledWith(
+		const link = screen.getByText("Sci-Fi & Fantasy").closest("a");
+		expect(link).toHaveAttribute(
+			"href",
 			"/libraries/all/series?gf=any:Sci-Fi%20%26%20Fantasy",
 		);
 	});
@@ -221,13 +206,13 @@ describe("GenreTagChips", () => {
 		expect(screen.queryByText(/more/)).not.toBeInTheDocument();
 	});
 
-	it("should call navigate when badge is clicked and clickable is true", async () => {
-		const user = userEvent.setup();
+	it("should render badges as proper links when clickable", () => {
 		renderWithProviders(<GenreTagChips genres={mockGenres} clickable={true} />);
 
-		// Clicking a badge should trigger navigation
-		await user.click(screen.getByText("Adventure"));
-		expect(mockNavigate).toHaveBeenCalledWith(
+		// Verify badges are rendered as links
+		const adventureLink = screen.getByText("Adventure").closest("a");
+		expect(adventureLink).toHaveAttribute(
+			"href",
 			"/libraries/all/series?gf=any:Adventure",
 		);
 	});

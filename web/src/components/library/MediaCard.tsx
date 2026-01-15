@@ -22,6 +22,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { booksApi } from "@/api/books";
+import { AppLink } from "@/components/common";
 import { seriesApi } from "@/api/series";
 import type { Book, Series } from "@/types";
 
@@ -576,37 +577,42 @@ export function MediaCard({
 								multiline
 								maw={300}
 							>
-								<Text
-									fw={500}
-									lineClamp={1}
-									c="dimmed"
-									size="xs"
-									onClick={(e: React.MouseEvent) => {
-										e.stopPropagation();
-										navigate(`/series/${book.seriesId}`);
-									}}
+								<AppLink
+									to={`/series/${book.seriesId}`}
+									stopPropagation
 									style={{
 										overflow: "hidden",
 										textOverflow: "ellipsis",
 										whiteSpace: "nowrap",
 										display: "block",
-										cursor: "pointer",
 									}}
 									className="hover-underline"
 								>
-									{book.seriesName}
-								</Text>
+									<Text fw={500} lineClamp={1} c="dimmed" size="xs">
+										{book.seriesName}
+									</Text>
+								</AppLink>
 							</Tooltip>
 						)}
 					<Tooltip label={title} openDelay={500} multiline maw={300}>
-						<Text
-							fw={600}
-							lineClamp={hideSeriesName ? 2 : 1}
-							size="sm"
-							style={{ overflow: "hidden" }}
+						<AppLink
+							to={
+								type === "series"
+									? `/series/${(data as Series).id}`
+									: `/books/${(data as Book).id}`
+							}
+							stopPropagation
+							className="hover-underline"
 						>
-							{title}
-						</Text>
+							<Text
+								fw={600}
+								lineClamp={hideSeriesName ? 2 : 1}
+								size="sm"
+								style={{ overflow: "hidden" }}
+							>
+								{title}
+							</Text>
+						</AppLink>
 					</Tooltip>
 					<Group gap="xs" mt="auto" style={{ flexShrink: 0 }}>
 						{book && (

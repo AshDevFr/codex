@@ -623,20 +623,22 @@ export function BookDetail() {
 					{prevBook ? (
 						<Tooltip label={prevBook.title} position="top">
 							<Button
+								component={Link}
+								to={`/books/${prevBook.id}`}
 								variant="subtle"
 								size="xs"
 								leftSection={<IconChevronLeft size={14} />}
-								onClick={() => navigate(`/books/${prevBook.id}`)}
 							>
 								Previous
 							</Button>
 						</Tooltip>
 					) : (
 						<Button
+							component={Link}
+							to={`/series/${book.seriesId}`}
 							variant="subtle"
 							size="xs"
 							leftSection={<IconChevronLeft size={14} />}
-							onClick={() => navigate(`/series/${book.seriesId}`)}
 						>
 							Back to Series
 						</Button>
@@ -645,10 +647,11 @@ export function BookDetail() {
 					{nextBook && (
 						<Tooltip label={nextBook.title} position="top">
 							<Button
+								component={Link}
+								to={`/books/${nextBook.id}`}
 								variant="subtle"
 								size="xs"
 								rightSection={<IconChevronRight size={14} />}
-								onClick={() => navigate(`/books/${nextBook.id}`)}
 							>
 								Next
 							</Button>

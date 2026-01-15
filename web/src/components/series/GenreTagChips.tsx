@@ -1,5 +1,5 @@
 import { Badge, Group, Text } from "@mantine/core";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import type { Genre } from "@/api/genres";
 import type { Tag } from "@/api/tags";
 
@@ -18,21 +18,13 @@ export function GenreTagChips({
 	clickable = true,
 	maxDisplay,
 }: GenreTagChipsProps) {
-	const navigate = useNavigate();
+	const basePath = libraryId ? `/libraries/${libraryId}` : "/libraries/all";
 
-	const handleGenreClick = (genre: Genre) => {
-		if (!clickable) return;
-		const basePath = libraryId ? `/libraries/${libraryId}` : "/libraries/all";
-		// Use the filter format: gf=any:GenreName
-		navigate(`${basePath}/series?gf=any:${encodeURIComponent(genre.name)}`);
-	};
+	const getGenreUrl = (genre: Genre) =>
+		`${basePath}/series?gf=any:${encodeURIComponent(genre.name)}`;
 
-	const handleTagClick = (tag: Tag) => {
-		if (!clickable) return;
-		const basePath = libraryId ? `/libraries/${libraryId}` : "/libraries/all";
-		// Use the filter format: tf=any:TagName
-		navigate(`${basePath}/series?tf=any:${encodeURIComponent(tag.name)}`);
-	};
+	const getTagUrl = (tag: Tag) =>
+		`${basePath}/series?tf=any:${encodeURIComponent(tag.name)}`;
 
 	const displayGenres = maxDisplay ? genres.slice(0, maxDisplay) : genres;
 	const displayTags = maxDisplay
@@ -47,30 +39,54 @@ export function GenreTagChips({
 
 	return (
 		<Group gap="xs">
-			{displayGenres.map((genre) => (
-				<Badge
-					key={`genre-${genre.id}`}
-					variant="light"
-					color="blue"
-					size="sm"
-					style={clickable ? { cursor: "pointer" } : undefined}
-					onClick={() => handleGenreClick(genre)}
-				>
-					{genre.name}
-				</Badge>
-			))}
-			{displayTags.map((tag) => (
-				<Badge
-					key={`tag-${tag.id}`}
-					variant="light"
-					color="gray"
-					size="sm"
-					style={clickable ? { cursor: "pointer" } : undefined}
-					onClick={() => handleTagClick(tag)}
-				>
-					{tag.name}
-				</Badge>
-			))}
+			{displayGenres.map((genre) =>
+				clickable ? (
+					<Badge
+						key={`genre-${genre.id}`}
+						component={Link}
+						to={getGenreUrl(genre)}
+						variant="light"
+						color="blue"
+						size="sm"
+						style={{ cursor: "pointer", textDecoration: "none" }}
+					>
+						{genre.name}
+					</Badge>
+				) : (
+					<Badge
+						key={`genre-${genre.id}`}
+						variant="light"
+						color="blue"
+						size="sm"
+					>
+						{genre.name}
+					</Badge>
+				),
+			)}
+			{displayTags.map((tag) =>
+				clickable ? (
+					<Badge
+						key={`tag-${tag.id}`}
+						component={Link}
+						to={getTagUrl(tag)}
+						variant="light"
+						color="gray"
+						size="sm"
+						style={{ cursor: "pointer", textDecoration: "none" }}
+					>
+						{tag.name}
+					</Badge>
+				) : (
+					<Badge
+						key={`tag-${tag.id}`}
+						variant="light"
+						color="gray"
+						size="sm"
+					>
+						{tag.name}
+					</Badge>
+				),
+			)}
 			{hiddenCount > 0 && (
 				<Text size="xs" c="dimmed">
 					+{hiddenCount} more

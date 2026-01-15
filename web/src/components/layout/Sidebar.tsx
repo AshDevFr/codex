@@ -31,7 +31,7 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { librariesApi } from "@/api/libraries";
 import { LibraryModal } from "@/components/forms/LibraryModal";
 import { TaskNotificationBadge } from "@/components/TaskNotificationBadge";
@@ -182,16 +182,15 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 				<AppShell.Section grow>
 					<Stack gap="xs">
 						<NavLink
-							onClick={() => navigate("/")}
+							component={Link}
+							to="/"
 							label="Home"
 							leftSection={<IconHome size={20} />}
 							active={currentPath === "/"}
 						/>
 						<NavLink
-							onClick={() => {
-								const lastTab = getLastTab("all") || "series";
-								navigate(`/libraries/all/${lastTab}`);
-							}}
+							component={Link}
+							to={`/libraries/all/${getLastTab("all") || "series"}`}
 							label="Libraries"
 							leftSection={<IconBooks size={20} />}
 							opened
@@ -251,10 +250,8 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 								libraries.map((library) => (
 									<NavLink
 										key={library.id}
-										onClick={() => {
-											const lastTab = getLastTab(library.id) || "recommended";
-											navigate(`/libraries/${library.id}/${lastTab}`);
-										}}
+										component={Link}
+										to={`/libraries/${library.id}/${getLastTab(library.id) || "recommended"}`}
 										label={library.name}
 										// leftSection={<IconFolder size={16} />}
 										active={currentPath.startsWith(`/libraries/${library.id}/`)}
@@ -352,31 +349,36 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 							{isAdmin && (
 								<>
 									<NavLink
-										onClick={() => navigate("/settings/server")}
+										component={Link}
+										to="/settings/server"
 										label="Server"
 										leftSection={<IconServer size={16} />}
 										active={currentPath.startsWith("/settings/server")}
 									/>
 									<NavLink
-										onClick={() => navigate("/settings/users")}
+										component={Link}
+										to="/settings/users"
 										label="Users"
 										leftSection={<IconUsers size={16} />}
 										active={currentPath.startsWith("/settings/users")}
 									/>
 									<NavLink
-										onClick={() => navigate("/settings/tasks")}
+										component={Link}
+										to="/settings/tasks"
 										label="Tasks"
 										leftSection={<IconClipboardList size={16} />}
 										active={currentPath.startsWith("/settings/tasks")}
 									/>
 									<NavLink
-										onClick={() => navigate("/settings/duplicates")}
+										component={Link}
+										to="/settings/duplicates"
 										label="Duplicates"
 										leftSection={<IconCopy size={16} />}
 										active={currentPath.startsWith("/settings/duplicates")}
 									/>
 									<NavLink
-										onClick={() => navigate("/settings/metrics")}
+										component={Link}
+										to="/settings/metrics"
 										label="Metrics"
 										leftSection={<IconChartBar size={16} />}
 										active={currentPath.startsWith("/settings/metrics")}
@@ -386,7 +388,8 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 
 							{/* User Section */}
 							<NavLink
-								onClick={() => navigate("/settings/profile")}
+								component={Link}
+								to="/settings/profile"
 								label="Profile"
 								leftSection={<IconUser size={16} />}
 								active={currentPath.startsWith("/settings/profile")}
