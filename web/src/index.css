@@ -69,6 +69,85 @@ button:focus-visible {
 	}
 }
 
+/* Light theme improvements for Mantine components */
+[data-mantine-color-scheme="light"] {
+	/* AppShell main content area - subtle gray background for contrast */
+	.mantine-AppShell-main {
+		background-color: #f1f3f5;
+	}
+
+	/* Header styling */
+	.mantine-AppShell-header {
+		background-color: #ffffff;
+		border-bottom: 1px solid #dee2e6;
+	}
+
+	/* Navbar/Sidebar styling */
+	.mantine-AppShell-navbar {
+		background-color: #ffffff;
+		border-right: 1px solid #dee2e6;
+	}
+
+	/* Card improvements - white cards on gray background */
+	.mantine-Card-root {
+		background-color: #ffffff;
+		border-color: #dee2e6;
+	}
+
+	/* NavLink active state - more visible in light mode */
+	.mantine-NavLink-root[data-active="true"] {
+		background-color: #e7f5ff;
+	}
+
+	/* Input fields - ensure good contrast */
+	.mantine-Input-input,
+	.mantine-TextInput-input,
+	.mantine-PasswordInput-input,
+	.mantine-Textarea-input,
+	.mantine-Select-input {
+		background-color: #ffffff;
+		border-color: #ced4da;
+	}
+
+	/* Menu dropdown */
+	.mantine-Menu-dropdown {
+		background-color: #ffffff;
+		border-color: #dee2e6;
+	}
+
+	/* Modal content */
+	.mantine-Modal-content {
+		background-color: #ffffff;
+	}
+
+	/* Paper component */
+	.mantine-Paper-root {
+		background-color: #ffffff;
+	}
+}
+
+/* Dark theme - ensure consistent dark styling */
+[data-mantine-color-scheme="dark"] {
+	.mantine-AppShell-main {
+		background-color: #1a1a1a;
+	}
+
+	.mantine-AppShell-header {
+		background-color: #1a1a1a;
+		border-bottom: 1px solid #373a40;
+	}
+
+	.mantine-AppShell-navbar {
+		background-color: #1a1a1a;
+		border-right: 1px solid #373a40;
+	}
+
+	.mantine-Card-root {
+		background-color: #242424;
+		border-color: #373a40;
+	}
+}
+
 /* Fade-in animation for new items */
 @keyframes fadeIn {
 	from {

@@ -1,5 +1,6 @@
 import {
 	createTheme,
+	type CSSVariablesResolver,
 	type MantineColorsTuple,
 	type MantineTheme,
 	type ModalProps,
@@ -25,7 +26,7 @@ export const theme = createTheme({
 		blue: primaryBlue,
 	},
 
-	// Dark theme colors (matching Komga's aesthetic)
+	// Base text color (dark theme defaults)
 	black: "#121212",
 	white: "#e0e0e0",
 
@@ -88,5 +89,50 @@ export const theme = createTheme({
 				};
 			},
 		},
+	},
+});
+
+// CSS variables resolver for light/dark mode specific customizations
+export const cssVariablesResolver: CSSVariablesResolver = (_theme) => ({
+	variables: {
+		// Scheme-independent variables
+	},
+	light: {
+		// Light mode: Use a clean white background with better contrast
+		"--mantine-color-body": "#ffffff",
+
+		// Improve text contrast in light mode
+		"--mantine-color-text": "#1a1b1e",
+		"--mantine-color-dimmed": "#495057",
+
+		// AppShell colors for light mode
+		"--mantine-color-default": "#ffffff",
+		"--mantine-color-default-hover": "#f8f9fa",
+		"--mantine-color-default-border": "#dee2e6",
+
+		// Card and surface colors
+		"--app-shell-main-bg": "#f8f9fa",
+		"--card-bg": "#ffffff",
+		"--card-border": "#e9ecef",
+
+		// Navbar styling in light mode
+		"--mantine-color-gray-light": "#f1f3f5",
+		"--mantine-color-gray-light-hover": "#e9ecef",
+	},
+	dark: {
+		// Dark mode keeps existing styling
+		"--mantine-color-body": "#121212",
+		"--mantine-color-text": "#e0e0e0",
+		"--mantine-color-dimmed": "#909296",
+
+		// AppShell colors for dark mode
+		"--mantine-color-default": "#1a1a1a",
+		"--mantine-color-default-hover": "#2c2c2c",
+		"--mantine-color-default-border": "#373a40",
+
+		// Card and surface colors
+		"--app-shell-main-bg": "#1a1a1a",
+		"--card-bg": "#242424",
+		"--card-border": "#373a40",
 	},
 });

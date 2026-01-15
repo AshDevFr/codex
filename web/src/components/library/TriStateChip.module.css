@@ -26,13 +26,22 @@
 }
 
 .badge[data-state="neutral"] {
-	border-color: var(--mantine-color-gray-6);
-	color: var(--mantine-color-gray-4);
+	border-color: light-dark(
+		var(--mantine-color-gray-4),
+		var(--mantine-color-gray-6)
+	);
+	color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-gray-4));
 }
 
 .badge[data-state="neutral"]:hover {
-	border-color: var(--mantine-color-gray-5);
-	background-color: var(--mantine-color-gray-9);
+	border-color: light-dark(
+		var(--mantine-color-gray-5),
+		var(--mantine-color-gray-5)
+	);
+	background-color: light-dark(
+		var(--mantine-color-gray-1),
+		var(--mantine-color-gray-9)
+	);
 }
 
 .badge[data-state="include"] {

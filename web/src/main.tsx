@@ -5,7 +5,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import { ThemeSync } from "./components/ThemeSync.tsx";
-import { theme } from "./theme";
+import { cssVariablesResolver, theme } from "./theme";
 
 // Import Mantine styles
 import "@mantine/core/styles.css";
@@ -41,7 +41,7 @@ enableMocking().then(() => {
 	if (rootElement) {
 		createRoot(rootElement).render(
 			<StrictMode>
-				<MantineProvider theme={theme} defaultColorScheme="dark">
+				<MantineProvider theme={theme} defaultColorScheme="dark" cssVariablesResolver={cssVariablesResolver}>
 					<ThemeSync />
 					<Notifications />
 					<QueryClientProvider client={queryClient}>

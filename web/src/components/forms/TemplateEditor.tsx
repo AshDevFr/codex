@@ -243,7 +243,10 @@ export function TemplateEditor({
 			</Group>
 			<Box
 				style={{
-					border: "1px solid var(--mantine-color-dark-4)",
+					border:
+						colorScheme === "dark"
+							? "1px solid var(--mantine-color-dark-4)"
+							: "1px solid var(--mantine-color-gray-4)",
 					borderRadius: "var(--mantine-radius-sm)",
 					overflow: "auto",
 					height: editorHeight,
@@ -261,9 +264,14 @@ export function TemplateEditor({
 						fontSize: 13,
 						lineHeight: 1.5,
 						minHeight: editorHeight - 2, // Account for border
-						backgroundColor: disabled
-							? "var(--mantine-color-dark-7)"
-							: "var(--mantine-color-dark-6)",
+						backgroundColor:
+							colorScheme === "dark"
+								? disabled
+									? "var(--mantine-color-dark-7)"
+									: "var(--mantine-color-dark-6)"
+								: disabled
+									? "var(--mantine-color-gray-2)"
+									: "var(--mantine-color-gray-0)",
 						color: "var(--mantine-color-text)",
 					}}
 					textareaClassName="template-editor-textarea"
@@ -317,7 +325,13 @@ export function TemplateEditor({
 					<Button
 						variant="subtle"
 						size="xs"
-						onClick={() => setTestData(initialSampleData)}
+						onClick={() => {
+							setTestData(initialSampleData);
+							// Also reset rawJson directly since the effect may not trigger
+							// if testData value doesn't change (e.g., when external state was undefined)
+							setRawJson(JSON.stringify(initialSampleData, null, 2));
+							setJsonError(null);
+						}}
 					>
 						Reset
 					</Button>
@@ -335,7 +349,10 @@ export function TemplateEditor({
 			)}
 			<Box
 				style={{
-					border: "1px solid var(--mantine-color-dark-4)",
+					border:
+						colorScheme === "dark"
+							? "1px solid var(--mantine-color-dark-4)"
+							: "1px solid var(--mantine-color-gray-4)",
 					borderRadius: "var(--mantine-radius-sm)",
 					overflow: "auto",
 					height: editorHeight,
@@ -416,7 +433,10 @@ export function TemplateEditor({
 							: "var(--mantine-color-gray-0)",
 					padding: 12,
 					borderRadius: "var(--mantine-radius-sm)",
-					border: "1px solid var(--mantine-color-dark-4)",
+					border:
+						colorScheme === "dark"
+							? "1px solid var(--mantine-color-dark-4)"
+							: "1px solid var(--mantine-color-gray-4)",
 					minHeight: 100,
 					maxHeight: 300,
 					overflow: "auto",
@@ -561,7 +581,10 @@ export function TemplateEditor({
 										size="xs"
 										style={{
 											fontFamily: "monospace",
-											backgroundColor: "var(--mantine-color-dark-6)",
+											backgroundColor:
+												colorScheme === "dark"
+													? "var(--mantine-color-dark-6)"
+													: "var(--mantine-color-gray-2)",
 											padding: "2px 6px",
 											borderRadius: 4,
 										}}
