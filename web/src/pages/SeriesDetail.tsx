@@ -32,9 +32,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { seriesApi } from "@/api/series";
 import { seriesMetadataApi } from "@/api/seriesMetadata";
+import { settingsApi } from "@/api/settings";
 import {
 	AlternateTitles,
+	CommunityRating,
+	CustomMetadataDisplay,
 	ExternalLinks,
+	ExternalRatings,
 	GenreTagChips,
 	SeriesBookList,
 	SeriesMetadataEditModal,
@@ -87,6 +91,13 @@ export function SeriesDetail() {
 		queryKey: ["series-metadata", seriesId],
 		queryFn: () => seriesMetadataApi.getFullMetadata(seriesId!),
 		enabled: !!seriesId,
+	});
+
+	// Fetch public settings (for custom metadata template)
+	const { data: publicSettings } = useQuery({
+		queryKey: ["public-settings"],
+		queryFn: () => settingsApi.getPublicSettings(),
+		staleTime: 5 * 60 * 1000, // Cache for 5 minutes
 	});
 
 	// Mark as read mutation
@@ -481,13 +492,35 @@ export function SeriesDetail() {
 						</Group>
 					)}
 
-					{/* User Rating - compact */}
-					<Group gap="md" align="center">
+					{/* Ratings Section - Your rating, Community average, External ratings */}
+					<Group gap="md" align="flex-start">
 						<Text size="sm" c="dimmed" w={100}>
-							YOUR RATING
+							RATINGS
 						</Text>
-						<SeriesRating seriesId={series.id} />
+						<Group gap="lg" wrap="wrap">
+							{/* Your rating */}
+							<SeriesRating seriesId={series.id} />
+							{/* Community average */}
+							<CommunityRating seriesId={series.id} />
+							{/* External ratings (MAL, AniList, etc.) */}
+							{metadata?.externalRatings &&
+								metadata.externalRatings.length > 0 && (
+									<ExternalRatings ratings={metadata.externalRatings} />
+								)}
+						</Group>
 					</Group>
+
+					{/* Custom Metadata */}
+					{metadata?.customMetadata && (
+						<CustomMetadataDisplay
+							customMetadata={
+								metadata.customMetadata as Record<string, unknown>
+							}
+							template={
+								publicSettings?.["display.custom_metadata_template"]?.value
+							}
+						/>
+					)}
 				</Stack>
 
 				{/* Books list */}

@@ -3,14 +3,11 @@ mod common;
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use codex::api::error::ErrorResponse;
-use codex::db::repositories::{
-    BookRepository, LibraryRepository, SeriesRepository, UserRepository,
-};
+use codex::db::repositories::{LibraryRepository, SeriesRepository, UserRepository};
 use codex::models::ScanningStrategy;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;
-use sea_orm::prelude::Decimal;
 
 // ============================================================================
 // OPDS Root Catalog Tests

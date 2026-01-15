@@ -6,11 +6,11 @@ use crate::api::{
             CreateExternalRatingRequest, ExternalLinkDto, ExternalLinkListResponse,
             ExternalRatingDto, ExternalRatingListResponse, FullSeriesMetadataResponse, GenreDto,
             GenreListResponse, MetadataLocks, PatchSeriesMetadataRequest, PatchSeriesRequest,
-            ReplaceSeriesMetadataRequest, SeriesCoverDto, SeriesCoverListResponse,
-            SeriesMetadataResponse, SeriesSortParam, SeriesUpdateResponse, SetSeriesGenresRequest,
-            SetSeriesTagsRequest, SetUserRatingRequest, TagDto, TagListResponse,
-            TaxonomyCleanupResponse, UpdateAlternateTitleRequest, UpdateMetadataLocksRequest,
-            UserRatingsListResponse, UserSeriesRatingDto,
+            ReplaceSeriesMetadataRequest, SeriesAverageRatingResponse, SeriesCoverDto,
+            SeriesCoverListResponse, SeriesMetadataResponse, SeriesSortParam, SeriesUpdateResponse,
+            SetSeriesGenresRequest, SetSeriesTagsRequest, SetUserRatingRequest, TagDto,
+            TagListResponse, TaxonomyCleanupResponse, UpdateAlternateTitleRequest,
+            UpdateMetadataLocksRequest, UserRatingsListResponse, UserSeriesRatingDto,
         },
         BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListRequest,
         SeriesListResponse,
@@ -27,6 +27,9 @@ use crate::db::repositories::{
 };
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
 use crate::require_permission;
+use crate::utils::{
+    parse_custom_metadata, serialize_custom_metadata, validate_custom_metadata_size,
+};
 use axum::{
     body::Body,
     extract::{Multipart, Path, Query, State},
@@ -405,6 +408,7 @@ pub async fn patch_series(
                 year_lock: Set(false),
                 genres_lock: Set(false),
                 tags_lock: Set(false),
+                custom_metadata_lock: Set(false),
                 created_at: Set(now),
                 updated_at: Set(now),
             };
@@ -1763,7 +1767,12 @@ pub async fn replace_series_metadata(
     active.reading_direction = Set(request.reading_direction.clone());
     active.year = Set(request.year);
     active.total_book_count = Set(request.total_book_count);
-    active.custom_metadata = Set(request.custom_metadata.clone());
+
+    // Validate and convert custom_metadata from JSON Value to String
+    if let Some(ref cm) = request.custom_metadata {
+        validate_custom_metadata_size(Some(cm)).map_err(ApiError::BadRequest)?;
+    }
+    active.custom_metadata = Set(serialize_custom_metadata(request.custom_metadata.as_ref()));
     active.updated_at = Set(Utc::now());
 
     let updated_metadata = active
@@ -1809,7 +1818,7 @@ pub async fn replace_series_metadata(
         reading_direction: updated_metadata.reading_direction,
         year: updated_metadata.year,
         total_book_count: updated_metadata.total_book_count,
-        custom_metadata: updated_metadata.custom_metadata,
+        custom_metadata: parse_custom_metadata(updated_metadata.custom_metadata.as_deref()),
         updated_at: updated_metadata.updated_at,
     }))
 }
@@ -1862,12 +1871,10 @@ pub async fn patch_series_metadata(
     let mut has_changes = false;
 
     // Handle title update with auto-lock
-    if let Some(opt) = request.title.into_nested_option() {
-        if let Some(title) = opt {
-            metadata_active.title = Set(title);
-            metadata_active.title_lock = Set(true); // Auto-lock when user edits
-            has_changes = true;
-        }
+    if let Some(Some(title)) = request.title.into_nested_option() {
+        metadata_active.title = Set(title);
+        metadata_active.title_lock = Set(true); // Auto-lock when user edits
+        has_changes = true;
     }
     if let Some(opt) = request.title_sort.into_nested_option() {
         metadata_active.title_sort = Set(opt);
@@ -1910,7 +1917,12 @@ pub async fn patch_series_metadata(
         has_changes = true;
     }
     if let Some(opt) = request.custom_metadata.into_nested_option() {
-        metadata_active.custom_metadata = Set(opt);
+        // Validate size if value is provided
+        if let Some(ref cm) = opt {
+            validate_custom_metadata_size(Some(cm)).map_err(ApiError::BadRequest)?;
+        }
+        // Convert from JSON Value to String for database storage
+        metadata_active.custom_metadata = Set(serialize_custom_metadata(opt.as_ref()));
         has_changes = true;
     }
 
@@ -1952,7 +1964,7 @@ pub async fn patch_series_metadata(
         reading_direction: updated_metadata.reading_direction,
         year: updated_metadata.year,
         total_book_count: updated_metadata.total_book_count,
-        custom_metadata: updated_metadata.custom_metadata,
+        custom_metadata: parse_custom_metadata(updated_metadata.custom_metadata.as_deref()),
         updated_at: updated_metadata.updated_at,
     }))
 }
@@ -2093,7 +2105,7 @@ pub async fn get_full_series_metadata(
         reading_direction: metadata.reading_direction,
         year: metadata.year,
         total_book_count: metadata.total_book_count,
-        custom_metadata: metadata.custom_metadata,
+        custom_metadata: parse_custom_metadata(metadata.custom_metadata.as_deref()),
         locks: MetadataLocks {
             title: metadata.title_lock,
             title_sort: metadata.title_sort_lock,
@@ -2105,8 +2117,10 @@ pub async fn get_full_series_metadata(
             language: metadata.language_lock,
             reading_direction: metadata.reading_direction_lock,
             year: metadata.year_lock,
+            total_book_count: metadata.total_book_count_lock,
             genres: metadata.genres_lock,
             tags: metadata.tags_lock,
+            custom_metadata: metadata.custom_metadata_lock,
         },
         genres: genre_dtos,
         tags: tag_dtos,
@@ -2205,12 +2219,20 @@ pub async fn update_metadata_locks(
         active.year_lock = Set(v);
         has_changes = true;
     }
+    if let Some(v) = request.total_book_count {
+        active.total_book_count_lock = Set(v);
+        has_changes = true;
+    }
     if let Some(v) = request.genres {
         active.genres_lock = Set(v);
         has_changes = true;
     }
     if let Some(v) = request.tags {
         active.tags_lock = Set(v);
+        has_changes = true;
+    }
+    if let Some(v) = request.custom_metadata {
+        active.custom_metadata_lock = Set(v);
         has_changes = true;
     }
 
@@ -2239,8 +2261,10 @@ pub async fn update_metadata_locks(
         language: updated.language_lock,
         reading_direction: updated.reading_direction_lock,
         year: updated.year_lock,
+        total_book_count: updated.total_book_count_lock,
         genres: updated.genres_lock,
         tags: updated.tags_lock,
+        custom_metadata: updated.custom_metadata_lock,
     }))
 }
 
@@ -2292,8 +2316,10 @@ pub async fn get_metadata_locks(
         language: metadata.language_lock,
         reading_direction: metadata.reading_direction_lock,
         year: metadata.year_lock,
+        total_book_count: metadata.total_book_count_lock,
         genres: metadata.genres_lock,
         tags: metadata.tags_lock,
+        custom_metadata: metadata.custom_metadata_lock,
     }))
 }
 
@@ -3624,6 +3650,58 @@ pub async fn delete_external_rating(
     let _ = state.event_broadcaster.emit(event);
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+// ============================================================================
+// Average Rating Handler
+// ============================================================================
+
+/// Get the average community rating for a series
+///
+/// Returns the average rating from all users and the total count of ratings.
+/// Ratings are stored on a 0-100 scale internally.
+#[utoipa::path(
+    get,
+    path = "/api/v1/series/{series_id}/ratings/average",
+    params(
+        ("series_id" = Uuid, Path, description = "Series ID")
+    ),
+    responses(
+        (status = 200, description = "Average rating for the series", body = SeriesAverageRatingResponse,
+            example = json!({"average": 78.5, "count": 15})),
+        (status = 404, description = "Series not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn get_series_average_rating(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+) -> Result<Json<SeriesAverageRatingResponse>, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    // Verify series exists
+    SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Get average rating
+    let average = UserSeriesRatingRepository::calculate_average_for_series(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to calculate average rating: {}", e)))?;
+
+    // Get count
+    let count = UserSeriesRatingRepository::count_for_series(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to count ratings: {}", e)))?;
+
+    Ok(Json(SeriesAverageRatingResponse { average, count }))
 }
 
 // ============================================================================

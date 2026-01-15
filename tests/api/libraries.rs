@@ -1,3 +1,6 @@
+// Allow unused temp_dir - needed to keep TempDir alive but not always referenced
+#![allow(unused_variables)]
+
 #[path = "../common/mod.rs"]
 mod common;
 

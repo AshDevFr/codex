@@ -1,4 +1,4 @@
-import { Button, Group, Text } from "@mantine/core";
+import { Button, Group, Text, Tooltip } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { IconStar } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
@@ -48,19 +48,21 @@ export function SeriesRating({ seriesId }: SeriesRatingProps) {
 						<Text fw={700} size="sm">
 							{displayValue?.toFixed(1)}
 						</Text>
-						{existingRating.notes && (
-							<Text
-								size="xs"
-								c="dimmed"
-								lineClamp={1}
-								style={{ maxWidth: 200 }}
-							>
-								{existingRating.notes}
-							</Text>
-						)}
 						<Button size="xs" variant="subtle" onClick={openModal}>
 							Edit
 						</Button>
+						{existingRating.notes && (
+							<Tooltip label={existingRating.notes} multiline maw={300}>
+								<Text
+									size="xs"
+									c="dimmed"
+									lineClamp={1}
+									style={{ maxWidth: 200, cursor: "help" }}
+								>
+									{existingRating.notes}
+								</Text>
+							</Tooltip>
+						)}
 					</>
 				) : (
 					<Button size="xs" variant="light" onClick={openModal}>

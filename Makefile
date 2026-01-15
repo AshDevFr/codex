@@ -198,6 +198,7 @@ check: fmt lint test ## Run format, lint, and tests
 ci: ## Run CI checks (format check, lint, tests, build)
 	cargo fmt -- --check
 	cargo clippy -- -D warnings
+	cargo check --features embed-frontend
 	cargo test
 	cd web && npm run test:run
 	cargo build --release

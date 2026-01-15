@@ -1,21 +1,21 @@
+// Allow unused temp_dir - needed to keep TempDir alive but not always referenced
+#![allow(unused_variables)]
+
 #[path = "../common/mod.rs"]
 mod common;
 
 use chrono::Utc;
-use codex::api::dto::duplicates::{
-    DuplicateGroup, ListDuplicatesResponse, TriggerDuplicateScanResponse,
-};
+use codex::api::dto::duplicates::{ListDuplicatesResponse, TriggerDuplicateScanResponse};
 use codex::api::error::ErrorResponse;
-use codex::db::entities::{books, libraries, series, series_metadata};
+use codex::db::entities::{books, series, series_metadata};
 use codex::db::repositories::{
     BookDuplicatesRepository, BookRepository, LibraryRepository, UserRepository,
 };
 use codex::db::ScanningStrategy;
 use codex::utils::password;
 use common::*;
-use hyper::{Request, StatusCode};
+use hyper::StatusCode;
 use sea_orm::{ActiveModelTrait, DatabaseConnection, Set};
-use tower::ServiceExt;
 use uuid::Uuid;
 
 // Helper to create an admin user and get a token

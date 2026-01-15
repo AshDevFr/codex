@@ -79,6 +79,7 @@ export function LockableChipInput({
 				value={value}
 				onChange={handleChange}
 				style={{ flex: 1 }}
+				comboboxProps={{ zIndex: 1100, ...props.comboboxProps }}
 				{...props}
 			/>
 		</Group>

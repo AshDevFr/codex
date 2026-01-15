@@ -11,6 +11,15 @@ export type BulkUpdateSettingsRequest =
 // Bulk update returns an array of SettingDto
 export type BulkUpdateSettingsResponse = SettingDto[];
 
+// Public setting type (simplified, for non-admin users)
+export interface PublicSettingDto {
+	key: string;
+	value: string;
+}
+
+// Map of setting key to public setting
+export type PublicSettingsMap = Record<string, PublicSettingDto>;
+
 export const settingsApi = {
 	/**
 	 * List all settings (admin only)
@@ -74,6 +83,15 @@ export const settingsApi = {
 		const response = await api.get<SettingHistoryDto[]>(
 			`/admin/settings/${encodeURIComponent(key)}/history`,
 		);
+		return response.data;
+	},
+
+	/**
+	 * Get public display settings (all authenticated users)
+	 * Returns non-sensitive settings that affect UI/display behavior
+	 */
+	getPublicSettings: async (): Promise<PublicSettingsMap> => {
+		const response = await api.get<PublicSettingsMap>("/settings/public");
 		return response.data;
 	},
 };

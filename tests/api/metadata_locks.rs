@@ -240,6 +240,7 @@ async fn test_get_metadata_locks() {
     assert!(!body.year);
     assert!(!body.genres);
     assert!(!body.tags);
+    assert!(!body.custom_metadata);
 }
 
 #[tokio::test]
@@ -294,6 +295,8 @@ async fn test_update_metadata_locks() {
         reading_direction: None,
         genres: None,
         tags: None,
+        custom_metadata: None,
+        total_book_count: None,
     };
 
     let request = put_json_request_with_auth(
@@ -359,6 +362,8 @@ async fn test_update_metadata_locks_partial() {
         year: None,
         genres: None,
         tags: None,
+        custom_metadata: None,
+        total_book_count: None,
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", series.id),
@@ -383,6 +388,8 @@ async fn test_update_metadata_locks_partial() {
         year: None,
         genres: None,
         tags: None,
+        custom_metadata: None,
+        total_book_count: None,
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", series.id),
@@ -431,6 +438,8 @@ async fn test_update_metadata_locks_all_fields() {
         year: Some(true),
         genres: Some(true),
         tags: Some(true),
+        custom_metadata: Some(true),
+        total_book_count: Some(true),
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", series.id),
@@ -455,6 +464,7 @@ async fn test_update_metadata_locks_all_fields() {
     assert!(locks.year);
     assert!(locks.genres);
     assert!(locks.tags);
+    assert!(locks.custom_metadata);
 }
 
 #[tokio::test]
@@ -479,6 +489,8 @@ async fn test_update_metadata_locks_not_found() {
         year: None,
         genres: None,
         tags: None,
+        custom_metadata: None,
+        total_book_count: None,
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", fake_id),
@@ -520,6 +532,8 @@ async fn test_update_metadata_locks_empty_request() {
         year: None,
         genres: None,
         tags: None,
+        custom_metadata: None,
+        total_book_count: None,
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", series.id),
@@ -578,6 +592,8 @@ async fn test_update_locks_requires_write_permission() {
         year: None,
         genres: None,
         tags: None,
+        custom_metadata: None,
+        total_book_count: None,
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", series.id),

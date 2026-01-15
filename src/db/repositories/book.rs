@@ -1208,7 +1208,6 @@ mod tests {
     use crate::db::repositories::{LibraryRepository, SeriesRepository};
     use crate::db::test_helpers::create_test_db;
     use crate::db::ScanningStrategy;
-    use sea_orm::prelude::Decimal;
 
     /// Helper to create a test book model
     fn create_book_model(

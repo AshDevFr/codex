@@ -10,7 +10,6 @@ use common::{
 };
 use hyper::StatusCode;
 use serde_json::json;
-use uuid::Uuid;
 
 /// Test listing tasks via API
 #[tokio::test]

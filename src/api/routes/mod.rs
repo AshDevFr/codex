@@ -338,6 +338,11 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/series/:series_id/external-ratings/:source",
             delete(handlers::delete_external_rating),
         )
+        // Series average rating route (protected)
+        .route(
+            "/series/:series_id/ratings/average",
+            get(handlers::get_series_average_rating),
+        )
         // Series external links routes (protected)
         .route(
             "/series/:series_id/external-links",
@@ -585,6 +590,11 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         // Filesystem routes (protected, admin only)
         .route("/filesystem/browse", get(handlers::browse_filesystem))
         .route("/filesystem/drives", get(handlers::list_drives))
+        // Public settings routes (protected, all authenticated users)
+        .route(
+            "/settings/public",
+            get(handlers::settings::get_public_settings),
+        )
         // Settings routes (protected, admin only)
         .route("/admin/settings", get(handlers::settings::list_settings))
         .route(

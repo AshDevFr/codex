@@ -23,13 +23,15 @@ export function GenreTagChips({
 	const handleGenreClick = (genre: Genre) => {
 		if (!clickable) return;
 		const basePath = libraryId ? `/libraries/${libraryId}` : "/libraries/all";
-		navigate(`${basePath}/series?genres=${encodeURIComponent(genre.name)}`);
+		// Use the filter format: gf=any:GenreName
+		navigate(`${basePath}/series?gf=any:${encodeURIComponent(genre.name)}`);
 	};
 
 	const handleTagClick = (tag: Tag) => {
 		if (!clickable) return;
 		const basePath = libraryId ? `/libraries/${libraryId}` : "/libraries/all";
-		navigate(`${basePath}/series?tags=${encodeURIComponent(tag.name)}`);
+		// Use the filter format: tf=any:TagName
+		navigate(`${basePath}/series?tf=any:${encodeURIComponent(tag.name)}`);
 	};
 
 	const displayGenres = maxDisplay ? genres.slice(0, maxDisplay) : genres;

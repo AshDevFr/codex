@@ -248,8 +248,8 @@ pub struct ReplaceSeriesMetadataRequest {
     pub total_book_count: Option<i32>,
 
     /// Custom JSON metadata for extensions
-    #[schema(example = "{\"myField\": \"value\"}")]
-    pub custom_metadata: Option<String>,
+    #[schema(value_type = Option<Object>, example = json!({"myField": "value", "nested": {"key": "data"}}))]
+    pub custom_metadata: Option<serde_json::Value>,
 }
 
 /// PATCH request for partial update of series metadata
@@ -316,8 +316,8 @@ pub struct PatchSeriesMetadataRequest {
 
     /// Custom JSON metadata for extensions
     #[serde(default)]
-    #[schema(value_type = Option<String>, example = "{\"myField\": \"value\"}", nullable = true)]
-    pub custom_metadata: super::patch::PatchValue<String>,
+    #[schema(value_type = Option<Object>, example = json!({"myField": "value"}), nullable = true)]
+    pub custom_metadata: super::patch::PatchValue<serde_json::Value>,
 }
 
 /// Response containing series metadata
@@ -373,8 +373,8 @@ pub struct SeriesMetadataResponse {
     pub total_book_count: Option<i32>,
 
     /// Custom JSON metadata for extensions
-    #[schema(example = "{\"myField\": \"value\"}")]
-    pub custom_metadata: Option<String>,
+    #[schema(value_type = Option<Object>, example = json!({"myField": "value"}))]
+    pub custom_metadata: Option<serde_json::Value>,
 
     /// Last update timestamp
     #[schema(example = "2024-01-15T10:30:00Z")]
@@ -806,6 +806,10 @@ pub struct MetadataLocks {
     #[schema(example = false)]
     pub year: bool,
 
+    /// Whether the total_book_count field is locked
+    #[schema(example = false)]
+    pub total_book_count: bool,
+
     /// Whether the genres are locked
     #[schema(example = false)]
     pub genres: bool,
@@ -813,6 +817,10 @@ pub struct MetadataLocks {
     /// Whether the tags are locked
     #[schema(example = false)]
     pub tags: bool,
+
+    /// Whether the custom_metadata field is locked
+    #[schema(example = false)]
+    pub custom_metadata: bool,
 }
 
 /// Full series metadata response including all related data
@@ -869,8 +877,8 @@ pub struct FullSeriesMetadataResponse {
     pub total_book_count: Option<i32>,
 
     /// Custom JSON metadata
-    #[schema(example = "{\"myField\": \"value\"}")]
-    pub custom_metadata: Option<String>,
+    #[schema(value_type = Option<Object>, example = json!({"myField": "value"}))]
+    pub custom_metadata: Option<serde_json::Value>,
 
     // Lock states
     /// Lock states for all metadata fields
@@ -954,6 +962,11 @@ pub struct UpdateMetadataLocksRequest {
     #[schema(example = false)]
     pub year: Option<bool>,
 
+    /// Whether to lock the total_book_count field
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = false)]
+    pub total_book_count: Option<bool>,
+
     /// Whether to lock the genres
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = false)]
@@ -963,6 +976,11 @@ pub struct UpdateMetadataLocksRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = false)]
     pub tags: Option<bool>,
+
+    /// Whether to lock the custom_metadata field
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = false)]
+    pub custom_metadata: Option<bool>,
 }
 
 // ============================================================================
@@ -1018,6 +1036,23 @@ pub struct SeriesCoverDto {
 pub struct SeriesCoverListResponse {
     /// List of covers
     pub covers: Vec<SeriesCoverDto>,
+}
+
+// ============================================================================
+// Average Rating DTOs
+// ============================================================================
+
+/// Response containing the average community rating for a series
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesAverageRatingResponse {
+    /// Average rating from all users (0-100 scale), null if no ratings exist
+    #[schema(example = 78.5)]
+    pub average: Option<f64>,
+
+    /// Total number of user ratings for this series
+    #[schema(example = 15)]
+    pub count: u64,
 }
 
 // ============================================================================

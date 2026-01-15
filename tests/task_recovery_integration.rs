@@ -4,7 +4,6 @@ use chrono::{Duration, Utc};
 use codex::db::entities::{libraries, tasks};
 use codex::db::repositories::TaskRepository;
 use codex::tasks::types::TaskType;
-use codex::tasks::worker::TaskWorker;
 use common::setup_test_db;
 use sea_orm::{ActiveModelTrait, DatabaseConnection, Set};
 use std::time::Duration as StdDuration;

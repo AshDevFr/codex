@@ -1,0 +1,12 @@
+{
+  "links": [
+    { "name": "MyAnimeList", "url": "https://myanimelist.net/manga/2" },
+    { "name": "AniList", "url": "https://anilist.co/manga/30002" },
+    { "name": "MangaUpdates", "url": "https://www.mangaupdates.com/series/example" }
+  ],
+  "ids": {
+    "mal_id": "2",
+    "anilist_id": "30002",
+    "isbn": "978-1-23456-789-0"
+  }
+}

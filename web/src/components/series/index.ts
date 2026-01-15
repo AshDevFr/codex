@@ -1,4 +1,6 @@
 export { AlternateTitles } from "./AlternateTitles";
+export { CommunityRating } from "./CommunityRating";
+export { CustomMetadataDisplay } from "./CustomMetadataDisplay";
 export { ExternalLinks } from "./ExternalLinks";
 export { ExternalRatings } from "./ExternalRatings";
 export { GenreTagChips } from "./GenreTagChips";

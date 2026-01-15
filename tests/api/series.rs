@@ -1419,23 +1419,23 @@ async fn test_download_series_success() {
     create_test_cbz(&book2_path, 5);
 
     // Create books in database with actual file paths
-    let mut book1 = create_test_book(
+    let book1 = create_test_book(
         series.id,
         library.id,
         book1_path.to_str().unwrap(),
         "book1.cbz",
         Some("Book 1"),
     );
-    book1 = BookRepository::create(&db, &book1, None).await.unwrap();
+    let _book1 = BookRepository::create(&db, &book1, None).await.unwrap();
 
-    let mut book2 = create_test_book(
+    let book2 = create_test_book(
         series.id,
         library.id,
         book2_path.to_str().unwrap(),
         "book2.cbz",
         Some("Book 2"),
     );
-    book2 = BookRepository::create(&db, &book2, None).await.unwrap();
+    let _book2 = BookRepository::create(&db, &book2, None).await.unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -1802,7 +1802,7 @@ async fn test_replace_series_metadata_success() {
         year: Some(2020),
         reading_direction: Some("ltr".to_string()),
         total_book_count: None,
-        custom_metadata: Some(r#"{"tag": "value"}"#.to_string()),
+        custom_metadata: Some(serde_json::json!({"tag": "value"})),
     };
 
     let request = put_json_request_with_auth(
@@ -1824,7 +1824,7 @@ async fn test_replace_series_metadata_success() {
     assert_eq!(metadata.reading_direction, Some("ltr".to_string()));
     assert_eq!(
         metadata.custom_metadata,
-        Some(r#"{"tag": "value"}"#.to_string())
+        Some(serde_json::json!({"tag": "value"}))
     );
 }
 
@@ -3204,7 +3204,7 @@ async fn test_list_series_filtered_by_publisher() {
     let series2 = SeriesRepository::create(&db, library.id, "Kodansha Series", None)
         .await
         .unwrap();
-    let series3 = SeriesRepository::create(&db, library.id, "No Publisher Series", None)
+    let _series3 = SeriesRepository::create(&db, library.id, "No Publisher Series", None)
         .await
         .unwrap();
 

@@ -9,6 +9,51 @@ import {
 	createSettingHistory,
 } from "../data/factories";
 
+// Default template for custom metadata display
+const DEFAULT_CUSTOM_METADATA_TEMPLATE = `{{#if custom_metadata}}
+## Additional Information
+
+{{#each custom_metadata}}
+- **{{@key}}**: {{this}}
+{{/each}}
+{{/if}}`;
+
+// Mock system integrations (admin-managed)
+const mockSystemIntegrations: Array<{
+	id: string;
+	name: string;
+	type: string;
+	isEnabled: boolean;
+	config: Record<string, unknown>;
+	lastTestAt: string | null;
+	lastTestResult: string | null;
+	createdAt: string;
+	updatedAt: string;
+}> = [
+	{
+		id: "integration-komga",
+		name: "Komga Sync",
+		type: "komga",
+		isEnabled: true,
+		config: { baseUrl: "https://komga.example.com", apiKey: "***" },
+		lastTestAt: "2024-06-15T10:00:00Z",
+		lastTestResult: "success",
+		createdAt: "2024-01-01T00:00:00Z",
+		updatedAt: "2024-06-15T10:00:00Z",
+	},
+	{
+		id: "integration-mal-system",
+		name: "MyAnimeList Metadata",
+		type: "myanimelist",
+		isEnabled: false,
+		config: { clientId: "***" },
+		lastTestAt: null,
+		lastTestResult: null,
+		createdAt: "2024-01-01T00:00:00Z",
+		updatedAt: "2024-01-01T00:00:00Z",
+	},
+];
+
 // Generate mock settings data
 const mockSettings = [
 	createSetting({
@@ -65,6 +110,16 @@ const mockSettings = [
 		value_type: "integer",
 		category: "thumbnails",
 		description: "Maximum thumbnail width",
+	}),
+	// Display settings
+	createSetting({
+		key: "display.custom_metadata_template",
+		value: DEFAULT_CUSTOM_METADATA_TEMPLATE,
+		value_type: "string",
+		category: "Display",
+		description:
+			"Handlebars-style Markdown template for displaying custom metadata on series detail pages. Use {{custom_metadata.field}} to access fields.",
+		default_value: DEFAULT_CUSTOM_METADATA_TEMPLATE,
 	}),
 ];
 
@@ -179,5 +234,187 @@ export const settingsHandlers = [
 		);
 
 		return HttpResponse.json(history);
+	}),
+
+	// ============================================
+	// Public Settings (non-admin)
+	// ============================================
+
+	// Get public settings (accessible to all authenticated users)
+	http.get("/api/v1/settings/public", async () => {
+		await delay(50);
+		// Return a subset of settings that are safe for non-admin users
+		const publicSettings = {
+			serverName:
+				mockSettings.find((s) => s.key === "server.name")?.value || "Codex",
+			registrationEnabled:
+				mockSettings.find((s) => s.key === "auth.registration_enabled")
+					?.value === "true",
+			version: "1.0.0",
+		};
+		return HttpResponse.json(publicSettings);
+	}),
+
+	// ============================================
+	// System Integrations (Admin)
+	// ============================================
+
+	// List all system integrations
+	http.get("/api/v1/admin/integrations", async () => {
+		await delay(100);
+		return HttpResponse.json({ integrations: mockSystemIntegrations });
+	}),
+
+	// Get a specific integration
+	http.get("/api/v1/admin/integrations/:id", async ({ params }) => {
+		await delay(50);
+		const integration = mockSystemIntegrations.find((i) => i.id === params.id);
+
+		if (!integration) {
+			return HttpResponse.json(
+				{ error: "Integration not found" },
+				{ status: 404 },
+			);
+		}
+
+		return HttpResponse.json(integration);
+	}),
+
+	// Create a new integration
+	http.post("/api/v1/admin/integrations", async ({ request }) => {
+		await delay(150);
+		const body = (await request.json()) as {
+			name: string;
+			type: string;
+			config?: Record<string, unknown>;
+		};
+		const now = new Date().toISOString();
+
+		const integration = {
+			id: `integration-${Date.now()}`,
+			name: body.name,
+			type: body.type,
+			isEnabled: false,
+			config: body.config || {},
+			lastTestAt: null,
+			lastTestResult: null,
+			createdAt: now,
+			updatedAt: now,
+		};
+
+		mockSystemIntegrations.push(integration);
+		return HttpResponse.json(integration, { status: 201 });
+	}),
+
+	// Update an integration
+	http.patch("/api/v1/admin/integrations/:id", async ({ params, request }) => {
+		await delay(100);
+		const body = (await request.json()) as {
+			name?: string;
+			config?: Record<string, unknown>;
+		};
+		const integration = mockSystemIntegrations.find((i) => i.id === params.id);
+
+		if (!integration) {
+			return HttpResponse.json(
+				{ error: "Integration not found" },
+				{ status: 404 },
+			);
+		}
+
+		if (body.name) integration.name = body.name;
+		if (body.config)
+			integration.config = { ...integration.config, ...body.config };
+		integration.updatedAt = new Date().toISOString();
+
+		return HttpResponse.json(integration);
+	}),
+
+	// Delete an integration
+	http.delete("/api/v1/admin/integrations/:id", async ({ params }) => {
+		await delay(100);
+		const index = mockSystemIntegrations.findIndex((i) => i.id === params.id);
+
+		if (index === -1) {
+			return HttpResponse.json(
+				{ error: "Integration not found" },
+				{ status: 404 },
+			);
+		}
+
+		mockSystemIntegrations.splice(index, 1);
+		return new HttpResponse(null, { status: 204 });
+	}),
+
+	// Enable an integration
+	http.post("/api/v1/admin/integrations/:id/enable", async ({ params }) => {
+		await delay(100);
+		const integration = mockSystemIntegrations.find((i) => i.id === params.id);
+
+		if (!integration) {
+			return HttpResponse.json(
+				{ error: "Integration not found" },
+				{ status: 404 },
+			);
+		}
+
+		integration.isEnabled = true;
+		integration.updatedAt = new Date().toISOString();
+
+		return HttpResponse.json(integration);
+	}),
+
+	// Disable an integration
+	http.post("/api/v1/admin/integrations/:id/disable", async ({ params }) => {
+		await delay(100);
+		const integration = mockSystemIntegrations.find((i) => i.id === params.id);
+
+		if (!integration) {
+			return HttpResponse.json(
+				{ error: "Integration not found" },
+				{ status: 404 },
+			);
+		}
+
+		integration.isEnabled = false;
+		integration.updatedAt = new Date().toISOString();
+
+		return HttpResponse.json(integration);
+	}),
+
+	// Test an integration
+	http.post("/api/v1/admin/integrations/:id/test", async ({ params }) => {
+		await delay(500); // Simulate network test
+		const integration = mockSystemIntegrations.find((i) => i.id === params.id);
+
+		if (!integration) {
+			return HttpResponse.json(
+				{ error: "Integration not found" },
+				{ status: 404 },
+			);
+		}
+
+		// Simulate test result
+		const success = Math.random() > 0.2; // 80% success rate
+		integration.lastTestAt = new Date().toISOString();
+		integration.lastTestResult = success ? "success" : "failed";
+		integration.updatedAt = new Date().toISOString();
+
+		if (success) {
+			return HttpResponse.json({
+				success: true,
+				message: "Connection successful",
+				details: { latency: Math.floor(Math.random() * 200) + 50 },
+			});
+		} else {
+			return HttpResponse.json(
+				{
+					success: false,
+					message: "Connection failed",
+					error: "Could not reach the server",
+				},
+				{ status: 400 },
+			);
+		}
 	}),
 ];

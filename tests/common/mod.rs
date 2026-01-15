@@ -1,4 +1,7 @@
 // Test helper modules organized by functionality
+// Allow unused imports/dead code - different test files use different subsets of helpers
+#![allow(unused_imports)]
+#![allow(dead_code)]
 
 pub mod db;
 pub mod files;

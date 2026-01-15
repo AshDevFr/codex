@@ -469,7 +469,7 @@ async fn test_queue_stats() {
     .await
     .expect("Failed to enqueue");
 
-    let task2_id = TaskRepository::enqueue(
+    let _task2_id = TaskRepository::enqueue(
         &db,
         TaskType::AnalyzeBook {
             book_id,
@@ -535,8 +535,8 @@ async fn test_purge_old_tasks() {
         .expect("Failed to purge");
 
     // Note: This might be 0 if the task isn't "old enough" yet
-    // depending on the timestamp precision
-    assert!(deleted >= 0);
+    // depending on the timestamp precision - just verify operation completed
+    let _ = deleted;
 }
 
 /// Test nuke all tasks

@@ -498,7 +498,6 @@ async fn test_register_disabled_by_default() {
 
     // Seed the auth.registration_enabled setting with false (default)
     use codex::db::repositories::SettingsRepository;
-    use uuid::Uuid;
 
     // The setting should already be seeded as false by the migration
     // But let's verify it exists and is false

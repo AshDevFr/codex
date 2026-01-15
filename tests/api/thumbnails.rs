@@ -609,7 +609,7 @@ async fn test_generate_book_thumbnail_requires_write_permission() {
     .unwrap();
 
     let state = create_test_app_state(db.clone()).await;
-    let admin_token = create_admin_and_token(&db, &state).await;
+    let _admin_token = create_admin_and_token(&db, &state).await;
     let readonly_token = create_readonly_and_token(&db, &state).await;
 
     trigger_scan_task(&state.db, library.id, ScanMode::Normal)

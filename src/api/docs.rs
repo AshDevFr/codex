@@ -138,6 +138,9 @@ Codex provides OPDS catalog feeds for e-reader applications:
         handlers::create_external_rating,
         handlers::delete_external_rating,
 
+        // Average rating endpoint
+        handlers::get_series_average_rating,
+
         // External link endpoints
         handlers::get_series_external_links,
         handlers::create_external_link,
@@ -236,6 +239,7 @@ Codex provides OPDS catalog feeds for e-reader applications:
         handlers::list_drives,
 
         // Settings endpoints
+        handlers::settings::get_public_settings,
         handlers::settings::list_settings,
         handlers::settings::get_setting,
         handlers::settings::update_setting,
@@ -369,6 +373,9 @@ Codex provides OPDS catalog feeds for e-reader applications:
             dto::ExternalRatingListResponse,
             dto::CreateExternalRatingRequest,
 
+            // Average Rating DTOs
+            dto::SeriesAverageRatingResponse,
+
             // External Link DTOs
             dto::ExternalLinkDto,
             dto::ExternalLinkListResponse,
@@ -430,6 +437,7 @@ Codex provides OPDS catalog feeds for e-reader applications:
 
             // Settings DTOs
             dto::SettingDto,
+            dto::PublicSettingDto,
             dto::UpdateSettingRequest,
             dto::BulkUpdateSettingsRequest,
             dto::BulkSettingUpdate,

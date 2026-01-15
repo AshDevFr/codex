@@ -5,6 +5,7 @@ import {
 	Divider,
 	Drawer,
 	Group,
+	Indicator,
 	Loader,
 	ScrollArea,
 	Stack,
@@ -85,27 +86,23 @@ export function FilterPanel() {
 	return (
 		<>
 			{/* Trigger Button */}
-			<ActionIcon
-				variant={filterState.hasActiveFilters ? "filled" : "subtle"}
-				color={filterState.hasActiveFilters ? "blue" : undefined}
-				size="lg"
-				title="Filters"
-				aria-label="Filter options"
-				onClick={open}
-				className={classes.triggerButton}
+			<Indicator
+				label={filterState.activeFilterCount}
+				size={16}
+				disabled={!filterState.hasActiveFilters}
+				color="red"
 			>
-				<IconAdjustments size={20} />
-				{filterState.hasActiveFilters && (
-					<Badge
-						size="xs"
-						variant="filled"
-						color="red"
-						className={classes.filterBadge}
-					>
-						{filterState.activeFilterCount}
-					</Badge>
-				)}
-			</ActionIcon>
+				<ActionIcon
+					variant={filterState.hasActiveFilters ? "filled" : "subtle"}
+					color={filterState.hasActiveFilters ? "blue" : undefined}
+					size="lg"
+					title="Filters"
+					aria-label="Filter options"
+					onClick={open}
+				>
+					<IconAdjustments size={20} />
+				</ActionIcon>
+			</Indicator>
 
 			{/* Filter Drawer */}
 			<Drawer

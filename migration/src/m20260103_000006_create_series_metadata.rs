@@ -122,6 +122,12 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .default(false),
                     )
+                    .col(
+                        ColumnDef::new(SeriesMetadata::CustomMetadataLock)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
                     // Timestamps
                     .col(
                         ColumnDef::new(SeriesMetadata::CreatedAt)
@@ -185,6 +191,7 @@ pub enum SeriesMetadata {
     YearLock,
     GenresLock,
     TagsLock,
+    CustomMetadataLock,
     // Timestamps
     CreatedAt,
     UpdatedAt,

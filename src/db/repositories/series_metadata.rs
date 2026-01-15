@@ -60,6 +60,7 @@ impl SeriesMetadataRepository {
             year_lock: Set(false),
             genres_lock: Set(false),
             tags_lock: Set(false),
+            custom_metadata_lock: Set(false),
             created_at: Set(now),
             updated_at: Set(now),
         };

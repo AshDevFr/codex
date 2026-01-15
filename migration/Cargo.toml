@@ -19,4 +19,6 @@ features = [
   "runtime-tokio-native-tls",  # `ASYNC_RUNTIME` feature
   "sqlx-postgres",             # `DATABASE_DRIVER` feature
   "sqlx-sqlite",               # `DATABASE_DRIVER` feature for SQLite
+  "with-uuid",                 # UUID support
+  "with-chrono",               # Chrono DateTime support
 ]

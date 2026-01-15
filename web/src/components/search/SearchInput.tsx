@@ -185,10 +185,10 @@ export const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
 		return (
 			<Combobox
 				store={combobox}
-				withinPortal={false}
+				withinPortal={true}
 				onOptionSubmit={handleOptionSubmit}
 			>
-				<Combobox.EventsTarget>
+				<Combobox.Target>
 					<TextInput
 						ref={inputRef}
 						placeholder={placeholder}
@@ -207,7 +207,7 @@ export const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
 						visibleFrom="sm"
 						w={width}
 					/>
-				</Combobox.EventsTarget>
+				</Combobox.Target>
 
 				{showDropdown && (
 					<Combobox.Dropdown className={classes.dropdown}>

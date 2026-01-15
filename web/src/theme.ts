@@ -59,5 +59,29 @@ export const theme = createTheme({
 				radius: "md",
 			},
 		},
+		Modal: {
+			styles: {
+				content: {
+					// Make modals wider on desktop
+					maxWidth: "min(90vw, var(--modal-size))",
+				},
+			},
+			vars: (_theme, props) => {
+				// Increase modal sizes for desktop
+				const sizeMap: Record<string, string> = {
+					xs: "400px",
+					sm: "500px",
+					md: "600px",
+					lg: "800px",
+					xl: "1000px",
+				};
+				const size = props.size as string | undefined;
+				return {
+					root: {
+						"--modal-size": sizeMap[size || "md"] || size || "600px",
+					},
+				};
+			},
+		},
 	},
 });

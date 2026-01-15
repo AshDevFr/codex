@@ -6,6 +6,8 @@ export type UserRatingsListResponse =
 	components["schemas"]["UserRatingsListResponse"];
 export type SetUserRatingRequest =
 	components["schemas"]["SetUserRatingRequest"];
+export type SeriesAverageRatingResponse =
+	components["schemas"]["SeriesAverageRatingResponse"];
 
 export const ratingsApi = {
 	/**
@@ -56,6 +58,20 @@ export const ratingsApi = {
 	getAllUserRatings: async (): Promise<UserSeriesRating[]> => {
 		const response = await api.get<UserRatingsListResponse>("/user/ratings");
 		return response.data.ratings;
+	},
+
+	/**
+	 * Get the average rating for a series from all users
+	 * @param seriesId - Series ID
+	 * @returns Average rating (0-100 scale) and count, or null average if no ratings
+	 */
+	getSeriesAverageRating: async (
+		seriesId: string,
+	): Promise<SeriesAverageRatingResponse> => {
+		const response = await api.get<SeriesAverageRatingResponse>(
+			`/series/${seriesId}/ratings/average`,
+		);
+		return response.data;
 	},
 };
 

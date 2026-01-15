@@ -155,3 +155,20 @@ pub struct HistoryQuery {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u64>,
 }
+
+/// Public setting DTO (for non-admin users)
+///
+/// A simplified setting DTO that only includes the key and value,
+/// used for public display settings accessible to all authenticated users.
+#[derive(Debug, Serialize, Deserialize, ToSchema, Clone)]
+pub struct PublicSettingDto {
+    /// Setting key name
+    #[schema(example = "display.custom_metadata_template")]
+    pub key: String,
+
+    /// Current setting value
+    #[schema(
+        example = "{{#if custom_metadata}}## Additional Information\n{{#each custom_metadata}}- **{{@key}}**: {{this}}\n{{/each}}{{/if}}"
+    )]
+    pub value: String,
+}

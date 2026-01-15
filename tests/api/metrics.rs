@@ -71,7 +71,7 @@ async fn test_get_metrics_with_auth() {
     let library1 = LibraryRepository::create(&db, "Comics", "/path1", ScanningStrategy::Default)
         .await
         .unwrap();
-    let library2 = LibraryRepository::create(&db, "Manga", "/path2", ScanningStrategy::Default)
+    let _library2 = LibraryRepository::create(&db, "Manga", "/path2", ScanningStrategy::Default)
         .await
         .unwrap();
 

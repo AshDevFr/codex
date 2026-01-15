@@ -6250,6 +6250,58 @@
         ]
       }
     },
+    "/api/v1/series/{series_id}/ratings/average": {
+      "get": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Get the average community rating for a series",
+        "description": "Returns the average rating from all users and the total count of ratings.\nRatings are stored on a 0-100 scale internally.",
+        "operationId": "get_series_average_rating",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Average rating for the series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesAverageRatingResponse"
+                },
+                "example": {
+                  "average": 78.5,
+                  "count": 15
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/{series_id}/read": {
       "post": {
         "tags": [
@@ -6640,6 +6692,51 @@
           },
           "404": {
             "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/settings/public": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get public display settings (authenticated users)",
+        "description": "Returns non-sensitive settings that affect UI/display behavior.\nThis endpoint is available to all authenticated users, not just admins.",
+        "operationId": "get_public_settings",
+        "responses": {
+          "200": {
+            "description": "Public settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/PublicSettingDto"
+                  },
+                  "propertyNames": {
+                    "type": "string"
+                  }
+                },
+                "example": {
+                  "display.custom_metadata_template": {
+                    "key": "display.custom_metadata_template",
+                    "value": "{{#if custom_metadata}}## Additional Information\n{{#each custom_metadata}}- **{{@key}}**: {{this}}\n{{/each}}{{/if}}"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         },
         "security": [
@@ -11272,11 +11369,10 @@
           },
           "customMetadata": {
             "type": [
-              "string",
+              "object",
               "null"
             ],
-            "description": "Custom JSON metadata",
-            "example": "{\"myField\": \"value\"}"
+            "description": "Custom JSON metadata"
           },
           "externalLinks": {
             "type": "array",
@@ -11994,13 +12090,20 @@
           "language",
           "readingDirection",
           "year",
+          "totalBookCount",
           "genres",
-          "tags"
+          "tags",
+          "customMetadata"
         ],
         "properties": {
           "ageRating": {
             "type": "boolean",
             "description": "Whether the age_rating field is locked",
+            "example": false
+          },
+          "customMetadata": {
+            "type": "boolean",
+            "description": "Whether the custom_metadata field is locked",
             "example": false
           },
           "genres": {
@@ -12051,6 +12154,11 @@
           "titleSort": {
             "type": "boolean",
             "description": "Whether the title_sort field is locked",
+            "example": false
+          },
+          "totalBookCount": {
+            "type": "boolean",
+            "description": "Whether the total_book_count field is locked",
             "example": false
           },
           "year": {
@@ -13042,11 +13150,10 @@
           },
           "customMetadata": {
             "type": [
-              "string",
+              "object",
               "null"
             ],
-            "description": "Custom JSON metadata for extensions",
-            "example": "{\"myField\": \"value\"}"
+            "description": "Custom JSON metadata for extensions"
           },
           "imprint": {
             "type": [
@@ -13179,6 +13286,26 @@
             "type": "integer",
             "description": "Total number of files found",
             "minimum": 0
+          }
+        }
+      },
+      "PublicSettingDto": {
+        "type": "object",
+        "description": "Public setting DTO (for non-admin users)\n\nA simplified setting DTO that only includes the key and value,\nused for public display settings accessible to all authenticated users.",
+        "required": [
+          "key",
+          "value"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Setting key name",
+            "example": "display.custom_metadata_template"
+          },
+          "value": {
+            "type": "string",
+            "description": "Current setting value",
+            "example": "{{#if custom_metadata}}## Additional Information\n{{#each custom_metadata}}- **{{@key}}**: {{this}}\n{{/each}}{{/if}}"
           }
         }
       },
@@ -13817,11 +13944,10 @@
           },
           "customMetadata": {
             "type": [
-              "string",
+              "object",
               "null"
             ],
-            "description": "Custom JSON metadata for extensions",
-            "example": "{\"myField\": \"value\"}"
+            "description": "Custom JSON metadata for extensions"
           },
           "imprint": {
             "type": [
@@ -14079,6 +14205,31 @@
           "source": {
             "type": "string",
             "description": "Cover source: \"default\" (first book cover) or \"custom\" (uploaded cover)"
+          }
+        }
+      },
+      "SeriesAverageRatingResponse": {
+        "type": "object",
+        "description": "Response containing the average community rating for a series",
+        "required": [
+          "count"
+        ],
+        "properties": {
+          "average": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Average rating from all users (0-100 scale), null if no ratings exist",
+            "example": 78.5
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of user ratings for this series",
+            "example": 15,
+            "minimum": 0
           }
         }
       },
@@ -14485,11 +14636,10 @@
           },
           "customMetadata": {
             "type": [
-              "string",
+              "object",
               "null"
             ],
-            "description": "Custom JSON metadata for extensions",
-            "example": "{\"myField\": \"value\"}"
+            "description": "Custom JSON metadata for extensions"
           },
           "id": {
             "type": "string",
@@ -16269,6 +16419,14 @@
             "description": "Whether to lock the age_rating field",
             "example": false
           },
+          "customMetadata": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the custom_metadata field",
+            "example": false
+          },
           "genres": {
             "type": [
               "boolean",
@@ -16347,6 +16505,14 @@
               "null"
             ],
             "description": "Whether to lock the title_sort field",
+            "example": false
+          },
+          "totalBookCount": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the total_book_count field",
             "example": false
           },
           "year": {

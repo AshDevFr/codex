@@ -3,13 +3,214 @@
  */
 
 import { delay, HttpResponse, http } from "msw";
-import { createPaginatedResponse } from "../data/factories";
+import {
+	bookTitlesAndSummaries,
+	createPaginatedResponse,
+} from "../data/factories";
 import { getBooksByLibrary, getBooksBySeries, mockBooks } from "../data/store";
 import coverSvg from "../fixtures/cover.svg?raw";
 import pageSvg from "../fixtures/page.svg?raw";
 import sampleCbzUrl from "../fixtures/sample.cbz?url";
 import sampleEpubUrl from "../fixtures/sample.epub?url";
 import samplePdfUrl from "../fixtures/sample.pdf?url";
+
+/**
+ * Get a detailed summary for a book based on series and number
+ */
+function getBookSummary(seriesName: string, number: number | null): string {
+	if (number === null) return `An exciting volume of ${seriesName}.`;
+
+	const seriesBooks = bookTitlesAndSummaries[seriesName];
+	const bookInfo = seriesBooks?.[number - 1];
+
+	if (bookInfo) {
+		return bookInfo.summary;
+	}
+
+	// Generate a generic but descriptive summary
+	return `Volume ${number} of ${seriesName} continues the thrilling saga with new challenges, deepening character arcs, and unexpected twists that will keep readers on the edge of their seats. This installment expands the world-building while advancing the central plot toward its next major turning point.`;
+}
+
+/**
+ * Publisher-specific creative teams for realistic metadata
+ */
+const creativeTeams: Record<
+	string,
+	{
+		writers: string[];
+		artists: string[];
+		colorists: string[];
+		letterers: string[];
+		editors: string[];
+	}
+> = {
+	"DC Comics": {
+		writers: [
+			"Frank Miller",
+			"Scott Snyder",
+			"Grant Morrison",
+			"Geoff Johns",
+			"Tom King",
+		],
+		artists: [
+			"David Mazzucchelli",
+			"Greg Capullo",
+			"Jim Lee",
+			"Jason Fabok",
+			"Mikel Janín",
+		],
+		colorists: [
+			"Richmond Lewis",
+			"FCO Plascencia",
+			"Alex Sinclair",
+			"Brad Anderson",
+			"Jordie Bellaire",
+		],
+		letterers: [
+			"Todd Klein",
+			"Deron Bennett",
+			"Clayton Cowles",
+			"John Workman",
+			"Sal Cipriano",
+		],
+		editors: [
+			"Dennis O'Neil",
+			"Mark Doyle",
+			"Ben Abernathy",
+			"Chris Conroy",
+			"Jamie S. Rich",
+		],
+	},
+	"Marvel Comics": {
+		writers: [
+			"Brian Michael Bendis",
+			"Jonathan Hickman",
+			"Ta-Nehisi Coates",
+			"Jason Aaron",
+			"Chip Zdarsky",
+		],
+		artists: [
+			"Alex Ross",
+			"Esad Ribić",
+			"Mike Deodato Jr.",
+			"Stuart Immonen",
+			"Marco Checchetto",
+		],
+		colorists: [
+			"Dean White",
+			"Matthew Wilson",
+			"Ive Svorcina",
+			"Laura Martin",
+			"Marte Gracia",
+		],
+		letterers: [
+			"Cory Petit",
+			"Joe Sabino",
+			"Clayton Cowles",
+			"Travis Lanham",
+			"Joe Caramagna",
+		],
+		editors: [
+			"Tom Brevoort",
+			"Nick Lowe",
+			"Jordan D. White",
+			"Will Moss",
+			"Devin Lewis",
+		],
+	},
+	"Image Comics": {
+		writers: [
+			"Brian K. Vaughan",
+			"Robert Kirkman",
+			"Ed Brubaker",
+			"Jeff Lemire",
+			"Rick Remender",
+		],
+		artists: [
+			"Fiona Staples",
+			"Charlie Adlard",
+			"Sean Phillips",
+			"Andrea Sorrentino",
+			"Jerome Opeña",
+		],
+		colorists: [
+			"Fiona Staples",
+			"Cliff Rathburn",
+			"Elizabeth Breitweiser",
+			"Dave Stewart",
+			"Matt Hollingsworth",
+		],
+		letterers: [
+			"Fonografiks",
+			"Rus Wooton",
+			"Sean Phillips",
+			"Steve Wands",
+			"Clem Robins",
+		],
+		editors: [
+			"Eric Stephenson",
+			"Sean Mackiewicz",
+			"Jon Moisan",
+			"Briah Skelly",
+			"Drew Gill",
+		],
+	},
+	"Shueisha / Viz Media": {
+		writers: [
+			"Eiichiro Oda",
+			"Masashi Kishimoto",
+			"Hajime Isayama",
+			"Kohei Horikoshi",
+			"Tatsuki Fujimoto",
+		],
+		artists: [
+			"Eiichiro Oda",
+			"Masashi Kishimoto",
+			"Hajime Isayama",
+			"Kohei Horikoshi",
+			"Tatsuki Fujimoto",
+		],
+		colorists: [],
+		letterers: [
+			"Alexis Kirsch",
+			"Erika Terriquez",
+			"Steve Dutro",
+			"John Hunt",
+			"Evan Waldinger",
+		],
+		editors: [
+			"Alexis Kirsch",
+			"Joel Enos",
+			"Mike Montesa",
+			"Hope Donovan",
+			"Erica Yee",
+		],
+	},
+	Kodansha: {
+		writers: [
+			"Hajime Isayama",
+			"Koyoharu Gotouge",
+			"Gege Akutami",
+			"Yoshihiro Togashi",
+			"Naoki Urasawa",
+		],
+		artists: [
+			"Hajime Isayama",
+			"Koyoharu Gotouge",
+			"Gege Akutami",
+			"Yoshihiro Togashi",
+			"Naoki Urasawa",
+		],
+		colorists: [],
+		letterers: ["Steve Wands", "Evan Waldinger", "John Hunt", "Brandon Bovia"],
+		editors: [
+			"Ben Applegate",
+			"Haruko Hashimoto",
+			"Alethea Nibley",
+			"Athena Nibley",
+		],
+	},
+};
 
 export const bookHandlers = [
 	// IMPORTANT: Specific routes MUST come before parameterized routes
@@ -236,6 +437,37 @@ export const bookHandlers = [
 			return HttpResponse.json({ error: "Book not found" }, { status: 404 });
 		}
 
+		// Determine publisher based on series
+		const publisherMap: Record<string, string> = {
+			"Batman: Year One": "DC Comics",
+			"Batman: The Dark Knight Returns": "DC Comics",
+			"Spider-Man: Blue": "Marvel Comics",
+			"One Piece": "Shueisha / Viz Media",
+			Naruto: "Shueisha / Viz Media",
+			"Attack on Titan": "Kodansha",
+			Saga: "Image Comics",
+			"The Walking Dead": "Image Comics",
+			Sandman: "DC Comics",
+		};
+		const publisher = publisherMap[book.seriesName] || "DC Comics";
+
+		// Get creative team based on publisher
+		const team = creativeTeams[publisher] || creativeTeams["DC Comics"];
+		const writerIndex = (book.number ?? 1) % team.writers.length;
+		const artistIndex = (book.number ?? 1) % team.artists.length;
+
+		// Determine genre based on series type
+		const genreMap: Record<string, string> = {
+			"Batman: Year One": "Superhero / Crime",
+			"One Piece": "Action / Adventure",
+			"Attack on Titan": "Dark Fantasy / Action",
+			Saga: "Science Fiction / Fantasy",
+			"The Walking Dead": "Horror / Drama",
+			Sandman: "Fantasy / Horror",
+			Naruto: "Action / Martial Arts",
+		};
+		const genre = genreMap[book.seriesName] || "Superhero";
+
 		return HttpResponse.json({
 			book,
 			metadata: {
@@ -244,20 +476,26 @@ export const bookHandlers = [
 				title: book.title,
 				series: book.seriesName,
 				number: book.number?.toString(),
-				summary: `A thrilling issue of ${book.seriesName}.`,
-				publisher: "DC Comics",
-				imprint: null,
-				genre: "Superhero",
+				summary: getBookSummary(book.seriesName, book.number),
+				publisher,
+				imprint: publisher.includes("Vertigo") ? "Vertigo" : null,
+				genre,
 				pageCount: book.pageCount,
-				languageIso: "en",
+				languageIso:
+					publisher.includes("Viz") || publisher.includes("Kodansha")
+						? "ja"
+						: "en",
 				releaseDate: null,
-				writers: ["Frank Miller"],
-				pencillers: ["David Mazzucchelli"],
-				inkers: ["David Mazzucchelli"],
-				colorists: ["Richmond Lewis"],
-				letterers: ["Todd Klein"],
-				coverArtists: ["David Mazzucchelli"],
-				editors: ["Dennis O'Neil"],
+				writers: [team.writers[writerIndex]],
+				pencillers: [team.artists[artistIndex]],
+				inkers: [team.artists[artistIndex]],
+				colorists:
+					team.colorists.length > 0
+						? [team.colorists[writerIndex % team.colorists.length]]
+						: [],
+				letterers: [team.letterers[writerIndex % team.letterers.length]],
+				coverArtists: [team.artists[artistIndex]],
+				editors: [team.editors[writerIndex % team.editors.length]],
 			},
 		});
 	}),
@@ -330,6 +568,212 @@ export const bookHandlers = [
 	http.post("/api/v1/books/:id/unread", async () => {
 		await delay(100);
 		return HttpResponse.json({ message: "Book marked as unread" });
+	}),
+
+	// ============================================
+	// Read Progress
+	// ============================================
+
+	// Get read progress for book
+	http.get("/api/v1/books/:id/progress", async ({ params }) => {
+		await delay(100);
+		const book = mockBooks.find((b) => b.id === params.id);
+
+		if (!book) {
+			return HttpResponse.json({ error: "Book not found" }, { status: 404 });
+		}
+
+		if (book.readProgress === null) {
+			// No progress exists
+			return HttpResponse.json({ error: "No progress found" }, { status: 404 });
+		}
+
+		return HttpResponse.json({
+			id: `progress-${params.id}`,
+			bookId: params.id,
+			userId: "mock-user-id",
+			currentPage: book.readProgress,
+			totalPages: book.pageCount,
+			percentage: Math.round((book.readProgress / book.pageCount) * 100),
+			isCompleted: book.readProgress >= book.pageCount,
+			lastReadAt: new Date().toISOString(),
+			createdAt: "2024-01-01T00:00:00Z",
+			updatedAt: new Date().toISOString(),
+		});
+	}),
+
+	// Update read progress for book
+	http.put("/api/v1/books/:id/progress", async ({ params, request }) => {
+		await delay(100);
+		const book = mockBooks.find((b) => b.id === params.id);
+
+		if (!book) {
+			return HttpResponse.json({ error: "Book not found" }, { status: 404 });
+		}
+
+		const body = (await request.json()) as {
+			currentPage: number;
+			isCompleted?: boolean;
+		};
+		const now = new Date().toISOString();
+
+		return HttpResponse.json({
+			id: `progress-${params.id}`,
+			bookId: params.id,
+			userId: "mock-user-id",
+			currentPage: body.currentPage,
+			totalPages: book.pageCount,
+			percentage: Math.round((body.currentPage / book.pageCount) * 100),
+			isCompleted: body.isCompleted ?? body.currentPage >= book.pageCount,
+			lastReadAt: now,
+			createdAt: "2024-01-01T00:00:00Z",
+			updatedAt: now,
+		});
+	}),
+
+	// Delete read progress for book
+	http.delete("/api/v1/books/:id/progress", async () => {
+		await delay(50);
+		return new HttpResponse(null, { status: 204 });
+	}),
+
+	// ============================================
+	// Book Metadata
+	// ============================================
+
+	// PATCH book metadata
+	http.patch("/api/v1/books/:id/metadata", async ({ params, request }) => {
+		await delay(100);
+		const book = mockBooks.find((b) => b.id === params.id);
+
+		if (!book) {
+			return HttpResponse.json({ error: "Book not found" }, { status: 404 });
+		}
+
+		const body = (await request.json()) as Record<string, unknown>;
+
+		return HttpResponse.json({
+			id: book.id,
+			bookId: book.id,
+			title: body.title ?? book.title,
+			series: body.series ?? book.seriesName,
+			number: body.number ?? book.number?.toString(),
+			summary: body.summary ?? null,
+			publisher: body.publisher ?? null,
+			imprint: body.imprint ?? null,
+			genre: body.genre ?? null,
+			pageCount: book.pageCount,
+			languageIso: body.languageIso ?? "en",
+			releaseDate: body.releaseDate ?? null,
+			writers: body.writers ?? [],
+			pencillers: body.pencillers ?? [],
+			inkers: body.inkers ?? [],
+			colorists: body.colorists ?? [],
+			letterers: body.letterers ?? [],
+			coverArtists: body.coverArtists ?? [],
+			editors: body.editors ?? [],
+			updatedAt: new Date().toISOString(),
+		});
+	}),
+
+	// PATCH book core fields (title, number)
+	http.patch("/api/v1/books/:id", async ({ params, request }) => {
+		await delay(100);
+		const book = mockBooks.find((b) => b.id === params.id);
+
+		if (!book) {
+			return HttpResponse.json({ error: "Book not found" }, { status: 404 });
+		}
+
+		const body = (await request.json()) as { title?: string; number?: number };
+
+		return HttpResponse.json({
+			...book,
+			title: body.title ?? book.title,
+			number: body.number ?? book.number,
+			updatedAt: new Date().toISOString(),
+		});
+	}),
+
+	// Get book metadata locks
+	http.get("/api/v1/books/:id/metadata/locks", async ({ params }) => {
+		await delay(100);
+		const book = mockBooks.find((b) => b.id === params.id);
+
+		if (!book) {
+			return HttpResponse.json({ error: "Book not found" }, { status: 404 });
+		}
+
+		// Return all locks as false by default
+		return HttpResponse.json({
+			title: false,
+			series: false,
+			number: false,
+			summary: false,
+			publisher: false,
+			imprint: false,
+			genre: false,
+			languageIso: false,
+			releaseDate: false,
+			writers: false,
+			pencillers: false,
+			inkers: false,
+			colorists: false,
+			letterers: false,
+			coverArtists: false,
+			editors: false,
+		});
+	}),
+
+	// Update book metadata locks
+	http.put("/api/v1/books/:id/metadata/locks", async ({ params, request }) => {
+		await delay(100);
+		const book = mockBooks.find((b) => b.id === params.id);
+
+		if (!book) {
+			return HttpResponse.json({ error: "Book not found" }, { status: 404 });
+		}
+
+		const body = (await request.json()) as Record<string, boolean>;
+
+		return HttpResponse.json({
+			title: body.title ?? false,
+			series: body.series ?? false,
+			number: body.number ?? false,
+			summary: body.summary ?? false,
+			publisher: body.publisher ?? false,
+			imprint: body.imprint ?? false,
+			genre: body.genre ?? false,
+			languageIso: body.languageIso ?? false,
+			releaseDate: body.releaseDate ?? false,
+			writers: body.writers ?? false,
+			pencillers: body.pencillers ?? false,
+			inkers: body.inkers ?? false,
+			colorists: body.colorists ?? false,
+			letterers: body.letterers ?? false,
+			coverArtists: body.coverArtists ?? false,
+			editors: body.editors ?? false,
+		});
+	}),
+
+	// Analyze unanalyzed book
+	http.post("/api/v1/books/:id/analyze-unanalyzed", async () => {
+		await delay(100);
+		return HttpResponse.json({
+			message: "Analysis queued for unanalyzed pages",
+		});
+	}),
+
+	// Upload book cover
+	http.post("/api/v1/books/:id/cover", async ({ params }) => {
+		await delay(200);
+		return HttpResponse.json({
+			id: `cover-${params.id}-custom-${Date.now()}`,
+			bookId: params.id,
+			source: "custom",
+			isSelected: true,
+			createdAt: new Date().toISOString(),
+		});
 	}),
 
 	// Download book file

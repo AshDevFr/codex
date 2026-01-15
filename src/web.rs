@@ -3,9 +3,13 @@
 //! This module provides functionality to serve the embedded React frontend.
 //! The frontend is embedded into the binary when the `embed-frontend` feature is enabled.
 
+#[cfg(feature = "embed-frontend")]
 use axum::{
     body::Body,
-    http::{header, HeaderValue, Response, StatusCode, Uri},
+    http::{header, HeaderValue, Response},
+};
+use axum::{
+    http::{StatusCode, Uri},
     response::IntoResponse,
 };
 

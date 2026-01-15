@@ -18,8 +18,8 @@ use codex::utils::password;
 use common::db::setup_test_db;
 use common::fixtures::create_test_user;
 use common::http::{
-    create_test_api_config, create_test_router_with_app_state, delete_request_with_auth,
-    get_request, get_request_with_auth, make_json_request, post_request_with_auth,
+    create_test_router_with_app_state, delete_request_with_auth, get_request,
+    get_request_with_auth, make_json_request, post_request_with_auth,
 };
 use hyper::StatusCode;
 use sea_orm::DatabaseConnection;

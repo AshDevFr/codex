@@ -7,9 +7,7 @@
 mod common;
 
 use codex::models::{BookStrategy, SeriesStrategy};
-use codex::scanner::strategies::{
-    create_book_strategy, BookMetadata, BookNamingContext, BookNamingStrategy,
-};
+use codex::scanner::strategies::{create_book_strategy, BookMetadata, BookNamingContext};
 use common::*;
 
 // ============================================================================

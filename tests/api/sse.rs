@@ -1,3 +1,6 @@
+// Allow unused temp_dir - needed to keep TempDir alive but not always referenced
+#![allow(unused_variables)]
+
 #[path = "../common/mod.rs"]
 mod common;
 
@@ -31,6 +34,7 @@ async fn create_admin_and_token(
 }
 
 /// Helper to parse SSE event from raw bytes
+#[allow(dead_code)]
 fn parse_sse_event(data: &str) -> Option<String> {
     for line in data.lines() {
         if let Some(json) = line.strip_prefix("data: ") {
@@ -174,7 +178,7 @@ async fn test_task_progress_stream_connects_with_auth() {
 
 #[tokio::test]
 async fn test_task_progress_event_serialization() {
-    use codex::events::{TaskProgress, TaskStatus};
+    use codex::events::TaskStatus;
     use uuid::Uuid;
 
     // Create a task progress event

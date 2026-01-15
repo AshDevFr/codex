@@ -2,16 +2,15 @@
 mod common;
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use codex::api::dto::opds2::{Opds2Feed, Opds2Link, Publication};
+use codex::api::dto::opds2::Opds2Feed;
 use codex::api::error::ErrorResponse;
 use codex::db::repositories::{
-    BookRepository, LibraryRepository, ReadProgressRepository, SeriesRepository, UserRepository,
+    LibraryRepository, ReadProgressRepository, SeriesRepository, UserRepository,
 };
 use codex::models::ScanningStrategy;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;
-use sea_orm::prelude::Decimal;
 
 // ============================================================================
 // OPDS 2.0 Root Catalog Tests

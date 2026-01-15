@@ -4,7 +4,6 @@ use chrono::Utc;
 use codex::db::entities::{books, series};
 use codex::db::repositories::{BookRepository, SeriesRepository};
 use codex::scanner::analyze_book;
-use std::path::PathBuf;
 use tempfile::TempDir;
 use uuid::Uuid;
 

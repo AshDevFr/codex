@@ -10,7 +10,6 @@ use codex::db::ScanningStrategy;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;
-use sea_orm::prelude::Decimal;
 use tower::ServiceExt;
 
 // Helper to create admin and token
@@ -1886,9 +1885,7 @@ async fn test_get_book_file_requires_auth() {
 // Book Metadata Tests (PUT and PATCH)
 // ============================================================================
 
-use codex::api::dto::book::{
-    BookMetadataResponse, PatchBookMetadataRequest, ReplaceBookMetadataRequest,
-};
+use codex::api::dto::book::{BookMetadataResponse, ReplaceBookMetadataRequest};
 
 #[tokio::test]
 async fn test_replace_book_metadata_creates_record() {

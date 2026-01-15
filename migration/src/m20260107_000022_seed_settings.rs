@@ -194,6 +194,18 @@ impl MigrationTrait for Migration {
                 Some(50),
                 Some(100),
             ),
+            // Display settings (1 setting)
+            (
+                "display.custom_metadata_template",
+                "",
+                "String",
+                "Display",
+                "Handlebars-style Markdown template for displaying custom metadata on series detail pages. Use {{custom_metadata.field}} to access fields.",
+                false,
+                "",
+                None,
+                None,
+            ),
         ];
 
         for (

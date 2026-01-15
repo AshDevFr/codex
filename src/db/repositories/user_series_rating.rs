@@ -1,7 +1,5 @@
 //! Repository for user_series_ratings table operations
-//!
-//! TODO: Remove allow(dead_code) once rating features are fully implemented
-
+// TODO: Remove once all repository methods are used by API handlers
 #![allow(dead_code)]
 
 use anyhow::Result;

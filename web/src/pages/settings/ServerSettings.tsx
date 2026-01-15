@@ -25,18 +25,23 @@ import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
 	IconAlertCircle,
+	IconCheck,
 	IconChevronDown,
 	IconChevronRight,
+	IconFileCode,
 	IconHistory,
 	IconPlug,
 	IconRefresh,
+	IconRestore,
 	IconServer,
 	IconSettings,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { type SettingDto, settingsApi } from "@/api/settings";
 import { systemIntegrationsApi } from "@/api/systemIntegrations";
+import { TemplateEditor } from "@/components/forms/TemplateEditor";
+import { TemplateSelector } from "@/components/forms/TemplateSelector";
 import type { components } from "@/types/api.generated";
 
 type SystemIntegrationDto = components["schemas"]["SystemIntegrationDto"];
@@ -192,6 +197,112 @@ function SettingRow({
 				</Group>
 			</Table.Td>
 		</Table.Tr>
+	);
+}
+
+// Template setting key constant
+const CUSTOM_METADATA_TEMPLATE_KEY = "display.custom_metadata_template";
+
+// Custom Metadata Template section with manual save
+function CustomMetadataTemplateSection({
+	setting,
+	onSave,
+	onViewHistory,
+	isSaving,
+}: {
+	setting: SettingDto | undefined;
+	onSave: (key: string, value: string) => void;
+	onViewHistory: (key: string) => void;
+	isSaving: boolean;
+}) {
+	// Local state for editing (not auto-saved)
+	const [localTemplate, setLocalTemplate] = useState(setting?.value ?? "");
+	// State for test data - synced when selecting example templates
+	const [testData, setTestData] = useState<Record<string, unknown> | undefined>(
+		undefined,
+	);
+
+	// Sync local state when setting value changes externally (e.g., from history restore)
+	useEffect(() => {
+		setLocalTemplate(setting?.value ?? "");
+	}, [setting?.value]);
+
+	// Track if there are unsaved changes
+	const hasChanges = localTemplate !== (setting?.value ?? "");
+
+	// Revert to saved value from DB
+	const handleRevertChanges = () => {
+		setLocalTemplate(setting?.value ?? "");
+	};
+
+	// Handle template selection - update local state and test data
+	const handleTemplateSelect = (
+		template: string,
+		sampleData: Record<string, unknown>,
+	) => {
+		setLocalTemplate(template);
+		setTestData(sampleData);
+	};
+
+	// Handle save
+	const handleSave = () => {
+		onSave(CUSTOM_METADATA_TEMPLATE_KEY, localTemplate);
+	};
+
+	if (!setting) {
+		return (
+			<Alert icon={<IconAlertCircle size={16} />} color="yellow">
+				Custom metadata template setting not found.
+			</Alert>
+		);
+	}
+
+	return (
+		<Stack gap="md">
+			<TemplateEditor
+				value={localTemplate}
+				onChange={setLocalTemplate}
+				label="Custom Metadata Display Template"
+				description="Handlebars template for displaying custom metadata on series detail pages. The template is rendered as Markdown."
+				testData={testData}
+				onTestDataChange={setTestData}
+			/>
+			<Group justify="space-between">
+				<Group gap="xs">
+					<TemplateSelector
+						onSelect={handleTemplateSelect}
+						currentTemplate={localTemplate}
+					/>
+					<Tooltip label="View change history">
+						<ActionIcon
+							variant="subtle"
+							onClick={() => onViewHistory(CUSTOM_METADATA_TEMPLATE_KEY)}
+						>
+							<IconHistory size={16} />
+						</ActionIcon>
+					</Tooltip>
+				</Group>
+				<Group gap="xs">
+					<Button
+						variant="subtle"
+						size="sm"
+						onClick={handleRevertChanges}
+						disabled={!hasChanges}
+					>
+						Revert Changes
+					</Button>
+					<Button
+						size="sm"
+						onClick={handleSave}
+						disabled={!hasChanges}
+						loading={isSaving}
+						leftSection={<IconCheck size={16} />}
+					>
+						Save Template
+					</Button>
+				</Group>
+			</Group>
+		</Stack>
 	);
 }
 
@@ -516,6 +627,12 @@ export function ServerSettings() {
 						<Tabs.Tab value="settings" leftSection={<IconSettings size={16} />}>
 							Settings
 						</Tabs.Tab>
+						<Tabs.Tab
+							value="custom-metadata"
+							leftSection={<IconFileCode size={16} />}
+						>
+							Custom Metadata
+						</Tabs.Tab>
 						<Tabs.Tab value="integrations" leftSection={<IconPlug size={16} />}>
 							System Integrations
 						</Tabs.Tab>
@@ -534,6 +651,7 @@ export function ServerSettings() {
 						) : (
 							<Stack gap="md">
 								{Object.entries(groupedSettings)
+									.filter(([category]) => category.toLowerCase() !== "display")
 									.sort(([a], [b]) => a.localeCompare(b))
 									.map(([category, categorySettings]) => (
 										<SettingsCategorySection
@@ -548,6 +666,30 @@ export function ServerSettings() {
 										/>
 									))}
 							</Stack>
+						)}
+					</Tabs.Panel>
+
+					{/* Custom Metadata Tab */}
+					<Tabs.Panel value="custom-metadata" pt="md">
+						{settingsLoading ? (
+							<Group justify="center" py="xl">
+								<Loader />
+							</Group>
+						) : settingsError ? (
+							<Alert icon={<IconAlertCircle size={16} />} color="red">
+								Failed to load settings. Please try again.
+							</Alert>
+						) : (
+							<CustomMetadataTemplateSection
+								setting={(groupedSettings.Display || []).find(
+									(s) => s.key === CUSTOM_METADATA_TEMPLATE_KEY,
+								)}
+								onSave={(key, value) =>
+									updateSettingMutation.mutate({ key, value })
+								}
+								onViewHistory={handleViewHistory}
+								isSaving={updateSettingMutation.isPending}
+							/>
 						)}
 					</Tabs.Panel>
 
@@ -622,7 +764,7 @@ export function ServerSettings() {
 					setHistoryKey(null);
 				}}
 				title={`History: ${historyKey}`}
-				size="lg"
+				size="xl"
 			>
 				{historyLoading ? (
 					<Group justify="center" py="xl">
@@ -636,28 +778,81 @@ export function ServerSettings() {
 								<Table.Th>New Value</Table.Th>
 								<Table.Th>Changed At</Table.Th>
 								<Table.Th>Reason</Table.Th>
+								<Table.Th>Actions</Table.Th>
 							</Table.Tr>
 						</Table.Thead>
 						<Table.Tbody>
-							{history.map((entry: SettingHistoryDto, index: number) => (
-								// biome-ignore lint/suspicious/noArrayIndexKey: History entries have no unique ID
-								<Table.Tr key={index}>
-									<Table.Td>
-										<Text size="sm" style={{ fontFamily: "monospace" }}>
-											{entry.old_value}
-										</Text>
-									</Table.Td>
-									<Table.Td>
-										<Text size="sm" style={{ fontFamily: "monospace" }}>
-											{entry.new_value}
-										</Text>
-									</Table.Td>
-									<Table.Td>
-										{new Date(entry.changed_at).toLocaleString()}
-									</Table.Td>
-									<Table.Td>{entry.change_reason || "-"}</Table.Td>
-								</Table.Tr>
-							))}
+							{history.map((entry: SettingHistoryDto, index: number) => {
+								// Get the current setting value to check if restore is needed
+								const currentValue = settings?.find(
+									(s) => s.key === historyKey,
+								)?.value;
+								const canRestore =
+									entry.old_value !== null && entry.old_value !== currentValue;
+
+								return (
+									// biome-ignore lint/suspicious/noArrayIndexKey: History entries have no unique ID
+									<Table.Tr key={index}>
+										<Table.Td>
+											<Text
+												size="sm"
+												style={{
+													fontFamily: "monospace",
+													whiteSpace: "pre-wrap",
+													wordBreak: "break-word",
+													maxWidth: 200,
+												}}
+												lineClamp={3}
+											>
+												{entry.old_value ?? "(empty)"}
+											</Text>
+										</Table.Td>
+										<Table.Td>
+											<Text
+												size="sm"
+												style={{
+													fontFamily: "monospace",
+													whiteSpace: "pre-wrap",
+													wordBreak: "break-word",
+													maxWidth: 200,
+												}}
+												lineClamp={3}
+											>
+												{entry.new_value}
+											</Text>
+										</Table.Td>
+										<Table.Td>
+											{new Date(entry.changed_at).toLocaleString()}
+										</Table.Td>
+										<Table.Td>{entry.change_reason || "-"}</Table.Td>
+										<Table.Td>
+											{canRestore ? (
+												<Tooltip label="Restore to this value">
+													<ActionIcon
+														variant="subtle"
+														color="blue"
+														onClick={() => {
+															if (historyKey) {
+																updateSettingMutation.mutate({
+																	key: historyKey,
+																	value: entry.old_value as string,
+																});
+															}
+														}}
+														loading={updateSettingMutation.isPending}
+													>
+														<IconRestore size={16} />
+													</ActionIcon>
+												</Tooltip>
+											) : (
+												<Text size="xs" c="dimmed">
+													-
+												</Text>
+											)}
+										</Table.Td>
+									</Table.Tr>
+								);
+							})}
 						</Table.Tbody>
 					</Table>
 				) : (

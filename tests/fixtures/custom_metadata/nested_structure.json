@@ -1,0 +1,24 @@
+{
+  "acquisition": {
+    "source": "Digital Purchase",
+    "platform": "Amazon Kindle",
+    "date": "2024-02-28",
+    "price": 12.99
+  },
+  "reading": {
+    "status": "Reading",
+    "progress": 45,
+    "started": "2024-03-01",
+    "sessions": [
+      { "date": "2024-03-01", "chapters": "1-5" },
+      { "date": "2024-03-05", "chapters": "6-10" }
+    ]
+  },
+  "notes": {
+    "general": "Great artwork and pacing",
+    "highlights": [
+      "Amazing cliffhanger in chapter 8",
+      "Character development in chapter 10"
+    ]
+  }
+}

@@ -28,6 +28,7 @@ const sidebars: SidebarsConfig = {
         },
         "formats",
         "filtering",
+        "custom-metadata",
         {
           type: "category",
           label: "Users & Permissions",

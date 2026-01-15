@@ -4,12 +4,15 @@ import {
 	Group,
 	Loader,
 	Modal,
+	SimpleGrid,
 	Stack,
 	Tabs,
 	Text,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import {
+	IconBook,
+	IconCode,
 	IconEdit,
 	IconLink,
 	IconList,
@@ -27,6 +30,7 @@ import {
 	seriesMetadataApi,
 } from "@/api/seriesMetadata";
 import { tagsApi } from "@/api/tags";
+import { CustomMetadataEditor } from "@/components/forms/CustomMetadataEditor";
 import {
 	type ImageInfo,
 	ImageUploader,
@@ -56,10 +60,12 @@ interface FormState {
 	ageRating: string;
 	imprint: string;
 	year: string;
+	totalBookCount: string;
 	genres: string[];
 	tags: string[];
 	alternateTitles: ListItem[];
 	externalLinks: ListItem[];
+	customMetadata: Record<string, unknown> | null;
 }
 
 interface LocksState {
@@ -73,8 +79,10 @@ interface LocksState {
 	ageRating: boolean;
 	imprint: boolean;
 	year: boolean;
+	totalBookCount: boolean;
 	genres: boolean;
 	tags: boolean;
+	customMetadata: boolean;
 }
 
 const STATUS_OPTIONS = [
@@ -117,6 +125,7 @@ function initializeFormState(
 		ageRating: metadata?.ageRating?.toString() || "",
 		imprint: metadata?.imprint || "",
 		year: metadata?.year?.toString() || "",
+		totalBookCount: metadata?.totalBookCount?.toString() || "",
 		genres: metadata?.genres.map((g) => g.name) || [],
 		tags: metadata?.tags?.map((t) => t.name) || [],
 		alternateTitles:
@@ -131,6 +140,7 @@ function initializeFormState(
 				values: { label: l.sourceName, url: l.url },
 				locked: false,
 			})) || [],
+		customMetadata: (metadata?.customMetadata as Record<string, unknown>) ?? null,
 	};
 }
 
@@ -146,8 +156,10 @@ function initializeLocksState(locks: MetadataLocks | undefined): LocksState {
 		ageRating: locks?.ageRating || false,
 		imprint: locks?.imprint || false,
 		year: locks?.year || false,
+		totalBookCount: locks?.totalBookCount || false,
 		genres: locks?.genres || false,
 		tags: locks?.tags || false,
+		customMetadata: locks?.customMetadata || false,
 	};
 }
 
@@ -174,6 +186,20 @@ export function SeriesMetadataEditModal({
 	const { data: metadata, isLoading } = useQuery({
 		queryKey: ["series", seriesId, "metadata", "full"],
 		queryFn: () => seriesMetadataApi.getFullMetadata(seriesId),
+		enabled: opened,
+	});
+
+	// Fetch all genres for suggestions
+	const { data: allGenres } = useQuery({
+		queryKey: ["genres"],
+		queryFn: () => genresApi.getAll(),
+		enabled: opened,
+	});
+
+	// Fetch all tags for suggestions
+	const { data: allTags } = useQuery({
+		queryKey: ["tags"],
+		queryFn: () => tagsApi.getAll(),
 		enabled: opened,
 	});
 
@@ -221,6 +247,11 @@ export function SeriesMetadataEditModal({
 				readingDirection: formState.readingDirection || undefined,
 				publisher: formState.publisher || null,
 				year: formState.year ? Number.parseInt(formState.year, 10) : null,
+				totalBookCount: formState.totalBookCount
+					? Number.parseInt(formState.totalBookCount, 10)
+					: null,
+				// Cast needed due to OpenAPI type generation quirk (Record<string, never> vs Record<string, unknown>)
+				customMetadata: formState.customMetadata as Record<string, never> | null,
 			});
 
 			// Update locks
@@ -344,7 +375,7 @@ export function SeriesMetadataEditModal({
 		saveMutation.mutate();
 	};
 
-	// General tab
+	// General tab - Title, Sort Title, Summary
 	const renderGeneralTab = () => (
 		<Stack gap="md">
 			<LockableInput
@@ -379,28 +410,35 @@ export function SeriesMetadataEditModal({
 				minRows={4}
 				autosize
 			/>
+		</Stack>
+	);
 
-			<LockableSelect
-				label="Status"
-				value={formState.status}
-				onChange={(v) => updateField("status", v)}
-				locked={locksState.status}
-				onLockChange={(v) => updateLock("status", v)}
-				originalValue={originalFormState?.status}
-				data={STATUS_OPTIONS}
-				placeholder="Select status"
-				clearable
-			/>
+	// Details tab - Status, Language, Reading Direction, Publisher, etc.
+	const renderDetailsTab = () => (
+		<Stack gap="md">
+			<SimpleGrid cols={2}>
+				<LockableSelect
+					label="Status"
+					value={formState.status}
+					onChange={(v) => updateField("status", v)}
+					locked={locksState.status}
+					onLockChange={(v) => updateLock("status", v)}
+					originalValue={originalFormState?.status}
+					data={STATUS_OPTIONS}
+					placeholder="Select status"
+					clearable
+				/>
 
-			<LockableInput
-				label="Language"
-				value={formState.language}
-				onChange={(v) => updateField("language", v)}
-				locked={locksState.language}
-				onLockChange={(v) => updateLock("language", v)}
-				originalValue={originalFormState?.language}
-				placeholder="e.g., en, ja, ko"
-			/>
+				<LockableInput
+					label="Language"
+					value={formState.language}
+					onChange={(v) => updateField("language", v)}
+					locked={locksState.language}
+					onLockChange={(v) => updateLock("language", v)}
+					originalValue={originalFormState?.language}
+					placeholder="e.g., en, ja, ko"
+				/>
+			</SimpleGrid>
 
 			<LockableSelect
 				label="Reading Direction"
@@ -414,47 +452,62 @@ export function SeriesMetadataEditModal({
 				clearable
 			/>
 
-			<LockableInput
-				label="Publisher"
-				value={formState.publisher}
-				onChange={(v) => updateField("publisher", v)}
-				locked={locksState.publisher}
-				onLockChange={(v) => updateLock("publisher", v)}
-				originalValue={originalFormState?.publisher}
-				placeholder="Publisher name"
-			/>
+			<SimpleGrid cols={2}>
+				<LockableInput
+					label="Publisher"
+					value={formState.publisher}
+					onChange={(v) => updateField("publisher", v)}
+					locked={locksState.publisher}
+					onLockChange={(v) => updateLock("publisher", v)}
+					originalValue={originalFormState?.publisher}
+					placeholder="Publisher name"
+				/>
 
-			<LockableInput
-				label="Imprint"
-				value={formState.imprint}
-				onChange={(v) => updateField("imprint", v)}
-				locked={locksState.imprint}
-				onLockChange={(v) => updateLock("imprint", v)}
-				originalValue={originalFormState?.imprint}
-				placeholder="Imprint (sub-publisher)"
-			/>
+				<LockableInput
+					label="Imprint"
+					value={formState.imprint}
+					onChange={(v) => updateField("imprint", v)}
+					locked={locksState.imprint}
+					onLockChange={(v) => updateLock("imprint", v)}
+					originalValue={originalFormState?.imprint}
+					placeholder="Sub-publisher"
+				/>
+			</SimpleGrid>
 
-			<LockableInput
-				label="Year"
-				value={formState.year}
-				onChange={(v) => updateField("year", v)}
-				locked={locksState.year}
-				onLockChange={(v) => updateLock("year", v)}
-				originalValue={originalFormState?.year}
-				placeholder="Publication year"
-				type="number"
-			/>
+			<SimpleGrid cols={3}>
+				<LockableInput
+					label="Year"
+					value={formState.year}
+					onChange={(v) => updateField("year", v)}
+					locked={locksState.year}
+					onLockChange={(v) => updateLock("year", v)}
+					originalValue={originalFormState?.year}
+					placeholder="Year"
+					type="number"
+				/>
 
-			<LockableInput
-				label="Age Rating"
-				value={formState.ageRating}
-				onChange={(v) => updateField("ageRating", v)}
-				locked={locksState.ageRating}
-				onLockChange={(v) => updateLock("ageRating", v)}
-				originalValue={originalFormState?.ageRating}
-				placeholder="e.g., 13, 16, 18"
-				type="number"
-			/>
+				<LockableInput
+					label="Total Books"
+					value={formState.totalBookCount}
+					onChange={(v) => updateField("totalBookCount", v)}
+					locked={locksState.totalBookCount}
+					onLockChange={(v) => updateLock("totalBookCount", v)}
+					originalValue={originalFormState?.totalBookCount}
+					placeholder="Count"
+					type="number"
+				/>
+
+				<LockableInput
+					label="Age Rating"
+					value={formState.ageRating}
+					onChange={(v) => updateField("ageRating", v)}
+					locked={locksState.ageRating}
+					onLockChange={(v) => updateLock("ageRating", v)}
+					originalValue={originalFormState?.ageRating}
+					placeholder="e.g., 13"
+					type="number"
+				/>
+			</SimpleGrid>
 		</Stack>
 	);
 
@@ -502,6 +555,7 @@ export function SeriesMetadataEditModal({
 				originalValue={originalFormState?.genres}
 				placeholder="Add genres..."
 				description="Press Enter to add a genre"
+				data={allGenres?.map((g) => g.name) ?? []}
 			/>
 
 			<LockableChipInput
@@ -513,6 +567,7 @@ export function SeriesMetadataEditModal({
 				originalValue={originalFormState?.tags}
 				placeholder="Add tags..."
 				description="Press Enter to add a tag"
+				data={allTags?.map((t) => t.name) ?? []}
 			/>
 		</Stack>
 	);
@@ -564,6 +619,17 @@ export function SeriesMetadataEditModal({
 		</Stack>
 	);
 
+	// Custom metadata tab
+	const renderCustomTab = () => (
+		<CustomMetadataEditor
+			value={formState.customMetadata}
+			onChange={(v) => updateField("customMetadata", v)}
+			locked={locksState.customMetadata}
+			onLockChange={(v) => updateLock("customMetadata", v)}
+			originalValue={originalFormState?.customMetadata}
+		/>
+	);
+
 	return (
 		<Modal
 			opened={opened}
@@ -593,6 +659,9 @@ export function SeriesMetadataEditModal({
 							<Tabs.Tab value="general" leftSection={<IconList size={16} />}>
 								General
 							</Tabs.Tab>
+							<Tabs.Tab value="details" leftSection={<IconBook size={16} />}>
+								Details
+							</Tabs.Tab>
 							<Tabs.Tab
 								value="alternateTitles"
 								leftSection={<IconTypography size={16} />}
@@ -608,10 +677,17 @@ export function SeriesMetadataEditModal({
 							<Tabs.Tab value="poster" leftSection={<IconPhoto size={16} />}>
 								Poster
 							</Tabs.Tab>
+							<Tabs.Tab value="custom" leftSection={<IconCode size={16} />}>
+								Custom
+							</Tabs.Tab>
 						</Tabs.List>
 
 						<Tabs.Panel value="general" pt="md">
 							{renderGeneralTab()}
+						</Tabs.Panel>
+
+						<Tabs.Panel value="details" pt="md">
+							{renderDetailsTab()}
 						</Tabs.Panel>
 
 						<Tabs.Panel value="alternateTitles" pt="md">
@@ -628,6 +704,10 @@ export function SeriesMetadataEditModal({
 
 						<Tabs.Panel value="poster" pt="md">
 							{renderPosterTab()}
+						</Tabs.Panel>
+
+						<Tabs.Panel value="custom" pt="md">
+							{renderCustomTab()}
 						</Tabs.Panel>
 					</Tabs>
 

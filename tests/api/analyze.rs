@@ -1,3 +1,6 @@
+// Allow unused temp_dir - needed to keep TempDir alive but not always referenced
+#![allow(unused_variables)]
+
 #[path = "../common/mod.rs"]
 mod common;
 
@@ -97,7 +100,8 @@ async fn test_analyze_series_success() {
 
     assert_eq!(status, StatusCode::OK);
     let result = response.unwrap();
-    assert!(result.books_analyzed >= 0);
+    // Just verify the analysis completed (books_analyzed is usize, always >= 0)
+    let _ = result.books_analyzed;
 }
 
 #[tokio::test]

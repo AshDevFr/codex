@@ -208,8 +208,8 @@ async fn test_postgres_reconnect() {
         .await
         .unwrap();
 
-    // Count doesn't matter, just that query works
-    assert!(count >= 0);
+    // Count doesn't matter, just that query works - assert it exists
+    let _ = count;
 
     db2.close().await;
 }

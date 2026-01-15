@@ -1,7 +1,7 @@
 use crate::api::{
     dto::{
-        BulkUpdateSettingsRequest, HistoryQuery, ListSettingsQuery, SettingDto, SettingHistoryDto,
-        UpdateSettingRequest,
+        BulkUpdateSettingsRequest, HistoryQuery, ListSettingsQuery, PublicSettingDto, SettingDto,
+        SettingHistoryDto, UpdateSettingRequest,
     },
     error::ApiError,
     extractors::{AuthContext, AuthState},
@@ -12,7 +12,12 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
+use std::collections::HashMap;
 use std::sync::Arc;
+
+/// Public settings that can be accessed by any authenticated user
+/// These are non-sensitive settings that affect UI/display behavior
+const PUBLIC_SETTING_KEYS: &[&str] = &["display.custom_metadata_template"];
 
 /// List all settings (admin only)
 #[utoipa::path(
@@ -383,4 +388,52 @@ pub async fn get_setting_history(
         .collect();
 
     Ok(Json(dtos))
+}
+
+/// Get public display settings (authenticated users)
+///
+/// Returns non-sensitive settings that affect UI/display behavior.
+/// This endpoint is available to all authenticated users, not just admins.
+#[utoipa::path(
+    get,
+    path = "/api/v1/settings/public",
+    responses(
+        (status = 200, description = "Public settings", body = HashMap<String, PublicSettingDto>,
+         example = json!({
+             "display.custom_metadata_template": {
+                 "key": "display.custom_metadata_template",
+                 "value": "{{#if custom_metadata}}## Additional Information\n{{#each custom_metadata}}- **{{@key}}**: {{this}}\n{{/each}}{{/if}}"
+             }
+         })
+        ),
+        (status = 401, description = "Unauthorized"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "settings"
+)]
+pub async fn get_public_settings(
+    State(state): State<Arc<AuthState>>,
+    _auth: AuthContext,
+) -> Result<Json<HashMap<String, PublicSettingDto>>, ApiError> {
+    let mut result = HashMap::new();
+
+    for key in PUBLIC_SETTING_KEYS {
+        if let Ok(Some(setting)) = SettingsRepository::get(&state.db, key).await {
+            // Only include non-sensitive settings
+            if !setting.is_sensitive {
+                result.insert(
+                    setting.key.clone(),
+                    PublicSettingDto {
+                        key: setting.key,
+                        value: setting.value,
+                    },
+                );
+            }
+        }
+    }
+
+    Ok(Json(result))
 }

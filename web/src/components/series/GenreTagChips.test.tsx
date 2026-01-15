@@ -90,7 +90,7 @@ describe("GenreTagChips", () => {
 		await user.click(screen.getByText("Action"));
 
 		expect(mockNavigate).toHaveBeenCalledWith(
-			"/libraries/all/series?genres=Action",
+			"/libraries/all/series?gf=any:Action",
 		);
 	});
 
@@ -108,7 +108,7 @@ describe("GenreTagChips", () => {
 		await user.click(screen.getByText("Action"));
 
 		expect(mockNavigate).toHaveBeenCalledWith(
-			"/libraries/lib-123/series?genres=Action",
+			"/libraries/lib-123/series?gf=any:Action",
 		);
 	});
 
@@ -120,7 +120,7 @@ describe("GenreTagChips", () => {
 		await user.click(screen.getByText("Favorite"));
 
 		expect(mockNavigate).toHaveBeenCalledWith(
-			"/libraries/all/series?tags=Favorite",
+			"/libraries/all/series?tf=any:Favorite",
 		);
 	});
 
@@ -172,7 +172,7 @@ describe("GenreTagChips", () => {
 		await user.click(screen.getByText("Sci-Fi & Fantasy"));
 
 		expect(mockNavigate).toHaveBeenCalledWith(
-			"/libraries/all/series?genres=Sci-Fi%20%26%20Fantasy",
+			"/libraries/all/series?gf=any:Sci-Fi%20%26%20Fantasy",
 		);
 	});
 
@@ -228,7 +228,7 @@ describe("GenreTagChips", () => {
 		// Clicking a badge should trigger navigation
 		await user.click(screen.getByText("Adventure"));
 		expect(mockNavigate).toHaveBeenCalledWith(
-			"/libraries/all/series?genres=Adventure",
+			"/libraries/all/series?gf=any:Adventure",
 		);
 	});
 });

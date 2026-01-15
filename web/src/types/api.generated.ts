@@ -2015,6 +2015,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/{series_id}/ratings/average": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the average community rating for a series
+         * @description Returns the average rating from all users and the total count of ratings.
+         *     Ratings are stored on a 0-100 scale internally.
+         */
+        get: operations["get_series_average_rating"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/{series_id}/read": {
         parameters: {
             query?: never;
@@ -2119,6 +2140,27 @@ export interface paths {
         put?: never;
         /** Mark all books in a series as unread */
         post: operations["mark_series_as_unread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/public": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get public display settings (authenticated users)
+         * @description Returns non-sensitive settings that affect UI/display behavior.
+         *     This endpoint is available to all authenticated users, not just admins.
+         */
+        get: operations["get_public_settings"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4192,11 +4234,8 @@ export interface components {
              * @example 2024-01-01T00:00:00Z
              */
             createdAt: string;
-            /**
-             * @description Custom JSON metadata
-             * @example {"myField": "value"}
-             */
-            customMetadata?: string | null;
+            /** @description Custom JSON metadata */
+            customMetadata?: Record<string, never> | null;
             /** @description External links to other sites */
             externalLinks: components["schemas"]["ExternalLinkDto"][];
             /** @description External ratings from various sources */
@@ -4608,6 +4647,11 @@ export interface components {
              */
             ageRating: boolean;
             /**
+             * @description Whether the custom_metadata field is locked
+             * @example false
+             */
+            customMetadata: boolean;
+            /**
              * @description Whether the genres are locked
              * @example false
              */
@@ -4657,6 +4701,11 @@ export interface components {
              * @example false
              */
             titleSort: boolean;
+            /**
+             * @description Whether the total_book_count field is locked
+             * @example false
+             */
+            totalBookCount: boolean;
             /**
              * @description Whether the year field is locked
              * @example false
@@ -5267,11 +5316,8 @@ export interface components {
              * @example 16
              */
             ageRating?: number | null;
-            /**
-             * @description Custom JSON metadata for extensions
-             * @example {"myField": "value"}
-             */
-            customMetadata?: string | null;
+            /** @description Custom JSON metadata for extensions */
+            customMetadata?: Record<string, never> | null;
             /**
              * @description Imprint (sub-publisher)
              * @example Vertigo
@@ -5342,6 +5388,26 @@ export interface components {
             detectedSeries: components["schemas"]["DetectedSeriesDto"][];
             /** @description Total number of files found */
             totalFiles: number;
+        };
+        /**
+         * @description Public setting DTO (for non-admin users)
+         *
+         *     A simplified setting DTO that only includes the key and value,
+         *     used for public display settings accessible to all authenticated users.
+         */
+        PublicSettingDto: {
+            /**
+             * @description Setting key name
+             * @example display.custom_metadata_template
+             */
+            key: string;
+            /**
+             * @description Current setting value
+             * @example {{#if custom_metadata}}## Additional Information
+             *     {{#each custom_metadata}}- **{{@key}}**: {{this}}
+             *     {{/each}}{{/if}}
+             */
+            value: string;
         };
         /**
          * @description OPDS 2.0 Publication Entry
@@ -5720,11 +5786,8 @@ export interface components {
              * @example 16
              */
             ageRating?: number | null;
-            /**
-             * @description Custom JSON metadata for extensions
-             * @example {"myField": "value"}
-             */
-            customMetadata?: string | null;
+            /** @description Custom JSON metadata for extensions */
+            customMetadata?: Record<string, never> | null;
             /**
              * @description Imprint (sub-publisher)
              * @example Vertigo
@@ -5888,6 +5951,21 @@ export interface components {
         SelectCoverSourceRequest: {
             /** @description Cover source: "default" (first book cover) or "custom" (uploaded cover) */
             source: string;
+        };
+        /** @description Response containing the average community rating for a series */
+        SeriesAverageRatingResponse: {
+            /**
+             * Format: double
+             * @description Average rating from all users (0-100 scale), null if no ratings exist
+             * @example 78.5
+             */
+            average?: number | null;
+            /**
+             * Format: int64
+             * @description Total number of user ratings for this series
+             * @example 15
+             */
+            count: number;
         };
         /**
          * @description Series-level search conditions
@@ -6073,11 +6151,8 @@ export interface components {
              * @example 16
              */
             ageRating?: number | null;
-            /**
-             * @description Custom JSON metadata for extensions
-             * @example {"myField": "value"}
-             */
-            customMetadata?: string | null;
+            /** @description Custom JSON metadata for extensions */
+            customMetadata?: Record<string, never> | null;
             /**
              * Format: uuid
              * @description Series ID
@@ -7104,6 +7179,11 @@ export interface components {
              */
             ageRating?: boolean | null;
             /**
+             * @description Whether to lock the custom_metadata field
+             * @example false
+             */
+            customMetadata?: boolean | null;
+            /**
              * @description Whether to lock the genres
              * @example false
              */
@@ -7153,6 +7233,11 @@ export interface components {
              * @example false
              */
             titleSort?: boolean | null;
+            /**
+             * @description Whether to lock the total_book_count field
+             * @example false
+             */
+            totalBookCount?: boolean | null;
             /**
              * @description Whether to lock the year field
              * @example false
@@ -12116,6 +12201,49 @@ export interface operations {
             };
         };
     };
+    get_series_average_rating: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Average rating for the series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "average": 78.5,
+                     *       "count": 15
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SeriesAverageRatingResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mark_series_as_read: {
         parameters: {
             query?: never;
@@ -12417,6 +12545,43 @@ export interface operations {
             };
             /** @description Series not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_public_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Public settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "display.custom_metadata_template": {
+                     *         "key": "display.custom_metadata_template",
+                     *         "value": "{{#if custom_metadata}}## Additional Information\n{{#each custom_metadata}}- **{{@key}}**: {{this}}\n{{/each}}{{/if}}"
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        [key: string]: components["schemas"]["PublicSettingDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

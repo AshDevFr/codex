@@ -42,8 +42,27 @@ export const libraryHandlers = [
 		return HttpResponse.json(newLibrary, { status: 201 });
 	}),
 
-	// Update library
+	// Update library (PUT - full replace)
 	http.put("/api/v1/libraries/:id", async ({ params, request }) => {
+		await delay(200);
+		const body = (await request.json()) as Partial<MockLibrary>;
+		const index = mockLibraries.findIndex((l) => l.id === params.id);
+
+		if (index === -1) {
+			return HttpResponse.json({ error: "Library not found" }, { status: 404 });
+		}
+
+		mockLibraries[index] = {
+			...mockLibraries[index],
+			...body,
+			updatedAt: new Date().toISOString(),
+		};
+
+		return HttpResponse.json(mockLibraries[index]);
+	}),
+
+	// Update library (PATCH - partial update)
+	http.patch("/api/v1/libraries/:id", async ({ params, request }) => {
 		await delay(200);
 		const body = (await request.json()) as Partial<MockLibrary>;
 		const index = mockLibraries.findIndex((l) => l.id === params.id);
@@ -74,7 +93,30 @@ export const libraryHandlers = [
 		return new HttpResponse(null, { status: 204 });
 	}),
 
-	// Purge deleted books
+	// Trigger library scan
+	http.post("/api/v1/libraries/:id/scan", async ({ params, request }) => {
+		await delay(100);
+		const library = mockLibraries.find((l) => l.id === params.id);
+
+		if (!library) {
+			return HttpResponse.json({ error: "Library not found" }, { status: 404 });
+		}
+
+		// Parse scan options from request body
+		const body = (await request.json().catch(() => ({}))) as {
+			deep?: boolean;
+			force?: boolean;
+		};
+
+		return HttpResponse.json({
+			message: "Scan started",
+			taskId: `scan-${params.id}-${Date.now()}`,
+			deep: body.deep || false,
+			force: body.force || false,
+		});
+	}),
+
+	// Purge deleted books (POST - legacy)
 	http.post("/api/v1/libraries/:id/purge", async ({ params }) => {
 		await delay(500);
 		const library = mockLibraries.find((l) => l.id === params.id);
@@ -84,6 +126,37 @@ export const libraryHandlers = [
 		}
 
 		return HttpResponse.json({ purgedCount: 0 });
+	}),
+
+	// Purge deleted books (DELETE - current API)
+	http.delete("/api/v1/libraries/:id/purge-deleted", async ({ params }) => {
+		await delay(500);
+		const library = mockLibraries.find((l) => l.id === params.id);
+
+		if (!library) {
+			return HttpResponse.json({ error: "Library not found" }, { status: 404 });
+		}
+
+		return HttpResponse.json({ purgedCount: 0 });
+	}),
+
+	// Preview scan (dry run to see what would be found)
+	http.post("/api/v1/libraries/preview-scan", async ({ request }) => {
+		await delay(300);
+		const body = (await request.json()) as { path: string };
+
+		// Simulate finding some files
+		return HttpResponse.json({
+			path: body.path,
+			filesFound: 42,
+			seriesEstimate: 8,
+			formats: {
+				cbz: 25,
+				cbr: 10,
+				epub: 5,
+				pdf: 2,
+			},
+		});
 	}),
 ];
 

@@ -220,7 +220,6 @@ mod tests {
     use crate::db::test_helpers::setup_test_db;
     use crate::models::ScanningStrategy;
     use crate::utils::password;
-    use sea_orm::prelude::Decimal;
 
     async fn create_test_user(db: &DatabaseConnection) -> users::Model {
         let password_hash = password::hash_password("password").unwrap();
