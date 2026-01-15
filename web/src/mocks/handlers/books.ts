@@ -476,7 +476,7 @@ export const bookHandlers = [
 				title: book.title,
 				series: book.seriesName,
 				number: book.number?.toString(),
-				summary: getBookSummary(book.seriesName, book.number),
+				summary: getBookSummary(book.seriesName, book.number ?? null),
 				publisher,
 				imprint: publisher.includes("Vertigo") ? "Vertigo" : null,
 				genre,
@@ -583,19 +583,20 @@ export const bookHandlers = [
 			return HttpResponse.json({ error: "Book not found" }, { status: 404 });
 		}
 
-		if (book.readProgress === null) {
+		if (!book.readProgress) {
 			// No progress exists
 			return HttpResponse.json({ error: "No progress found" }, { status: 404 });
 		}
 
+		const currentPage = book.readProgress.current_page;
 		return HttpResponse.json({
 			id: `progress-${params.id}`,
 			bookId: params.id,
 			userId: "mock-user-id",
-			currentPage: book.readProgress,
+			currentPage,
 			totalPages: book.pageCount,
-			percentage: Math.round((book.readProgress / book.pageCount) * 100),
-			isCompleted: book.readProgress >= book.pageCount,
+			percentage: Math.round((currentPage / book.pageCount) * 100),
+			isCompleted: currentPage >= book.pageCount,
 			lastReadAt: new Date().toISOString(),
 			createdAt: "2024-01-01T00:00:00Z",
 			updatedAt: new Date().toISOString(),

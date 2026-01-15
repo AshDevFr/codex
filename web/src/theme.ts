@@ -1,4 +1,9 @@
-import { createTheme, type MantineColorsTuple } from "@mantine/core";
+import {
+	createTheme,
+	type MantineColorsTuple,
+	type MantineTheme,
+	type ModalProps,
+} from "@mantine/core";
 
 // Primary blue color palette (inspired by Komga)
 const primaryBlue: MantineColorsTuple = [
@@ -66,7 +71,7 @@ export const theme = createTheme({
 					maxWidth: "min(90vw, var(--modal-size))",
 				},
 			},
-			vars: (_theme, props) => {
+			vars: (_theme: MantineTheme, props: ModalProps) => {
 				// Increase modal sizes for desktop
 				const sizeMap: Record<string, string> = {
 					xs: "400px",
