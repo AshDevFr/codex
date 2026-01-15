@@ -462,8 +462,12 @@ async fn process_series_with_detected(
     let file_refs: Vec<&PathBuf> = file_paths.iter().collect();
     let fingerprint = calculate_series_fingerprint(&file_refs);
 
-    // Use series path from detected series if available
-    let series_path = detected_series.path.clone();
+    // Use series path from detected series (should always be available from scanner)
+    // Fallback to series name if not available (shouldn't happen in practice)
+    let series_path = detected_series
+        .path
+        .as_deref()
+        .unwrap_or(&detected_series.name);
 
     // Find or create series with fingerprint
     let series_model = find_or_create_series(
@@ -471,7 +475,7 @@ async fn process_series_with_detected(
         library.id,
         &detected_series.name,
         Some(&fingerprint),
-        series_path.as_deref(),
+        series_path,
         event_broadcaster,
     )
     .await?;
@@ -786,38 +790,86 @@ fn calculate_series_fingerprint(file_paths: &[&PathBuf]) -> String {
     format!("{:x}", hasher.finalize())
 }
 
-/// Find or create a series by fingerprint only
+/// Find or create a series using a 3-step matching strategy
 ///
-/// This function uses fingerprint-only matching (no normalized name fallback).
-/// If two directories have similar names but different fingerprints, they remain separate series.
+/// Matching strategy (in order of priority):
+/// 1. **Path match**: Same directory = same series (primary key)
+/// 2. **Fingerprint match**: Directory renamed but same files = same series
+/// 3. **Normalized name match**: Last resort for moved+renamed directories
+/// 4. If no match, create a new series
+///
+/// This approach ensures that:
+/// - Adding/removing files from a series directory keeps the same series (path match)
+/// - Renaming a series directory keeps the same series (fingerprint match)
+/// - Moving AND renaming a series directory may still match (normalized name fallback)
 async fn find_or_create_series(
     db: &DatabaseConnection,
     library_id: Uuid,
     series_name: &str,
     fingerprint: Option<&str>,
-    path: Option<&str>,
+    path: &str,
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
 ) -> Result<series::Model> {
     use crate::db::repositories::SeriesMetadataRepository;
 
-    let series_list = SeriesRepository::list_by_library(db, library_id).await?;
+    // Step 1: Path match (same directory = same series)
+    // This is the primary matching key - if the path matches, it's definitely the same series
+    if let Some(existing) = SeriesRepository::find_by_path(db, library_id, path).await? {
+        info!(
+            "Matched series by path: {} -> series id {}",
+            path, existing.id
+        );
 
-    // Try fingerprint match only (no normalized name fallback)
+        // Update fingerprint and name if files changed (fingerprint may have changed)
+        if let Some(fp) = fingerprint {
+            if existing.fingerprint.as_ref() != Some(&fp.to_string())
+                || existing.name != series_name
+            {
+                debug!(
+                    "Updating series fingerprint/name after path match: {} (old fingerprint: {:?}, new: {})",
+                    series_name,
+                    existing.fingerprint,
+                    fp
+                );
+                SeriesRepository::update_fingerprint_and_name(
+                    db,
+                    existing.id,
+                    Some(fp.to_string()),
+                    series_name,
+                )
+                .await?;
+
+                // Also update series_metadata title if not locked
+                if let Ok(Some(metadata)) =
+                    SeriesMetadataRepository::get_by_series_id(db, existing.id).await
+                {
+                    if metadata.title != series_name && !metadata.title_lock {
+                        SeriesRepository::update_name(db, existing.id, series_name).await?;
+                    }
+                }
+            }
+        }
+
+        return Ok(existing);
+    }
+
+    // Step 2: Fingerprint match (directory renamed, same files)
+    // The directory was renamed but files stayed the same
     if let Some(fp) = fingerprint {
-        if let Some(existing) = series_list
-            .iter()
-            .find(|s| s.fingerprint.as_ref().map(|f| f == fp).unwrap_or(false))
-        {
-            // Get the series metadata to check the current title
+        if let Some(existing) = SeriesRepository::find_by_fingerprint(db, library_id, fp).await? {
+            info!(
+                "Matched series by fingerprint: {} -> series id {} (path changed from {} to {})",
+                series_name, existing.id, existing.path, path
+            );
+
+            // Update path and name (directory was renamed)
+            SeriesRepository::update_path_and_name(db, existing.id, path.to_string(), series_name)
+                .await?;
+
+            // Also update series_metadata title if not locked
             if let Ok(Some(metadata)) =
                 SeriesMetadataRepository::get_by_series_id(db, existing.id).await
             {
-                info!(
-                    "Matched series by fingerprint: {} -> {}",
-                    series_name, metadata.title
-                );
-
-                // Update title if changed and not locked (series directory was renamed)
                 if metadata.title != series_name && !metadata.title_lock {
                     info!(
                         "Detected series rename: {} -> {}",
@@ -827,17 +879,63 @@ async fn find_or_create_series(
                 }
             }
 
-            return Ok(existing.clone());
+            return Ok(existing);
         }
     }
 
-    // Create new series with fingerprint (title stored in series_metadata)
+    // Step 3: Normalized name match (last resort fallback)
+    // The directory was moved AND renamed, but the name is similar
+    let normalized_name = SeriesRepository::normalize_name(series_name);
+    if let Some(existing) =
+        SeriesRepository::find_by_normalized_name(db, library_id, &normalized_name).await?
+    {
+        info!(
+            "Matched series by normalized name: {} -> series id {} (path changed from {} to {})",
+            series_name, existing.id, existing.path, path
+        );
+
+        // Update fingerprint and path
+        SeriesRepository::update_fingerprint_and_path(
+            db,
+            existing.id,
+            fingerprint.map(String::from),
+            path.to_string(),
+        )
+        .await?;
+
+        // Also update series.name and series_metadata title if not locked
+        if existing.name != series_name {
+            SeriesRepository::update_fingerprint_and_name(
+                db,
+                existing.id,
+                fingerprint.map(String::from),
+                series_name,
+            )
+            .await?;
+
+            if let Ok(Some(metadata)) =
+                SeriesMetadataRepository::get_by_series_id(db, existing.id).await
+            {
+                if !metadata.title_lock {
+                    SeriesRepository::update_name(db, existing.id, series_name).await?;
+                }
+            }
+        }
+
+        return Ok(existing);
+    }
+
+    // Step 4: Create new series with fingerprint (title stored in series_metadata)
+    info!(
+        "Creating new series: {} at path {} with fingerprint {:?}",
+        series_name, path, fingerprint
+    );
     SeriesRepository::create_with_fingerprint(
         db,
         library_id,
         series_name,
         fingerprint.map(String::from),
-        path.map(String::from),
+        path.to_string(),
         event_broadcaster,
     )
     .await

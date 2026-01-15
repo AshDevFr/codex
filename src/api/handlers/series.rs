@@ -138,7 +138,7 @@ async fn series_to_dto(
         publisher: metadata.as_ref().and_then(|m| m.publisher.clone()),
         year: metadata.as_ref().and_then(|m| m.year),
         book_count,
-        path: series.path,
+        path: Some(series.path),
         selected_cover_source: selected_cover.map(|c| c.source),
         has_custom_cover: Some(has_custom_cover),
         unread_count,

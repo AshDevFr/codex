@@ -36,7 +36,9 @@ async fn create_test_series(db: &DatabaseConnection, library_id: Uuid) -> Uuid {
         id: Set(series_id),
         library_id: Set(library_id),
         fingerprint: Set(Some(format!("test-series-{}", series_id))),
-        path: Set(Some("/test/series".to_string())),
+        path: Set("/test/series".to_string()),
+        name: Set("Test Series".to_string()),
+        normalized_name: Set("test series".to_string()),
         created_at: Set(now),
         updated_at: Set(now),
     };

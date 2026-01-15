@@ -16,7 +16,12 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Series::Id).uuid().not_null().primary_key())
                     .col(ColumnDef::new(Series::LibraryId).uuid().not_null())
                     .col(ColumnDef::new(Series::Fingerprint).string_len(64))
-                    .col(ColumnDef::new(Series::Path).text())
+                    // Path is required - primary matching key (library_id, path)
+                    .col(ColumnDef::new(Series::Path).text().not_null())
+                    // Name derived from directory name (internal use only)
+                    .col(ColumnDef::new(Series::Name).text().not_null())
+                    // Normalized name for fallback matching (internal use only)
+                    .col(ColumnDef::new(Series::NormalizedName).text().not_null())
                     .col(
                         ColumnDef::new(Series::CreatedAt)
                             .timestamp_with_time_zone()
@@ -50,6 +55,31 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        // Unique index on (library_id, path) - primary matching key
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_series_library_path")
+                    .table(Series::Table)
+                    .col(Series::LibraryId)
+                    .col(Series::Path)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+
+        // Index on (library_id, normalized_name) for fallback matching
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_series_library_normalized_name")
+                    .table(Series::Table)
+                    .col(Series::LibraryId)
+                    .col(Series::NormalizedName)
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 
@@ -67,6 +97,8 @@ pub enum Series {
     LibraryId,
     Fingerprint,
     Path,
+    Name,
+    NormalizedName,
     CreatedAt,
     UpdatedAt,
 }

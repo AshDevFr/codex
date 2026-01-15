@@ -15,7 +15,12 @@ pub struct Model {
     pub id: Uuid,
     pub library_id: Uuid,
     pub fingerprint: Option<String>,
-    pub path: Option<String>,
+    /// Path to the series directory (required, primary matching key)
+    pub path: String,
+    /// Name derived from directory name (internal use only, not exposed via API)
+    pub name: String,
+    /// Normalized name for fallback matching (internal use only, not exposed via API)
+    pub normalized_name: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

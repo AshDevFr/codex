@@ -1321,11 +1321,11 @@ async fn test_list_recently_updated_series() {
 
     // Update series1 and series3 to change their updated_at (update path field which is on series model)
     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-    series3.path = Some("/updated/path3".to_string());
+    series3.path = "/updated/path3".to_string();
     SeriesRepository::update(&db, &series3, None).await.unwrap();
 
     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-    series1.path = Some("/updated/path1".to_string());
+    series1.path = "/updated/path1".to_string();
     SeriesRepository::update(&db, &series1, None).await.unwrap();
 
     let state = create_test_auth_state(db.clone()).await;
@@ -1361,7 +1361,7 @@ async fn test_list_library_recently_updated_series() {
         .await
         .unwrap();
     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-    series1.path = Some("/updated/lib1/path".to_string());
+    series1.path = "/updated/lib1/path".to_string();
     SeriesRepository::update(&db, &series1, None).await.unwrap();
 
     // Create series in library 2 (not updated)

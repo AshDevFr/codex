@@ -24,7 +24,9 @@ pub struct SeriesWithAggregates {
     pub id: Uuid,
     pub library_id: Uuid,
     pub fingerprint: Option<String>,
-    pub path: Option<String>,
+    pub path: String,
+    pub name: String,
+    pub normalized_name: String,
     pub created_at: chrono::DateTime<Utc>,
     pub updated_at: chrono::DateTime<Utc>,
     /// Aggregated field for date_read sort - used for SQL ORDER BY mapping
@@ -39,6 +41,8 @@ impl From<SeriesWithAggregates> for series::Model {
             library_id: s.library_id,
             fingerprint: s.fingerprint,
             path: s.path,
+            name: s.name,
+            normalized_name: s.normalized_name,
             created_at: s.created_at,
             updated_at: s.updated_at,
         }
@@ -60,34 +64,47 @@ impl SeriesRepository {
             .join(" ")
     }
 
-    /// Create a new series
+    /// Create a new series with a default path derived from the name
+    /// For production use, prefer `create_with_fingerprint` which takes an explicit path
     pub async fn create(
         db: &DatabaseConnection,
         library_id: Uuid,
         name: &str,
         event_broadcaster: Option<&Arc<EventBroadcaster>>,
     ) -> Result<series::Model> {
-        Self::create_with_fingerprint(db, library_id, name, None, None, event_broadcaster).await
+        // Use name as path for backwards compatibility in tests
+        Self::create_with_fingerprint(
+            db,
+            library_id,
+            name,
+            None,
+            name.to_string(),
+            event_broadcaster,
+        )
+        .await
     }
 
-    /// Create a new series with optional fingerprint
+    /// Create a new series with optional fingerprint and required path
     /// Also creates the corresponding series_metadata record
     pub async fn create_with_fingerprint(
         db: &DatabaseConnection,
         library_id: Uuid,
         name: &str,
         fingerprint: Option<String>,
-        path: Option<String>,
+        path: String,
         event_broadcaster: Option<&Arc<EventBroadcaster>>,
     ) -> Result<series::Model> {
         let now = Utc::now();
         let series_id = Uuid::new_v4();
+        let normalized_name = Self::normalize_name(name);
 
         let series = series::ActiveModel {
             id: Set(series_id),
             library_id: Set(library_id),
             fingerprint: Set(fingerprint),
             path: Set(path),
+            name: Set(name.to_string()),
+            normalized_name: Set(normalized_name),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -499,6 +516,8 @@ impl SeriesRepository {
             library_id: Set(series_model.library_id),
             fingerprint: Set(series_model.fingerprint.clone()),
             path: Set(series_model.path.clone()),
+            name: Set(series_model.name.clone()),
+            normalized_name: Set(series_model.normalized_name.clone()),
             created_at: Set(series_model.created_at),
             updated_at: Set(Utc::now()),
         };
@@ -565,6 +584,152 @@ impl SeriesRepository {
             .update(db)
             .await
             .context("Failed to update series fingerprint")?;
+
+        Ok(())
+    }
+
+    /// Find a series by library_id and path (primary matching key)
+    /// Used for step 1 of the deduplication strategy: same directory = same series
+    pub async fn find_by_path(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        path: &str,
+    ) -> Result<Option<series::Model>> {
+        Series::find()
+            .filter(series::Column::LibraryId.eq(library_id))
+            .filter(series::Column::Path.eq(path))
+            .one(db)
+            .await
+            .context("Failed to find series by path")
+    }
+
+    /// Find a series by fingerprint within a library
+    /// Used for step 2 of the deduplication strategy: directory renamed, same files
+    pub async fn find_by_fingerprint(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        fingerprint: &str,
+    ) -> Result<Option<series::Model>> {
+        Series::find()
+            .filter(series::Column::LibraryId.eq(library_id))
+            .filter(series::Column::Fingerprint.eq(fingerprint))
+            .one(db)
+            .await
+            .context("Failed to find series by fingerprint")
+    }
+
+    /// Find a series by library_id and normalized_name
+    /// Used for step 3 of the deduplication strategy: last resort fallback
+    pub async fn find_by_normalized_name(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        normalized_name: &str,
+    ) -> Result<Option<series::Model>> {
+        Series::find()
+            .filter(series::Column::LibraryId.eq(library_id))
+            .filter(series::Column::NormalizedName.eq(normalized_name))
+            .one(db)
+            .await
+            .context("Failed to find series by normalized name")
+    }
+
+    /// Update series path (when directory is moved but fingerprint matches)
+    pub async fn update_path(db: &DatabaseConnection, id: Uuid, path: String) -> Result<()> {
+        let series = Series::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Series not found"))?;
+
+        let mut active: series::ActiveModel = series.into();
+        active.path = Set(path);
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to update series path")?;
+
+        Ok(())
+    }
+
+    /// Update series fingerprint and name when matched by path
+    /// Used when files change in the directory but path stays the same
+    pub async fn update_fingerprint_and_name(
+        db: &DatabaseConnection,
+        id: Uuid,
+        fingerprint: Option<String>,
+        name: &str,
+    ) -> Result<()> {
+        let series = Series::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Series not found"))?;
+
+        let normalized_name = Self::normalize_name(name);
+        let mut active: series::ActiveModel = series.into();
+        active.fingerprint = Set(fingerprint);
+        active.name = Set(name.to_string());
+        active.normalized_name = Set(normalized_name);
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to update series fingerprint and name")?;
+
+        Ok(())
+    }
+
+    /// Update series path and name when matched by fingerprint
+    /// Used when directory is renamed but files stay the same
+    pub async fn update_path_and_name(
+        db: &DatabaseConnection,
+        id: Uuid,
+        path: String,
+        name: &str,
+    ) -> Result<()> {
+        let series = Series::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Series not found"))?;
+
+        let normalized_name = Self::normalize_name(name);
+        let mut active: series::ActiveModel = series.into();
+        active.path = Set(path);
+        active.name = Set(name.to_string());
+        active.normalized_name = Set(normalized_name);
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to update series path and name")?;
+
+        Ok(())
+    }
+
+    /// Update series fingerprint and path when matched by normalized_name
+    /// Used as fallback when directory is moved AND renamed
+    pub async fn update_fingerprint_and_path(
+        db: &DatabaseConnection,
+        id: Uuid,
+        fingerprint: Option<String>,
+        path: String,
+    ) -> Result<()> {
+        let series = Series::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Series not found"))?;
+
+        let mut active: series::ActiveModel = series.into();
+        active.fingerprint = Set(fingerprint);
+        active.path = Set(path);
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to update series fingerprint and path")?;
 
         Ok(())
     }
@@ -1140,5 +1305,351 @@ mod tests {
         .unwrap();
 
         assert_eq!(started.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_find_by_path() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Create a series with a specific path
+        let series = SeriesRepository::create_with_fingerprint(
+            db.sea_orm_connection(),
+            library.id,
+            "My Series",
+            Some("fingerprint123".to_string()),
+            "/test/path/My Series".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Find by path - should match
+        let found = SeriesRepository::find_by_path(
+            db.sea_orm_connection(),
+            library.id,
+            "/test/path/My Series",
+        )
+        .await
+        .unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, series.id);
+
+        // Find by different path - should not match
+        let not_found =
+            SeriesRepository::find_by_path(db.sea_orm_connection(), library.id, "/test/path/Other")
+                .await
+                .unwrap();
+        assert!(not_found.is_none());
+
+        // Find in different library - should not match
+        let other_library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Other Library",
+            "/other/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let not_found = SeriesRepository::find_by_path(
+            db.sea_orm_connection(),
+            other_library.id,
+            "/test/path/My Series",
+        )
+        .await
+        .unwrap();
+        assert!(not_found.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_find_by_fingerprint() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Create a series with a fingerprint
+        let series = SeriesRepository::create_with_fingerprint(
+            db.sea_orm_connection(),
+            library.id,
+            "My Series",
+            Some("unique_fingerprint_abc".to_string()),
+            "/test/path/My Series".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Find by fingerprint - should match
+        let found = SeriesRepository::find_by_fingerprint(
+            db.sea_orm_connection(),
+            library.id,
+            "unique_fingerprint_abc",
+        )
+        .await
+        .unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, series.id);
+
+        // Find by different fingerprint - should not match
+        let not_found = SeriesRepository::find_by_fingerprint(
+            db.sea_orm_connection(),
+            library.id,
+            "different_fingerprint",
+        )
+        .await
+        .unwrap();
+        assert!(not_found.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_find_by_normalized_name() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Create a series - normalized name will be "one piece" (lowercase, alphanumeric)
+        let series = SeriesRepository::create_with_fingerprint(
+            db.sea_orm_connection(),
+            library.id,
+            "One Piece",
+            Some("fp123".to_string()),
+            "/test/path/One Piece".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Find by normalized name - should match
+        let found = SeriesRepository::find_by_normalized_name(
+            db.sea_orm_connection(),
+            library.id,
+            "one piece",
+        )
+        .await
+        .unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, series.id);
+
+        // Find by different normalized name - should not match
+        let not_found = SeriesRepository::find_by_normalized_name(
+            db.sea_orm_connection(),
+            library.id,
+            "two piece",
+        )
+        .await
+        .unwrap();
+        assert!(not_found.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_update_path() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create_with_fingerprint(
+            db.sea_orm_connection(),
+            library.id,
+            "My Series",
+            Some("fp".to_string()),
+            "/old/path".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Update path
+        SeriesRepository::update_path(db.sea_orm_connection(), series.id, "/new/path".to_string())
+            .await
+            .unwrap();
+
+        // Verify path was updated
+        let updated = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(updated.path, "/new/path");
+    }
+
+    #[tokio::test]
+    async fn test_update_fingerprint_and_name() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create_with_fingerprint(
+            db.sea_orm_connection(),
+            library.id,
+            "Original Name",
+            Some("old_fp".to_string()),
+            "/test/path/series".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Update fingerprint and name
+        SeriesRepository::update_fingerprint_and_name(
+            db.sea_orm_connection(),
+            series.id,
+            Some("new_fp".to_string()),
+            "New Name",
+        )
+        .await
+        .unwrap();
+
+        // Verify updates
+        let updated = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(updated.fingerprint, Some("new_fp".to_string()));
+        assert_eq!(updated.name, "New Name");
+        assert_eq!(updated.normalized_name, "new name");
+    }
+
+    #[tokio::test]
+    async fn test_update_path_and_name() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create_with_fingerprint(
+            db.sea_orm_connection(),
+            library.id,
+            "Original Name",
+            Some("fp".to_string()),
+            "/old/path".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Update path and name
+        SeriesRepository::update_path_and_name(
+            db.sea_orm_connection(),
+            series.id,
+            "/new/path".to_string(),
+            "Renamed Series",
+        )
+        .await
+        .unwrap();
+
+        // Verify updates
+        let updated = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(updated.path, "/new/path");
+        assert_eq!(updated.name, "Renamed Series");
+        assert_eq!(updated.normalized_name, "renamed series");
+    }
+
+    #[tokio::test]
+    async fn test_update_fingerprint_and_path() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create_with_fingerprint(
+            db.sea_orm_connection(),
+            library.id,
+            "My Series",
+            Some("old_fp".to_string()),
+            "/old/path".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Update fingerprint and path
+        SeriesRepository::update_fingerprint_and_path(
+            db.sea_orm_connection(),
+            series.id,
+            Some("new_fp".to_string()),
+            "/new/path".to_string(),
+        )
+        .await
+        .unwrap();
+
+        // Verify updates
+        let updated = SeriesRepository::get_by_id(db.sea_orm_connection(), series.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(updated.fingerprint, Some("new_fp".to_string()));
+        assert_eq!(updated.path, "/new/path");
+        // Name should remain unchanged
+        assert_eq!(updated.name, "My Series");
+    }
+
+    #[tokio::test]
+    async fn test_normalize_name() {
+        // Test various normalization cases
+        assert_eq!(SeriesRepository::normalize_name("One Piece"), "one piece");
+        assert_eq!(
+            SeriesRepository::normalize_name("  Multiple   Spaces  "),
+            "multiple spaces"
+        );
+        assert_eq!(
+            SeriesRepository::normalize_name("Special!@#$Characters"),
+            "specialcharacters"
+        );
+        assert_eq!(SeriesRepository::normalize_name("UPPERCASE"), "uppercase");
+        assert_eq!(
+            SeriesRepository::normalize_name("MixedCase123"),
+            "mixedcase123"
+        );
     }
 }
