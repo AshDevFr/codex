@@ -129,21 +129,21 @@ button:focus-visible {
 /* Dark theme - ensure consistent dark styling */
 [data-mantine-color-scheme="dark"] {
 	.mantine-AppShell-main {
-		background-color: #1a1a1a;
+		background-color: #242424;
 	}
 
 	.mantine-AppShell-header {
-		background-color: #1a1a1a;
+		background-color: #242424;
 		border-bottom: 1px solid #373a40;
 	}
 
 	.mantine-AppShell-navbar {
-		background-color: #1a1a1a;
+		background-color: #242424;
 		border-right: 1px solid #373a40;
 	}
 
 	.mantine-Card-root {
-		background-color: #242424;
+		background-color: #2c2c2c;
 		border-color: #373a40;
 	}
 }
@@ -166,6 +166,12 @@ button:focus-visible {
 }
 
 /* Media card hover effect - show read button overlay */
+.media-card-read-overlay {
+	opacity: 0;
+	pointer-events: none;
+}
+
 .media-card-cover:hover .media-card-read-overlay {
 	opacity: 1;
+	pointer-events: auto;
 }

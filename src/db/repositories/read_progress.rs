@@ -56,19 +56,15 @@ impl ReadProgressRepository {
 
         if let Some(existing_model) = existing {
             // Update existing progress
-            let mut active_model: read_progress::ActiveModel = existing_model.clone().into();
-            active_model.current_page = Set(current_page);
-            active_model.progress_percentage = Set(progress_percentage);
-            active_model.completed = Set(completed);
-            active_model.updated_at = Set(now);
-
-            // Set completed_at if just marked as completed
-            if completed && existing_model.completed_at.is_none() {
-                active_model.completed_at = Set(Some(now));
-            }
-
-            let result = active_model.update(db).await?;
-            Ok(result)
+            Self::update_existing(
+                db,
+                existing_model,
+                current_page,
+                progress_percentage,
+                completed,
+                now,
+            )
+            .await
         } else {
             // Create new progress
             let new_progress = read_progress::ActiveModel {
@@ -83,9 +79,55 @@ impl ReadProgressRepository {
                 completed_at: Set(if completed { Some(now) } else { None }),
             };
 
-            let result = new_progress.insert(db).await?;
-            Ok(result)
+            match new_progress.insert(db).await {
+                Ok(result) => Ok(result),
+                Err(DbErr::Query(RuntimeErr::SqlxError(sqlx_err)))
+                    if sqlx_err.to_string().contains("UNIQUE constraint failed")
+                        || sqlx_err.to_string().contains("duplicate key") =>
+                {
+                    // Race condition: another request created the record, fetch and update it
+                    let existing = Self::get_by_user_and_book(db, user_id, book_id)
+                        .await?
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("Failed to find progress after constraint violation")
+                        })?;
+                    Self::update_existing(
+                        db,
+                        existing,
+                        current_page,
+                        progress_percentage,
+                        completed,
+                        now,
+                    )
+                    .await
+                }
+                Err(e) => Err(e.into()),
+            }
         }
+    }
+
+    /// Helper to update an existing progress record
+    async fn update_existing(
+        db: &DatabaseConnection,
+        existing_model: read_progress::Model,
+        current_page: i32,
+        progress_percentage: Option<f64>,
+        completed: bool,
+        now: chrono::DateTime<Utc>,
+    ) -> Result<read_progress::Model> {
+        let mut active_model: read_progress::ActiveModel = existing_model.clone().into();
+        active_model.current_page = Set(current_page);
+        active_model.progress_percentage = Set(progress_percentage);
+        active_model.completed = Set(completed);
+        active_model.updated_at = Set(now);
+
+        // Set completed_at if just marked as completed
+        if completed && existing_model.completed_at.is_none() {
+            active_model.completed_at = Set(Some(now));
+        }
+
+        let result = active_model.update(db).await?;
+        Ok(result)
     }
 
     /// Delete reading progress
@@ -556,5 +598,32 @@ mod tests {
         assert!(progress1.is_none());
         assert!(progress2.is_none());
         assert!(progress3.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_unique_constraint_prevents_duplicates() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book = create_test_book(&db).await;
+
+        // Create initial progress
+        let progress1 = ReadProgressRepository::upsert(&db, user.id, book.id, 10, false)
+            .await
+            .unwrap();
+
+        // Attempting to create another progress for the same user/book should update, not create duplicate
+        let progress2 = ReadProgressRepository::upsert(&db, user.id, book.id, 20, false)
+            .await
+            .unwrap();
+
+        // Should be the same record (same ID), just updated
+        assert_eq!(progress1.id, progress2.id);
+        assert_eq!(progress2.current_page, 20);
+
+        // Verify only one record exists
+        let all_progress = ReadProgressRepository::get_by_user(&db, user.id)
+            .await
+            .unwrap();
+        assert_eq!(all_progress.len(), 1);
     }
 }

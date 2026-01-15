@@ -9,14 +9,6 @@ import {
 	createSettingHistory,
 } from "../data/factories";
 
-// Default template for custom metadata display
-const DEFAULT_CUSTOM_METADATA_TEMPLATE = `{{#if custom_metadata}}
-## Additional Information
-
-{{#each custom_metadata}}
-- **{{@key}}**: {{this}}
-{{/each}}
-{{/if}}`;
 
 // Mock system integrations (admin-managed)
 const mockSystemIntegrations: Array<{
@@ -114,12 +106,18 @@ const mockSettings = [
 	// Display settings
 	createSetting({
 		key: "display.custom_metadata_template",
-		value: DEFAULT_CUSTOM_METADATA_TEMPLATE,
+		value: `{{#if custom_metadata}}
+## Additional Information
+
+{{#each custom_metadata}}
+- **{{@key}}**: {{this}}
+{{/each}}
+{{/if}}`,
 		value_type: "string",
 		category: "Display",
 		description:
 			"Handlebars-style Markdown template for displaying custom metadata on series detail pages. Use {{custom_metadata.field}} to access fields.",
-		default_value: DEFAULT_CUSTOM_METADATA_TEMPLATE,
+		default_value: "",
 	}),
 ];
 

@@ -12,6 +12,8 @@ const createMockBook = (overrides?: Partial<Book>): Book => ({
 	pageCount: 200,
 	fileHash: "abc123def456ghi789jkl012mno345pqr678",
 	filePath: "/library/comics/Test Book/issue-01.cbz",
+	libraryId: "lib-1",
+	libraryName: "Comics",
 	seriesId: "series-1",
 	seriesName: "Test Series",
 	createdAt: "2024-06-15T12:00:00Z",

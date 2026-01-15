@@ -13,6 +13,9 @@ pub struct SetupStatusResponse {
 
     /// Whether any users exist in the database
     pub has_users: bool,
+
+    /// Whether user registration is enabled
+    pub registration_enabled: bool,
 }
 
 /// Initialize setup request - creates first admin user

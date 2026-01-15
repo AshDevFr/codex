@@ -4,7 +4,6 @@ import {
 	renderTemplate,
 	validateTemplate,
 	getAvailableHelpers,
-	DEFAULT_CUSTOM_METADATA_TEMPLATE,
 } from "./templateEngine";
 
 describe("templateEngine", () => {
@@ -399,42 +398,6 @@ describe("templateEngine", () => {
 		});
 	});
 
-	describe("DEFAULT_CUSTOM_METADATA_TEMPLATE", () => {
-		it("should be a valid template", () => {
-			const result = validateTemplate(DEFAULT_CUSTOM_METADATA_TEMPLATE);
-			expect(result.valid).toBe(true);
-		});
-
-		it("should render sample custom metadata", () => {
-			const result = renderTemplate(DEFAULT_CUSTOM_METADATA_TEMPLATE, {
-				custom_metadata: {
-					status: "reading",
-					rating: 8.5,
-				},
-			});
-			expect(result.success).toBe(true);
-			expect(result.output).toContain("Additional Information");
-			expect(result.output).toContain("status");
-			expect(result.output).toContain("reading");
-		});
-
-		it("should render header but no items when custom_metadata is empty object", () => {
-			const result = renderTemplate(DEFAULT_CUSTOM_METADATA_TEMPLATE, {
-				custom_metadata: {},
-			});
-			expect(result.success).toBe(true);
-			// Empty object is truthy in Handlebars #if, but #each produces nothing
-			expect(result.output).toContain("Additional Information");
-		});
-
-		it("should render nothing when custom_metadata is null", () => {
-			const result = renderTemplate(DEFAULT_CUSTOM_METADATA_TEMPLATE, {
-				custom_metadata: null,
-			});
-			expect(result.success).toBe(true);
-			expect(result.output.trim()).toBe("");
-		});
-	});
 
 	describe("security", () => {
 		it("should escape HTML in output by default", () => {

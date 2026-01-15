@@ -1,6 +1,7 @@
 import {
 	ActionIcon,
 	Alert,
+	Anchor,
 	Badge,
 	Box,
 	Button,
@@ -22,10 +23,18 @@ import {
 	IconTrash,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/api/client";
 import { type DuplicateGroup, duplicatesApi } from "@/api/duplicates";
+import { AppLink } from "@/components/common/AppLink";
+import { useTaskProgress } from "@/hooks/useTaskProgress";
 import type { Book } from "@/types";
+
+// Duplicate scan task type
+const DUPLICATE_SCAN_TASK_TYPE = "find_duplicates";
+
+// Throttle duration for refresh (30 seconds)
+const REFRESH_THROTTLE_MS = 30000;
 
 // Duplicate group card component
 function DuplicateGroupCard({
@@ -46,12 +55,12 @@ function DuplicateGroupCard({
 			<Group justify="space-between" mb="md">
 				<Group gap="sm">
 					<IconCopy size={20} />
-					<div>
+					<Box>
 						<Text fw={500}>{group.duplicate_count} Duplicates</Text>
 						<Text size="xs" c="dimmed" style={{ fontFamily: "monospace" }}>
 							{group.file_hash.slice(0, 16)}...
 						</Text>
-					</div>
+					</Box>
 				</Group>
 				<Group gap="xs">
 					<Badge variant="light" color="orange">
@@ -78,29 +87,62 @@ function DuplicateGroupCard({
 			</Group>
 
 			{expanded && (
-				<Table>
+				<Table layout="fixed">
 					<Table.Thead>
 						<Table.Tr>
-							<Table.Th>Book</Table.Th>
-							<Table.Th>Series</Table.Th>
-							<Table.Th>Path</Table.Th>
-							<Table.Th>Size</Table.Th>
+							<Table.Th style={{ width: "20%" }}>Book</Table.Th>
+							<Table.Th style={{ width: "15%" }}>Library</Table.Th>
+							<Table.Th style={{ width: "15%" }}>Series</Table.Th>
+							<Table.Th style={{ width: "35%" }}>Path</Table.Th>
+							<Table.Th style={{ width: "15%" }}>Size</Table.Th>
 						</Table.Tr>
 					</Table.Thead>
 					<Table.Tbody>
-						{books.map((book) => (
-							<Table.Tr key={book.id}>
+						{books.map((book, index) => (
+							<Table.Tr key={`${book.id}-${index}`}>
 								<Table.Td>
-									<Text size="sm" fw={500}>
+									<Anchor
+										size="sm"
+										fw={500}
+										truncate="end"
+										c="blue.4"
+										component={AppLink}
+										to={`/books/${book.id}`}
+									>
 										{book.title}
-									</Text>
+									</Anchor>
 								</Table.Td>
 								<Table.Td>
-									<Text size="sm">{book.seriesName || "-"}</Text>
+									<Anchor
+										size="sm"
+										truncate="end"
+										c="blue.4"
+										component={AppLink}
+										to={`/libraries/${book.libraryId}`}
+									>
+										{book.libraryName || "-"}
+									</Anchor>
+								</Table.Td>
+								<Table.Td>
+									{book.seriesId ? (
+										<Anchor
+											size="sm"
+											truncate="end"
+											c="blue.4"
+											component={AppLink}
+											to={`/series/${book.seriesId}`}
+										>
+											{book.seriesName || "-"}
+										</Anchor>
+									) : (
+										<Text size="sm" truncate>
+											-
+										</Text>
+									)}
 								</Table.Td>
 								<Table.Td>
 									<Tooltip label={book.filePath}>
-										<Text size="sm" lineClamp={1} style={{ maxWidth: 300 }}>
+										<Text size="sm" truncate>
 											{book.filePath}
 										</Text>
 									</Tooltip>
@@ -132,15 +174,45 @@ export function DuplicatesSettings() {
 		new Map(),
 	);
 
+	// Track completed duplicate scan tasks to trigger refresh
+	const { activeTasks } = useTaskProgress();
+	const lastRefreshTime = useRef<number>(0);
+	const processedTaskIds = useRef<Set<string>>(new Set());
+
 	// Fetch duplicates
 	const {
 		data: duplicates,
 		isLoading,
 		error,
+		refetch: refetchDuplicates,
 	} = useQuery({
 		queryKey: ["duplicates"],
 		queryFn: duplicatesApi.list,
 	});
+
+	// Watch for duplicate scan task completions and refresh (throttled to 30s)
+	useEffect(() => {
+		const completedScanTasks = activeTasks.filter(
+			(task) =>
+				task.task_type === DUPLICATE_SCAN_TASK_TYPE &&
+				task.status === "completed" &&
+				!processedTaskIds.current.has(task.task_id),
+		);
+
+		if (completedScanTasks.length > 0) {
+			// Mark these tasks as processed
+			for (const task of completedScanTasks) {
+				processedTaskIds.current.add(task.task_id);
+			}
+
+			// Throttle refresh to avoid hammering the API
+			const now = Date.now();
+			if (now - lastRefreshTime.current >= REFRESH_THROTTLE_MS) {
+				lastRefreshTime.current = now;
+				refetchDuplicates();
+			}
+		}
+	}, [activeTasks, refetchDuplicates]);
 
 	// Fetch book details for a group
 	const fetchBooksForGroup = async (group: DuplicateGroup): Promise<Book[]> => {
@@ -150,10 +222,11 @@ export function DuplicatesSettings() {
 		const books: Book[] = [];
 		for (const bookId of group.book_ids) {
 			try {
-				const response = await api.get<Book>(`/books/${bookId}`);
-				books.push(response.data);
-			} catch {
-				// Book might have been deleted
+				// API returns { book: BookDto, metadata: ... }
+				const response = await api.get<{ book: Book }>(`/books/${bookId}`);
+				books.push(response.data.book);
+			} catch (err) {
+				console.error(`Failed to fetch book ${bookId}:`, err);
 			}
 		}
 
@@ -230,12 +303,12 @@ export function DuplicatesSettings() {
 		<Box py="xl" px="md">
 			<Stack gap="xl">
 				<Group justify="space-between">
-					<div>
+					<Box>
 						<Title order={1}>Duplicate Detection</Title>
 						<Text c="dimmed" size="sm">
 							Find and manage duplicate files in your library
 						</Text>
-					</div>
+					</Box>
 					<Group gap="xs">
 						<Button
 							variant="light"
@@ -259,30 +332,30 @@ export function DuplicatesSettings() {
 				{/* Summary Stats */}
 				<Card withBorder>
 					<Group justify="space-around">
-						<div style={{ textAlign: "center" }}>
+						<Box style={{ textAlign: "center" }}>
 							<Text size="xl" fw={700}>
 								{duplicates?.length || 0}
 							</Text>
 							<Text size="sm" c="dimmed">
 								Duplicate Groups
 							</Text>
-						</div>
-						<div style={{ textAlign: "center" }}>
+						</Box>
+						<Box style={{ textAlign: "center" }}>
 							<Text size="xl" fw={700}>
 								{totalDuplicates}
 							</Text>
 							<Text size="sm" c="dimmed">
 								Total Duplicates
 							</Text>
-						</div>
-						<div style={{ textAlign: "center" }}>
+						</Box>
+						<Box style={{ textAlign: "center" }}>
 							<Text size="xl" fw={700}>
 								{totalDuplicates - (duplicates?.length || 0)}
 							</Text>
 							<Text size="sm" c="dimmed">
 								Redundant Copies
 							</Text>
-						</div>
+						</Box>
 					</Group>
 				</Card>
 

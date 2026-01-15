@@ -504,16 +504,19 @@ impl BookRepository {
         // Always exclude deleted books
         query = query.filter(books::Column::Deleted.eq(false));
 
-        // Get total count
+        // Get total count (use distinct to avoid counting duplicates from join)
         let total = query
             .clone()
+            .distinct()
             .paginate(db, 1)
             .num_items()
             .await
             .context("Failed to count books with progress")?;
 
         // Get paginated results, ordered by most recently updated
+        // Use distinct() to prevent duplicates when joining with read_progress
         let books = query
+            .distinct()
             .order_by_desc(read_progress::Column::UpdatedAt)
             .offset(page * page_size)
             .limit(page_size)

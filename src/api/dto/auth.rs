@@ -40,14 +40,23 @@ pub struct LoginResponse {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserInfo {
+    /// User unique identifier
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub id: uuid::Uuid,
+
+    /// Username
     #[schema(example = "admin")]
     pub username: String,
+
+    /// Email address
     #[schema(example = "admin@example.com")]
     pub email: String,
+
+    /// Whether user has admin privileges
     #[schema(example = true)]
     pub is_admin: bool,
+
+    /// Whether email has been verified
     #[schema(example = true)]
     pub email_verified: bool,
 }

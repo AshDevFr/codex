@@ -30,9 +30,12 @@ const utilityHandlers = [
 	http.get("/api/v1/setup/status", async () => {
 		await delay(50);
 		const setupRequired = import.meta.env.VITE_MOCK_SETUP_REQUIRED === "true";
+		const registrationEnabled =
+			import.meta.env.VITE_MOCK_REGISTRATION_ENABLED === "true";
 		return HttpResponse.json({
 			setupRequired,
 			hasUsers: !setupRequired,
+			registrationEnabled,
 		});
 	}),
 

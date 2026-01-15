@@ -53,6 +53,19 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        // Unique constraint on (user_id, book_id) - only one progress record per user per book
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_read_progress_user_book_unique")
+                    .table(ReadProgress::Table)
+                    .col(ReadProgress::UserId)
+                    .col(ReadProgress::BookId)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 

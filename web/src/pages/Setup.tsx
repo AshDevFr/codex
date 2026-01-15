@@ -138,6 +138,7 @@ export function Setup() {
 			queryClient.setQueryData<SetupStatusResponse>(["setup-status"], {
 				setupRequired: false,
 				hasUsers: true,
+				registrationEnabled: false,
 			});
 			// Also invalidate to trigger a refetch in the background
 			queryClient.invalidateQueries({ queryKey: ["setup-status"] });

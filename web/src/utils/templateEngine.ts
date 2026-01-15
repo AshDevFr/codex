@@ -412,13 +412,3 @@ export function getAvailableHelpers(): string[] {
 	];
 }
 
-/**
- * Default template for displaying custom metadata
- */
-export const DEFAULT_CUSTOM_METADATA_TEMPLATE = `{{#if custom_metadata}}
-## Additional Information
-
-{{#each custom_metadata}}
-- **{{@key}}**: {{this}}
-{{/each}}
-{{/if}}`;

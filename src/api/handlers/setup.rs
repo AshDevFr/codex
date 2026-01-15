@@ -7,7 +7,10 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     handlers::auth::build_auth_cookie,
 };
-use crate::db::{entities::users, repositories::UserRepository};
+use crate::db::{
+    entities::users,
+    repositories::{SettingsRepository, UserRepository},
+};
 use crate::utils::password;
 use axum::{
     extract::State,
@@ -37,9 +40,17 @@ pub async fn setup_status(
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
+    // Get registration enabled setting (defaults to false if not set)
+    let registration_enabled =
+        SettingsRepository::get_value::<bool>(&state.db, "auth.registration_enabled")
+            .await
+            .unwrap_or(Some(false))
+            .unwrap_or(false);
+
     Ok(Json(SetupStatusResponse {
         setup_required: !has_users,
         has_users,
+        registration_enabled,
     }))
 }
 

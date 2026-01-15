@@ -126,14 +126,16 @@ impl BookDuplicatesRepository {
         let mut count = 0;
         for row in duplicates_result {
             let file_hash: String = row.try_get("", "file_hash")?;
-            let duplicate_count: i32 = row.try_get("", "duplicate_count")?;
+            let duplicate_count: i64 = row.try_get("", "duplicate_count")?;
+            let duplicate_count = duplicate_count as i32;
 
             // Parse book IDs based on database backend
             let book_ids: Vec<Uuid> = match db.get_database_backend() {
                 DatabaseBackend::Postgres => {
                     // PostgreSQL returns JSON array
-                    let book_ids_json: String = row.try_get("", "book_ids")?;
-                    serde_json::from_str(&book_ids_json).context("Failed to parse book_ids JSON")?
+                    let book_ids_json: serde_json::Value = row.try_get("", "book_ids")?;
+                    serde_json::from_value(book_ids_json)
+                        .context("Failed to parse book_ids JSON")?
                 }
                 DatabaseBackend::Sqlite => {
                     // SQLite returns comma-separated hex strings

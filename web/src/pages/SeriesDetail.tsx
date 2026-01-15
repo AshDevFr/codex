@@ -237,7 +237,7 @@ export function SeriesDetail() {
 
 	if (series.libraryId) {
 		breadcrumbItems.push({
-			title: (series as { libraryName?: string }).libraryName || "Library",
+			title: series.libraryName,
 			href: `/libraries/${series.libraryId}/series`,
 		});
 	}
@@ -297,9 +297,7 @@ export function SeriesDetail() {
 										</Title>
 										{metadata?.publisher && (
 											<Text size="sm" c="dimmed">
-												in{" "}
-												{(series as { libraryName?: string }).libraryName ||
-													"Library"}
+												in {series.libraryName}
 											</Text>
 										)}
 									</Group>

@@ -92,13 +92,13 @@ pub struct ScanningConfigDto {
     pub enabled: bool,
 
     /// Scan library when the application starts
-    #[schema(example = false)]
     #[serde(default)]
+    #[schema(example = false)]
     pub scan_on_start: bool,
 
     /// Purge soft-deleted books after completing a scan
-    #[schema(example = false)]
     #[serde(default)]
+    #[schema(example = false)]
     pub purge_deleted_on_scan: bool,
 }
 

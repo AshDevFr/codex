@@ -12,7 +12,7 @@ import {
 import { notifications } from "@mantine/notifications";
 import {
 	IconAnalyze,
-	IconBookFilled,
+	IconBook,
 	IconBookOff,
 	IconCheck,
 	IconDotsVertical,
@@ -390,6 +390,7 @@ export function MediaCard({
 									color="dark"
 									size="sm"
 									style={{ opacity: 0.8 }}
+									onClick={(e: React.MouseEvent) => e.stopPropagation()}
 								>
 									<IconDotsVertical size={16} />
 								</ActionIcon>
@@ -516,10 +517,8 @@ export function MediaCard({
 								alignItems: "center",
 								justifyContent: "center",
 								backgroundColor: "rgba(0, 0, 0, 0.5)",
-								opacity: 0,
 								transition: "opacity 0.2s ease",
-								zIndex: 1,
-								pointerEvents: "none",
+								zIndex: 2,
 							}}
 						>
 							<ActionIcon
@@ -528,10 +527,9 @@ export function MediaCard({
 								size={56}
 								radius="xl"
 								onClick={handleReadClick}
-								style={{ pointerEvents: "auto" }}
 								aria-label="Read book"
 							>
-								<IconBookFilled size={28} />
+								<IconBook size={28} />
 							</ActionIcon>
 						</div>
 					)}
@@ -595,24 +593,31 @@ export function MediaCard({
 							</Tooltip>
 						)}
 					<Tooltip label={title} openDelay={500} multiline maw={300}>
-						<AppLink
-							to={
-								type === "series"
-									? `/series/${(data as Series).id}`
-									: `/books/${(data as Book).id}`
-							}
-							stopPropagation
-							className="hover-underline"
-						>
-							<Text
-								fw={600}
-								lineClamp={hideSeriesName ? 2 : 1}
-								size="sm"
-								style={{ overflow: "hidden" }}
+						<div style={{ minWidth: 0, width: "100%" }}>
+							<AppLink
+								to={
+									type === "series"
+										? `/series/${(data as Series).id}`
+										: `/books/${(data as Book).id}`
+								}
+								stopPropagation
+								className="hover-underline"
 							>
-								{title}
-							</Text>
-						</AppLink>
+								<Text
+									fw={600}
+									size="sm"
+									style={{
+										display: "-webkit-box",
+										WebkitLineClamp: hideSeriesName ? 2 : 1,
+										WebkitBoxOrient: "vertical",
+										overflow: "hidden",
+										wordBreak: "break-all",
+									}}
+								>
+									{title}
+								</Text>
+							</AppLink>
+						</div>
 					</Tooltip>
 					<Group gap="xs" mt="auto" style={{ flexShrink: 0 }}>
 						{book && (

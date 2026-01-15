@@ -13,10 +13,7 @@ import type { ReactNode } from "react";
 import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import {
-	DEFAULT_CUSTOM_METADATA_TEMPLATE,
-	renderTemplate,
-} from "@/utils/templateEngine";
+import { renderTemplate } from "@/utils/templateEngine";
 
 export interface CustomMetadataDisplayProps {
 	/**
@@ -24,8 +21,8 @@ export interface CustomMetadataDisplayProps {
 	 */
 	customMetadata: Record<string, unknown> | null | undefined;
 	/**
-	 * The Handlebars template to use for rendering
-	 * Falls back to DEFAULT_CUSTOM_METADATA_TEMPLATE if not provided
+	 * The Handlebars template to use for rendering.
+	 * If empty or not provided, nothing will be rendered.
 	 */
 	template?: string;
 	/**
@@ -82,15 +79,13 @@ export function CustomMetadataDisplay({
 	showErrors = false,
 }: CustomMetadataDisplayProps) {
 	const result = useMemo(() => {
-		// If no custom metadata, return empty result
-		if (!customMetadata || Object.keys(customMetadata).length === 0) {
+		// If no template or no custom metadata, return empty result
+		if (!template || !customMetadata || Object.keys(customMetadata).length === 0) {
 			return { success: true, output: "" };
 		}
 
-		const templateToUse = template || DEFAULT_CUSTOM_METADATA_TEMPLATE;
-
 		// Render the template with the custom metadata
-		return renderTemplate(templateToUse, {
+		return renderTemplate(template, {
 			custom_metadata: customMetadata,
 		});
 	}, [customMetadata, template]);

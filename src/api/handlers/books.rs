@@ -118,11 +118,11 @@ pub async fn books_to_dtos(
         }
     }
 
-    // Fetch libraries for default reading direction fallback
-    let mut library_reading_direction_map: HashMap<Uuid, String> = HashMap::new();
+    // Fetch libraries for name and default reading direction fallback
+    let mut library_map: HashMap<Uuid, crate::db::entities::libraries::Model> = HashMap::new();
     for library_id in &library_ids {
         if let Ok(Some(library)) = LibraryRepository::get_by_id(db, *library_id).await {
-            library_reading_direction_map.insert(*library_id, library.default_reading_direction);
+            library_map.insert(*library_id, library);
         }
     }
 
@@ -140,6 +140,12 @@ pub async fn books_to_dtos(
     let dtos = books
         .into_iter()
         .map(|book| {
+            // Get library info
+            let library = library_map.get(&book.library_id);
+            let library_name = library
+                .map(|l| l.name.clone())
+                .unwrap_or_else(|| "Unknown Library".to_string());
+
             // Get series name from series_metadata.title
             let series_name = series_metadata_map
                 .get(&book.series_id)
@@ -174,10 +180,12 @@ pub async fn books_to_dtos(
             let reading_direction = series_metadata_map
                 .get(&book.series_id)
                 .and_then(|m| m.reading_direction.clone())
-                .or_else(|| library_reading_direction_map.get(&book.library_id).cloned());
+                .or_else(|| library.map(|l| l.default_reading_direction.clone()));
 
             BookDto {
                 id: book.id,
+                library_id: book.library_id,
+                library_name,
                 series_id: book.series_id,
                 series_name,
                 title,

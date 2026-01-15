@@ -22,8 +22,8 @@ use crate::api::{
 use crate::db::entities::{series, series_metadata};
 use crate::db::repositories::{
     AlternateTitleRepository, BookRepository, ExternalLinkRepository, ExternalRatingRepository,
-    GenreRepository, ReadProgressRepository, SeriesCoversRepository, SeriesMetadataRepository,
-    SeriesRepository, TagRepository, UserSeriesRatingRepository,
+    GenreRepository, LibraryRepository, ReadProgressRepository, SeriesCoversRepository,
+    SeriesMetadataRepository, SeriesRepository, TagRepository, UserSeriesRatingRepository,
 };
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
 use crate::require_permission;
@@ -123,6 +123,14 @@ async fn series_to_dto(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to check custom cover: {:?}", e)))?;
 
+    // Fetch library name
+    let library = LibraryRepository::get_by_id(db, series.library_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch library: {:?}", e)))?;
+    let library_name = library
+        .map(|l| l.name)
+        .unwrap_or_else(|| "Unknown Library".to_string());
+
     // Series name now comes from series_metadata.title (fall back to "Unknown Series" if not found)
     let name = metadata
         .as_ref()
@@ -132,6 +140,7 @@ async fn series_to_dto(
     Ok(SeriesDto {
         id: series.id,
         library_id: series.library_id,
+        library_name,
         title: name,
         title_sort: metadata.as_ref().and_then(|m| m.title_sort.clone()),
         summary: metadata.as_ref().and_then(|m| m.summary.clone()),

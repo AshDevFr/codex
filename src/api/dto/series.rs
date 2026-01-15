@@ -145,6 +145,9 @@ pub struct SeriesDto {
     pub id: uuid::Uuid,
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub library_id: uuid::Uuid,
+    /// Name of the library this series belongs to
+    #[schema(example = "Comics")]
+    pub library_name: String,
     /// Series title from series_metadata
     #[schema(example = "Batman: Year One")]
     pub title: String,

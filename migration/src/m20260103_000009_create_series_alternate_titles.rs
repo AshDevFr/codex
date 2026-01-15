@@ -72,6 +72,19 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        // Unique constraint on (series_id, label) - only one title per label per series
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_series_alternate_titles_unique")
+                    .table(SeriesAlternateTitles::Table)
+                    .col(SeriesAlternateTitles::SeriesId)
+                    .col(SeriesAlternateTitles::Label)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 

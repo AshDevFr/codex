@@ -18,13 +18,32 @@ describe("CustomMetadataDisplay", () => {
 			expect(container.querySelector(".custom-metadata-display")).toBeNull();
 		});
 
-		it("should render custom metadata with default template", () => {
+		it("should render nothing when template is not provided", () => {
+			const { container } = renderWithProviders(
+				<CustomMetadataDisplay
+					customMetadata={{
+						status: "reading",
+						rating: 8.5,
+					}}
+				/>,
+			);
+
+			// Without a template, nothing should render
+			expect(container.querySelector(".custom-metadata-display")).toBeNull();
+		});
+
+		it("should render custom metadata with provided template", () => {
 			renderWithProviders(
 				<CustomMetadataDisplay
 					customMetadata={{
 						status: "reading",
 						rating: 8.5,
 					}}
+					template={`## Additional Information
+
+{{#each custom_metadata}}
+- **{{@key}}**: {{this}}
+{{/each}}`}
 				/>,
 			);
 
@@ -61,14 +80,15 @@ describe("CustomMetadataDisplay", () => {
 	});
 
 	describe("empty states", () => {
-		it("should render nothing for empty object because #each produces no output", () => {
+		it("should render nothing for empty object", () => {
 			const { container } = renderWithProviders(
-				<CustomMetadataDisplay customMetadata={{}} />,
+				<CustomMetadataDisplay
+					customMetadata={{}}
+					template="{{#each custom_metadata}}- {{@key}}: {{this}}{{/each}}"
+				/>,
 			);
 
-			// Component returns null when output is empty (trimmed)
-			// Default template with empty object produces header but no items
-			// which gets trimmed as effectively empty
+			// Component returns null when customMetadata is empty
 			expect(container.querySelector(".custom-metadata-display")).toBeNull();
 		});
 

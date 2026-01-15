@@ -213,6 +213,7 @@ export function BookDetail() {
 	// Build breadcrumbs
 	const breadcrumbItems = [
 		{ title: "Home", href: "/" },
+		{ title: book.libraryName, href: `/libraries/${book.libraryId}/series` },
 		{ title: book.seriesName, href: `/series/${book.seriesId}` },
 		{ title: displayTitle, href: `/books/${book.id}` },
 	];

@@ -1,11 +1,13 @@
 import { screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { authApi } from "@/api/auth";
+import { setupApi } from "@/api/setup";
 import { renderWithProviders, userEvent } from "@/test/utils";
-import type { LoginResponse } from "@/types";
+import type { LoginResponse, SetupStatusResponse } from "@/types";
 import { Login } from "./Login";
 
 vi.mock("@/api/auth");
+vi.mock("@/api/setup");
 
 const mockNavigate = vi.fn();
 vi.mock("react-router-dom", async () => {
@@ -16,6 +18,12 @@ vi.mock("react-router-dom", async () => {
 	};
 });
 
+const mockSetupStatus = (registrationEnabled: boolean): SetupStatusResponse => ({
+	setupRequired: false,
+	hasUsers: true,
+	registrationEnabled,
+});
+
 describe("Login Component", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -24,9 +32,12 @@ describe("Login Component", () => {
 		// Mock window.location
 		delete (window as any).location;
 		window.location = { href: "" } as any;
+
+		// Default: registration enabled
+		vi.mocked(setupApi.checkStatus).mockResolvedValue(mockSetupStatus(true));
 	});
 
-	it("should render login form", () => {
+	it("should render login form", async () => {
 		renderWithProviders(<Login />);
 
 		expect(screen.getByText("Welcome to Codex")).toBeInTheDocument();
@@ -35,6 +46,28 @@ describe("Login Component", () => {
 		expect(
 			screen.getByRole("button", { name: /sign in/i }),
 		).toBeInTheDocument();
+	});
+
+	it("should show create account link when registration is enabled", async () => {
+		vi.mocked(setupApi.checkStatus).mockResolvedValue(mockSetupStatus(true));
+
+		renderWithProviders(<Login />);
+
+		await waitFor(() => {
+			expect(screen.getByText(/create one/i)).toBeInTheDocument();
+		});
+	});
+
+	it("should hide create account link when registration is disabled", async () => {
+		vi.mocked(setupApi.checkStatus).mockResolvedValue(mockSetupStatus(false));
+
+		renderWithProviders(<Login />);
+
+		await waitFor(() => {
+			expect(setupApi.checkStatus).toHaveBeenCalled();
+		});
+
+		expect(screen.queryByText(/create one/i)).not.toBeInTheDocument();
 	});
 
 	it("should handle successful login", async () => {

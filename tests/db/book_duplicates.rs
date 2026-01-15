@@ -2,7 +2,10 @@
 mod common;
 
 use codex::db::repositories::{BookDuplicatesRepository, BookRepository};
-use common::*;
+use common::{
+    create_test_book_with_hash, create_test_library, create_test_series, setup_test_db,
+    setup_test_db_postgres,
+};
 use uuid::Uuid;
 
 #[tokio::test]
@@ -474,4 +477,115 @@ async fn test_rebuild_is_idempotent() {
     // Should still have exactly 1 group
     let duplicates = BookDuplicatesRepository::find_all(&db).await.unwrap();
     assert_eq!(duplicates.len(), 1);
+}
+
+/// PostgreSQL-specific test for rebuild_from_books
+/// This tests the correct handling of PostgreSQL's COUNT(*) returning BIGINT (i64)
+/// and json_agg() returning JSON type instead of TEXT
+#[tokio::test]
+#[ignore]
+async fn test_rebuild_from_books_postgres() {
+    let Some(db) = setup_test_db_postgres().await else {
+        // Skip test if PostgreSQL is not available
+        return;
+    };
+
+    // Create library and series
+    let library = create_test_library(&db, "Test Library", "/test/library").await;
+    let series = create_test_series(&db, &library, "Test Series").await;
+
+    // Create three books with the same file_hash
+    let file_hash = "abc123";
+    let book1 = create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Book 1",
+        "/test/book1.cbz",
+        file_hash,
+    )
+    .await;
+    let book2 = create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Book 2",
+        "/test/book2.cbz",
+        file_hash,
+    )
+    .await;
+    let book3 = create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Book 3",
+        "/test/book3.cbz",
+        file_hash,
+    )
+    .await;
+
+    // Create two books with a different file_hash
+    let file_hash2 = "def456";
+    let book4 = create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Book 4",
+        "/test/book4.cbz",
+        file_hash2,
+    )
+    .await;
+    let book5 = create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Book 5",
+        "/test/book5.cbz",
+        file_hash2,
+    )
+    .await;
+
+    // Create a book with a unique hash (should not appear in duplicates)
+    create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Book 6",
+        "/test/book6.cbz",
+        "unique789",
+    )
+    .await;
+
+    // Rebuild duplicates - this exercises PostgreSQL's COUNT(*) -> BIGINT and json_agg() -> JSON
+    let count = BookDuplicatesRepository::rebuild_from_books(&db)
+        .await
+        .unwrap();
+
+    // Should have found 2 duplicate groups
+    assert_eq!(count, 2);
+
+    // Verify the duplicate groups
+    let duplicates = BookDuplicatesRepository::find_all(&db).await.unwrap();
+    assert_eq!(duplicates.len(), 2);
+
+    // Find the group with file_hash "abc123"
+    let group1 = duplicates
+        .iter()
+        .find(|d| d.file_hash == file_hash)
+        .unwrap();
+    assert_eq!(group1.duplicate_count, 3);
+    let book_ids: Vec<Uuid> = serde_json::from_str(&group1.book_ids).unwrap();
+    assert!(book_ids.contains(&book1.id));
+    assert!(book_ids.contains(&book2.id));
+    assert!(book_ids.contains(&book3.id));
+
+    // Find the group with file_hash "def456"
+    let group2 = duplicates
+        .iter()
+        .find(|d| d.file_hash == file_hash2)
+        .unwrap();
+    assert_eq!(group2.duplicate_count, 2);
+    let book_ids: Vec<Uuid> = serde_json::from_str(&group2.book_ids).unwrap();
+    assert!(book_ids.contains(&book4.id));
+    assert!(book_ids.contains(&book5.id));
 }

@@ -112,40 +112,79 @@ impl fmt::Display for BookSortParam {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BookDto {
+    /// Book unique identifier
     #[schema(example = "550e8400-e29b-41d4-a716-446655440001")]
     pub id: uuid::Uuid,
+
+    /// Library this book belongs to
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
+    pub library_id: uuid::Uuid,
+
+    /// Name of the library
+    #[schema(example = "Comics")]
+    pub library_name: String,
+
+    /// Series this book belongs to
     #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]
     pub series_id: uuid::Uuid,
+
+    /// Name of the series
     #[schema(example = "Batman: Year One")]
     pub series_name: String,
+
+    /// Book title
     #[schema(example = "Batman: Year One #1")]
     pub title: String,
+
+    /// Sort title for ordering
     #[schema(example = "batman year one 001")]
     pub sort_title: Option<String>,
+
+    /// Filesystem path to the book file
     #[schema(example = "/media/comics/Batman/Batman - Year One 001.cbz")]
     pub file_path: String,
+
+    /// File format (cbz, cbr, epub, pdf)
     #[schema(example = "cbz")]
     pub file_format: String,
+
+    /// File size in bytes
     #[schema(example = 52428800)]
     pub file_size: i64,
+
+    /// File hash for deduplication
     #[schema(example = "a1b2c3d4e5f6g7h8i9j0")]
     pub file_hash: String,
+
+    /// Number of pages in the book
     #[schema(example = 32)]
     pub page_count: i32,
+
+    /// Book number within the series
     #[schema(example = 1)]
     pub number: Option<i32>,
+
+    /// When the book was added to the library
     #[schema(example = "2024-01-01T00:00:00Z")]
     pub created_at: DateTime<Utc>,
+
+    /// When the book was last updated
     #[schema(example = "2024-01-15T10:30:00Z")]
     pub updated_at: DateTime<Utc>,
+
+    /// User's read progress for this book
     #[serde(skip_serializing_if = "Option::is_none")]
     pub read_progress: Option<ReadProgressResponse>,
+
+    /// Error message if book analysis failed
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = "Failed to parse CBZ: invalid archive")]
     pub analysis_error: Option<String>,
+
     /// Whether the book has been soft-deleted
     #[schema(example = false)]
     pub deleted: bool,
+
     /// Effective reading direction (from series metadata, or library default if not set)
     /// Values: ltr, rtl, ttb or webtoon
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -160,7 +199,10 @@ pub type BookListResponse = PaginatedResponse<BookDto>;
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BookDetailResponse {
+    /// The book data
     pub book: BookDto,
+
+    /// Optional metadata from ComicInfo.xml or similar
     pub metadata: Option<BookMetadataDto>,
 }
 
@@ -168,44 +210,81 @@ pub struct BookDetailResponse {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BookMetadataDto {
+    /// Metadata record ID
     #[schema(example = "550e8400-e29b-41d4-a716-446655440003")]
     pub id: uuid::Uuid,
+
+    /// Associated book ID
     #[schema(example = "550e8400-e29b-41d4-a716-446655440001")]
     pub book_id: uuid::Uuid,
+
+    /// Book title from metadata
     #[schema(example = "Batman: Year One #1")]
     pub title: Option<String>,
+
+    /// Series name from metadata
     #[schema(example = "Batman: Year One")]
     pub series: Option<String>,
+
+    /// Issue/chapter number from metadata
     #[schema(example = "1")]
     pub number: Option<String>,
+
+    /// Book summary/description
     #[schema(
         example = "Bruce Wayne returns to Gotham City after years abroad to begin his war on crime."
     )]
     pub summary: Option<String>,
+
+    /// Publisher name
     #[schema(example = "DC Comics")]
     pub publisher: Option<String>,
+
+    /// Imprint name
     #[schema(example = "DC Black Label")]
     pub imprint: Option<String>,
+
+    /// Genre
     #[schema(example = "Superhero")]
     pub genre: Option<String>,
+
+    /// Page count from metadata
     #[schema(example = 32)]
     pub page_count: Option<i32>,
+
+    /// ISO language code
     #[schema(example = "en")]
     pub language_iso: Option<String>,
+
+    /// Release/publication date
     #[schema(example = "1987-02-01T00:00:00Z")]
     pub release_date: Option<DateTime<Utc>>,
+
+    /// Writers/authors
     #[schema(example = json!(["Frank Miller"]))]
     pub writers: Vec<String>,
+
+    /// Pencillers (line artists)
     #[schema(example = json!(["David Mazzucchelli"]))]
     pub pencillers: Vec<String>,
+
+    /// Inkers
     #[schema(example = json!(["David Mazzucchelli"]))]
     pub inkers: Vec<String>,
+
+    /// Colorists
     #[schema(example = json!(["Richmond Lewis"]))]
     pub colorists: Vec<String>,
+
+    /// Letterers
     #[schema(example = json!(["Todd Klein"]))]
     pub letterers: Vec<String>,
+
+    /// Cover artists
     #[schema(example = json!(["David Mazzucchelli"]))]
     pub cover_artists: Vec<String>,
+
+    /// Editors
     #[schema(example = json!(["Dennis O'Neil"]))]
     pub editors: Vec<String>,
 }
@@ -535,66 +614,87 @@ pub struct BookMetadataLocks {
     /// Whether summary is locked
     #[schema(example = false)]
     pub summary_lock: bool,
+
     /// Whether writer is locked
     #[schema(example = false)]
     pub writer_lock: bool,
+
     /// Whether penciller is locked
     #[schema(example = false)]
     pub penciller_lock: bool,
+
     /// Whether inker is locked
     #[schema(example = false)]
     pub inker_lock: bool,
+
     /// Whether colorist is locked
     #[schema(example = false)]
     pub colorist_lock: bool,
+
     /// Whether letterer is locked
     #[schema(example = false)]
     pub letterer_lock: bool,
+
     /// Whether cover artist is locked
     #[schema(example = false)]
     pub cover_artist_lock: bool,
+
     /// Whether editor is locked
     #[schema(example = false)]
     pub editor_lock: bool,
+
     /// Whether publisher is locked
     #[schema(example = true)]
     pub publisher_lock: bool,
+
     /// Whether imprint is locked
     #[schema(example = false)]
     pub imprint_lock: bool,
+
     /// Whether genre is locked
     #[schema(example = false)]
     pub genre_lock: bool,
+
     /// Whether web URL is locked
     #[schema(example = false)]
     pub web_lock: bool,
+
     /// Whether language_iso is locked
     #[schema(example = false)]
     pub language_iso_lock: bool,
+
     /// Whether format_detail is locked
     #[schema(example = false)]
     pub format_detail_lock: bool,
+
     /// Whether black_and_white is locked
     #[schema(example = false)]
     pub black_and_white_lock: bool,
+
     /// Whether manga is locked
     #[schema(example = false)]
     pub manga_lock: bool,
+
     /// Whether year is locked
     #[schema(example = true)]
     pub year_lock: bool,
+
     /// Whether month is locked
     #[schema(example = false)]
     pub month_lock: bool,
+
     /// Whether day is locked
     #[schema(example = false)]
     pub day_lock: bool,
+
     /// Whether volume is locked
     #[schema(example = false)]
     pub volume_lock: bool,
+
     /// Whether count is locked
     #[schema(example = false)]
     pub count_lock: bool,
+
     /// Whether isbns is locked
     #[schema(example = false)]
     pub isbns_lock: bool,
@@ -609,46 +709,67 @@ pub struct UpdateBookMetadataLocksRequest {
     /// Whether to lock summary
     #[schema(example = true)]
     pub summary_lock: Option<bool>,
+
     /// Whether to lock writer
     pub writer_lock: Option<bool>,
+
     /// Whether to lock penciller
     pub penciller_lock: Option<bool>,
+
     /// Whether to lock inker
     pub inker_lock: Option<bool>,
+
     /// Whether to lock colorist
     pub colorist_lock: Option<bool>,
+
     /// Whether to lock letterer
     pub letterer_lock: Option<bool>,
+
     /// Whether to lock cover artist
     pub cover_artist_lock: Option<bool>,
+
     /// Whether to lock editor
     pub editor_lock: Option<bool>,
+
     /// Whether to lock publisher
     pub publisher_lock: Option<bool>,
+
     /// Whether to lock imprint
     pub imprint_lock: Option<bool>,
+
     /// Whether to lock genre
     pub genre_lock: Option<bool>,
+
     /// Whether to lock web URL
     pub web_lock: Option<bool>,
+
     /// Whether to lock language_iso
     pub language_iso_lock: Option<bool>,
+
     /// Whether to lock format_detail
     pub format_detail_lock: Option<bool>,
+
     /// Whether to lock black_and_white
     pub black_and_white_lock: Option<bool>,
+
     /// Whether to lock manga
     pub manga_lock: Option<bool>,
+
     /// Whether to lock year
     pub year_lock: Option<bool>,
+
     /// Whether to lock month
     pub month_lock: Option<bool>,
+
     /// Whether to lock day
     pub day_lock: Option<bool>,
+
     /// Whether to lock volume
     pub volume_lock: Option<bool>,
+
     /// Whether to lock count
     pub count_lock: Option<bool>,
+
     /// Whether to lock isbns
     pub isbns_lock: Option<bool>,
 }
@@ -663,6 +784,7 @@ pub struct AdjacentBooksResponse {
     /// The previous book in the series (lower number), if any
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prev: Option<BookDto>,
+
     /// The next book in the series (higher number), if any
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next: Option<BookDto>,

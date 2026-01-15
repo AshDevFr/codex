@@ -9334,7 +9334,8 @@
         ],
         "properties": {
           "book": {
-            "$ref": "#/components/schemas/BookDto"
+            "$ref": "#/components/schemas/BookDto",
+            "description": "The book data"
           },
           "metadata": {
             "oneOf": [
@@ -9342,7 +9343,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/BookMetadataDto"
+                "$ref": "#/components/schemas/BookMetadataDto",
+                "description": "Optional metadata from ComicInfo.xml or similar"
               }
             ]
           }
@@ -9353,6 +9355,8 @@
         "description": "Book data transfer object",
         "required": [
           "id",
+          "libraryId",
+          "libraryName",
           "seriesId",
           "seriesName",
           "title",
@@ -9371,11 +9375,13 @@
               "string",
               "null"
             ],
+            "description": "Error message if book analysis failed",
             "example": "Failed to parse CBZ: invalid archive"
           },
           "createdAt": {
             "type": "string",
             "format": "date-time",
+            "description": "When the book was added to the library",
             "example": "2024-01-01T00:00:00Z"
           },
           "deleted": {
@@ -9385,25 +9391,41 @@
           },
           "fileFormat": {
             "type": "string",
+            "description": "File format (cbz, cbr, epub, pdf)",
             "example": "cbz"
           },
           "fileHash": {
             "type": "string",
+            "description": "File hash for deduplication",
             "example": "a1b2c3d4e5f6g7h8i9j0"
           },
           "filePath": {
             "type": "string",
+            "description": "Filesystem path to the book file",
             "example": "/media/comics/Batman/Batman - Year One 001.cbz"
           },
           "fileSize": {
             "type": "integer",
             "format": "int64",
+            "description": "File size in bytes",
             "example": 52428800
           },
           "id": {
             "type": "string",
             "format": "uuid",
+            "description": "Book unique identifier",
             "example": "550e8400-e29b-41d4-a716-446655440001"
+          },
+          "libraryId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Library this book belongs to",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "libraryName": {
+            "type": "string",
+            "description": "Name of the library",
+            "example": "Comics"
           },
           "number": {
             "type": [
@@ -9411,11 +9433,13 @@
               "null"
             ],
             "format": "int32",
+            "description": "Book number within the series",
             "example": 1
           },
           "pageCount": {
             "type": "integer",
             "format": "int32",
+            "description": "Number of pages in the book",
             "example": 32
           },
           "readProgress": {
@@ -9424,7 +9448,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/ReadProgressResponse"
+                "$ref": "#/components/schemas/ReadProgressResponse",
+                "description": "User's read progress for this book"
               }
             ]
           },
@@ -9439,10 +9464,12 @@
           "seriesId": {
             "type": "string",
             "format": "uuid",
+            "description": "Series this book belongs to",
             "example": "550e8400-e29b-41d4-a716-446655440002"
           },
           "seriesName": {
             "type": "string",
+            "description": "Name of the series",
             "example": "Batman: Year One"
           },
           "sortTitle": {
@@ -9450,15 +9477,18 @@
               "string",
               "null"
             ],
+            "description": "Sort title for ordering",
             "example": "batman year one 001"
           },
           "title": {
             "type": "string",
+            "description": "Book title",
             "example": "Batman: Year One #1"
           },
           "updatedAt": {
             "type": "string",
             "format": "date-time",
+            "description": "When the book was last updated",
             "example": "2024-01-15T10:30:00Z"
           }
         }
@@ -9524,6 +9554,7 @@
           "bookId": {
             "type": "string",
             "format": "uuid",
+            "description": "Associated book ID",
             "example": "550e8400-e29b-41d4-a716-446655440001"
           },
           "colorists": {
@@ -9531,6 +9562,7 @@
             "items": {
               "type": "string"
             },
+            "description": "Colorists",
             "example": [
               "Richmond Lewis"
             ]
@@ -9540,6 +9572,7 @@
             "items": {
               "type": "string"
             },
+            "description": "Cover artists",
             "example": [
               "David Mazzucchelli"
             ]
@@ -9549,6 +9582,7 @@
             "items": {
               "type": "string"
             },
+            "description": "Editors",
             "example": [
               "Dennis O'Neil"
             ]
@@ -9558,11 +9592,13 @@
               "string",
               "null"
             ],
+            "description": "Genre",
             "example": "Superhero"
           },
           "id": {
             "type": "string",
             "format": "uuid",
+            "description": "Metadata record ID",
             "example": "550e8400-e29b-41d4-a716-446655440003"
           },
           "imprint": {
@@ -9570,6 +9606,7 @@
               "string",
               "null"
             ],
+            "description": "Imprint name",
             "example": "DC Black Label"
           },
           "inkers": {
@@ -9577,6 +9614,7 @@
             "items": {
               "type": "string"
             },
+            "description": "Inkers",
             "example": [
               "David Mazzucchelli"
             ]
@@ -9586,6 +9624,7 @@
               "string",
               "null"
             ],
+            "description": "ISO language code",
             "example": "en"
           },
           "letterers": {
@@ -9593,6 +9632,7 @@
             "items": {
               "type": "string"
             },
+            "description": "Letterers",
             "example": [
               "Todd Klein"
             ]
@@ -9602,6 +9642,7 @@
               "string",
               "null"
             ],
+            "description": "Issue/chapter number from metadata",
             "example": "1"
           },
           "pageCount": {
@@ -9610,6 +9651,7 @@
               "null"
             ],
             "format": "int32",
+            "description": "Page count from metadata",
             "example": 32
           },
           "pencillers": {
@@ -9617,6 +9659,7 @@
             "items": {
               "type": "string"
             },
+            "description": "Pencillers (line artists)",
             "example": [
               "David Mazzucchelli"
             ]
@@ -9626,6 +9669,7 @@
               "string",
               "null"
             ],
+            "description": "Publisher name",
             "example": "DC Comics"
           },
           "releaseDate": {
@@ -9634,6 +9678,7 @@
               "null"
             ],
             "format": "date-time",
+            "description": "Release/publication date",
             "example": "1987-02-01T00:00:00Z"
           },
           "series": {
@@ -9641,6 +9686,7 @@
               "string",
               "null"
             ],
+            "description": "Series name from metadata",
             "example": "Batman: Year One"
           },
           "summary": {
@@ -9648,6 +9694,7 @@
               "string",
               "null"
             ],
+            "description": "Book summary/description",
             "example": "Bruce Wayne returns to Gotham City after years abroad to begin his war on crime."
           },
           "title": {
@@ -9655,6 +9702,7 @@
               "string",
               "null"
             ],
+            "description": "Book title from metadata",
             "example": "Batman: Year One #1"
           },
           "writers": {
@@ -9662,6 +9710,7 @@
             "items": {
               "type": "string"
             },
+            "description": "Writers/authors",
             "example": [
               "Frank Miller"
             ]
@@ -11964,6 +12013,7 @@
               "null"
             ],
             "format": "int64",
+            "description": "Total number of books in this library",
             "example": 1250
           },
           "bookStrategy": {
@@ -11973,6 +12023,7 @@
           "createdAt": {
             "type": "string",
             "format": "date-time",
+            "description": "When the library was created",
             "example": "2024-01-01T00:00:00Z"
           },
           "defaultReadingDirection": {
@@ -11985,6 +12036,7 @@
               "string",
               "null"
             ],
+            "description": "Optional description",
             "example": "My comic book collection"
           },
           "excludedPatterns": {
@@ -11998,10 +12050,12 @@
           "id": {
             "type": "string",
             "format": "uuid",
+            "description": "Library unique identifier",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
           "isActive": {
             "type": "boolean",
+            "description": "Whether the library is active",
             "example": true
           },
           "lastScannedAt": {
@@ -12010,10 +12064,12 @@
               "null"
             ],
             "format": "date-time",
+            "description": "When the library was last scanned",
             "example": "2024-01-15T10:30:00Z"
           },
           "name": {
             "type": "string",
+            "description": "Library name",
             "example": "Comics"
           },
           "numberConfig": {
@@ -12025,6 +12081,7 @@
           },
           "path": {
             "type": "string",
+            "description": "Filesystem path to the library root",
             "example": "/media/comics"
           },
           "scanningConfig": {
@@ -12033,7 +12090,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/ScanningConfigDto"
+                "$ref": "#/components/schemas/ScanningConfigDto",
+                "description": "Scanning configuration for scheduled scans"
               }
             ]
           },
@@ -12046,6 +12104,7 @@
               "null"
             ],
             "format": "int64",
+            "description": "Total number of series in this library",
             "example": 85
           },
           "seriesStrategy": {
@@ -12055,6 +12114,7 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time",
+            "description": "When the library was last updated",
             "example": "2024-01-15T10:30:00Z"
           }
         }
@@ -12809,6 +12869,8 @@
               "description": "Book data transfer object",
               "required": [
                 "id",
+                "libraryId",
+                "libraryName",
                 "seriesId",
                 "seriesName",
                 "title",
@@ -12827,11 +12889,13 @@
                     "string",
                     "null"
                   ],
+                  "description": "Error message if book analysis failed",
                   "example": "Failed to parse CBZ: invalid archive"
                 },
                 "createdAt": {
                   "type": "string",
                   "format": "date-time",
+                  "description": "When the book was added to the library",
                   "example": "2024-01-01T00:00:00Z"
                 },
                 "deleted": {
@@ -12841,25 +12905,41 @@
                 },
                 "fileFormat": {
                   "type": "string",
+                  "description": "File format (cbz, cbr, epub, pdf)",
                   "example": "cbz"
                 },
                 "fileHash": {
                   "type": "string",
+                  "description": "File hash for deduplication",
                   "example": "a1b2c3d4e5f6g7h8i9j0"
                 },
                 "filePath": {
                   "type": "string",
+                  "description": "Filesystem path to the book file",
                   "example": "/media/comics/Batman/Batman - Year One 001.cbz"
                 },
                 "fileSize": {
                   "type": "integer",
                   "format": "int64",
+                  "description": "File size in bytes",
                   "example": 52428800
                 },
                 "id": {
                   "type": "string",
                   "format": "uuid",
+                  "description": "Book unique identifier",
                   "example": "550e8400-e29b-41d4-a716-446655440001"
+                },
+                "libraryId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Library this book belongs to",
+                  "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "libraryName": {
+                  "type": "string",
+                  "description": "Name of the library",
+                  "example": "Comics"
                 },
                 "number": {
                   "type": [
@@ -12867,11 +12947,13 @@
                     "null"
                   ],
                   "format": "int32",
+                  "description": "Book number within the series",
                   "example": 1
                 },
                 "pageCount": {
                   "type": "integer",
                   "format": "int32",
+                  "description": "Number of pages in the book",
                   "example": 32
                 },
                 "readProgress": {
@@ -12880,7 +12962,8 @@
                       "type": "null"
                     },
                     {
-                      "$ref": "#/components/schemas/ReadProgressResponse"
+                      "$ref": "#/components/schemas/ReadProgressResponse",
+                      "description": "User's read progress for this book"
                     }
                   ]
                 },
@@ -12895,10 +12978,12 @@
                 "seriesId": {
                   "type": "string",
                   "format": "uuid",
+                  "description": "Series this book belongs to",
                   "example": "550e8400-e29b-41d4-a716-446655440002"
                 },
                 "seriesName": {
                   "type": "string",
+                  "description": "Name of the series",
                   "example": "Batman: Year One"
                 },
                 "sortTitle": {
@@ -12906,15 +12991,18 @@
                     "string",
                     "null"
                   ],
+                  "description": "Sort title for ordering",
                   "example": "batman year one 001"
                 },
                 "title": {
                   "type": "string",
+                  "description": "Book title",
                   "example": "Batman: Year One #1"
                 },
                 "updatedAt": {
                   "type": "string",
                   "format": "date-time",
+                  "description": "When the book was last updated",
                   "example": "2024-01-15T10:30:00Z"
                 }
               }
@@ -12970,6 +13058,7 @@
               "required": [
                 "id",
                 "libraryId",
+                "libraryName",
                 "title",
                 "bookCount",
                 "createdAt",
@@ -13002,6 +13091,11 @@
                   "type": "string",
                   "format": "uuid",
                   "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "libraryName": {
+                  "type": "string",
+                  "description": "Name of the library this series belongs to",
+                  "example": "Comics"
                 },
                 "path": {
                   "type": [
@@ -14717,6 +14811,7 @@
         "required": [
           "id",
           "libraryId",
+          "libraryName",
           "title",
           "bookCount",
           "createdAt",
@@ -14749,6 +14844,11 @@
             "type": "string",
             "format": "uuid",
             "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "libraryName": {
+            "type": "string",
+            "description": "Name of the library this series belongs to",
+            "example": "Comics"
           },
           "path": {
             "type": [
@@ -15279,12 +15379,17 @@
         "description": "Setup status response",
         "required": [
           "setupRequired",
-          "hasUsers"
+          "hasUsers",
+          "registrationEnabled"
         ],
         "properties": {
           "hasUsers": {
             "type": "boolean",
             "description": "Whether any users exist in the database"
+          },
+          "registrationEnabled": {
+            "type": "boolean",
+            "description": "Whether user registration is enabled"
           },
           "setupRequired": {
             "type": "boolean",
@@ -17059,23 +17164,28 @@
         "properties": {
           "email": {
             "type": "string",
+            "description": "Email address",
             "example": "admin@example.com"
           },
           "emailVerified": {
             "type": "boolean",
+            "description": "Whether email has been verified",
             "example": true
           },
           "id": {
             "type": "string",
             "format": "uuid",
+            "description": "User unique identifier",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
           "isAdmin": {
             "type": "boolean",
+            "description": "Whether user has admin privileges",
             "example": true
           },
           "username": {
             "type": "string",
+            "description": "Username",
             "example": "admin"
           }
         }

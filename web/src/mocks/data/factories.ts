@@ -223,6 +223,7 @@ export const createSeries = (
 	return {
 		id: faker.string.uuid(),
 		libraryId: overrides.libraryId || faker.string.uuid(),
+		libraryName: overrides.libraryName || "Comics",
 		title,
 		titleSort: title.toLowerCase().replace(/^the\s+/, ""),
 		summary,
@@ -364,6 +365,8 @@ export const createBook = (overrides: Partial<MockBook> = {}): MockBook => {
 
 	return {
 		id: faker.string.uuid(),
+		libraryId: overrides.libraryId || faker.string.uuid(),
+		libraryName: overrides.libraryName || "Comics",
 		seriesId: overrides.seriesId || faker.string.uuid(),
 		seriesName,
 		title,

@@ -28,6 +28,7 @@ describe("Setup", () => {
 		vi.mocked(setupApi.checkStatus).mockResolvedValue({
 			setupRequired: true,
 			hasUsers: false,
+			registrationEnabled: false,
 		});
 	});
 

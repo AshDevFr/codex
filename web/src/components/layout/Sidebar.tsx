@@ -194,9 +194,6 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 							to={`/libraries/all/${getLastTab("all") || "series"}`}
 							label="Libraries"
 							leftSection={<IconBooks size={20} />}
-							opened
-							childrenOffset={32}
-							disableRightSectionRotation
 							active={currentPath.startsWith("/libraries/all")}
 							rightSection={
 								<Group gap={4}>
@@ -204,6 +201,7 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 										variant="subtle"
 										size="sm"
 										onClick={(e: React.MouseEvent) => {
+											e.preventDefault();
 											e.stopPropagation();
 											setAddLibraryOpened(true);
 										}}
@@ -216,7 +214,10 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 											<ActionIcon
 												variant="subtle"
 												size="sm"
-												onClick={(e: React.MouseEvent) => e.stopPropagation()}
+												onClick={(e: React.MouseEvent) => {
+													e.preventDefault();
+													e.stopPropagation();
+												}}
 												title="Options"
 											>
 												<IconDotsVertical size={16} />
@@ -226,19 +227,13 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 										<Menu.Dropdown>
 											<Menu.Item
 												leftSection={<IconScan size={16} />}
-												onClick={(e: React.MouseEvent) => {
-													e.stopPropagation();
-													handleScanAll("normal");
-												}}
+												onClick={() => handleScanAll("normal")}
 											>
 												Scan All Libraries
 											</Menu.Item>
 											<Menu.Item
 												leftSection={<IconRadar size={16} />}
-												onClick={(e: React.MouseEvent) => {
-													e.stopPropagation();
-													handleScanAll("deep");
-												}}
+												onClick={() => handleScanAll("deep")}
 											>
 												Deep Scan All Libraries
 											</Menu.Item>
@@ -246,97 +241,92 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 									</Menu>
 								</Group>
 							}
-						>
-							{libraries && libraries.length > 0 ? (
-								libraries.map((library) => (
-									<NavLink
-										key={library.id}
-										component={Link}
-										to={`/libraries/${library.id}/${getLastTab(library.id) || "recommended"}`}
-										label={library.name}
-										// leftSection={<IconFolder size={16} />}
-										active={currentPath.startsWith(`/libraries/${library.id}/`)}
-										styles={{ label: { textTransform: "capitalize" } }}
-										rightSection={
-											<Menu shadow="md" width={200} position="right-start">
-												<Menu.Target>
-													<ActionIcon
-														variant="subtle"
-														size="xs"
-														onClick={(e: React.MouseEvent) =>
-															e.stopPropagation()
-														}
-														title="Library options"
-													>
-														<IconDotsVertical size={14} />
-													</ActionIcon>
-												</Menu.Target>
+						/>
+						{libraries && libraries.length > 0 ? (
+							libraries.map((library) => (
+								<NavLink
+									key={library.id}
+									component={Link}
+									to={`/libraries/${library.id}/${getLastTab(library.id) || "recommended"}`}
+									label={library.name}
+									active={currentPath.startsWith(`/libraries/${library.id}/`)}
+									styles={{
+										root: { paddingLeft: 48 },
+										label: { textTransform: "capitalize" },
+									}}
+									rightSection={
+										<Menu shadow="md" width={200} position="right-start">
+											<Menu.Target>
+												<ActionIcon
+													variant="subtle"
+													size="xs"
+													onClick={(e: React.MouseEvent) => {
+														e.preventDefault();
+														e.stopPropagation();
+													}}
+													title="Library options"
+												>
+													<IconDotsVertical size={14} />
+												</ActionIcon>
+											</Menu.Target>
 
-												<Menu.Dropdown>
-													<Menu.Item
-														leftSection={<IconScan size={16} />}
-														onClick={(e: React.MouseEvent) => {
-															e.stopPropagation();
-															scanMutation.mutate({
-																libraryId: library.id,
-																mode: "normal",
-															});
-														}}
-													>
-														Scan Library
-													</Menu.Item>
-													<Menu.Item
-														leftSection={<IconRadar size={16} />}
-														onClick={(e: React.MouseEvent) => {
-															e.stopPropagation();
-															scanMutation.mutate({
-																libraryId: library.id,
-																mode: "deep",
-															});
-														}}
-													>
-														Scan Library (Deep)
-													</Menu.Item>
-													<Menu.Divider />
-													<Menu.Item
-														leftSection={<IconEdit size={16} />}
-														onClick={(e: React.MouseEvent) => {
-															e.stopPropagation();
-															handleEditLibrary(library);
-														}}
-													>
-														Edit Library
-													</Menu.Item>
-													<Menu.Divider />
-													<Menu.Item
-														leftSection={<IconTrashX size={16} />}
-														color="orange"
-														onClick={(e: React.MouseEvent) => {
-															e.stopPropagation();
-															handlePurgeDeleted(library);
-														}}
-													>
-														Purge Deleted Books
-													</Menu.Item>
-													<Menu.Item
-														leftSection={<IconTrash size={16} />}
-														color="red"
-														onClick={(e: React.MouseEvent) => {
-															e.stopPropagation();
-															handleDeleteLibrary(library);
-														}}
-													>
-														Delete Library
-													</Menu.Item>
-												</Menu.Dropdown>
-											</Menu>
-										}
-									/>
-								))
-							) : (
-								<NavLink label="No libraries" disabled />
-							)}
-						</NavLink>
+											<Menu.Dropdown>
+												<Menu.Item
+													leftSection={<IconScan size={16} />}
+													onClick={() =>
+														scanMutation.mutate({
+															libraryId: library.id,
+															mode: "normal",
+														})
+													}
+												>
+													Scan Library
+												</Menu.Item>
+												<Menu.Item
+													leftSection={<IconRadar size={16} />}
+													onClick={() =>
+														scanMutation.mutate({
+															libraryId: library.id,
+															mode: "deep",
+														})
+													}
+												>
+													Scan Library (Deep)
+												</Menu.Item>
+												<Menu.Divider />
+												<Menu.Item
+													leftSection={<IconEdit size={16} />}
+													onClick={() => handleEditLibrary(library)}
+												>
+													Edit Library
+												</Menu.Item>
+												<Menu.Divider />
+												<Menu.Item
+													leftSection={<IconTrashX size={16} />}
+													color="orange"
+													onClick={() => handlePurgeDeleted(library)}
+												>
+													Purge Deleted Books
+												</Menu.Item>
+												<Menu.Item
+													leftSection={<IconTrash size={16} />}
+													color="red"
+													onClick={() => handleDeleteLibrary(library)}
+												>
+													Delete Library
+												</Menu.Item>
+											</Menu.Dropdown>
+										</Menu>
+									}
+								/>
+							))
+						) : (
+							<NavLink
+								label="No libraries"
+								disabled
+								styles={{ root: { paddingLeft: 32 } }}
+							/>
+						)}
 
 						<NavLink
 							label="Settings"

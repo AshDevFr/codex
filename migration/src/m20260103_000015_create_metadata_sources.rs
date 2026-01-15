@@ -61,6 +61,20 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        // Unique constraint on (series_id, source_name, external_id) - one record per source per series
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_metadata_sources_unique")
+                    .table(MetadataSources::Table)
+                    .col(MetadataSources::SeriesId)
+                    .col(MetadataSources::SourceName)
+                    .col(MetadataSources::ExternalId)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 

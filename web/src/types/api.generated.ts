@@ -3242,15 +3242,20 @@ export interface components {
         };
         /** @description Detailed book response with metadata */
         BookDetailResponse: {
+            /** @description The book data */
             book: components["schemas"]["BookDto"];
             metadata?: null | components["schemas"]["BookMetadataDto"];
         };
         /** @description Book data transfer object */
         BookDto: {
-            /** @example Failed to parse CBZ: invalid archive */
+            /**
+             * @description Error message if book analysis failed
+             * @example Failed to parse CBZ: invalid archive
+             */
             analysisError?: string | null;
             /**
              * Format: date-time
+             * @description When the book was added to the library
              * @example 2024-01-01T00:00:00Z
              */
             createdAt: string;
@@ -3259,29 +3264,53 @@ export interface components {
              * @example false
              */
             deleted: boolean;
-            /** @example cbz */
+            /**
+             * @description File format (cbz, cbr, epub, pdf)
+             * @example cbz
+             */
             fileFormat: string;
-            /** @example a1b2c3d4e5f6g7h8i9j0 */
+            /**
+             * @description File hash for deduplication
+             * @example a1b2c3d4e5f6g7h8i9j0
+             */
             fileHash: string;
-            /** @example /media/comics/Batman/Batman - Year One 001.cbz */
+            /**
+             * @description Filesystem path to the book file
+             * @example /media/comics/Batman/Batman - Year One 001.cbz
+             */
             filePath: string;
             /**
              * Format: int64
+             * @description File size in bytes
              * @example 52428800
              */
             fileSize: number;
             /**
              * Format: uuid
+             * @description Book unique identifier
              * @example 550e8400-e29b-41d4-a716-446655440001
              */
             id: string;
             /**
+             * Format: uuid
+             * @description Library this book belongs to
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            libraryId: string;
+            /**
+             * @description Name of the library
+             * @example Comics
+             */
+            libraryName: string;
+            /**
              * Format: int32
+             * @description Book number within the series
              * @example 1
              */
             number?: number | null;
             /**
              * Format: int32
+             * @description Number of pages in the book
              * @example 32
              */
             pageCount: number;
@@ -3294,17 +3323,28 @@ export interface components {
             readingDirection?: string | null;
             /**
              * Format: uuid
+             * @description Series this book belongs to
              * @example 550e8400-e29b-41d4-a716-446655440002
              */
             seriesId: string;
-            /** @example Batman: Year One */
+            /**
+             * @description Name of the series
+             * @example Batman: Year One
+             */
             seriesName: string;
-            /** @example batman year one 001 */
+            /**
+             * @description Sort title for ordering
+             * @example batman year one 001
+             */
             sortTitle?: string | null;
-            /** @example Batman: Year One #1 */
+            /**
+             * @description Book title
+             * @example Batman: Year One #1
+             */
             title: string;
             /**
              * Format: date-time
+             * @description When the book was last updated
              * @example 2024-01-15T10:30:00Z
              */
             updatedAt: string;
@@ -3334,77 +3374,112 @@ export interface components {
         BookMetadataDto: {
             /**
              * Format: uuid
+             * @description Associated book ID
              * @example 550e8400-e29b-41d4-a716-446655440001
              */
             bookId: string;
             /**
+             * @description Colorists
              * @example [
              *       "Richmond Lewis"
              *     ]
              */
             colorists: string[];
             /**
+             * @description Cover artists
              * @example [
              *       "David Mazzucchelli"
              *     ]
              */
             coverArtists: string[];
             /**
+             * @description Editors
              * @example [
              *       "Dennis O'Neil"
              *     ]
              */
             editors: string[];
-            /** @example Superhero */
+            /**
+             * @description Genre
+             * @example Superhero
+             */
             genre?: string | null;
             /**
              * Format: uuid
+             * @description Metadata record ID
              * @example 550e8400-e29b-41d4-a716-446655440003
              */
             id: string;
-            /** @example DC Black Label */
+            /**
+             * @description Imprint name
+             * @example DC Black Label
+             */
             imprint?: string | null;
             /**
+             * @description Inkers
              * @example [
              *       "David Mazzucchelli"
              *     ]
              */
             inkers: string[];
-            /** @example en */
+            /**
+             * @description ISO language code
+             * @example en
+             */
             languageIso?: string | null;
             /**
+             * @description Letterers
              * @example [
              *       "Todd Klein"
              *     ]
              */
             letterers: string[];
-            /** @example 1 */
+            /**
+             * @description Issue/chapter number from metadata
+             * @example 1
+             */
             number?: string | null;
             /**
              * Format: int32
+             * @description Page count from metadata
              * @example 32
              */
             pageCount?: number | null;
             /**
+             * @description Pencillers (line artists)
              * @example [
              *       "David Mazzucchelli"
              *     ]
              */
             pencillers: string[];
-            /** @example DC Comics */
+            /**
+             * @description Publisher name
+             * @example DC Comics
+             */
             publisher?: string | null;
             /**
              * Format: date-time
+             * @description Release/publication date
              * @example 1987-02-01T00:00:00Z
              */
             releaseDate?: string | null;
-            /** @example Batman: Year One */
+            /**
+             * @description Series name from metadata
+             * @example Batman: Year One
+             */
             series?: string | null;
-            /** @example Bruce Wayne returns to Gotham City after years abroad to begin his war on crime. */
+            /**
+             * @description Book summary/description
+             * @example Bruce Wayne returns to Gotham City after years abroad to begin his war on crime.
+             */
             summary?: string | null;
-            /** @example Batman: Year One #1 */
+            /**
+             * @description Book title from metadata
+             * @example Batman: Year One #1
+             */
             title?: string | null;
             /**
+             * @description Writers/authors
              * @example [
              *       "Frank Miller"
              *     ]
@@ -4554,6 +4629,7 @@ export interface components {
             bookConfig?: unknown;
             /**
              * Format: int64
+             * @description Total number of books in this library
              * @example 1250
              */
             bookCount?: number | null;
@@ -4561,6 +4637,7 @@ export interface components {
             bookStrategy: components["schemas"]["BookStrategy"];
             /**
              * Format: date-time
+             * @description When the library was created
              * @example 2024-01-01T00:00:00Z
              */
             createdAt: string;
@@ -4569,7 +4646,10 @@ export interface components {
              * @example ltr
              */
             defaultReadingDirection: string;
-            /** @example My comic book collection */
+            /**
+             * @description Optional description
+             * @example My comic book collection
+             */
             description?: string | null;
             /**
              * @description Excluded path patterns (newline-separated, e.g., ".DS_Store\nThumbs.db")
@@ -4579,29 +4659,41 @@ export interface components {
             excludedPatterns?: string | null;
             /**
              * Format: uuid
+             * @description Library unique identifier
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             id: string;
-            /** @example true */
+            /**
+             * @description Whether the library is active
+             * @example true
+             */
             isActive: boolean;
             /**
              * Format: date-time
+             * @description When the library was last scanned
              * @example 2024-01-15T10:30:00Z
              */
             lastScannedAt?: string | null;
-            /** @example Comics */
+            /**
+             * @description Library name
+             * @example Comics
+             */
             name: string;
             /** @description Number strategy-specific configuration (JSON) */
             numberConfig?: unknown;
             /** @description Book number strategy (file_order, metadata, filename, smart) */
             numberStrategy: components["schemas"]["NumberStrategy"];
-            /** @example /media/comics */
+            /**
+             * @description Filesystem path to the library root
+             * @example /media/comics
+             */
             path: string;
             scanningConfig?: null | components["schemas"]["ScanningConfigDto"];
             /** @description Strategy-specific configuration (JSON) */
             seriesConfig?: unknown;
             /**
              * Format: int64
+             * @description Total number of series in this library
              * @example 85
              */
             seriesCount?: number | null;
@@ -4609,6 +4701,7 @@ export interface components {
             seriesStrategy: components["schemas"]["SeriesStrategy"];
             /**
              * Format: date-time
+             * @description When the library was last updated
              * @example 2024-01-15T10:30:00Z
              */
             updatedAt: string;
@@ -5075,10 +5168,14 @@ export interface components {
         PaginatedResponse_BookDto: {
             /** @description The data items for this page */
             data: {
-                /** @example Failed to parse CBZ: invalid archive */
+                /**
+                 * @description Error message if book analysis failed
+                 * @example Failed to parse CBZ: invalid archive
+                 */
                 analysisError?: string | null;
                 /**
                  * Format: date-time
+                 * @description When the book was added to the library
                  * @example 2024-01-01T00:00:00Z
                  */
                 createdAt: string;
@@ -5087,29 +5184,53 @@ export interface components {
                  * @example false
                  */
                 deleted: boolean;
-                /** @example cbz */
+                /**
+                 * @description File format (cbz, cbr, epub, pdf)
+                 * @example cbz
+                 */
                 fileFormat: string;
-                /** @example a1b2c3d4e5f6g7h8i9j0 */
+                /**
+                 * @description File hash for deduplication
+                 * @example a1b2c3d4e5f6g7h8i9j0
+                 */
                 fileHash: string;
-                /** @example /media/comics/Batman/Batman - Year One 001.cbz */
+                /**
+                 * @description Filesystem path to the book file
+                 * @example /media/comics/Batman/Batman - Year One 001.cbz
+                 */
                 filePath: string;
                 /**
                  * Format: int64
+                 * @description File size in bytes
                  * @example 52428800
                  */
                 fileSize: number;
                 /**
                  * Format: uuid
+                 * @description Book unique identifier
                  * @example 550e8400-e29b-41d4-a716-446655440001
                  */
                 id: string;
                 /**
+                 * Format: uuid
+                 * @description Library this book belongs to
+                 * @example 550e8400-e29b-41d4-a716-446655440000
+                 */
+                libraryId: string;
+                /**
+                 * @description Name of the library
+                 * @example Comics
+                 */
+                libraryName: string;
+                /**
                  * Format: int32
+                 * @description Book number within the series
                  * @example 1
                  */
                 number?: number | null;
                 /**
                  * Format: int32
+                 * @description Number of pages in the book
                  * @example 32
                  */
                 pageCount: number;
@@ -5122,17 +5243,28 @@ export interface components {
                 readingDirection?: string | null;
                 /**
                  * Format: uuid
+                 * @description Series this book belongs to
                  * @example 550e8400-e29b-41d4-a716-446655440002
                  */
                 seriesId: string;
-                /** @example Batman: Year One */
+                /**
+                 * @description Name of the series
+                 * @example Batman: Year One
+                 */
                 seriesName: string;
-                /** @example batman year one 001 */
+                /**
+                 * @description Sort title for ordering
+                 * @example batman year one 001
+                 */
                 sortTitle?: string | null;
-                /** @example Batman: Year One #1 */
+                /**
+                 * @description Book title
+                 * @example Batman: Year One #1
+                 */
                 title: string;
                 /**
                  * Format: date-time
+                 * @description When the book was last updated
                  * @example 2024-01-15T10:30:00Z
                  */
                 updatedAt: string;
@@ -5188,6 +5320,11 @@ export interface components {
                  * @example 550e8400-e29b-41d4-a716-446655440000
                  */
                 libraryId: string;
+                /**
+                 * @description Name of the library this series belongs to
+                 * @example Comics
+                 */
+                libraryName: string;
                 /** @example /media/comics/Batman - Year One */
                 path?: string | null;
                 /** @example DC Comics */
@@ -6221,6 +6358,11 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             libraryId: string;
+            /**
+             * @description Name of the library this series belongs to
+             * @example Comics
+             */
+            libraryName: string;
             /** @example /media/comics/Batman - Year One */
             path?: string | null;
             /** @example DC Comics */
@@ -6556,6 +6698,8 @@ export interface components {
         SetupStatusResponse: {
             /** @description Whether any users exist in the database */
             hasUsers: boolean;
+            /** @description Whether user registration is enabled */
+            registrationEnabled: boolean;
             /** @description Whether initial setup is required */
             setupRequired: boolean;
         };
@@ -7542,18 +7686,31 @@ export interface components {
         };
         /** @description User information in login response */
         UserInfo: {
-            /** @example admin@example.com */
+            /**
+             * @description Email address
+             * @example admin@example.com
+             */
             email: string;
-            /** @example true */
+            /**
+             * @description Whether email has been verified
+             * @example true
+             */
             emailVerified: boolean;
             /**
              * Format: uuid
+             * @description User unique identifier
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             id: string;
-            /** @example true */
+            /**
+             * @description Whether user has admin privileges
+             * @example true
+             */
             isAdmin: boolean;
-            /** @example admin */
+            /**
+             * @description Username
+             * @example admin
+             */
             username: string;
         };
         /** @description A user integration (credentials are never exposed) */

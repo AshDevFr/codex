@@ -121,17 +121,17 @@ export const cssVariablesResolver: CSSVariablesResolver = (_theme) => ({
 	},
 	dark: {
 		// Dark mode keeps existing styling
-		"--mantine-color-body": "#121212",
+		"--mantine-color-body": "#242424",
 		"--mantine-color-text": "#e0e0e0",
 		"--mantine-color-dimmed": "#909296",
 
 		// AppShell colors for dark mode
-		"--mantine-color-default": "#1a1a1a",
+		"--mantine-color-default": "#242424",
 		"--mantine-color-default-hover": "#2c2c2c",
 		"--mantine-color-default-border": "#373a40",
 
 		// Card and surface colors
-		"--app-shell-main-bg": "#1a1a1a",
+		"--app-shell-main-bg": "#242424",
 		"--card-bg": "#242424",
 		"--card-border": "#373a40",
 	},

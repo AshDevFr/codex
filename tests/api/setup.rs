@@ -37,6 +37,10 @@ async fn test_setup_status_no_users() {
         !status_response.has_users,
         "has_users should be false when no users exist"
     );
+    assert!(
+        !status_response.registration_enabled,
+        "registration_enabled should default to false"
+    );
 }
 
 #[tokio::test]
@@ -65,6 +69,72 @@ async fn test_setup_status_with_users() {
     assert!(
         status_response.has_users,
         "has_users should be true when users exist"
+    );
+}
+
+#[tokio::test]
+async fn test_setup_status_registration_enabled() {
+    use codex::db::repositories::SettingsRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Enable registration via settings
+    SettingsRepository::set(
+        &db,
+        "auth.registration_enabled",
+        "true".to_string(),
+        uuid::Uuid::new_v4(),
+        Some("Test setup".to_string()),
+        None,
+    )
+    .await
+    .expect("Failed to set registration setting");
+
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request("/api/v1/setup/status");
+    let (status, response): (StatusCode, Option<SetupStatusResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let status_response = response.unwrap();
+    assert!(
+        status_response.registration_enabled,
+        "registration_enabled should be true when setting is enabled"
+    );
+}
+
+#[tokio::test]
+async fn test_setup_status_registration_disabled() {
+    use codex::db::repositories::SettingsRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Explicitly disable registration via settings
+    SettingsRepository::set(
+        &db,
+        "auth.registration_enabled",
+        "false".to_string(),
+        uuid::Uuid::new_v4(),
+        Some("Test setup".to_string()),
+        None,
+    )
+    .await
+    .expect("Failed to set registration setting");
+
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request("/api/v1/setup/status");
+    let (status, response): (StatusCode, Option<SetupStatusResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let status_response = response.unwrap();
+    assert!(
+        !status_response.registration_enabled,
+        "registration_enabled should be false when setting is disabled"
     );
 }
 
