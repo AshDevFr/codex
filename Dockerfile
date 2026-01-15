@@ -5,10 +5,11 @@ FROM node:22-alpine AS frontend-builder
 WORKDIR /web
 
 # Copy package files
-COPY web/package*.json ./
+# COPY web/package*.json ./
+COPY web/package.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm install
 
 # Copy frontend source
 COPY web/ ./

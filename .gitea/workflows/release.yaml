@@ -64,7 +64,7 @@ jobs:
       - name: Build frontend
         working-directory: web
         run: |
-          npm ci
+          npm install
           npm run build
 
       - name: Install Rust
