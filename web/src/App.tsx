@@ -21,6 +21,7 @@ import { SearchResults } from "@/pages/SearchResults";
 import { SeriesDetail } from "@/pages/SeriesDetail";
 import { Setup } from "@/pages/Setup";
 import {
+	CleanupSettings,
 	DuplicatesSettings,
 	MetricsSettings,
 	ProfileSettings,
@@ -236,6 +237,17 @@ function App() {
 						<ProtectedRoute>
 							<AppLayout currentPath="/settings/duplicates">
 								<DuplicatesSettings />
+							</AppLayout>
+						</ProtectedRoute>
+					}
+				/>
+
+				<Route
+					path="/settings/cleanup"
+					element={
+						<ProtectedRoute>
+							<AppLayout currentPath="/settings/cleanup">
+								<CleanupSettings />
 							</AppLayout>
 						</ProtectedRoute>
 					}

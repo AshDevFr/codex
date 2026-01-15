@@ -4,6 +4,68 @@
  */
 
 export interface paths {
+    "/api/v1/admin/cleanup-orphans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger orphan cleanup task
+         * @description Enqueues a background task to scan and delete orphaned files
+         *     (thumbnails and covers without database entries).
+         *
+         *     # Permission Required
+         *     - Admin access required
+         *
+         *     Returns the task ID which can be used to track progress.
+         */
+        post: operations["trigger_cleanup"];
+        /**
+         * Delete orphaned files immediately (synchronous)
+         * @description Scans for and deletes orphaned files immediately, returning
+         *     the results. For large numbers of files, prefer using the
+         *     async trigger_cleanup endpoint instead.
+         *
+         *     # Permission Required
+         *     - Admin access required
+         */
+        delete: operations["delete_orphans"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/cleanup-orphans/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get statistics about orphaned files
+         * @description Scans the thumbnail and cover directories for files that don't have
+         *     corresponding database entries. This is a read-only operation.
+         *
+         *     # Permission Required
+         *     - Admin access required
+         *
+         *     # Query Parameters
+         *     - `include_files`: If true, includes the list of orphaned files in the response
+         */
+        get: operations["get_orphan_stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/integrations": {
         parameters: {
             query?: never;
@@ -3574,6 +3636,35 @@ export interface components {
             /** @description Strip Calibre ID suffix from folder names (e.g., " (123)") */
             stripIdSuffix?: boolean;
         };
+        /** @description Result of a cleanup operation */
+        CleanupResultDto: {
+            /**
+             * Format: int64
+             * @description Total bytes freed by deletion
+             * @example 1073741824
+             */
+            bytes_freed: number;
+            /**
+             * Format: int32
+             * @description Number of cover files deleted
+             * @example 5
+             */
+            covers_deleted: number;
+            /** @description Error messages for any failed deletions */
+            errors?: string[];
+            /**
+             * Format: int32
+             * @description Number of files that failed to delete
+             * @example 0
+             */
+            failures: number;
+            /**
+             * Format: int32
+             * @description Number of thumbnail files deleted
+             * @example 42
+             */
+            thumbnails_deleted: number;
+        };
         /** @description Configure initial settings request */
         ConfigureSettingsRequest: {
             /** @description Settings to configure (key-value pairs) */
@@ -4848,6 +4939,59 @@ export interface components {
             title?: string | null;
             /** @description Media type of the linked resource */
             type?: string | null;
+        };
+        /** @description Statistics about orphaned files in the system */
+        OrphanStatsDto: {
+            /** @description List of orphaned files with details */
+            files?: components["schemas"]["OrphanedFileDto"][] | null;
+            /**
+             * Format: int32
+             * @description Number of orphaned cover files (no matching series in database)
+             * @example 5
+             */
+            orphaned_covers: number;
+            /**
+             * Format: int32
+             * @description Number of orphaned thumbnail files (no matching book in database)
+             * @example 42
+             */
+            orphaned_thumbnails: number;
+            /**
+             * Format: int64
+             * @description Total size of all orphaned files in bytes
+             * @example 1073741824
+             */
+            total_size_bytes: number;
+        };
+        /** @description Query parameters for orphan stats endpoint */
+        OrphanStatsQuery: {
+            /** @description If true, include the full list of orphaned files in the response */
+            include_files?: boolean;
+        };
+        /** @description Information about a single orphaned file */
+        OrphanedFileDto: {
+            /**
+             * Format: uuid
+             * @description The entity UUID extracted from the filename
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            entity_id?: string | null;
+            /**
+             * @description Type of file: "thumbnail" or "cover"
+             * @example thumbnail
+             */
+            file_type: string;
+            /**
+             * @description Path to the orphaned file (relative to data directory)
+             * @example thumbnails/books/55/550e8400-e29b-41d4-a716-446655440000.jpg
+             */
+            path: string;
+            /**
+             * Format: int64
+             * @description Size of the file in bytes
+             * @example 25600
+             */
+            size_bytes: number;
         };
         /** @description Page data transfer object */
         PageDto: {
@@ -6899,6 +7043,21 @@ export interface components {
         } | {
             /** @enum {string} */
             type: "find_duplicates";
+        } | {
+            /** Format: uuid */
+            book_id: string;
+            /** @description Optional thumbnail path (if known at deletion time) */
+            thumbnail_path?: string | null;
+            /** @enum {string} */
+            type: "cleanup_book_files";
+        } | {
+            /** Format: uuid */
+            series_id: string;
+            /** @enum {string} */
+            type: "cleanup_series_files";
+        } | {
+            /** @enum {string} */
+            type: "cleanup_orphaned_files";
         };
         /** @description Metrics for a specific task type */
         TaskTypeMetricsDto: {
@@ -7049,6 +7208,20 @@ export interface components {
              * @example Bearer
              */
             tokenType: string;
+        };
+        /** @description Response when triggering a cleanup task */
+        TriggerCleanupResponse: {
+            /**
+             * @description Message describing the action taken
+             * @example Cleanup task queued successfully
+             */
+            message: string;
+            /**
+             * Format: uuid
+             * @description ID of the queued cleanup task
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            task_id: string;
         };
         /** @description Response for triggering a duplicate scan */
         TriggerDuplicateScanResponse: {
@@ -7583,6 +7756,111 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    trigger_cleanup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleanup task queued successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "message": "Cleanup task queued successfully",
+                     *       "task_id": "550e8400-e29b-41d4-a716-446655440000"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["TriggerCleanupResponse"];
+                };
+            };
+            /** @description Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_orphans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleanup completed successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "bytes_freed": 1073741824,
+                     *       "covers_deleted": 5,
+                     *       "failures": 0,
+                     *       "thumbnails_deleted": 42
+                     *     }
+                     */
+                    "application/json": components["schemas"]["CleanupResultDto"];
+                };
+            };
+            /** @description Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_orphan_stats: {
+        parameters: {
+            query?: {
+                /** @description Include list of orphaned files in response */
+                include_files?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Orphan statistics retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "orphaned_covers": 5,
+                     *       "orphaned_thumbnails": 42,
+                     *       "total_size_bytes": 1073741824
+                     *     }
+                     */
+                    "application/json": components["schemas"]["OrphanStatsDto"];
+                };
+            };
+            /** @description Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_system_integrations: {
         parameters: {
             query?: never;

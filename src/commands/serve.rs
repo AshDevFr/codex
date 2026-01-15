@@ -55,6 +55,14 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     let event_broadcaster = Arc::new(crate::events::EventBroadcaster::new(1000));
     info!("Event broadcaster initialized");
 
+    // Start cleanup event subscriber to handle file cleanup on entity deletion
+    let cleanup_subscriber = crate::services::CleanupEventSubscriber::new(
+        db.sea_orm_connection().clone(),
+        event_broadcaster.clone(),
+    );
+    let _cleanup_subscriber_handle = cleanup_subscriber.start();
+    info!("Cleanup event subscriber started");
+
     // Start PostgreSQL task listener for multi-container deployments
     // This allows workers in separate containers to notify the web server of task completions
     if config.database.db_type == DatabaseType::Postgres {
@@ -92,6 +100,11 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         "Files service initialized (thumbnails: {}, uploads: {})",
         config.files.thumbnail_dir, config.files.uploads_dir
     );
+
+    // Initialize file cleanup service (for orphaned file cleanup via API)
+    let file_cleanup_service = Arc::new(crate::services::FileCleanupService::new(
+        config.files.clone(),
+    ));
 
     // Initialize task metrics service
     let task_metrics_service = Arc::new(crate::services::TaskMetricsService::new(
@@ -134,6 +147,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             settings_service.clone(),
             thumbnail_service.clone(),
             Some(task_metrics_service.clone()),
+            config.files.clone(),
         );
         worker_handles = handles;
         worker_shutdown_channels = channels;
@@ -162,6 +176,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         event_broadcaster,
         settings_service,
         thumbnail_service,
+        file_cleanup_service,
         task_metrics_service: Some(task_metrics_service),
         scheduler: if disable_workers {
             None

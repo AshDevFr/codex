@@ -76,6 +76,8 @@ pub struct AppState {
     #[allow(dead_code)]
     pub settings_service: Arc<crate::services::SettingsService>,
     pub thumbnail_service: Arc<crate::services::ThumbnailService>,
+    /// File cleanup service for managing orphaned files
+    pub file_cleanup_service: Arc<crate::services::FileCleanupService>,
     /// Task metrics service for collecting task performance data
     /// None in test environments or when not needed
     pub task_metrics_service: Option<Arc<crate::services::TaskMetricsService>>,

@@ -81,6 +81,15 @@ impl BookRepository {
             .context("Failed to get book by ID")
     }
 
+    /// Check if a book exists by ID (more efficient than get_by_id for existence checks)
+    pub async fn exists(db: &DatabaseConnection, id: Uuid) -> Result<bool> {
+        let count = Books::find_by_id(id)
+            .count(db)
+            .await
+            .context("Failed to check book existence")?;
+        Ok(count > 0)
+    }
+
     /// Get a book by file hash (for duplicate detection)
     pub async fn get_by_hash(db: &DatabaseConnection, hash: &str) -> Result<Option<books::Model>> {
         Books::find()

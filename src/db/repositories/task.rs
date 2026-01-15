@@ -155,6 +155,7 @@ impl TaskRepository {
                             // 6. generate_thumbnails (5) - batch thumbnail
                             // 7. find_duplicates (6)
                             // 8. refresh_metadata (7)
+                            // 9-11. cleanup tasks (lowest priority - run after core operations)
                             "ORDER BY (CASE
                                 WHEN task_type = 'scan_library' THEN 0
                                 WHEN task_type = 'purge_deleted' THEN 1
@@ -164,6 +165,9 @@ impl TaskRepository {
                                 WHEN task_type = 'generate_thumbnails' THEN 5
                                 WHEN task_type = 'find_duplicates' THEN 6
                                 WHEN task_type = 'refresh_metadata' THEN 7
+                                WHEN task_type = 'cleanup_book_files' THEN 8
+                                WHEN task_type = 'cleanup_series_files' THEN 9
+                                WHEN task_type = 'cleanup_orphaned_files' THEN 10
                                 ELSE 99
                             END), priority DESC, scheduled_for ASC"
                         } else {
@@ -229,6 +233,7 @@ impl TaskRepository {
                             // 6. generate_thumbnails (5) - batch thumbnail
                             // 7. find_duplicates (6)
                             // 8. refresh_metadata (7)
+                            // 9-11. cleanup tasks (lowest priority - run after core operations)
                             "ORDER BY (CASE
                                 WHEN task_type = 'scan_library' THEN 0
                                 WHEN task_type = 'purge_deleted' THEN 1
@@ -238,6 +243,9 @@ impl TaskRepository {
                                 WHEN task_type = 'generate_thumbnails' THEN 5
                                 WHEN task_type = 'find_duplicates' THEN 6
                                 WHEN task_type = 'refresh_metadata' THEN 7
+                                WHEN task_type = 'cleanup_book_files' THEN 8
+                                WHEN task_type = 'cleanup_series_files' THEN 9
+                                WHEN task_type = 'cleanup_orphaned_files' THEN 10
                                 ELSE 99
                             END), priority DESC, scheduled_for ASC"
                         } else {

@@ -12,6 +12,7 @@ import {
 import { notifications } from "@mantine/notifications";
 import {
 	IconBooks,
+	IconBrush,
 	IconChartBar,
 	IconClipboardList,
 	IconCopy,
@@ -382,6 +383,13 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 										label="Metrics"
 										leftSection={<IconChartBar size={16} />}
 										active={currentPath.startsWith("/settings/metrics")}
+									/>
+									<NavLink
+										component={Link}
+										to="/settings/cleanup"
+										label="Cleanup"
+										leftSection={<IconBrush size={16} />}
+										active={currentPath.startsWith("/settings/cleanup")}
 									/>
 								</>
 							)}

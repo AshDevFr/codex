@@ -650,6 +650,19 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/admin/integrations/:id/test",
             post(handlers::system_integrations::test_system_integration),
         )
+        // Cleanup routes (protected, admin only)
+        .route(
+            "/admin/cleanup-orphans/stats",
+            get(handlers::cleanup::get_orphan_stats),
+        )
+        .route(
+            "/admin/cleanup-orphans",
+            post(handlers::cleanup::trigger_cleanup),
+        )
+        .route(
+            "/admin/cleanup-orphans",
+            delete(handlers::cleanup::delete_orphans),
+        )
         // Add state to all routes
         .with_state(state)
 }

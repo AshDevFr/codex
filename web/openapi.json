@@ -10,6 +10,129 @@
     "version": "1.0.0"
   },
   "paths": {
+    "/api/v1/admin/cleanup-orphans": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Trigger orphan cleanup task",
+        "description": "Enqueues a background task to scan and delete orphaned files\n(thumbnails and covers without database entries).\n\n# Permission Required\n- Admin access required\n\nReturns the task ID which can be used to track progress.",
+        "operationId": "trigger_cleanup",
+        "responses": {
+          "200": {
+            "description": "Cleanup task queued successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerCleanupResponse"
+                },
+                "example": {
+                  "message": "Cleanup task queued successfully",
+                  "task_id": "550e8400-e29b-41d4-a716-446655440000"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Delete orphaned files immediately (synchronous)",
+        "description": "Scans for and deletes orphaned files immediately, returning\nthe results. For large numbers of files, prefer using the\nasync trigger_cleanup endpoint instead.\n\n# Permission Required\n- Admin access required",
+        "operationId": "delete_orphans",
+        "responses": {
+          "200": {
+            "description": "Cleanup completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanupResultDto"
+                },
+                "example": {
+                  "bytes_freed": 1073741824,
+                  "covers_deleted": 5,
+                  "failures": 0,
+                  "thumbnails_deleted": 42
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/cleanup-orphans/stats": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get statistics about orphaned files",
+        "description": "Scans the thumbnail and cover directories for files that don't have\ncorresponding database entries. This is a read-only operation.\n\n# Permission Required\n- Admin access required\n\n# Query Parameters\n- `include_files`: If true, includes the list of orphaned files in the response",
+        "operationId": "get_orphan_stats",
+        "parameters": [
+          {
+            "name": "include_files",
+            "in": "query",
+            "description": "Include list of orphaned files in response",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Orphan statistics retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrphanStatsDto"
+                },
+                "example": {
+                  "orphaned_covers": 5,
+                  "orphaned_thumbnails": 42,
+                  "total_size_bytes": 1073741824
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/integrations": {
       "get": {
         "tags": [
@@ -9933,6 +10056,53 @@
           }
         }
       },
+      "CleanupResultDto": {
+        "type": "object",
+        "description": "Result of a cleanup operation",
+        "required": [
+          "thumbnails_deleted",
+          "covers_deleted",
+          "bytes_freed",
+          "failures"
+        ],
+        "properties": {
+          "bytes_freed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total bytes freed by deletion",
+            "example": 1073741824,
+            "minimum": 0
+          },
+          "covers_deleted": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of cover files deleted",
+            "example": 5,
+            "minimum": 0
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Error messages for any failed deletions"
+          },
+          "failures": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of files that failed to delete",
+            "example": 0,
+            "minimum": 0
+          },
+          "thumbnails_deleted": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of thumbnail files deleted",
+            "example": 42,
+            "minimum": 0
+          }
+        }
+      },
       "ConfigureSettingsRequest": {
         "type": "object",
         "description": "Configure initial settings request",
@@ -12415,6 +12585,95 @@
               "null"
             ],
             "description": "Media type of the linked resource"
+          }
+        }
+      },
+      "OrphanStatsDto": {
+        "type": "object",
+        "description": "Statistics about orphaned files in the system",
+        "required": [
+          "orphaned_thumbnails",
+          "orphaned_covers",
+          "total_size_bytes"
+        ],
+        "properties": {
+          "files": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/OrphanedFileDto"
+            },
+            "description": "List of orphaned files with details"
+          },
+          "orphaned_covers": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of orphaned cover files (no matching series in database)",
+            "example": 5,
+            "minimum": 0
+          },
+          "orphaned_thumbnails": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of orphaned thumbnail files (no matching book in database)",
+            "example": 42,
+            "minimum": 0
+          },
+          "total_size_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total size of all orphaned files in bytes",
+            "example": 1073741824,
+            "minimum": 0
+          }
+        }
+      },
+      "OrphanStatsQuery": {
+        "type": "object",
+        "description": "Query parameters for orphan stats endpoint",
+        "properties": {
+          "include_files": {
+            "type": "boolean",
+            "description": "If true, include the full list of orphaned files in the response"
+          }
+        }
+      },
+      "OrphanedFileDto": {
+        "type": "object",
+        "description": "Information about a single orphaned file",
+        "required": [
+          "path",
+          "size_bytes",
+          "file_type"
+        ],
+        "properties": {
+          "entity_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The entity UUID extracted from the filename",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "file_type": {
+            "type": "string",
+            "description": "Type of file: \"thumbnail\" or \"cover\"",
+            "example": "thumbnail"
+          },
+          "path": {
+            "type": "string",
+            "description": "Path to the orphaned file (relative to data directory)",
+            "example": "thumbnails/books/55/550e8400-e29b-41d4-a716-446655440000.jpg"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Size of the file in bytes",
+            "example": 25600,
+            "minimum": 0
           }
         }
       },
@@ -15940,6 +16199,68 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Clean up files for a deleted book (thumbnail + cover references)",
+            "required": [
+              "book_id",
+              "type"
+            ],
+            "properties": {
+              "book_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "thumbnail_path": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Optional thumbnail path (if known at deletion time)"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "cleanup_book_files"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Clean up files for a deleted series (cover files)",
+            "required": [
+              "series_id",
+              "type"
+            ],
+            "properties": {
+              "series_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "cleanup_series_files"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Scan filesystem for orphaned files and delete them",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "cleanup_orphaned_files"
+                ]
+              }
+            }
           }
         ],
         "description": "Task types supported by the distributed task queue"
@@ -16178,6 +16499,27 @@
             "type": "string",
             "description": "Token type (always \"Bearer\")",
             "example": "Bearer"
+          }
+        }
+      },
+      "TriggerCleanupResponse": {
+        "type": "object",
+        "description": "Response when triggering a cleanup task",
+        "required": [
+          "task_id",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message describing the action taken",
+            "example": "Cleanup task queued successfully"
+          },
+          "task_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the queued cleanup task",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
           }
         }
       },
@@ -17176,6 +17518,10 @@
     {
       "name": "duplicates",
       "description": "Duplicate book detection and management"
+    },
+    {
+      "name": "Admin",
+      "description": "Administrative operations (cleanup, maintenance)"
     },
     {
       "name": "events",

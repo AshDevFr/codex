@@ -1,6 +1,7 @@
 pub mod api_key;
 pub mod auth;
 pub mod book;
+pub mod cleanup;
 pub mod common;
 pub mod duplicates;
 pub mod filter;
@@ -24,6 +25,7 @@ pub mod user_preferences;
 pub use api_key::*;
 pub use auth::*;
 pub use book::*;
+pub use cleanup::*;
 pub use common::*;
 pub use duplicates::*;
 pub use filter::*;

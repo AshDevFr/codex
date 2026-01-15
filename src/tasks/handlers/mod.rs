@@ -8,6 +8,9 @@ use crate::tasks::types::TaskResult;
 
 pub mod analyze_book;
 pub mod analyze_series;
+pub mod cleanup_book_files;
+pub mod cleanup_orphaned_files;
+pub mod cleanup_series_files;
 pub mod find_duplicates;
 pub mod generate_thumbnail;
 pub mod generate_thumbnails;
@@ -16,6 +19,9 @@ pub mod scan_library;
 
 pub use analyze_book::AnalyzeBookHandler;
 pub use analyze_series::AnalyzeSeriesHandler;
+pub use cleanup_book_files::CleanupBookFilesHandler;
+pub use cleanup_orphaned_files::CleanupOrphanedFilesHandler;
+pub use cleanup_series_files::CleanupSeriesFilesHandler;
 pub use find_duplicates::FindDuplicatesHandler;
 pub use generate_thumbnail::GenerateThumbnailHandler;
 pub use generate_thumbnails::GenerateThumbnailsHandler;

@@ -16,11 +16,13 @@ use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
+use crate::config::FilesConfig;
 use crate::db::repositories::TaskRepository;
 use crate::events::{EventBroadcaster, RecordedEvent, TaskProgressEvent};
 use crate::services::{SettingsService, TaskMetricsService, ThumbnailService};
 use crate::tasks::handlers::{
-    AnalyzeBookHandler, AnalyzeSeriesHandler, FindDuplicatesHandler, GenerateThumbnailHandler,
+    AnalyzeBookHandler, AnalyzeSeriesHandler, CleanupBookFilesHandler, CleanupOrphanedFilesHandler,
+    CleanupSeriesFilesHandler, FindDuplicatesHandler, GenerateThumbnailHandler,
     GenerateThumbnailsHandler, PurgeDeletedHandler, ScanLibraryHandler, TaskHandler,
 };
 
@@ -129,6 +131,27 @@ impl TaskWorker {
         task_metrics_service: Arc<TaskMetricsService>,
     ) -> Self {
         self.task_metrics_service = Some(task_metrics_service);
+        self
+    }
+
+    /// Set the files config for cleanup handlers
+    ///
+    /// This registers the cleanup task handlers that need access to
+    /// thumbnail and upload directories.
+    pub fn with_files_config(mut self, files_config: FilesConfig) -> Self {
+        // Register cleanup handlers
+        self.handlers.insert(
+            "cleanup_book_files".to_string(),
+            Arc::new(CleanupBookFilesHandler::new(files_config.clone())),
+        );
+        self.handlers.insert(
+            "cleanup_series_files".to_string(),
+            Arc::new(CleanupSeriesFilesHandler::new(files_config.clone())),
+        );
+        self.handlers.insert(
+            "cleanup_orphaned_files".to_string(),
+            Arc::new(CleanupOrphanedFilesHandler::new(files_config)),
+        );
         self
     }
 

@@ -257,6 +257,11 @@ Codex provides OPDS catalog feeds for e-reader applications:
         handlers::system_integrations::disable_system_integration,
         handlers::system_integrations::test_system_integration,
 
+        // Cleanup endpoints
+        handlers::cleanup::get_orphan_stats,
+        handlers::cleanup::trigger_cleanup,
+        handlers::cleanup::delete_orphans,
+
         // Duplicates endpoints
         handlers::duplicates::list_duplicates,
         handlers::duplicates::trigger_duplicate_scan,
@@ -469,6 +474,13 @@ Codex provides OPDS catalog feeds for e-reader applications:
             dto::ListDuplicatesResponse,
             dto::TriggerDuplicateScanResponse,
 
+            // Cleanup DTOs
+            dto::OrphanStatsDto,
+            dto::OrphanedFileDto,
+            dto::CleanupResultDto,
+            dto::TriggerCleanupResponse,
+            dto::OrphanStatsQuery,
+
             // SSE Event DTOs
             crate::events::EntityChangeEvent,
             crate::events::EntityEvent,
@@ -514,6 +526,7 @@ Codex provides OPDS catalog feeds for e-reader applications:
         (name = "settings", description = "Runtime configuration settings management (admin only)"),
         (name = "System Integrations", description = "Admin-managed external service integrations"),
         (name = "duplicates", description = "Duplicate book detection and management"),
+        (name = "Admin", description = "Administrative operations (cleanup, maintenance)"),
         (name = "events", description = "Server-Sent Events for real-time updates"),
         (name = "opds", description = "OPDS 1.2 catalog feed (Atom XML format)"),
         (name = "opds2", description = "OPDS 2.0 catalog feed (JSON format) - Modern JSON-based OPDS specification"),

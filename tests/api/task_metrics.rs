@@ -12,7 +12,7 @@ use codex::config::{AuthConfig, EmailConfig, FilesConfig};
 use codex::db::repositories::UserRepository;
 use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
-use codex::services::{SettingsService, TaskMetricsService, ThumbnailService};
+use codex::services::{FileCleanupService, SettingsService, TaskMetricsService, ThumbnailService};
 use codex::utils::jwt::JwtService;
 use codex::utils::password;
 use common::db::setup_test_db;
@@ -40,7 +40,9 @@ async fn create_test_app_state_with_metrics(db: DatabaseConnection) -> Arc<AppSt
             .await
             .expect("Failed to initialize settings service for tests"),
     );
-    let thumbnail_service = Arc::new(ThumbnailService::new(FilesConfig::default()));
+    let files_config = FilesConfig::default();
+    let thumbnail_service = Arc::new(ThumbnailService::new(files_config.clone()));
+    let file_cleanup_service = Arc::new(FileCleanupService::new(files_config));
 
     // Create task metrics service
     let task_metrics_service = Arc::new(TaskMetricsService::new(
@@ -56,6 +58,7 @@ async fn create_test_app_state_with_metrics(db: DatabaseConnection) -> Arc<AppSt
         event_broadcaster,
         settings_service,
         thumbnail_service,
+        file_cleanup_service,
         task_metrics_service: Some(task_metrics_service),
         scheduler: None,
     })

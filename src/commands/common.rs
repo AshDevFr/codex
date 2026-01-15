@@ -339,6 +339,7 @@ pub fn spawn_workers(
     settings_service: Arc<SettingsService>,
     thumbnail_service: Arc<crate::services::ThumbnailService>,
     task_metrics_service: Option<Arc<TaskMetricsService>>,
+    files_config: crate::config::FilesConfig,
 ) -> (
     Vec<tokio::task::JoinHandle<()>>,
     Vec<tokio::sync::broadcast::Sender<()>>,
@@ -359,7 +360,8 @@ pub fn spawn_workers(
             .with_worker_id(&worker_id)
             .with_event_broadcaster(event_broadcaster.clone())
             .with_settings_service(settings_service.clone())
-            .with_thumbnail_service(thumbnail_service.clone());
+            .with_thumbnail_service(thumbnail_service.clone())
+            .with_files_config(files_config.clone());
 
         // Add task metrics service if available
         if let Some(ref metrics) = task_metrics_service {

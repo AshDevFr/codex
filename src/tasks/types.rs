@@ -56,6 +56,20 @@ pub enum TaskType {
 
     /// Find and catalog duplicate books across all libraries
     FindDuplicates,
+
+    /// Clean up files for a deleted book (thumbnail + cover references)
+    CleanupBookFiles {
+        book_id: Uuid,
+        /// Optional thumbnail path (if known at deletion time)
+        #[serde(default)]
+        thumbnail_path: Option<String>,
+    },
+
+    /// Clean up files for a deleted series (cover files)
+    CleanupSeriesFiles { series_id: Uuid },
+
+    /// Scan filesystem for orphaned files and delete them
+    CleanupOrphanedFiles,
 }
 
 fn default_mode() -> String {
@@ -74,6 +88,9 @@ impl TaskType {
             TaskType::GenerateThumbnails { .. } => "generate_thumbnails",
             TaskType::GenerateThumbnail { .. } => "generate_thumbnail",
             TaskType::FindDuplicates => "find_duplicates",
+            TaskType::CleanupBookFiles { .. } => "cleanup_book_files",
+            TaskType::CleanupSeriesFiles { .. } => "cleanup_series_files",
+            TaskType::CleanupOrphanedFiles => "cleanup_orphaned_files",
         }
     }
 
@@ -108,25 +125,42 @@ impl TaskType {
             TaskType::GenerateThumbnail { force, .. } => {
                 serde_json::json!({ "force": force })
             }
+            TaskType::CleanupBookFiles {
+                book_id,
+                thumbnail_path,
+            } => {
+                // Store book_id in params since the FK column can't reference deleted books
+                serde_json::json!({ "book_id": book_id, "thumbnail_path": thumbnail_path })
+            }
+            TaskType::CleanupSeriesFiles { series_id } => {
+                // Store series_id in params since the FK column can't reference deleted series
+                serde_json::json!({ "series_id": series_id })
+            }
             _ => serde_json::json!({}),
         }
     }
 
     /// Extract series_id if present
+    /// Note: CleanupSeriesFiles stores series_id in params, not as FK (entity may be deleted)
     pub fn series_id(&self) -> Option<Uuid> {
         match self {
             TaskType::AnalyzeSeries { series_id, .. } => Some(*series_id),
             TaskType::GenerateThumbnails { series_id, .. } => *series_id,
+            // CleanupSeriesFiles intentionally NOT included - series_id is stored in params
+            // because the series may already be deleted when the task runs
             _ => None,
         }
     }
 
     /// Extract book_id if present
+    /// Note: CleanupBookFiles stores book_id in params, not as FK (entity may be deleted)
     pub fn book_id(&self) -> Option<Uuid> {
         match self {
             TaskType::AnalyzeBook { book_id, .. } => Some(*book_id),
             TaskType::RefreshMetadata { book_id, .. } => Some(*book_id),
             TaskType::GenerateThumbnail { book_id, .. } => Some(*book_id),
+            // CleanupBookFiles intentionally NOT included - book_id is stored in params
+            // because the book is already deleted when the cleanup task runs
             _ => None,
         }
     }
@@ -404,5 +438,120 @@ mod tests {
         assert_eq!(book_id, None);
         assert!(params.is_some());
         assert_eq!(params.unwrap()["force"], true);
+    }
+
+    #[test]
+    fn test_cleanup_book_files_extraction() {
+        let book_id = Uuid::new_v4();
+
+        // Without thumbnail path
+        let task = TaskType::CleanupBookFiles {
+            book_id,
+            thumbnail_path: None,
+        };
+
+        assert_eq!(task.type_string(), "cleanup_book_files");
+        // book_id is NOT returned from book_id() - it's stored in params because
+        // cleanup tasks reference deleted books that can't have FK constraints
+        assert_eq!(task.book_id(), None);
+        assert_eq!(task.library_id(), None);
+        assert_eq!(task.series_id(), None);
+
+        let (type_str, lib_id, series_id, extracted_book_id, params) = task.extract_fields();
+        assert_eq!(type_str, "cleanup_book_files");
+        assert_eq!(lib_id, None);
+        assert_eq!(series_id, None);
+        assert_eq!(extracted_book_id, None); // Not using FK column
+                                             // params should contain book_id and thumbnail_path
+        assert!(params.is_some());
+        let params = params.unwrap();
+        assert_eq!(params["book_id"], book_id.to_string());
+        assert!(params["thumbnail_path"].is_null());
+
+        // With thumbnail path
+        let task = TaskType::CleanupBookFiles {
+            book_id,
+            thumbnail_path: Some("/data/thumbnails/books/ab/abc123.jpg".to_string()),
+        };
+
+        let params = task.params();
+        assert_eq!(params["book_id"], book_id.to_string());
+        assert_eq!(
+            params["thumbnail_path"],
+            "/data/thumbnails/books/ab/abc123.jpg"
+        );
+    }
+
+    #[test]
+    fn test_cleanup_series_files_extraction() {
+        let series_id = Uuid::new_v4();
+
+        let task = TaskType::CleanupSeriesFiles { series_id };
+
+        assert_eq!(task.type_string(), "cleanup_series_files");
+        // series_id is NOT returned from series_id() - it's stored in params because
+        // cleanup tasks reference deleted series that can't have FK constraints
+        assert_eq!(task.series_id(), None);
+        assert_eq!(task.book_id(), None);
+        assert_eq!(task.library_id(), None);
+
+        let (type_str, lib_id, extracted_series_id, book_id, params) = task.extract_fields();
+        assert_eq!(type_str, "cleanup_series_files");
+        assert_eq!(lib_id, None);
+        assert_eq!(extracted_series_id, None); // Not using FK column
+        assert_eq!(book_id, None);
+        // params should contain series_id
+        assert!(params.is_some());
+        let params = params.unwrap();
+        assert_eq!(params["series_id"], series_id.to_string());
+    }
+
+    #[test]
+    fn test_cleanup_orphaned_files_extraction() {
+        let task = TaskType::CleanupOrphanedFiles;
+
+        assert_eq!(task.type_string(), "cleanup_orphaned_files");
+        assert_eq!(task.library_id(), None);
+        assert_eq!(task.series_id(), None);
+        assert_eq!(task.book_id(), None);
+
+        let (type_str, lib_id, series_id, book_id, params) = task.extract_fields();
+        assert_eq!(type_str, "cleanup_orphaned_files");
+        assert_eq!(lib_id, None);
+        assert_eq!(series_id, None);
+        assert_eq!(book_id, None);
+        assert!(params.is_none());
+    }
+
+    #[test]
+    fn test_cleanup_task_serialization() {
+        let book_id = Uuid::new_v4();
+        let series_id = Uuid::new_v4();
+
+        // Test CleanupBookFiles serialization
+        let task = TaskType::CleanupBookFiles {
+            book_id,
+            thumbnail_path: Some("/path/to/thumb.jpg".to_string()),
+        };
+        let json = serde_json::to_string(&task).unwrap();
+        assert!(json.contains("cleanup_book_files"));
+        assert!(json.contains(&book_id.to_string()));
+
+        // Test deserialization
+        let deserialized: TaskType = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.type_string(), "cleanup_book_files");
+
+        // Test CleanupSeriesFiles serialization
+        let task = TaskType::CleanupSeriesFiles { series_id };
+        let json = serde_json::to_string(&task).unwrap();
+        assert!(json.contains("cleanup_series_files"));
+
+        // Test CleanupOrphanedFiles serialization
+        let task = TaskType::CleanupOrphanedFiles;
+        let json = serde_json::to_string(&task).unwrap();
+        assert!(json.contains("cleanup_orphaned_files"));
+
+        let deserialized: TaskType = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.type_string(), "cleanup_orphaned_files");
     }
 }

@@ -75,6 +75,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         settings_service,
         thumbnail_service,
         Some(task_metrics_service),
+        config.files.clone(),
     );
 
     info!("All {} task workers started successfully", worker_count);

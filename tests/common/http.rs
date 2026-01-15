@@ -4,7 +4,7 @@ use codex::api::routes::create_router;
 use codex::config::{ApiConfig, AuthConfig, EmailConfig, FilesConfig};
 use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
-use codex::services::{SettingsService, ThumbnailService};
+use codex::services::{FileCleanupService, SettingsService, ThumbnailService};
 use codex::utils::jwt::JwtService;
 use http_body_util::BodyExt;
 use hyper::{body::Bytes, Request, StatusCode};
@@ -28,7 +28,9 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
             .await
             .expect("Failed to initialize settings service for tests"),
     );
-    let thumbnail_service = Arc::new(ThumbnailService::new(FilesConfig::default()));
+    let files_config = FilesConfig::default();
+    let thumbnail_service = Arc::new(ThumbnailService::new(files_config.clone()));
+    let file_cleanup_service = Arc::new(FileCleanupService::new(files_config));
 
     Arc::new(AppState {
         db,
@@ -38,6 +40,7 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
         event_broadcaster,
         settings_service,
         thumbnail_service,
+        file_cleanup_service,
         task_metrics_service: None, // Tests don't need metrics service
         scheduler: None,            // Tests don't need scheduler
     })
@@ -58,7 +61,9 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
             .await
             .expect("Failed to initialize settings service for tests"),
     );
-    let thumbnail_service = Arc::new(ThumbnailService::new(FilesConfig::default()));
+    let files_config = FilesConfig::default();
+    let thumbnail_service = Arc::new(ThumbnailService::new(files_config.clone()));
+    let file_cleanup_service = Arc::new(FileCleanupService::new(files_config));
 
     Arc::new(AppState {
         db,
@@ -68,6 +73,7 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
         event_broadcaster,
         settings_service,
         thumbnail_service,
+        file_cleanup_service,
         task_metrics_service: None, // Tests don't need metrics service
         scheduler: None,            // Tests don't need scheduler
     })
@@ -98,7 +104,9 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
             .await
             .expect("Failed to initialize settings service for tests"),
     );
-    let thumbnail_service = Arc::new(ThumbnailService::new(FilesConfig::default()));
+    let files_config = FilesConfig::default();
+    let thumbnail_service = Arc::new(ThumbnailService::new(files_config.clone()));
+    let file_cleanup_service = Arc::new(FileCleanupService::new(files_config));
     let app_state = Arc::new(AppState {
         db: state.db.clone(),
         jwt_service: state.jwt_service.clone(),
@@ -107,6 +115,7 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
         event_broadcaster,
         settings_service,
         thumbnail_service,
+        file_cleanup_service,
         task_metrics_service: None, // Tests don't need metrics service
         scheduler: None,            // Tests don't need scheduler
     });

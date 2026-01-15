@@ -172,6 +172,15 @@ impl SeriesRepository {
             .context("Failed to get series by ID")
     }
 
+    /// Check if a series exists by ID (more efficient than get_by_id for existence checks)
+    pub async fn exists(db: &DatabaseConnection, id: Uuid) -> Result<bool> {
+        let count = Series::find_by_id(id)
+            .count(db)
+            .await
+            .context("Failed to check series existence")?;
+        Ok(count > 0)
+    }
+
     /// Get series with its metadata
     pub async fn get_with_metadata(
         db: &DatabaseConnection,
