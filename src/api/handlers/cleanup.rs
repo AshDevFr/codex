@@ -62,17 +62,28 @@ pub async fn get_orphan_stats(
 
     let cleanup_service = &state.file_cleanup_service;
 
-    // Scan thumbnails
+    // Scan thumbnails and covers from filesystem
     let thumbnails = cleanup_service
         .scan_thumbnails()
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to scan thumbnails: {}", e)))?;
 
-    // Scan covers
     let covers = cleanup_service
         .scan_covers()
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to scan covers: {}", e)))?;
+
+    // Batch query: get all existing book IDs in a single query
+    let book_ids: Vec<_> = thumbnails.iter().map(|(_, id)| *id).collect();
+    let existing_book_ids = BookRepository::get_existing_ids(&state.db, &book_ids)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check book existence: {}", e)))?;
+
+    // Batch query: get all existing series IDs in a single query
+    let series_ids: Vec<_> = covers.iter().map(|(_, id)| *id).collect();
+    let existing_series_ids = SeriesRepository::get_existing_ids(&state.db, &series_ids)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check series existence: {}", e)))?;
 
     // Check which files are orphaned (no DB record)
     let mut orphaned_thumbnails = 0u32;
@@ -80,13 +91,9 @@ pub async fn get_orphan_stats(
     let mut total_size_bytes = 0u64;
     let mut orphaned_files = Vec::new();
 
-    // Check thumbnails against database
+    // Check thumbnails against existing IDs (O(1) lookup per file)
     for (path, book_id) in &thumbnails {
-        let exists = BookRepository::exists(&state.db, *book_id)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to check book existence: {}", e)))?;
-
-        if !exists {
+        if !existing_book_ids.contains(book_id) {
             orphaned_thumbnails += 1;
             let size = cleanup_service.get_file_size(path).await;
             total_size_bytes += size;
@@ -102,13 +109,9 @@ pub async fn get_orphan_stats(
         }
     }
 
-    // Check covers against database
+    // Check covers against existing IDs (O(1) lookup per file)
     for (path, series_id) in &covers {
-        let exists = SeriesRepository::exists(&state.db, *series_id)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to check series existence: {}", e)))?;
-
-        if !exists {
+        if !existing_series_ids.contains(series_id) {
             orphaned_covers += 1;
             let size = cleanup_service.get_file_size(path).await;
             total_size_bytes += size;
@@ -216,39 +219,42 @@ pub async fn delete_orphans(
 
     let cleanup_service = &state.file_cleanup_service;
 
-    // Scan and find orphaned thumbnails
+    // Scan thumbnails and covers from filesystem
     let thumbnails = cleanup_service
         .scan_thumbnails()
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to scan thumbnails: {}", e)))?;
 
-    let mut orphaned_thumbnail_paths = Vec::new();
-    for (path, book_id) in thumbnails {
-        let exists = BookRepository::exists(&state.db, book_id)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to check book existence: {}", e)))?;
-
-        if !exists {
-            orphaned_thumbnail_paths.push(path);
-        }
-    }
-
-    // Scan and find orphaned covers
     let covers = cleanup_service
         .scan_covers()
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to scan covers: {}", e)))?;
 
-    let mut orphaned_cover_paths = Vec::new();
-    for (path, series_id) in covers {
-        let exists = SeriesRepository::exists(&state.db, series_id)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to check series existence: {}", e)))?;
+    // Batch query: get all existing book IDs in a single query
+    let book_ids: Vec<_> = thumbnails.iter().map(|(_, id)| *id).collect();
+    let existing_book_ids = BookRepository::get_existing_ids(&state.db, &book_ids)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check book existence: {}", e)))?;
 
-        if !exists {
-            orphaned_cover_paths.push(path);
-        }
-    }
+    // Batch query: get all existing series IDs in a single query
+    let series_ids: Vec<_> = covers.iter().map(|(_, id)| *id).collect();
+    let existing_series_ids = SeriesRepository::get_existing_ids(&state.db, &series_ids)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check series existence: {}", e)))?;
+
+    // Find orphaned thumbnails (O(1) lookup per file)
+    let orphaned_thumbnail_paths: Vec<_> = thumbnails
+        .into_iter()
+        .filter(|(_, book_id)| !existing_book_ids.contains(book_id))
+        .map(|(path, _)| path)
+        .collect();
+
+    // Find orphaned covers (O(1) lookup per file)
+    let orphaned_cover_paths: Vec<_> = covers
+        .into_iter()
+        .filter(|(_, series_id)| !existing_series_ids.contains(series_id))
+        .map(|(path, _)| path)
+        .collect();
 
     // Delete orphaned files
     let mut stats = cleanup_service

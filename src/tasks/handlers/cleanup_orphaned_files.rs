@@ -8,7 +8,7 @@ use anyhow::Result;
 use sea_orm::DatabaseConnection;
 use serde_json::json;
 use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use crate::config::FilesConfig;
 use crate::db::entities::tasks;
@@ -93,26 +93,23 @@ impl CleanupOrphanedFilesHandler {
     /// Scan thumbnails directory and delete files for books that no longer exist
     async fn cleanup_orphaned_thumbnails(&self, db: &DatabaseConnection) -> Result<CleanupStats> {
         let thumbnails = self.file_cleanup.scan_thumbnails().await?;
-        let mut orphaned_paths = Vec::new();
 
-        for (path, book_id) in thumbnails {
-            // Check if the book exists in the database
-            match BookRepository::get_by_id(db, book_id).await {
-                Ok(Some(_)) => {
-                    // Book exists, keep the thumbnail
-                    debug!("Thumbnail for book {} has valid owner", book_id);
-                }
-                Ok(None) => {
-                    // Book doesn't exist, mark for deletion
+        // Batch query: get all existing book IDs in a single query
+        let book_ids: Vec<_> = thumbnails.iter().map(|(_, id)| *id).collect();
+        let existing_book_ids = BookRepository::get_existing_ids(db, &book_ids).await?;
+
+        // Find orphaned thumbnails (O(1) lookup per file)
+        let orphaned_paths: Vec<_> = thumbnails
+            .into_iter()
+            .filter(|(_, book_id)| {
+                let is_orphaned = !existing_book_ids.contains(book_id);
+                if is_orphaned {
                     debug!("Thumbnail for book {} is orphaned", book_id);
-                    orphaned_paths.push(path);
                 }
-                Err(e) => {
-                    // Error checking, skip this file
-                    warn!("Error checking book {} existence: {}", book_id, e);
-                }
-            }
-        }
+                is_orphaned
+            })
+            .map(|(path, _)| path)
+            .collect();
 
         let stats = self
             .file_cleanup
@@ -125,26 +122,23 @@ impl CleanupOrphanedFilesHandler {
     /// Scan covers directory and delete files for series that no longer exist
     async fn cleanup_orphaned_covers(&self, db: &DatabaseConnection) -> Result<CleanupStats> {
         let covers = self.file_cleanup.scan_covers().await?;
-        let mut orphaned_paths = Vec::new();
 
-        for (path, series_id) in covers {
-            // Check if the series exists in the database
-            match SeriesRepository::get_by_id(db, series_id).await {
-                Ok(Some(_)) => {
-                    // Series exists, keep the cover
-                    debug!("Cover for series {} has valid owner", series_id);
-                }
-                Ok(None) => {
-                    // Series doesn't exist, mark for deletion
+        // Batch query: get all existing series IDs in a single query
+        let series_ids: Vec<_> = covers.iter().map(|(_, id)| *id).collect();
+        let existing_series_ids = SeriesRepository::get_existing_ids(db, &series_ids).await?;
+
+        // Find orphaned covers (O(1) lookup per file)
+        let orphaned_paths: Vec<_> = covers
+            .into_iter()
+            .filter(|(_, series_id)| {
+                let is_orphaned = !existing_series_ids.contains(series_id);
+                if is_orphaned {
                     debug!("Cover for series {} is orphaned", series_id);
-                    orphaned_paths.push(path);
                 }
-                Err(e) => {
-                    // Error checking, skip this file
-                    warn!("Error checking series {} existence: {}", series_id, e);
-                }
-            }
-        }
+                is_orphaned
+            })
+            .map(|(path, _)| path)
+            .collect();
 
         let stats = self
             .file_cleanup

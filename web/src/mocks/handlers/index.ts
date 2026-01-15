@@ -7,6 +7,7 @@
 import { delay, HttpResponse, http } from "msw";
 import { authHandlers } from "./auth";
 import { bookHandlers } from "./books";
+import { cleanupHandlers } from "./cleanup";
 import { duplicatesHandlers } from "./duplicates";
 import { eventHandlers } from "./events";
 import { libraryHandlers } from "./libraries";
@@ -99,6 +100,7 @@ export const handlers = [
 	...libraryHandlers,
 	...seriesHandlers,
 	...bookHandlers,
+	...cleanupHandlers,
 	...eventHandlers,
 	...metadataHandlers,
 	...settingsHandlers,
@@ -112,6 +114,7 @@ export const handlers = [
 // Re-export individual handlers for selective use
 export { authHandlers } from "./auth";
 export { bookHandlers } from "./books";
+export { cleanupHandlers } from "./cleanup";
 export { duplicatesHandlers } from "./duplicates";
 export { eventHandlers } from "./events";
 export { libraryHandlers } from "./libraries";

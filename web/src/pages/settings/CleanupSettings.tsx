@@ -21,9 +21,20 @@ import {
 	IconTrash,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cleanupApi } from "@/api/cleanup";
 import type { CleanupResultDto, OrphanStatsDto } from "@/api/cleanup";
+import { useTaskProgress } from "@/hooks/useTaskProgress";
+
+// Cleanup task types that should trigger a stats refresh
+const CLEANUP_TASK_TYPES = [
+	"cleanup_orphaned_files",
+	"cleanup_book_files",
+	"cleanup_series_files",
+];
+
+// Throttle duration for stats refresh (30 seconds)
+const REFRESH_THROTTLE_MS = 30000;
 
 // Utility to format bytes as human-readable
 function formatBytes(bytes: number): string {
@@ -75,7 +86,12 @@ export function CleanupSettings() {
 	const [cleanupModalOpened, setCleanupModalOpened] = useState(false);
 	const [asyncCleanupModalOpened, setAsyncCleanupModalOpened] = useState(false);
 
-	// Fetch orphan stats
+	// Track completed cleanup tasks to trigger refresh
+	const { activeTasks } = useTaskProgress();
+	const lastRefreshTime = useRef<number>(0);
+	const processedTaskIds = useRef<Set<string>>(new Set());
+
+	// Fetch orphan stats (no auto-refresh - use Refresh button or wait for cleanup task)
 	const {
 		data: stats,
 		isLoading: statsLoading,
@@ -83,8 +99,31 @@ export function CleanupSettings() {
 	} = useQuery<OrphanStatsDto>({
 		queryKey: ["orphan-stats"],
 		queryFn: () => cleanupApi.getOrphanStats(),
-		refetchInterval: 30000, // Refresh every 30 seconds
 	});
+
+	// Watch for cleanup task completions and refresh stats (throttled to 30s)
+	useEffect(() => {
+		const completedCleanupTasks = activeTasks.filter(
+			(task) =>
+				CLEANUP_TASK_TYPES.includes(task.task_type) &&
+				task.status === "completed" &&
+				!processedTaskIds.current.has(task.task_id),
+		);
+
+		if (completedCleanupTasks.length > 0) {
+			// Mark these tasks as processed
+			for (const task of completedCleanupTasks) {
+				processedTaskIds.current.add(task.task_id);
+			}
+
+			// Throttle refresh to avoid hammering the API
+			const now = Date.now();
+			if (now - lastRefreshTime.current >= REFRESH_THROTTLE_MS) {
+				lastRefreshTime.current = now;
+				refetchStats();
+			}
+		}
+	}, [activeTasks, refetchStats]);
 
 	// Trigger async cleanup (background task)
 	const triggerCleanupMutation = useMutation({

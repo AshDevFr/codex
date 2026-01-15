@@ -90,6 +90,32 @@ impl BookRepository {
         Ok(count > 0)
     }
 
+    /// Get existing book IDs from a list of candidates (batch existence check)
+    ///
+    /// Returns only the IDs that exist in the database. This is much more efficient
+    /// than calling `exists()` for each ID individually.
+    pub async fn get_existing_ids(
+        db: &DatabaseConnection,
+        ids: &[Uuid],
+    ) -> Result<std::collections::HashSet<Uuid>> {
+        use std::collections::HashSet;
+
+        if ids.is_empty() {
+            return Ok(HashSet::new());
+        }
+
+        let existing: Vec<Uuid> = Books::find()
+            .filter(books::Column::Id.is_in(ids.to_vec()))
+            .select_only()
+            .column(books::Column::Id)
+            .into_tuple()
+            .all(db)
+            .await
+            .context("Failed to get existing book IDs")?;
+
+        Ok(existing.into_iter().collect())
+    }
+
     /// Get a book by file hash (for duplicate detection)
     pub async fn get_by_hash(db: &DatabaseConnection, hash: &str) -> Result<Option<books::Model>> {
         Books::find()
@@ -2091,5 +2117,56 @@ mod tests {
 
         assert_eq!(total, 2);
         assert_eq!(books.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_get_existing_ids() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create two books
+        let book1 = create_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz");
+        let book2 = create_book_model(series.id, library.id, "/test/book2.cbz", "book2.cbz");
+
+        BookRepository::create(db.sea_orm_connection(), &book1, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book2, None)
+            .await
+            .unwrap();
+
+        // Create a non-existent ID
+        let non_existent_id = Uuid::new_v4();
+
+        // Test batch lookup
+        let ids_to_check = vec![book1.id, book2.id, non_existent_id];
+        let existing = BookRepository::get_existing_ids(db.sea_orm_connection(), &ids_to_check)
+            .await
+            .unwrap();
+
+        // Should contain the two existing books but not the non-existent one
+        assert_eq!(existing.len(), 2);
+        assert!(existing.contains(&book1.id));
+        assert!(existing.contains(&book2.id));
+        assert!(!existing.contains(&non_existent_id));
+
+        // Test with empty input
+        let existing = BookRepository::get_existing_ids(db.sea_orm_connection(), &[])
+            .await
+            .unwrap();
+        assert!(existing.is_empty());
     }
 }
