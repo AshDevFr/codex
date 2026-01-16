@@ -120,6 +120,11 @@ docs-start-fresh: ## Start documentation dev server with fresh API docs
 docs-build: ## Build documentation for production
 	cd docs && npm run build
 
+docs-build-fresh: ## Build documentation for production with fresh API docs
+	@$(MAKE) docs-clean-api-docs
+	@$(MAKE) docs-gen-api-docs
+	@$(MAKE) docs-build
+
 docs-build-docker: ## Build documentation for production in Docker
 	docker compose --profile docs build
 

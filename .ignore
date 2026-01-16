@@ -1,0 +1,9 @@
+/target
+/logs
+/data
+/docker/data
+/codex.yaml
+/codex.db
+*.db-shm
+*.db-wal
+*.log
