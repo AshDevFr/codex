@@ -39,7 +39,10 @@ export const EXTERNAL_LINKS_METADATA = {
 	links: [
 		{ name: "MyAnimeList", url: "https://myanimelist.net/manga/2" },
 		{ name: "AniList", url: "https://anilist.co/manga/30002" },
-		{ name: "MangaUpdates", url: "https://www.mangaupdates.com/series/example" },
+		{
+			name: "MangaUpdates",
+			url: "https://www.mangaupdates.com/series/example",
+		},
 		{ name: "Official Site", url: "https://example.com/series" },
 	],
 	ids: {
@@ -85,7 +88,10 @@ export const NESTED_METADATA = {
 	},
 	notes: {
 		general: "Great artwork and pacing",
-		highlights: ["Amazing cliffhanger in chapter 8", "Character development in chapter 10"],
+		highlights: [
+			"Amazing cliffhanger in chapter 8",
+			"Character development in chapter 10",
+		],
 	},
 };
 
@@ -129,7 +135,10 @@ export const EMPTY_METADATA = {};
 /**
  * All mock custom metadata fixtures mapped by name
  */
-export const CUSTOM_METADATA_FIXTURES: Record<string, Record<string, unknown>> = {
+export const CUSTOM_METADATA_FIXTURES: Record<
+	string,
+	Record<string, unknown>
+> = {
 	manga_reading_progress: MANGA_READING_PROGRESS,
 	completed_comic: COMPLETED_COMIC,
 	external_links: EXTERNAL_LINKS_METADATA,
@@ -146,7 +155,7 @@ export const CUSTOM_METADATA_FIXTURES: Record<string, Record<string, unknown>> =
  */
 export function getRandomCustomMetadata(): Record<string, unknown> | null {
 	const fixtures = Object.values(CUSTOM_METADATA_FIXTURES).filter(
-		(f) => Object.keys(f).length > 0
+		(f) => Object.keys(f).length > 0,
 	);
 	const randomIndex = Math.floor(Math.random() * fixtures.length);
 	// 30% chance of returning null to simulate series without custom metadata

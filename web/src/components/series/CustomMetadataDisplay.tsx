@@ -80,7 +80,11 @@ export function CustomMetadataDisplay({
 }: CustomMetadataDisplayProps) {
 	const result = useMemo(() => {
 		// If no template or no custom metadata, return empty result
-		if (!template || !customMetadata || Object.keys(customMetadata).length === 0) {
+		if (
+			!template ||
+			!customMetadata ||
+			Object.keys(customMetadata).length === 0
+		) {
 			return { success: true, output: "" };
 		}
 
@@ -144,7 +148,12 @@ export function CustomMetadataDisplay({
 						<List
 							size="sm"
 							spacing="xs"
-							icon={<IconPointFilled size={8} style={{ color: "var(--mantine-color-dimmed)" }} />}
+							icon={
+								<IconPointFilled
+									size={8}
+									style={{ color: "var(--mantine-color-dimmed)" }}
+								/>
+							}
 						>
 							{children}
 						</List>
@@ -222,12 +231,7 @@ export function CustomMetadataDisplay({
 					),
 					// Style deleted/strikethrough text
 					del: ({ children }) => (
-						<Text
-							component="span"
-							size="sm"
-							c="dimmed"
-							td="line-through"
-						>
+						<Text component="span" size="sm" c="dimmed" td="line-through">
 							{children}
 						</Text>
 					),

@@ -22,8 +22,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { booksApi } from "@/api/books";
-import { AppLink } from "@/components/common";
 import { seriesApi } from "@/api/series";
+import { AppLink } from "@/components/common";
 import type { Book, Series } from "@/types";
 
 interface MediaCardProps {

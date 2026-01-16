@@ -21,17 +21,13 @@ import {
 	IconTrash,
 	IconTree,
 } from "@tabler/icons-react";
-import {
-	JsonEditor,
-	githubDarkTheme,
-	githubLightTheme,
-} from "json-edit-react";
+import { githubDarkTheme, githubLightTheme, JsonEditor } from "json-edit-react";
 import { useCallback, useEffect, useState } from "react";
 import {
-	READING_LIST_EXAMPLE,
-	EXTERNAL_LINKS_EXAMPLE,
 	DEFAULT_TEMPLATE_EXAMPLE,
+	EXTERNAL_LINKS_EXAMPLE,
 	MINIMAL_METADATA,
+	READING_LIST_EXAMPLE,
 } from "@/mocks/data/customMetadata";
 
 export interface CustomMetadataEditorProps {
@@ -264,8 +260,8 @@ export function CustomMetadataEditor({
 						{(!value || Object.keys(value).length === 0) && (
 							<Stack gap="xs" align="center" py="md">
 								<Text size="sm" c="dimmed" ta="center">
-									No custom metadata yet. Click the + button in the editor
-									above to add your first field, or load an example below.
+									No custom metadata yet. Click the + button in the editor above
+									to add your first field, or load an example below.
 								</Text>
 								<Menu shadow="md" width={200} zIndex={1100}>
 									<Menu.Target>

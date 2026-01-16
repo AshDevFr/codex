@@ -37,9 +37,7 @@ describe("CustomMetadataEditor", () => {
 
 		expect(screen.getByText("Custom Metadata")).toBeInTheDocument();
 		// Should show empty state hint
-		expect(
-			screen.getByText(/No custom metadata yet/i),
-		).toBeInTheDocument();
+		expect(screen.getByText(/No custom metadata yet/i)).toBeInTheDocument();
 	});
 
 	it("should render with existing metadata", () => {
@@ -60,7 +58,9 @@ describe("CustomMetadataEditor", () => {
 
 		expect(screen.getByText("Custom Metadata")).toBeInTheDocument();
 		// The JsonEditor should render the data
-		expect(screen.queryByText(/No custom metadata yet/i)).not.toBeInTheDocument();
+		expect(
+			screen.queryByText(/No custom metadata yet/i),
+		).not.toBeInTheDocument();
 	});
 
 	it("should show locked state correctly", () => {
@@ -250,7 +250,7 @@ describe("CustomMetadataEditor", () => {
 			expect.objectContaining({
 				status: expect.any(String),
 				rating: expect.any(Number),
-			})
+			}),
 		);
 	});
 

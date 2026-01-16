@@ -184,6 +184,9 @@ openapi-all: openapi openapi-types ## Generate OpenAPI spec and TypeScript types
 frontend-fixtures: ## Generate mock fixture files (CBZ, EPUB, PDF)
 	cd web && npm run generate:fixtures
 
+frontend-lint: ## Run frontend lint
+	cd web && npm run lint
+
 # =============================================================================
 # Setup
 # =============================================================================

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ratingsApi } from "@/api/ratings";
 import { renderWithProviders, screen, waitFor } from "@/test/utils";
 import { CommunityRating } from "./CommunityRating";
-import { ratingsApi } from "@/api/ratings";
 
 // Mock the API
 vi.mock("@/api/ratings", () => ({

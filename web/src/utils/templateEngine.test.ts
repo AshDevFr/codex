@@ -1,9 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
 	compileTemplate,
+	getAvailableHelpers,
 	renderTemplate,
 	validateTemplate,
-	getAvailableHelpers,
 } from "./templateEngine";
 
 describe("templateEngine", () => {
@@ -255,12 +255,9 @@ describe("templateEngine", () => {
 
 		describe("first", () => {
 			it("should render first N items", () => {
-				const result = renderTemplate(
-					"{{#first items 2}}{{this}} {{/first}}",
-					{
-						items: ["a", "b", "c", "d"],
-					},
-				);
+				const result = renderTemplate("{{#first items 2}}{{this}} {{/first}}", {
+					items: ["a", "b", "c", "d"],
+				});
 				expect(result.success).toBe(true);
 				expect(result.output).toBe("a b ");
 			});
@@ -268,28 +265,25 @@ describe("templateEngine", () => {
 
 		describe("exists", () => {
 			it("should render content when value exists", () => {
-				const result = renderTemplate(
-					"{{#exists value}}Has value{{/exists}}",
-					{ value: "something" },
-				);
+				const result = renderTemplate("{{#exists value}}Has value{{/exists}}", {
+					value: "something",
+				});
 				expect(result.success).toBe(true);
 				expect(result.output).toBe("Has value");
 			});
 
 			it("should not render content for null", () => {
-				const result = renderTemplate(
-					"{{#exists value}}Has value{{/exists}}",
-					{ value: null },
-				);
+				const result = renderTemplate("{{#exists value}}Has value{{/exists}}", {
+					value: null,
+				});
 				expect(result.success).toBe(true);
 				expect(result.output).toBe("");
 			});
 
 			it("should not render content for empty string", () => {
-				const result = renderTemplate(
-					"{{#exists value}}Has value{{/exists}}",
-					{ value: "" },
-				);
+				const result = renderTemplate("{{#exists value}}Has value{{/exists}}", {
+					value: "",
+				});
 				expect(result.success).toBe(true);
 				expect(result.output).toBe("");
 			});
@@ -397,7 +391,6 @@ describe("templateEngine", () => {
 			expect(helpers.length).toBeGreaterThan(10);
 		});
 	});
-
 
 	describe("security", () => {
 		it("should escape HTML in output by default", () => {

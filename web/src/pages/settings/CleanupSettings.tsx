@@ -22,8 +22,8 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { cleanupApi } from "@/api/cleanup";
 import type { CleanupResultDto, OrphanStatsDto } from "@/api/cleanup";
+import { cleanupApi } from "@/api/cleanup";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 
 // Cleanup task types that should trigger a stats refresh

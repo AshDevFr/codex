@@ -115,16 +115,14 @@ export const seriesSummaries: Record<string, string> = {
 		"Naruto Uzumaki, a young ninja shunned by his village for harboring a powerful demon fox sealed within him, dreams of becoming Hokage—the strongest ninja and leader of his village. Through years of training, fierce battles, and unbreakable bonds of friendship, Naruto transforms from an outcast prankster into a legendary hero. Masashi Kishimoto's epic saga explores themes of perseverance, redemption, and the cycle of hatred, following Naruto and his generation as they reshape the ninja world.",
 	"Attack on Titan":
 		"In a world where humanity lives behind massive walls to protect themselves from giant humanoid creatures called Titans, young Eren Yeager witnesses the destruction of his home and vows to eradicate every Titan. But as Eren and his comrades in the Survey Corps venture beyond the walls, they discover terrifying truths about the Titans, their world, and themselves. Hajime Isayama's dark fantasy masterpiece subverts expectations at every turn, delivering shocking twists, complex moral dilemmas, and an unflinching examination of war, freedom, and human nature.",
-	Saga:
-		"From bestselling writer Brian K. Vaughan and critically acclaimed artist Fiona Staples comes an epic space opera about star-crossed lovers from warring alien races. Alana, a winged soldier, and Marko, a horned deserter, are on the run across the galaxy with their newborn daughter Hazel, hunted by both sides of a never-ending war. Narrated by an adult Hazel looking back on her unconventional childhood, Saga blends science fiction, fantasy, and deeply personal family drama into one of the most acclaimed comics of the modern era.",
+	Saga: "From bestselling writer Brian K. Vaughan and critically acclaimed artist Fiona Staples comes an epic space opera about star-crossed lovers from warring alien races. Alana, a winged soldier, and Marko, a horned deserter, are on the run across the galaxy with their newborn daughter Hazel, hunted by both sides of a never-ending war. Narrated by an adult Hazel looking back on her unconventional childhood, Saga blends science fiction, fantasy, and deeply personal family drama into one of the most acclaimed comics of the modern era.",
 	"The Walking Dead":
 		"When police officer Rick Grimes awakens from a coma into a world overrun by the undead, he must find his family and navigate the new rules of survival. But the walking dead are only part of the danger—the living can be far more terrifying. Robert Kirkman's landmark series follows Rick and a rotating cast of survivors across years of struggle, loss, and moral compromise, asking what kind of people we become when civilization crumbles and every day is a fight to stay alive.",
 	Sandman:
 		"After being imprisoned for decades by an occult ritual, Dream of the Endless—also known as Morpheus, the Sandman—escapes and must rebuild his realm of the Dreaming. Neil Gaiman's literary masterpiece weaves mythology, history, horror, and fantasy into a tapestry of interconnected stories spanning millennia. From the gates of Hell to a diner in middle America, from Shakespeare's debut to the end of all things, Sandman explores the nature of stories themselves and the beings who embody our hopes, fears, and dreams.",
 	Watchmen:
 		"In an alternate 1985 where superheroes exist and America won the Vietnam War, the murder of a former hero sets off a chain of events that could change the world forever. Alan Moore and Dave Gibbons' deconstruction of the superhero genre examines what masked vigilantes would really be like—flawed, neurotic, and sometimes dangerous. Told through multiple perspectives with groundbreaking narrative techniques, Watchmen asks who watches those with power and what price comes with playing god.",
-	Dune:
-		"On the desert planet Arrakis, the most valuable substance in the universe—the spice melange—is produced. When young Paul Atreides and his noble family are sent to govern this hostile world, they become pawns in an interstellar power struggle that will transform Paul into something more than human. Frank Herbert's science fiction epic explores ecology, religion, politics, and the dangers of messianic leadership across a richly detailed universe of feuding houses, ancient orders, and desert warriors.",
+	Dune: "On the desert planet Arrakis, the most valuable substance in the universe—the spice melange—is produced. When young Paul Atreides and his noble family are sent to govern this hostile world, they become pawns in an interstellar power struggle that will transform Paul into something more than human. Frank Herbert's science fiction epic explores ecology, religion, politics, and the dangers of messianic leadership across a richly detailed universe of feuding houses, ancient orders, and desert warriors.",
 	Foundation:
 		"Mathematician Hari Seldon predicts the fall of the Galactic Empire and a 30,000-year dark age to follow. To shorten this period of barbarism, he establishes the Foundation—a repository of knowledge and science at the edge of the galaxy. Isaac Asimov's visionary series follows the Foundation across centuries as it faces existential crises through the power of science, trade, and political manipulation, asking whether the future can truly be predicted and controlled.",
 	"The Expanse":
@@ -243,72 +241,283 @@ export const createSeries = (
 /**
  * Book titles and summaries for specific series volumes/issues
  */
-export const bookTitlesAndSummaries: Record<string, { title: string; summary: string }[]> = {
+export const bookTitlesAndSummaries: Record<
+	string,
+	{ title: string; summary: string }[]
+> = {
 	"Batman: Year One": [
-		{ title: "Who I Am", summary: "Bruce Wayne returns to Gotham after years abroad, beginning his war on crime as Lieutenant James Gordon arrives in the corrupt city. Both men face the overwhelming darkness of Gotham's underworld as they take their first steps toward becoming legends." },
-		{ title: "War on Crime", summary: "Batman's early attempts at crime-fighting are clumsy and nearly fatal. Meanwhile, Gordon struggles against corruption in the GCPD while trying to protect his pregnant wife from the city's dangers." },
-		{ title: "Black Dawn", summary: "As Batman refines his methods and strikes fear into the criminal element, Gordon finds himself caught between his duty and the corrupt cops who want him gone—or dead." },
-		{ title: "Friend in Need", summary: "Batman and Gordon form an unlikely alliance as both face their darkest hour. Selina Kyle emerges from the shadows, and the stage is set for Gotham's transformation." },
+		{
+			title: "Who I Am",
+			summary:
+				"Bruce Wayne returns to Gotham after years abroad, beginning his war on crime as Lieutenant James Gordon arrives in the corrupt city. Both men face the overwhelming darkness of Gotham's underworld as they take their first steps toward becoming legends.",
+		},
+		{
+			title: "War on Crime",
+			summary:
+				"Batman's early attempts at crime-fighting are clumsy and nearly fatal. Meanwhile, Gordon struggles against corruption in the GCPD while trying to protect his pregnant wife from the city's dangers.",
+		},
+		{
+			title: "Black Dawn",
+			summary:
+				"As Batman refines his methods and strikes fear into the criminal element, Gordon finds himself caught between his duty and the corrupt cops who want him gone—or dead.",
+		},
+		{
+			title: "Friend in Need",
+			summary:
+				"Batman and Gordon form an unlikely alliance as both face their darkest hour. Selina Kyle emerges from the shadows, and the stage is set for Gotham's transformation.",
+		},
 	],
 	"One Piece": [
-		{ title: "Romance Dawn", summary: "Monkey D. Luffy, a young man with rubber powers gained from eating the Gum-Gum Fruit, sets out to become King of the Pirates. His first adventure leads him to free a swordsman named Roronoa Zoro from execution." },
-		{ title: "Buggy the Clown", summary: "Luffy and Zoro encounter the pirate clown Buggy, who possesses the power to separate his body parts. Meanwhile, the crew gains their navigator, Nami, a skilled thief with her own mysterious goals." },
-		{ title: "Usopp's Pirates", summary: "On Syrup Village, the Straw Hats meet the legendary liar Usopp and uncover a plot by the sinister Captain Kuro. The battle for the village reveals the true courage beneath Usopp's tall tales." },
-		{ title: "The Black Cat Pirates", summary: "The showdown with Captain Kuro reaches its climax as Usopp must choose between running away and standing to protect everything he loves. The crew gains their ship, the Going Merry." },
-		{ title: "Sanji's Debt", summary: "At the floating restaurant Baratie, the Straw Hats encounter the legendary pirate Don Krieg and meet Sanji, a chef with dreams of finding the All Blue, a legendary sea where fish from all four oceans gather." },
-		{ title: "Don Krieg's Armada", summary: "The battle at Baratie intensifies as Luffy faces Don Krieg while Zoro challenges the world's greatest swordsman, Dracule Mihawk. Both fights will change the crew forever." },
-		{ title: "Arlong Park", summary: "The truth about Nami's past is revealed as the Straw Hats confront Arlong, a fish-man pirate who has enslaved her village for years. Luffy must free Nami from her lifetime of suffering." },
-		{ title: "I Won't Die", summary: "The epic battle at Arlong Park reaches its conclusion as Luffy destroys everything that symbolizes Nami's enslavement. The Straw Hat Pirates sail toward the Grand Line, their bonds stronger than ever." },
+		{
+			title: "Romance Dawn",
+			summary:
+				"Monkey D. Luffy, a young man with rubber powers gained from eating the Gum-Gum Fruit, sets out to become King of the Pirates. His first adventure leads him to free a swordsman named Roronoa Zoro from execution.",
+		},
+		{
+			title: "Buggy the Clown",
+			summary:
+				"Luffy and Zoro encounter the pirate clown Buggy, who possesses the power to separate his body parts. Meanwhile, the crew gains their navigator, Nami, a skilled thief with her own mysterious goals.",
+		},
+		{
+			title: "Usopp's Pirates",
+			summary:
+				"On Syrup Village, the Straw Hats meet the legendary liar Usopp and uncover a plot by the sinister Captain Kuro. The battle for the village reveals the true courage beneath Usopp's tall tales.",
+		},
+		{
+			title: "The Black Cat Pirates",
+			summary:
+				"The showdown with Captain Kuro reaches its climax as Usopp must choose between running away and standing to protect everything he loves. The crew gains their ship, the Going Merry.",
+		},
+		{
+			title: "Sanji's Debt",
+			summary:
+				"At the floating restaurant Baratie, the Straw Hats encounter the legendary pirate Don Krieg and meet Sanji, a chef with dreams of finding the All Blue, a legendary sea where fish from all four oceans gather.",
+		},
+		{
+			title: "Don Krieg's Armada",
+			summary:
+				"The battle at Baratie intensifies as Luffy faces Don Krieg while Zoro challenges the world's greatest swordsman, Dracule Mihawk. Both fights will change the crew forever.",
+		},
+		{
+			title: "Arlong Park",
+			summary:
+				"The truth about Nami's past is revealed as the Straw Hats confront Arlong, a fish-man pirate who has enslaved her village for years. Luffy must free Nami from her lifetime of suffering.",
+		},
+		{
+			title: "I Won't Die",
+			summary:
+				"The epic battle at Arlong Park reaches its conclusion as Luffy destroys everything that symbolizes Nami's enslavement. The Straw Hat Pirates sail toward the Grand Line, their bonds stronger than ever.",
+		},
 	],
 	"Attack on Titan": [
-		{ title: "To You, 2,000 Years From Now", summary: "In a world where humanity hides behind massive walls from man-eating Titans, young Eren Yeager dreams of the outside world. When the Colossal Titan breaches Wall Maria, Eren's life changes forever." },
-		{ title: "That Day", summary: "Eren, Mikasa, and Armin join the military Training Corps, each driven by their own reasons. Eren's burning hatred for Titans fuels his determination, but is rage enough to survive?" },
-		{ title: "A Dim Light Amid Despair", summary: "The cadets face their first real battle as Titans breach Trost District. Amidst the chaos and death, Eren makes a discovery that could change everything—or doom them all." },
-		{ title: "First Battle", summary: "Eren's mysterious power is revealed as he transforms into a Titan. But can he control this ability, and will humanity accept a monster as their savior?" },
-		{ title: "Historia", summary: "The truth about the walls, the Titans, and the royal family begins to unravel. Historia Reiss must confront her past while Eren learns the terrible secret his father left him." },
-		{ title: "The Basement", summary: "After years of fighting, Eren finally reaches his father's basement. What he discovers there rewrites everything humanity believed about their world and their enemies." },
-		{ title: "Declaration of War", summary: "Four years after the truth was revealed, the world has changed. Eren takes matters into his own hands, making a choice that will determine the fate of everyone—friend and enemy alike." },
-		{ title: "The Rumbling", summary: "The final battle begins as ancient powers awaken and march. With the fate of the world hanging in the balance, former enemies must unite to stop a genocide—or die trying." },
+		{
+			title: "To You, 2,000 Years From Now",
+			summary:
+				"In a world where humanity hides behind massive walls from man-eating Titans, young Eren Yeager dreams of the outside world. When the Colossal Titan breaches Wall Maria, Eren's life changes forever.",
+		},
+		{
+			title: "That Day",
+			summary:
+				"Eren, Mikasa, and Armin join the military Training Corps, each driven by their own reasons. Eren's burning hatred for Titans fuels his determination, but is rage enough to survive?",
+		},
+		{
+			title: "A Dim Light Amid Despair",
+			summary:
+				"The cadets face their first real battle as Titans breach Trost District. Amidst the chaos and death, Eren makes a discovery that could change everything—or doom them all.",
+		},
+		{
+			title: "First Battle",
+			summary:
+				"Eren's mysterious power is revealed as he transforms into a Titan. But can he control this ability, and will humanity accept a monster as their savior?",
+		},
+		{
+			title: "Historia",
+			summary:
+				"The truth about the walls, the Titans, and the royal family begins to unravel. Historia Reiss must confront her past while Eren learns the terrible secret his father left him.",
+		},
+		{
+			title: "The Basement",
+			summary:
+				"After years of fighting, Eren finally reaches his father's basement. What he discovers there rewrites everything humanity believed about their world and their enemies.",
+		},
+		{
+			title: "Declaration of War",
+			summary:
+				"Four years after the truth was revealed, the world has changed. Eren takes matters into his own hands, making a choice that will determine the fate of everyone—friend and enemy alike.",
+		},
+		{
+			title: "The Rumbling",
+			summary:
+				"The final battle begins as ancient powers awaken and march. With the fate of the world hanging in the balance, former enemies must unite to stop a genocide—or die trying.",
+		},
 	],
 	Saga: [
-		{ title: "Chapter One", summary: "Alana and Marko, soldiers from opposite sides of an endless galactic war, have done the unthinkable—fallen in love and had a child. Now, as new parents, they must flee across the universe while being hunted by both armies." },
-		{ title: "Chapter Two", summary: "While freelance killers and vengeful ex-fiancées close in, Alana and Marko find unexpected allies. Their daughter Hazel begins narrating her own extraordinary origin story." },
-		{ title: "Chapter Three", summary: "The family reaches a lighthouse on a rogue moon where they meet author D. Oswald Heist, whose banned romance novel inspired their forbidden relationship. But their pursuers are closing in." },
-		{ title: "Chapter Four", summary: "Trapped on the planet Quietus, Alana and Marko must navigate a world of drug addiction and showbiz while raising Hazel. The bounty hunters are right behind them." },
-		{ title: "Chapter Five", summary: "A time skip reveals Hazel as a young girl attending school in secret. Meanwhile, her parents' relationship strains under the weight of their endless running." },
-		{ title: "Chapter Six", summary: "The family is torn apart by violence and circumstance. As Marko searches desperately for his daughter, Hazel must survive in a world that fears her very existence." },
-		{ title: "Chapter Seven", summary: "Reunited but scarred, the family seeks refuge with Marko's parents. New enemies emerge as old ones return, and Hazel begins to understand the true cost of war." },
-		{ title: "Chapter Eight", summary: "The Stalk, The Will, Prince Robot IV—enemies become allies as the stakes grow ever higher. Hazel is no longer just running; she's learning to fight." },
+		{
+			title: "Chapter One",
+			summary:
+				"Alana and Marko, soldiers from opposite sides of an endless galactic war, have done the unthinkable—fallen in love and had a child. Now, as new parents, they must flee across the universe while being hunted by both armies.",
+		},
+		{
+			title: "Chapter Two",
+			summary:
+				"While freelance killers and vengeful ex-fiancées close in, Alana and Marko find unexpected allies. Their daughter Hazel begins narrating her own extraordinary origin story.",
+		},
+		{
+			title: "Chapter Three",
+			summary:
+				"The family reaches a lighthouse on a rogue moon where they meet author D. Oswald Heist, whose banned romance novel inspired their forbidden relationship. But their pursuers are closing in.",
+		},
+		{
+			title: "Chapter Four",
+			summary:
+				"Trapped on the planet Quietus, Alana and Marko must navigate a world of drug addiction and showbiz while raising Hazel. The bounty hunters are right behind them.",
+		},
+		{
+			title: "Chapter Five",
+			summary:
+				"A time skip reveals Hazel as a young girl attending school in secret. Meanwhile, her parents' relationship strains under the weight of their endless running.",
+		},
+		{
+			title: "Chapter Six",
+			summary:
+				"The family is torn apart by violence and circumstance. As Marko searches desperately for his daughter, Hazel must survive in a world that fears her very existence.",
+		},
+		{
+			title: "Chapter Seven",
+			summary:
+				"Reunited but scarred, the family seeks refuge with Marko's parents. New enemies emerge as old ones return, and Hazel begins to understand the true cost of war.",
+		},
+		{
+			title: "Chapter Eight",
+			summary:
+				"The Stalk, The Will, Prince Robot IV—enemies become allies as the stakes grow ever higher. Hazel is no longer just running; she's learning to fight.",
+		},
 	],
 	"The Walking Dead": [
-		{ title: "Days Gone Bye", summary: "Rick Grimes wakes from a coma into a nightmare. With Atlanta fallen to the dead, he must find his wife and son while learning the brutal rules of survival in a world that has ended." },
-		{ title: "Miles Behind Us", summary: "The survivors find temporary sanctuary at a farm, but tensions rise as resources dwindle. Rick begins to understand that the living dead may not be the greatest threat they face." },
-		{ title: "Safety Behind Bars", summary: "A prison offers hope for permanent shelter, but clearing it of the dead is only the beginning. Inside these walls, the survivors will face threats from the living as dangerous as any walker." },
-		{ title: "The Heart's Desire", summary: "As the prison community grows, so do the complications. Relationships form and break while an external threat looms—the Governor and his town of Woodbury." },
-		{ title: "The Best Defense", summary: "The Governor's true nature is revealed in horrifying detail. Rick and his group must escape Woodbury, but the cost will shake them to their core." },
-		{ title: "This Sorrowful Life", summary: "War with Woodbury erupts as the prison is attacked. In the brutal battle that follows, the survivors lose people they love and the home they built together." },
-		{ title: "The Calm Before", summary: "After the fall of the prison, the scattered survivors must find each other and a new purpose. Alexandria offers a glimpse of the old world—but is it too good to be true?" },
-		{ title: "What We Become", summary: "Years into the apocalypse, Rick Grimes leads a network of communities rebuilding civilization. But new threats emerge, and the choices Rick makes will define humanity's future." },
+		{
+			title: "Days Gone Bye",
+			summary:
+				"Rick Grimes wakes from a coma into a nightmare. With Atlanta fallen to the dead, he must find his wife and son while learning the brutal rules of survival in a world that has ended.",
+		},
+		{
+			title: "Miles Behind Us",
+			summary:
+				"The survivors find temporary sanctuary at a farm, but tensions rise as resources dwindle. Rick begins to understand that the living dead may not be the greatest threat they face.",
+		},
+		{
+			title: "Safety Behind Bars",
+			summary:
+				"A prison offers hope for permanent shelter, but clearing it of the dead is only the beginning. Inside these walls, the survivors will face threats from the living as dangerous as any walker.",
+		},
+		{
+			title: "The Heart's Desire",
+			summary:
+				"As the prison community grows, so do the complications. Relationships form and break while an external threat looms—the Governor and his town of Woodbury.",
+		},
+		{
+			title: "The Best Defense",
+			summary:
+				"The Governor's true nature is revealed in horrifying detail. Rick and his group must escape Woodbury, but the cost will shake them to their core.",
+		},
+		{
+			title: "This Sorrowful Life",
+			summary:
+				"War with Woodbury erupts as the prison is attacked. In the brutal battle that follows, the survivors lose people they love and the home they built together.",
+		},
+		{
+			title: "The Calm Before",
+			summary:
+				"After the fall of the prison, the scattered survivors must find each other and a new purpose. Alexandria offers a glimpse of the old world—but is it too good to be true?",
+		},
+		{
+			title: "What We Become",
+			summary:
+				"Years into the apocalypse, Rick Grimes leads a network of communities rebuilding civilization. But new threats emerge, and the choices Rick makes will define humanity's future.",
+		},
 	],
 	Sandman: [
-		{ title: "Preludes & Nocturnes", summary: "Dream of the Endless escapes decades of imprisonment to find his realm in ruins and his tools of power scattered across the waking world. His quest to reclaim them leads through hell itself." },
-		{ title: "The Doll's House", summary: "Rose Walker searches for her missing brother, unknowingly serving as a vortex that threatens the Dreaming. Dream must decide whether to destroy her—and face the consequences of his past cruelty." },
-		{ title: "Dream Country", summary: "Four tales from the corners of the Dreaming: a writer trapped in a muse's prison, a cat's crusade to reshape reality, Shakespeare's deal with Dream, and a night in the life of an immortal." },
-		{ title: "Season of Mists", summary: "When Lucifer Morningstar abdicates the throne of Hell and gives Dream the key, every pantheon in existence descends on the Dreaming to claim the empty realm. Dream must choose wisely—or not at all." },
-		{ title: "A Game of You", summary: "Barbie returns to the land she once ruled in dreams, now threatened by the Cuckoo. As reality and dream blur together, five women from a New York apartment fight to save a world of imagination." },
-		{ title: "Fables & Reflections", summary: "Stories from across history—an African tribe's encounter with Dream, Emperor Norton's madness, Orpheus's tragedy, and more—reveal the Endless's influence on human civilization." },
-		{ title: "Brief Lives", summary: "Dream joins his irresponsible sister Delirium to search for their missing brother Destruction. The journey forces Dream to confront old loves, old wounds, and a destiny he cannot escape." },
-		{ title: "The Kindly Ones", summary: "Dream's past sins catch up with him as the Furies are unleashed. The Dreaming itself is under attack, and Dream must face the ultimate consequence of his nature—and his choices." },
+		{
+			title: "Preludes & Nocturnes",
+			summary:
+				"Dream of the Endless escapes decades of imprisonment to find his realm in ruins and his tools of power scattered across the waking world. His quest to reclaim them leads through hell itself.",
+		},
+		{
+			title: "The Doll's House",
+			summary:
+				"Rose Walker searches for her missing brother, unknowingly serving as a vortex that threatens the Dreaming. Dream must decide whether to destroy her—and face the consequences of his past cruelty.",
+		},
+		{
+			title: "Dream Country",
+			summary:
+				"Four tales from the corners of the Dreaming: a writer trapped in a muse's prison, a cat's crusade to reshape reality, Shakespeare's deal with Dream, and a night in the life of an immortal.",
+		},
+		{
+			title: "Season of Mists",
+			summary:
+				"When Lucifer Morningstar abdicates the throne of Hell and gives Dream the key, every pantheon in existence descends on the Dreaming to claim the empty realm. Dream must choose wisely—or not at all.",
+		},
+		{
+			title: "A Game of You",
+			summary:
+				"Barbie returns to the land she once ruled in dreams, now threatened by the Cuckoo. As reality and dream blur together, five women from a New York apartment fight to save a world of imagination.",
+		},
+		{
+			title: "Fables & Reflections",
+			summary:
+				"Stories from across history—an African tribe's encounter with Dream, Emperor Norton's madness, Orpheus's tragedy, and more—reveal the Endless's influence on human civilization.",
+		},
+		{
+			title: "Brief Lives",
+			summary:
+				"Dream joins his irresponsible sister Delirium to search for their missing brother Destruction. The journey forces Dream to confront old loves, old wounds, and a destiny he cannot escape.",
+		},
+		{
+			title: "The Kindly Ones",
+			summary:
+				"Dream's past sins catch up with him as the Furies are unleashed. The Dreaming itself is under attack, and Dream must face the ultimate consequence of his nature—and his choices.",
+		},
 	],
 	Dune: [
-		{ title: "Dune", summary: "Young Paul Atreides arrives on Arrakis, the desert planet that produces the universe's most valuable substance. Betrayal, survival, and transformation await as Paul becomes something more than human—the Kwisatz Haderach." },
-		{ title: "Muad'Dib", summary: "Paul rises among the Fremen, the fierce desert people of Arrakis. As he masters their ways and his own prescient powers, he sets in motion a jihad that will sweep across the known universe." },
-		{ title: "The Prophet", summary: "Paul Atreides has become Emperor, but the throne is a trap. Surrounded by enemies and haunted by visions of the future, he must navigate political intrigue while his legend grows beyond his control." },
-		{ title: "Dune Messiah", summary: "Twelve years after Paul's ascent, his empire spans the universe but his prescience shows only doom. A conspiracy threatens everything he's built, and the only escape may be through betrayal and loss." },
-		{ title: "Children of Dune", summary: "Paul's children Leto and Ghanima possess powers even greater than their father's. As Arrakis transforms and enemies close in, Leto must make a choice that will change humanity's path for millennia." },
-		{ title: "God Emperor of Dune", summary: "Three thousand years later, Leto II has become something inhuman to guide humanity down the Golden Path. His iron grip ensures survival but at what cost to his soul—and to free will itself?" },
-		{ title: "Heretics of Dune", summary: "The Bene Gesserit struggle to control a universe transformed by Leto II's death. From the desert comes a new threat—and a young woman named Sheeana who can command the sandworms." },
-		{ title: "Chapterhouse: Dune", summary: "As enemies from the Scattering return to destroy the Bene Gesserit, the sisterhood must adapt or die. On a new desert world, they plant the seeds of Arrakis's future—and humanity's last hope." },
+		{
+			title: "Dune",
+			summary:
+				"Young Paul Atreides arrives on Arrakis, the desert planet that produces the universe's most valuable substance. Betrayal, survival, and transformation await as Paul becomes something more than human—the Kwisatz Haderach.",
+		},
+		{
+			title: "Muad'Dib",
+			summary:
+				"Paul rises among the Fremen, the fierce desert people of Arrakis. As he masters their ways and his own prescient powers, he sets in motion a jihad that will sweep across the known universe.",
+		},
+		{
+			title: "The Prophet",
+			summary:
+				"Paul Atreides has become Emperor, but the throne is a trap. Surrounded by enemies and haunted by visions of the future, he must navigate political intrigue while his legend grows beyond his control.",
+		},
+		{
+			title: "Dune Messiah",
+			summary:
+				"Twelve years after Paul's ascent, his empire spans the universe but his prescience shows only doom. A conspiracy threatens everything he's built, and the only escape may be through betrayal and loss.",
+		},
+		{
+			title: "Children of Dune",
+			summary:
+				"Paul's children Leto and Ghanima possess powers even greater than their father's. As Arrakis transforms and enemies close in, Leto must make a choice that will change humanity's path for millennia.",
+		},
+		{
+			title: "God Emperor of Dune",
+			summary:
+				"Three thousand years later, Leto II has become something inhuman to guide humanity down the Golden Path. His iron grip ensures survival but at what cost to his soul—and to free will itself?",
+		},
+		{
+			title: "Heretics of Dune",
+			summary:
+				"The Bene Gesserit struggle to control a universe transformed by Leto II's death. From the desert comes a new threat—and a young woman named Sheeana who can command the sandworms.",
+		},
+		{
+			title: "Chapterhouse: Dune",
+			summary:
+				"As enemies from the Scattering return to destroy the Bene Gesserit, the sisterhood must adapt or die. On a new desert world, they plant the seeds of Arrakis's future—and humanity's last hope.",
+		},
 	],
 };
 
@@ -339,8 +548,26 @@ export const createBook = (overrides: Partial<MockBook> = {}): MockBook => {
 		title = `${seriesName}: ${bookInfo.title}`;
 	} else {
 		// Default format varies by content type
-		const isVolumeBased = ["One Piece", "Naruto", "Attack on Titan", "Bleach", "Dragon Ball", "My Hero Academia", "Demon Slayer", "Jujutsu Kaisen", "Chainsaw Man", "Death Note", "Fullmetal Alchemist", "Hunter x Hunter", "Dune", "The Expanse", "Foundation"].includes(seriesName);
-		title = isVolumeBased ? `${seriesName} Vol. ${number}` : `${seriesName} #${number}`;
+		const isVolumeBased = [
+			"One Piece",
+			"Naruto",
+			"Attack on Titan",
+			"Bleach",
+			"Dragon Ball",
+			"My Hero Academia",
+			"Demon Slayer",
+			"Jujutsu Kaisen",
+			"Chainsaw Man",
+			"Death Note",
+			"Fullmetal Alchemist",
+			"Hunter x Hunter",
+			"Dune",
+			"The Expanse",
+			"Foundation",
+		].includes(seriesName);
+		title = isVolumeBased
+			? `${seriesName} Vol. ${number}`
+			: `${seriesName} #${number}`;
 	}
 
 	const formats = ["cbz", "cbr", "pdf", "epub"];
@@ -349,16 +576,43 @@ export const createBook = (overrides: Partial<MockBook> = {}): MockBook => {
 	let fileFormat: string;
 	if (overrides.fileFormat) {
 		fileFormat = overrides.fileFormat;
-	} else if (["Dune", "The Expanse", "Foundation", "Neuromancer", "Snow Crash", "The Diamond Age", "Hyperion", "Ender's Game"].includes(seriesName)) {
+	} else if (
+		[
+			"Dune",
+			"The Expanse",
+			"Foundation",
+			"Neuromancer",
+			"Snow Crash",
+			"The Diamond Age",
+			"Hyperion",
+			"Ender's Game",
+		].includes(seriesName)
+	) {
 		fileFormat = faker.helpers.arrayElement(["epub", "pdf"]);
-	} else if (["One Piece", "Naruto", "Attack on Titan", "Bleach", "Dragon Ball", "My Hero Academia", "Demon Slayer", "Jujutsu Kaisen", "Chainsaw Man", "Death Note", "Fullmetal Alchemist", "Hunter x Hunter"].includes(seriesName)) {
+	} else if (
+		[
+			"One Piece",
+			"Naruto",
+			"Attack on Titan",
+			"Bleach",
+			"Dragon Ball",
+			"My Hero Academia",
+			"Demon Slayer",
+			"Jujutsu Kaisen",
+			"Chainsaw Man",
+			"Death Note",
+			"Fullmetal Alchemist",
+			"Hunter x Hunter",
+		].includes(seriesName)
+	) {
 		fileFormat = "cbz"; // Manga typically comes in CBZ
 	} else {
 		fileFormat = faker.helpers.arrayElement(formats);
 	}
 
 	// Page count varies by format
-	const pageCount = overrides.pageCount ??
+	const pageCount =
+		overrides.pageCount ??
 		(fileFormat === "epub" || fileFormat === "pdf"
 			? faker.number.int({ min: 200, max: 600 })
 			: faker.number.int({ min: 20, max: 50 }));
@@ -423,7 +677,12 @@ export const createSetting = (
 	description: faker.lorem.sentence(),
 	category:
 		overrides.category ||
-		faker.helpers.arrayElement(["Application", "Scanner", "Authentication", "Task"]),
+		faker.helpers.arrayElement([
+			"Application",
+			"Scanner",
+			"Authentication",
+			"Task",
+		]),
 	value_type: "string",
 	is_sensitive: false,
 	updated_at: faker.date.recent().toISOString(),

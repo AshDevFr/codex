@@ -1,14 +1,14 @@
 import { waitFor } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { EXAMPLE_TEMPLATES } from "@/data/exampleTemplates";
 import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import { TemplateSelector } from "./TemplateSelector";
-import { EXAMPLE_TEMPLATES } from "@/data/exampleTemplates";
 
 describe("TemplateSelector", () => {
 	it("should render the button to open selector", () => {
 		renderWithProviders(<TemplateSelector onSelect={() => {}} />);
 		expect(
-			screen.getByRole("button", { name: /choose example template/i })
+			screen.getByRole("button", { name: /choose example template/i }),
 		).toBeInTheDocument();
 	});
 
@@ -17,7 +17,7 @@ describe("TemplateSelector", () => {
 		renderWithProviders(<TemplateSelector onSelect={() => {}} />);
 
 		await user.click(
-			screen.getByRole("button", { name: /choose example template/i })
+			screen.getByRole("button", { name: /choose example template/i }),
 		);
 
 		await waitFor(() => {
@@ -31,7 +31,7 @@ describe("TemplateSelector", () => {
 		renderWithProviders(<TemplateSelector onSelect={() => {}} />);
 
 		await user.click(
-			screen.getByRole("button", { name: /choose example template/i })
+			screen.getByRole("button", { name: /choose example template/i }),
 		);
 
 		await waitFor(() => {
@@ -52,7 +52,7 @@ describe("TemplateSelector", () => {
 		renderWithProviders(<TemplateSelector onSelect={onSelect} />);
 
 		await user.click(
-			screen.getByRole("button", { name: /choose example template/i })
+			screen.getByRole("button", { name: /choose example template/i }),
 		);
 
 		await waitFor(() => {
@@ -66,7 +66,10 @@ describe("TemplateSelector", () => {
 		// Click Use Template button
 		await user.click(screen.getByRole("button", { name: /use template/i }));
 
-		expect(onSelect).toHaveBeenCalledWith(firstTemplate.template, firstTemplate.sampleData);
+		expect(onSelect).toHaveBeenCalledWith(
+			firstTemplate.template,
+			firstTemplate.sampleData,
+		);
 	});
 
 	it("should disable Use Template button when no template is selected", async () => {
@@ -74,7 +77,7 @@ describe("TemplateSelector", () => {
 		renderWithProviders(<TemplateSelector onSelect={() => {}} />);
 
 		await user.click(
-			screen.getByRole("button", { name: /choose example template/i })
+			screen.getByRole("button", { name: /choose example template/i }),
 		);
 
 		await waitFor(() => {
@@ -90,7 +93,7 @@ describe("TemplateSelector", () => {
 		renderWithProviders(<TemplateSelector onSelect={() => {}} />);
 
 		await user.click(
-			screen.getByRole("button", { name: /choose example template/i })
+			screen.getByRole("button", { name: /choose example template/i }),
 		);
 
 		await waitFor(() => {
@@ -109,7 +112,7 @@ describe("TemplateSelector", () => {
 		renderWithProviders(<TemplateSelector onSelect={() => {}} />);
 
 		await user.click(
-			screen.getByRole("button", { name: /choose example template/i })
+			screen.getByRole("button", { name: /choose example template/i }),
 		);
 
 		await waitFor(() => {
@@ -133,7 +136,7 @@ describe("TemplateSelector", () => {
 		renderWithProviders(<TemplateSelector onSelect={() => {}} />);
 
 		await user.click(
-			screen.getByRole("button", { name: /choose example template/i })
+			screen.getByRole("button", { name: /choose example template/i }),
 		);
 
 		await waitFor(() => {
@@ -151,7 +154,7 @@ describe("TemplateSelector", () => {
 		renderWithProviders(<TemplateSelector onSelect={() => {}} />);
 
 		await user.click(
-			screen.getByRole("button", { name: /choose example template/i })
+			screen.getByRole("button", { name: /choose example template/i }),
 		);
 
 		await waitFor(() => {
@@ -169,11 +172,14 @@ describe("TemplateSelector", () => {
 		const user = userEvent.setup();
 		const currentTemplate = EXAMPLE_TEMPLATES[0].template;
 		renderWithProviders(
-			<TemplateSelector onSelect={() => {}} currentTemplate={currentTemplate} />
+			<TemplateSelector
+				onSelect={() => {}}
+				currentTemplate={currentTemplate}
+			/>,
 		);
 
 		await user.click(
-			screen.getByRole("button", { name: /choose example template/i })
+			screen.getByRole("button", { name: /choose example template/i }),
 		);
 
 		await waitFor(() => {
@@ -189,11 +195,11 @@ describe("TemplateSelector", () => {
 			<TemplateSelector
 				onSelect={() => {}}
 				currentTemplate="some other template"
-			/>
+			/>,
 		);
 
 		await user.click(
-			screen.getByRole("button", { name: /choose example template/i })
+			screen.getByRole("button", { name: /choose example template/i }),
 		);
 
 		await waitFor(() => {
@@ -208,7 +214,7 @@ describe("TemplateSelector", () => {
 		renderWithProviders(<TemplateSelector onSelect={() => {}} />);
 
 		await user.click(
-			screen.getByRole("button", { name: /choose example template/i })
+			screen.getByRole("button", { name: /choose example template/i }),
 		);
 
 		await waitFor(() => {
@@ -220,7 +226,9 @@ describe("TemplateSelector", () => {
 
 		// Use Template button should now be enabled
 		await waitFor(() => {
-			expect(screen.getByRole("button", { name: /use template/i })).not.toBeDisabled();
+			expect(
+				screen.getByRole("button", { name: /use template/i }),
+			).not.toBeDisabled();
 		});
 	});
 });

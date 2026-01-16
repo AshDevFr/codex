@@ -149,7 +149,8 @@ function initializeFormState(
 				values: { label: l.sourceName, url: l.url },
 				locked: false,
 			})) || [],
-		customMetadata: (metadata?.customMetadata as Record<string, unknown>) ?? null,
+		customMetadata:
+			(metadata?.customMetadata as Record<string, unknown>) ?? null,
 	};
 }
 
@@ -359,7 +360,10 @@ export function SeriesMetadataEditModal({
 					? Number.parseInt(formState.totalBookCount, 10)
 					: null,
 				// Cast needed due to OpenAPI type generation quirk (Record<string, never> vs Record<string, unknown>)
-				customMetadata: formState.customMetadata as Record<string, never> | null,
+				customMetadata: formState.customMetadata as Record<
+					string,
+					never
+				> | null,
 			});
 
 			// Update locks
@@ -463,7 +467,9 @@ export function SeriesMetadataEditModal({
 				color: "green",
 			});
 			queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
-			queryClient.invalidateQueries({ queryKey: ["series-metadata", seriesId] });
+			queryClient.invalidateQueries({
+				queryKey: ["series-metadata", seriesId],
+			});
 			onClose();
 		},
 		onError: (error: Error) => {

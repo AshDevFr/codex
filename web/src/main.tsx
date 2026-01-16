@@ -41,7 +41,11 @@ enableMocking().then(() => {
 	if (rootElement) {
 		createRoot(rootElement).render(
 			<StrictMode>
-				<MantineProvider theme={theme} defaultColorScheme="dark" cssVariablesResolver={cssVariablesResolver}>
+				<MantineProvider
+					theme={theme}
+					defaultColorScheme="dark"
+					cssVariablesResolver={cssVariablesResolver}
+				>
 					<ThemeSync />
 					<Notifications zIndex={10000} />
 					<QueryClientProvider client={queryClient}>

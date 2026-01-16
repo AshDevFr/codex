@@ -14,33 +14,26 @@ import {
 import { useDisclosure } from "@mantine/hooks";
 import {
 	IconAlertCircle,
+	IconCheck,
 	IconChevronDown,
 	IconChevronRight,
-	IconCheck,
 	IconCode,
 	IconHelp,
 	IconLayoutColumns,
 	IconLayoutRows,
 	IconTree,
 } from "@tabler/icons-react";
-import {
-	JsonEditor,
-	githubDarkTheme,
-	githubLightTheme,
-} from "json-edit-react";
+import { githubDarkTheme, githubLightTheme, JsonEditor } from "json-edit-react";
+import Prism from "prismjs";
 import { useEffect, useMemo, useState } from "react";
 import Editor from "react-simple-code-editor";
-import Prism from "prismjs";
 // Load dependencies in correct order for handlebars syntax highlighting
 import "prismjs/components/prism-markup";
 import "prismjs/components/prism-markup-templating";
 import "prismjs/components/prism-handlebars";
 import "prismjs/components/prism-markdown";
 import { CustomMetadataDisplay } from "@/components/series";
-import {
-	getAvailableHelpers,
-	validateTemplate,
-} from "@/utils/templateEngine";
+import { getAvailableHelpers, validateTemplate } from "@/utils/templateEngine";
 
 // Sample data for preview - comprehensive example showcasing various data types
 const SAMPLE_METADATA = {
@@ -483,7 +476,9 @@ export function TemplateEditor({
 							label: (
 								<Group gap={4} wrap="nowrap" align="center">
 									<IconLayoutColumns size={14} style={{ flexShrink: 0 }} />
-									<Text size="xs" lh={1}>Side by Side</Text>
+									<Text size="xs" lh={1}>
+										Side by Side
+									</Text>
 								</Group>
 							),
 						},
@@ -492,7 +487,9 @@ export function TemplateEditor({
 							label: (
 								<Group gap={4} wrap="nowrap" align="center">
 									<IconLayoutRows size={14} style={{ flexShrink: 0 }} />
-									<Text size="xs" lh={1}>Stacked</Text>
+									<Text size="xs" lh={1}>
+										Stacked
+									</Text>
 								</Group>
 							),
 						},
@@ -615,7 +612,9 @@ export function TemplateEditor({
 										<code>{"{{json custom_metadata}}"}</code> - Output as JSON
 									</li>
 									<li>
-										<code>{"{{#ifEquals status \"active\"}}...{{/ifEquals}}"}</code>{" "}
+										<code>
+											{'{{#ifEquals status "active"}}...{{/ifEquals}}'}
+										</code>{" "}
 										- Compare values
 									</li>
 									<li>

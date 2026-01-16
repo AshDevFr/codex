@@ -9,7 +9,7 @@ import {
 	Text,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconTemplate, IconCheck } from "@tabler/icons-react";
+import { IconCheck, IconTemplate } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { MarkdownContent } from "@/components/common";
 import {

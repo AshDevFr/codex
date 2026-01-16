@@ -1,5 +1,5 @@
+import { format, isValid, parseISO } from "date-fns";
 import Handlebars from "handlebars";
-import { format, parseISO, isValid } from "date-fns";
 
 // Maximum execution time for template compilation and rendering (in ms)
 const EXECUTION_TIMEOUT_MS = 100;
@@ -265,12 +265,15 @@ function registerSafeHelpers(instance: typeof Handlebars): void {
 	 * Default value helper
 	 * Usage: {{default value "fallback"}}
 	 */
-	instance.registerHelper("default", (value: unknown, defaultValue: unknown) => {
-		if (value === null || value === undefined || value === "") {
-			return defaultValue ?? "";
-		}
-		return value;
-	});
+	instance.registerHelper(
+		"default",
+		(value: unknown, defaultValue: unknown) => {
+			if (value === null || value === undefined || value === "") {
+				return defaultValue ?? "";
+			}
+			return value;
+		},
+	);
 }
 
 /**
@@ -411,4 +414,3 @@ export function getAvailableHelpers(): string[] {
 		"default",
 	];
 }
-

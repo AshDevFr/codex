@@ -1,6 +1,6 @@
 import {
-	createTheme,
 	type CSSVariablesResolver,
+	createTheme,
 	type MantineColorsTuple,
 	type MantineTheme,
 	type ModalProps,

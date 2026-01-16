@@ -18,7 +18,9 @@ vi.mock("react-router-dom", async () => {
 	};
 });
 
-const mockSetupStatus = (registrationEnabled: boolean): SetupStatusResponse => ({
+const mockSetupStatus = (
+	registrationEnabled: boolean,
+): SetupStatusResponse => ({
 	setupRequired: false,
 	hasUsers: true,
 	registrationEnabled,

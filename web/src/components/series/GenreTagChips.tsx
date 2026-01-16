@@ -77,12 +77,7 @@ export function GenreTagChips({
 						{tag.name}
 					</Badge>
 				) : (
-					<Badge
-						key={`tag-${tag.id}`}
-						variant="light"
-						color="gray"
-						size="sm"
-					>
+					<Badge key={`tag-${tag.id}`} variant="light" color="gray" size="sm">
 						{tag.name}
 					</Badge>
 				),

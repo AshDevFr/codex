@@ -28,10 +28,7 @@ export function CommunityRating({ seriesId }: CommunityRatingProps) {
 	return (
 		<Tooltip label={tooltipLabel} position="top">
 			<Group gap={4}>
-				<IconUsers
-					size={14}
-					style={{ color: "var(--mantine-color-blue-5)" }}
-				/>
+				<IconUsers size={14} style={{ color: "var(--mantine-color-blue-5)" }} />
 				<Text size="sm" fw={500}>
 					Community: {displayRating.toFixed(1)}
 				</Text>

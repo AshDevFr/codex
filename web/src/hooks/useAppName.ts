@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { settingsApi, type BrandingSettingsDto } from "@/api/settings";
+import { type BrandingSettingsDto, settingsApi } from "@/api/settings";
 
 /** Default application name used as fallback */
 export const DEFAULT_APP_NAME = "Codex";

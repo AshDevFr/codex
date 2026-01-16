@@ -554,8 +554,9 @@ export function ProfileSettings() {
 										</Button>
 									</Group>
 									<Text size="sm" c="dimmed">
-										API keys allow external applications to access your {appName}{" "}
-										account. Keep them secure and never share them publicly.
+										API keys allow external applications to access your{" "}
+										{appName} account. Keep them secure and never share them
+										publicly.
 									</Text>
 									{apiKeysLoading ? (
 										<Text>Loading API keys...</Text>

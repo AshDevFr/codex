@@ -476,7 +476,8 @@ File ID: \`{{custom_metadata.technical.file_id}}\`
 			{
 				name: "Armin Arlert",
 				role: "Strategist",
-				quote: "Someone who can't sacrifice anything can never change anything.",
+				quote:
+					"Someone who can't sacrifice anything can never change anything.",
 			},
 			{
 				name: "Erwin Smith",
@@ -532,7 +533,11 @@ File ID: \`{{custom_metadata.technical.file_id}}\`
 				"Beautiful animation",
 				"Thought-provoking themes",
 			],
-			cons: ["Can be extremely dark", "Long wait between seasons", "Divisive ending"],
+			cons: [
+				"Can be extremely dark",
+				"Long wait between seasons",
+				"Divisive ending",
+			],
 			best_for:
 				"Fans of dark fantasy, complex narratives, and emotional roller coasters",
 		},

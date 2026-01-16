@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CustomMetadataDisplay } from "./CustomMetadataDisplay";
 import { renderWithProviders, screen } from "@/test/utils";
+import { CustomMetadataDisplay } from "./CustomMetadataDisplay";
 
 describe("CustomMetadataDisplay", () => {
 	describe("rendering", () => {

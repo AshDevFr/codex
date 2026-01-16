@@ -9,7 +9,6 @@ import {
 	createSettingHistory,
 } from "../data/factories";
 
-
 // Mock system integrations (admin-managed)
 const mockSystemIntegrations: Array<{
 	id: string;
@@ -336,7 +335,8 @@ export const settingsHandlers = [
 		// Return a subset of settings that are safe for non-admin users
 		const publicSettings = {
 			applicationName:
-				mockSettings.find((s) => s.key === "application.name")?.value || "Codex",
+				mockSettings.find((s) => s.key === "application.name")?.value ||
+				"Codex",
 			registrationEnabled:
 				mockSettings.find((s) => s.key === "auth.registration_enabled")
 					?.value === "true",
