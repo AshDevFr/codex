@@ -301,3 +301,21 @@ dist-build: ## Build standalone binaries for all platforms
 
 dist-build-local: ## Build binary for current platform only
 	cargo dist build --local
+
+# =============================================================================
+# Changelog (git-cliff)
+# =============================================================================
+
+changelog: ## Generate changelog from git history
+	git-cliff -o CHANGELOG.md
+
+changelog-unreleased: ## Show unreleased changes (preview)
+	git-cliff --unreleased
+
+changelog-release: ## Generate changelog for a new release (usage: make changelog-release VERSION=1.0.0)
+	@if [ -z "$(VERSION)" ]; then \
+		echo "$(YELLOW)Error: VERSION not set. Use: make changelog-release VERSION=1.0.0$(NC)"; \
+		exit 1; \
+	fi
+	git-cliff --tag v$(VERSION) -o CHANGELOG.md
+	@echo "$(GREEN)Changelog generated for v$(VERSION)$(NC)"
