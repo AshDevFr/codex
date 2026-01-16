@@ -82,6 +82,7 @@ services:
       - ./config:/app/config:ro
       - ./docker/data/libraries:/libraries:ro
       - ./docker/data/thumbnails:/app/data/thumbnails:rw
+      - ./docker/data/uploads:/app/data/uploads:rw
     environment:
       RUST_BACKTRACE: 1
       # Email configuration for Mailhog
@@ -128,6 +129,8 @@ services:
       - target_cache:/app/target
       - ./config:/app/config:ro
       - ./docker/data/libraries:/libraries:ro
+      - ./docker/data/thumbnails:/app/data/thumbnails:rw
+      - ./docker/data/uploads:/app/data/uploads:rw
     command:
       [
         "cargo",

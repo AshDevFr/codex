@@ -7,9 +7,9 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
-    sea_query::{Expr, Func},
-    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, PaginatorTrait,
-    QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
+    sea_query::{Alias, Expr, Func},
+    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, Order,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -504,20 +504,31 @@ impl BookRepository {
         // Always exclude deleted books
         query = query.filter(books::Column::Deleted.eq(false));
 
-        // Get total count (use distinct to avoid counting duplicates from join)
-        let total = query
+        // Use GROUP BY to avoid duplicates from join and enable ordering by read_progress.updated_at
+        // PostgreSQL requires ORDER BY columns to be in SELECT list when using DISTINCT,
+        // so we use GROUP BY with MAX(updated_at) instead
+        let base_query = query
+            .column_as(
+                Expr::col((
+                    Alias::new("read_progress"),
+                    read_progress::Column::UpdatedAt,
+                ))
+                .max(),
+                "last_read_at",
+            )
+            .group_by(books::Column::Id);
+
+        // Get total count
+        let total = base_query
             .clone()
-            .distinct()
             .paginate(db, 1)
             .num_items()
             .await
             .context("Failed to count books with progress")?;
 
         // Get paginated results, ordered by most recently updated
-        // Use distinct() to prevent duplicates when joining with read_progress
-        let books = query
-            .distinct()
-            .order_by_desc(read_progress::Column::UpdatedAt)
+        let books = base_query
+            .order_by(Expr::col(Alias::new("last_read_at")), Order::Desc)
             .offset(page * page_size)
             .limit(page_size)
             .all(db)

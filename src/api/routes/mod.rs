@@ -230,8 +230,16 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             get(handlers::list_series_covers),
         )
         .route(
+            "/series/:series_id/covers/selected",
+            delete(handlers::reset_series_cover),
+        )
+        .route(
             "/series/:series_id/covers/:cover_id/select",
             put(handlers::select_series_cover),
+        )
+        .route(
+            "/series/:series_id/covers/:cover_id/image",
+            get(handlers::get_series_cover_image),
         )
         .route(
             "/series/:series_id/covers/:cover_id",

@@ -10,7 +10,7 @@ import {
 	Stack,
 	Text,
 	Tooltip,
-	useMantineColorScheme,
+	useComputedColorScheme,
 } from "@mantine/core";
 import {
 	IconAlertCircle,
@@ -63,7 +63,7 @@ export function CustomMetadataEditor({
 	originalValue,
 	autoLock = true,
 }: CustomMetadataEditorProps) {
-	const { colorScheme } = useMantineColorScheme();
+	const colorScheme = useComputedColorScheme("dark");
 	const [viewMode, setViewMode] = useState<ViewMode>("tree");
 	const [jsonError, setJsonError] = useState<string | null>(null);
 	const [rawJson, setRawJson] = useState<string>("");
@@ -228,20 +228,22 @@ export function CustomMetadataEditor({
 								data={editorValue}
 								setData={handleTreeChange}
 								rootName="customMetadata"
-								theme={{
-									...jsonTheme,
-									styles: {
-										...jsonTheme.styles,
-										container: {
-											...(typeof jsonTheme.styles?.container === "object"
-												? jsonTheme.styles.container
-												: {}),
-											fontSize: 12,
-											fontFamily:
-												'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
+								theme={[
+									jsonTheme,
+									{
+										styles: {
+											container: {
+												fontSize: 12,
+												fontFamily:
+													'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
+											},
+											input:
+												colorScheme === "dark"
+													? { color: "#e6edf3", backgroundColor: "#21262d" }
+													: {},
 										},
 									},
-								}}
+								]}
 								collapse={2}
 								indent={2}
 								showCollectionCount="when-closed"

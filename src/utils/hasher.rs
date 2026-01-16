@@ -3,6 +3,13 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 
+/// Compute SHA-256 hash of byte slice
+pub fn hash_bytes(data: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    format!("{:x}", hasher.finalize())
+}
+
 /// Compute SHA-256 hash of entire file
 pub fn hash_file<P: AsRef<Path>>(path: P) -> io::Result<String> {
     let mut file = File::open(path)?;

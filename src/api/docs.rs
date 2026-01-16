@@ -148,7 +148,9 @@ Codex provides OPDS catalog feeds for e-reader applications:
 
         // Cover management endpoints
         handlers::list_series_covers,
+        handlers::get_series_cover_image,
         handlers::select_series_cover,
+        handlers::reset_series_cover,
         handlers::delete_series_cover,
 
         // Book endpoints

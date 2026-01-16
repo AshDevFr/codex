@@ -109,8 +109,18 @@ export function SeriesDetail() {
 				message: data.message,
 				color: "green",
 			});
-			queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
-			queryClient.invalidateQueries({ queryKey: ["series-books", seriesId] });
+			// Refetch all book and series related queries to update UI
+			queryClient.refetchQueries({
+				predicate: (query) => {
+					const key = query.queryKey[0] as string;
+					return (
+						key === "books" ||
+						key === "series" ||
+						key === "series-books" ||
+						key === "book-detail"
+					);
+				},
+			});
 		},
 		onError: (error: Error) => {
 			notifications.show({
@@ -130,8 +140,18 @@ export function SeriesDetail() {
 				message: data.message,
 				color: "blue",
 			});
-			queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
-			queryClient.invalidateQueries({ queryKey: ["series-books", seriesId] });
+			// Refetch all book and series related queries to update UI
+			queryClient.refetchQueries({
+				predicate: (query) => {
+					const key = query.queryKey[0] as string;
+					return (
+						key === "books" ||
+						key === "series" ||
+						key === "series-books" ||
+						key === "book-detail"
+					);
+				},
+			});
 		},
 		onError: (error: Error) => {
 			notifications.show({
@@ -224,7 +244,7 @@ export function SeriesDetail() {
 		);
 	}
 
-	const coverUrl = `/api/v1/series/${series.id}/thumbnail`;
+	const coverUrl = `/api/v1/series/${series.id}/thumbnail?v=${encodeURIComponent(series.updatedAt)}`;
 	const hasUnread = (series.unreadCount ?? 0) > 0;
 	const hasRead = (series.bookCount ?? 0) > (series.unreadCount ?? 0);
 	const readingDirection = formatReadingDirection(metadata?.readingDirection);

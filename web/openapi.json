@@ -5253,6 +5253,46 @@
         ]
       }
     },
+    "/api/v1/series/{series_id}/covers/selected": {
+      "delete": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Reset series cover to default (deselect all custom covers)",
+        "operationId": "reset_series_cover",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Reset to default cover successfully"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/{series_id}/covers/{cover_id}": {
       "delete": {
         "tags": [
@@ -5288,6 +5328,59 @@
           },
           "400": {
             "description": "Cannot delete the only selected cover"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series or cover not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{series_id}/covers/{cover_id}/image": {
+      "get": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Get a specific cover image for a series",
+        "operationId": "get_series_cover_image",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cover_id",
+            "in": "path",
+            "description": "Cover ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cover image",
+            "content": {
+              "image/jpeg": {}
+            }
           },
           "403": {
             "description": "Forbidden"

@@ -148,7 +148,7 @@ export function ReaderToolbar({
 						right: 0,
 						zIndex: 100,
 						background:
-							"linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%)",
+							"linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 70%, rgba(0,0,0,0) 100%)",
 						padding: "12px 16px",
 					}}
 				>

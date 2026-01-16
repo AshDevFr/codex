@@ -43,7 +43,7 @@ enableMocking().then(() => {
 			<StrictMode>
 				<MantineProvider theme={theme} defaultColorScheme="dark" cssVariablesResolver={cssVariablesResolver}>
 					<ThemeSync />
-					<Notifications />
+					<Notifications zIndex={10000} />
 					<QueryClientProvider client={queryClient}>
 						<App />
 					</QueryClientProvider>

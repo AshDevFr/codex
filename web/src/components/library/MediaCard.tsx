@@ -175,12 +175,18 @@ export function MediaCard({
 				message: "Book marked as read",
 				color: "green",
 			});
-			// Invalidate all book-related queries to refresh UI
-			queryClient.invalidateQueries({ queryKey: ["books"] });
-			queryClient.invalidateQueries({ queryKey: ["series"] });
-			queryClient.invalidateQueries({ queryKey: ["library-books"] });
-			queryClient.invalidateQueries({ queryKey: ["in-progress"] });
-			queryClient.invalidateQueries({ queryKey: ["recently-added"] });
+			// Refetch all book and series related queries to update UI
+			queryClient.refetchQueries({
+				predicate: (query) => {
+					const key = query.queryKey[0] as string;
+					return (
+						key === "books" ||
+						key === "series" ||
+						key === "series-books" ||
+						key === "book-detail"
+					);
+				},
+			});
 		},
 		onError: (error: Error) => {
 			notifications.show({
@@ -202,12 +208,18 @@ export function MediaCard({
 				message: "Book marked as unread",
 				color: "blue",
 			});
-			// Invalidate all book-related queries to refresh UI
-			queryClient.invalidateQueries({ queryKey: ["books"] });
-			queryClient.invalidateQueries({ queryKey: ["series"] });
-			queryClient.invalidateQueries({ queryKey: ["library-books"] });
-			queryClient.invalidateQueries({ queryKey: ["in-progress"] });
-			queryClient.invalidateQueries({ queryKey: ["recently-added"] });
+			// Refetch all book and series related queries to update UI
+			queryClient.refetchQueries({
+				predicate: (query) => {
+					const key = query.queryKey[0] as string;
+					return (
+						key === "books" ||
+						key === "series" ||
+						key === "series-books" ||
+						key === "book-detail"
+					);
+				},
+			});
 		},
 		onError: (error: Error) => {
 			notifications.show({
@@ -230,7 +242,18 @@ export function MediaCard({
 				message: data.message,
 				color: "green",
 			});
-			queryClient.invalidateQueries({ queryKey: ["series"] });
+			// Refetch all book and series related queries to update UI
+			queryClient.refetchQueries({
+				predicate: (query) => {
+					const key = query.queryKey[0] as string;
+					return (
+						key === "books" ||
+						key === "series" ||
+						key === "series-books" ||
+						key === "book-detail"
+					);
+				},
+			});
 		},
 		onError: (error: Error) => {
 			notifications.show({
@@ -252,7 +275,18 @@ export function MediaCard({
 				message: data.message,
 				color: "blue",
 			});
-			queryClient.invalidateQueries({ queryKey: ["series"] });
+			// Refetch all book and series related queries to update UI
+			queryClient.refetchQueries({
+				predicate: (query) => {
+					const key = query.queryKey[0] as string;
+					return (
+						key === "books" ||
+						key === "series" ||
+						key === "series-books" ||
+						key === "book-detail"
+					);
+				},
+			});
 		},
 		onError: (error: Error) => {
 			notifications.show({

@@ -1,24 +1,35 @@
 import {
+	ActionIcon,
+	Box,
 	Button,
+	Card,
 	Center,
 	Group,
+	Image,
 	Loader,
 	Modal,
 	SimpleGrid,
 	Stack,
 	Tabs,
 	Text,
+	Tooltip,
 } from "@mantine/core";
+import { Dropzone, IMAGE_MIME_TYPE } from "@mantine/dropzone";
 import { notifications } from "@mantine/notifications";
 import {
 	IconBook,
+	IconCheck,
 	IconCode,
 	IconEdit,
 	IconLink,
 	IconList,
 	IconPhoto,
+	IconRefresh,
 	IconTag,
+	IconTrash,
 	IconTypography,
+	IconUpload,
+	IconX,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
@@ -32,8 +43,6 @@ import {
 import { tagsApi } from "@/api/tags";
 import { CustomMetadataEditor } from "@/components/forms/CustomMetadataEditor";
 import {
-	type ImageInfo,
-	ImageUploader,
 	type ListItem,
 	LockableChipInput,
 	LockableInput,
@@ -180,7 +189,8 @@ export function SeriesMetadataEditModal({
 	const [originalFormState, setOriginalFormState] = useState<FormState | null>(
 		null,
 	);
-	const [posterImage, setPosterImage] = useState<ImageInfo | null>(null);
+	const [pendingUpload, setPendingUpload] = useState<File | null>(null);
+	const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
 
 	// Fetch full metadata
 	const { data: metadata, isLoading } = useQuery({
@@ -201,6 +211,104 @@ export function SeriesMetadataEditModal({
 		queryKey: ["tags"],
 		queryFn: () => tagsApi.getAll(),
 		enabled: opened,
+	});
+
+	// Fetch existing covers for this series
+	const { data: existingCovers, refetch: refetchCovers } = useQuery({
+		queryKey: ["series", seriesId, "covers"],
+		queryFn: () => seriesMetadataApi.listCovers(seriesId),
+		enabled: opened,
+	});
+
+	// Upload cover mutation
+	const uploadCoverMutation = useMutation({
+		mutationFn: (file: File) => seriesMetadataApi.uploadCover(seriesId, file),
+		onSuccess: () => {
+			notifications.show({
+				title: "Success",
+				message: "Cover uploaded successfully",
+				color: "green",
+			});
+			refetchCovers();
+			// Clear the pending upload
+			if (uploadPreviewUrl) {
+				URL.revokeObjectURL(uploadPreviewUrl);
+				setUploadPreviewUrl(null);
+			}
+			setPendingUpload(null);
+		},
+		onError: (error: { message?: string }) => {
+			notifications.show({
+				title: "Error",
+				message: error.message || "Failed to upload cover",
+				color: "red",
+			});
+		},
+	});
+
+	// Select cover mutation
+	const selectCoverMutation = useMutation({
+		mutationFn: (coverId: string) =>
+			seriesMetadataApi.selectCover(seriesId, coverId),
+		onSuccess: () => {
+			notifications.show({
+				title: "Success",
+				message: "Cover selected",
+				color: "green",
+			});
+			refetchCovers();
+			queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
+		},
+		onError: (error: { message?: string }) => {
+			notifications.show({
+				title: "Error",
+				message: error.message || "Failed to select cover",
+				color: "red",
+			});
+		},
+	});
+
+	// Reset to default cover mutation
+	const resetCoverMutation = useMutation({
+		mutationFn: () => seriesMetadataApi.resetCover(seriesId),
+		onSuccess: () => {
+			notifications.show({
+				title: "Success",
+				message: "Reset to default cover",
+				color: "green",
+			});
+			refetchCovers();
+			queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
+		},
+		onError: (error: { message?: string }) => {
+			notifications.show({
+				title: "Error",
+				message: error.message || "Failed to reset cover",
+				color: "red",
+			});
+		},
+	});
+
+	// Delete cover mutation
+	const deleteCoverMutation = useMutation({
+		mutationFn: (coverId: string) =>
+			seriesMetadataApi.deleteCover(seriesId, coverId),
+		onSuccess: () => {
+			notifications.show({
+				title: "Success",
+				message: "Cover deleted",
+				color: "green",
+			});
+			refetchCovers();
+			queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
+		},
+		onError: (error: { message?: string }) => {
+			notifications.show({
+				title: "Error",
+				message: error.message || "Failed to delete cover",
+				color: "red",
+			});
+		},
 	});
 
 	// Initialize form state when metadata loads
@@ -271,11 +379,6 @@ export function SeriesMetadataEditModal({
 				JSON.stringify((originalFormState?.tags || []).slice().sort());
 			if (tagsChanged) {
 				await tagsApi.setForSeries(seriesId, formState.tags);
-			}
-
-			// Upload poster image if selected
-			if (posterImage?.file) {
-				await seriesMetadataApi.uploadCover(seriesId, posterImage.file);
 			}
 
 			// Handle alternate titles changes
@@ -360,6 +463,7 @@ export function SeriesMetadataEditModal({
 				color: "green",
 			});
 			queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
+			queryClient.invalidateQueries({ queryKey: ["series-metadata", seriesId] });
 			onClose();
 		},
 		onError: (error: Error) => {
@@ -603,19 +707,235 @@ export function SeriesMetadataEditModal({
 		</Stack>
 	);
 
+	// Handle file drop for upload
+	const handleFileDrop = useCallback(
+		(files: File[]) => {
+			if (files.length === 0) return;
+			const file = files[0];
+
+			// Create preview URL
+			const url = URL.createObjectURL(file);
+			if (uploadPreviewUrl) {
+				URL.revokeObjectURL(uploadPreviewUrl);
+			}
+			setUploadPreviewUrl(url);
+			setPendingUpload(file);
+		},
+		[uploadPreviewUrl],
+	);
+
+	// Handle upload confirmation
+	const handleUploadConfirm = useCallback(() => {
+		if (pendingUpload) {
+			uploadCoverMutation.mutate(pendingUpload);
+		}
+	}, [pendingUpload, uploadCoverMutation]);
+
+	// Handle upload cancel
+	const handleUploadCancel = useCallback(() => {
+		if (uploadPreviewUrl) {
+			URL.revokeObjectURL(uploadPreviewUrl);
+			setUploadPreviewUrl(null);
+		}
+		setPendingUpload(null);
+	}, [uploadPreviewUrl]);
+
+	// Get source label for display
+	const getCoverSourceLabel = (source: string) => {
+		if (source === "custom") return "Custom Upload";
+		if (source.startsWith("book:")) return "From Book";
+		return source;
+	};
+
 	// Poster tab
 	const renderPosterTab = () => (
 		<Stack gap="md">
 			<Text size="sm" c="dimmed">
-				Upload a custom poster image for this series.
+				Upload custom poster images or select from existing covers.
 			</Text>
 
-			<ImageUploader
-				value={posterImage}
-				onChange={setPosterImage}
-				label="Upload poster image - drag and drop"
+			{/* Upload dropzone */}
+			<Dropzone
+				onDrop={handleFileDrop}
+				onReject={() =>
+					notifications.show({
+						title: "Error",
+						message: "Invalid file type. Please upload an image.",
+						color: "red",
+					})
+				}
 				maxSize={10 * 1024 * 1024}
-			/>
+				accept={IMAGE_MIME_TYPE}
+				multiple={false}
+				disabled={uploadCoverMutation.isPending}
+			>
+				<Group
+					justify="center"
+					gap="xl"
+					mih={100}
+					style={{ pointerEvents: "none" }}
+				>
+					<Dropzone.Accept>
+						<IconUpload size={40} stroke={1.5} />
+					</Dropzone.Accept>
+					<Dropzone.Reject>
+						<IconX size={40} stroke={1.5} />
+					</Dropzone.Reject>
+					<Dropzone.Idle>
+						<IconPhoto size={40} stroke={1.5} />
+					</Dropzone.Idle>
+
+					<Box>
+						<Text size="md" inline>
+							Drop image here or click to upload
+						</Text>
+						<Text size="sm" c="dimmed" inline mt={7}>
+							Max file size: 10MB
+						</Text>
+					</Box>
+				</Group>
+			</Dropzone>
+
+			{/* Pending upload preview */}
+			{pendingUpload && uploadPreviewUrl && (
+				<Card withBorder p="md">
+					<Group wrap="nowrap" align="flex-start">
+						<Image
+							src={uploadPreviewUrl}
+							alt="Upload preview"
+							w={80}
+							h={120}
+							fit="contain"
+							radius="sm"
+						/>
+						<Stack gap="xs" style={{ flex: 1 }}>
+							<Text size="sm" fw={500}>
+								Ready to upload
+							</Text>
+							<Text size="sm" c="dimmed">
+								{pendingUpload.name}
+							</Text>
+						</Stack>
+						<Group gap="xs">
+							<Tooltip label="Upload">
+								<ActionIcon
+									variant="filled"
+									color="green"
+									onClick={handleUploadConfirm}
+									loading={uploadCoverMutation.isPending}
+									aria-label="Confirm upload"
+								>
+									<IconCheck size={18} />
+								</ActionIcon>
+							</Tooltip>
+							<Tooltip label="Cancel">
+								<ActionIcon
+									variant="subtle"
+									color="red"
+									onClick={handleUploadCancel}
+									aria-label="Cancel upload"
+								>
+									<IconX size={18} />
+								</ActionIcon>
+							</Tooltip>
+						</Group>
+					</Group>
+				</Card>
+			)}
+
+			{/* Reset to default button - show if any cover is selected */}
+			{existingCovers?.some((c) => c.isSelected) && (
+				<Button
+					variant="light"
+					color="gray"
+					leftSection={<IconRefresh size={16} />}
+					onClick={() => resetCoverMutation.mutate()}
+					loading={resetCoverMutation.isPending}
+				>
+					Reset to Default (Use First Book Cover)
+				</Button>
+			)}
+
+			{/* Existing covers */}
+			{existingCovers && existingCovers.length > 0 && (
+				<>
+					<Group justify="space-between" mt="md">
+						<Text size="sm" fw={500}>
+							Available Covers
+						</Text>
+						{!existingCovers?.some((c) => c.isSelected) && (
+							<Text size="xs" c="dimmed">
+								Using default (first book cover)
+							</Text>
+						)}
+					</Group>
+					<SimpleGrid cols={4} spacing="md">
+						{existingCovers.map((cover) => (
+							<Card
+								key={cover.id}
+								withBorder
+								p="xs"
+								style={{
+									cursor: "pointer",
+									borderColor: cover.isSelected
+										? "var(--mantine-color-blue-6)"
+										: undefined,
+									borderWidth: cover.isSelected ? 2 : 1,
+								}}
+								onClick={() => {
+									if (!cover.isSelected) {
+										selectCoverMutation.mutate(cover.id);
+									}
+								}}
+							>
+								<Card.Section>
+									<Image
+										src={`/api/v1/series/${seriesId}/covers/${cover.id}/image`}
+										alt="Cover"
+										h={150}
+										fit="contain"
+									/>
+								</Card.Section>
+								<Group justify="space-between" mt="xs" wrap="nowrap">
+									<Stack gap={2}>
+										<Text size="xs" c="dimmed" truncate>
+											{getCoverSourceLabel(cover.source)}
+										</Text>
+										{cover.isSelected && (
+											<Text size="xs" c="blue" fw={500}>
+												Selected
+											</Text>
+										)}
+									</Stack>
+									{cover.source === "custom" && (
+										<Tooltip label="Delete cover">
+											<ActionIcon
+												variant="subtle"
+												color="red"
+												size="sm"
+												onClick={(e: React.MouseEvent) => {
+													e.stopPropagation();
+													deleteCoverMutation.mutate(cover.id);
+												}}
+												loading={deleteCoverMutation.isPending}
+												aria-label="Delete cover"
+											>
+												<IconTrash size={14} />
+											</ActionIcon>
+										</Tooltip>
+									)}
+								</Group>
+							</Card>
+						))}
+					</SimpleGrid>
+				</>
+			)}
+
+			{existingCovers && existingCovers.length === 0 && (
+				<Text size="sm" c="dimmed" ta="center" py="xl">
+					No covers uploaded yet. Upload an image above.
+				</Text>
+			)}
 		</Stack>
 	);
 

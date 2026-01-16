@@ -600,6 +600,24 @@ impl SeriesRepository {
         Ok(())
     }
 
+    /// Touch series to update updated_at timestamp (used for cache busting after cover changes)
+    pub async fn touch(db: &DatabaseConnection, id: Uuid) -> Result<()> {
+        let series = Series::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Series not found"))?;
+
+        let mut active: series::ActiveModel = series.into();
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to touch series timestamp")?;
+
+        Ok(())
+    }
+
     /// Update series fingerprint
     pub async fn update_fingerprint(
         db: &DatabaseConnection,

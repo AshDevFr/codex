@@ -783,15 +783,27 @@ pub async fn upload_series_cover(
     image::load_from_memory(&image_data)
         .map_err(|e| ApiError::BadRequest(format!("Invalid image file: {}", e)))?;
 
+    // Compute hash of image data for deduplication
+    let image_hash = crate::utils::hasher::hash_bytes(&image_data);
+    // Use first 16 chars of hash for filename (64 chars is excessive)
+    let short_hash = &image_hash[..16];
+
     // Create covers directory within uploads dir if it doesn't exist
     let covers_dir = state.thumbnail_service.get_uploads_dir().join("covers");
     fs::create_dir_all(&covers_dir)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to create covers directory: {}", e)))?;
 
-    // Save the image with a unique filename
-    let filename = format!("{}.jpg", series_id);
+    // Use series_id and image hash for filename to avoid duplicates
+    let filename = format!("{}-{}.jpg", series_id, short_hash);
     let filepath = covers_dir.join(&filename);
+
+    // Check if this exact image already exists for this series
+    if filepath.exists() {
+        return Err(ApiError::BadRequest(
+            "This image has already been uploaded for this series".to_string(),
+        ));
+    }
 
     let mut file = fs::File::create(&filepath)
         .await
@@ -801,35 +813,24 @@ pub async fn upload_series_cover(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to write cover file: {}", e)))?;
 
-    // Check if a custom cover already exists and update or create accordingly
-    let existing_custom = SeriesCoversRepository::get_by_source(&state.db, series_id, "custom")
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to check existing cover: {}", e)))?;
+    // Create a new custom cover (allows multiple covers per series)
+    // This automatically deselects any previously selected cover
+    SeriesCoversRepository::create(
+        &state.db,
+        series_id,
+        "custom",
+        &filepath.to_string_lossy(),
+        true, // is_selected
+        None,
+        None,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to create cover: {}", e)))?;
 
-    if let Some(existing) = existing_custom {
-        // Update existing custom cover
-        SeriesCoversRepository::update_path(&state.db, existing.id, &filepath.to_string_lossy())
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to update cover path: {}", e)))?;
-
-        // Select this cover
-        SeriesCoversRepository::select_cover(&state.db, series_id, existing.id)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to select cover: {}", e)))?;
-    } else {
-        // Create new custom cover and select it
-        SeriesCoversRepository::create(
-            &state.db,
-            series_id,
-            "custom",
-            &filepath.to_string_lossy(),
-            true, // is_selected
-            None,
-            None,
-        )
+    // Touch series to update updated_at (for cache busting)
+    SeriesRepository::touch(&state.db, series_id)
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to create cover: {}", e)))?;
-    }
+        .map_err(|e| ApiError::Internal(format!("Failed to update series timestamp: {}", e)))?;
 
     // Emit cover updated event
     let event = EntityChangeEvent {
@@ -3990,6 +3991,11 @@ pub async fn select_series_cover(
             }
         })?;
 
+    // Touch series to update updated_at (for cache busting)
+    SeriesRepository::touch(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to update series timestamp: {}", e)))?;
+
     // Emit cover updated event
     let event = EntityChangeEvent {
         event: EntityEvent::CoverUpdated {
@@ -4013,6 +4019,62 @@ pub async fn select_series_cover(
         created_at: cover.created_at,
         updated_at: cover.updated_at,
     }))
+}
+
+/// Reset series cover to default (deselect all custom covers)
+#[utoipa::path(
+    delete,
+    path = "/api/v1/series/{series_id}/covers/selected",
+    params(
+        ("series_id" = Uuid, Path, description = "Series ID")
+    ),
+    responses(
+        (status = 204, description = "Reset to default cover successfully"),
+        (status = 404, description = "Series not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn reset_series_cover(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    require_permission!(auth, Permission::SeriesWrite)?;
+
+    // Verify series exists and get library_id
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Deselect all covers (this will make the thumbnail endpoint use the default)
+    SeriesCoversRepository::deselect_all(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to reset cover: {}", e)))?;
+
+    // Touch series to update updated_at (for cache busting)
+    SeriesRepository::touch(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to update series timestamp: {}", e)))?;
+
+    // Emit cover updated event
+    let event = EntityChangeEvent {
+        event: EntityEvent::CoverUpdated {
+            entity_type: EntityType::Series,
+            entity_id: series_id,
+            library_id: Some(series.library_id),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Delete a cover from a series
@@ -4090,6 +4152,11 @@ pub async fn delete_series_cover(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to delete cover: {}", e)))?;
 
+    // Touch series to update updated_at (for cache busting)
+    SeriesRepository::touch(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to update series timestamp: {}", e)))?;
+
     // Emit cover updated event
     let event = EntityChangeEvent {
         event: EntityEvent::CoverUpdated {
@@ -4103,6 +4170,64 @@ pub async fn delete_series_cover(
     let _ = state.event_broadcaster.emit(event);
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Get a specific cover image for a series
+#[utoipa::path(
+    get,
+    path = "/api/v1/series/{series_id}/covers/{cover_id}/image",
+    params(
+        ("series_id" = Uuid, Path, description = "Series ID"),
+        ("cover_id" = Uuid, Path, description = "Cover ID")
+    ),
+    responses(
+        (status = 200, description = "Cover image", content_type = "image/jpeg"),
+        (status = 404, description = "Series or cover not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn get_series_cover_image(
+    State(state): State<Arc<AuthState>>,
+    FlexibleAuthContext(auth): FlexibleAuthContext,
+    Path((series_id, cover_id)): Path<(Uuid, Uuid)>,
+) -> Result<Response, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    // Verify series exists
+    let _series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Get the cover
+    let cover = SeriesCoversRepository::get_by_id(&state.db, cover_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch cover: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Cover not found".to_string()))?;
+
+    // Verify cover belongs to this series
+    if cover.series_id != series_id {
+        return Err(ApiError::NotFound("Cover not found".to_string()));
+    }
+
+    // Read the cover file
+    let image_data = fs::read(&cover.path).await.map_err(|e| {
+        ApiError::Internal(format!("Failed to read cover from {}: {}", cover.path, e))
+    })?;
+
+    // Build response with caching headers
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "image/jpeg")
+        .header(header::CACHE_CONTROL, "public, max-age=3600")
+        .header(header::CONTENT_LENGTH, image_data.len())
+        .body(Body::from(image_data))
+        .unwrap())
 }
 
 #[cfg(test)]

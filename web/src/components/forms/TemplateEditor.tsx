@@ -9,7 +9,7 @@ import {
 	SegmentedControl,
 	Stack,
 	Text,
-	useMantineColorScheme,
+	useComputedColorScheme,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import {
@@ -148,7 +148,7 @@ export function TemplateEditor({
 	testData: externalTestData,
 	onTestDataChange,
 }: TemplateEditorProps) {
-	const { colorScheme } = useMantineColorScheme();
+	const colorScheme = useComputedColorScheme("dark");
 	const [helpOpened, { toggle: toggleHelp }] = useDisclosure(false);
 	const [layoutMode, setLayoutMode] = useState<LayoutMode>("side-by-side");
 	const [testDataViewMode, setTestDataViewMode] =

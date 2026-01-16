@@ -40,7 +40,7 @@ unrar = { version = "0.5", optional = true }
 lopdf = "0.34"
 
 # Image processing
-image = "0.25"
+image = { version = "0.25", features = ["avif"] }
 
 # Hashing
 sha2 = "0.10"

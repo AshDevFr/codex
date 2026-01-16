@@ -284,7 +284,7 @@ export const booksApi = {
 
 		await api.post(`/books/${bookId}/cover`, formData, {
 			headers: {
-				"Content-Type": "multipart/form-data",
+				"Content-Type": undefined,
 			},
 		});
 	},

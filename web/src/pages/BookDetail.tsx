@@ -105,8 +105,18 @@ export function BookDetail() {
 				message: "Book marked as read",
 				color: "green",
 			});
-			queryClient.invalidateQueries({ queryKey: ["book-detail", bookId] });
-			queryClient.invalidateQueries({ queryKey: ["books"] });
+			// Refetch all book and series related queries to update UI
+			queryClient.refetchQueries({
+				predicate: (query) => {
+					const key = query.queryKey[0] as string;
+					return (
+						key === "books" ||
+						key === "series" ||
+						key === "series-books" ||
+						key === "book-detail"
+					);
+				},
+			});
 		},
 		onError: (error: Error) => {
 			notifications.show({
@@ -126,8 +136,18 @@ export function BookDetail() {
 				message: "Book marked as unread",
 				color: "blue",
 			});
-			queryClient.invalidateQueries({ queryKey: ["book-detail", bookId] });
-			queryClient.invalidateQueries({ queryKey: ["books"] });
+			// Refetch all book and series related queries to update UI
+			queryClient.refetchQueries({
+				predicate: (query) => {
+					const key = query.queryKey[0] as string;
+					return (
+						key === "books" ||
+						key === "series" ||
+						key === "series-books" ||
+						key === "book-detail"
+					);
+				},
+			});
 		},
 		onError: (error: Error) => {
 			notifications.show({

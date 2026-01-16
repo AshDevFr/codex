@@ -494,6 +494,7 @@ export function ServerSettings() {
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["admin-settings"] });
+			queryClient.invalidateQueries({ queryKey: ["public-settings"] });
 			notifications.show({
 				title: "Success",
 				message: "Setting updated",
@@ -515,6 +516,7 @@ export function ServerSettings() {
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["admin-settings"] });
+			queryClient.invalidateQueries({ queryKey: ["public-settings"] });
 			notifications.show({
 				title: "Success",
 				message: "Setting reset to default",

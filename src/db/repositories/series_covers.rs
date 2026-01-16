@@ -152,8 +152,8 @@ impl SeriesCoversRepository {
         Ok(Some(model))
     }
 
-    /// Deselect all covers for a series
-    async fn deselect_all(db: &DatabaseConnection, series_id: Uuid) -> Result<()> {
+    /// Deselect all covers for a series (resets to default thumbnail)
+    pub async fn deselect_all(db: &DatabaseConnection, series_id: Uuid) -> Result<()> {
         use sea_orm::sea_query::Expr;
 
         SeriesCovers::update_many()

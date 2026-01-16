@@ -194,7 +194,7 @@ export const seriesMetadataApi = {
 			formData,
 			{
 				headers: {
-					"Content-Type": "multipart/form-data",
+					"Content-Type": undefined,
 				},
 			},
 		);
@@ -203,6 +203,14 @@ export const seriesMetadataApi = {
 
 	selectCover: async (seriesId: string, coverId: string): Promise<void> => {
 		await api.put(`/series/${seriesId}/covers/${coverId}/select`);
+	},
+
+	/**
+	 * Reset to default cover (deselect all custom covers)
+	 * The series will use the first book's cover as thumbnail
+	 */
+	resetCover: async (seriesId: string): Promise<void> => {
+		await api.delete(`/series/${seriesId}/covers/selected`);
 	},
 
 	deleteCover: async (seriesId: string, coverId: string): Promise<void> => {
