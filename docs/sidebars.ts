@@ -4,6 +4,7 @@ import apiSidebar from "./apiSidebar";
 const sidebars: SidebarsConfig = {
   tutorialSidebar: [
     "intro",
+    "showcase",
     {
       type: "category",
       label: "Getting Started",

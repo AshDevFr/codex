@@ -60,15 +60,15 @@ Codex supports multiple scanning strategies for different organizational pattern
    - **Path**: Filesystem path to the folder
    - **Default Reading Direction**: Based on content type
 
-![New Library - General Settings](./screenshots/new-library-general.png)
+![Add Library - General Settings](./screenshots/add-library-general.png)
 
 4. Configure the **Strategy** tab for series and book detection
 
-![New Library - Strategy Settings](./screenshots/new-library-strategy.png)
+![Add Library - Strategy Settings](./screenshots/add-library-strategy.png)
 
 5. Configure **Scanning** options (manual or automatic with cron)
 
-![New Library - Scanning Settings](./screenshots/new-library-scanning-cron.png)
+![Add Library - Scanning Settings](./screenshots/add-library-scanning.png)
 
 ### Via API
 
@@ -303,7 +303,7 @@ If you move files:
 
 Codex can detect duplicate books across libraries using file hashes (SHA-256).
 
-![Duplicate Detection](./screenshots/settings-duplicate-detection.png)
+![Duplicate Detection](./screenshots/settings-duplicates.png)
 
 ### Enable Duplicate Scanning
 

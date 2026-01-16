@@ -16,6 +16,8 @@ Custom metadata is a flexible JSON object that can contain any data you want to 
 - Add personal notes and reviews
 - Track technical information (resolution, audio, subtitles)
 
+![Custom Metadata on Series](./screenshots/edit-series-metadata-custom-metadata.png)
+
 ## Storing Custom Metadata
 
 Custom metadata is stored as a JSON object on each series. You can set it via the API or through the series metadata editor.
@@ -87,6 +89,10 @@ The default template displays all fields as a simple bullet list:
 3. Edit the template or select a pre-built example
 4. Use the live preview to test your changes
 5. Save your changes
+
+![Custom Metadata Settings](./screenshots/settings-server-custom-metadata.png)
+
+![Custom Metadata Template Editor](./screenshots/settings-server-custom-metadata-templates.png)
 
 ## Handlebars Syntax
 

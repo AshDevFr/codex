@@ -27,11 +27,12 @@ const utilityHandlers = [
 	}),
 
 	// Setup status - configurable via VITE_MOCK_SETUP_REQUIRED env var
+	// Registration enabled defaults to true to match mock settings
 	http.get("/api/v1/setup/status", async () => {
 		await delay(50);
 		const setupRequired = import.meta.env.VITE_MOCK_SETUP_REQUIRED === "true";
 		const registrationEnabled =
-			import.meta.env.VITE_MOCK_REGISTRATION_ENABLED === "true";
+			import.meta.env.VITE_MOCK_REGISTRATION_ENABLED !== "false";
 		return HttpResponse.json({
 			setupRequired,
 			hasUsers: !setupRequired,

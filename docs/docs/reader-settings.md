@@ -10,7 +10,7 @@ Codex provides extensive customization options for reading comics, manga, EPUBs,
 
 The comic reader supports CBZ, CBR, and image-based formats with powerful display options.
 
-![Comic Reader](./screenshots/comic-reader.png)
+![Comic Reader](./screenshots/comic-reader-comic.png)
 
 ### Reading Modes
 
@@ -76,7 +76,9 @@ When reading a series, you can customize display settings specifically for that 
 
 To reset to global defaults, click **"Reset to global"** in the settings panel.
 
-![Comic Reader Settings](./screenshots/comic-reader-settings-series.png)
+![Comic Reader Settings](./screenshots/comic-reader-comic-settings.png)
+
+![Comic Reader Series Settings](./screenshots/comic-reader-comic-settings-series.png)
 
 ### Keyboard Shortcuts
 
@@ -93,7 +95,9 @@ To reset to global defaults, click **"Reset to global"** in the settings panel.
 
 The EPUB reader provides a comfortable reading experience for ebooks with extensive typography controls.
 
-![EPUB Reader](./screenshots/epub-reader.png)
+![EPUB Reader](./screenshots/epub-reader-epub.png)
+
+![EPUB Reader Toolbar](./screenshots/epub-reader-epub-toolbar.png)
 
 ### Themes
 
@@ -137,7 +141,7 @@ Control line height from "Tight" (100%) to "Loose" (250%) for comfortable readin
 
 Adjust page margins from 0% (edge-to-edge) to 30% (generous margins).
 
-![EPUB Reader Settings](./screenshots/epub-reader-settings.png)
+![EPUB Reader Settings](./screenshots/epub-reader-epub-settings.png)
 
 ### Navigation Features
 
@@ -145,7 +149,7 @@ Adjust page margins from 0% (edge-to-edge) to 30% (generous margins).
 - **Bookmarks**: Save and return to specific locations
 - **Search**: Find text within the book
 
-![EPUB Table of Contents](./screenshots/epub-reader-toc.png)
+![EPUB Table of Contents](./screenshots/epub-reader-epub-toc.png)
 
 ### Keyboard Shortcuts
 

@@ -321,7 +321,7 @@ This was fixed in recent versions. If you experience this:
 2. **Monitor the Task Queue**:
    Go to **Settings** > **Tasks** to view active and pending tasks.
 
-   ![Task Queue](./screenshots/settings-task-queue.png)
+   ![Task Queue](./screenshots/settings-tasks.png)
 
 3. **Use normal scan** for updates:
    Deep scans re-process everything.

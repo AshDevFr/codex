@@ -112,6 +112,11 @@ docs-install: ## Install documentation dependencies
 docs-start: ## Start documentation dev server
 	cd docs && npm start
 
+docs-start-fresh: ## Start documentation dev server with fresh API docs
+	@$(MAKE) docs-clean-api-docs
+	@$(MAKE) docs-gen-api-docs
+	@$(MAKE) docs-start
+
 docs-build: ## Build documentation for production
 	cd docs && npm run build
 
