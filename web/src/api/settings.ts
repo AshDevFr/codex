@@ -1,3 +1,4 @@
+import axios from "axios";
 import type { components } from "@/types/api.generated";
 import { api } from "./client";
 
@@ -8,6 +9,7 @@ export type UpdateSettingRequest =
 	components["schemas"]["UpdateSettingRequest"];
 export type BulkUpdateSettingsRequest =
 	components["schemas"]["BulkUpdateSettingsRequest"];
+export type BrandingSettingsDto = components["schemas"]["BrandingSettingsDto"];
 // Bulk update returns an array of SettingDto
 export type BulkUpdateSettingsResponse = SettingDto[];
 
@@ -92,6 +94,19 @@ export const settingsApi = {
 	 */
 	getPublicSettings: async (): Promise<PublicSettingsMap> => {
 		const response = await api.get<PublicSettingsMap>("/settings/public");
+		return response.data;
+	},
+
+	/**
+	 * Get branding settings (unauthenticated)
+	 * Returns branding-related settings needed on login page and other
+	 * unauthenticated UI surfaces.
+	 */
+	getBranding: async (): Promise<BrandingSettingsDto> => {
+		// Use axios directly without auth interceptor since this is unauthenticated
+		const response = await axios.get<BrandingSettingsDto>(
+			"/api/v1/settings/branding",
+		);
 		return response.data;
 	},
 };

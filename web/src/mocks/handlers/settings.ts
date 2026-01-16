@@ -195,6 +195,25 @@ const mockSettings = [
 ];
 
 export const settingsHandlers = [
+	// ============================================
+	// Branding Settings (unauthenticated)
+	// ============================================
+
+	// Get branding settings (unauthenticated - used on login page)
+	http.get("/api/v1/settings/branding", async () => {
+		await delay(50);
+		const appNameSetting = mockSettings.find(
+			(s) => s.key === "application.name",
+		);
+		return HttpResponse.json({
+			application_name: appNameSetting?.value || "Codex",
+		});
+	}),
+
+	// ============================================
+	// Admin Settings
+	// ============================================
+
 	// List all settings
 	http.get("/api/v1/admin/settings", async ({ request }) => {
 		await delay(100);

@@ -37,6 +37,7 @@ import { BooksSection } from "@/components/library/BooksSection";
 import { LibraryToolbar } from "@/components/library/LibraryToolbar";
 import { RecommendedSection } from "@/components/library/RecommendedSection";
 import { SeriesSection } from "@/components/library/SeriesSection";
+import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import {
 	useLibraryPreferencesHydrated,
@@ -117,6 +118,12 @@ export function LibraryPage() {
 		},
 		enabled: !isAllLibraries && !!libraryId,
 	});
+
+	// Set document title based on library name
+	useDynamicDocumentTitle(
+		isAllLibraries ? "All Libraries" : library?.name,
+		"Library",
+	);
 
 	// Redirect to base path if no tab specified
 	useEffect(() => {

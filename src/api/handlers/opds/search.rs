@@ -6,7 +6,7 @@ use crate::api::{
 };
 use crate::db::repositories::{
     BookMetadataRepository, BookRepository, ReadProgressRepository, SeriesMetadataRepository,
-    SeriesRepository,
+    SeriesRepository, SettingsRepository,
 };
 use crate::require_permission;
 use axum::{
@@ -18,15 +18,20 @@ use chrono::Utc;
 use serde::Deserialize;
 use std::sync::Arc;
 
-/// OpenSearch descriptor XML
-const OPENSEARCH_DESCRIPTOR: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+/// Generate OpenSearch descriptor XML with dynamic app name
+fn generate_opensearch_descriptor(app_name: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
 <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
-  <ShortName>Codex</ShortName>
-  <Description>Search your Codex digital library</Description>
+  <ShortName>{app_name}</ShortName>
+  <Description>Search your {app_name} digital library</Description>
   <InputEncoding>UTF-8</InputEncoding>
   <OutputEncoding>UTF-8</OutputEncoding>
-  <Url type="application/atom+xml;profile=opds-catalog" template="/opds/search?q={searchTerms}"/>
-</OpenSearchDescription>"#;
+  <Url type="application/atom+xml;profile=opds-catalog" template="/opds/search?q={{searchTerms}}"/>
+</OpenSearchDescription>"#,
+        app_name = app_name
+    )
+}
 
 /// OpenSearch descriptor response
 pub struct OpenSearchResponse(String);
@@ -85,10 +90,13 @@ pub struct SearchParams {
     tag = "opds"
 )]
 pub async fn opensearch_descriptor(
-    State(_state): State<Arc<AuthState>>,
+    State(state): State<Arc<AuthState>>,
     _auth: AuthContext,
 ) -> Result<OpenSearchResponse, ApiError> {
-    Ok(OpenSearchResponse(OPENSEARCH_DESCRIPTOR.to_string()))
+    let app_name = SettingsRepository::get_app_name(&state.db).await;
+    Ok(OpenSearchResponse(generate_opensearch_descriptor(
+        &app_name,
+    )))
 }
 
 /// OPDS search endpoint
@@ -120,6 +128,7 @@ pub async fn opds_search(
     let now = Utc::now();
     let base_url = "/opds";
     let query = params.q.trim();
+    let app_name = SettingsRepository::get_app_name(&state.db).await;
 
     if query.is_empty() {
         return Err(ApiError::BadRequest(
@@ -127,11 +136,12 @@ pub async fn opds_search(
         ));
     }
 
-    let mut feed = OpdsFeed::new(
+    let mut feed = OpdsFeed::with_author(
         format!("urn:uuid:codex-search-{}", query),
         format!("Search Results for '{}'", query),
         now,
         true, // Include PSE namespace
+        &app_name,
     )
     .add_link(OpdsLink::self_link(format!(
         "{}/search?q={}",

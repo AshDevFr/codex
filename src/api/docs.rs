@@ -241,6 +241,7 @@ Codex provides OPDS catalog feeds for e-reader applications:
         handlers::list_drives,
 
         // Settings endpoints
+        handlers::settings::get_branding_settings,
         handlers::settings::get_public_settings,
         handlers::settings::list_settings,
         handlers::settings::get_setting,
@@ -445,6 +446,7 @@ Codex provides OPDS catalog feeds for e-reader applications:
             // Settings DTOs
             dto::SettingDto,
             dto::PublicSettingDto,
+            dto::BrandingSettingsDto,
             dto::UpdateSettingRequest,
             dto::BulkUpdateSettingsRequest,
             dto::BulkSettingUpdate,

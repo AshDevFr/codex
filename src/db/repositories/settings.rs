@@ -275,6 +275,19 @@ impl SettingsRepository {
             _ => Err(anyhow!("Unknown value type: {}", value_type)),
         }
     }
+
+    /// Get the application name from settings with fallback to default
+    ///
+    /// This is a convenience method for retrieving the `application.name` setting.
+    /// Returns "Codex" if the setting is not found or an error occurs.
+    pub async fn get_app_name(db: &DatabaseConnection) -> String {
+        Self::get(db, "application.name")
+            .await
+            .ok()
+            .flatten()
+            .map(|s| s.value)
+            .unwrap_or_else(|| "Codex".to_string())
+    }
 }
 
 #[cfg(test)]

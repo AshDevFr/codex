@@ -172,3 +172,14 @@ pub struct PublicSettingDto {
     )]
     pub value: String,
 }
+
+/// Branding settings DTO (unauthenticated access)
+///
+/// Contains branding-related settings that can be accessed without authentication.
+/// Used on the login page and other unauthenticated UI surfaces.
+#[derive(Debug, Serialize, Deserialize, ToSchema, Clone)]
+pub struct BrandingSettingsDto {
+    /// The application name to display
+    #[schema(example = "Codex")]
+    pub application_name: String,
+}

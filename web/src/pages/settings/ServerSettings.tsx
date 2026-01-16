@@ -42,6 +42,7 @@ import { type SettingDto, settingsApi } from "@/api/settings";
 import { systemIntegrationsApi } from "@/api/systemIntegrations";
 import { TemplateEditor } from "@/components/forms/TemplateEditor";
 import { TemplateSelector } from "@/components/forms/TemplateSelector";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import type { components } from "@/types/api.generated";
 
 type SystemIntegrationDto = components["schemas"]["SystemIntegrationDto"];
@@ -443,6 +444,8 @@ export function ServerSettings() {
 	const [historyModalOpened, setHistoryModalOpened] = useState(false);
 	const [historyKey, setHistoryKey] = useState<string | null>(null);
 	const [createIntegrationOpened, setCreateIntegrationOpened] = useState(false);
+
+	useDocumentTitle("Server Settings");
 
 	// Fetch settings
 	const {

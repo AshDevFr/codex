@@ -9,7 +9,7 @@ use crate::api::{
 };
 use crate::db::repositories::{
     BookMetadataRepository, BookRepository, LibraryRepository, ReadProgressRepository,
-    SeriesMetadataRepository, SeriesRepository,
+    SeriesMetadataRepository, SeriesRepository, SettingsRepository,
 };
 use crate::require_permission;
 use axum::{
@@ -55,15 +55,16 @@ impl IntoResponse for Opds2Response {
     tag = "opds2"
 )]
 pub async fn opds2_root(
-    State(_state): State<Arc<AuthState>>,
+    State(state): State<Arc<AuthState>>,
     auth: AuthContext,
 ) -> Result<Opds2Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
     let base_url = "/opds/v2";
+    let app_name = SettingsRepository::get_app_name(&state.db).await;
 
     let feed = Opds2Feed::navigation(
-        "Codex OPDS 2.0 Catalog",
+        format!("{} OPDS 2.0 Catalog", app_name),
         vec![
             Opds2Link::self_link(base_url),
             Opds2Link::start_link(base_url),

@@ -6,7 +6,7 @@ use crate::api::{
 };
 use crate::db::repositories::{
     BookMetadataRepository, BookRepository, LibraryRepository, ReadProgressRepository,
-    SeriesMetadataRepository, SeriesRepository,
+    SeriesMetadataRepository, SeriesRepository, SettingsRepository,
 };
 use crate::require_permission;
 use axum::{
@@ -93,36 +93,43 @@ impl IntoResponse for OpdsResponse {
     tag = "opds"
 )]
 pub async fn root_catalog(
-    State(_state): State<Arc<AuthState>>,
+    State(state): State<Arc<AuthState>>,
     auth: AuthContext,
 ) -> Result<OpdsResponse, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
     let now = Utc::now();
     let base_url = "/opds";
+    let app_name = SettingsRepository::get_app_name(&state.db).await;
 
-    let feed = OpdsFeed::new("urn:uuid:codex-root", "Codex OPDS Catalog", now, false)
-        .with_subtitle("Digital library server for comics, manga, and ebooks")
-        .add_link(OpdsLink::self_link(base_url.to_string()))
-        .add_link(OpdsLink::start_link(base_url.to_string()))
-        .add_link(OpdsLink::search_link(format!("{}/search.xml", base_url)))
-        // Navigation entries
-        .add_entry(
-            OpdsEntry::new("urn:uuid:codex-libraries", "All Libraries", now)
-                .with_content("text", "Browse all available libraries")
-                .add_link(OpdsLink::subsection_link(
-                    format!("{}/libraries", base_url),
-                    "All Libraries",
-                )),
-        )
-        .add_entry(
-            OpdsEntry::new("urn:uuid:codex-recent", "Recent Additions", now)
-                .with_content("text", "Recently added books and series")
-                .add_link(OpdsLink::subsection_link(
-                    format!("{}/recent", base_url),
-                    "Recent Additions",
-                )),
-        );
+    let feed = OpdsFeed::with_author(
+        "urn:uuid:codex-root",
+        format!("{} OPDS Catalog", app_name),
+        now,
+        false,
+        &app_name,
+    )
+    .with_subtitle("Digital library server for comics, manga, and ebooks")
+    .add_link(OpdsLink::self_link(base_url.to_string()))
+    .add_link(OpdsLink::start_link(base_url.to_string()))
+    .add_link(OpdsLink::search_link(format!("{}/search.xml", base_url)))
+    // Navigation entries
+    .add_entry(
+        OpdsEntry::new("urn:uuid:codex-libraries", "All Libraries", now)
+            .with_content("text", "Browse all available libraries")
+            .add_link(OpdsLink::subsection_link(
+                format!("{}/libraries", base_url),
+                "All Libraries",
+            )),
+    )
+    .add_entry(
+        OpdsEntry::new("urn:uuid:codex-recent", "Recent Additions", now)
+            .with_content("text", "Recently added books and series")
+            .add_link(OpdsLink::subsection_link(
+                format!("{}/recent", base_url),
+                "Recent Additions",
+            )),
+    );
 
     let xml = feed
         .to_xml()
@@ -155,16 +162,23 @@ pub async fn opds_list_libraries(
 
     let now = Utc::now();
     let base_url = "/opds";
+    let app_name = SettingsRepository::get_app_name(&state.db).await;
 
     // Fetch all libraries
     let libraries = LibraryRepository::list_all(&state.db)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch libraries: {}", e)))?;
 
-    let mut feed = OpdsFeed::new("urn:uuid:codex-libraries", "All Libraries", now, false)
-        .add_link(OpdsLink::self_link(format!("{}/libraries", base_url)))
-        .add_link(OpdsLink::start_link(base_url.to_string()))
-        .add_link(OpdsLink::up_link(base_url.to_string(), "Home"));
+    let mut feed = OpdsFeed::with_author(
+        "urn:uuid:codex-libraries",
+        "All Libraries",
+        now,
+        false,
+        &app_name,
+    )
+    .add_link(OpdsLink::self_link(format!("{}/libraries", base_url)))
+    .add_link(OpdsLink::start_link(base_url.to_string()))
+    .add_link(OpdsLink::up_link(base_url.to_string(), "Home"));
 
     // Add library entries
     for library in libraries {
@@ -221,6 +235,7 @@ pub async fn opds_library_series(
     let pagination = pagination.validate(100);
     let now = Utc::now();
     let base_url = "/opds";
+    let app_name = SettingsRepository::get_app_name(&state.db).await;
 
     // Fetch library
     let library = LibraryRepository::get_by_id(&state.db, library_id)
@@ -240,11 +255,12 @@ pub async fn opds_library_series(
     let end = (start + pagination.page_size as usize).min(all_series.len());
     let series_list = all_series[start..end].to_vec();
 
-    let mut feed = OpdsFeed::new(
+    let mut feed = OpdsFeed::with_author(
         format!("urn:uuid:library-{}", library_id),
         format!("{} - Series", library.name),
         now,
         false,
+        &app_name,
     )
     .add_link(OpdsLink::self_link(format!(
         "{}/libraries/{}?page={}&page_size={}",
@@ -351,6 +367,7 @@ pub async fn opds_series_books(
 
     let now = Utc::now();
     let base_url = "/opds";
+    let app_name = SettingsRepository::get_app_name(&state.db).await;
 
     // Fetch series
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -371,11 +388,12 @@ pub async fn opds_series_books(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?;
 
-    let mut feed = OpdsFeed::new(
+    let mut feed = OpdsFeed::with_author(
         format!("urn:uuid:series-{}", series_id),
         format!("{} - Books", series_name),
         now,
         true, // Include PSE namespace
+        &app_name,
     )
     .add_link(OpdsLink::self_link(format!(
         "{}/series/{}",

@@ -22,14 +22,15 @@ impl EmailService {
         to_email: &str,
         to_name: &str,
         verification_token: &str,
+        app_name: &str,
     ) -> Result<()> {
         let verification_url = format!(
             "{}/auth/verify-email?token={}",
             self.config.verification_url_base, verification_token
         );
 
-        let html_body = self.create_verification_email_html(to_name, &verification_url);
-        let text_body = self.create_verification_email_text(to_name, &verification_url);
+        let html_body = self.create_verification_email_html(to_name, &verification_url, app_name);
+        let text_body = self.create_verification_email_text(to_name, &verification_url, app_name);
 
         self.send_email(
             to_email,
@@ -87,7 +88,12 @@ impl EmailService {
         Ok(())
     }
 
-    fn create_verification_email_html(&self, to_name: &str, verification_url: &str) -> String {
+    fn create_verification_email_html(
+        &self,
+        to_name: &str,
+        verification_url: &str,
+        app_name: &str,
+    ) -> String {
         format!(
             r#"<!DOCTYPE html>
 <html>
@@ -98,47 +104,55 @@ impl EmailService {
 </head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
     <div style="background-color: #f4f4f4; border-radius: 5px; padding: 20px; margin-bottom: 20px;">
-        <h1 style="color: #444; margin-top: 0;">Welcome to Codex!</h1>
-        <p>Hi {},</p>
-        <p>Thank you for registering with Codex. To complete your registration and activate your account, please verify your email address by clicking the button below:</p>
+        <h1 style="color: #444; margin-top: 0;">Welcome to {app_name}!</h1>
+        <p>Hi {to_name},</p>
+        <p>Thank you for registering with {app_name}. To complete your registration and activate your account, please verify your email address by clicking the button below:</p>
         <div style="text-align: center; margin: 30px 0;">
-            <a href="{}" style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Verify Email Address</a>
+            <a href="{verification_url}" style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Verify Email Address</a>
         </div>
         <p style="color: #666; font-size: 14px;">If the button doesn't work, you can also copy and paste this link into your browser:</p>
-        <p style="word-break: break-all; color: #007bff; font-size: 14px;">{}</p>
-        <p style="color: #666; font-size: 14px; margin-top: 30px;">This verification link will expire in {} hours.</p>
-        <p style="color: #666; font-size: 14px;">If you didn't create an account with Codex, you can safely ignore this email.</p>
+        <p style="word-break: break-all; color: #007bff; font-size: 14px;">{verification_url}</p>
+        <p style="color: #666; font-size: 14px; margin-top: 30px;">This verification link will expire in {expiry_hours} hours.</p>
+        <p style="color: #666; font-size: 14px;">If you didn't create an account with {app_name}, you can safely ignore this email.</p>
     </div>
     <div style="text-align: center; color: #999; font-size: 12px;">
-        <p>&copy; 2026 Codex. All rights reserved.</p>
+        <p>&copy; 2026 {app_name}. All rights reserved.</p>
     </div>
 </body>
 </html>"#,
-            to_name,
-            verification_url,
-            verification_url,
-            self.config.verification_token_expiry_hours
+            app_name = app_name,
+            to_name = to_name,
+            verification_url = verification_url,
+            expiry_hours = self.config.verification_token_expiry_hours
         )
     }
 
-    fn create_verification_email_text(&self, to_name: &str, verification_url: &str) -> String {
+    fn create_verification_email_text(
+        &self,
+        to_name: &str,
+        verification_url: &str,
+        app_name: &str,
+    ) -> String {
         format!(
-            r#"Welcome to Codex!
+            r#"Welcome to {app_name}!
 
-Hi {},
+Hi {to_name},
 
-Thank you for registering with Codex. To complete your registration and activate your account, please verify your email address by visiting the following link:
+Thank you for registering with {app_name}. To complete your registration and activate your account, please verify your email address by visiting the following link:
 
-{}
+{verification_url}
 
-This verification link will expire in {} hours.
+This verification link will expire in {expiry_hours} hours.
 
-If you didn't create an account with Codex, you can safely ignore this email.
+If you didn't create an account with {app_name}, you can safely ignore this email.
 
 ---
-© 2026 Codex. All rights reserved.
+© 2026 {app_name}. All rights reserved.
 "#,
-            to_name, verification_url, self.config.verification_token_expiry_hours
+            app_name = app_name,
+            to_name = to_name,
+            verification_url = verification_url,
+            expiry_hours = self.config.verification_token_expiry_hours
         )
     }
 }
@@ -167,11 +181,30 @@ mod tests {
         let html = service.create_verification_email_html(
             "John Doe",
             "http://localhost:8080/auth/verify-email?token=abc123",
+            "Codex",
         );
 
         assert!(html.contains("John Doe"));
         assert!(html.contains("http://localhost:8080/auth/verify-email?token=abc123"));
         assert!(html.contains("24 hours"));
+        assert!(html.contains("Welcome to Codex!"));
+    }
+
+    #[test]
+    fn test_create_verification_email_html_custom_app_name() {
+        let config = create_test_config();
+        let service = EmailService::new(config);
+        let html = service.create_verification_email_html(
+            "John Doe",
+            "http://localhost:8080/auth/verify-email?token=abc123",
+            "My Comic Library",
+        );
+
+        assert!(html.contains("John Doe"));
+        assert!(html.contains("Welcome to My Comic Library!"));
+        assert!(html.contains("registering with My Comic Library"));
+        assert!(html.contains("account with My Comic Library"));
+        assert!(html.contains("2026 My Comic Library"));
     }
 
     #[test]
@@ -181,10 +214,29 @@ mod tests {
         let text = service.create_verification_email_text(
             "John Doe",
             "http://localhost:8080/auth/verify-email?token=abc123",
+            "Codex",
         );
 
         assert!(text.contains("John Doe"));
         assert!(text.contains("http://localhost:8080/auth/verify-email?token=abc123"));
         assert!(text.contains("24 hours"));
+        assert!(text.contains("Welcome to Codex!"));
+    }
+
+    #[test]
+    fn test_create_verification_email_text_custom_app_name() {
+        let config = create_test_config();
+        let service = EmailService::new(config);
+        let text = service.create_verification_email_text(
+            "John Doe",
+            "http://localhost:8080/auth/verify-email?token=abc123",
+            "My Comic Library",
+        );
+
+        assert!(text.contains("John Doe"));
+        assert!(text.contains("Welcome to My Comic Library!"));
+        assert!(text.contains("registering with My Comic Library"));
+        assert!(text.contains("account with My Comic Library"));
+        assert!(text.contains("2026 My Comic Library"));
     }
 }

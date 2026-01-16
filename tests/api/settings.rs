@@ -745,3 +745,135 @@ async fn test_update_setting_without_ip_header() {
         "Should have None when no IP headers present"
     );
 }
+
+// ============================================================================
+// Branding Endpoint Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_branding_endpoint_returns_default_app_name() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_app_state(db.clone()).await;
+    let app = create_test_router_with_app_state(state.clone());
+
+    // No authentication needed for branding endpoint
+    let request = get_request("/api/v1/settings/branding");
+    let (status, response): (StatusCode, Option<codex::api::dto::BrandingSettingsDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let branding = response.expect("Expected branding response");
+    assert_eq!(branding.application_name, "Codex");
+}
+
+#[tokio::test]
+async fn test_branding_endpoint_no_auth_required() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_app_state(db.clone()).await;
+    let app = create_test_router_with_app_state(state.clone());
+
+    // Explicitly test without any auth headers
+    let request = hyper::Request::builder()
+        .method("GET")
+        .uri("/api/v1/settings/branding")
+        .body(String::new())
+        .unwrap();
+
+    let (status, _): (StatusCode, Option<codex::api::dto::BrandingSettingsDto>) =
+        make_json_request(app, request).await;
+
+    // Should succeed without authentication
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_branding_endpoint_returns_custom_app_name() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_app_state(db.clone()).await;
+    let app = create_test_router_with_app_state(state.clone());
+
+    // First, update the application.name setting via admin API
+    let token = create_admin_and_token(&db, &state).await;
+    let update = UpdateSettingRequest {
+        value: "My Comic Library".to_string(),
+        change_reason: Some("Testing custom app name".to_string()),
+    };
+
+    let request =
+        put_json_request_with_auth("/api/v1/admin/settings/application.name", &update, &token);
+    let (status, _): (StatusCode, Option<SettingDto>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Now test the branding endpoint returns the custom name
+    let request = get_request("/api/v1/settings/branding");
+    let (status, response): (StatusCode, Option<codex::api::dto::BrandingSettingsDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let branding = response.expect("Expected branding response");
+    assert_eq!(branding.application_name, "My Comic Library");
+}
+
+#[tokio::test]
+async fn test_application_name_in_public_settings() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_app_state(db.clone()).await;
+    let app = create_test_router_with_app_state(state.clone());
+
+    let token = create_regular_user_and_token(&db, &state).await;
+
+    let request = get_request_with_auth("/api/v1/settings/public", &token);
+    let (status, response): (
+        StatusCode,
+        Option<std::collections::HashMap<String, codex::api::dto::PublicSettingDto>>,
+    ) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let settings = response.expect("Expected settings response");
+
+    // application.name should be included in public settings
+    assert!(
+        settings.contains_key("application.name"),
+        "Public settings should include application.name"
+    );
+
+    let app_name = settings.get("application.name").unwrap();
+    assert_eq!(app_name.key, "application.name");
+    assert_eq!(app_name.value, "Codex"); // Default value
+}
+
+// ============================================================================
+// Settings Repository get_app_name() Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_app_name_returns_default() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Should return default "Codex" since setting hasn't been modified
+    let app_name = SettingsRepository::get_app_name(&db).await;
+    assert_eq!(app_name, "Codex");
+}
+
+#[tokio::test]
+async fn test_get_app_name_returns_custom_value() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let user_id = uuid::Uuid::new_v4();
+
+    // Update the application.name setting
+    SettingsRepository::set(
+        &db,
+        "application.name",
+        "Custom App Name".to_string(),
+        user_id,
+        None,
+        None,
+    )
+    .await
+    .expect("Failed to update setting");
+
+    // Should return the custom value
+    let app_name = SettingsRepository::get_app_name(&db).await;
+    assert_eq!(app_name, "Custom App Name");
+}

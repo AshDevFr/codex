@@ -1,7 +1,7 @@
 use crate::api::{
     dto::{
-        BulkUpdateSettingsRequest, HistoryQuery, ListSettingsQuery, PublicSettingDto, SettingDto,
-        SettingHistoryDto, UpdateSettingRequest,
+        BrandingSettingsDto, BulkUpdateSettingsRequest, HistoryQuery, ListSettingsQuery,
+        PublicSettingDto, SettingDto, SettingHistoryDto, UpdateSettingRequest,
     },
     error::ApiError,
     extractors::{AuthContext, AuthState},
@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 /// Public settings that can be accessed by any authenticated user
 /// These are non-sensitive settings that affect UI/display behavior
-const PUBLIC_SETTING_KEYS: &[&str] = &["display.custom_metadata_template"];
+const PUBLIC_SETTING_KEYS: &[&str] = &["display.custom_metadata_template", "application.name"];
 
 /// List all settings (admin only)
 #[utoipa::path(
@@ -436,4 +436,36 @@ pub async fn get_public_settings(
     }
 
     Ok(Json(result))
+}
+
+/// Default application name when setting is not found
+const DEFAULT_APP_NAME: &str = "Codex";
+
+/// Get branding settings (unauthenticated)
+///
+/// Returns branding-related settings that are needed on unauthenticated pages
+/// like the login screen. This endpoint does not require authentication.
+#[utoipa::path(
+    get,
+    path = "/api/v1/settings/branding",
+    responses(
+        (status = 200, description = "Branding settings", body = BrandingSettingsDto,
+         example = json!({
+             "application_name": "Codex"
+         })
+        ),
+    ),
+    tag = "settings"
+)]
+pub async fn get_branding_settings(
+    State(state): State<Arc<AuthState>>,
+) -> Result<Json<BrandingSettingsDto>, ApiError> {
+    let application_name = SettingsRepository::get(&state.db, "application.name")
+        .await
+        .ok()
+        .flatten()
+        .map(|s| s.value)
+        .unwrap_or_else(|| DEFAULT_APP_NAME.to_string());
+
+    Ok(Json(BrandingSettingsDto { application_name }))
 }

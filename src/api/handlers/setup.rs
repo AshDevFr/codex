@@ -183,6 +183,9 @@ pub async fn initialize_setup(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to update last login: {}", e)))?;
 
+    // Get app name for welcome message
+    let app_name = SettingsRepository::get_app_name(&state.db).await;
+
     // Build response
     let response = InitializeSetupResponse {
         user: UserInfo {
@@ -195,7 +198,7 @@ pub async fn initialize_setup(
         access_token: access_token.clone(),
         token_type: "Bearer".to_string(),
         expires_in: 24 * 3600, // 24 hours in seconds
-        message: "Setup completed successfully. Welcome to Codex!".to_string(),
+        message: format!("Setup completed successfully. Welcome to {}!", app_name),
     };
 
     // Create HTTP-only cookie for image authentication (same as login)

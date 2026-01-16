@@ -36,6 +36,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { librariesApi } from "@/api/libraries";
 import { LibraryModal } from "@/components/forms/LibraryModal";
 import { TaskNotificationBadge } from "@/components/TaskNotificationBadge";
+import { useAppName } from "@/hooks/useAppName";
 import { useAuthStore } from "@/store/authStore";
 import { useLibraryPreferencesStore } from "@/store/libraryPreferencesStore";
 import type { Library } from "@/types";
@@ -45,6 +46,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ currentPath = "/" }: SidebarProps) {
+	const appName = useAppName();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const { user, clearAuth } = useAuthStore();
@@ -445,8 +447,8 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 						<strong>{libraryToDelete?.name}</strong>?
 					</Text>
 					<Text size="sm" c="dimmed">
-						This will remove the library from Codex. The files on disk will not
-						be deleted.
+						This will remove the library from {appName}. The files on disk will
+						not be deleted.
 					</Text>
 					<Group justify="flex-end" mt="md">
 						<Button

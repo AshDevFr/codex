@@ -4,7 +4,7 @@ use crate::api::{
     extractors::{AuthContext, AuthState},
     permissions::Permission,
 };
-use crate::db::repositories::{BookMetadataRepository, BookRepository};
+use crate::db::repositories::{BookMetadataRepository, BookRepository, SettingsRepository};
 use crate::require_permission;
 use axum::{
     extract::{Path, State},
@@ -62,6 +62,7 @@ pub async fn opds_book_pages(
 
     let now = Utc::now();
     let base_url = "/opds";
+    let app_name = SettingsRepository::get_app_name(&state.db).await;
 
     // Fetch book
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -77,11 +78,12 @@ pub async fn opds_book_pages(
         .and_then(|m| m.title)
         .unwrap_or_else(|| "Untitled".to_string());
 
-    let mut feed = OpdsFeed::new(
+    let mut feed = OpdsFeed::with_author(
         format!("urn:uuid:book-{}-pages", book_id),
         format!("{} - Pages", title),
         now,
         true, // Include PSE namespace
+        &app_name,
     )
     .add_link(OpdsLink::self_link(format!(
         "{}/books/{}/pages",

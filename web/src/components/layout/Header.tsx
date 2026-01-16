@@ -9,6 +9,7 @@ import {
 import { IconMenu2, IconMoon, IconSun } from "@tabler/icons-react";
 import type { RefObject } from "react";
 import { SearchInput, type SearchInputHandle } from "@/components/search";
+import { useAppName } from "@/hooks/useAppName";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
 
 interface HeaderProps {
@@ -24,6 +25,7 @@ export function Header({
 	toggleDesktop,
 	searchInputRef,
 }: HeaderProps) {
+	const appName = useAppName();
 	const computedColorScheme = useComputedColorScheme("dark");
 	const setPreference = useUserPreferencesStore((state) => state.setPreference);
 
@@ -55,7 +57,7 @@ export function Header({
 						<IconMenu2 size={20} />
 					</ActionIcon>
 					<Text size="xl" fw={700}>
-						Codex
+						{appName}
 					</Text>
 				</Group>
 

@@ -17,14 +17,19 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { authApi } from "@/api/auth";
 import { setupApi } from "@/api/setup";
+import { useAppName } from "@/hooks/useAppName";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useAuthStore } from "@/store/authStore";
 import type { ApiError, LoginRequest, LoginResponse } from "@/types";
 
 export function Login() {
 	const navigate = useNavigate();
+	const appName = useAppName();
 	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
 	const { setAuth } = useAuthStore();
+
+	useDocumentTitle("Login");
 
 	const { data: setupStatus } = useQuery({
 		queryKey: ["setup-status"],
@@ -49,7 +54,7 @@ export function Login() {
 		<Box bg="dark.7" mih="100vh">
 			<Container size={420} py={100}>
 				<Title ta="center" mb="xl">
-					Welcome to Codex
+					Welcome to {appName}
 				</Title>
 
 				<Paper shadow="md" p={30} radius="md" bg="dark.6">

@@ -19,6 +19,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { setupApi } from "@/api/setup";
 import { CronInput } from "@/components/forms/CronInput";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useAuthStore } from "@/store/authStore";
 import type {
 	ApiError,
@@ -58,6 +59,8 @@ const validateEmail = (email: string) => {
 export function Setup() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
+
+	useDocumentTitle("Setup");
 	const { setAuth } = useAuthStore();
 	const [active, setActive] = useState(0);
 

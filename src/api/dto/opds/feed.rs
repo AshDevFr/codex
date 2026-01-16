@@ -63,12 +63,23 @@ pub struct OpdsFeed {
 
 #[allow(dead_code)] // Public API for OPDS feed building
 impl OpdsFeed {
-    /// Create a new OPDS feed
+    /// Create a new OPDS feed with default author name "Codex"
     pub fn new(
         id: impl Into<String>,
         title: impl Into<String>,
         updated: DateTime<Utc>,
         include_pse: bool,
+    ) -> Self {
+        Self::with_author(id, title, updated, include_pse, "Codex")
+    }
+
+    /// Create a new OPDS feed with a custom author/app name
+    pub fn with_author(
+        id: impl Into<String>,
+        title: impl Into<String>,
+        updated: DateTime<Utc>,
+        include_pse: bool,
+        author_name: impl Into<String>,
     ) -> Self {
         Self {
             xmlns: "http://www.w3.org/2005/Atom".to_string(),
@@ -83,7 +94,7 @@ impl OpdsFeed {
             title: title.into(),
             updated: updated.to_rfc3339(),
             author: OpdsAuthor {
-                name: "Codex".to_string(),
+                name: author_name.into(),
                 uri: None,
             },
             link: Vec::new(),

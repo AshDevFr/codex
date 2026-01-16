@@ -8,7 +8,7 @@ use crate::api::{
 };
 use crate::db::{
     entities::users,
-    repositories::{EmailVerificationTokenRepository, UserRepository},
+    repositories::{EmailVerificationTokenRepository, SettingsRepository, UserRepository},
 };
 use crate::utils::password;
 use axum::{
@@ -262,10 +262,18 @@ pub async fn register(
                     ApiError::Internal(format!("Failed to create verification token: {}", e))
                 })?;
 
+        // Get app name for email branding
+        let app_name = SettingsRepository::get_app_name(&state.db).await;
+
         // Send verification email
         state
             .email_service
-            .send_verification_email(&created_user.email, &created_user.username, &token.token)
+            .send_verification_email(
+                &created_user.email,
+                &created_user.username,
+                &token.token,
+                &app_name,
+            )
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to send verification email: {}", e)))?;
 
@@ -468,10 +476,13 @@ pub async fn resend_verification(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to create verification token: {}", e)))?;
 
+    // Get app name for email branding
+    let app_name = SettingsRepository::get_app_name(&state.db).await;
+
     // Send verification email
     state
         .email_service
-        .send_verification_email(&user.email, &user.username, &token.token)
+        .send_verification_email(&user.email, &user.username, &token.token, &app_name)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to send verification email: {}", e)))?;
 

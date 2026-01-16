@@ -38,6 +38,8 @@ import { useState } from "react";
 import { api } from "@/api/client";
 import { userIntegrationsApi } from "@/api/userIntegrations";
 import { userPreferencesApi } from "@/api/userPreferences";
+import { useAppName } from "@/hooks/useAppName";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useAuthStore } from "@/store/authStore";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
 import type { components } from "@/types/api.generated";
@@ -49,11 +51,14 @@ type UserIntegrationDto = components["schemas"]["UserIntegrationDto"];
 type AvailableIntegrationDto = components["schemas"]["AvailableIntegrationDto"];
 
 export function ProfileSettings() {
+	const appName = useAppName();
 	const { user } = useAuthStore();
 	const queryClient = useQueryClient();
 	const { getPreference, setPreference } = useUserPreferencesStore();
 	const [createKeyModalOpened, setCreateKeyModalOpened] = useState(false);
 	const [newApiKey, setNewApiKey] = useState<string | null>(null);
+
+	useDocumentTitle("Profile Settings");
 
 	// Fetch user preferences
 	const { data: preferences } = useQuery({
@@ -549,7 +554,7 @@ export function ProfileSettings() {
 										</Button>
 									</Group>
 									<Text size="sm" c="dimmed">
-										API keys allow external applications to access your Codex
+										API keys allow external applications to access your {appName}{" "}
 										account. Keep them secure and never share them publicly.
 									</Text>
 									{apiKeysLoading ? (

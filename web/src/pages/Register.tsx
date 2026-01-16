@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { authApi } from "@/api/auth";
 import { setupApi } from "@/api/setup";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useAuthStore } from "@/store/authStore";
 import type { ApiError, RegisterRequest } from "@/types";
 
@@ -28,6 +29,8 @@ export function Register() {
 	const [confirmPassword, setConfirmPassword] = useState("");
 	const [passwordError, setPasswordError] = useState("");
 	const { setAuth } = useAuthStore();
+
+	useDocumentTitle("Register");
 
 	const { data: setupStatus, isLoading: isStatusLoading } = useQuery({
 		queryKey: ["setup-status"],

@@ -6920,6 +6920,31 @@
         ]
       }
     },
+    "/api/v1/settings/branding": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get branding settings (unauthenticated)",
+        "description": "Returns branding-related settings that are needed on unauthenticated pages\nlike the login screen. This endpoint does not require authentication.",
+        "operationId": "get_branding_settings",
+        "responses": {
+          "200": {
+            "description": "Branding settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandingSettingsDto"
+                },
+                "example": {
+                  "application_name": "Codex"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/settings/public": {
       "get": {
         "tags": [
@@ -10056,6 +10081,20 @@
           }
         ],
         "description": "Operators for boolean comparisons"
+      },
+      "BrandingSettingsDto": {
+        "type": "object",
+        "description": "Branding settings DTO (unauthenticated access)\n\nContains branding-related settings that can be accessed without authentication.\nUsed on the login page and other unauthenticated UI surfaces.",
+        "required": [
+          "application_name"
+        ],
+        "properties": {
+          "application_name": {
+            "type": "string",
+            "description": "The application name to display",
+            "example": "Codex"
+          }
+        }
       },
       "BrowseResponse": {
         "type": "object",

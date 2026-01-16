@@ -2242,6 +2242,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get branding settings (unauthenticated)
+         * @description Returns branding-related settings that are needed on unauthenticated pages
+         *     like the login screen. This endpoint does not require authentication.
+         */
+        get: operations["get_branding_settings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings/public": {
         parameters: {
             query?: never;
@@ -3664,6 +3685,19 @@ export interface components {
         } | {
             /** @enum {string} */
             operator: "isFalse";
+        };
+        /**
+         * @description Branding settings DTO (unauthenticated access)
+         *
+         *     Contains branding-related settings that can be accessed without authentication.
+         *     Used on the login page and other unauthenticated UI surfaces.
+         */
+        BrandingSettingsDto: {
+            /**
+             * @description The application name to display
+             * @example Codex
+             */
+            application_name: string;
         };
         /**
          * @example {
@@ -13092,6 +13126,31 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_branding_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Branding settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "application_name": "Codex"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BrandingSettingsDto"];
+                };
             };
         };
     };

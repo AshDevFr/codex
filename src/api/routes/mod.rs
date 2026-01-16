@@ -598,6 +598,11 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         // Filesystem routes (protected, admin only)
         .route("/filesystem/browse", get(handlers::browse_filesystem))
         .route("/filesystem/drives", get(handlers::list_drives))
+        // Branding settings route (public, no authentication required)
+        .route(
+            "/settings/branding",
+            get(handlers::settings::get_branding_settings),
+        )
         // Public settings routes (protected, all authenticated users)
         .route(
             "/settings/public",
