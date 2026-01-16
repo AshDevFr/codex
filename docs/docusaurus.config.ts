@@ -8,7 +8,7 @@ import type * as OpenApiPlugin from 'docusaurus-plugin-openapi-docs';
 const config: Config = {
   title: 'Codex',
   tagline: 'A next-generation digital library server for comics, manga, and ebooks',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/codex-logo-color.svg',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
@@ -106,7 +106,7 @@ const config: Config = {
       title: 'Codex',
       logo: {
         alt: 'Codex Logo',
-        src: 'img/logo.svg',
+        src: 'img/codex-logo-color.svg',
       },
       items: [
         {
