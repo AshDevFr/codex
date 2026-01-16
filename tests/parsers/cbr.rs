@@ -30,7 +30,7 @@ fn test_cbr_parser_parse_nonexistent_file() {
 #[test]
 fn test_cbr_parser_default() {
     let parser1 = CbrParser::new();
-    let parser2 = CbrParser::default();
+    let parser2 = CbrParser;
 
     // Both should be able to parse CBR files
     assert!(parser1.can_parse("test.cbr"));

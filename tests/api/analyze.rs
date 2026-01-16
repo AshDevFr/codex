@@ -450,7 +450,7 @@ async fn test_auto_analysis_queues_tasks() {
 
     // Books should still be unanalyzed (tasks queued but not processed)
     assert!(
-        unanalyzed_books.len() > 0,
+        !unanalyzed_books.is_empty(),
         "Books should be unanalyzed with analysis tasks queued"
     );
 

@@ -157,7 +157,7 @@ pub fn create_test_epub(temp_dir: &TempDir, num_chapters: usize, num_images: usi
             i, i, i
         );
 
-        zip.start_file(&format!("OEBPS/chapter{}.xhtml", i), options)
+        zip.start_file(format!("OEBPS/chapter{}.xhtml", i), options)
             .unwrap();
         zip.write_all(chapter_content.as_bytes()).unwrap();
     }
@@ -165,7 +165,7 @@ pub fn create_test_epub(temp_dir: &TempDir, num_chapters: usize, num_images: usi
     // Add images
     for i in 1..=num_images {
         let image_data = create_test_png(10, 10);
-        zip.start_file(&format!("OEBPS/images/image{}.png", i), options)
+        zip.start_file(format!("OEBPS/images/image{}.png", i), options)
             .unwrap();
         zip.write_all(&image_data).unwrap();
     }

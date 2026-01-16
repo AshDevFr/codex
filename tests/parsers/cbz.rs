@@ -96,7 +96,7 @@ fn test_cbz_parser_parse_nonexistent_file() {
 #[test]
 fn test_cbz_parser_default() {
     let parser1 = CbzParser::new();
-    let parser2 = CbzParser::default();
+    let parser2 = CbzParser;
 
     // Both should be able to parse CBZ files
     assert!(parser1.can_parse("test.cbz"));

@@ -19,6 +19,7 @@ use uuid::Uuid;
 static POSTGRES_MIGRATION_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 /// Helper to create a test database
+#[allow(clippy::await_holding_lock)] // Intentionally holding lock across await to serialize migrations
 async fn create_test_postgres_db() -> Database {
     let config = DatabaseConfig {
         db_type: DatabaseType::Postgres,
@@ -241,7 +242,7 @@ async fn test_postgres_metrics_repository() {
 
     // Create multiple books with different file sizes to test SUM aggregation
     let now = Utc::now();
-    let book_sizes = vec![1_000_000_i64, 2_500_000, 500_000, 3_000_000]; // Total: 7,000,000
+    let book_sizes = [1_000_000_i64, 2_500_000, 500_000, 3_000_000]; // Total: 7,000,000
 
     for (idx, size) in book_sizes.iter().enumerate() {
         // Title and number are now in book_metadata table

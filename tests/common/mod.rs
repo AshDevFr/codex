@@ -1,7 +1,9 @@
 // Test helper modules organized by functionality
 // Allow unused imports/dead code - different test files use different subsets of helpers
+// Allow duplicate_mod - this module is intentionally loaded by multiple test files via #[path]
 #![allow(unused_imports)]
 #![allow(dead_code)]
+#![allow(clippy::duplicate_mod)]
 
 pub mod db;
 pub mod files;

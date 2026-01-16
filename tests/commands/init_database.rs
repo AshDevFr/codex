@@ -53,9 +53,7 @@ async fn test_init_database_without_skip_migrations() {
         scanner: codex::config::ScannerConfig {
             max_concurrent_scans: 2,
         },
-        task: codex::config::TaskConfig {
-            worker_count: 4,
-        },
+        task: codex::config::TaskConfig { worker_count: 4 },
     };
 
     // Initialize database - should run migrations
@@ -71,7 +69,10 @@ async fn test_init_database_without_skip_migrations() {
 
     // Verify migrations are complete
     let complete = db.migrations_complete().await.unwrap();
-    assert!(complete, "Migrations should be complete after init_database");
+    assert!(
+        complete,
+        "Migrations should be complete after init_database"
+    );
 }
 
 #[tokio::test]
@@ -122,9 +123,7 @@ async fn test_init_database_with_skip_migrations_complete() {
         scanner: codex::config::ScannerConfig {
             max_concurrent_scans: 2,
         },
-        task: codex::config::TaskConfig {
-            worker_count: 4,
-        },
+        task: codex::config::TaskConfig { worker_count: 4 },
     };
 
     // First, run migrations to set up the database
@@ -195,9 +194,7 @@ async fn test_init_database_with_skip_migrations_wait_for_completion() {
         scanner: codex::config::ScannerConfig {
             max_concurrent_scans: 2,
         },
-        task: codex::config::TaskConfig {
-            worker_count: 4,
-        },
+        task: codex::config::TaskConfig { worker_count: 4 },
     };
 
     // Simulate external migration process running in background
@@ -207,7 +204,9 @@ async fn test_init_database_with_skip_migrations_wait_for_completion() {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
         // Run migrations (simulating external migration job)
-        let db = codex::db::Database::new(&config_clone.database).await.unwrap();
+        let db = codex::db::Database::new(&config_clone.database)
+            .await
+            .unwrap();
         db.run_migrations().await.unwrap();
     });
 
@@ -282,9 +281,7 @@ async fn test_init_database_with_skip_migrations_variant_1() {
         scanner: codex::config::ScannerConfig {
             max_concurrent_scans: 2,
         },
-        task: codex::config::TaskConfig {
-            worker_count: 4,
-        },
+        task: codex::config::TaskConfig { worker_count: 4 },
     };
 
     // First, run migrations to set up the database
@@ -355,9 +352,7 @@ async fn test_init_database_with_skip_migrations_timeout() {
         scanner: codex::config::ScannerConfig {
             max_concurrent_scans: 2,
         },
-        task: codex::config::TaskConfig {
-            worker_count: 4,
-        },
+        task: codex::config::TaskConfig { worker_count: 4 },
     };
 
     // Initialize with skip migrations on a fresh database - should timeout

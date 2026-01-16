@@ -29,7 +29,11 @@ database:
     let result = migrate_command(PathBuf::from(config_path)).await;
 
     // Should succeed
-    assert!(result.is_ok(), "Migration command should succeed: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Migration command should succeed: {:?}",
+        result
+    );
 }
 
 #[tokio::test]
@@ -61,6 +65,8 @@ database:
 
     // Run again - should still succeed (idempotent)
     let result2 = migrate_command(PathBuf::from(config_path)).await;
-    assert!(result2.is_ok(), "Second migration should also succeed (idempotent)");
+    assert!(
+        result2.is_ok(),
+        "Second migration should also succeed (idempotent)"
+    );
 }
-

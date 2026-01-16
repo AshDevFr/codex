@@ -201,7 +201,7 @@ async fn test_trigger_duplicate_scan() {
         "Duplicate detection scan has been queued"
     );
     // Verify task_id is a valid UUID
-    assert!(scan_response.task_id.to_string().len() > 0);
+    assert!(!scan_response.task_id.to_string().is_empty());
 }
 
 #[tokio::test]

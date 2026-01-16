@@ -413,7 +413,7 @@ mod tests {
 
         // Create multiple books with different sizes
         let now = Utc::now();
-        let book_sizes = vec![1000000, 2500000, 500000, 3000000]; // Total: 7000000
+        let book_sizes = [1000000, 2500000, 500000, 3000000]; // Total: 7000000
 
         for (idx, size) in book_sizes.iter().enumerate() {
             // Note: title and number are now in book_metadata table

@@ -143,7 +143,10 @@ fn extract_password(url: &str) -> String {
 
 /// Helper to extract database name from PostgreSQL URL
 fn extract_database(url: &str) -> String {
-    url.split('/').last().unwrap_or("codex_test").to_string()
+    url.split('/')
+        .next_back()
+        .unwrap_or("codex_test")
+        .to_string()
 }
 
 /// Clean up test data from PostgreSQL database

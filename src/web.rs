@@ -14,8 +14,6 @@ use axum::{
 };
 
 #[cfg(feature = "embed-frontend")]
-use mime_guess;
-#[cfg(feature = "embed-frontend")]
 use rust_embed::RustEmbed;
 
 // Embed the frontend dist directory when the feature is enabled

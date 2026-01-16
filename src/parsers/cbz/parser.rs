@@ -201,7 +201,7 @@ mod tests {
 
     #[test]
     fn test_cbz_parser_default() {
-        let parser = CbzParser::default();
+        let parser = CbzParser;
         assert!(parser.can_parse("test.cbz"));
     }
 }

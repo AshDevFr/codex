@@ -451,7 +451,7 @@ mod tests {
             task_var_before
         );
         // Debug: Check what the scanner config looks like after applying
-        let env_key_used = format!("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
+        let env_key_used = "CODEX_SCANNER_MAX_CONCURRENT_SCANS".to_string();
         let env_value_when_checked = env::var(&env_key_used).ok();
 
         assert_eq!(

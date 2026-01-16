@@ -97,7 +97,7 @@ fn test_pdf_parser_parse_invalid_pdf() {
 #[test]
 fn test_pdf_parser_default() {
     let parser1 = PdfParser::new();
-    let parser2 = PdfParser::default();
+    let parser2 = PdfParser;
 
     // Both should be able to parse PDF files
     assert!(parser1.can_parse("test.pdf"));

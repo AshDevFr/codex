@@ -335,7 +335,7 @@ mod tests {
 
     #[test]
     fn test_pdf_parser_default() {
-        let parser = PdfParser::default();
+        let parser = PdfParser;
         assert!(parser.can_parse("test.pdf"));
     }
 

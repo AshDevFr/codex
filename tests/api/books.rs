@@ -559,8 +559,8 @@ async fn test_list_in_progress_books() {
     use codex::db::repositories::ReadProgressRepository;
 
     // Mark 3 books as in-progress
-    for i in 0..3 {
-        ReadProgressRepository::upsert(&db, admin_user.id, book_ids[i], 5, false)
+    for book_id in book_ids.iter().take(3) {
+        ReadProgressRepository::upsert(&db, admin_user.id, *book_id, 5, false)
             .await
             .unwrap();
     }

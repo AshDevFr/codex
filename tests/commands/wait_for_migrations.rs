@@ -102,9 +102,7 @@ database:
     // Start waiting for migrations in the background
     let wait_handle = tokio::spawn({
         let config_path = config_path.clone();
-        async move {
-            wait_for_migrations_command(PathBuf::from(config_path), Some(10), Some(1)).await
-        }
+        async move { wait_for_migrations_command(PathBuf::from(config_path), Some(10), Some(1)).await }
     });
 
     // Give it a moment to start waiting
@@ -166,4 +164,3 @@ database:
         "Should have waited at least the timeout duration"
     );
 }
-

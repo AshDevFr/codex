@@ -2020,11 +2020,11 @@ mod tests {
             .unwrap();
 
         // Add reading progress for some books
-        for i in 0..3 {
+        for book_id in book_ids.iter().take(3) {
             ReadProgressRepository::upsert(
                 db.sea_orm_connection(),
                 created_user.id,
-                book_ids[i],
+                *book_id,
                 5,
                 false,
             )

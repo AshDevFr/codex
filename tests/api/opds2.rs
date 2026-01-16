@@ -900,7 +900,7 @@ fn create_test_book_model(
         series_id,
         library_id,
         file_path: file_path.to_string(),
-        file_name: file_path.split('/').last().unwrap().to_string(),
+        file_name: file_path.split('/').next_back().unwrap().to_string(),
         file_size: 1024000,
         file_hash: format!("hash_{}", Uuid::new_v4()),
         partial_hash: String::new(),

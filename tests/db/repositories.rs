@@ -238,7 +238,7 @@ async fn test_user_read_progress() {
     let progress = progress.insert(conn).await.unwrap();
 
     // Query progress with user and book info using SeaORM
-    let progress_result = read_progress::Entity::find_by_id(progress.id.clone())
+    let progress_result = read_progress::Entity::find_by_id(progress.id)
         .find_also_related(users::Entity)
         .one(conn)
         .await
@@ -474,7 +474,7 @@ async fn test_mark_book_deleted() {
         .unwrap();
 
     // Verify book is not deleted initially
-    assert_eq!(book.deleted, false);
+    assert!(!book.deleted);
 
     // Mark book as deleted
     BookRepository::mark_deleted(conn, book.id, true, None)
@@ -488,7 +488,7 @@ async fn test_mark_book_deleted() {
         .unwrap()
         .unwrap();
 
-    assert_eq!(updated_book.deleted, true);
+    assert!(updated_book.deleted);
     assert!(updated_book.updated_at > book.updated_at);
 
     db.close().await;
@@ -531,7 +531,7 @@ async fn test_restore_deleted_book() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(deleted_book.deleted, true);
+    assert!(deleted_book.deleted);
 
     // Restore the book
     BookRepository::mark_deleted(conn, book.id, false, None)
@@ -545,7 +545,7 @@ async fn test_restore_deleted_book() {
         .unwrap()
         .unwrap();
 
-    assert_eq!(restored_book.deleted, false);
+    assert!(!restored_book.deleted);
     assert!(restored_book.updated_at > deleted_book.updated_at);
 
     db.close().await;
@@ -605,7 +605,7 @@ async fn test_list_by_series_filters_deleted_by_default() {
     // Should only return book2
     assert_eq!(books.len(), 1);
     assert_eq!(books[0].id, book2.id);
-    assert_eq!(books[0].deleted, false);
+    assert!(!books[0].deleted);
 
     db.close().await;
 }

@@ -729,12 +729,12 @@ mod tests {
             error: None,
         };
 
-        TaskMetricsRepository::record_completion(&db, data.clone())
+        TaskMetricsRepository::record_completion(db, data.clone())
             .await
             .expect("Failed to record completion");
 
         // Verify record was created
-        let metrics = TaskMetricsRepository::get_current_aggregates(&db)
+        let metrics = TaskMetricsRepository::get_current_aggregates(db)
             .await
             .expect("Failed to get aggregates");
 
@@ -763,7 +763,7 @@ mod tests {
             bytes_processed: 512,
             error: None,
         };
-        TaskMetricsRepository::record_completion(&db, data1)
+        TaskMetricsRepository::record_completion(db, data1)
             .await
             .expect("Failed to record first completion");
 
@@ -779,12 +779,12 @@ mod tests {
             bytes_processed: 256,
             error: Some("Test error".to_string()),
         };
-        TaskMetricsRepository::record_completion(&db, data2)
+        TaskMetricsRepository::record_completion(db, data2)
             .await
             .expect("Failed to record second completion");
 
         // Verify aggregates
-        let metrics = TaskMetricsRepository::get_current_aggregates(&db)
+        let metrics = TaskMetricsRepository::get_current_aggregates(db)
             .await
             .expect("Failed to get aggregates");
 
@@ -823,12 +823,12 @@ mod tests {
             bytes_processed: 100,
             error: None,
         };
-        TaskMetricsRepository::record_completion(&db, data)
+        TaskMetricsRepository::record_completion(db, data)
             .await
             .expect("Failed to record completion");
 
         // Cleanup with 30 days retention - the record was just created so it should NOT be deleted
-        let deleted = TaskMetricsRepository::cleanup_old_metrics(&db, 30)
+        let deleted = TaskMetricsRepository::cleanup_old_metrics(db, 30)
             .await
             .expect("Failed to cleanup");
 
@@ -836,7 +836,7 @@ mod tests {
         assert_eq!(deleted, 0);
 
         // Now cleanup with -1 days (cutoff = now + 1 day, so everything before tomorrow is deleted)
-        let deleted = TaskMetricsRepository::cleanup_old_metrics(&db, -1)
+        let deleted = TaskMetricsRepository::cleanup_old_metrics(db, -1)
             .await
             .expect("Failed to cleanup");
 
@@ -862,25 +862,25 @@ mod tests {
                 bytes_processed: 100,
                 error: None,
             };
-            TaskMetricsRepository::record_completion(&db, data)
+            TaskMetricsRepository::record_completion(db, data)
                 .await
                 .expect("Failed to record completion");
         }
 
         // Verify records exist
-        let metrics = TaskMetricsRepository::get_current_aggregates(&db)
+        let metrics = TaskMetricsRepository::get_current_aggregates(db)
             .await
             .expect("Failed to get aggregates");
         assert_eq!(metrics.len(), 3);
 
         // Nuke all
-        let deleted = TaskMetricsRepository::nuke_all_metrics(&db)
+        let deleted = TaskMetricsRepository::nuke_all_metrics(db)
             .await
             .expect("Failed to nuke");
         assert_eq!(deleted, 3);
 
         // Verify all deleted
-        let metrics = TaskMetricsRepository::get_current_aggregates(&db)
+        let metrics = TaskMetricsRepository::get_current_aggregates(db)
             .await
             .expect("Failed to get aggregates");
         assert!(metrics.is_empty());
@@ -982,7 +982,7 @@ mod tests {
         let db = db.sea_orm_connection();
 
         // Delete metrics for a library that has no metrics
-        let deleted = TaskMetricsRepository::delete_by_library_id(&db, Uuid::new_v4())
+        let deleted = TaskMetricsRepository::delete_by_library_id(db, Uuid::new_v4())
             .await
             .expect("Failed to delete by library id");
         assert_eq!(deleted, 0);

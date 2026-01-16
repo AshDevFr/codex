@@ -183,7 +183,11 @@ pub async fn create_test_book_with_hash(
         series_id: series.id,
         library_id: series.library_id,
         file_path: file_path.to_string(),
-        file_name: file_path.split('/').last().unwrap_or(file_path).to_string(),
+        file_name: file_path
+            .split('/')
+            .next_back()
+            .unwrap_or(file_path)
+            .to_string(),
         file_size: 1024,
         file_hash: file_hash.to_string(),
         partial_hash: String::new(),

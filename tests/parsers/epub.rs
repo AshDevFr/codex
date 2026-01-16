@@ -125,7 +125,7 @@ fn test_epub_parser_parse_invalid_epub() {
 #[test]
 fn test_epub_parser_default() {
     let parser1 = EpubParser::new();
-    let parser2 = EpubParser::default();
+    let parser2 = EpubParser;
 
     // Both should be able to parse EPUB files
     assert!(parser1.can_parse("test.epub"));

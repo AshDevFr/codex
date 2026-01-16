@@ -751,7 +751,7 @@ async fn test_purge_deleted_on_scan_with_deep_scan() {
     let books = BookRepository::list_by_series(&db, series_list[0].id, false)
         .await
         .unwrap();
-    assert!(books.len() >= 1, "Should have at least 1 book");
+    assert!(!books.is_empty(), "Should have at least 1 book");
 
     // Mark one book as deleted
     BookRepository::mark_deleted(&db, books[0].id, true, None)

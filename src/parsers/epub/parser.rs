@@ -371,7 +371,7 @@ mod tests {
 
     #[test]
     fn test_epub_parser_default() {
-        let parser = EpubParser::default();
+        let parser = EpubParser;
         assert!(parser.can_parse("test.epub"));
     }
 

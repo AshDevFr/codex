@@ -248,6 +248,5 @@ mod tests {
     fn test_scheduler_can_be_created() {
         // This test is a placeholder - proper tests require a database connection
         // See tests/scheduler/mod.rs for integration tests
-        assert!(true);
     }
 }

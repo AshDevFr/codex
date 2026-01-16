@@ -559,7 +559,7 @@ async fn test_nuke_all_tasks() {
             None,
         )
         .await
-        .expect(&format!("Failed to enqueue task {}", i));
+        .unwrap_or_else(|_| panic!("Failed to enqueue task {}", i));
     }
 
     // Nuke all

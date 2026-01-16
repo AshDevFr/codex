@@ -684,11 +684,8 @@ mod tests {
 
         // Test case 3: No events, keep original data
         let existing_data = json!({ "status": "ok" });
-        let result_data = match (Some(existing_data.clone()), None::<Vec<RecordedEvent>>) {
-            (data, _) => data,
-        };
 
-        assert_eq!(result_data.unwrap()["status"], "ok");
+        assert_eq!(existing_data["status"], "ok");
     }
 
     #[test]

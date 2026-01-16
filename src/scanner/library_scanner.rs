@@ -1205,14 +1205,14 @@ mod tests {
     #[test]
     fn test_calculate_series_fingerprint_consistency() {
         // Same files in same order should produce same fingerprint
-        let files1 = vec![
+        let files1 = [
             PathBuf::from("/library/Batman/issue1.cbz"),
             PathBuf::from("/library/Batman/issue2.cbz"),
             PathBuf::from("/library/Batman/issue3.cbz"),
         ];
         let refs1: Vec<&PathBuf> = files1.iter().collect();
 
-        let files2 = vec![
+        let files2 = [
             PathBuf::from("/library/Batman/issue1.cbz"),
             PathBuf::from("/library/Batman/issue2.cbz"),
             PathBuf::from("/library/Batman/issue3.cbz"),
@@ -1228,14 +1228,14 @@ mod tests {
     #[test]
     fn test_calculate_series_fingerprint_order_independence() {
         // Files in different order should produce same fingerprint (alphabetically sorted)
-        let files1 = vec![
+        let files1 = [
             PathBuf::from("/library/Batman/issue3.cbz"),
             PathBuf::from("/library/Batman/issue1.cbz"),
             PathBuf::from("/library/Batman/issue2.cbz"),
         ];
         let refs1: Vec<&PathBuf> = files1.iter().collect();
 
-        let files2 = vec![
+        let files2 = [
             PathBuf::from("/library/Batman/issue1.cbz"),
             PathBuf::from("/library/Batman/issue2.cbz"),
             PathBuf::from("/library/Batman/issue3.cbz"),
@@ -1251,13 +1251,13 @@ mod tests {
     #[test]
     fn test_calculate_series_fingerprint_different_content() {
         // Different filenames should produce different fingerprints
-        let files1 = vec![
+        let files1 = [
             PathBuf::from("/library/Batman/Batman-001.cbz"),
             PathBuf::from("/library/Batman/Batman-002.cbz"),
         ];
         let refs1: Vec<&PathBuf> = files1.iter().collect();
 
-        let files2 = vec![
+        let files2 = [
             PathBuf::from("/library/Superman/Superman-001.cbz"),
             PathBuf::from("/library/Superman/Superman-002.cbz"),
         ];
@@ -1275,7 +1275,7 @@ mod tests {
     #[test]
     fn test_calculate_series_fingerprint_limit_5_files() {
         // Should only use first 5 files (alphabetically)
-        let files1 = vec![
+        let files1 = [
             PathBuf::from("/library/Batman/issue1.cbz"),
             PathBuf::from("/library/Batman/issue2.cbz"),
             PathBuf::from("/library/Batman/issue3.cbz"),
@@ -1284,7 +1284,7 @@ mod tests {
         ];
         let refs1: Vec<&PathBuf> = files1.iter().collect();
 
-        let files2 = vec![
+        let files2 = [
             PathBuf::from("/library/Batman/issue1.cbz"),
             PathBuf::from("/library/Batman/issue2.cbz"),
             PathBuf::from("/library/Batman/issue3.cbz"),
@@ -1307,13 +1307,13 @@ mod tests {
     #[test]
     fn test_calculate_series_fingerprint_path_independence() {
         // Same filenames in different paths should produce same fingerprint
-        let files1 = vec![
+        let files1 = [
             PathBuf::from("/library/Batman/issue1.cbz"),
             PathBuf::from("/library/Batman/issue2.cbz"),
         ];
         let refs1: Vec<&PathBuf> = files1.iter().collect();
 
-        let files2 = vec![
+        let files2 = [
             PathBuf::from("/new_location/Batman-Comics/issue1.cbz"),
             PathBuf::from("/new_location/Batman-Comics/issue2.cbz"),
         ];
@@ -1328,7 +1328,7 @@ mod tests {
     #[test]
     fn test_calculate_series_fingerprint_single_file() {
         // Should work with just one file
-        let files = vec![PathBuf::from("/library/Batman/standalone.cbz")];
+        let files = [PathBuf::from("/library/Batman/standalone.cbz")];
         let refs: Vec<&PathBuf> = files.iter().collect();
 
         let fp = calculate_series_fingerprint(&refs);

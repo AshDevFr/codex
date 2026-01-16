@@ -436,7 +436,7 @@ mod tests {
 
     #[test]
     fn test_cbr_parser_default() {
-        let parser = CbrParser::default();
+        let parser = CbrParser;
         assert!(parser.can_parse("test.cbr"));
     }
 

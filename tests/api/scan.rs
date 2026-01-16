@@ -405,7 +405,7 @@ async fn test_list_active_scans() {
 
     assert_eq!(status, StatusCode::OK);
     let scans = response.unwrap();
-    assert!(scans.len() >= 1); // At least one scan should be active or queued
+    assert!(!scans.is_empty()); // At least one scan should be active or queued
 }
 
 #[tokio::test]
@@ -653,22 +653,16 @@ async fn test_full_scan_with_progress_updates() {
         let mut updates = Vec::new();
         let mut completed = false;
 
-        loop {
-            match receiver.recv().await {
-                Ok(progress) => {
-                    if progress.library_id == Some(library.id) {
-                        use codex::events::TaskStatus;
-                        let is_done =
-                            matches!(progress.status, TaskStatus::Completed | TaskStatus::Failed);
-                        updates.push(progress.clone());
+        while let Ok(progress) = receiver.recv().await {
+            if progress.library_id == Some(library.id) {
+                use codex::events::TaskStatus;
+                let is_done = matches!(progress.status, TaskStatus::Completed | TaskStatus::Failed);
+                updates.push(progress.clone());
 
-                        if is_done {
-                            completed = true;
-                            break;
-                        }
-                    }
+                if is_done {
+                    completed = true;
+                    break;
                 }
-                Err(_) => break,
             }
         }
 
