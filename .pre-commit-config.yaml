@@ -5,6 +5,21 @@
 repos:
   - repo: local
     hooks:
+      - id: cargo-fmt
+        name: Rust format
+        entry: cargo fmt --
+        language: system
+        types: [rust]
+        pass_filenames: true
+
+      - id: cargo-clippy
+        name: Rust clippy (warnings only)
+        entry: bash -c 'cargo clippy --all-targets --all-features -- -W clippy::all || true'
+        language: system
+        types: [rust]
+        pass_filenames: false
+        verbose: true
+
       - id: openapi-sync
         name: Check OpenAPI files are in sync
         entry: ./scripts/check-openapi-sync.sh
