@@ -413,17 +413,17 @@ export const createSetting = (
 	key:
 		overrides.key ||
 		faker.helpers.arrayElement([
-			"server.name",
-			"server.port",
+			"application.name",
+			"scanner.scan_timeout_minutes",
 			"auth.registration_enabled",
-			"scanning.default_interval",
+			"task.poll_interval_seconds",
 		]),
 	value: overrides.value || faker.word.sample(),
 	default_value: overrides.default_value || faker.word.sample(),
 	description: faker.lorem.sentence(),
 	category:
 		overrides.category ||
-		faker.helpers.arrayElement(["server", "auth", "scanning"]),
+		faker.helpers.arrayElement(["Application", "Scanner", "Authentication", "Task"]),
 	value_type: "string",
 	is_sensitive: false,
 	updated_at: faker.date.recent().toISOString(),

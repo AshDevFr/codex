@@ -1249,6 +1249,161 @@ impl BookRepository {
 
         Ok((books, total))
     }
+
+    /// Create multiple books in a single batch insert operation
+    ///
+    /// This is significantly more efficient than calling `create()` for each book
+    /// individually. Note: This does NOT emit events for performance reasons.
+    /// If you need events, use `create()` in a loop or emit them separately.
+    ///
+    /// # Arguments
+    /// * `db` - Database connection
+    /// * `books_models` - Slice of book models to create
+    ///
+    /// # Returns
+    /// Number of books created
+    pub async fn create_batch(
+        db: &DatabaseConnection,
+        books_models: &[books::Model],
+    ) -> Result<u64> {
+        if books_models.is_empty() {
+            return Ok(0);
+        }
+
+        // Convert models to active models for batch insert
+        let active_models: Vec<books::ActiveModel> = books_models
+            .iter()
+            .map(|book_model| books::ActiveModel {
+                id: Set(book_model.id),
+                series_id: Set(book_model.series_id),
+                library_id: Set(book_model.library_id),
+                file_path: Set(book_model.file_path.clone()),
+                file_name: Set(book_model.file_name.clone()),
+                file_size: Set(book_model.file_size),
+                file_hash: Set(book_model.file_hash.clone()),
+                partial_hash: Set(book_model.partial_hash.clone()),
+                format: Set(book_model.format.clone()),
+                page_count: Set(book_model.page_count),
+                deleted: Set(book_model.deleted),
+                analyzed: Set(book_model.analyzed),
+                analysis_error: Set(book_model.analysis_error.clone()),
+                modified_at: Set(book_model.modified_at),
+                created_at: Set(book_model.created_at),
+                updated_at: Set(book_model.updated_at),
+                thumbnail_path: Set(book_model.thumbnail_path.clone()),
+                thumbnail_generated_at: Set(book_model.thumbnail_generated_at),
+            })
+            .collect();
+
+        let count = active_models.len() as u64;
+
+        // Bulk insert all books in a single query
+        Books::insert_many(active_models)
+            .exec(db)
+            .await
+            .context("Failed to batch create books")?;
+
+        Ok(count)
+    }
+
+    /// Update multiple books in a batch operation
+    ///
+    /// This performs individual updates but groups them efficiently. For very large
+    /// batches, consider chunking the input.
+    ///
+    /// Note: This does NOT emit events for performance reasons.
+    ///
+    /// # Arguments
+    /// * `db` - Database connection
+    /// * `books_models` - Slice of book models to update (must have valid IDs)
+    ///
+    /// # Returns
+    /// Number of books updated
+    pub async fn update_batch(
+        db: &DatabaseConnection,
+        books_models: &[books::Model],
+    ) -> Result<u64> {
+        use sea_orm::TransactionTrait;
+
+        if books_models.is_empty() {
+            return Ok(0);
+        }
+
+        let txn = db.begin().await.context("Failed to begin transaction")?;
+        let mut updated = 0u64;
+
+        for book_model in books_models {
+            let active = books::ActiveModel {
+                id: Set(book_model.id),
+                series_id: Set(book_model.series_id),
+                library_id: Set(book_model.library_id),
+                file_path: Set(book_model.file_path.clone()),
+                file_name: Set(book_model.file_name.clone()),
+                file_size: Set(book_model.file_size),
+                file_hash: Set(book_model.file_hash.clone()),
+                partial_hash: Set(book_model.partial_hash.clone()),
+                format: Set(book_model.format.clone()),
+                page_count: Set(book_model.page_count),
+                deleted: Set(book_model.deleted),
+                analyzed: Set(book_model.analyzed),
+                analysis_error: Set(book_model.analysis_error.clone()),
+                modified_at: Set(book_model.modified_at),
+                created_at: Set(book_model.created_at),
+                updated_at: Set(book_model.updated_at),
+                thumbnail_path: Set(book_model.thumbnail_path.clone()),
+                thumbnail_generated_at: Set(book_model.thumbnail_generated_at),
+            };
+
+            active
+                .update(&txn)
+                .await
+                .context("Failed to update book in batch")?;
+            updated += 1;
+        }
+
+        txn.commit()
+            .await
+            .context("Failed to commit batch update")?;
+
+        Ok(updated)
+    }
+
+    /// Get multiple books by their file paths in a single query
+    ///
+    /// This is more efficient than calling `get_by_path()` for each path individually.
+    ///
+    /// # Arguments
+    /// * `db` - Database connection
+    /// * `library_id` - Library ID to filter by
+    /// * `paths` - List of file paths to look up
+    ///
+    /// # Returns
+    /// HashMap of path -> book model for existing books
+    pub async fn get_by_paths(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        paths: &[String],
+    ) -> Result<std::collections::HashMap<String, books::Model>> {
+        use std::collections::HashMap;
+
+        if paths.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let books_list = Books::find()
+            .filter(books::Column::LibraryId.eq(library_id))
+            .filter(books::Column::FilePath.is_in(paths.to_vec()))
+            .all(db)
+            .await
+            .context("Failed to get books by paths")?;
+
+        let mut map = HashMap::with_capacity(books_list.len());
+        for book in books_list {
+            map.insert(book.file_path.clone(), book);
+        }
+
+        Ok(map)
+    }
 }
 
 #[cfg(test)]
@@ -2182,5 +2337,178 @@ mod tests {
             .await
             .unwrap();
         assert!(existing.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_create_batch() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create multiple books
+        let books_to_create: Vec<books::Model> = (0..5)
+            .map(|i| {
+                create_book_model(
+                    series.id,
+                    library.id,
+                    &format!("/test/book{}.cbz", i),
+                    &format!("book{}.cbz", i),
+                )
+            })
+            .collect();
+
+        // Batch create
+        let count = BookRepository::create_batch(db.sea_orm_connection(), &books_to_create)
+            .await
+            .unwrap();
+        assert_eq!(count, 5);
+
+        // Verify all books were created
+        for book in &books_to_create {
+            let retrieved = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+                .await
+                .unwrap();
+            assert!(retrieved.is_some());
+            assert_eq!(retrieved.unwrap().file_path, book.file_path);
+        }
+
+        // Test with empty input
+        let count = BookRepository::create_batch(db.sea_orm_connection(), &[])
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_update_batch() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create books first
+        let mut books_to_update: Vec<books::Model> = (0..3)
+            .map(|i| {
+                create_book_model(
+                    series.id,
+                    library.id,
+                    &format!("/test/book{}.cbz", i),
+                    &format!("book{}.cbz", i),
+                )
+            })
+            .collect();
+
+        BookRepository::create_batch(db.sea_orm_connection(), &books_to_update)
+            .await
+            .unwrap();
+
+        // Modify the books
+        for book in &mut books_to_update {
+            book.page_count = 99;
+            book.analyzed = true;
+        }
+
+        // Batch update
+        let count = BookRepository::update_batch(db.sea_orm_connection(), &books_to_update)
+            .await
+            .unwrap();
+        assert_eq!(count, 3);
+
+        // Verify updates
+        for book in &books_to_update {
+            let retrieved = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(retrieved.page_count, 99);
+            assert!(retrieved.analyzed);
+        }
+
+        // Test with empty input
+        let count = BookRepository::update_batch(db.sea_orm_connection(), &[])
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_by_paths() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create books
+        let book1 = create_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz");
+        let book2 = create_book_model(series.id, library.id, "/test/book2.cbz", "book2.cbz");
+        let book3 = create_book_model(series.id, library.id, "/test/book3.cbz", "book3.cbz");
+
+        BookRepository::create_batch(
+            db.sea_orm_connection(),
+            &[book1.clone(), book2.clone(), book3.clone()],
+        )
+        .await
+        .unwrap();
+
+        // Test batch lookup
+        let paths = vec![
+            "/test/book1.cbz".to_string(),
+            "/test/book2.cbz".to_string(),
+            "/test/nonexistent.cbz".to_string(),
+        ];
+
+        let result = BookRepository::get_by_paths(db.sea_orm_connection(), library.id, &paths)
+            .await
+            .unwrap();
+
+        // Should contain book1 and book2, but not nonexistent
+        assert_eq!(result.len(), 2);
+        assert!(result.contains_key("/test/book1.cbz"));
+        assert!(result.contains_key("/test/book2.cbz"));
+        assert!(!result.contains_key("/test/nonexistent.cbz"));
+
+        // Verify the IDs
+        assert_eq!(result.get("/test/book1.cbz").unwrap().id, book1.id);
+        assert_eq!(result.get("/test/book2.cbz").unwrap().id, book2.id);
+
+        // Test with empty paths
+        let result = BookRepository::get_by_paths(db.sea_orm_connection(), library.id, &[])
+            .await
+            .unwrap();
+        assert!(result.is_empty());
     }
 }

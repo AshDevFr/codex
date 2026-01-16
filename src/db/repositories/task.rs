@@ -96,6 +96,116 @@ impl TaskRepository {
         }
     }
 
+    /// Enqueue multiple tasks in a batch operation
+    ///
+    /// This is significantly more efficient than calling `enqueue()` for each task
+    /// individually. Skips tasks that already exist (based on type and entity).
+    ///
+    /// # Arguments
+    /// * `db` - Database connection
+    /// * `task_types` - List of task types to enqueue
+    /// * `priority` - Priority for all tasks (higher = more urgent)
+    /// * `scheduled_for` - Optional scheduled time for all tasks
+    ///
+    /// # Returns
+    /// Number of tasks actually enqueued (excluding duplicates)
+    pub async fn enqueue_batch(
+        db: &DatabaseConnection,
+        task_types: Vec<TaskType>,
+        priority: i32,
+        scheduled_for: Option<DateTime<Utc>>,
+    ) -> Result<u64> {
+        if task_types.is_empty() {
+            return Ok(0);
+        }
+
+        let now = Utc::now();
+        let scheduled = scheduled_for.unwrap_or(now);
+        let mut enqueued = 0u64;
+
+        // Build list of tasks to insert, filtering out existing ones
+        let mut tasks_to_insert: Vec<tasks::ActiveModel> = Vec::with_capacity(task_types.len());
+
+        // Get all book IDs from the task types for batch existence check
+        let book_ids: Vec<Uuid> = task_types.iter().filter_map(|t| t.book_id()).collect();
+
+        // Batch check for existing tasks with these book IDs
+        let existing_book_ids: std::collections::HashSet<Uuid> = if !book_ids.is_empty() {
+            // Get pending/processing tasks for these book IDs
+            let existing_tasks = Tasks::find()
+                .filter(tasks::Column::BookId.is_in(book_ids.clone()))
+                .filter(tasks::Column::Status.is_in(["pending", "processing"]))
+                .select_only()
+                .column(tasks::Column::BookId)
+                .into_tuple::<Option<Uuid>>()
+                .all(db)
+                .await
+                .context("Failed to check existing tasks")?;
+
+            existing_tasks.into_iter().flatten().collect()
+        } else {
+            std::collections::HashSet::new()
+        };
+
+        for task_type in task_types {
+            let type_str = task_type.type_string();
+            let library_id = task_type.library_id();
+            let series_id = task_type.series_id();
+            let book_id = task_type.book_id();
+            let params = task_type.params();
+
+            // Skip if task already exists for this book
+            if let Some(bk_id) = book_id {
+                if existing_book_ids.contains(&bk_id) {
+                    continue;
+                }
+            }
+
+            let task_id = Uuid::new_v4();
+
+            let task = tasks::ActiveModel {
+                id: Set(task_id),
+                task_type: Set(type_str.to_string()),
+                library_id: Set(library_id),
+                series_id: Set(series_id),
+                book_id: Set(book_id),
+                params: Set(Some(params)),
+                status: Set("pending".to_string()),
+                priority: Set(priority),
+                locked_by: Set(None),
+                locked_until: Set(None),
+                attempts: Set(0),
+                max_attempts: Set(3),
+                last_error: Set(None),
+                result: Set(None),
+                scheduled_for: Set(scheduled),
+                created_at: Set(now),
+                started_at: Set(None),
+                completed_at: Set(None),
+            };
+
+            tasks_to_insert.push(task);
+            enqueued += 1;
+        }
+
+        if !tasks_to_insert.is_empty() {
+            // Bulk insert all tasks - use on_conflict to ignore duplicates
+            Tasks::insert_many(tasks_to_insert)
+                .on_conflict(
+                    sea_orm::sea_query::OnConflict::new()
+                        .do_nothing()
+                        .to_owned(),
+                )
+                .exec(db)
+                .await
+                .context("Failed to batch enqueue tasks")?;
+
+            info!("Batch enqueued {} tasks", enqueued);
+        }
+
+        Ok(enqueued)
+    }
+
     /// Find an existing pending/processing task for the given entity
     async fn find_existing_task(
         db: &DatabaseConnection,

@@ -3,7 +3,6 @@ import {
 	Button,
 	Collapse,
 	Container,
-	Group,
 	NumberInput,
 	Paper,
 	PasswordInput,
@@ -84,18 +83,20 @@ export function Setup() {
 
 	// Step 2: Configure settings (optional)
 	const [skipSettings, setSkipSettings] = useState(false);
-	const [scannerExpanded, setScannerExpanded] = useState(true);
-	const [appExpanded, setAppExpanded] = useState(false);
-	const [taskExpanded, setTaskExpanded] = useState(false);
-	const [thumbnailExpanded, setThumbnailExpanded] = useState(false);
-	const [deduplicationExpanded, setDeduplicationExpanded] = useState(false);
+	const [showAdvanced, setShowAdvanced] = useState(false);
 
 	// Scanner settings
 	const [scanTimeoutMinutes, setScanTimeoutMinutes] = useState(120);
 	const [retryFailedFiles, setRetryFailedFiles] = useState(false);
+	const [scannerBatchSize, setScannerBatchSize] = useState(100);
+	const [scannerParallelHashing, setScannerParallelHashing] = useState(8);
+	const [scannerParallelSeries, setScannerParallelSeries] = useState(4);
 
 	// Application settings
 	const [appName, setAppName] = useState("Codex");
+
+	// Authentication settings
+	const [registrationEnabled, setRegistrationEnabled] = useState(false);
 
 	// Task worker settings
 	const [pollIntervalSeconds, setPollIntervalSeconds] = useState(5);
@@ -111,6 +112,9 @@ export function Setup() {
 	const [deduplicationEnabled, setDeduplicationEnabled] = useState(true);
 	const [deduplicationCronSchedule, setDeduplicationCronSchedule] =
 		useState("");
+
+	// Purge settings
+	const [purgeEmptySeries, setPurgeEmptySeries] = useState(true);
 
 	// Initialize setup mutation
 	const initializeMutation = useMutation<any, ApiError, InitializeSetupRequest>(
@@ -169,7 +173,11 @@ export function Setup() {
 			const settings: Record<string, string> = {
 				"scanner.scan_timeout_minutes": scanTimeoutMinutes.toString(),
 				"scanner.retry_failed_files": retryFailedFiles.toString(),
+				"scanner.batch_size": scannerBatchSize.toString(),
+				"scanner.parallel_hashing": scannerParallelHashing.toString(),
+				"scanner.parallel_series": scannerParallelSeries.toString(),
 				"application.name": appName,
+				"auth.registration_enabled": registrationEnabled.toString(),
 				"task.poll_interval_seconds": pollIntervalSeconds.toString(),
 				"task.cleanup_interval_seconds": cleanupIntervalSeconds.toString(),
 				"task.prioritize_scans_over_analysis":
@@ -177,6 +185,7 @@ export function Setup() {
 				"thumbnail.max_dimension": thumbnailMaxDimension.toString(),
 				"thumbnail.jpeg_quality": thumbnailJpegQuality.toString(),
 				"deduplication.enabled": deduplicationEnabled.toString(),
+				"purge.purge_empty_series": purgeEmptySeries.toString(),
 			};
 
 			// Only include cron schedule if deduplication is enabled
@@ -310,225 +319,236 @@ export function Setup() {
 
 								{!skipSettings && (
 									<Stack>
-										{/* Scanner Settings */}
+										{/* Essential Settings - Always Visible */}
 										<Paper withBorder p="md">
-											<Group justify="space-between" mb="xs">
-												<div>
-													<Text fw={500}>Scanner Settings</Text>
-													<Text size="xs" c="dimmed">
-														Configure library scanning behavior
-													</Text>
-												</div>
-												<Button
-													variant="subtle"
-													size="xs"
-													onClick={() => setScannerExpanded(!scannerExpanded)}
-												>
-													{scannerExpanded ? "Collapse" : "Expand"}
-												</Button>
-											</Group>
+											<Text fw={500} mb="md">
+												Basic Settings
+											</Text>
+											<Stack gap="sm">
+												<TextInput
+													label="Application Name"
+													description="Display name for branding and UI"
+													value={appName}
+													onChange={(e) => setAppName(e.currentTarget.value)}
+												/>
 
-											<Collapse in={scannerExpanded}>
-												<Stack gap="sm" mt="sm">
-													<NumberInput
-														label="Scan Timeout (minutes)"
-														description="Maximum time for a single library scan"
-														value={scanTimeoutMinutes}
-														onChange={(val) =>
-															setScanTimeoutMinutes(Number(val) || 120)
-														}
-														min={10}
-														max={1440}
-													/>
-
-													<Switch
-														label="Retry Failed Files"
-														description="Automatically retry files that failed to scan"
-														checked={retryFailedFiles}
-														onChange={(e) =>
-															setRetryFailedFiles(e.currentTarget.checked)
-														}
-													/>
-												</Stack>
-											</Collapse>
+												<Switch
+													label="Enable User Registration"
+													description="Allow new users to register accounts (disabled by default for security)"
+													checked={registrationEnabled}
+													onChange={(e) =>
+														setRegistrationEnabled(e.currentTarget.checked)
+													}
+												/>
+											</Stack>
 										</Paper>
 
-										{/* Application Settings */}
-										<Paper withBorder p="md">
-											<Group justify="space-between" mb="xs">
-												<div>
-													<Text fw={500}>Application Settings</Text>
-													<Text size="xs" c="dimmed">
-														General application configuration
+										{/* Advanced Settings Toggle */}
+										<Button
+											variant="subtle"
+											onClick={() => setShowAdvanced(!showAdvanced)}
+											fullWidth
+										>
+											{showAdvanced
+												? "Hide Advanced Settings"
+												: "Show Advanced Settings"}
+										</Button>
+
+										{/* Advanced Settings - Hidden by Default */}
+										<Collapse in={showAdvanced}>
+											<Stack gap="md">
+												{/* Scanner Settings */}
+												<Paper withBorder p="md">
+													<Text fw={500} mb="xs">
+														Scanner Settings
 													</Text>
-												</div>
-												<Button
-													variant="subtle"
-													size="xs"
-													onClick={() => setAppExpanded(!appExpanded)}
-												>
-													{appExpanded ? "Collapse" : "Expand"}
-												</Button>
-											</Group>
+													<Text size="xs" c="dimmed" mb="md">
+														Performance tuning for library scanning
+													</Text>
+													<Stack gap="sm">
+														<NumberInput
+															label="Scan Timeout (minutes)"
+															description="Maximum time for a single library scan"
+															value={scanTimeoutMinutes}
+															onChange={(val) =>
+																setScanTimeoutMinutes(Number(val) || 120)
+															}
+															min={10}
+															max={1440}
+														/>
 
-											<Collapse in={appExpanded}>
-												<Stack gap="sm" mt="sm">
-													<TextInput
-														label="Application Name"
-														description="Display name for branding and UI"
-														value={appName}
-														onChange={(e) => setAppName(e.currentTarget.value)}
-													/>
-												</Stack>
-											</Collapse>
-										</Paper>
+														<Switch
+															label="Retry Failed Files"
+															description="Automatically retry files that failed to scan"
+															checked={retryFailedFiles}
+															onChange={(e) =>
+																setRetryFailedFiles(e.currentTarget.checked)
+															}
+														/>
 
-										{/* Task Worker Settings */}
-										<Paper withBorder p="md">
-											<Group justify="space-between" mb="xs">
-												<div>
-													<Text fw={500}>Task Worker Settings</Text>
-													<Text size="xs" c="dimmed">
+														<NumberInput
+															label="Batch Size"
+															description="Files per batch during scanning (higher = faster but more memory)"
+															value={scannerBatchSize}
+															onChange={(val) =>
+																setScannerBatchSize(Number(val) || 100)
+															}
+															min={10}
+															max={500}
+														/>
+
+														<NumberInput
+															label="Parallel Hashing"
+															description="Concurrent file hashing (higher = faster on SSD, lower for HDD/network)"
+															value={scannerParallelHashing}
+															onChange={(val) =>
+																setScannerParallelHashing(Number(val) || 8)
+															}
+															min={1}
+															max={32}
+														/>
+
+														<NumberInput
+															label="Parallel Series"
+															description="Concurrent series processing (higher = faster for many small series)"
+															value={scannerParallelSeries}
+															onChange={(val) =>
+																setScannerParallelSeries(Number(val) || 4)
+															}
+															min={1}
+															max={16}
+														/>
+													</Stack>
+												</Paper>
+
+												{/* Task Worker Settings */}
+												<Paper withBorder p="md">
+													<Text fw={500} mb="xs">
+														Task Worker Settings
+													</Text>
+													<Text size="xs" c="dimmed" mb="md">
 														Background task processing configuration
 													</Text>
-												</div>
-												<Button
-													variant="subtle"
-													size="xs"
-													onClick={() => setTaskExpanded(!taskExpanded)}
-												>
-													{taskExpanded ? "Collapse" : "Expand"}
-												</Button>
-											</Group>
-
-											<Collapse in={taskExpanded}>
-												<Stack gap="sm" mt="sm">
-													<NumberInput
-														label="Poll Interval (seconds)"
-														description="How often to check for new tasks"
-														value={pollIntervalSeconds}
-														onChange={(val) =>
-															setPollIntervalSeconds(Number(val) || 5)
-														}
-														min={1}
-														max={60}
-													/>
-
-													<NumberInput
-														label="Cleanup Interval (seconds)"
-														description="How often to clean up completed tasks"
-														value={cleanupIntervalSeconds}
-														onChange={(val) =>
-															setCleanupIntervalSeconds(Number(val) || 30)
-														}
-														min={10}
-														max={300}
-													/>
-
-													<Switch
-														label="Prioritize Scans Over Analysis"
-														description="When enabled, scan tasks will be processed before analysis tasks in the queue"
-														checked={prioritizeScansOverAnalysis}
-														onChange={(e) =>
-															setPrioritizeScansOverAnalysis(
-																e.currentTarget.checked,
-															)
-														}
-													/>
-												</Stack>
-											</Collapse>
-										</Paper>
-
-										{/* Thumbnail Settings */}
-										<Paper withBorder p="md">
-											<Group justify="space-between" mb="xs">
-												<div>
-													<Text fw={500}>Thumbnail Settings</Text>
-													<Text size="xs" c="dimmed">
-														Configure thumbnail caching and storage
-													</Text>
-												</div>
-												<Button
-													variant="subtle"
-													size="xs"
-													onClick={() =>
-														setThumbnailExpanded(!thumbnailExpanded)
-													}
-												>
-													{thumbnailExpanded ? "Collapse" : "Expand"}
-												</Button>
-											</Group>
-
-											<Collapse in={thumbnailExpanded}>
-												<Stack gap="sm" mt="sm">
-													<NumberInput
-														label="Max Dimension (pixels)"
-														description="Maximum width or height for generated thumbnails"
-														value={thumbnailMaxDimension}
-														onChange={(val) =>
-															setThumbnailMaxDimension(Number(val) || 400)
-														}
-														min={100}
-														max={2000}
-													/>
-
-													<NumberInput
-														label="JPEG Quality"
-														description="Quality for thumbnail images (higher = better quality but larger files)"
-														value={thumbnailJpegQuality}
-														onChange={(val) =>
-															setThumbnailJpegQuality(Number(val) || 85)
-														}
-														min={50}
-														max={100}
-													/>
-												</Stack>
-											</Collapse>
-										</Paper>
-
-										{/* Deduplication Settings */}
-										<Paper withBorder p="md">
-											<Group justify="space-between" mb="xs">
-												<div>
-													<Text fw={500}>Deduplication Settings</Text>
-													<Text size="xs" c="dimmed">
-														Configure automatic duplicate detection
-													</Text>
-												</div>
-												<Button
-													variant="subtle"
-													size="xs"
-													onClick={() =>
-														setDeduplicationExpanded(!deduplicationExpanded)
-													}
-												>
-													{deduplicationExpanded ? "Collapse" : "Expand"}
-												</Button>
-											</Group>
-
-											<Collapse in={deduplicationExpanded}>
-												<Stack gap="sm" mt="sm">
-													<Switch
-														label="Enable Deduplication"
-														description="Enable automatic duplicate detection scanning"
-														checked={deduplicationEnabled}
-														onChange={(e) =>
-															setDeduplicationEnabled(e.currentTarget.checked)
-														}
-													/>
-
-													{deduplicationEnabled && (
-														<CronInput
-															label="Cron Schedule"
-															description="Cron expression for automatic duplicate detection (e.g., '0 2 * * *' for daily at 2am). Leave empty to disable automatic scanning."
-															placeholder="0 2 * * *"
-															value={deduplicationCronSchedule}
-															onChange={setDeduplicationCronSchedule}
+													<Stack gap="sm">
+														<NumberInput
+															label="Poll Interval (seconds)"
+															description="How often to check for new tasks"
+															value={pollIntervalSeconds}
+															onChange={(val) =>
+																setPollIntervalSeconds(Number(val) || 5)
+															}
+															min={1}
+															max={60}
 														/>
-													)}
-												</Stack>
-											</Collapse>
-										</Paper>
+
+														<NumberInput
+															label="Cleanup Interval (seconds)"
+															description="How often to clean up completed tasks"
+															value={cleanupIntervalSeconds}
+															onChange={(val) =>
+																setCleanupIntervalSeconds(Number(val) || 30)
+															}
+															min={10}
+															max={300}
+														/>
+
+														<Switch
+															label="Prioritize Scans Over Analysis"
+															description="When enabled, scan tasks will be processed before analysis tasks in the queue"
+															checked={prioritizeScansOverAnalysis}
+															onChange={(e) =>
+																setPrioritizeScansOverAnalysis(
+																	e.currentTarget.checked,
+																)
+															}
+														/>
+													</Stack>
+												</Paper>
+
+												{/* Thumbnail Settings */}
+												<Paper withBorder p="md">
+													<Text fw={500} mb="xs">
+														Thumbnail Settings
+													</Text>
+													<Text size="xs" c="dimmed" mb="md">
+														Configure thumbnail generation
+													</Text>
+													<Stack gap="sm">
+														<NumberInput
+															label="Max Dimension (pixels)"
+															description="Maximum width or height for generated thumbnails"
+															value={thumbnailMaxDimension}
+															onChange={(val) =>
+																setThumbnailMaxDimension(Number(val) || 400)
+															}
+															min={100}
+															max={2000}
+														/>
+
+														<NumberInput
+															label="JPEG Quality"
+															description="Quality for thumbnail images (higher = better quality but larger files)"
+															value={thumbnailJpegQuality}
+															onChange={(val) =>
+																setThumbnailJpegQuality(Number(val) || 85)
+															}
+															min={50}
+															max={100}
+														/>
+													</Stack>
+												</Paper>
+
+												{/* Deduplication Settings */}
+												<Paper withBorder p="md">
+													<Text fw={500} mb="xs">
+														Deduplication Settings
+													</Text>
+													<Text size="xs" c="dimmed" mb="md">
+														Automatic duplicate detection
+													</Text>
+													<Stack gap="sm">
+														<Switch
+															label="Enable Deduplication"
+															description="Enable automatic duplicate detection scanning"
+															checked={deduplicationEnabled}
+															onChange={(e) =>
+																setDeduplicationEnabled(e.currentTarget.checked)
+															}
+														/>
+
+														{deduplicationEnabled && (
+															<CronInput
+																label="Cron Schedule"
+																description="Cron expression for automatic duplicate detection (e.g., '0 2 * * *' for daily at 2am). Leave empty to disable automatic scanning."
+																placeholder="0 2 * * *"
+																value={deduplicationCronSchedule}
+																onChange={setDeduplicationCronSchedule}
+															/>
+														)}
+													</Stack>
+												</Paper>
+
+												{/* Purge Settings */}
+												<Paper withBorder p="md">
+													<Text fw={500} mb="xs">
+														Purge Settings
+													</Text>
+													<Text size="xs" c="dimmed" mb="md">
+														Cleanup behavior for deleted items
+													</Text>
+													<Stack gap="sm">
+														<Switch
+															label="Purge Empty Series"
+															description="When purging deleted books, also delete series that have no remaining books"
+															checked={purgeEmptySeries}
+															onChange={(e) =>
+																setPurgeEmptySeries(e.currentTarget.checked)
+															}
+														/>
+													</Stack>
+												</Paper>
+											</Stack>
+										</Collapse>
 									</Stack>
 								)}
 

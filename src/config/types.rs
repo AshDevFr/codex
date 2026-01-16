@@ -83,7 +83,7 @@ impl Default for Config {
                 None,
                 Some(SQLiteConfig {
                     path: env_string_opt("CODEX_DATABASE_SQLITE_PATH")
-                        .unwrap_or_else(|| "codex.db".to_string()),
+                        .unwrap_or_else(|| "data/codex.db".to_string()),
                     pragmas: Some(pragmas),
                 }),
             ),
@@ -97,7 +97,7 @@ impl Default for Config {
             },
             application: ApplicationConfig {
                 host: env_string_opt("CODEX_APPLICATION_HOST")
-                    .unwrap_or_else(|| "127.0.0.1".to_string()),
+                    .unwrap_or_else(|| "0.0.0.0".to_string()),
                 port: env_or("CODEX_APPLICATION_PORT", 8080),
             },
             logging: LoggingConfig::default(),
@@ -268,7 +268,7 @@ impl Default for SQLiteConfig {
 
         Self {
             path: env_string_opt("CODEX_DATABASE_SQLITE_PATH")
-                .unwrap_or_else(|| "codex.db".to_string()),
+                .unwrap_or_else(|| "data/codex.db".to_string()),
             pragmas: Some(pragmas),
         }
     }
@@ -284,8 +284,7 @@ pub struct ApplicationConfig {
 impl Default for ApplicationConfig {
     fn default() -> Self {
         Self {
-            host: env_string_opt("CODEX_APPLICATION_HOST")
-                .unwrap_or_else(|| "127.0.0.1".to_string()),
+            host: env_string_opt("CODEX_APPLICATION_HOST").unwrap_or_else(|| "0.0.0.0".to_string()),
             port: env_or("CODEX_APPLICATION_PORT", 8080),
         }
     }

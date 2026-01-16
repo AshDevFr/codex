@@ -171,6 +171,8 @@ pub struct ScanResult {
     pub books_deleted: usize,
     /// Number of books restored (deleted books that reappeared)
     pub books_restored: usize,
+    /// Number of analysis tasks queued during scan
+    pub tasks_queued: usize,
     /// List of errors encountered
     pub errors: Vec<String>,
 }
@@ -185,6 +187,7 @@ impl ScanResult {
             books_updated: 0,
             books_deleted: 0,
             books_restored: 0,
+            tasks_queued: 0,
             errors: Vec::new(),
         }
     }
@@ -233,6 +236,65 @@ impl ScanningConfig {
     /// Parse scan mode from config
     pub fn get_scan_mode(&self) -> Result<ScanMode> {
         ScanMode::from_str(&self.scan_mode).map_err(|e| anyhow::anyhow!(e))
+    }
+}
+
+/// Scanner optimization configuration loaded from database settings
+///
+/// These settings control the parallelism and batching behavior of the library scanner.
+#[derive(Debug, Clone)]
+pub struct ScannerConfig {
+    /// Number of files to process in each batch (default: 100, range: 10-500)
+    pub batch_size: usize,
+    /// Number of files to hash concurrently within a batch (default: 8, range: 1-32)
+    pub parallel_hashing: usize,
+    /// Number of series to process concurrently (default: 4, range: 1-16)
+    pub parallel_series: usize,
+}
+
+impl Default for ScannerConfig {
+    fn default() -> Self {
+        Self {
+            batch_size: 100,
+            parallel_hashing: 8,
+            parallel_series: 4,
+        }
+    }
+}
+
+impl ScannerConfig {
+    /// Load scanner configuration from database settings
+    ///
+    /// Falls back to defaults if settings are not found or invalid.
+    pub async fn load(db: &sea_orm::DatabaseConnection) -> Self {
+        use crate::db::repositories::SettingsRepository;
+
+        let batch_size = SettingsRepository::get_value::<i64>(db, "scanner.batch_size")
+            .await
+            .ok()
+            .flatten()
+            .map(|v| v.clamp(10, 500) as usize)
+            .unwrap_or(100);
+
+        let parallel_hashing = SettingsRepository::get_value::<i64>(db, "scanner.parallel_hashing")
+            .await
+            .ok()
+            .flatten()
+            .map(|v| v.clamp(1, 32) as usize)
+            .unwrap_or(8);
+
+        let parallel_series = SettingsRepository::get_value::<i64>(db, "scanner.parallel_series")
+            .await
+            .ok()
+            .flatten()
+            .map(|v| v.clamp(1, 16) as usize)
+            .unwrap_or(4);
+
+        Self {
+            batch_size,
+            parallel_hashing,
+            parallel_series,
+        }
     }
 }
 
@@ -371,5 +433,13 @@ mod tests {
             config.purge_deleted_on_scan,
             "purgeDeletedOnScan should be true"
         );
+    }
+
+    #[test]
+    fn test_scanner_config_defaults() {
+        let config = ScannerConfig::default();
+        assert_eq!(config.batch_size, 100);
+        assert_eq!(config.parallel_hashing, 8);
+        assert_eq!(config.parallel_series, 4);
     }
 }

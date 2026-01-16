@@ -5,11 +5,11 @@ use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
 use crate::db::entities::tasks;
-use crate::db::repositories::{BookRepository, LibraryRepository, TaskRepository};
+use crate::db::repositories::{BookRepository, LibraryRepository};
 use crate::events::EventBroadcaster;
 use crate::scanner::{scan_library, ScanMode, ScanningConfig};
 use crate::tasks::handlers::TaskHandler;
-use crate::tasks::types::{TaskResult, TaskType};
+use crate::tasks::types::TaskResult;
 
 pub struct ScanLibraryHandler;
 
@@ -56,68 +56,17 @@ impl TaskHandler for ScanLibraryHandler {
             );
 
             // Execute scan (without progress channel for now, pass event_broadcaster)
+            // Note: Analysis tasks are now queued during the scan itself (streaming),
+            // so workers can start processing immediately rather than waiting for scan to complete.
             match scan_library(db, library_id, scan_mode, None, event_broadcaster).await {
                 Ok(result) => {
                     info!(
-                        "Task {}: Library scan completed - {} files processed, {} series, {} books",
+                        "Task {}: Library scan completed - {} files processed, {} series, {} books, {} analysis tasks queued",
                         task.id,
                         result.files_processed,
                         result.series_created,
-                        result.books_created
-                    );
-
-                    // Auto-queue analysis tasks after successful scan
-                    let books_to_analyze = match scan_mode {
-                        ScanMode::Normal => {
-                            // Normal scan: only analyze unanalyzed books
-                            BookRepository::get_unanalyzed_in_library(db, library_id).await?
-                        }
-                        ScanMode::Deep => {
-                            // Deep scan: analyze ALL books (get via series)
-                            use crate::db::entities::{books, prelude::*, series};
-                            use sea_orm::{
-                                ColumnTrait, EntityTrait, JoinType, QueryFilter, QuerySelect,
-                                RelationTrait,
-                            };
-
-                            Books::find()
-                                .join(JoinType::InnerJoin, books::Relation::Series.def())
-                                .filter(series::Column::LibraryId.eq(library_id))
-                                .filter(books::Column::Deleted.eq(false))
-                                .all(db)
-                                .await?
-                        }
-                    };
-
-                    let mut tasks_queued = 0;
-                    // Deep scans should force re-analysis even if file hash hasn't changed
-                    let force = matches!(scan_mode, ScanMode::Deep);
-
-                    for book in books_to_analyze {
-                        match TaskRepository::enqueue(
-                            db,
-                            TaskType::AnalyzeBook {
-                                book_id: book.id,
-                                force,
-                            },
-                            0, // Priority 0 for auto-queued tasks
-                            None,
-                        )
-                        .await
-                        {
-                            Ok(_) => tasks_queued += 1,
-                            Err(e) => {
-                                error!(
-                                    "Task {}: Failed to queue analysis for book {}: {}",
-                                    task.id, book.id, e
-                                );
-                            }
-                        }
-                    }
-
-                    info!(
-                        "Task {}: Queued {} analysis tasks for library {}",
-                        task.id, tasks_queued, library_id
+                        result.books_created,
+                        result.tasks_queued
                     );
 
                     // Check if purge_deleted_on_scan is enabled and purge deleted books
@@ -196,7 +145,7 @@ impl TaskHandler for ScanLibraryHandler {
                             result.files_processed,
                             result.series_created,
                             result.books_created,
-                            tasks_queued,
+                            result.tasks_queued,
                             if purged_count > 0 {
                                 format!(", purged {} deleted books", purged_count)
                             } else {
@@ -210,7 +159,7 @@ impl TaskHandler for ScanLibraryHandler {
                             "books_updated": result.books_updated,
                             "books_deleted": result.books_deleted,
                             "books_restored": result.books_restored,
-                            "tasks_queued": tasks_queued,
+                            "tasks_queued": result.tasks_queued,
                             "books_purged": purged_count,
                             "errors": result.errors.len(),
                         }),

@@ -19,6 +19,8 @@ use commands::{
 };
 use std::path::PathBuf;
 
+const DEFAULT_CONFIG_PATH: &str = "config/codex.yaml";
+
 #[derive(Parser)]
 #[command(name = "codex")]
 #[command(about = "A digital library media server", long_about = None)]
@@ -51,35 +53,35 @@ enum Commands {
     /// Start the media server
     Serve {
         /// Path to configuration file
-        #[arg(short, long, default_value = "codex.yaml")]
+        #[arg(short, long, default_value = DEFAULT_CONFIG_PATH)]
         config: PathBuf,
     },
 
     /// Start task workers (without web server)
     Worker {
         /// Path to configuration file
-        #[arg(short, long, default_value = "codex.yaml")]
+        #[arg(short, long, default_value = DEFAULT_CONFIG_PATH)]
         config: PathBuf,
     },
 
     /// Create initial admin user and API key
     Seed {
         /// Path to configuration file
-        #[arg(short, long, default_value = "codex.yaml")]
+        #[arg(short, long, default_value = DEFAULT_CONFIG_PATH)]
         config: PathBuf,
     },
 
     /// Run database migrations
     Migrate {
         /// Path to configuration file
-        #[arg(short, long, default_value = "codex.yaml")]
+        #[arg(short, long, default_value = DEFAULT_CONFIG_PATH)]
         config: PathBuf,
     },
 
     /// Wait for database migrations to complete
     WaitForMigrations {
         /// Path to configuration file
-        #[arg(short, long, default_value = "codex.yaml")]
+        #[arg(short, long, default_value = DEFAULT_CONFIG_PATH)]
         config: PathBuf,
 
         /// Timeout in seconds (default: 300)
@@ -105,7 +107,7 @@ enum Commands {
     /// Task queue management commands
     Tasks {
         /// Path to configuration file
-        #[arg(short, long, default_value = "codex.yaml")]
+        #[arg(short, long, default_value = DEFAULT_CONFIG_PATH)]
         config: PathBuf,
 
         #[command(subcommand)]

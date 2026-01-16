@@ -206,6 +206,40 @@ impl MigrationTrait for Migration {
                 None,
                 None,
             ),
+            // Scanner optimization settings (3 settings)
+            (
+                "scanner.batch_size",
+                "100",
+                "Integer",
+                "Scanner",
+                "Number of files to process in each batch during library scanning. Higher values use more memory but reduce database operations.",
+                false,
+                "100",
+                Some(10),
+                Some(500),
+            ),
+            (
+                "scanner.parallel_hashing",
+                "8",
+                "Integer",
+                "Scanner",
+                "Number of files to hash concurrently during scanning. Higher values improve speed on fast storage (SSD/NVMe) but may overwhelm slow storage (HDD/network).",
+                false,
+                "8",
+                Some(1),
+                Some(32),
+            ),
+            (
+                "scanner.parallel_series",
+                "4",
+                "Integer",
+                "Scanner",
+                "Number of series to process concurrently during library scanning. Higher values improve speed for libraries with many small series.",
+                false,
+                "4",
+                Some(1),
+                Some(16),
+            ),
         ];
 
         for (

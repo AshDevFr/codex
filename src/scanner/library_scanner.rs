@@ -1,24 +1,28 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use futures::future::join_all;
 use sea_orm::DatabaseConnection;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex, Semaphore};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 use walkdir::WalkDir;
 
 use crate::db::entities::{books, series};
-use crate::db::repositories::{BookRepository, LibraryRepository, SeriesRepository};
+use crate::db::repositories::{
+    BookRepository, LibraryRepository, SeriesRepository, TaskRepository,
+};
 use crate::events::EventBroadcaster;
 use crate::models::SeriesStrategy;
+use crate::tasks::types::TaskType;
 
 use super::strategies::{create_strategy, DetectedSeries};
-use super::types::{ScanMode, ScanProgress, ScanResult, ScanStatus};
+use super::types::{ScanMode, ScanProgress, ScanResult, ScanStatus, ScannerConfig};
 
 const SUPPORTED_EXTENSIONS: &[&str] = &["cbz", "cbr", "epub", "pdf"];
 
@@ -35,6 +39,255 @@ fn parse_allowed_formats(library: &crate::db::entities::libraries::Model) -> Opt
                     .collect::<Vec<String>>()
             })
     })
+}
+
+/// Result from processing a single series
+///
+/// Contains counts and errors from processing all books in a series.
+#[derive(Debug, Default)]
+struct SeriesProcessResult {
+    /// Number of files scanned (processed/checked)
+    files_scanned: usize,
+    /// Number of books created
+    books_created: usize,
+    /// Number of books updated
+    books_updated: usize,
+    /// Number of analysis tasks queued
+    tasks_queued: usize,
+    /// Errors encountered during processing
+    errors: Vec<String>,
+}
+
+impl SeriesProcessResult {
+    fn new() -> Self {
+        Self::default()
+    }
+}
+
+/// Thread-safe wrapper for shared scan state during parallel series processing
+///
+/// This allows multiple series to be processed concurrently while still
+/// maintaining accurate counts and error tracking.
+struct SharedScanState {
+    /// Thread-safe progress tracking
+    progress: Arc<Mutex<ScanProgress>>,
+    /// Thread-safe result accumulation
+    result: Arc<Mutex<ScanResult>>,
+    /// Progress channel sender
+    progress_tx: Option<mpsc::Sender<ScanProgress>>,
+}
+
+impl SharedScanState {
+    fn new(library_id: Uuid, progress_tx: Option<mpsc::Sender<ScanProgress>>) -> Self {
+        let mut progress = ScanProgress::new(library_id);
+        progress.start();
+        Self {
+            progress: Arc::new(Mutex::new(progress)),
+            result: Arc::new(Mutex::new(ScanResult::new())),
+            progress_tx,
+        }
+    }
+
+    /// Set the total file count for progress tracking
+    async fn set_total_files(&self, total: usize) {
+        let mut progress = self.progress.lock().await;
+        progress.files_total = total;
+    }
+
+    /// Merge results from a completed series into the shared state
+    async fn merge_series_result(&self, series_result: SeriesProcessResult, is_new_series: bool) {
+        {
+            let mut result = self.result.lock().await;
+            result.books_created += series_result.books_created;
+            result.books_updated += series_result.books_updated;
+            result.files_processed += series_result.files_scanned;
+            result.tasks_queued += series_result.tasks_queued;
+            result.errors.extend(series_result.errors);
+
+            if is_new_series {
+                result.series_created += 1;
+            }
+        }
+
+        {
+            let mut progress = self.progress.lock().await;
+            progress.books_found += series_result.books_created + series_result.books_updated;
+            progress.files_processed += series_result.files_scanned;
+
+            if is_new_series {
+                progress.series_found += 1;
+            }
+        }
+    }
+
+    /// Send current progress through the channel
+    async fn send_progress(&self) {
+        if let Some(ref tx) = self.progress_tx {
+            let progress = self.progress.lock().await.clone();
+            if let Err(e) = tx.send(progress).await {
+                warn!("Failed to send progress update: {}", e);
+            }
+        }
+    }
+
+    /// Add an error to the result
+    async fn add_error(&self, error: String) {
+        self.result.lock().await.errors.push(error);
+    }
+
+    /// Mark deleted book count
+    async fn add_deleted(&self, count: usize) {
+        self.result.lock().await.books_deleted += count;
+    }
+
+    /// Mark restored book count
+    async fn add_restored(&self, count: usize) {
+        self.result.lock().await.books_restored += count;
+    }
+
+    /// Get the final results
+    async fn into_result(self) -> (ScanResult, ScanProgress) {
+        let result = match Arc::try_unwrap(self.result) {
+            Ok(mutex) => mutex.into_inner(),
+            Err(arc) => arc.lock().await.clone(),
+        };
+        let progress = match Arc::try_unwrap(self.progress) {
+            Ok(mutex) => mutex.into_inner(),
+            Err(arc) => arc.lock().await.clone(),
+        };
+        (result, progress)
+    }
+}
+
+impl Clone for SharedScanState {
+    fn clone(&self) -> Self {
+        Self {
+            progress: Arc::clone(&self.progress),
+            result: Arc::clone(&self.result),
+            progress_tx: self.progress_tx.clone(),
+        }
+    }
+}
+
+/// Batch accumulator for pending book operations
+///
+/// Collects books to create or update until the batch is full,
+/// then flushes them to the database in a single operation.
+struct BookBatch {
+    /// Books to create (new files)
+    to_create: Vec<books::Model>,
+    /// Books to update (changed files)
+    to_update: Vec<books::Model>,
+    /// Book IDs that need analysis tasks queued
+    needs_analysis: Vec<Uuid>,
+    /// Maximum batch size before auto-flush
+    capacity: usize,
+    /// Whether to force re-analysis (Deep scan mode)
+    force_analysis: bool,
+}
+
+impl BookBatch {
+    fn new(capacity: usize, force_analysis: bool) -> Self {
+        Self {
+            to_create: Vec::with_capacity(capacity),
+            to_update: Vec::with_capacity(capacity),
+            needs_analysis: Vec::with_capacity(capacity),
+            capacity,
+            force_analysis,
+        }
+    }
+
+    /// Check if the batch is full and should be flushed
+    fn is_full(&self) -> bool {
+        self.to_create.len() + self.to_update.len() >= self.capacity
+    }
+
+    /// Check if the batch has any items
+    fn is_empty(&self) -> bool {
+        self.to_create.is_empty() && self.to_update.is_empty()
+    }
+
+    /// Add a book to create
+    fn add_create(&mut self, book: books::Model, needs_analysis: bool) {
+        if needs_analysis {
+            self.needs_analysis.push(book.id);
+        }
+        self.to_create.push(book);
+    }
+
+    /// Add a book to update
+    fn add_update(&mut self, book: books::Model, needs_analysis: bool) {
+        if needs_analysis {
+            self.needs_analysis.push(book.id);
+        }
+        self.to_update.push(book);
+    }
+
+    /// Flush the batch to the database
+    ///
+    /// Returns (created_count, updated_count, tasks_queued, errors)
+    async fn flush(&mut self, db: &DatabaseConnection) -> (usize, usize, usize, Vec<String>) {
+        let mut errors = Vec::new();
+        let mut created = 0;
+        let mut updated = 0;
+        let mut tasks_queued = 0;
+
+        // Batch create new books
+        if !self.to_create.is_empty() {
+            match BookRepository::create_batch(db, &self.to_create).await {
+                Ok(count) => {
+                    created = count as usize;
+                    debug!("Batch created {} books", created);
+                }
+                Err(e) => {
+                    errors.push(format!("Failed to batch create books: {}", e));
+                }
+            }
+        }
+
+        // Batch update existing books
+        if !self.to_update.is_empty() {
+            match BookRepository::update_batch(db, &self.to_update).await {
+                Ok(count) => {
+                    updated = count as usize;
+                    debug!("Batch updated {} books", updated);
+                }
+                Err(e) => {
+                    errors.push(format!("Failed to batch update books: {}", e));
+                }
+            }
+        }
+
+        // Enqueue analysis tasks for books that need it
+        if !self.needs_analysis.is_empty() {
+            let force = self.force_analysis;
+            let tasks: Vec<TaskType> = self
+                .needs_analysis
+                .iter()
+                .map(|book_id| TaskType::AnalyzeBook {
+                    book_id: *book_id,
+                    force,
+                })
+                .collect();
+
+            match TaskRepository::enqueue_batch(db, tasks, 0, None).await {
+                Ok(count) => {
+                    tasks_queued = count as usize;
+                    debug!("Enqueued {} analysis tasks", tasks_queued);
+                }
+                Err(e) => {
+                    errors.push(format!("Failed to enqueue analysis tasks: {}", e));
+                }
+            }
+        }
+
+        // Clear the batch
+        self.to_create.clear();
+        self.to_update.clear();
+        self.needs_analysis.clear();
+
+        (created, updated, tasks_queued, errors)
+    }
 }
 
 /// Main library scanner that orchestrates the scanning process
@@ -67,39 +320,34 @@ pub async fn scan_library(
         ));
     }
 
-    // Initialize progress tracking
-    let mut progress = ScanProgress::new(library_id);
-    progress.start();
-    send_progress(&progress_tx, &progress).await;
+    // Execute optimized batched scan (handles both Normal and Deep modes)
+    // The batched scan manages its own progress tracking internally
+    let result = scan_batched(db, &library, mode, progress_tx.clone(), event_broadcaster).await;
 
-    // Execute scan based on mode
-    let result = match mode {
-        ScanMode::Normal => {
-            scan_normal(db, &library, &mut progress, &progress_tx, event_broadcaster).await
-        }
-        ScanMode::Deep => {
-            scan_deep(db, &library, &mut progress, &progress_tx, event_broadcaster).await
-        }
-    };
-
-    // Update progress based on result
+    // Send final progress update
+    let mut final_progress = ScanProgress::new(library_id);
     match &result {
         Ok(scan_result) => {
+            final_progress.files_processed = scan_result.files_processed;
+            final_progress.files_total = scan_result.files_processed;
+            final_progress.series_found = scan_result.series_created;
+            final_progress.books_found = scan_result.books_created + scan_result.books_updated;
+
             if scan_result.has_errors() {
-                progress.status = ScanStatus::Completed;
+                final_progress.status = ScanStatus::Completed;
                 for error in &scan_result.errors {
-                    progress.add_error(error.clone());
+                    final_progress.add_error(error.clone());
                 }
             } else {
-                progress.complete();
+                final_progress.complete();
             }
         }
         Err(e) => {
-            progress.fail(e.to_string());
+            final_progress.fail(e.to_string());
         }
     }
 
-    send_progress(&progress_tx, &progress).await;
+    send_progress(&progress_tx, &final_progress).await;
 
     // Update last_scanned_at timestamp
     if result.is_ok() {
@@ -141,23 +389,46 @@ pub async fn scan_library(
 
     result
 }
-
-/// Normal scan - only process new/changed files
-async fn scan_normal(
+/// Unified batched scan implementation for both Normal and Deep modes
+///
+/// This optimized version:
+/// - Processes multiple series concurrently (configurable via scanner.parallel_series)
+/// - Hashes files in parallel within each series (configurable via scanner.parallel_hashing)
+/// - Uses batch DB operations (configurable via scanner.batch_size)
+/// - Queues analysis tasks immediately during scan (workers can start early)
+/// - Uses thread-safe shared state for progress tracking
+async fn scan_batched(
     db: &DatabaseConnection,
     library: &crate::db::entities::libraries::Model,
-    progress: &mut ScanProgress,
-    progress_tx: &Option<mpsc::Sender<ScanProgress>>,
+    mode: ScanMode,
+    progress_tx: Option<mpsc::Sender<ScanProgress>>,
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
 ) -> Result<ScanResult> {
-    let mut result = ScanResult::new();
+    // Load scanner configuration from database settings
+    let config = ScannerConfig::load(db).await;
+    info!(
+        "Scanner config: batch_size={}, parallel_hashing={}, parallel_series={}",
+        config.batch_size, config.parallel_hashing, config.parallel_series
+    );
 
-    // Load existing books from database (including deleted ones for restoration)
+    // Create shared state for thread-safe progress tracking
+    let shared_state = SharedScanState::new(library.id, progress_tx);
+
+    // Always load existing books from database
+    // - Normal mode: used for change detection (skip unchanged files)
+    // - Deep mode: used to detect updates vs creates, and for series detection
     let load_start = Instant::now();
-    let existing_books = load_existing_books(db, library.id).await?;
+    let existing_books_with_hash = load_existing_books(db, library.id).await?;
+
+    // Create a simpler map without the hash for the new batched processing
+    let existing_books_map: HashMap<String, books::Model> = existing_books_with_hash
+        .iter()
+        .map(|(path, (_, book))| (path.clone(), book.clone()))
+        .collect();
+
     info!(
         "Loaded {} existing books from database in {:?}",
-        existing_books.len(),
+        existing_books_map.len(),
         load_start.elapsed()
     );
 
@@ -174,15 +445,20 @@ async fn scan_normal(
     let discover_start = Instant::now();
     let library_path = library.path.clone();
     let allowed_extensions_clone = allowed_extensions.clone();
-    info!("Starting file discovery in library path: {}", library_path);
+    info!(
+        "Starting file discovery for {} scan in library path: {}",
+        mode, library_path
+    );
     let discovered_files = tokio::task::spawn_blocking(move || {
         discover_files(&library_path, allowed_extensions_clone.as_deref())
     })
     .await
     .map_err(|e| anyhow::anyhow!("Failed to spawn file discovery task: {}", e))??;
     let discover_duration = discover_start.elapsed();
-    progress.files_total = discovered_files.len();
-    send_progress(progress_tx, progress).await;
+
+    // Update progress with total files
+    shared_state.set_total_files(discovered_files.len()).await;
+    shared_state.send_progress().await;
 
     info!(
         "Discovered {} files in library '{}' in {:?} ({:.2} files/sec)",
@@ -196,416 +472,193 @@ async fn scan_normal(
         }
     );
 
-    // Track which file paths were seen during scan
-    let mut seen_paths = std::collections::HashSet::new();
-    for file in &discovered_files {
-        if let Some(path_str) = file.to_str() {
-            seen_paths.insert(path_str.to_string());
-        }
-    }
-
-    // Create scanning strategy based on library configuration
-    let series_strategy = library
-        .series_strategy
-        .parse::<SeriesStrategy>()
-        .unwrap_or_default();
-    let series_config_str = library.series_config.as_ref().map(|v| v.to_string());
-    let strategy = create_strategy(series_strategy, series_config_str.as_deref())?;
-    info!(
-        "Using {} strategy for library '{}'",
-        series_strategy, library.name
-    );
-
-    // Organize files by series using strategy
-    let organize_start = Instant::now();
-    let library_path = Path::new(&library.path);
-    let series_map = strategy.organize_files(&discovered_files, library_path)?;
-    info!(
-        "Organized files into {} series in {:?}",
-        series_map.len(),
-        organize_start.elapsed()
-    );
-
-    // Process each series
-    let series_count = series_map.len();
-    let mut series_processed = 0;
-    for (series_name, detected_series) in series_map {
-        series_processed += 1;
-        let series_start = Instant::now();
-        info!(
-            "Processing series {}/{}: '{}' ({} files)",
-            series_processed,
-            series_count,
-            series_name,
-            detected_series.books.len()
-        );
-
-        match process_series_with_detected(
-            db,
-            library,
-            &detected_series,
-            &existing_books,
-            ScanMode::Normal,
-            progress,
-            progress_tx,
-            &mut result,
-            event_broadcaster,
-        )
-        .await
-        {
-            Ok(_) => {
-                info!(
-                    "Completed series '{}' in {:?}",
-                    series_name,
-                    series_start.elapsed()
-                );
-            }
-            Err(e) => {
-                let error_msg = format!("Error processing series '{}': {}", series_name, e);
-                error!("{} (took {:?})", error_msg, series_start.elapsed());
-                result.errors.push(error_msg);
-            }
-        }
-    }
-
-    // Detect deleted files (in DB but not on filesystem) and restore reappeared files
-    let cleanup_start = Instant::now();
-    let mut deleted_count = 0;
-    let mut restored_count = 0;
-
-    for (path, (_hash, book)) in existing_books {
-        if !seen_paths.contains(&path) {
-            // File is missing from filesystem
-            if !book.deleted {
-                // Mark as deleted
-                debug!("Marking missing book as deleted: {}", path);
-                match BookRepository::mark_deleted(db, book.id, true, event_broadcaster).await {
-                    Ok(_) => {
-                        deleted_count += 1;
-                        result.books_deleted += 1;
-                    }
-                    Err(e) => {
-                        let error_msg = format!("Failed to mark book as deleted {}: {}", path, e);
-                        warn!("{}", error_msg);
-                        result.errors.push(error_msg);
-                    }
-                }
-            }
-        } else if book.deleted {
-            // File reappeared on filesystem, restore it
-            debug!("Restoring deleted book: {}", path);
-            match BookRepository::mark_deleted(db, book.id, false, event_broadcaster).await {
-                Ok(_) => {
-                    restored_count += 1;
-                    result.books_restored += 1;
-                }
-                Err(e) => {
-                    let error_msg = format!("Failed to restore book {}: {}", path, e);
-                    warn!("{}", error_msg);
-                    result.errors.push(error_msg);
-                }
-            }
-        }
-    }
-
-    if deleted_count > 0 || restored_count > 0 {
-        info!(
-            "Cleanup completed in {:?}: {} books marked as deleted, {} books restored",
-            cleanup_start.elapsed(),
-            deleted_count,
-            restored_count
-        );
-    }
-
-    Ok(result)
-}
-
-/// Deep scan - re-process all files
-async fn scan_deep(
-    db: &DatabaseConnection,
-    library: &crate::db::entities::libraries::Model,
-    progress: &mut ScanProgress,
-    progress_tx: &Option<mpsc::Sender<ScanProgress>>,
-    event_broadcaster: Option<&Arc<EventBroadcaster>>,
-) -> Result<ScanResult> {
-    let mut result = ScanResult::new();
-
-    // Parse allowed formats
-    let allowed_extensions = parse_allowed_formats(library);
-    if let Some(ref formats) = allowed_extensions {
-        info!(
-            "Library '{}' has format restrictions: {:?}",
-            library.name, formats
-        );
-    }
-
-    // Discover all files in library (blocking I/O operation)
-    let discover_start = Instant::now();
-    let library_path = library.path.clone();
-    let allowed_extensions_clone = allowed_extensions.clone();
-    info!(
-        "Starting file discovery for deep scan in library path: {}",
-        library_path
-    );
-    let discovered_files = tokio::task::spawn_blocking(move || {
-        discover_files(&library_path, allowed_extensions_clone.as_deref())
-    })
-    .await
-    .map_err(|e| anyhow::anyhow!("Failed to spawn file discovery task: {}", e))??;
-    let discover_duration = discover_start.elapsed();
-    progress.files_total = discovered_files.len();
-    send_progress(progress_tx, progress).await;
-
-    info!(
-        "Discovered {} files for deep scan in library '{}' in {:?} ({:.2} files/sec)",
-        discovered_files.len(),
-        library.name,
-        discover_duration,
-        if discover_duration.as_secs_f64() > 0.0 {
-            discovered_files.len() as f64 / discover_duration.as_secs_f64()
-        } else {
-            0.0
-        }
-    );
-
-    // Create scanning strategy based on library configuration
-    let series_strategy = library
-        .series_strategy
-        .parse::<SeriesStrategy>()
-        .unwrap_or_default();
-    let series_config_str = library.series_config.as_ref().map(|v| v.to_string());
-    let strategy = create_strategy(series_strategy, series_config_str.as_deref())?;
-    info!(
-        "Using {} strategy for deep scan of library '{}'",
-        series_strategy, library.name
-    );
-
-    // Organize files by series using strategy
-    let organize_start = Instant::now();
-    let library_path = Path::new(&library.path);
-    let series_map = strategy.organize_files(&discovered_files, library_path)?;
-    info!(
-        "Organized files into {} series in {:?}",
-        series_map.len(),
-        organize_start.elapsed()
-    );
-
-    // For deep scan, we don't use existing books cache (process everything)
-    let existing_books = HashMap::new();
-
-    // Process each series
-    let series_count = series_map.len();
-    let mut series_processed = 0;
-    for (series_name, detected_series) in series_map {
-        series_processed += 1;
-        let series_start = Instant::now();
-        info!(
-            "Processing series {}/{}: '{}' ({} files)",
-            series_processed,
-            series_count,
-            series_name,
-            detected_series.books.len()
-        );
-
-        match process_series_with_detected(
-            db,
-            library,
-            &detected_series,
-            &existing_books,
-            ScanMode::Deep, // Always deep mode
-            progress,
-            progress_tx,
-            &mut result,
-            event_broadcaster,
-        )
-        .await
-        {
-            Ok(_) => {
-                info!(
-                    "Completed series '{}' in {:?}",
-                    series_name,
-                    series_start.elapsed()
-                );
-            }
-            Err(e) => {
-                let error_msg = format!("Error processing series '{}': {}", series_name, e);
-                error!("{} (took {:?})", error_msg, series_start.elapsed());
-                result.errors.push(error_msg);
-            }
-        }
-    }
-
-    Ok(result)
-}
-
-/// Process a single series with detected series information from strategy
-#[allow(clippy::too_many_arguments)] // Internal scanner function - context params needed for recursive book processing
-async fn process_series_with_detected(
-    db: &DatabaseConnection,
-    library: &crate::db::entities::libraries::Model,
-    detected_series: &DetectedSeries,
-    existing_books: &HashMap<String, (String, books::Model)>,
-    mode: ScanMode,
-    progress: &mut ScanProgress,
-    progress_tx: &Option<mpsc::Sender<ScanProgress>>,
-    result: &mut ScanResult,
-    event_broadcaster: Option<&Arc<EventBroadcaster>>,
-) -> Result<()> {
-    // Extract file paths from detected books
-    let file_paths: Vec<PathBuf> = detected_series
-        .books
+    // Track which file paths were seen during scan (for deleted file detection)
+    let seen_paths: HashSet<String> = discovered_files
         .iter()
-        .map(|b| b.path.clone())
+        .filter_map(|f| f.to_str().map(String::from))
         .collect();
 
-    // Calculate series fingerprint from file paths
-    let file_refs: Vec<&PathBuf> = file_paths.iter().collect();
-    let fingerprint = calculate_series_fingerprint(&file_refs);
+    // Create scanning strategy based on library configuration
+    let series_strategy = library
+        .series_strategy
+        .parse::<SeriesStrategy>()
+        .unwrap_or_default();
+    let series_config_str = library.series_config.as_ref().map(|v| v.to_string());
+    let strategy = create_strategy(series_strategy, series_config_str.as_deref())?;
+    info!(
+        "Using {} strategy for {} scan of library '{}'",
+        series_strategy, mode, library.name
+    );
 
-    // Use series path from detected series (should always be available from scanner)
-    // Fallback to series name if not available (shouldn't happen in practice)
-    let series_path = detected_series
-        .path
-        .as_deref()
-        .unwrap_or(&detected_series.name);
+    // Organize files by series using strategy
+    let organize_start = Instant::now();
+    let library_path = Path::new(&library.path);
+    let series_map = strategy.organize_files(&discovered_files, library_path)?;
+    info!(
+        "Organized files into {} series in {:?}",
+        series_map.len(),
+        organize_start.elapsed()
+    );
 
-    // Find or create series with fingerprint
-    let series_model = find_or_create_series(
-        db,
-        library.id,
-        &detected_series.name,
-        Some(&fingerprint),
-        series_path,
-        event_broadcaster,
-    )
-    .await?;
+    // Process series in parallel with semaphore control
+    let series_semaphore = Arc::new(Semaphore::new(config.parallel_series));
+    let series_count = series_map.len();
 
-    let is_new_series = existing_books
-        .values()
-        .all(|(_, book)| book.series_id != series_model.id);
+    let series_futures: Vec<_> = series_map
+        .into_iter()
+        .map(|(series_name, detected_series)| {
+            let sem = Arc::clone(&series_semaphore);
+            let state = shared_state.clone();
+            let db = db.clone();
+            let library = library.clone();
+            let existing_books_map = existing_books_map.clone();
+            let config = config.clone();
+            let event_broadcaster = event_broadcaster.cloned();
 
-    if is_new_series {
-        result.series_created += 1;
-        progress.increment_series();
-    }
+            async move {
+                let _permit = match sem.acquire().await {
+                    Ok(permit) => permit,
+                    Err(e) => {
+                        let error = format!(
+                            "Failed to acquire series semaphore for '{}': {}",
+                            series_name, e
+                        );
+                        error!("{}", error);
+                        state.add_error(error).await;
+                        return;
+                    }
+                };
 
-    // Process each detected book in the series
-    let file_count = detected_series.books.len();
-    let mut file_processed = 0;
-    let mut last_progress_log = Instant::now();
-    const PROGRESS_LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+                let series_start = Instant::now();
+                info!(
+                    "Processing series '{}' ({} files)",
+                    series_name,
+                    detected_series.books.len()
+                );
 
-    for detected_book in &detected_series.books {
-        file_processed += 1;
-        let file_start = Instant::now();
-
-        match process_file(
-            db,
-            &series_model,
-            &detected_book.path,
-            existing_books,
-            mode,
-            progress,
-            result,
-            event_broadcaster,
-        )
-        .await
-        {
-            Ok(_) => {
-                result.files_processed += 1;
-                progress.files_processed += 1;
-
-                let file_duration = file_start.elapsed();
-                if file_duration.as_millis() > 1000 {
-                    // Log slow files (>1s)
-                    debug!(
-                        "Processed file {}/{} in {:?}: {}",
-                        file_processed,
-                        file_count,
-                        file_duration,
-                        detected_book
-                            .path
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                    );
-                }
-
-                // Send progress update every file (for real-time updates)
-                send_progress(progress_tx, progress).await;
-
-                // Log progress periodically
-                if last_progress_log.elapsed() >= PROGRESS_LOG_INTERVAL {
-                    let elapsed_duration = Utc::now()
-                        .signed_duration_since(progress.started_at)
-                        .to_std()
-                        .unwrap_or(std::time::Duration::ZERO);
-                    let elapsed_secs = elapsed_duration.as_secs_f64();
-                    let files_per_sec = if elapsed_secs > 0.0 {
-                        progress.files_processed as f64 / elapsed_secs
-                    } else {
-                        0.0
-                    };
-                    let remaining = if files_per_sec > 0.0
-                        && progress.files_total > progress.files_processed
-                    {
-                        let remaining_files = progress.files_total - progress.files_processed;
-                        std::time::Duration::from_secs_f64(remaining_files as f64 / files_per_sec)
-                    } else {
-                        std::time::Duration::ZERO
-                    };
-
-                    info!(
-                        "Scan progress: {}/{} files ({:.1}%), {:.2} files/sec, ~{:?} remaining",
-                        progress.files_processed,
-                        progress.files_total,
-                        if progress.files_total > 0 {
-                            (progress.files_processed as f64 / progress.files_total as f64) * 100.0
-                        } else {
-                            0.0
-                        },
-                        files_per_sec,
-                        remaining
-                    );
-                    last_progress_log = Instant::now();
+                match process_series_batched(
+                    &db,
+                    &library,
+                    &detected_series,
+                    &existing_books_map,
+                    mode,
+                    &config,
+                    event_broadcaster.as_ref(),
+                )
+                .await
+                {
+                    Ok((series_result, is_new_series)) => {
+                        info!(
+                            "Completed series '{}' in {:?} (created: {}, updated: {}, tasks: {})",
+                            series_name,
+                            series_start.elapsed(),
+                            series_result.books_created,
+                            series_result.books_updated,
+                            series_result.tasks_queued
+                        );
+                        state
+                            .merge_series_result(series_result, is_new_series)
+                            .await;
+                        state.send_progress().await;
+                    }
+                    Err(e) => {
+                        let error_msg = format!(
+                            "Error processing series '{}': {} (took {:?})",
+                            series_name,
+                            e,
+                            series_start.elapsed()
+                        );
+                        error!("{}", error_msg);
+                        state.add_error(error_msg).await;
+                    }
                 }
             }
-            Err(e) => {
-                let error_msg = format!(
-                    "Error processing file '{}': {}",
-                    detected_book.path.display(),
-                    e
-                );
-                error!("{} (took {:?})", error_msg, file_start.elapsed());
-                result.errors.push(error_msg);
+        })
+        .collect();
+
+    info!(
+        "Starting parallel series processing ({} series, {} concurrent)",
+        series_count, config.parallel_series
+    );
+
+    // Wait for all series to complete
+    join_all(series_futures).await;
+
+    // Handle deleted/restored files (Normal mode only)
+    if mode == ScanMode::Normal {
+        let cleanup_start = Instant::now();
+        let mut deleted_count = 0;
+        let mut restored_count = 0;
+
+        for (path, (_, book)) in &existing_books_with_hash {
+            if !seen_paths.contains(path) {
+                // File is missing from filesystem
+                if !book.deleted {
+                    // Mark as deleted
+                    debug!("Marking missing book as deleted: {}", path);
+                    match BookRepository::mark_deleted(db, book.id, true, event_broadcaster).await {
+                        Ok(_) => {
+                            deleted_count += 1;
+                        }
+                        Err(e) => {
+                            let error_msg =
+                                format!("Failed to mark book as deleted {}: {}", path, e);
+                            warn!("{}", error_msg);
+                            shared_state.add_error(error_msg).await;
+                        }
+                    }
+                }
+            } else if book.deleted {
+                // File reappeared on filesystem, restore it
+                debug!("Restoring deleted book: {}", path);
+                match BookRepository::mark_deleted(db, book.id, false, event_broadcaster).await {
+                    Ok(_) => {
+                        restored_count += 1;
+                    }
+                    Err(e) => {
+                        let error_msg = format!("Failed to restore book {}: {}", path, e);
+                        warn!("{}", error_msg);
+                        shared_state.add_error(error_msg).await;
+                    }
+                }
             }
         }
 
-        // Yield to the runtime after each file to allow other tasks to run
-        tokio::task::yield_now().await;
+        if deleted_count > 0 || restored_count > 0 {
+            info!(
+                "Cleanup completed in {:?}: {} books marked as deleted, {} books restored",
+                cleanup_start.elapsed(),
+                deleted_count,
+                restored_count
+            );
+            shared_state.add_deleted(deleted_count).await;
+            shared_state.add_restored(restored_count).await;
+        }
     }
 
-    Ok(())
+    // Extract final results
+    let (result, _progress) = shared_state.into_result().await;
+    Ok(result)
 }
 
-/// Process a single file - FAST DETECTION PHASE (no analysis)
-/// Only calculates hash and creates/updates database record without analyzing content
-#[allow(clippy::too_many_arguments)] // Internal scanner function - context params needed for book creation
-async fn process_file(
-    db: &DatabaseConnection,
-    series_model: &series::Model,
-    file_path: &Path,
-    existing_books: &HashMap<String, (String, books::Model)>,
-    mode: ScanMode,
-    progress: &mut ScanProgress,
-    result: &mut ScanResult,
-    event_broadcaster: Option<&Arc<EventBroadcaster>>,
-) -> Result<()> {
+/// Result from hashing a file
+struct FileHashResult {
+    path: PathBuf,
+    path_str: String,
+    partial_hash: String,
+    file_size: u64,
+    modified_at: DateTime<Utc>,
+    format: String,
+}
+
+/// Hash a single file and get its metadata
+///
+/// This is designed to be called concurrently with semaphore control.
+async fn hash_file_with_metadata(file_path: PathBuf) -> Result<FileHashResult> {
     let path_str = file_path.to_string_lossy().to_string();
 
     // Calculate current partial hash (blocking I/O operation - fast, only first 1MB)
-    let hash_start = Instant::now();
-    let file_path_clone = file_path.to_path_buf();
+    let file_path_clone = file_path.clone();
     let current_partial_hash = tokio::task::spawn_blocking(move || {
         use crate::utils::hasher::hash_file_partial;
         hash_file_partial(&file_path_clone)
@@ -613,40 +666,8 @@ async fn process_file(
     .await
     .map_err(|e| anyhow::anyhow!("Failed to spawn hash calculation task: {}", e))??;
 
-    // Check if we should skip this file (normal mode only)
-    if mode == ScanMode::Normal {
-        if let Some((existing_partial_hash, existing_book)) = existing_books.get(&path_str) {
-            if &current_partial_hash == existing_partial_hash {
-                // Partial hash hasn't changed - file is likely unchanged
-                if existing_book.analyzed {
-                    debug!(
-                        "Skipping unchanged analyzed file: {} (partial hash check took {:?})",
-                        path_str,
-                        hash_start.elapsed()
-                    );
-                    return Ok(());
-                } else {
-                    info!(
-                        "File unchanged but not analyzed (will update/skip): {} - partial hash: {}",
-                        path_str, current_partial_hash
-                    );
-                }
-            } else {
-                info!(
-                    "File partial hash changed: {} - old: {}, new: {}",
-                    path_str, existing_partial_hash, current_partial_hash
-                );
-            }
-        } else {
-            info!(
-                "New file detected (not in existing_books map): {}",
-                path_str
-            );
-        }
-    }
-
-    // Get file metadata (size and modified time) without full analysis
-    let file_path_clone = file_path.to_path_buf();
+    // Get file metadata (size and modified time)
+    let file_path_clone = file_path.clone();
     let (file_size, modified_at) =
         tokio::task::spawn_blocking(move || -> Result<(u64, DateTime<Utc>)> {
             let metadata = fs::metadata(&file_path_clone)?;
@@ -664,94 +685,234 @@ async fn process_file(
         .unwrap_or("unknown")
         .to_lowercase();
 
-    // Check if book already exists by path and library
-    let existing_book = BookRepository::get_by_path(db, series_model.library_id, &path_str).await?;
+    Ok(FileHashResult {
+        path: file_path,
+        path_str,
+        partial_hash: current_partial_hash,
+        file_size,
+        modified_at,
+        format,
+    })
+}
+
+/// Process a batch of files in parallel and collect them for batch DB operations
+///
+/// Returns a list of file hash results that can be used to create/update books.
+async fn hash_files_parallel(
+    files: Vec<PathBuf>,
+    parallel_hashing: usize,
+) -> Vec<Result<FileHashResult>> {
+    let semaphore = Arc::new(Semaphore::new(parallel_hashing));
+
+    let hash_futures: Vec<_> = files
+        .into_iter()
+        .map(|file_path| {
+            let sem = Arc::clone(&semaphore);
+            async move {
+                let _permit = sem
+                    .acquire()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to acquire semaphore: {}", e))?;
+                hash_file_with_metadata(file_path).await
+            }
+        })
+        .collect();
+
+    join_all(hash_futures).await
+}
+
+/// Process a single series using batch operations
+///
+/// This is the optimized version that:
+/// - Hashes files in parallel
+/// - Batch creates/updates books in the database
+/// - Immediately queues analysis tasks
+///
+/// Returns a SeriesProcessResult instead of mutating state directly.
+#[allow(clippy::too_many_arguments)]
+async fn process_series_batched(
+    db: &DatabaseConnection,
+    library: &crate::db::entities::libraries::Model,
+    detected_series: &DetectedSeries,
+    existing_books_map: &HashMap<String, books::Model>,
+    mode: ScanMode,
+    config: &ScannerConfig,
+    event_broadcaster: Option<&Arc<EventBroadcaster>>,
+) -> Result<(SeriesProcessResult, bool)> {
+    let mut result = SeriesProcessResult::new();
+
+    // Extract file paths from detected books
+    let file_paths: Vec<PathBuf> = detected_series
+        .books
+        .iter()
+        .map(|b| b.path.clone())
+        .collect();
+
+    // Calculate series fingerprint from file paths
+    let file_refs: Vec<&PathBuf> = file_paths.iter().collect();
+    let fingerprint = calculate_series_fingerprint(&file_refs);
+
+    // Use series path from detected series
+    let series_path = detected_series
+        .path
+        .as_deref()
+        .unwrap_or(&detected_series.name);
+
+    // Find or create series with fingerprint
+    let series_model = find_or_create_series(
+        db,
+        library.id,
+        &detected_series.name,
+        Some(&fingerprint),
+        series_path,
+        event_broadcaster,
+    )
+    .await?;
+
+    // Check if this is a new series
+    let is_new_series = existing_books_map
+        .values()
+        .all(|book| book.series_id != series_model.id);
+
+    // Create batch accumulator
+    // Deep scan forces re-analysis of all books, Normal scan only analyzes new/changed books
+    let force_analysis = mode == ScanMode::Deep;
+    let mut batch = BookBatch::new(config.batch_size, force_analysis);
+
+    // Process files in chunks for parallel hashing
     let now = Utc::now();
+    let total_files = file_paths.len();
+    let mut files_processed = 0;
 
-    if let Some(mut existing) = existing_book {
-        // Update existing book - only update hashes, size, and modified time
-        // Mark as not analyzed if partial hash changed (will be verified before analysis)
-        let partial_hash_changed = existing.partial_hash != current_partial_hash;
+    for chunk in file_paths.chunks(config.batch_size) {
+        let chunk_start = Instant::now();
 
-        // Check if any meaningful fields have changed (excluding updated_at which always changes)
-        let size_changed = existing.file_size != file_size as i64;
-        let format_changed = existing.format != format;
-        let modified_changed = existing.modified_at != modified_at;
-        let anything_changed =
-            partial_hash_changed || size_changed || format_changed || modified_changed;
+        // Hash all files in this chunk in parallel
+        let hash_results = hash_files_parallel(chunk.to_vec(), config.parallel_hashing).await;
 
-        existing.file_size = file_size as i64;
-        existing.partial_hash = current_partial_hash.clone();
-        // Note: file_hash (full hash) is NOT updated during scanning - only during analysis
-        // This prevents the constant rehashing issue
-        existing.format = format;
-        existing.modified_at = modified_at;
-        existing.updated_at = now;
+        for hash_result in hash_results {
+            files_processed += 1;
 
-        let was_analyzed = existing.analyzed;
-        existing.analyzed = if partial_hash_changed {
-            false
-        } else {
-            existing.analyzed
-        };
+            match hash_result {
+                Ok(file_hash) => {
+                    // Count every successfully hashed file as scanned
+                    result.files_scanned += 1;
 
-        BookRepository::update(db, &existing, event_broadcaster).await?;
+                    // Check if we should skip this file (normal mode only)
+                    if mode == ScanMode::Normal {
+                        if let Some(existing_book) = existing_books_map.get(&file_hash.path_str) {
+                            if existing_book.partial_hash == file_hash.partial_hash {
+                                // Partial hash hasn't changed - file is likely unchanged
+                                if existing_book.analyzed {
+                                    debug!(
+                                        "Skipping unchanged analyzed file: {}",
+                                        file_hash.path_str
+                                    );
+                                    continue;
+                                }
+                            }
+                        }
+                    }
 
-        // Only count as updated if something actually changed
-        if anything_changed {
-            result.books_updated += 1;
-        }
-        progress.increment_books();
+                    // Check if book already exists by path
+                    if let Some(existing_book) = existing_books_map.get(&file_hash.path_str) {
+                        // Update existing book
+                        let partial_hash_changed =
+                            existing_book.partial_hash != file_hash.partial_hash;
+                        let size_changed = existing_book.file_size != file_hash.file_size as i64;
+                        let format_changed = existing_book.format != file_hash.format;
+                        let modified_changed = existing_book.modified_at != file_hash.modified_at;
+                        let anything_changed = partial_hash_changed
+                            || size_changed
+                            || format_changed
+                            || modified_changed;
 
-        if partial_hash_changed && was_analyzed {
-            info!(
-                "Book marked as unanalyzed due to partial hash change: {} - old: (in DB), new: {}",
-                path_str, current_partial_hash
-            );
+                        if anything_changed {
+                            let mut updated_book = existing_book.clone();
+                            updated_book.file_size = file_hash.file_size as i64;
+                            updated_book.partial_hash = file_hash.partial_hash;
+                            updated_book.format = file_hash.format;
+                            updated_book.modified_at = file_hash.modified_at;
+                            updated_book.updated_at = now;
+
+                            // Mark as unanalyzed if hash changed
+                            let needs_analysis = if partial_hash_changed {
+                                updated_book.analyzed = false;
+                                true
+                            } else {
+                                !existing_book.analyzed
+                            };
+
+                            batch.add_update(updated_book, needs_analysis);
+                        } else if !existing_book.analyzed {
+                            // No changes but needs analysis - just queue a task
+                            batch.needs_analysis.push(existing_book.id);
+                        }
+                    } else {
+                        // Create new book
+                        let book_model = books::Model {
+                            id: Uuid::new_v4(),
+                            series_id: series_model.id,
+                            library_id: library.id,
+                            file_path: file_hash.path_str.clone(),
+                            file_name: file_hash
+                                .path
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                                .to_string(),
+                            file_size: file_hash.file_size as i64,
+                            file_hash: String::new(), // Filled during analysis
+                            partial_hash: file_hash.partial_hash,
+                            format: file_hash.format,
+                            page_count: 0, // Filled during analysis
+                            deleted: false,
+                            analyzed: false,
+                            analysis_error: None,
+                            modified_at: file_hash.modified_at,
+                            created_at: now,
+                            updated_at: now,
+                            thumbnail_path: None,
+                            thumbnail_generated_at: None,
+                        };
+
+                        batch.add_create(book_model, true);
+                    }
+                }
+                Err(e) => {
+                    result.errors.push(format!("Failed to hash file: {}", e));
+                }
+            }
+
+            // Flush batch if full
+            if batch.is_full() {
+                let (created, updated, tasks_queued, errors) = batch.flush(db).await;
+                result.books_created += created;
+                result.books_updated += updated;
+                result.tasks_queued += tasks_queued;
+                result.errors.extend(errors);
+            }
         }
 
         debug!(
-            "Updated book (detection only): {} - analyzed: {}, partial_hash_changed: {}",
-            path_str, existing.analyzed, partial_hash_changed
+            "Processed chunk of {} files in {:?} ({}/{} total)",
+            chunk.len(),
+            chunk_start.elapsed(),
+            files_processed,
+            total_files
         );
-    } else {
-        // Create new book WITHOUT analysis
-        // Note: title and number are now stored in book_metadata (populated during analysis)
-        let book_model = books::Model {
-            id: Uuid::new_v4(),
-            series_id: series_model.id,
-            library_id: series_model.library_id,
-            file_path: path_str.clone(),
-            file_name: file_path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string(),
-            file_size: file_size as i64,
-            file_hash: String::new(), // Will be filled during analysis phase with full hash
-            partial_hash: current_partial_hash,
-            format,
-            page_count: 0, // Will be filled during analysis phase
-            deleted: false,
-            analyzed: false, // Mark as not analyzed
-            analysis_error: None,
-            modified_at,
-            created_at: now,
-            updated_at: now,
-            thumbnail_path: None,         // Thumbnail not generated yet
-            thumbnail_generated_at: None, // Thumbnail not generated yet
-        };
-
-        BookRepository::create(db, &book_model, event_broadcaster).await?;
-        // Note: book_count is now computed dynamically via SeriesRepository::get_book_count()
-
-        result.books_created += 1;
-        progress.increment_books();
-
-        debug!("Created book (detection only): {}", path_str);
     }
 
-    Ok(())
+    // Flush any remaining items in the batch
+    if !batch.is_empty() {
+        let (created, updated, tasks_queued, errors) = batch.flush(db).await;
+        result.books_created += created;
+        result.books_updated += updated;
+        result.tasks_queued += tasks_queued;
+        result.errors.extend(errors);
+    }
+
+    Ok((result, is_new_series))
 }
 
 /// Calculate a fingerprint for a series based on its books
