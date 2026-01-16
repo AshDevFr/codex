@@ -199,12 +199,12 @@ impl BookBatch {
 
     /// Check if the batch is full and should be flushed
     fn is_full(&self) -> bool {
-        self.to_create.len() + self.to_update.len() >= self.capacity
+        self.to_create.len() + self.to_update.len() + self.needs_analysis.len() >= self.capacity
     }
 
     /// Check if the batch has any items
     fn is_empty(&self) -> bool {
-        self.to_create.is_empty() && self.to_update.is_empty()
+        self.to_create.is_empty() && self.to_update.is_empty() && self.needs_analysis.is_empty()
     }
 
     /// Add a book to create
@@ -840,12 +840,13 @@ async fn process_series_batched(
                                 updated_book.analyzed = false;
                                 true
                             } else {
-                                !existing_book.analyzed
+                                // For deep scan, always re-analyze; for normal scan, only if not analyzed
+                                force_analysis || !existing_book.analyzed
                             };
 
                             batch.add_update(updated_book, needs_analysis);
-                        } else if !existing_book.analyzed {
-                            // No changes but needs analysis - just queue a task
+                        } else if !existing_book.analyzed || force_analysis {
+                            // No changes but needs analysis (or deep scan forces re-analysis)
                             batch.needs_analysis.push(existing_book.id);
                         }
                     } else {
