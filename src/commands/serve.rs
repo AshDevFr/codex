@@ -173,7 +173,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         )),
         auth_config: Arc::new(config.auth.clone()),
         email_service,
-        event_broadcaster,
+        event_broadcaster: event_broadcaster.clone(),
         settings_service,
         thumbnail_service,
         file_cleanup_service,
@@ -243,8 +243,14 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("  Health check: http://{}/health", addr);
     info!("========================================");
 
-    // Set up graceful shutdown
-    let graceful = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal());
+    // Set up graceful shutdown with broadcaster shutdown
+    let event_broadcaster_for_shutdown = event_broadcaster.clone();
+    let graceful = axum::serve(listener, app).with_graceful_shutdown(async move {
+        shutdown_signal().await;
+        // Shutdown event broadcaster to close all SSE connections
+        info!("Closing SSE connections...");
+        event_broadcaster_for_shutdown.shutdown();
+    });
 
     // Run server with graceful shutdown
     let server_result = graceful.await;

@@ -99,6 +99,9 @@ pub enum EntityEvent {
     LibraryUpdated { library_id: Uuid },
     /// A library was deleted
     LibraryDeleted { library_id: Uuid },
+    /// Internal signal to indicate shutdown (not sent to clients)
+    #[serde(skip)]
+    Shutdown,
 }
 
 /// Complete entity change event with metadata
@@ -137,7 +140,22 @@ impl EntityChangeEvent {
             | EntityEvent::LibraryUpdated { library_id }
             | EntityEvent::LibraryDeleted { library_id } => Some(*library_id),
             EntityEvent::CoverUpdated { library_id, .. } => *library_id,
+            EntityEvent::Shutdown => None,
         }
+    }
+
+    /// Create a shutdown signal event (internal use only)
+    pub fn shutdown_signal() -> Self {
+        Self {
+            event: EntityEvent::Shutdown,
+            timestamp: Utc::now(),
+            user_id: None,
+        }
+    }
+
+    /// Check if this is a shutdown signal
+    pub fn is_shutdown(&self) -> bool {
+        matches!(self.event, EntityEvent::Shutdown)
     }
 }
 
@@ -270,5 +288,26 @@ impl TaskProgressEvent {
             series_id,
             book_id,
         }
+    }
+
+    /// Create a shutdown signal event (internal use only)
+    pub fn shutdown_signal() -> Self {
+        Self {
+            task_id: Uuid::nil(),
+            task_type: "__shutdown__".to_string(),
+            status: TaskStatus::Completed,
+            progress: None,
+            error: None,
+            started_at: Utc::now(),
+            completed_at: None,
+            library_id: None,
+            series_id: None,
+            book_id: None,
+        }
+    }
+
+    /// Check if this is a shutdown signal
+    pub fn is_shutdown(&self) -> bool {
+        self.task_type == "__shutdown__"
     }
 }

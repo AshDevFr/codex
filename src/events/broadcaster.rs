@@ -33,12 +33,14 @@ pub struct RecordedEvent {
 /// In single-process mode, events are broadcast directly to subscribers.
 /// In distributed mode (with recording enabled), events are also recorded
 /// for later replay by the TaskListener.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct EventBroadcaster {
     entity_sender: broadcast::Sender<EntityChangeEvent>,
     task_sender: broadcast::Sender<TaskProgressEvent>,
     /// Optional event recording for cross-process bridging in distributed deployments
     recorded_events: Option<Arc<RwLock<Vec<RecordedEvent>>>>,
+    /// Flag to track if the broadcaster has been shut down
+    shutdown: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl EventBroadcaster {
@@ -70,6 +72,7 @@ impl EventBroadcaster {
             } else {
                 None
             },
+            shutdown: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 
@@ -182,6 +185,30 @@ impl EventBroadcaster {
         } else {
             0
         }
+    }
+
+    /// Check if the broadcaster has been shut down
+    pub fn is_shutdown(&self) -> bool {
+        self.shutdown.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Shutdown the broadcaster, signaling all SSE streams to close
+    ///
+    /// This sets a shutdown flag and sends a final event to wake up
+    /// any receivers that are waiting. SSE handlers should check
+    /// `is_shutdown()` and exit their loops.
+    pub fn shutdown(&self) {
+        debug!("Shutting down event broadcaster");
+        self.shutdown
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        // Send a dummy event to wake up any receivers waiting on recv()
+        // They will then check is_shutdown() and exit
+        // We don't care if this fails (no subscribers)
+        let _ = self
+            .entity_sender
+            .send(EntityChangeEvent::shutdown_signal());
+        let _ = self.task_sender.send(TaskProgressEvent::shutdown_signal());
     }
 }
 
@@ -373,5 +400,31 @@ mod tests {
             deserialized.event,
             EntityEvent::CoverUpdated { .. }
         ));
+    }
+
+    #[tokio::test]
+    async fn test_shutdown_sets_flag() {
+        let broadcaster = EventBroadcaster::new(100);
+        assert!(!broadcaster.is_shutdown());
+
+        broadcaster.shutdown();
+        assert!(broadcaster.is_shutdown());
+    }
+
+    #[tokio::test]
+    async fn test_shutdown_wakes_receivers() {
+        let broadcaster = EventBroadcaster::new(100);
+        let mut entity_receiver = broadcaster.subscribe();
+        let mut task_receiver = broadcaster.subscribe_tasks();
+
+        // Shutdown should send signals that wake up waiting receivers
+        broadcaster.shutdown();
+
+        // Receivers should get the shutdown signal
+        let entity_event = entity_receiver.recv().await.unwrap();
+        assert!(entity_event.is_shutdown());
+
+        let task_event = task_receiver.recv().await.unwrap();
+        assert!(task_event.is_shutdown());
     }
 }

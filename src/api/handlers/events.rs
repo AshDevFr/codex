@@ -60,13 +60,28 @@ pub async fn entity_events_stream(
     // Subscribe to the event broadcaster
     let mut receiver = state.event_broadcaster.subscribe();
 
+    // Clone broadcaster to check shutdown status
+    let broadcaster = state.event_broadcaster.clone();
+
     // Create SSE stream with timeout to detect client disconnects
     let stream = async_stream::stream! {
         loop {
+            // Check if broadcaster is shutting down
+            if broadcaster.is_shutdown() {
+                debug!("Broadcaster shutdown detected, ending entity events stream");
+                break;
+            }
+
             // Use timeout to detect if client has disconnected
             // If no event for 30 seconds (2x keep-alive), assume disconnect
             match timeout(Duration::from_secs(30), receiver.recv()).await {
                 Ok(Ok(event)) => {
+                    // Check for shutdown signal
+                    if event.is_shutdown() {
+                        debug!("Received shutdown signal, ending entity events stream");
+                        break;
+                    }
+
                     // Serialize event to JSON
                     match serde_json::to_string(&event) {
                         Ok(json) => {
@@ -90,7 +105,11 @@ pub async fn entity_events_stream(
                 }
                 Err(_) => {
                     // Timeout - keep-alive should have triggered within 30s
-                    // Continue to next iteration (keep-alive will be sent)
+                    // Check shutdown status and continue
+                    if broadcaster.is_shutdown() {
+                        debug!("Broadcaster shutdown detected during timeout, ending stream");
+                        break;
+                    }
                     continue;
                 }
             }
@@ -162,13 +181,28 @@ pub async fn task_progress_stream(
     // Subscribe to the task progress broadcaster
     let mut receiver = state.event_broadcaster.subscribe_tasks();
 
+    // Clone broadcaster to check shutdown status
+    let broadcaster = state.event_broadcaster.clone();
+
     // Create SSE stream with timeout to detect client disconnects
     let stream = async_stream::stream! {
         loop {
+            // Check if broadcaster is shutting down
+            if broadcaster.is_shutdown() {
+                debug!("Broadcaster shutdown detected, ending task progress stream");
+                break;
+            }
+
             // Use timeout to detect if client has disconnected
             // If no event for 30 seconds (2x keep-alive), assume disconnect
             match timeout(Duration::from_secs(30), receiver.recv()).await {
                 Ok(Ok(event)) => {
+                    // Check for shutdown signal
+                    if event.is_shutdown() {
+                        debug!("Received shutdown signal, ending task progress stream");
+                        break;
+                    }
+
                     // Serialize event to JSON
                     match serde_json::to_string(&event) {
                         Ok(json) => {
@@ -195,7 +229,11 @@ pub async fn task_progress_stream(
                 }
                 Err(_) => {
                     // Timeout - keep-alive should have triggered within 30s
-                    // Continue to next iteration (keep-alive will be sent)
+                    // Check shutdown status and continue
+                    if broadcaster.is_shutdown() {
+                        debug!("Broadcaster shutdown detected during timeout, ending stream");
+                        break;
+                    }
                     continue;
                 }
             }

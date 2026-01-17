@@ -356,3 +356,87 @@ async fn test_sse_stream_content_type() {
     );
     assert_eq!(response.headers().get("cache-control").unwrap(), "no-cache");
 }
+
+// ============================================================================
+// Graceful Shutdown Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_broadcaster_shutdown_closes_entity_stream() {
+    use codex::events::EventBroadcaster;
+    use std::sync::Arc;
+
+    let broadcaster = Arc::new(EventBroadcaster::new(100));
+    let mut receiver = broadcaster.subscribe();
+
+    // Spawn a task that waits for an event
+    let broadcaster_clone = broadcaster.clone();
+    let handle = tokio::spawn(async move {
+        // This would normally block forever, but shutdown will wake it
+        match receiver.recv().await {
+            Ok(event) => event.is_shutdown(),
+            Err(_) => false,
+        }
+    });
+
+    // Give the spawned task time to start waiting
+    tokio::time::sleep(Duration::from_millis(10)).await;
+
+    // Shutdown should wake up the receiver
+    broadcaster_clone.shutdown();
+
+    // The task should complete quickly with the shutdown signal
+    let result = timeout(Duration::from_secs(1), handle)
+        .await
+        .expect("Task should complete after shutdown")
+        .expect("Task should not panic");
+
+    assert!(result, "Receiver should have received shutdown signal");
+}
+
+#[tokio::test]
+async fn test_broadcaster_shutdown_closes_task_stream() {
+    use codex::events::EventBroadcaster;
+    use std::sync::Arc;
+
+    let broadcaster = Arc::new(EventBroadcaster::new(100));
+    let mut receiver = broadcaster.subscribe_tasks();
+
+    // Spawn a task that waits for an event
+    let broadcaster_clone = broadcaster.clone();
+    let handle = tokio::spawn(async move {
+        match receiver.recv().await {
+            Ok(event) => event.is_shutdown(),
+            Err(_) => false,
+        }
+    });
+
+    // Give the spawned task time to start waiting
+    tokio::time::sleep(Duration::from_millis(10)).await;
+
+    // Shutdown should wake up the receiver
+    broadcaster_clone.shutdown();
+
+    // The task should complete quickly with the shutdown signal
+    let result = timeout(Duration::from_secs(1), handle)
+        .await
+        .expect("Task should complete after shutdown")
+        .expect("Task should not panic");
+
+    assert!(result, "Receiver should have received shutdown signal");
+}
+
+#[tokio::test]
+async fn test_shutdown_signal_not_serialized_to_clients() {
+    // Verify that shutdown signals cannot be accidentally sent to clients
+    let shutdown_event = EntityChangeEvent::shutdown_signal();
+
+    // The Shutdown variant has #[serde(skip)], so serialization should fail
+    // This ensures shutdown signals are never accidentally sent over the wire
+    let result = serde_json::to_string(&shutdown_event);
+
+    assert!(
+        result.is_err(),
+        "Shutdown signal should not be serializable"
+    );
+}
