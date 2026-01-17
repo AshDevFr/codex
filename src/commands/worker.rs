@@ -1,6 +1,6 @@
 use crate::commands::common::{
-    display_database_config, get_worker_count, init_database, init_settings_service, init_tracing,
-    load_config, shutdown_workers, spawn_workers,
+    display_database_config, ensure_data_directories, get_worker_count, init_database,
+    init_settings_service, init_tracing, load_config, shutdown_workers, spawn_workers,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -17,6 +17,9 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Logging level: {}", log_level);
     info!("Loading configuration from {:?}", config_path);
     info!("Configuration loaded successfully");
+
+    // Ensure all required data directories exist
+    ensure_data_directories(&config)?;
 
     info!("========================================");
     info!("Starting Codex Worker v{}", env!("CARGO_PKG_VERSION"));

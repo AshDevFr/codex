@@ -1,6 +1,6 @@
 use crate::commands::common::{
-    display_database_config, get_worker_count, init_database, init_settings_service, init_tracing,
-    load_config, shutdown_workers, spawn_workers,
+    display_database_config, ensure_data_directories, get_worker_count, init_database,
+    init_settings_service, init_tracing, load_config, shutdown_workers, spawn_workers,
 };
 use crate::config::DatabaseType;
 use std::path::PathBuf;
@@ -22,6 +22,9 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     }
     info!("Loading configuration from {:?}", config_path);
     info!("Configuration loaded successfully");
+
+    // Ensure all required data directories exist
+    ensure_data_directories(&config)?;
 
     info!("========================================");
     info!("Starting Codex v{}", env!("CARGO_PKG_VERSION"));

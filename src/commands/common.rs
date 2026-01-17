@@ -4,14 +4,68 @@ use crate::events::EventBroadcaster;
 use crate::services::{SettingsService, TaskMetricsService};
 use crate::tasks::TaskWorker;
 use sea_orm::DatabaseConnection;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
+/// Ensure a directory exists, creating it and any parent directories if necessary
+pub fn ensure_dir_exists(path: &Path) -> anyhow::Result<()> {
+    if !path.exists() {
+        fs::create_dir_all(path)?;
+    }
+    Ok(())
+}
+
+/// Ensure parent directory of a file path exists
+pub fn ensure_parent_dir_exists(path: &Path) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            fs::create_dir_all(parent)?;
+        }
+    }
+    Ok(())
+}
+
+/// Ensure all data directories from config exist
+/// Call this after loading config to ensure thumbnail_dir, uploads_dir, and database dir exist
+pub fn ensure_data_directories(config: &Config) -> anyhow::Result<()> {
+    // Ensure thumbnail directory exists
+    let thumbnail_path = Path::new(&config.files.thumbnail_dir);
+    ensure_dir_exists(thumbnail_path)?;
+    info!(
+        "Ensured thumbnail directory exists: {}",
+        config.files.thumbnail_dir
+    );
+
+    // Ensure uploads directory exists
+    let uploads_path = Path::new(&config.files.uploads_dir);
+    ensure_dir_exists(uploads_path)?;
+    info!(
+        "Ensured uploads directory exists: {}",
+        config.files.uploads_dir
+    );
+
+    // Ensure SQLite database parent directory exists (if using SQLite)
+    if let Some(ref sqlite_config) = config.database.sqlite {
+        let db_path = Path::new(&sqlite_config.path);
+        ensure_parent_dir_exists(db_path)?;
+        info!(
+            "Ensured database directory exists for: {}",
+            sqlite_config.path
+        );
+    }
+
+    Ok(())
+}
+
 /// Load and apply configuration
 pub fn load_config(config_path: PathBuf) -> anyhow::Result<(Config, bool)> {
+    // Ensure config file parent directory exists
+    ensure_parent_dir_exists(&config_path)?;
+
     // Check if config file exists, if not create a default one
     let config_created = if !config_path.exists() {
         println!(
@@ -424,9 +478,128 @@ pub async fn shutdown_workers(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::TaskConfig;
+    use crate::config::{FilesConfig, SQLiteConfig, TaskConfig};
     use crate::db::test_helpers::create_test_db;
     use crate::services::SettingsService;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_ensure_dir_exists_creates_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let new_dir = temp_dir.path().join("new_directory");
+
+        assert!(!new_dir.exists());
+        ensure_dir_exists(&new_dir).unwrap();
+        assert!(new_dir.exists());
+        assert!(new_dir.is_dir());
+    }
+
+    #[test]
+    fn test_ensure_dir_exists_nested_directories() {
+        let temp_dir = TempDir::new().unwrap();
+        let nested_dir = temp_dir.path().join("level1").join("level2").join("level3");
+
+        assert!(!nested_dir.exists());
+        ensure_dir_exists(&nested_dir).unwrap();
+        assert!(nested_dir.exists());
+        assert!(nested_dir.is_dir());
+    }
+
+    #[test]
+    fn test_ensure_dir_exists_already_exists() {
+        let temp_dir = TempDir::new().unwrap();
+        let existing_dir = temp_dir.path().join("existing");
+        fs::create_dir(&existing_dir).unwrap();
+
+        assert!(existing_dir.exists());
+        // Should not error when directory already exists
+        ensure_dir_exists(&existing_dir).unwrap();
+        assert!(existing_dir.exists());
+    }
+
+    #[test]
+    fn test_ensure_parent_dir_exists_creates_parent() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("parent_dir").join("file.txt");
+
+        assert!(!file_path.parent().unwrap().exists());
+        ensure_parent_dir_exists(&file_path).unwrap();
+        assert!(file_path.parent().unwrap().exists());
+        assert!(!file_path.exists()); // File itself should not be created
+    }
+
+    #[test]
+    fn test_ensure_parent_dir_exists_nested() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir
+            .path()
+            .join("a")
+            .join("b")
+            .join("c")
+            .join("file.db");
+
+        assert!(!file_path.parent().unwrap().exists());
+        ensure_parent_dir_exists(&file_path).unwrap();
+        assert!(file_path.parent().unwrap().exists());
+    }
+
+    #[test]
+    fn test_ensure_parent_dir_exists_empty_parent() {
+        // File in current directory (empty parent)
+        let file_path = Path::new("file.txt");
+        // Should not error
+        ensure_parent_dir_exists(file_path).unwrap();
+    }
+
+    #[test]
+    fn test_ensure_data_directories_creates_all() {
+        let temp_dir = TempDir::new().unwrap();
+        let thumbnail_dir = temp_dir.path().join("thumbnails");
+        let uploads_dir = temp_dir.path().join("uploads");
+        let db_path = temp_dir.path().join("data").join("codex.db");
+
+        let config = Config {
+            files: FilesConfig {
+                thumbnail_dir: thumbnail_dir.to_string_lossy().to_string(),
+                uploads_dir: uploads_dir.to_string_lossy().to_string(),
+            },
+            database: crate::config::DatabaseConfig {
+                db_type: crate::config::DatabaseType::SQLite,
+                sqlite: Some(SQLiteConfig {
+                    path: db_path.to_string_lossy().to_string(),
+                    pragmas: None,
+                }),
+                postgres: None,
+            },
+            ..Config::default()
+        };
+
+        assert!(!thumbnail_dir.exists());
+        assert!(!uploads_dir.exists());
+        assert!(!db_path.parent().unwrap().exists());
+
+        ensure_data_directories(&config).unwrap();
+
+        assert!(thumbnail_dir.exists());
+        assert!(uploads_dir.exists());
+        assert!(db_path.parent().unwrap().exists());
+    }
+
+    #[test]
+    fn test_load_config_creates_parent_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config").join("codex.yaml");
+
+        assert!(!config_path.parent().unwrap().exists());
+
+        let (config, created) = load_config(config_path.clone()).unwrap();
+
+        assert!(config_path.parent().unwrap().exists());
+        assert!(config_path.exists());
+        assert!(created);
+        // Verify it's a valid config
+        assert!(!config.application.host.is_empty());
+    }
 
     #[tokio::test]
     async fn test_get_worker_count_from_config() {
