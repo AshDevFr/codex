@@ -328,7 +328,7 @@ jobs:
       - plan
     if: ${{ needs.plan.outputs.publishing == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - name: Set up QEMU
