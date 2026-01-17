@@ -175,6 +175,11 @@ frontend-install: ## Install frontend dependencies
 
 openapi: ## Generate OpenAPI spec from backend
 	cargo run -- openapi --output web/openapi.json
+	@echo "$(GREEN)OpenAPI spec generated!$(NC)"
+	@echo "$(YELLOW)Copying OpenAPI spec to docs/api/openapi.json...$(NC)"
+	cp web/openapi.json docs/api/openapi.json
+	@echo "$(GREEN)OpenAPI spec copied to docs/api/openapi.json!$(NC)"
+
 
 openapi-types: ## Generate TypeScript types from OpenAPI spec
 	cd web && npm run generate:types
