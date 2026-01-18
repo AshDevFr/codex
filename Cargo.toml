@@ -69,13 +69,13 @@ tabled = "0.20"
 sea-orm = { version = "1.1", features = [
     "sqlx-postgres",
     "sqlx-sqlite",
-    "runtime-tokio-native-tls",
+    "runtime-tokio-rustls",
     "macros",
     "with-chrono",
     "with-uuid",
 ] }
 sea-orm-migration = { version = "1.1", features = [
-    "runtime-tokio-native-tls",
+    "runtime-tokio-rustls",
     "sqlx-postgres",
     "sqlx-sqlite",
 ] }
@@ -105,10 +105,20 @@ base64 = "0.22"
 aes-gcm = "0.10"
 
 # Email
-lettre = { version = "0.11", features = ["tokio1", "tokio1-native-tls", "smtp-transport", "builder"] }
+lettre = { version = "0.11", default-features = false, features = [
+    "tokio1",
+    "tokio1-rustls-tls",
+    "smtp-transport",
+    "builder",
+] }
 
 # API Documentation
-utoipa = { version = "5.0", features = ["axum_extras", "chrono", "uuid", "yaml"] }
+utoipa = { version = "5.0", features = [
+    "axum_extras",
+    "chrono",
+    "uuid",
+    "yaml",
+] }
 utoipa-scalar = { version = "0.2", features = ["axum"] }
 
 # Job Scheduling
@@ -140,16 +150,18 @@ ci = "github"
 # The installers to generate for each app
 installers = ["shell", "powershell"]
 # Target platforms to build apps for (Rust target-triple syntax)
-targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
-
-# Cross-compile ARM64 Linux from x86_64 runner (private repos don't have access to ARM runners)
-[workspace.metadata.dist.github-custom-runners.aarch64-unknown-linux-gnu]
-runner = "ubuntu-22.04"
-host = "x86_64-unknown-linux-gnu"
-# Features to pass to cargo build
-features = ["embed-frontend"]
-# Whether default-features should be enabled with cargo build
-default-features = false
+# =============================================================================
+# SELF-HOSTED RUNNER MODIFICATIONS
+# =============================================================================
+# To revert to paid GitHub runners:
+# 1. Uncomment the full targets list below
+# 2. Comment out or remove the Linux-only targets line
+# 3. Remove both [workspace.metadata.dist.github-custom-runners.*] sections below
+# =============================================================================
+# ORIGINAL (GitHub runners): Uncomment this line for paid runners
+# targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+# SELF-HOSTED: Only Linux targets - macOS/Windows require GitHub-hosted runners (paid)
+targets = ["x86_64-unknown-linux-gnu"]
 # Which actions to run on pull requests
 pr-run-mode = "plan"
 # Whether to install an updater program
@@ -160,3 +172,14 @@ install-path = "CARGO_HOME"
 github-attestations = true
 # Allow customized workflow file (we use build.yml instead of release.yml)
 allow-dirty = ["ci"]
+
+# =============================================================================
+# SELF-HOSTED: Custom runner configurations
+# Remove this section when reverting to paid GitHub runners
+# =============================================================================
+
+# SELF-HOSTED: Use self-hosted runner for x86_64 Linux builds
+[workspace.metadata.dist.github-custom-runners.x86_64-unknown-linux-gnu]
+runner = "arc-runner-codex"
+features = ["embed-frontend"]
+default-features = false
