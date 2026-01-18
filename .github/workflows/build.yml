@@ -321,16 +321,48 @@ jobs:
           path: |
             ${{ steps.cargo-dist.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
-  # Build and push Docker images (multi-arch)
+  # Build and push Docker images (multi-arch) using pre-built binaries from cargo-dist
   docker:
     name: Docker
     needs:
       - plan
+      - build-local-artifacts
     if: ${{ needs.plan.outputs.publishing == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: artifacts-build-local-*
+          path: artifacts/
+          merge-multiple: true
+      - name: Prepare binaries for Docker
+        run: |
+          mkdir -p binaries/amd64 binaries/arm64
+
+          # Extract amd64 binary
+          if ls artifacts/codex-x86_64-unknown-linux-gnu.tar.gz 1> /dev/null 2>&1; then
+            tar -xzf artifacts/codex-x86_64-unknown-linux-gnu.tar.gz -C binaries/amd64 --strip-components=1
+            echo "Extracted amd64 binary"
+          elif ls artifacts/codex-x86_64-unknown-linux-gnu.tar.xz 1> /dev/null 2>&1; then
+            tar -xJf artifacts/codex-x86_64-unknown-linux-gnu.tar.xz -C binaries/amd64 --strip-components=1
+            echo "Extracted amd64 binary (xz)"
+          fi
+
+          # Extract arm64 binary
+          if ls artifacts/codex-aarch64-unknown-linux-gnu.tar.gz 1> /dev/null 2>&1; then
+            tar -xzf artifacts/codex-aarch64-unknown-linux-gnu.tar.gz -C binaries/arm64 --strip-components=1
+            echo "Extracted arm64 binary"
+          elif ls artifacts/codex-aarch64-unknown-linux-gnu.tar.xz 1> /dev/null 2>&1; then
+            tar -xJf artifacts/codex-aarch64-unknown-linux-gnu.tar.xz -C binaries/arm64 --strip-components=1
+            echo "Extracted arm64 binary (xz)"
+          fi
+
+          # Verify binaries exist
+          ls -la binaries/amd64/
+          ls -la binaries/arm64/
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
@@ -366,17 +398,13 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile
+          file: Dockerfile.release
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ needs.plan.outputs.is-release == 'true' && steps.meta-release.outputs.tags || steps.meta-main.outputs.tags }}
           labels: ${{ needs.plan.outputs.is-release == 'true' && steps.meta-release.outputs.labels || steps.meta-main.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: |
-            COMMIT_SHA=${{ github.sha }}
-            VERSION=${{ needs.plan.outputs.version }}
-            BUILD_ENV=production
 
   # Create GitHub Release (only for releases)
   host:

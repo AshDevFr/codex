@@ -140,9 +140,12 @@ ci = "github"
 # The installers to generate for each app
 installers = ["shell", "powershell"]
 # Target platforms to build apps for (Rust target-triple syntax)
-# Note: aarch64-unknown-linux-gnu commented out - requires ARM64 runners (public repos only) or cross-compilation
-targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
-# targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+
+# Cross-compile ARM64 Linux from x86_64 runner (private repos don't have access to ARM runners)
+[workspace.metadata.dist.github-custom-runners.aarch64-unknown-linux-gnu]
+runner = "ubuntu-22.04"
+host = "x86_64-unknown-linux-gnu"
 # Features to pass to cargo build
 features = ["embed-frontend"]
 # Whether default-features should be enabled with cargo build
