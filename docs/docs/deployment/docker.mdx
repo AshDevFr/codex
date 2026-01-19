@@ -41,7 +41,7 @@ To add multiple library paths, mount each one separately:
 ```yaml
 services:
   codex:
-    image: ghcr.io/ashdevfr/codex:main
+    image: ghcr.io/ashdevfr/codex:latest
     container_name: codex
     ports:
       - "8080:8080"
@@ -69,7 +69,7 @@ If you prefer using a local directory instead of a Docker volume for Codex data:
 ```yaml
 services:
   codex:
-    image: ghcr.io/ashdevfr/codex:main
+    image: ghcr.io/ashdevfr/codex:latest
     container_name: codex
     ports:
       - "8080:8080"
@@ -107,7 +107,7 @@ services:
     restart: unless-stopped
 
   codex:
-    image: ghcr.io/ashdevfr/codex:main
+    image: ghcr.io/ashdevfr/codex:latest
     container_name: codex
     ports:
       - "8080:8080"
@@ -169,7 +169,7 @@ See [Configuration](../configuration) for all options.
 
 ```bash
 # If using docker run
-docker pull ghcr.io/ashdevfr/codex:main
+docker pull ghcr.io/ashdevfr/codex:latest
 docker stop codex
 docker rm codex
 # Then run the docker run command again

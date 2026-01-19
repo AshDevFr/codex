@@ -26,7 +26,7 @@ function HomepageHeader() {
           </Link>
         </div>
         <div className={styles.heroCode}>
-          <code>docker pull ghcr.io/codex/codex:latest</code>
+          <code>docker pull ghcr.io/ashdevfr/codex:latest</code>
         </div>
       </div>
     </header>
