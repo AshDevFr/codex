@@ -610,12 +610,14 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
 							</Table.Tr>
 						</Table.Thead>
 						<Table.Tbody>
-							{byType.map((taskMetrics) => (
-								<TaskTypeRow
-									key={taskMetrics.task_type}
-									metrics={taskMetrics}
-								/>
-							))}
+							{[...byType]
+								.sort((a, b) => a.task_type.localeCompare(b.task_type))
+								.map((taskMetrics) => (
+									<TaskTypeRow
+										key={taskMetrics.task_type}
+										metrics={taskMetrics}
+									/>
+								))}
 						</Table.Tbody>
 					</Table>
 				</div>

@@ -403,7 +403,9 @@ export function TasksSettings() {
 					<Card withBorder>
 						<Stack gap="md">
 							<Title order={3}>Active Tasks</Title>
-							{Array.from(activeProgress.values()).map((event) => (
+							{Array.from(activeProgress.values())
+								.sort((a, b) => a.task_type.localeCompare(b.task_type))
+								.map((event) => (
 								<div key={event.task_id}>
 									<Group justify="space-between" mb="xs">
 										<Group gap="xs">
@@ -509,18 +511,20 @@ export function TasksSettings() {
 									</Table.Tr>
 								</Table.Thead>
 								<Table.Tbody>
-									{Object.entries(stats.by_type).map(([type, typeStats]) => (
-										<Table.Tr key={type}>
-											<Table.Td>
-												<Badge variant="light">{type}</Badge>
-											</Table.Td>
-											<Table.Td>{typeStats.pending}</Table.Td>
-											<Table.Td>{typeStats.processing}</Table.Td>
-											<Table.Td>{typeStats.completed}</Table.Td>
-											<Table.Td>{typeStats.failed}</Table.Td>
-											<Table.Td>{typeStats.total}</Table.Td>
-										</Table.Tr>
-									))}
+									{Object.entries(stats.by_type)
+										.sort(([typeA], [typeB]) => typeA.localeCompare(typeB))
+										.map(([type, typeStats]) => (
+											<Table.Tr key={type}>
+												<Table.Td>
+													<Badge variant="light">{type}</Badge>
+												</Table.Td>
+												<Table.Td>{typeStats.pending}</Table.Td>
+												<Table.Td>{typeStats.processing}</Table.Td>
+												<Table.Td>{typeStats.completed}</Table.Td>
+												<Table.Td>{typeStats.failed}</Table.Td>
+												<Table.Td>{typeStats.total}</Table.Td>
+											</Table.Tr>
+										))}
 								</Table.Tbody>
 							</Table>
 						</Stack>

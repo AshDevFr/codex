@@ -226,11 +226,15 @@ export function useTaskProgress() {
 		};
 	}, [isAuthenticated]);
 
+	// Sort helper for consistent ordering (by task_type alphabetically)
+	const sortTasks = (tasks: TaskProgressEvent[]): TaskProgressEvent[] =>
+		tasks.sort((a, b) => a.task_type.localeCompare(b.task_type));
+
 	return {
 		/**
-		 * Array of active tasks
+		 * Array of active tasks (sorted by task_type for consistent UI ordering)
 		 */
-		activeTasks: Array.from(activeTasks.values()),
+		activeTasks: sortTasks(Array.from(activeTasks.values())),
 		/**
 		 * Current SSE connection state
 		 */
@@ -240,19 +244,23 @@ export function useTaskProgress() {
 		 */
 		pendingCounts,
 		/**
-		 * Get all tasks with a specific status
+		 * Get all tasks with a specific status (sorted by task_type)
 		 */
 		getTasksByStatus: (status: TaskStatus): TaskProgressEvent[] => {
-			return Array.from(activeTasks.values()).filter(
-				(task) => task.status === status,
+			return sortTasks(
+				Array.from(activeTasks.values()).filter(
+					(task) => task.status === status,
+				),
 			);
 		},
 		/**
-		 * Get all tasks for a specific library
+		 * Get all tasks for a specific library (sorted by task_type)
 		 */
 		getTasksByLibrary: (libraryId: string): TaskProgressEvent[] => {
-			return Array.from(activeTasks.values()).filter(
-				(task) => task.library_id === libraryId,
+			return sortTasks(
+				Array.from(activeTasks.values()).filter(
+					(task) => task.library_id === libraryId,
+				),
 			);
 		},
 		/**
