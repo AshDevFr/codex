@@ -406,34 +406,35 @@ export function TasksSettings() {
 							{Array.from(activeProgress.values())
 								.sort((a, b) => a.task_type.localeCompare(b.task_type))
 								.map((event) => (
-								<div key={event.task_id}>
-									<Group justify="space-between" mb="xs">
-										<Group gap="xs">
-											<Badge variant="light">{event.task_type}</Badge>
-											<Text size="sm">
-												{event.progress?.message || "Processing..."}
-											</Text>
+									<div key={event.task_id}>
+										<Group justify="space-between" mb="xs">
+											<Group gap="xs">
+												<Badge variant="light">{event.task_type}</Badge>
+												<Text size="sm">
+													{event.progress?.message || "Processing..."}
+												</Text>
+											</Group>
+											{event.progress?.current !== undefined &&
+												event.progress?.total !== undefined && (
+													<Text size="sm" c="dimmed">
+														{event.progress.current} / {event.progress.total}
+													</Text>
+												)}
 										</Group>
 										{event.progress?.current !== undefined &&
-											event.progress?.total !== undefined && (
-												<Text size="sm" c="dimmed">
-													{event.progress.current} / {event.progress.total}
-												</Text>
+											event.progress?.total !== undefined &&
+											event.progress.total > 0 && (
+												<Progress
+													value={
+														(event.progress.current / event.progress.total) *
+														100
+													}
+													size="sm"
+													animated
+												/>
 											)}
-									</Group>
-									{event.progress?.current !== undefined &&
-										event.progress?.total !== undefined &&
-										event.progress.total > 0 && (
-											<Progress
-												value={
-													(event.progress.current / event.progress.total) * 100
-												}
-												size="sm"
-												animated
-											/>
-										)}
-								</div>
-							))}
+									</div>
+								))}
 						</Stack>
 					</Card>
 				)}
