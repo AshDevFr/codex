@@ -92,11 +92,11 @@ const mockSettings = [
 	// Application settings
 	createSetting({
 		key: "application.name",
-		value: "Codex",
+		value: "Codex - Mock",
 		value_type: "string",
 		category: "Application",
 		description: "Application display name (for branding/white-labeling)",
-		default_value: "Codex",
+		default_value: "Codex - Mock",
 	}),
 	// Authentication settings
 	createSetting({

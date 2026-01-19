@@ -42,6 +42,7 @@ import { type SettingDto, settingsApi } from "@/api/settings";
 import { systemIntegrationsApi } from "@/api/systemIntegrations";
 import { TemplateEditor } from "@/components/forms/TemplateEditor";
 import { TemplateSelector } from "@/components/forms/TemplateSelector";
+import { brandingQueryKey } from "@/hooks/useAppName";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import type { components } from "@/types/api.generated";
 
@@ -495,9 +496,13 @@ export function ServerSettings() {
 		mutationFn: async ({ key, value }: { key: string; value: string }) => {
 			return settingsApi.update(key, { value });
 		},
-		onSuccess: () => {
+		onSuccess: (_data, variables) => {
 			queryClient.invalidateQueries({ queryKey: ["admin-settings"] });
 			queryClient.invalidateQueries({ queryKey: ["public-settings"] });
+			// Invalidate branding cache when application name is updated
+			if (variables.key === "application.name") {
+				queryClient.invalidateQueries({ queryKey: brandingQueryKey });
+			}
 			notifications.show({
 				title: "Success",
 				message: "Setting updated",
@@ -517,9 +522,13 @@ export function ServerSettings() {
 		mutationFn: async (key: string) => {
 			return settingsApi.reset(key);
 		},
-		onSuccess: () => {
+		onSuccess: (_data, key) => {
 			queryClient.invalidateQueries({ queryKey: ["admin-settings"] });
 			queryClient.invalidateQueries({ queryKey: ["public-settings"] });
+			// Invalidate branding cache when application name is reset
+			if (key === "application.name") {
+				queryClient.invalidateQueries({ queryKey: brandingQueryKey });
+			}
 			notifications.show({
 				title: "Success",
 				message: "Setting reset to default",
