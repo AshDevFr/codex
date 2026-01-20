@@ -1,0 +1,148 @@
+# Multi-stage Dockerfile for Codex with cross-compilation
+#
+# This Dockerfile builds ARM64 and AMD64 images efficiently by:
+# 1. Always running the Rust compiler on x86_64 (native speed)
+# 2. Cross-compiling to the target architecture
+# 3. Only the final runtime stage uses the target architecture
+#
+# This avoids QEMU emulation for Rust compilation, which is ~10-50x slower.
+#
+# Usage:
+#   docker buildx build --platform linux/amd64,linux/arm64 -f Dockerfile.cross .
+
+# =============================================================================
+# Stage 1: Build frontend (pinned to x86_64 for speed)
+# =============================================================================
+FROM --platform=linux/amd64 node:22-alpine AS frontend-builder
+WORKDIR /web
+
+# Copy package files
+COPY web/package.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy frontend source
+COPY web/ ./
+
+# Build frontend
+RUN npm run build
+
+# =============================================================================
+# Stage 2: Rust build with cross-compilation support (always x86_64)
+# =============================================================================
+FROM --platform=linux/amd64 rust:1.92-bookworm AS chef
+
+# Install base build tools
+RUN apt-get update && \
+    apt-get install -y \
+    build-essential \
+    pkg-config \
+    curl \
+    xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install musl cross-compilers from musl.cc (provides both gcc and g++)
+# x86_64-linux-musl-cross for amd64 target
+# aarch64-linux-musl-cross for arm64 target
+RUN curl -sSL https://musl.cc/x86_64-linux-musl-cross.tgz | tar -xz -C /opt && \
+    curl -sSL https://musl.cc/aarch64-linux-musl-cross.tgz | tar -xz -C /opt
+ENV PATH="/opt/x86_64-linux-musl-cross/bin:/opt/aarch64-linux-musl-cross/bin:$PATH"
+
+# Add Rust targets for cross-compilation
+RUN rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
+
+# Configure Cargo for cross-compilation
+RUN mkdir -p /root/.cargo && \
+    echo '[target.aarch64-unknown-linux-musl]' >> /root/.cargo/config.toml && \
+    echo 'linker = "aarch64-linux-musl-gcc"' >> /root/.cargo/config.toml && \
+    echo '' >> /root/.cargo/config.toml && \
+    echo '[target.x86_64-unknown-linux-musl]' >> /root/.cargo/config.toml && \
+    echo 'linker = "x86_64-linux-musl-gcc"' >> /root/.cargo/config.toml
+
+RUN cargo install cargo-chef
+WORKDIR /app
+
+# =============================================================================
+# Stage 3: Prepare recipe
+# =============================================================================
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+# =============================================================================
+# Stage 4: Build dependencies (cached layer)
+# =============================================================================
+FROM chef AS builder
+
+ARG TARGETARCH
+
+COPY --from=planner /app/recipe.json recipe.json
+
+# Build dependencies (this layer is cached)
+# Set CC/CXX for build scripts and AR for static libraries
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        export CC=aarch64-linux-musl-gcc && \
+        export CXX=aarch64-linux-musl-g++ && \
+        export AR=aarch64-linux-musl-ar && \
+        export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc && \
+        cargo chef cook --release --target aarch64-unknown-linux-musl --features embed-frontend --recipe-path recipe.json; \
+    else \
+        export CC=x86_64-linux-musl-gcc && \
+        export CXX=x86_64-linux-musl-g++ && \
+        export AR=x86_64-linux-musl-ar && \
+        export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc && \
+        cargo chef cook --release --target x86_64-unknown-linux-musl --features embed-frontend --recipe-path recipe.json; \
+    fi
+
+# =============================================================================
+# Stage 5: Build application
+# =============================================================================
+COPY . .
+
+# Copy frontend dist from frontend-builder
+COPY --from=frontend-builder /web/dist ./web/dist
+
+# Build with embedded frontend
+# Set CC/CXX for build scripts and AR for static libraries
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        export CC=aarch64-linux-musl-gcc && \
+        export CXX=aarch64-linux-musl-g++ && \
+        export AR=aarch64-linux-musl-ar && \
+        export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc && \
+        cargo build --release --target aarch64-unknown-linux-musl --features embed-frontend && \
+        cp target/aarch64-unknown-linux-musl/release/codex /app/codex; \
+    else \
+        export CC=x86_64-linux-musl-gcc && \
+        export CXX=x86_64-linux-musl-g++ && \
+        export AR=x86_64-linux-musl-ar && \
+        export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc && \
+        cargo build --release --target x86_64-unknown-linux-musl --features embed-frontend && \
+        cp target/x86_64-unknown-linux-musl/release/codex /app/codex; \
+    fi
+
+# =============================================================================
+# Stage 6: Runtime (uses target architecture)
+# =============================================================================
+FROM alpine:latest AS runtime
+
+# Install runtime dependencies (ca-certificates for HTTPS)
+RUN apk add --no-cache ca-certificates
+
+# Create app user
+RUN adduser -D -u 1000 codex
+
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /app/codex /usr/local/bin/codex
+
+# Create directories
+RUN mkdir -p /app/data /app/config && \
+    chown -R codex:codex /app
+
+USER codex
+
+EXPOSE 8080
+
+CMD ["codex", "serve"]

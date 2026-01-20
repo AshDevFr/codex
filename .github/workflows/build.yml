@@ -372,8 +372,8 @@ jobs:
           path: |
             ${{ steps.cargo-dist.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
-  # Build and push Docker images (multi-arch) from source
-  # Uses multi-stage Dockerfile with cargo-chef for dependency caching
+  # Build and push Docker images (multi-arch) using cross-compilation
+  # Uses Dockerfile.cross which cross-compiles ARM on x86 (no QEMU emulation)
   docker:
     name: Docker
     needs:
@@ -393,6 +393,7 @@ jobs:
       - name: Determine build info
         id: info
         run: |
+          echo "DOCKER_REGISTRY=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "is-release=true" >> "$GITHUB_OUTPUT"
           else
@@ -430,13 +431,13 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile
+          file: Dockerfile.cross
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.info.outputs.is-release == 'true' && steps.meta-release.outputs.tags || steps.meta-main.outputs.tags }}
           labels: ${{ steps.info.outputs.is-release == 'true' && steps.meta-release.outputs.labels || steps.meta-main.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=ghcr.io/${{ env.DOCKER_REGISTRY }}-buildcache:latest
+          cache-to: type=registry,ref=ghcr.io/${{ env.DOCKER_REGISTRY }}-buildcache:latest,mode=max
 
   # Create GitHub Release (only for releases)
   host:
