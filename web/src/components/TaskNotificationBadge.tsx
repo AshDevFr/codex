@@ -1,13 +1,18 @@
 import { Badge, Group, Stack, Text, Tooltip } from "@mantine/core";
 import { IconLoader2 } from "@tabler/icons-react";
+import { useNavigate } from "react-router-dom";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
+import { useAuthStore } from "@/store/authStore";
 
 /**
  * Task notification badge that appears at the bottom of the navigation sidebar
  * Shows count of active tasks with a tooltip containing task details
  */
 export function TaskNotificationBadge() {
+	const navigate = useNavigate();
+	const { user } = useAuthStore();
 	const { activeTasks, pendingCounts } = useTaskProgress();
+	const isAdmin = user?.isAdmin;
 
 	// Filter to only running tasks (processing tasks are shown as running)
 	// Note: pending tasks are shown separately via pendingCounts, not from activeTasks
@@ -116,9 +121,10 @@ export function TaskNotificationBadge() {
 				variant="filled"
 				size="sm"
 				style={{
-					cursor: "pointer",
+					cursor: isAdmin ? "pointer" : "default",
 					animation: "pulse 2s ease-in-out infinite",
 				}}
+				onClick={isAdmin ? () => navigate("/settings/tasks") : undefined}
 				fullWidth
 			>
 				{totalTasks} pending task

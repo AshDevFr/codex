@@ -2,8 +2,9 @@ import { MantineProvider } from "@mantine/core";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type React from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
+import { useAuthStore } from "@/store/authStore";
 import type { TaskProgressEvent } from "@/types";
 import { TaskNotificationBadge } from "./TaskNotificationBadge";
 
@@ -12,12 +13,50 @@ vi.mock("@/hooks/useTaskProgress", () => ({
 	useTaskProgress: vi.fn(),
 }));
 
+// Mock the useAuthStore hook
+vi.mock("@/store/authStore", () => ({
+	useAuthStore: vi.fn(),
+}));
+
+// Mock react-router-dom
+const mockNavigate = vi.fn();
+vi.mock("react-router-dom", () => ({
+	useNavigate: () => mockNavigate,
+}));
+
 // Helper to render with Mantine Provider
 const renderWithMantine = (component: React.ReactElement) => {
 	return render(<MantineProvider>{component}</MantineProvider>);
 };
 
+// Default mock for useAuthStore (admin user)
+const mockAuthStoreAdmin = () => {
+	vi.mocked(useAuthStore).mockReturnValue({
+		user: { id: "user-1", username: "admin", isAdmin: true },
+		token: "test-token",
+		isAuthenticated: true,
+		setAuth: vi.fn(),
+		clearAuth: vi.fn(),
+	});
+};
+
+// Mock for non-admin user
+const mockAuthStoreNonAdmin = () => {
+	vi.mocked(useAuthStore).mockReturnValue({
+		user: { id: "user-2", username: "user", isAdmin: false },
+		token: "test-token",
+		isAuthenticated: true,
+		setAuth: vi.fn(),
+		clearAuth: vi.fn(),
+	});
+};
+
 describe("TaskNotificationBadge", () => {
+	beforeEach(() => {
+		mockNavigate.mockClear();
+		mockAuthStoreAdmin();
+	});
+
 	it("should not render when no tasks are active", () => {
 		vi.mocked(useTaskProgress).mockReturnValue({
 			activeTasks: [],
@@ -405,5 +444,127 @@ describe("TaskNotificationBadge", () => {
 			const pendingTasksText = screen.queryByText("Pending Tasks (5)");
 			expect(pendingTasksText).toBeInTheDocument();
 		});
+	});
+
+	it("should navigate to task settings when admin clicks badge", async () => {
+		const user = userEvent.setup();
+		const mockTasks: TaskProgressEvent[] = [
+			{
+				task_id: "task-1",
+				task_type: "analyze_book",
+				status: "running",
+				progress: undefined,
+				error: undefined,
+				started_at: "2026-01-07T12:00:00Z",
+				library_id: "lib-1",
+			},
+		];
+
+		vi.mocked(useTaskProgress).mockReturnValue({
+			activeTasks: mockTasks,
+			connectionState: "connected",
+			pendingCounts: {},
+			getTasksByStatus: vi.fn(() => mockTasks),
+			getTasksByLibrary: vi.fn(() => mockTasks),
+			getTask: vi.fn(() => mockTasks[0]),
+		});
+
+		renderWithMantine(<TaskNotificationBadge />);
+
+		const badge = screen.getByText("1 pending task");
+		await user.click(badge);
+
+		expect(mockNavigate).toHaveBeenCalledWith("/settings/tasks");
+	});
+
+	it("should not navigate when non-admin clicks badge", async () => {
+		const user = userEvent.setup();
+		mockAuthStoreNonAdmin();
+
+		const mockTasks: TaskProgressEvent[] = [
+			{
+				task_id: "task-1",
+				task_type: "analyze_book",
+				status: "running",
+				progress: undefined,
+				error: undefined,
+				started_at: "2026-01-07T12:00:00Z",
+				library_id: "lib-1",
+			},
+		];
+
+		vi.mocked(useTaskProgress).mockReturnValue({
+			activeTasks: mockTasks,
+			connectionState: "connected",
+			pendingCounts: {},
+			getTasksByStatus: vi.fn(() => mockTasks),
+			getTasksByLibrary: vi.fn(() => mockTasks),
+			getTask: vi.fn(() => mockTasks[0]),
+		});
+
+		renderWithMantine(<TaskNotificationBadge />);
+
+		const badge = screen.getByText("1 pending task");
+		await user.click(badge);
+
+		expect(mockNavigate).not.toHaveBeenCalled();
+	});
+
+	it("should have pointer cursor for admin", () => {
+		const mockTasks: TaskProgressEvent[] = [
+			{
+				task_id: "task-1",
+				task_type: "analyze_book",
+				status: "running",
+				progress: undefined,
+				error: undefined,
+				started_at: "2026-01-07T12:00:00Z",
+				library_id: "lib-1",
+			},
+		];
+
+		vi.mocked(useTaskProgress).mockReturnValue({
+			activeTasks: mockTasks,
+			connectionState: "connected",
+			pendingCounts: {},
+			getTasksByStatus: vi.fn(() => mockTasks),
+			getTasksByLibrary: vi.fn(() => mockTasks),
+			getTask: vi.fn(() => mockTasks[0]),
+		});
+
+		renderWithMantine(<TaskNotificationBadge />);
+
+		const badge = screen.getByText("1 pending task");
+		expect(badge.parentElement).toHaveStyle({ cursor: "pointer" });
+	});
+
+	it("should have default cursor for non-admin", () => {
+		mockAuthStoreNonAdmin();
+
+		const mockTasks: TaskProgressEvent[] = [
+			{
+				task_id: "task-1",
+				task_type: "analyze_book",
+				status: "running",
+				progress: undefined,
+				error: undefined,
+				started_at: "2026-01-07T12:00:00Z",
+				library_id: "lib-1",
+			},
+		];
+
+		vi.mocked(useTaskProgress).mockReturnValue({
+			activeTasks: mockTasks,
+			connectionState: "connected",
+			pendingCounts: {},
+			getTasksByStatus: vi.fn(() => mockTasks),
+			getTasksByLibrary: vi.fn(() => mockTasks),
+			getTask: vi.fn(() => mockTasks[0]),
+		});
+
+		renderWithMantine(<TaskNotificationBadge />);
+
+		const badge = screen.getByText("1 pending task");
+		expect(badge.parentElement).toHaveStyle({ cursor: "default" });
 	});
 });
