@@ -134,6 +134,8 @@ interface EpubReaderProps {
 	totalPages: number;
 	/** Starting percentage from URL parameter (0.0-1.0, overrides saved progress) */
 	startPercent?: number;
+	/** Incognito mode - when true, progress tracking is disabled */
+	incognito?: boolean;
 	/** Callback when reader should close */
 	onClose: () => void;
 }
@@ -155,6 +157,7 @@ export function EpubReader({
 	title,
 	totalPages,
 	startPercent,
+	incognito,
 	onClose,
 }: EpubReaderProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -163,7 +166,7 @@ export function EpubReader({
 	const initialLocationLoadedRef = useRef(false);
 	const currentPercentageRef = useRef<number>(0);
 
-	// CFI-based progress tracking (also syncs to backend)
+	// CFI-based progress tracking (also syncs to backend, disabled in incognito mode)
 	const {
 		getSavedLocation,
 		initialPercentage,
@@ -172,6 +175,7 @@ export function EpubReader({
 	} = useEpubProgress({
 		bookId,
 		totalPages,
+		enabled: !incognito,
 	});
 
 	// Bookmarks with notes

@@ -298,6 +298,34 @@ describe("useEpubProgress", () => {
 
 			setItemSpy.mockRestore();
 		});
+
+		it("does not save on unmount when disabled (incognito mode)", () => {
+			const { result, unmount } = renderHook(
+				() =>
+					useEpubProgress({
+						bookId: mockBookId,
+						totalPages: 100,
+						debounceMs: 5000,
+						enabled: false,
+					}),
+				{ wrapper: createWrapper() },
+			);
+
+			// Try to save a location (will be ignored due to enabled=false)
+			act(() => {
+				result.current.saveLocation(mockCfi, mockPercentage);
+			});
+
+			const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
+
+			// Unmount - should NOT flush any pending saves when disabled
+			unmount();
+
+			expect(setItemSpy).not.toHaveBeenCalled();
+			expect(localStorage.getItem(`epub-cfi-${mockBookId}`)).toBeNull();
+
+			setItemSpy.mockRestore();
+		});
 	});
 
 	describe("different book IDs", () => {

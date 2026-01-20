@@ -214,6 +214,12 @@ export function useEpubProgress({
 		}
 	}, [storageKey]);
 
+	// Store enabled ref for cleanup
+	const enabledRef = useRef(enabled);
+	useEffect(() => {
+		enabledRef.current = enabled;
+	}, [enabled]);
+
 	// Cleanup: save pending progress on unmount
 	useEffect(() => {
 		// Capture current values for cleanup
@@ -223,6 +229,12 @@ export function useEpubProgress({
 			if (debounceTimerRef.current) {
 				clearTimeout(debounceTimerRef.current);
 			}
+
+			// Skip saving if tracking is disabled (incognito mode)
+			if (!enabledRef.current) {
+				return;
+			}
+
 			// Flush any pending CFI to localStorage
 			if (
 				pendingCfiRef.current &&

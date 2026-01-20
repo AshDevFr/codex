@@ -30,6 +30,7 @@ import {
 	IconDotsVertical,
 	IconDownload,
 	IconEdit,
+	IconEyeOff,
 	IconPhoto,
 	IconTrash,
 } from "@tabler/icons-react";
@@ -461,6 +462,18 @@ export function BookDetail() {
 								>
 									{hasProgress && !isCompleted ? "Continue" : "Read"}
 								</Button>
+								<Tooltip label="Read without tracking progress">
+									<Button
+										size="xs"
+										variant="outline"
+										leftSection={<IconEyeOff size={14} />}
+										onClick={() =>
+											navigate(`/reader/${book.id}?page=1&incognito=true`)
+										}
+									>
+										Incognito
+									</Button>
+								</Tooltip>
 								<Button
 									size="xs"
 									variant="outline"

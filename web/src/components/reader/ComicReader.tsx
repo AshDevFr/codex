@@ -45,6 +45,8 @@ interface ComicReaderProps {
 	readingDirectionOverride?: "ltr" | "rtl" | "ttb" | "webtoon" | null;
 	/** Starting page from URL parameter (overrides saved progress) */
 	startPage?: number;
+	/** Incognito mode - when true, progress tracking is disabled */
+	incognito?: boolean;
 	/** Callback when reader should close */
 	onClose: () => void;
 }
@@ -68,6 +70,7 @@ export function ComicReader({
 	format: _format,
 	readingDirectionOverride,
 	startPage,
+	incognito,
 	onClose,
 }: ComicReaderProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -164,11 +167,11 @@ export function ComicReader({
 		},
 	});
 
-	// Read progress hook
+	// Read progress hook (disabled in incognito mode)
 	const { initialPage, isLoading: progressLoading } = useReadProgress({
 		bookId,
 		totalPages,
-		enabled: true,
+		enabled: !incognito,
 	});
 
 	// Initialize reader when progress loads and we haven't initialized this book yet

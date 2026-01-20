@@ -450,5 +450,38 @@ describe("useReadProgress", () => {
 
 			vi.useRealTimers();
 		});
+
+		it("should not save on unmount when disabled (incognito mode)", async () => {
+			vi.useFakeTimers();
+
+			const { unmount } = renderHook(
+				() =>
+					useReadProgress({
+						bookId: "test-book",
+						totalPages: 100,
+						debounceMs: 5000,
+						enabled: false,
+					}),
+				{ wrapper: createWrapper() },
+			);
+
+			// Run timers to complete initial load
+			await act(async () => {
+				await vi.runAllTimersAsync();
+			});
+
+			// Set a page change
+			act(() => {
+				useReaderStore.setState({ currentPage: 30 });
+			});
+
+			// Unmount
+			unmount();
+
+			// Should NOT have called update because enabled=false
+			expect(mockUpdate).not.toHaveBeenCalled();
+
+			vi.useRealTimers();
+		});
 	});
 });

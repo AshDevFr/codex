@@ -139,15 +139,23 @@ export function useReadProgress({
 		debouncedSave(currentPage);
 	}, [currentPage, enabled, debouncedSave]);
 
+	// Store enabled ref for cleanup
+	const enabledRef = useRef(enabled);
+	useEffect(() => {
+		enabledRef.current = enabled;
+	}, [enabled]);
+
 	// Cleanup debounce timer and save on unmount
 	useEffect(() => {
 		return () => {
 			if (debounceTimerRef.current) {
 				clearTimeout(debounceTimerRef.current);
-				// Save final progress before unmount
-				const finalPage = useReaderStore.getState().currentPage;
-				if (finalPage !== lastSavedPageRef.current && finalPage > 0) {
-					saveToBackend(finalPage);
+				// Save final progress before unmount (only if tracking is enabled)
+				if (enabledRef.current) {
+					const finalPage = useReaderStore.getState().currentPage;
+					if (finalPage !== lastSavedPageRef.current && finalPage > 0) {
+						saveToBackend(finalPage);
+					}
 				}
 			}
 		};

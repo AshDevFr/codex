@@ -26,6 +26,9 @@ export function Reader() {
 		? Number.parseFloat(percentParam) / 100
 		: undefined;
 
+	// Extract incognito parameter (e.g., ?incognito=true) for reading without progress tracking
+	const incognito = searchParams.get("incognito") === "true";
+
 	// Fetch book details (includes effective reading direction from series/library)
 	const {
 		data: bookDetail,
@@ -85,6 +88,7 @@ export function Reader() {
 			readingDirection={book.readingDirection ?? null}
 			startPage={startPage}
 			startPercent={startPercent}
+			incognito={incognito}
 			onClose={handleClose}
 		/>
 	);

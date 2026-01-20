@@ -27,6 +27,8 @@ interface ReaderRouterProps {
 	startPage?: number;
 	/** Starting percentage from URL parameter (0.0-1.0) - for EPUBs */
 	startPercent?: number;
+	/** Incognito mode - when true, progress tracking is disabled */
+	incognito?: boolean;
 	/** Callback when reader should close */
 	onClose: () => void;
 }
@@ -49,6 +51,7 @@ export function ReaderRouter({
 	readingDirection,
 	startPage,
 	startPercent,
+	incognito,
 	onClose,
 }: ReaderRouterProps) {
 	const normalizedFormat = format.toUpperCase();
@@ -100,6 +103,7 @@ export function ReaderRouter({
 					format={normalizedFormat}
 					readingDirectionOverride={readingDirectionOverride}
 					startPage={startPage}
+					incognito={incognito}
 					onClose={onClose}
 				/>
 			);
@@ -124,6 +128,7 @@ export function ReaderRouter({
 						title={title}
 						totalPages={totalPages}
 						startPage={startPage}
+						incognito={incognito}
 						onClose={onClose}
 						hasPerBookPdfMode={hasPerBookPdfMode}
 						onSavePerBookPdfMode={savePerBookPdfMode}
@@ -142,6 +147,7 @@ export function ReaderRouter({
 					format={normalizedFormat}
 					readingDirectionOverride={readingDirectionOverride}
 					startPage={startPage}
+					incognito={incognito}
 					onClose={onClose}
 				/>
 			);
@@ -155,6 +161,7 @@ export function ReaderRouter({
 					title={title}
 					totalPages={totalPages}
 					startPercent={startPercent}
+					incognito={incognito}
 					onClose={onClose}
 				/>
 			);

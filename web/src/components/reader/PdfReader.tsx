@@ -52,6 +52,8 @@ export interface PdfReaderProps {
 	totalPages: number;
 	/** Starting page from URL parameter */
 	startPage?: number;
+	/** Incognito mode - when true, progress tracking is disabled */
+	incognito?: boolean;
 	/** Callback when reader should close */
 	onClose: () => void;
 	/** Whether this book has a per-book PDF mode preference saved */
@@ -77,6 +79,7 @@ export function PdfReader({
 	title,
 	totalPages: _backendTotalPages,
 	startPage,
+	incognito,
 	onClose,
 	hasPerBookPdfMode,
 	onSavePerBookPdfMode,
@@ -149,12 +152,12 @@ export function PdfReader({
 		},
 	});
 
-	// Read progress hook (use numPages from PDF if available)
+	// Read progress hook (use numPages from PDF if available, disabled in incognito mode)
 	const effectiveTotalPages = numPages > 0 ? numPages : _backendTotalPages;
 	const { initialPage, isLoading: progressLoading } = useReadProgress({
 		bookId,
 		totalPages: effectiveTotalPages,
-		enabled: true,
+		enabled: !incognito,
 	});
 
 	// Calculate page dimensions based on zoom level
