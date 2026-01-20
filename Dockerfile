@@ -21,11 +21,7 @@ RUN npm run build
 FROM rust:1.92-alpine AS chef
 RUN apk add --no-cache \
     musl-dev \
-    pkgconf \
-    openssl-dev \
-    openssl-libs-static \
-    build-base \
-    curl
+    build-base
 RUN cargo install cargo-chef
 WORKDIR /app
 
@@ -38,15 +34,6 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
 
-# Install build dependencies
-RUN apk add --no-cache \
-    pkgconf \
-    openssl-dev \
-    openssl-libs-static \
-    musl-dev \
-    build-base \
-    curl
-
 # Build dependencies (this layer is cached)
 RUN cargo chef cook --release --features embed-frontend --recipe-path recipe.json
 
@@ -57,16 +44,13 @@ COPY . .
 COPY --from=frontend-builder /web/dist ./web/dist
 
 # Build with embedded frontend
-ENV OPENSSL_STATIC=1
 RUN cargo build --release --features embed-frontend
 
 # Stage 6: Runtime
 FROM alpine:latest AS runtime
 
-# Install runtime dependencies
-RUN apk add --no-cache \
-    ca-certificates \
-    openssl
+# Install runtime dependencies (ca-certificates for HTTPS)
+RUN apk add --no-cache ca-certificates
 
 # Create app user
 RUN adduser -D -u 1000 codex

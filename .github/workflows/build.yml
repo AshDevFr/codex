@@ -48,7 +48,7 @@ jobs:
     # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
     runs-on: arc-runner-codex
     container: ubuntu:22.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - name: Install base dependencies
         run: |
@@ -372,47 +372,32 @@ jobs:
           path: |
             ${{ steps.cargo-dist.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
-  # Build and push Docker images (multi-arch) using pre-built binaries from cargo-dist
+  # Build and push Docker images (multi-arch) from source
+  # Uses multi-stage Dockerfile with cargo-chef for dependency caching
   docker:
     name: Docker
     needs:
-      - plan
-      - build-local-artifacts
-    if: ${{ needs.plan.outputs.publishing == 'true' }}
+      - test
+      - lint
+      - frontend
+    # Only build Docker on main branch or release tags
+    if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
     # SELF-HOSTED: Change to ubuntu-latest for GitHub runners
     # Note: Docker job runs directly on the host (not in a container) to use dind
     runs-on: arc-runner-codex
-    timeout-minutes: 90
+    timeout-minutes: 240
     steps:
-      # SELF-HOSTED: Install dependencies; remove for GitHub runners
-      - name: Install base dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xz-utils
       - uses: actions/checkout@v4
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: artifacts-build-local-*
-          path: artifacts/
-          merge-multiple: true
-      - name: Prepare binaries for Docker
-        run: |
-          mkdir -p binaries/amd64
-
-          # Extract amd64 binary
-          if ls artifacts/codex-x86_64-unknown-linux-gnu.tar.gz 1> /dev/null 2>&1; then
-            tar -xzf artifacts/codex-x86_64-unknown-linux-gnu.tar.gz -C binaries/amd64 --strip-components=1
-            echo "Extracted amd64 binary"
-          elif ls artifacts/codex-x86_64-unknown-linux-gnu.tar.xz 1> /dev/null 2>&1; then
-            tar -xJf artifacts/codex-x86_64-unknown-linux-gnu.tar.xz -C binaries/amd64 --strip-components=1
-            echo "Extracted amd64 binary (xz)"
-          fi
-
-          # Verify binary exists
-          ls -la binaries/amd64/
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      - name: Determine build info
+        id: info
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "is-release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is-release=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -420,7 +405,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Docker meta (release)
-        if: ${{ needs.plan.outputs.is-release == 'true' }}
+        if: ${{ steps.info.outputs.is-release == 'true' }}
         id: meta-release
         uses: docker/metadata-action@v5
         with:
@@ -432,7 +417,7 @@ jobs:
             type=raw,value=latest
             type=sha,prefix=sha-
       - name: Docker meta (main)
-        if: ${{ needs.plan.outputs.is-release == 'false' }}
+        if: ${{ steps.info.outputs.is-release == 'false' }}
         id: meta-main
         uses: docker/metadata-action@v5
         with:
@@ -445,11 +430,11 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile.release
-          platforms: linux/amd64
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ needs.plan.outputs.is-release == 'true' && steps.meta-release.outputs.tags || steps.meta-main.outputs.tags }}
-          labels: ${{ needs.plan.outputs.is-release == 'true' && steps.meta-release.outputs.labels || steps.meta-main.outputs.labels }}
+          tags: ${{ steps.info.outputs.is-release == 'true' && steps.meta-release.outputs.tags || steps.meta-main.outputs.tags }}
+          labels: ${{ steps.info.outputs.is-release == 'true' && steps.meta-release.outputs.labels || steps.meta-main.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -460,9 +445,8 @@ jobs:
       - plan
       - build-local-artifacts
       - build-global-artifacts
-      - docker
-    # Only run if we're "publishing" a release, and only if plan, local, global, and docker didn't fail (skipped is fine)
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.is-release == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') && (needs.docker.result == 'skipped' || needs.docker.result == 'success') }}
+    # Only run if we're "publishing" a release, and only if plan, local, global didn't fail (skipped is fine)
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.is-release == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     # SELF-HOSTED: Change to ubuntu-22.04 for GitHub runners and remove container

@@ -324,52 +324,32 @@ jobs:
             ${{ steps.cargo-dist.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
 
-  # Build and push Docker images (multi-arch) using pre-built binaries from cargo-dist
+  # Build and push Docker images (multi-arch) from source
+  # Uses multi-stage Dockerfile with cargo-chef for dependency caching
   docker:
     name: Docker
     needs:
-      - plan
-      - build-local-artifacts
-    if: ${{ needs.plan.outputs.publishing == 'true' }}
+      - test
+      - lint
+      - frontend
+    # Only build Docker on main branch or release tags (not PRs)
+    if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
-      - name: Download artifacts
-        uses: actions/download-artifact@v3
-        with:
-          pattern: artifacts-build-local-*
-          path: artifacts/
-          merge-multiple: true
-      - name: Prepare binaries for Docker
-        run: |
-          mkdir -p binaries/amd64 binaries/arm64
-
-          # Extract amd64 binary
-          if ls artifacts/codex-x86_64-unknown-linux-gnu.tar.gz 1> /dev/null 2>&1; then
-            tar -xzf artifacts/codex-x86_64-unknown-linux-gnu.tar.gz -C binaries/amd64 --strip-components=1
-            echo "Extracted amd64 binary"
-          elif ls artifacts/codex-x86_64-unknown-linux-gnu.tar.xz 1> /dev/null 2>&1; then
-            tar -xJf artifacts/codex-x86_64-unknown-linux-gnu.tar.xz -C binaries/amd64 --strip-components=1
-            echo "Extracted amd64 binary (xz)"
-          fi
-
-          # Extract arm64 binary
-          if ls artifacts/codex-aarch64-unknown-linux-gnu.tar.gz 1> /dev/null 2>&1; then
-            tar -xzf artifacts/codex-aarch64-unknown-linux-gnu.tar.gz -C binaries/arm64 --strip-components=1
-            echo "Extracted arm64 binary"
-          elif ls artifacts/codex-aarch64-unknown-linux-gnu.tar.xz 1> /dev/null 2>&1; then
-            tar -xJf artifacts/codex-aarch64-unknown-linux-gnu.tar.xz -C binaries/arm64 --strip-components=1
-            echo "Extracted arm64 binary (xz)"
-          fi
-
-          # Verify binaries exist
-          ls -la binaries/amd64/
-          ls -la binaries/arm64/
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      - name: Determine build info
+        id: info
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "is-release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is-release=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Registry FQDN Setup
         id: registry
         run: |
@@ -382,7 +362,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.REGISTRY_TOKEN }}
       - name: Docker meta (release)
-        if: ${{ needs.plan.outputs.is-release == 'true' }}
+        if: ${{ steps.info.outputs.is-release == 'true' }}
         id: meta-release
         uses: docker/metadata-action@v5
         with:
@@ -394,7 +374,7 @@ jobs:
             type=raw,value=latest
             type=sha,prefix=sha-
       - name: Docker meta (main)
-        if: ${{ needs.plan.outputs.is-release == 'false' }}
+        if: ${{ steps.info.outputs.is-release == 'false' }}
         id: meta-main
         uses: docker/metadata-action@v5
         with:
@@ -406,17 +386,13 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile.release
+          file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ needs.plan.outputs.is-release == 'true' && steps.meta-release.outputs.tags || steps.meta-main.outputs.tags }}
-          labels: ${{ needs.plan.outputs.is-release == 'true' && steps.meta-release.outputs.labels || steps.meta-main.outputs.labels }}
-          cache-from: |
-            type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache-latest
-            type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache
-          cache-to: |
-            type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache-latest,mode=min
-            type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache,mode=min
+          tags: ${{ steps.info.outputs.is-release == 'true' && steps.meta-release.outputs.tags || steps.meta-main.outputs.tags }}
+          labels: ${{ steps.info.outputs.is-release == 'true' && steps.meta-release.outputs.labels || steps.meta-main.outputs.labels }}
+          cache-from: type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache
+          cache-to: type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache,mode=max
 
   # Create Release (only for releases)
   host:
@@ -425,9 +401,8 @@ jobs:
       - plan
       - build-local-artifacts
       - build-global-artifacts
-      - docker
-    # Only run if we're "publishing" a release, and only if plan, local, global, and docker didn't fail (skipped is fine)
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.is-release == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') && (needs.docker.result == 'skipped' || needs.docker.result == 'success') }}
+    # Only run if we're "publishing" a release, and only if plan, local, global didn't fail (skipped is fine)
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.is-release == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     runs-on: ubuntu-latest
