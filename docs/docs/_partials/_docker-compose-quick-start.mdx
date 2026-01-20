@@ -11,6 +11,9 @@ services:
       # Codex data: SQLite database, thumbnails, uploads
       - codex-data:/app/data
     environment:
+      # User/Group ID for file permissions (run `id` to find yours)
+      PUID: 1000
+      PGID: 1000
       # Generate with: openssl rand -base64 32
       CODEX_AUTH_JWT_SECRET: "your-secure-secret-here"
     restart: unless-stopped
@@ -30,3 +33,7 @@ docker compose logs -f codex
 ```
 
 Access Codex at `http://localhost:8080`. On first launch, you'll be guided through a setup wizard to create your admin account.
+
+:::tip Finding Your User ID
+Run `id` in your terminal to find your UID and GID. Use these values for `PUID` and `PGID` to avoid permission issues with mounted volumes.
+:::

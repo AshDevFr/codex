@@ -4,8 +4,14 @@ docker run -d \
   -p 8080:8080 \
   -v /path/to/your/library:/library:ro \
   -v codex-data:/app/data \
+  -e PUID=1000 \
+  -e PGID=1000 \
   -e CODEX_AUTH_JWT_SECRET="$(openssl rand -base64 32)" \
   ghcr.io/ashdevfr/codex:latest
 ```
 
 Access Codex at `http://localhost:8080`. On first launch, you'll be guided through a setup wizard to create your admin account.
+
+:::tip Finding Your User ID
+Run `id` in your terminal to find your UID and GID. Use these values for `PUID` and `PGID` to avoid permission issues with mounted volumes.
+:::

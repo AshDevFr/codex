@@ -126,23 +126,31 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 # =============================================================================
 FROM alpine:latest AS runtime
 
-# Install runtime dependencies (ca-certificates for HTTPS)
-RUN apk add --no-cache ca-certificates
+# Install runtime dependencies (ca-certificates for HTTPS, su-exec for user switching)
+RUN apk add --no-cache ca-certificates su-exec
 
-# Create app user
-RUN adduser -D -u 1000 codex
+# Create app user with default UID/GID (can be changed at runtime via PUID/PGID)
+RUN addgroup -g 1000 codex && \
+    adduser -D -u 1000 -G codex codex
 
 WORKDIR /app
 
 # Copy binary from builder
 COPY --from=builder /app/codex /usr/local/bin/codex
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Create directories
 RUN mkdir -p /app/data /app/config && \
     chown -R codex:codex /app
 
-USER codex
+# Environment variables for user mapping (defaults)
+ENV PUID=1000
+ENV PGID=1000
 
 EXPOSE 8080
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["codex", "serve"]

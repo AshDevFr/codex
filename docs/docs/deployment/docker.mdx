@@ -151,12 +151,50 @@ healthcheck:
   retries: 5
 ```
 
+## User/Group Permissions (PUID/PGID)
+
+Codex supports `PUID` and `PGID` environment variables to run with specific user/group permissions. This is essential when using bind mounts to ensure the container can read/write to your host directories.
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PUID` | User ID to run as | `1000` |
+| `PGID` | Group ID to run as | `1000` |
+
+To find your user's UID and GID:
+
+```bash
+id
+# Output: uid=1000(youruser) gid=1000(youruser) ...
+```
+
+### Example with Custom PUID/PGID
+
+```yaml
+services:
+  codex:
+    image: ghcr.io/ashdevfr/codex:latest
+    environment:
+      PUID: 1000
+      PGID: 1000
+      CODEX_AUTH_JWT_SECRET: "your-secret-here"
+    volumes:
+      - ./codex-data:/app/data
+      - ./codex-config:/app/config
+      - /mnt/media:/library:ro
+```
+
+:::tip Synology NAS Users
+Synology DSM often uses different UIDs. Check your user's ID with `id` via SSH, or use the admin user's UID (usually `1026` or similar).
+:::
+
 ## Environment Variables
 
 Common environment variables for Docker:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
+| `PUID` | User ID for file permissions | `1000` |
+| `PGID` | Group ID for file permissions | `1000` |
 | `CODEX_AUTH_JWT_SECRET` | JWT signing secret | `your-secret-key` |
 | `CODEX_DATABASE_DB_TYPE` | Database type | `postgres` or `sqlite` |
 | `CODEX_DATABASE_POSTGRES_HOST` | PostgreSQL host | `postgres` |
@@ -206,8 +244,26 @@ docker compose exec codex ping postgres
 
 ### Permission Issues
 
-```bash
-# Check volume permissions
-docker compose exec codex ls -la /app/data
-docker compose exec codex ls -la /library
-```
+If you see `Permission denied (os error 13)` errors:
+
+1. **Check your host user's UID/GID:**
+   ```bash
+   id
+   # uid=1000(user) gid=1000(user) ...
+   ```
+
+2. **Set PUID/PGID in your docker-compose.yml:**
+   ```yaml
+   environment:
+     PUID: 1000  # Your UID from step 1
+     PGID: 1000  # Your GID from step 1
+   ```
+
+3. **Verify permissions inside the container:**
+   ```bash
+   docker compose exec codex ls -la /app/data
+   docker compose exec codex ls -la /app/config
+   docker compose exec codex ls -la /library
+   ```
+
+The container will automatically adjust the internal user to match your PUID/PGID, ensuring it can write to mounted volumes.
