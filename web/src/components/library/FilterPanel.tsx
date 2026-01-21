@@ -52,7 +52,10 @@ const SERIES_STATUS_OPTIONS = [
 export function FilterPanel() {
 	const [opened, { open, close }] = useDisclosure(false);
 	// Use committed state for the indicator badge (shows what's actually applied)
-	const { activeFilterCount: committedFilterCount, hasActiveFilters: hasCommittedFilters } = useFilterState();
+	const {
+		activeFilterCount: committedFilterCount,
+		hasActiveFilters: hasCommittedFilters,
+	} = useFilterState();
 	// Use draft state for editing within the drawer
 	const draftState = useDraftFilterState();
 	const isMobile = useMediaQuery("(max-width: 768px)");
@@ -93,7 +96,8 @@ export function FilterPanel() {
 		enabled: isAdmin,
 	});
 
-	const isLoading = genresLoading || tagsLoading || (isAdmin && sharingTagsLoading);
+	const isLoading =
+		genresLoading || tagsLoading || (isAdmin && sharingTagsLoading);
 
 	// Transform API data to filter options
 	const genreOptions = genres.map((g) => ({

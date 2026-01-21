@@ -3,7 +3,8 @@ import { api } from "./client";
 
 // Re-export generated types for convenience
 export type SharingTagDto = components["schemas"]["SharingTagDto"];
-export type SharingTagSummaryDto = components["schemas"]["SharingTagSummaryDto"];
+export type SharingTagSummaryDto =
+	components["schemas"]["SharingTagSummaryDto"];
 export type SharingTagListResponse =
 	components["schemas"]["SharingTagListResponse"];
 export type CreateSharingTagRequest =
@@ -176,9 +177,8 @@ export const sharingTagsApi = {
 	 * Get current user's sharing tag grants
 	 */
 	getMyGrants: async (): Promise<UserSharingTagGrantsResponse> => {
-		const response = await api.get<UserSharingTagGrantsResponse>(
-			"/user/sharing-tags",
-		);
+		const response =
+			await api.get<UserSharingTagGrantsResponse>("/user/sharing-tags");
 		return response.data;
 	},
 };

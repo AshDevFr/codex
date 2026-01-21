@@ -38,6 +38,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { booksApi } from "@/api/books";
 import { BookMetadataEditModal } from "@/components/books/BookMetadataEditModal";
+import { usePermissions } from "@/hooks/usePermissions";
+import { PERMISSIONS } from "@/types/permissions";
 
 // Language code mapping
 const LANGUAGE_DISPLAY: Record<string, string> = {
@@ -73,6 +75,10 @@ export function BookDetail() {
 	const [summaryOpened, { toggle: toggleSummary }] = useDisclosure(false);
 	const [editModalOpened, { open: openEditModal, close: closeEditModal }] =
 		useDisclosure(false);
+
+	// Permission checks
+	const { hasPermission } = usePermissions();
+	const canEditBook = hasPermission(PERMISSIONS.BOOKS_WRITE);
 
 	// Fetch book details
 	const {
@@ -392,28 +398,32 @@ export function BookDetail() {
 												Mark as Unread
 											</Menu.Item>
 										)}
-										<Menu.Divider />
-										<Menu.Item
-											leftSection={<IconAnalyze size={14} />}
-											onClick={() => analyzeMutation.mutate()}
-											disabled={analyzeMutation.isPending}
-										>
-											Force Analyze
-										</Menu.Item>
-										<Menu.Item
-											leftSection={<IconPhoto size={14} />}
-											onClick={() => generateThumbnailMutation.mutate()}
-											disabled={generateThumbnailMutation.isPending}
-										>
-											Generate Thumbnail
-										</Menu.Item>
-										<Menu.Divider />
-										<Menu.Item
-											leftSection={<IconEdit size={14} />}
-											onClick={openEditModal}
-										>
-											Edit Metadata
-										</Menu.Item>
+										{canEditBook && (
+											<>
+												<Menu.Divider />
+												<Menu.Item
+													leftSection={<IconAnalyze size={14} />}
+													onClick={() => analyzeMutation.mutate()}
+													disabled={analyzeMutation.isPending}
+												>
+													Force Analyze
+												</Menu.Item>
+												<Menu.Item
+													leftSection={<IconPhoto size={14} />}
+													onClick={() => generateThumbnailMutation.mutate()}
+													disabled={generateThumbnailMutation.isPending}
+												>
+													Generate Thumbnail
+												</Menu.Item>
+												<Menu.Divider />
+												<Menu.Item
+													leftSection={<IconEdit size={14} />}
+													onClick={openEditModal}
+												>
+													Edit Metadata
+												</Menu.Item>
+											</>
+										)}
 									</Menu.Dropdown>
 								</Menu>
 							</Group>

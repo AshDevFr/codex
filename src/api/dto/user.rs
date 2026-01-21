@@ -24,6 +24,9 @@ pub struct UserDto {
     #[schema(example = "reader")]
     pub role: UserRole,
 
+    /// Custom permissions that extend the role's base permissions
+    pub permissions: Vec<String>,
+
     /// Whether the account is active
     #[schema(example = true)]
     pub is_active: bool,
@@ -60,6 +63,9 @@ pub struct UserDetailDto {
     /// User role (reader, maintainer, admin)
     #[schema(example = "reader")]
     pub role: UserRole,
+
+    /// Custom permissions that extend the role's base permissions
+    pub permissions: Vec<String>,
 
     /// Whether the account is active
     #[schema(example = true)]
@@ -126,6 +132,11 @@ pub struct UpdateUserRequest {
     /// Update active status
     #[schema(example = true)]
     pub is_active: Option<bool>,
+
+    /// Custom permissions that extend the role's base permissions (admin only)
+    /// These permissions are unioned with the role's permissions
+    #[serde(default)]
+    pub permissions: Option<Vec<String>>,
 }
 
 fn default_page_size() -> u64 {

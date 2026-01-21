@@ -59,6 +59,10 @@ pub struct UserInfo {
     /// Whether email has been verified
     #[schema(example = true)]
     pub email_verified: bool,
+
+    /// Custom permissions granted to the user (in addition to role permissions)
+    #[schema(example = json!(["libraries:write", "series:delete"]))]
+    pub permissions: Vec<String>,
 }
 
 /// Token response (for refresh tokens in future)

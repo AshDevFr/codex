@@ -37,13 +37,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { genresApi } from "@/api/genres";
 import { seriesApi } from "@/api/series";
-import { sharingTagsApi } from "@/api/sharingTags";
-import { useAuthStore } from "@/store/authStore";
 import {
 	type FullSeriesMetadata,
 	type MetadataLocks,
 	seriesMetadataApi,
 } from "@/api/seriesMetadata";
+import { sharingTagsApi } from "@/api/sharingTags";
 import { tagsApi } from "@/api/tags";
 import { CustomMetadataEditor } from "@/components/forms/CustomMetadataEditor";
 import {
@@ -54,6 +53,7 @@ import {
 	LockableSelect,
 	LockableTextarea,
 } from "@/components/forms/lockable";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export interface SeriesMetadataEditModalProps {
 	opened: boolean;
@@ -186,8 +186,7 @@ export function SeriesMetadataEditModal({
 	seriesTitle,
 }: SeriesMetadataEditModalProps) {
 	const queryClient = useQueryClient();
-	const { user } = useAuthStore();
-	const isAdmin = user?.role === "admin";
+	const { isAdmin } = usePermissions();
 	const [activeTab, setActiveTab] = useState<string | null>("general");
 	const [formState, setFormState] = useState<FormState>(
 		initializeFormState(undefined),
@@ -413,9 +412,7 @@ export function SeriesMetadataEditModal({
 			// Update sharing tags if changed (admin only)
 			const sharingTagsChanged =
 				JSON.stringify(formState.sharingTags.slice().sort()) !==
-				JSON.stringify(
-					(originalFormState?.sharingTags || []).slice().sort(),
-				);
+				JSON.stringify((originalFormState?.sharingTags || []).slice().sort());
 			if (sharingTagsChanged && isAdmin) {
 				// Find which tags need to be created (names that don't exist yet)
 				const existingNames = new Set(

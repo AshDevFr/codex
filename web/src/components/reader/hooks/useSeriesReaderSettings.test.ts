@@ -61,6 +61,7 @@ describe("useSeriesReaderSettings", () => {
 				email: "test@example.com",
 				emailVerified: true,
 				role: "reader",
+				permissions: [],
 			},
 			token: "test-token",
 			isAuthenticated: true,
@@ -547,6 +548,7 @@ describe("useSeriesReaderSettings", () => {
 					email: "user1@example.com",
 					emailVerified: true,
 					role: "reader",
+					permissions: [],
 				},
 			});
 
@@ -569,6 +571,7 @@ describe("useSeriesReaderSettings", () => {
 					email: "user2@example.com",
 					emailVerified: true,
 					role: "reader",
+					permissions: [],
 				},
 			});
 
@@ -635,6 +638,7 @@ describe("useSeriesReaderSettings", () => {
 					email: "user1@example.com",
 					emailVerified: true,
 					role: "reader",
+					permissions: [],
 				},
 				token: "token-1",
 				isAuthenticated: true,
@@ -659,6 +663,7 @@ describe("useSeriesReaderSettings", () => {
 					email: "user2@example.com",
 					emailVerified: true,
 					role: "reader",
+					permissions: [],
 				},
 				token: "token-2",
 				isAuthenticated: true,

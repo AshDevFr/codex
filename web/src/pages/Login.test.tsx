@@ -84,6 +84,7 @@ describe("Login Component", () => {
 				email: "test@example.com",
 				role: "reader",
 				emailVerified: true,
+				permissions: [],
 			},
 		};
 

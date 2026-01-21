@@ -24,7 +24,9 @@ import { useNavigate } from "react-router-dom";
 import { booksApi } from "@/api/books";
 import { seriesApi } from "@/api/series";
 import { AppLink } from "@/components/common";
+import { usePermissions } from "@/hooks/usePermissions";
 import type { Book, Series } from "@/types";
+import { PERMISSIONS } from "@/types/permissions";
 
 interface MediaCardProps {
 	type: "book" | "series";
@@ -39,6 +41,9 @@ export function MediaCard({
 }: MediaCardProps) {
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
+	const { hasPermission } = usePermissions();
+	const canWriteBooks = hasPermission(PERMISSIONS.BOOKS_WRITE);
+	const canWriteSeries = hasPermission(PERMISSIONS.SERIES_WRITE);
 
 	// Handle card click navigation
 	const handleCardClick = (e: React.MouseEvent) => {
@@ -462,18 +467,20 @@ export function MediaCard({
 													: "Mark as Unread"}
 											</Menu.Item>
 										)}
-										<Menu.Item
-											leftSection={<IconAnalyze size={14} />}
-											onClick={(e: React.MouseEvent) => {
-												e.stopPropagation();
-												bookAnalyzeMutation.mutate();
-											}}
-											disabled={bookAnalyzeMutation.isPending}
-										>
-											{bookAnalyzeMutation.isPending
-												? "Analyzing..."
-												: "Force Analyze"}
-										</Menu.Item>
+										{canWriteBooks && (
+											<Menu.Item
+												leftSection={<IconAnalyze size={14} />}
+												onClick={(e: React.MouseEvent) => {
+													e.stopPropagation();
+													bookAnalyzeMutation.mutate();
+												}}
+												disabled={bookAnalyzeMutation.isPending}
+											>
+												{bookAnalyzeMutation.isPending
+													? "Analyzing..."
+													: "Force Analyze"}
+											</Menu.Item>
+										)}
 									</>
 								) : (
 									<>
@@ -508,30 +515,34 @@ export function MediaCard({
 														: "Mark as Unread"}
 												</Menu.Item>
 											)}
-										<Menu.Item
-											leftSection={<IconAnalyze size={14} />}
-											onClick={(e: React.MouseEvent) => {
-												e.stopPropagation();
-												seriesAnalyzeMutation.mutate();
-											}}
-											disabled={seriesAnalyzeMutation.isPending}
-										>
-											{seriesAnalyzeMutation.isPending
-												? "Analyzing..."
-												: "Force Analyze All"}
-										</Menu.Item>
-										<Menu.Item
-											leftSection={<IconAnalyze size={14} />}
-											onClick={(e: React.MouseEvent) => {
-												e.stopPropagation();
-												seriesAnalyzeUnanalyzedMutation.mutate();
-											}}
-											disabled={seriesAnalyzeUnanalyzedMutation.isPending}
-										>
-											{seriesAnalyzeUnanalyzedMutation.isPending
-												? "Analyzing..."
-												: "Analyze Unanalyzed"}
-										</Menu.Item>
+										{canWriteSeries && (
+											<>
+												<Menu.Item
+													leftSection={<IconAnalyze size={14} />}
+													onClick={(e: React.MouseEvent) => {
+														e.stopPropagation();
+														seriesAnalyzeMutation.mutate();
+													}}
+													disabled={seriesAnalyzeMutation.isPending}
+												>
+													{seriesAnalyzeMutation.isPending
+														? "Analyzing..."
+														: "Force Analyze All"}
+												</Menu.Item>
+												<Menu.Item
+													leftSection={<IconAnalyze size={14} />}
+													onClick={(e: React.MouseEvent) => {
+														e.stopPropagation();
+														seriesAnalyzeUnanalyzedMutation.mutate();
+													}}
+													disabled={seriesAnalyzeUnanalyzedMutation.isPending}
+												>
+													{seriesAnalyzeUnanalyzedMutation.isPending
+														? "Analyzing..."
+														: "Analyze Unanalyzed"}
+												</Menu.Item>
+											</>
+										)}
 									</>
 								)}
 							</Menu.Dropdown>

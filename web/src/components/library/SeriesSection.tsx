@@ -94,15 +94,7 @@ export function SeriesSection({
 
 	// Fetch series data using the new POST search endpoint
 	const { data: seriesData, isLoading } = useQuery({
-		queryKey: [
-			"series",
-			"search",
-			libraryId,
-			page,
-			pageSize,
-			sort,
-			filterKey,
-		],
+		queryKey: ["series", "search", libraryId, page, pageSize, sort, filterKey],
 		queryFn: () =>
 			seriesApi.search(libraryId, {
 				condition,

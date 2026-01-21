@@ -38,12 +38,14 @@ import { LibraryToolbar } from "@/components/library/LibraryToolbar";
 import { RecommendedSection } from "@/components/library/RecommendedSection";
 import { SeriesSection } from "@/components/library/SeriesSection";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import {
 	useLibraryPreferencesHydrated,
 	useLibraryPreferencesStore,
 } from "@/store/libraryPreferencesStore";
 import type { Library } from "@/types";
+import { PERMISSIONS } from "@/types/permissions";
 
 export function LibraryPage() {
 	const { libraryId } = useParams<{ libraryId: string }>();
@@ -85,6 +87,11 @@ export function LibraryPage() {
 	const [libraryToPurge, setLibraryToPurge] = useState<Library | null>(null);
 
 	const queryClient = useQueryClient();
+
+	// Permission checks
+	const { hasPermission } = usePermissions();
+	const canEditLibrary = hasPermission(PERMISSIONS.LIBRARIES_WRITE);
+	const canDeleteLibrary = hasPermission(PERMISSIONS.LIBRARIES_DELETE);
 
 	// Get active tasks for progress display
 	const { getTasksByLibrary } = useTaskProgress();
@@ -461,62 +468,76 @@ export function LibraryPage() {
 					{/* Header with library name, count, and action menu */}
 					<Group gap="md" align="center" justify="space-between">
 						<Group gap="xs" align="baseline">
-							{!isAllLibraries && library && (
-								<Menu shadow="md" width={200} position="bottom-start">
-									<Menu.Target>
-										<ActionIcon variant="subtle" color="gray" size="lg">
-											<IconDotsVertical size={20} />
-										</ActionIcon>
-									</Menu.Target>
+							{!isAllLibraries &&
+								library &&
+								(canEditLibrary || canDeleteLibrary) && (
+									<Menu shadow="md" width={200} position="bottom-start">
+										<Menu.Target>
+											<ActionIcon variant="subtle" color="gray" size="lg">
+												<IconDotsVertical size={20} />
+											</ActionIcon>
+										</Menu.Target>
 
-									<Menu.Dropdown>
-										<Menu.Item
-											leftSection={<IconScan size={16} />}
-											onClick={() =>
-												scanMutation.mutate({
-													libraryId: library.id,
-													mode: "normal",
-												})
-											}
-										>
-											Scan Library
-										</Menu.Item>
-										<Menu.Item
-											leftSection={<IconRadar size={16} />}
-											onClick={() =>
-												scanMutation.mutate({
-													libraryId: library.id,
-													mode: "deep",
-												})
-											}
-										>
-											Scan Library (Deep)
-										</Menu.Item>
-										<Menu.Divider />
-										<Menu.Item
-											leftSection={<IconEdit size={16} />}
-											onClick={handleEditLibrary}
-										>
-											Edit Library
-										</Menu.Item>
-										<Menu.Divider />
-										<Menu.Item
-											leftSection={<IconTrashX size={16} />}
-											color="orange"
-											onClick={handlePurgeDeleted}
-										>
-											Purge Deleted Books
-										</Menu.Item>
-										<Menu.Item
-											leftSection={<IconTrash size={16} />}
-											color="red"
-											onClick={handleDeleteLibrary}
-										>
-											Delete Library
-										</Menu.Item>
-									</Menu.Dropdown>
-								</Menu>
-							)}
+										<Menu.Dropdown>
+											{canEditLibrary && (
+												<>
+													<Menu.Item
+														leftSection={<IconScan size={16} />}
+														onClick={() =>
+															scanMutation.mutate({
+																libraryId: library.id,
+																mode: "normal",
+															})
+														}
+													>
+														Scan Library
+													</Menu.Item>
+													<Menu.Item
+														leftSection={<IconRadar size={16} />}
+														onClick={() =>
+															scanMutation.mutate({
+																libraryId: library.id,
+																mode: "deep",
+															})
+														}
+													>
+														Scan Library (Deep)
+													</Menu.Item>
+													<Menu.Divider />
+													<Menu.Item
+														leftSection={<IconEdit size={16} />}
+														onClick={handleEditLibrary}
+													>
+														Edit Library
+													</Menu.Item>
+												</>
+											)}
+											{(canEditLibrary || canDeleteLibrary) && (
+												<>
+													<Menu.Divider />
+													{canEditLibrary && (
+														<Menu.Item
+															leftSection={<IconTrashX size={16} />}
+															color="orange"
+															onClick={handlePurgeDeleted}
+														>
+															Purge Deleted Books
+														</Menu.Item>
+													)}
+													{canDeleteLibrary && (
+														<Menu.Item
+															leftSection={<IconTrash size={16} />}
+															color="red"
+															onClick={handleDeleteLibrary}
+														>
+															Delete Library
+														</Menu.Item>
+													)}
+												</>
+											)}
+										</Menu.Dropdown>
+									</Menu>
+								)}
 							<Title order={1} tt="capitalize">
 								{isAllLibraries ? "All Libraries" : library?.name || "Library"}
 							</Title>

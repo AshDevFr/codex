@@ -62,6 +62,7 @@ export const createUser = (overrides: Partial<UserDto> = {}): UserDto => ({
 	email: faker.internet.email(),
 	role: "reader",
 	isActive: true,
+	permissions: [],
 	lastLoginAt: faker.date.recent().toISOString(),
 	createdAt: faker.date.past().toISOString(),
 	updatedAt: faker.date.recent().toISOString(),

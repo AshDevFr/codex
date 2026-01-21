@@ -27,6 +27,7 @@ describe("authStore", () => {
 			email: "test@example.com",
 			role: "reader",
 			emailVerified: true,
+			permissions: [],
 		};
 		const mockToken = "test-jwt-token";
 
@@ -46,6 +47,7 @@ describe("authStore", () => {
 			email: "test@example.com",
 			role: "admin",
 			emailVerified: true,
+			permissions: [],
 		};
 
 		// First set auth
@@ -69,6 +71,7 @@ describe("authStore", () => {
 			email: "test@example.com",
 			role: "reader",
 			emailVerified: true,
+			permissions: [],
 		};
 
 		useAuthStore.getState().setAuth(mockUser, "token");

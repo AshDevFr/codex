@@ -9,19 +9,21 @@ import type { components } from "@/types/api.generated";
 type UserInfo = components["schemas"]["UserInfo"];
 
 // Helper to create a UserInfo object (used in login/register responses)
-const createUserInfo = (
-	overrides: Partial<UserInfo> = {},
-): UserInfo => ({
+const createUserInfo = (overrides: Partial<UserInfo> = {}): UserInfo => ({
 	id: faker.string.uuid(),
 	username: faker.internet.username(),
 	email: faker.internet.email(),
 	role: "reader",
 	emailVerified: true,
+	permissions: [],
 	...overrides,
 });
 
 // Mock user state
-let currentUser: UserInfo = createUserInfo({ username: "admin", role: "admin" });
+let currentUser: UserInfo = createUserInfo({
+	username: "admin",
+	role: "admin",
+});
 let isAuthenticated = false;
 
 export const authHandlers = [
@@ -41,12 +43,18 @@ export const authHandlers = [
 			);
 		}
 
-		// Mock successful login
+		// Mock successful login - determine role from username
 		isAuthenticated = true;
+		let role: "admin" | "maintainer" | "reader" = "reader";
+		if (body.username === "admin") {
+			role = "admin";
+		} else if (body.username === "maintainer") {
+			role = "maintainer";
+		}
 		currentUser = createUserInfo({
 			username: body.username,
 			email: `${body.username}@example.com`,
-			role: body.username === "admin" ? "admin" : "reader",
+			role,
 		});
 
 		return HttpResponse.json({

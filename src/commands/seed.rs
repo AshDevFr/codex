@@ -1,4 +1,6 @@
-use crate::api::permissions::{serialize_permissions, ADMIN_PERMISSIONS};
+use crate::api::permissions::{
+    serialize_permissions, ADMIN_PERMISSIONS, MAINTAINER_PERMISSIONS, READER_PERMISSIONS,
+};
 use crate::config::{Config, EnvOverride};
 use crate::db::entities::{api_keys, users};
 use crate::db::repositories::{api_key::ApiKeyRepository, user::UserRepository};
@@ -37,54 +39,91 @@ pub async fn seed_command(config_path: PathBuf) -> Result<()> {
         return Ok(());
     }
 
-    // Generate random password for admin user
-    let admin_password = generate_random_password(16);
-    let password_hash = hash_password(&admin_password).context("Failed to hash admin password")?;
-
-    // Create admin user with Admin role
-    info!("Creating admin user...");
     use crate::api::permissions::UserRole;
-    let admin_user = users::Model {
-        id: Uuid::new_v4(),
-        username: "admin".to_string(),
-        email: "admin@localhost".to_string(),
-        password_hash,
-        role: UserRole::Admin.to_string(),
-        is_active: true,
-        email_verified: true,
-        permissions: serde_json::json!([]), // Custom permissions (empty = use role defaults)
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-        last_login_at: None,
-    };
 
-    let created_user = UserRepository::create(db_conn, &admin_user)
-        .await
-        .context("Failed to create admin user")?;
+    // Define users to create: (username, email, role, permissions for API key)
+    let users_to_create = [
+        (
+            "admin",
+            "admin@localhost",
+            UserRole::Admin,
+            &*ADMIN_PERMISSIONS,
+        ),
+        (
+            "maintainer",
+            "maintainer@localhost",
+            UserRole::Maintainer,
+            &*MAINTAINER_PERMISSIONS,
+        ),
+        (
+            "reader",
+            "reader@localhost",
+            UserRole::Reader,
+            &*READER_PERMISSIONS,
+        ),
+    ];
 
-    info!("Admin user created successfully: {}", created_user.id);
+    let mut credentials: Vec<(String, String, String)> = Vec::new();
 
-    // Generate admin API key
-    info!("Generating admin API key...");
-    let (api_key_plain, api_key_model) = generate_api_key(
-        created_user.id,
-        "Initial Admin Key".to_string(),
-        &ADMIN_PERMISSIONS,
-    )?;
+    for (username, email, role, permissions) in users_to_create {
+        // Generate random password
+        let password = generate_random_password(16);
+        let password_hash =
+            hash_password(&password).context(format!("Failed to hash {} password", username))?;
 
-    let created_api_key = ApiKeyRepository::create(db_conn, &api_key_model)
-        .await
-        .context("Failed to create admin API key")?;
+        // Create user
+        info!("Creating {} user...", username);
+        let user = users::Model {
+            id: Uuid::new_v4(),
+            username: username.to_string(),
+            email: email.to_string(),
+            password_hash,
+            role: role.to_string(),
+            is_active: true,
+            email_verified: true,
+            permissions: serde_json::json!([]), // Custom permissions (empty = use role defaults)
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_login_at: None,
+        };
 
-    info!("Admin API key created successfully: {}", created_api_key.id);
+        let created_user = UserRepository::create(db_conn, &user)
+            .await
+            .context(format!("Failed to create {} user", username))?;
+
+        info!(
+            "{} user created successfully: {}",
+            username, created_user.id
+        );
+
+        // Generate API key
+        info!("Generating {} API key...", username);
+        let (api_key_plain, api_key_model) = generate_api_key(
+            created_user.id,
+            format!("Initial {} Key", username.to_uppercase()),
+            permissions,
+        )?;
+
+        ApiKeyRepository::create(db_conn, &api_key_model)
+            .await
+            .context(format!("Failed to create {} API key", username))?;
+
+        info!("{} API key created successfully", username);
+
+        credentials.push((username.to_string(), password, api_key_plain));
+    }
 
     // Print credentials to console (once-only view)
     println!("\n========================================");
-    println!("🎉 Codex Admin User Created!");
+    println!("🎉 Codex Users Created!");
     println!("========================================\n");
-    println!("Username: admin");
-    println!("Password: {}\n", admin_password);
-    println!("API Key:  {}\n", api_key_plain);
+
+    for (username, password, api_key) in &credentials {
+        println!("User: {}", username);
+        println!("  Password: {}", password);
+        println!("  API Key:  {}\n", api_key);
+    }
+
     println!("========================================");
     println!("⚠️  IMPORTANT: Save these credentials now!");
     println!("   They will NOT be shown again.");

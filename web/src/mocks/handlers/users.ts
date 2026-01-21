@@ -13,7 +13,19 @@ const mockUsers = [
 		email: "admin@example.com",
 		role: "admin",
 	}),
-	...createList(() => createUser(), 9),
+	createUser({
+		id: "maintainer-user-id",
+		username: "maintainer",
+		email: "maintainer@example.com",
+		role: "maintainer",
+	}),
+	createUser({
+		id: "reader-user-id",
+		username: "reader",
+		email: "reader@example.com",
+		role: "reader",
+	}),
+	...createList(() => createUser(), 7),
 ];
 
 // Mock user preferences
@@ -163,6 +175,7 @@ export const usersHandlers = [
 			email: string;
 			role: "reader" | "maintainer" | "admin";
 			isActive: boolean;
+			permissions: string[];
 		}>;
 
 		const userIndex = mockUsers.findIndex((u) => u.id === userId);

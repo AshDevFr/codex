@@ -5,6 +5,7 @@
  */
 
 import { delay, HttpResponse, http } from "msw";
+import { apiKeysHandlers } from "./apiKeys";
 import { authHandlers } from "./auth";
 import { bookHandlers } from "./books";
 import { cleanupHandlers } from "./cleanup";
@@ -61,6 +62,7 @@ const utilityHandlers = [
 				email: body.email,
 				role: "admin",
 				emailVerified: true,
+				permissions: [],
 			},
 		});
 	}),
@@ -100,6 +102,7 @@ const utilityHandlers = [
 
 // Combine all handlers
 export const handlers = [
+	...apiKeysHandlers,
 	...authHandlers,
 	...libraryHandlers,
 	...seriesHandlers,
@@ -117,6 +120,7 @@ export const handlers = [
 ];
 
 // Re-export individual handlers for selective use
+export { apiKeysHandlers } from "./apiKeys";
 export { authHandlers } from "./auth";
 export { bookHandlers } from "./books";
 export { cleanupHandlers } from "./cleanup";

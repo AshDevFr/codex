@@ -19,6 +19,17 @@ use chrono::Utc;
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Parse permissions from JSON value (stored as array of strings in database)
+fn parse_permissions_json(json: &serde_json::Value) -> Vec<String> {
+    json.as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// List all users (admin only) with pagination and filtering
 #[utoipa::path(
     get,
@@ -61,11 +72,13 @@ pub async fn list_users(
         .into_iter()
         .map(|user| {
             let role = user.get_role();
+            let permissions = parse_permissions_json(&user.permissions);
             UserDto {
                 id: user.id,
                 username: user.username,
                 email: user.email,
                 role,
+                permissions,
                 is_active: user.is_active,
                 last_login_at: user.last_login_at,
                 created_at: user.created_at,
@@ -123,11 +136,13 @@ pub async fn get_user(
         .collect();
 
     let role = user.get_role();
+    let permissions = parse_permissions_json(&user.permissions);
     let dto = UserDetailDto {
         id: user.id,
         username: user.username,
         email: user.email,
         role,
+        permissions,
         is_active: user.is_active,
         last_login_at: user.last_login_at,
         created_at: user.created_at,
@@ -198,11 +213,13 @@ pub async fn create_user(
         .map_err(|e| ApiError::Internal(format!("Failed to create user: {}", e)))?;
 
     let role = user.get_role();
+    let permissions = parse_permissions_json(&user.permissions);
     let dto = UserDto {
         id: user.id,
         username: user.username,
         email: user.email,
         role,
+        permissions,
         is_active: user.is_active,
         last_login_at: user.last_login_at,
         created_at: user.created_at,
@@ -280,6 +297,21 @@ pub async fn update_user(
         user.is_active = is_active;
     }
 
+    if let Some(permissions) = request.permissions {
+        // Validate permissions are valid permission strings
+        for perm in &permissions {
+            // Normalize: convert kebab-case to colon format if needed
+            let normalized = perm.replace('-', ":");
+            if normalized.parse::<Permission>().is_err() {
+                return Err(ApiError::BadRequest(format!(
+                    "Invalid permission: {}",
+                    perm
+                )));
+            }
+        }
+        user.permissions = serde_json::json!(permissions);
+    }
+
     user.updated_at = Utc::now();
 
     let updated = UserRepository::update(&state.db, &user)
@@ -287,11 +319,13 @@ pub async fn update_user(
         .map_err(|e| ApiError::Internal(format!("Failed to update user: {}", e)))?;
 
     let role = updated.get_role();
+    let permissions = parse_permissions_json(&updated.permissions);
     let dto = UserDto {
         id: updated.id,
         username: updated.username,
         email: updated.email,
         role,
+        permissions,
         is_active: updated.is_active,
         last_login_at: updated.last_login_at,
         created_at: updated.created_at,

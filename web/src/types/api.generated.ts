@@ -5654,6 +5654,8 @@ export interface components {
                  * @example 2024-01-15T10:30:00Z
                  */
                 lastLoginAt?: string | null;
+                /** @description Custom permissions that extend the role's base permissions */
+                permissions: string[];
                 /** @description User role (reader, maintainer, admin) */
                 role: components["schemas"]["UserRole"];
                 /**
@@ -7985,6 +7987,11 @@ export interface components {
              * @example newSecurePassword123!
              */
             password?: string | null;
+            /**
+             * @description Custom permissions that extend the role's base permissions (admin only)
+             *     These permissions are unioned with the role's permissions
+             */
+            permissions?: string[] | null;
             role?: null | components["schemas"]["UserRole"];
             /**
              * @description New username
@@ -8022,6 +8029,8 @@ export interface components {
              * @example 2024-01-15T10:30:00Z
              */
             lastLoginAt?: string | null;
+            /** @description Custom permissions that extend the role's base permissions */
+            permissions: string[];
             /** @description User role (reader, maintainer, admin) */
             role: components["schemas"]["UserRole"];
             /** @description Sharing tag grants for this user */
@@ -8068,6 +8077,8 @@ export interface components {
              * @example 2024-01-15T10:30:00Z
              */
             lastLoginAt?: string | null;
+            /** @description Custom permissions that extend the role's base permissions */
+            permissions: string[];
             /** @description User role (reader, maintainer, admin) */
             role: components["schemas"]["UserRole"];
             /**
@@ -8100,6 +8111,14 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             id: string;
+            /**
+             * @description Custom permissions granted to the user (in addition to role permissions)
+             * @example [
+             *       "libraries:write",
+             *       "series:delete"
+             *     ]
+             */
+            permissions: string[];
             /**
              * @description User role (reader, maintainer, admin)
              * @example admin

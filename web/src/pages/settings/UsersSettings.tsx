@@ -6,6 +6,7 @@ import {
 	Button,
 	Card,
 	Collapse,
+	Divider,
 	Group,
 	Loader,
 	Modal,
@@ -20,11 +21,13 @@ import {
 	Title,
 	Tooltip,
 } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
 import { useForm } from "@mantine/form";
+import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
 	IconAlertCircle,
+	IconChevronDown,
+	IconChevronRight,
 	IconEdit,
 	IconFilter,
 	IconTrash,
@@ -37,8 +40,10 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { sharingTagsApi } from "@/api/sharingTags";
 import { type UserDto, type UserListParams, usersApi } from "@/api/users";
+import { PermissionPicker } from "@/components/common";
 import { UserSharingTagGrants } from "@/components/users";
 import { useAuthStore } from "@/store/authStore";
+import { type Permission, ROLE_PERMISSIONS } from "@/types/permissions";
 
 const PAGE_SIZE = 20;
 
@@ -50,32 +55,35 @@ export function UsersSettings() {
 	const [editModalOpened, setEditModalOpened] = useState(false);
 	const [deleteModalOpened, setDeleteModalOpened] = useState(false);
 	const [selectedUser, setSelectedUser] = useState<UserDto | null>(null);
+	const [customPermissions, setCustomPermissions] = useState<Permission[]>([]);
+	const [permissionsExpanded, setPermissionsExpanded] = useState(false);
 
 	// Initialize filter state from URL params
 	const initialSharingTag = searchParams.get("sharingTag");
 	const [filtersOpened, { toggle: toggleFilters }] = useDisclosure(
 		// Auto-open filters if there's a sharingTag in URL
-		!!initialSharingTag
+		!!initialSharingTag,
 	);
 
 	// Filter state - initialized from URL
 	const [page, setPage] = useState(0);
 	const [roleFilter, setRoleFilter] = useState<string | null>(
-		searchParams.get("role")
+		searchParams.get("role"),
 	);
 	const [sharingTagFilter, setSharingTagFilter] = useState<string | null>(
-		initialSharingTag
+		initialSharingTag,
 	);
-	const [sharingTagModeFilter, setSharingTagModeFilter] = useState<string | null>(
-		searchParams.get("sharingTagMode")
-	);
+	const [sharingTagModeFilter, setSharingTagModeFilter] = useState<
+		string | null
+	>(searchParams.get("sharingTagMode"));
 
 	// Sync URL when filters change
 	useEffect(() => {
 		const params = new URLSearchParams();
 		if (roleFilter) params.set("role", roleFilter);
 		if (sharingTagFilter) params.set("sharingTag", sharingTagFilter);
-		if (sharingTagModeFilter) params.set("sharingTagMode", sharingTagModeFilter);
+		if (sharingTagModeFilter)
+			params.set("sharingTagMode", sharingTagModeFilter);
 		setSearchParams(params, { replace: true });
 	}, [roleFilter, sharingTagFilter, sharingTagModeFilter, setSearchParams]);
 
@@ -125,7 +133,9 @@ export function UsersSettings() {
 
 	// Check if any filters are active
 	const hasActiveFilters = roleFilter !== null || sharingTagFilter !== null;
-	const activeFilterCount = [roleFilter, sharingTagFilter].filter(Boolean).length;
+	const activeFilterCount = [roleFilter, sharingTagFilter].filter(
+		Boolean,
+	).length;
 
 	// Clear all filters
 	const clearFilters = () => {
@@ -217,6 +227,7 @@ export function UsersSettings() {
 				password?: string;
 				role?: "reader" | "maintainer" | "admin";
 				isActive?: boolean;
+				permissions?: string[];
 			};
 		}) => {
 			return usersApi.update(userId, {
@@ -225,6 +236,7 @@ export function UsersSettings() {
 				password: data.password || undefined,
 				role: data.role,
 				isActive: data.isActive,
+				permissions: data.permissions,
 			});
 		},
 		onSuccess: () => {
@@ -278,6 +290,12 @@ export function UsersSettings() {
 			role: user.role,
 			isActive: user.isActive,
 		});
+		// Set custom permissions from user (those not included in role's base permissions)
+		const rolePerms = ROLE_PERMISSIONS[user.role] || [];
+		const userPerms = (user.permissions || []) as Permission[];
+		const customPerms = userPerms.filter((p) => !rolePerms.includes(p));
+		setCustomPermissions(customPerms);
+		setPermissionsExpanded(customPerms.length > 0);
 		setEditModalOpened(true);
 	};
 
@@ -449,8 +467,20 @@ export function UsersSettings() {
 											</Table.Td>
 											<Table.Td>{user.email}</Table.Td>
 											<Table.Td>
-												<Badge color={user.role === "admin" ? "blue" : user.role === "maintainer" ? "cyan" : "gray"}>
-													{user.role === "admin" ? "Admin" : user.role === "maintainer" ? "Maintainer" : "Reader"}
+												<Badge
+													color={
+														user.role === "admin"
+															? "blue"
+															: user.role === "maintainer"
+																? "cyan"
+																: "gray"
+													}
+												>
+													{user.role === "admin"
+														? "Admin"
+														: user.role === "maintainer"
+															? "Maintainer"
+															: "Reader"}
 												</Badge>
 											</Table.Td>
 											<Table.Td>
@@ -571,15 +601,26 @@ export function UsersSettings() {
 				onClose={() => {
 					setEditModalOpened(false);
 					setSelectedUser(null);
+					setCustomPermissions([]);
+					setPermissionsExpanded(false);
 				}}
 				title={`Edit User: ${selectedUser?.username}`}
+				size="lg"
 			>
 				<form
 					onSubmit={editForm.onSubmit((values) => {
 						if (selectedUser) {
+							// Combine role permissions with custom permissions
+							const rolePerms = ROLE_PERMISSIONS[values.role] || [];
+							const allPermissions = [
+								...new Set([...rolePerms, ...customPermissions]),
+							];
 							updateUserMutation.mutate({
 								userId: selectedUser.id,
-								data: values,
+								data: {
+									...values,
+									permissions: allPermissions,
+								},
 							});
 						}
 					})}
@@ -620,8 +661,50 @@ export function UsersSettings() {
 						)}
 
 						{/* Sharing Tag Grants */}
-						{selectedUser && (
-							<UserSharingTagGrants userId={selectedUser.id} />
+						{selectedUser && <UserSharingTagGrants userId={selectedUser.id} />}
+
+						{/* Custom Permissions */}
+						{selectedUser && selectedUser.role !== "admin" && (
+							<>
+								<Divider />
+								<Box>
+									<Button
+										variant="subtle"
+										color="gray"
+										size="sm"
+										leftSection={
+											permissionsExpanded ? (
+												<IconChevronDown size={16} />
+											) : (
+												<IconChevronRight size={16} />
+											)
+										}
+										onClick={() => setPermissionsExpanded(!permissionsExpanded)}
+										px={0}
+									>
+										Custom Permissions
+										{customPermissions.length > 0 && (
+											<Badge size="sm" ml="xs" variant="light">
+												{customPermissions.length}
+											</Badge>
+										)}
+									</Button>
+									<Text size="xs" c="dimmed" mt={4}>
+										Grant additional permissions beyond the role&apos;s defaults
+									</Text>
+									<Collapse in={permissionsExpanded}>
+										<Box mt="md">
+											<PermissionPicker
+												selectedPermissions={customPermissions}
+												onPermissionsChange={setCustomPermissions}
+												disabledCheckedPermissions={
+													ROLE_PERMISSIONS[editForm.values.role] || []
+												}
+											/>
+										</Box>
+									</Collapse>
+								</Box>
+							</>
 						)}
 
 						<Group justify="flex-end">

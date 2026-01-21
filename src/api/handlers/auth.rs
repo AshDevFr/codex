@@ -25,6 +25,17 @@ use std::env;
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Parse permissions from JSON value (stored as array of strings in database)
+fn parse_permissions_json(json: &serde_json::Value) -> Vec<String> {
+    json.as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Build authentication cookie string
 ///
 /// Conditionally includes `Secure` flag based on environment:
@@ -107,6 +118,7 @@ pub async fn login(
 
     // Build response
     let role = user.get_role().to_string();
+    let permissions = parse_permissions_json(&user.permissions);
     let response = LoginResponse {
         access_token: access_token.clone(),
         token_type: "Bearer".to_string(),
@@ -117,6 +129,7 @@ pub async fn login(
             email: user.email,
             role,
             email_verified: user.email_verified,
+            permissions,
         },
     };
 
@@ -277,6 +290,7 @@ pub async fn register(
 
         // Email confirmation required - don't generate token yet (no cookie)
         let role = created_user.get_role().to_string();
+        let permissions = parse_permissions_json(&created_user.permissions);
         let response = RegisterResponse {
             access_token: None,
             token_type: None,
@@ -287,6 +301,7 @@ pub async fn register(
                 email: created_user.email,
                 role,
                 email_verified: created_user.email_verified,
+                permissions,
             },
             message: Some(
                 "Registration successful. Please verify your email to activate your account."
@@ -307,6 +322,7 @@ pub async fn register(
             .map_err(|e| ApiError::Internal(format!("Failed to generate token: {}", e)))?;
 
         let role = created_user.get_role().to_string();
+        let permissions = parse_permissions_json(&created_user.permissions);
         let response = RegisterResponse {
             access_token: Some(access_token.clone()),
             token_type: Some("Bearer".to_string()),
@@ -317,6 +333,7 @@ pub async fn register(
                 email: created_user.email,
                 role,
                 email_verified: created_user.email_verified,
+                permissions,
             },
             message: Some("Registration successful. You are now logged in.".to_string()),
         };
@@ -405,6 +422,7 @@ pub async fn verify_email(
 
     // Build response
     let role = updated_user.get_role().to_string();
+    let permissions = parse_permissions_json(&updated_user.permissions);
     let response = VerifyEmailResponse {
         message: "Email verified successfully. Your account is now active.".to_string(),
         access_token: access_token.clone(),
@@ -416,6 +434,7 @@ pub async fn verify_email(
             email: updated_user.email,
             role,
             email_verified: updated_user.email_verified,
+            permissions,
         },
     };
 

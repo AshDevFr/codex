@@ -55,8 +55,7 @@ export function SharingTagsSettings() {
 			description: "",
 		},
 		validate: {
-			name: (value) =>
-				value.trim().length < 1 ? "Name is required" : null,
+			name: (value) => (value.trim().length < 1 ? "Name is required" : null),
 		},
 	});
 
@@ -67,8 +66,7 @@ export function SharingTagsSettings() {
 			description: "",
 		},
 		validate: {
-			name: (value) =>
-				value.trim().length < 1 ? "Name is required" : null,
+			name: (value) => (value.trim().length < 1 ? "Name is required" : null),
 		},
 	});
 
@@ -175,7 +173,8 @@ export function SharingTagsSettings() {
 					<div>
 						<Title order={1}>Sharing Tags</Title>
 						<Text c="dimmed" size="sm" mt="xs">
-							Manage content sharing tags for controlling series visibility to users
+							Manage content sharing tags for controlling series visibility to
+							users
 						</Text>
 					</div>
 					<Button
@@ -217,7 +216,10 @@ export function SharingTagsSettings() {
 											</Group>
 										</Table.Td>
 										<Table.Td>
-											<Text size="sm" c={tag.description ? undefined : "dimmed"}>
+											<Text
+												size="sm"
+												c={tag.description ? undefined : "dimmed"}
+											>
 												{tag.description || "No description"}
 											</Text>
 										</Table.Td>
@@ -284,8 +286,9 @@ export function SharingTagsSettings() {
 					<Alert icon={<IconShare size={16} />} color="gray" variant="light">
 						<Text fw={500}>No sharing tags yet</Text>
 						<Text size="sm" mt="xs">
-							Create sharing tags to control which series are visible to specific users.
-							Tags can be assigned to series and then granted to users with "allow" or "deny" access modes.
+							Create sharing tags to control which series are visible to
+							specific users. Tags can be assigned to series and then granted to
+							users with "allow" or "deny" access modes.
 						</Text>
 					</Alert>
 				)}
@@ -402,13 +405,14 @@ export function SharingTagsSettings() {
 						Are you sure you want to delete the sharing tag{" "}
 						<strong>{selectedTag?.name}</strong>?
 					</Text>
-					{selectedTag && (selectedTag.seriesCount > 0 || selectedTag.userCount > 0) && (
-						<Alert icon={<IconAlertCircle size={16} />} color="yellow">
-							This tag is currently assigned to {selectedTag.seriesCount} series
-							and {selectedTag.userCount} users. Deleting it will remove all these
-							associations.
-						</Alert>
-					)}
+					{selectedTag &&
+						(selectedTag.seriesCount > 0 || selectedTag.userCount > 0) && (
+							<Alert icon={<IconAlertCircle size={16} />} color="yellow">
+								This tag is currently assigned to {selectedTag.seriesCount}{" "}
+								series and {selectedTag.userCount} users. Deleting it will
+								remove all these associations.
+							</Alert>
+						)}
 					<Text size="sm" c="dimmed">
 						This action cannot be undone.
 					</Text>

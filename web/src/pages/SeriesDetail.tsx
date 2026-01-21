@@ -35,7 +35,6 @@ import { seriesApi } from "@/api/series";
 import { seriesMetadataApi } from "@/api/seriesMetadata";
 import { settingsApi } from "@/api/settings";
 import { sharingTagsApi } from "@/api/sharingTags";
-import { useAuthStore } from "@/store/authStore";
 import {
 	AlternateTitles,
 	CommunityRating,
@@ -47,6 +46,8 @@ import {
 	SeriesMetadataEditModal,
 	SeriesRating,
 } from "@/components/series";
+import { usePermissions } from "@/hooks/usePermissions";
+import { PERMISSIONS } from "@/types/permissions";
 
 // Helper to format reading direction
 function formatReadingDirection(dir?: string | null): string | null {
@@ -70,8 +71,8 @@ export function SeriesDetail() {
 	const { seriesId } = useParams<{ seriesId: string }>();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
-	const { user } = useAuthStore();
-	const isAdmin = user?.role === "admin";
+	const { isAdmin, hasPermission } = usePermissions();
+	const canEditSeries = hasPermission(PERMISSIONS.SERIES_WRITE);
 	const [summaryOpened, { toggle: toggleSummary }] = useDisclosure(false);
 	const [editModalOpened, { open: openEditModal, close: closeEditModal }] =
 		useDisclosure(false);
@@ -376,35 +377,39 @@ export function SeriesDetail() {
 												Mark as Unread
 											</Menu.Item>
 										)}
-										<Menu.Divider />
-										<Menu.Item
-											leftSection={<IconAnalyze size={14} />}
-											onClick={() => analyzeMutation.mutate()}
-											disabled={analyzeMutation.isPending}
-										>
-											Analyze All
-										</Menu.Item>
-										<Menu.Item
-											leftSection={<IconAnalyze size={14} />}
-											onClick={() => analyzeUnanalyzedMutation.mutate()}
-											disabled={analyzeUnanalyzedMutation.isPending}
-										>
-											Analyze Unanalyzed
-										</Menu.Item>
-										<Menu.Item
-											leftSection={<IconPhoto size={14} />}
-											onClick={() => generateThumbnailsMutation.mutate()}
-											disabled={generateThumbnailsMutation.isPending}
-										>
-											Generate Thumbnails
-										</Menu.Item>
-										<Menu.Divider />
-										<Menu.Item
-											leftSection={<IconEdit size={14} />}
-											onClick={openEditModal}
-										>
-											Edit Metadata
-										</Menu.Item>
+										{canEditSeries && (
+											<>
+												<Menu.Divider />
+												<Menu.Item
+													leftSection={<IconAnalyze size={14} />}
+													onClick={() => analyzeMutation.mutate()}
+													disabled={analyzeMutation.isPending}
+												>
+													Analyze All
+												</Menu.Item>
+												<Menu.Item
+													leftSection={<IconAnalyze size={14} />}
+													onClick={() => analyzeUnanalyzedMutation.mutate()}
+													disabled={analyzeUnanalyzedMutation.isPending}
+												>
+													Analyze Unanalyzed
+												</Menu.Item>
+												<Menu.Item
+													leftSection={<IconPhoto size={14} />}
+													onClick={() => generateThumbnailsMutation.mutate()}
+													disabled={generateThumbnailsMutation.isPending}
+												>
+													Generate Thumbnails
+												</Menu.Item>
+												<Menu.Divider />
+												<Menu.Item
+													leftSection={<IconEdit size={14} />}
+													onClick={openEditModal}
+												>
+													Edit Metadata
+												</Menu.Item>
+											</>
+										)}
 									</Menu.Dropdown>
 								</Menu>
 							</Group>

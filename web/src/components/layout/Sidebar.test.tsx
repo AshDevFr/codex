@@ -35,6 +35,7 @@ describe("Sidebar Component (via AppLayout)", () => {
 			email: "test@example.com",
 			role: "reader",
 			emailVerified: true,
+			permissions: [],
 		};
 
 		useAuthStore.setState({
@@ -62,6 +63,7 @@ describe("Sidebar Component (via AppLayout)", () => {
 			email: "admin@example.com",
 			role: "admin",
 			emailVerified: true,
+			permissions: [],
 		};
 
 		useAuthStore.setState({
@@ -86,6 +88,7 @@ describe("Sidebar Component (via AppLayout)", () => {
 			email: "test@example.com",
 			role: "reader",
 			emailVerified: true,
+			permissions: [],
 		};
 
 		useAuthStore.setState({
@@ -112,6 +115,7 @@ describe("Sidebar Component (via AppLayout)", () => {
 			email: "test@example.com",
 			role: "reader",
 			emailVerified: true,
+			permissions: [],
 		};
 
 		useAuthStore.setState({
@@ -136,6 +140,7 @@ describe("Sidebar Component (via AppLayout)", () => {
 			email: "admin@example.com",
 			role: "admin",
 			emailVerified: true,
+			permissions: [],
 		};
 
 		useAuthStore.setState({
@@ -165,6 +170,7 @@ describe("Sidebar Component (via AppLayout)", () => {
 			email: "test@example.com",
 			role: "reader",
 			emailVerified: true,
+			permissions: [],
 		};
 
 		useAuthStore.setState({
@@ -196,6 +202,7 @@ describe("Sidebar Component (via AppLayout)", () => {
 			email: "test@example.com",
 			role: "reader",
 			emailVerified: true,
+			permissions: [],
 		};
 
 		useAuthStore.setState({

@@ -204,7 +204,6 @@ lazy_static::lazy_static! {
     /// - Browse libraries, series, and books
     /// - Read pages/content
     /// - Manage their own API keys
-    /// - View task status
     /// - View system health
     pub static ref READER_PERMISSIONS: HashSet<Permission> = {
         let mut set = HashSet::new();
@@ -217,8 +216,6 @@ lazy_static::lazy_static! {
         set.insert(Permission::ApiKeysRead);
         set.insert(Permission::ApiKeysWrite);
         set.insert(Permission::ApiKeysDelete);
-        // Tasks (view only)
-        set.insert(Permission::TasksRead);
         // System
         set.insert(Permission::SystemHealth);
         set
@@ -230,7 +227,7 @@ lazy_static::lazy_static! {
     /// - Create/modify libraries (but not delete)
     /// - Create/modify/delete series
     /// - Create/modify/delete books
-    /// - Trigger scans and manage tasks
+    /// - View and manage tasks
     pub static ref MAINTAINER_PERMISSIONS: HashSet<Permission> = {
         let mut set = READER_PERMISSIONS.clone();
         // Libraries (create/modify, but not delete)
@@ -241,7 +238,8 @@ lazy_static::lazy_static! {
         // Books (full control)
         set.insert(Permission::BooksWrite);
         set.insert(Permission::BooksDelete);
-        // Tasks (manage)
+        // Tasks (view and manage)
+        set.insert(Permission::TasksRead);
         set.insert(Permission::TasksWrite);
         set
     };
@@ -338,9 +336,11 @@ mod tests {
         assert!(READER_PERMISSIONS.contains(&Permission::ApiKeysRead));
         assert!(READER_PERMISSIONS.contains(&Permission::ApiKeysWrite));
         assert!(READER_PERMISSIONS.contains(&Permission::ApiKeysDelete));
-        // Reader has task view and system health
-        assert!(READER_PERMISSIONS.contains(&Permission::TasksRead));
+        // Reader has system health
         assert!(READER_PERMISSIONS.contains(&Permission::SystemHealth));
+        // Reader cannot view or manage tasks
+        assert!(!READER_PERMISSIONS.contains(&Permission::TasksRead));
+        assert!(!READER_PERMISSIONS.contains(&Permission::TasksWrite));
         // Reader cannot modify content
         assert!(!READER_PERMISSIONS.contains(&Permission::BooksWrite));
         assert!(!READER_PERMISSIONS.contains(&Permission::SeriesWrite));
@@ -349,7 +349,7 @@ mod tests {
         assert!(!READER_PERMISSIONS.contains(&Permission::UsersRead));
         assert!(!READER_PERMISSIONS.contains(&Permission::SystemAdmin));
 
-        assert_eq!(READER_PERMISSIONS.len(), 9);
+        assert_eq!(READER_PERMISSIONS.len(), 8);
     }
 
     #[test]

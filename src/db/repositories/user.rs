@@ -104,12 +104,6 @@ impl UserRepository {
         Ok(())
     }
 
-    /// List all users
-    pub async fn list_all(db: &DatabaseConnection) -> Result<Vec<users::Model>> {
-        let users = User::find().all(db).await?;
-        Ok(users)
-    }
-
     /// List users with filtering and pagination
     pub async fn list_paginated(
         db: &DatabaseConnection,

@@ -38,11 +38,20 @@ import { useState } from "react";
 import { api } from "@/api/client";
 import { userIntegrationsApi } from "@/api/userIntegrations";
 import { userPreferencesApi } from "@/api/userPreferences";
+import { PermissionPicker } from "@/components/common";
 import { useAppName } from "@/hooks/useAppName";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useAuthStore } from "@/store/authStore";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
 import type { components } from "@/types/api.generated";
+import {
+	ALL_PERMISSIONS,
+	getPermissionsForRole,
+	PERMISSION_PRESETS,
+	type Permission,
+	type PermissionPreset,
+	parsePermissions,
+} from "@/types/permissions";
 import type { PreferenceKey, TypedPreferences } from "@/types/preferences";
 import { PREFERENCE_DEFAULTS } from "@/types/preferences";
 
@@ -57,6 +66,11 @@ export function ProfileSettings() {
 	const { getPreference, setPreference } = useUserPreferencesStore();
 	const [createKeyModalOpened, setCreateKeyModalOpened] = useState(false);
 	const [newApiKey, setNewApiKey] = useState<string | null>(null);
+	const [permissionPreset, setPermissionPreset] =
+		useState<PermissionPreset>("full");
+	const [selectedPermissions, setSelectedPermissions] = useState<Permission[]>(
+		[],
+	);
 
 	useDocumentTitle("Profile Settings");
 
@@ -165,7 +179,11 @@ export function ProfileSettings() {
 	});
 
 	const createApiKeyMutation = useMutation({
-		mutationFn: async (data: { name: string; expiresInDays: number }) => {
+		mutationFn: async (data: {
+			name: string;
+			expiresInDays: number;
+			permissions?: Permission[];
+		}) => {
 			const response = await api.post<{ apiKey: ApiKeyDto; key: string }>(
 				"/api-keys",
 				{
@@ -175,6 +193,8 @@ export function ProfileSettings() {
 								Date.now() + data.expiresInDays * 24 * 60 * 60 * 1000,
 							).toISOString()
 						: null,
+					// Only send permissions if not using full access (let backend use defaults)
+					permissions: data.permissions,
 				},
 			);
 			return response.data;
@@ -183,6 +203,8 @@ export function ProfileSettings() {
 			setNewApiKey(data.key);
 			queryClient.invalidateQueries({ queryKey: ["api-keys"] });
 			apiKeyForm.reset();
+			setPermissionPreset("full");
+			setSelectedPermissions([]);
 		},
 		onError: () => {
 			notifications.show({
@@ -310,7 +332,11 @@ export function ProfileSettings() {
 									<Group>
 										<Text fw={500}>Role:</Text>
 										<Badge color={user?.role === "admin" ? "blue" : "gray"}>
-											{user?.role === "admin" ? "Admin" : user?.role === "maintainer" ? "Maintainer" : "User"}
+											{user?.role === "admin"
+												? "Admin"
+												: user?.role === "maintainer"
+													? "Maintainer"
+													: "User"}
 										</Badge>
 									</Group>
 								</Stack>
@@ -578,6 +604,7 @@ export function ProfileSettings() {
 											<Table.Thead>
 												<Table.Tr>
 													<Table.Th>Name</Table.Th>
+													<Table.Th>Permissions</Table.Th>
 													<Table.Th>Created</Table.Th>
 													<Table.Th>Expires</Table.Th>
 													<Table.Th>Last Used</Table.Th>
@@ -585,38 +612,75 @@ export function ProfileSettings() {
 												</Table.Tr>
 											</Table.Thead>
 											<Table.Tbody>
-												{apiKeys.map((key: ApiKeyDto) => (
-													<Table.Tr key={key.id}>
-														<Table.Td>
-															<Text fw={500}>{key.name}</Text>
-														</Table.Td>
-														<Table.Td>
-															{new Date(key.createdAt).toLocaleDateString()}
-														</Table.Td>
-														<Table.Td>
-															{key.expiresAt
-																? new Date(key.expiresAt).toLocaleDateString()
-																: "Never"}
-														</Table.Td>
-														<Table.Td>
-															{key.lastUsedAt
-																? new Date(key.lastUsedAt).toLocaleString()
-																: "Never"}
-														</Table.Td>
-														<Table.Td>
-															<ActionIcon
-																color="red"
-																variant="light"
-																onClick={() =>
-																	deleteApiKeyMutation.mutate(key.id)
-																}
-																loading={deleteApiKeyMutation.isPending}
-															>
-																<IconTrash size={16} />
-															</ActionIcon>
-														</Table.Td>
-													</Table.Tr>
-												))}
+												{apiKeys.map((key: ApiKeyDto) => {
+													const permissions = parsePermissions(key.permissions);
+													const userPerms = user?.role
+														? PERMISSION_PRESETS.find(
+																(p) => p.value === "full",
+															)?.getPermissions(user.role) || []
+														: [];
+													const isFullAccess =
+														userPerms.length > 0 &&
+														permissions.length === userPerms.length;
+													return (
+														<Table.Tr key={key.id}>
+															<Table.Td>
+																<Text fw={500}>{key.name}</Text>
+															</Table.Td>
+															<Table.Td>
+																<Tooltip
+																	label={
+																		permissions.length > 0
+																			? permissions.join(", ")
+																			: "No permissions"
+																	}
+																	multiline
+																	w={300}
+																>
+																	<Badge
+																		variant="light"
+																		color={
+																			isFullAccess
+																				? "blue"
+																				: permissions.length > 0
+																					? "cyan"
+																					: "gray"
+																		}
+																	>
+																		{isFullAccess
+																			? "Full Access"
+																			: `${permissions.length} permissions`}
+																	</Badge>
+																</Tooltip>
+															</Table.Td>
+															<Table.Td>
+																{new Date(key.createdAt).toLocaleDateString()}
+															</Table.Td>
+															<Table.Td>
+																{key.expiresAt
+																	? new Date(key.expiresAt).toLocaleDateString()
+																	: "Never"}
+															</Table.Td>
+															<Table.Td>
+																{key.lastUsedAt
+																	? new Date(key.lastUsedAt).toLocaleString()
+																	: "Never"}
+															</Table.Td>
+															<Table.Td>
+																<ActionIcon
+																	color="red"
+																	variant="light"
+																	onClick={() =>
+																		deleteApiKeyMutation.mutate(key.id)
+																	}
+																	loading={deleteApiKeyMutation.isPending}
+																>
+																	<IconTrash size={16} />
+																</ActionIcon>
+															</Table.Td>
+														</Table.Tr>
+													);
+												})}
 											</Table.Tbody>
 										</Table>
 									) : (
@@ -636,8 +700,11 @@ export function ProfileSettings() {
 					setCreateKeyModalOpened(false);
 					setNewApiKey(null);
 					apiKeyForm.reset();
+					setPermissionPreset("full");
+					setSelectedPermissions([]);
 				}}
 				title="Create API Key"
+				size="lg"
 			>
 				{newApiKey ? (
 					<Stack gap="md">
@@ -681,9 +748,23 @@ export function ProfileSettings() {
 					</Stack>
 				) : (
 					<form
-						onSubmit={apiKeyForm.onSubmit((values) =>
-							createApiKeyMutation.mutate(values),
-						)}
+						onSubmit={apiKeyForm.onSubmit((values) => {
+							// Determine permissions based on preset
+							let permissions: Permission[] | undefined;
+							if (permissionPreset === "custom") {
+								permissions = selectedPermissions;
+							} else if (permissionPreset !== "full") {
+								const preset = PERMISSION_PRESETS.find(
+									(p) => p.value === permissionPreset,
+								);
+								permissions = preset?.getPermissions(user?.role || "reader");
+							}
+							// For "full" preset, don't send permissions (backend uses user's full permissions)
+							createApiKeyMutation.mutate({
+								...values,
+								permissions,
+							});
+						})}
 					>
 						<Stack gap="md">
 							<TextInput
@@ -710,6 +791,60 @@ export function ProfileSettings() {
 									)
 								}
 							/>
+							<Select
+								label="Permissions"
+								description="What this key can access"
+								data={PERMISSION_PRESETS.map((preset) => ({
+									value: preset.value,
+									label: preset.label,
+									description: preset.description,
+								}))}
+								value={permissionPreset}
+								onChange={(value) => {
+									setPermissionPreset(value as PermissionPreset);
+									if (value !== "custom") {
+										setSelectedPermissions([]);
+									}
+								}}
+							/>
+							{permissionPreset === "custom" && (
+								<Card withBorder p="md">
+									<Stack gap="md">
+										<div>
+											<Text size="sm" fw={500}>
+												Select Permissions
+											</Text>
+											<Text size="xs" c="dimmed">
+												You can only grant permissions your role has
+											</Text>
+										</div>
+										<PermissionPicker
+											selectedPermissions={selectedPermissions}
+											onPermissionsChange={setSelectedPermissions}
+											disabledUncheckedPermissions={
+												ALL_PERMISSIONS.filter((p) => {
+													// User can select from their role's permissions + custom permissions
+													const rolePerms = getPermissionsForRole(
+														user?.role || "reader",
+													);
+													const customPerms = parsePermissions(
+														user?.permissions || [],
+													);
+													const allUserPerms = [
+														...new Set([...rolePerms, ...customPerms]),
+													];
+													return !allUserPerms.includes(p);
+												}) as Permission[]
+											}
+										/>
+										{selectedPermissions.length === 0 && (
+											<Text size="xs" c="red">
+												Select at least one permission
+											</Text>
+										)}
+									</Stack>
+								</Card>
+							)}
 							<Group justify="flex-end">
 								<Button
 									variant="subtle"
@@ -717,7 +852,14 @@ export function ProfileSettings() {
 								>
 									Cancel
 								</Button>
-								<Button type="submit" loading={createApiKeyMutation.isPending}>
+								<Button
+									type="submit"
+									loading={createApiKeyMutation.isPending}
+									disabled={
+										permissionPreset === "custom" &&
+										selectedPermissions.length === 0
+									}
+								>
 									Create Key
 								</Button>
 							</Group>

@@ -97,29 +97,32 @@ export const sharingTagsHandlers = [
 	}),
 
 	// Update sharing tag
-	http.patch("/api/v1/admin/sharing-tags/:tagId", async ({ params, request }) => {
-		await delay(100);
-		const body = (await request.json()) as {
-			name?: string;
-			description?: string | null;
-		};
+	http.patch(
+		"/api/v1/admin/sharing-tags/:tagId",
+		async ({ params, request }) => {
+			await delay(100);
+			const body = (await request.json()) as {
+				name?: string;
+				description?: string | null;
+			};
 
-		const tagIndex = mockSharingTags.findIndex((t) => t.id === params.tagId);
-		if (tagIndex === -1) {
-			return HttpResponse.json({ error: "Not found" }, { status: 404 });
-		}
+			const tagIndex = mockSharingTags.findIndex((t) => t.id === params.tagId);
+			if (tagIndex === -1) {
+				return HttpResponse.json({ error: "Not found" }, { status: 404 });
+			}
 
-		if (body.name !== undefined) {
-			mockSharingTags[tagIndex].name = body.name;
-			mockSharingTags[tagIndex].normalizedName = body.name.toLowerCase();
-		}
-		if (body.description !== undefined) {
-			mockSharingTags[tagIndex].description = body.description;
-		}
-		mockSharingTags[tagIndex].updatedAt = new Date().toISOString();
+			if (body.name !== undefined) {
+				mockSharingTags[tagIndex].name = body.name;
+				mockSharingTags[tagIndex].normalizedName = body.name.toLowerCase();
+			}
+			if (body.description !== undefined) {
+				mockSharingTags[tagIndex].description = body.description;
+			}
+			mockSharingTags[tagIndex].updatedAt = new Date().toISOString();
 
-		return HttpResponse.json(mockSharingTags[tagIndex]);
-	}),
+			return HttpResponse.json(mockSharingTags[tagIndex]);
+		},
+	),
 
 	// Delete sharing tag
 	http.delete("/api/v1/admin/sharing-tags/:tagId", async ({ params }) => {
@@ -152,45 +155,51 @@ export const sharingTagsHandlers = [
 	}),
 
 	// Set sharing tags for a series (replace all)
-	http.put("/api/v1/series/:seriesId/sharing-tags", async ({ params, request }) => {
-		await delay(100);
-		const body = (await request.json()) as { sharingTagIds: string[] };
-		const seriesId = params.seriesId as string;
+	http.put(
+		"/api/v1/series/:seriesId/sharing-tags",
+		async ({ params, request }) => {
+			await delay(100);
+			const body = (await request.json()) as { sharingTagIds: string[] };
+			const seriesId = params.seriesId as string;
 
-		mockSeriesSharingTags[seriesId] = body.sharingTagIds;
+			mockSeriesSharingTags[seriesId] = body.sharingTagIds;
 
-		const tags = mockSharingTags
-			.filter((t) => body.sharingTagIds.includes(t.id))
-			.map((t) => ({
-				id: t.id,
-				name: t.name,
-				description: t.description,
-			}));
-		return HttpResponse.json(tags);
-	}),
+			const tags = mockSharingTags
+				.filter((t) => body.sharingTagIds.includes(t.id))
+				.map((t) => ({
+					id: t.id,
+					name: t.name,
+					description: t.description,
+				}));
+			return HttpResponse.json(tags);
+		},
+	),
 
 	// Add a sharing tag to a series
-	http.post("/api/v1/series/:seriesId/sharing-tags", async ({ params, request }) => {
-		await delay(100);
-		const body = (await request.json()) as { sharingTagId: string };
-		const seriesId = params.seriesId as string;
+	http.post(
+		"/api/v1/series/:seriesId/sharing-tags",
+		async ({ params, request }) => {
+			await delay(100);
+			const body = (await request.json()) as { sharingTagId: string };
+			const seriesId = params.seriesId as string;
 
-		if (!mockSeriesSharingTags[seriesId]) {
-			mockSeriesSharingTags[seriesId] = [];
-		}
-		if (!mockSeriesSharingTags[seriesId].includes(body.sharingTagId)) {
-			mockSeriesSharingTags[seriesId].push(body.sharingTagId);
-		}
+			if (!mockSeriesSharingTags[seriesId]) {
+				mockSeriesSharingTags[seriesId] = [];
+			}
+			if (!mockSeriesSharingTags[seriesId].includes(body.sharingTagId)) {
+				mockSeriesSharingTags[seriesId].push(body.sharingTagId);
+			}
 
-		const tags = mockSharingTags
-			.filter((t) => mockSeriesSharingTags[seriesId].includes(t.id))
-			.map((t) => ({
-				id: t.id,
-				name: t.name,
-				description: t.description,
-			}));
-		return HttpResponse.json(tags);
-	}),
+			const tags = mockSharingTags
+				.filter((t) => mockSeriesSharingTags[seriesId].includes(t.id))
+				.map((t) => ({
+					id: t.id,
+					name: t.name,
+					description: t.description,
+				}));
+			return HttpResponse.json(tags);
+		},
+	),
 
 	// Remove a sharing tag from a series
 	http.delete(
@@ -230,47 +239,53 @@ export const sharingTagsHandlers = [
 	}),
 
 	// Set a grant for a user
-	http.put("/api/v1/users/:userId/sharing-tags", async ({ params, request }) => {
-		await delay(100);
-		const body = (await request.json()) as {
-			sharingTagId: string;
-			accessMode: "allow" | "deny";
-		};
-		const userId = params.userId as string;
+	http.put(
+		"/api/v1/users/:userId/sharing-tags",
+		async ({ params, request }) => {
+			await delay(100);
+			const body = (await request.json()) as {
+				sharingTagId: string;
+				accessMode: "allow" | "deny";
+			};
+			const userId = params.userId as string;
 
-		if (!mockUserGrants[userId]) {
-			mockUserGrants[userId] = [];
-		}
+			if (!mockUserGrants[userId]) {
+				mockUserGrants[userId] = [];
+			}
 
-		const tag = mockSharingTags.find((t) => t.id === body.sharingTagId);
-		if (!tag) {
-			return HttpResponse.json({ error: "Tag not found" }, { status: 404 });
-		}
+			const tag = mockSharingTags.find((t) => t.id === body.sharingTagId);
+			if (!tag) {
+				return HttpResponse.json({ error: "Tag not found" }, { status: 404 });
+			}
 
-		// Check if grant already exists
-		const existingIndex = mockUserGrants[userId].findIndex(
-			(g) => g.sharingTagId === body.sharingTagId,
-		);
+			// Check if grant already exists
+			const existingIndex = mockUserGrants[userId].findIndex(
+				(g) => g.sharingTagId === body.sharingTagId,
+			);
 
-		const grant = {
-			id: existingIndex >= 0 ? mockUserGrants[userId][existingIndex].id : `grant-${Date.now()}`,
-			sharingTagId: body.sharingTagId,
-			sharingTagName: tag.name,
-			accessMode: body.accessMode,
-			createdAt:
-				existingIndex >= 0
-					? mockUserGrants[userId][existingIndex].createdAt
-					: new Date().toISOString(),
-		};
+			const grant = {
+				id:
+					existingIndex >= 0
+						? mockUserGrants[userId][existingIndex].id
+						: `grant-${Date.now()}`,
+				sharingTagId: body.sharingTagId,
+				sharingTagName: tag.name,
+				accessMode: body.accessMode,
+				createdAt:
+					existingIndex >= 0
+						? mockUserGrants[userId][existingIndex].createdAt
+						: new Date().toISOString(),
+			};
 
-		if (existingIndex >= 0) {
-			mockUserGrants[userId][existingIndex] = grant;
-		} else {
-			mockUserGrants[userId].push(grant);
-		}
+			if (existingIndex >= 0) {
+				mockUserGrants[userId][existingIndex] = grant;
+			} else {
+				mockUserGrants[userId].push(grant);
+			}
 
-		return HttpResponse.json(grant);
-	}),
+			return HttpResponse.json(grant);
+		},
+	),
 
 	// Remove a grant from a user
 	http.delete(

@@ -14066,6 +14066,7 @@
                 "username",
                 "email",
                 "role",
+                "permissions",
                 "isActive",
                 "createdAt",
                 "updatedAt"
@@ -14101,6 +14102,13 @@
                   "format": "date-time",
                   "description": "Timestamp of last login",
                   "example": "2024-01-15T10:30:00Z"
+                },
+                "permissions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Custom permissions that extend the role's base permissions"
                 },
                 "role": {
                   "$ref": "#/components/schemas/UserRole",
@@ -18117,6 +18125,16 @@
             "description": "New password",
             "example": "newSecurePassword123!"
           },
+          "permissions": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Custom permissions that extend the role's base permissions (admin only)\nThese permissions are unioned with the role's permissions"
+          },
           "role": {
             "oneOf": [
               {
@@ -18146,6 +18164,7 @@
           "username",
           "email",
           "role",
+          "permissions",
           "isActive",
           "createdAt",
           "updatedAt",
@@ -18183,6 +18202,13 @@
             "description": "Timestamp of last login",
             "example": "2024-01-15T10:30:00Z"
           },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Custom permissions that extend the role's base permissions"
+          },
           "role": {
             "$ref": "#/components/schemas/UserRole",
             "description": "User role (reader, maintainer, admin)"
@@ -18215,6 +18241,7 @@
           "username",
           "email",
           "role",
+          "permissions",
           "isActive",
           "createdAt",
           "updatedAt"
@@ -18251,6 +18278,13 @@
             "description": "Timestamp of last login",
             "example": "2024-01-15T10:30:00Z"
           },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Custom permissions that extend the role's base permissions"
+          },
           "role": {
             "$ref": "#/components/schemas/UserRole",
             "description": "User role (reader, maintainer, admin)"
@@ -18276,7 +18310,8 @@
           "username",
           "email",
           "role",
-          "emailVerified"
+          "emailVerified",
+          "permissions"
         ],
         "properties": {
           "email": {
@@ -18294,6 +18329,17 @@
             "format": "uuid",
             "description": "User unique identifier",
             "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Custom permissions granted to the user (in addition to role permissions)",
+            "example": [
+              "libraries:write",
+              "series:delete"
+            ]
           },
           "role": {
             "type": "string",

@@ -24,6 +24,17 @@ use chrono::Utc;
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Parse permissions from JSON value (stored as array of strings in database)
+fn parse_permissions_json(json: &serde_json::Value) -> Vec<String> {
+    json.as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Check if initial setup is required
 ///
 /// Returns whether the application needs initial setup (no users exist)
@@ -188,6 +199,7 @@ pub async fn initialize_setup(
 
     // Build response
     let role = created_user.get_role().to_string();
+    let permissions = parse_permissions_json(&created_user.permissions);
     let response = InitializeSetupResponse {
         user: UserInfo {
             id: created_user.id,
@@ -195,6 +207,7 @@ pub async fn initialize_setup(
             email: created_user.email,
             role,
             email_verified: created_user.email_verified,
+            permissions,
         },
         access_token: access_token.clone(),
         token_type: "Bearer".to_string(),
