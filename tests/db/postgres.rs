@@ -226,6 +226,10 @@ async fn test_postgres_metrics_repository() {
     let db = create_test_postgres_db().await;
     let conn = db.sea_orm_connection();
 
+    // Record initial state (database may have leftover data from previous test runs)
+    let initial_total_size = MetricsRepository::total_book_size(conn).await.unwrap();
+    let initial_book_count = MetricsRepository::count_books(conn).await.unwrap();
+
     // Create library and series
     let library = LibraryRepository::create(
         conn,
@@ -273,18 +277,19 @@ async fn test_postgres_metrics_repository() {
     }
 
     // Test total_book_size - this is where the PostgreSQL NUMERIC type issue would occur
+    // We test the increment rather than absolute value since database may have other data
     let total_size = MetricsRepository::total_book_size(conn).await.unwrap();
+    let size_increment = total_size - initial_total_size;
     assert_eq!(
-        total_size, 7_000_000,
-        "total_book_size should correctly sum all book sizes"
+        size_increment, 7_000_000,
+        "total_book_size should correctly sum all book sizes (got increment of {}, expected 7_000_000)",
+        size_increment
     );
 
     // Test book count
     let book_count = MetricsRepository::count_books(conn).await.unwrap();
-    assert!(
-        book_count >= 4,
-        "should have at least 4 books from this test"
-    );
+    let count_increment = book_count - initial_book_count;
+    assert_eq!(count_increment, 4, "should have added exactly 4 books");
 
     // Test library_metrics - this also uses SUM aggregation
     let metrics = MetricsRepository::library_metrics(conn).await.unwrap();
