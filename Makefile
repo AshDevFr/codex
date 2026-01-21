@@ -194,6 +194,9 @@ frontend-fixtures: ## Generate mock fixture files (CBZ, EPUB, PDF)
 frontend-lint: ## Run frontend lint
 	cd web && npm run lint
 
+frontend-lint-fix: ## Run frontend lint
+	cd web && npm run lint -- --write
+
 # =============================================================================
 # Setup
 # =============================================================================

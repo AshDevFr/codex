@@ -13,8 +13,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { seriesApi } from "@/api/series";
 import { ActiveFilters } from "@/components/library/ActiveFilters";
 import {
-	AlphabetFilter,
 	type AlphabetCounts,
+	AlphabetFilter,
 	type AlphabetLetter,
 } from "@/components/library/AlphabetFilter";
 import { MediaCard } from "@/components/library/MediaCard";
@@ -158,12 +158,7 @@ export function SeriesSection({
 
 	// Fetch alphabetical groups for the A-Z filter (without alphabet filter applied)
 	const { data: alphabeticalGroups } = useQuery({
-		queryKey: [
-			"series",
-			"alphabetical-groups",
-			libraryId,
-			baseConditionKey,
-		],
+		queryKey: ["series", "alphabetical-groups", libraryId, baseConditionKey],
 		queryFn: () => seriesApi.getAlphabeticalGroups(libraryId, condition),
 		staleTime: 60000, // 1 minute - these don't change often
 	});

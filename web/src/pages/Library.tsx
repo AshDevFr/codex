@@ -473,130 +473,140 @@ export function LibraryPage() {
 				}}
 			>
 				{/* Fixed header area - does not scroll */}
-				<Box px="md" pt="sm" pb="xs" style={{ flexShrink: 0, backgroundColor: "var(--mantine-color-body)" }}>
+				<Box
+					px="md"
+					pt="sm"
+					pb="xs"
+					style={{
+						flexShrink: 0,
+						backgroundColor: "var(--mantine-color-body)",
+					}}
+				>
 					<Stack gap="xs">
 						{/* Header with library name, count, and action menu */}
 						<Group gap="md" align="center" justify="space-between">
-						<Group gap="xs" align="baseline">
-							{!isAllLibraries &&
-								library &&
-								(canEditLibrary || canDeleteLibrary) && (
-									<Menu shadow="md" width={200} position="bottom-start">
-										<Menu.Target>
-											<ActionIcon variant="subtle" color="gray" size="lg">
-												<IconDotsVertical size={20} />
-											</ActionIcon>
-										</Menu.Target>
+							<Group gap="xs" align="baseline">
+								{!isAllLibraries &&
+									library &&
+									(canEditLibrary || canDeleteLibrary) && (
+										<Menu shadow="md" width={200} position="bottom-start">
+											<Menu.Target>
+												<ActionIcon variant="subtle" color="gray" size="lg">
+													<IconDotsVertical size={20} />
+												</ActionIcon>
+											</Menu.Target>
 
-										<Menu.Dropdown>
-											{canEditLibrary && (
-												<>
-													<Menu.Item
-														leftSection={<IconScan size={16} />}
-														onClick={() =>
-															scanMutation.mutate({
-																libraryId: library.id,
-																mode: "normal",
-															})
-														}
-													>
-														Scan Library
-													</Menu.Item>
-													<Menu.Item
-														leftSection={<IconRadar size={16} />}
-														onClick={() =>
-															scanMutation.mutate({
-																libraryId: library.id,
-																mode: "deep",
-															})
-														}
-													>
-														Scan Library (Deep)
-													</Menu.Item>
-													<Menu.Divider />
-													<Menu.Item
-														leftSection={<IconEdit size={16} />}
-														onClick={handleEditLibrary}
-													>
-														Edit Library
-													</Menu.Item>
-												</>
-											)}
-											{(canEditLibrary || canDeleteLibrary) && (
-												<>
-													<Menu.Divider />
-													{canEditLibrary && (
+											<Menu.Dropdown>
+												{canEditLibrary && (
+													<>
 														<Menu.Item
-															leftSection={<IconTrashX size={16} />}
-															color="orange"
-															onClick={handlePurgeDeleted}
+															leftSection={<IconScan size={16} />}
+															onClick={() =>
+																scanMutation.mutate({
+																	libraryId: library.id,
+																	mode: "normal",
+																})
+															}
 														>
-															Purge Deleted Books
+															Scan Library
 														</Menu.Item>
-													)}
-													{canDeleteLibrary && (
 														<Menu.Item
-															leftSection={<IconTrash size={16} />}
-															color="red"
-															onClick={handleDeleteLibrary}
+															leftSection={<IconRadar size={16} />}
+															onClick={() =>
+																scanMutation.mutate({
+																	libraryId: library.id,
+																	mode: "deep",
+																})
+															}
 														>
-															Delete Library
+															Scan Library (Deep)
 														</Menu.Item>
-													)}
-												</>
-											)}
-										</Menu.Dropdown>
-									</Menu>
+														<Menu.Divider />
+														<Menu.Item
+															leftSection={<IconEdit size={16} />}
+															onClick={handleEditLibrary}
+														>
+															Edit Library
+														</Menu.Item>
+													</>
+												)}
+												{(canEditLibrary || canDeleteLibrary) && (
+													<>
+														<Menu.Divider />
+														{canEditLibrary && (
+															<Menu.Item
+																leftSection={<IconTrashX size={16} />}
+																color="orange"
+																onClick={handlePurgeDeleted}
+															>
+																Purge Deleted Books
+															</Menu.Item>
+														)}
+														{canDeleteLibrary && (
+															<Menu.Item
+																leftSection={<IconTrash size={16} />}
+																color="red"
+																onClick={handleDeleteLibrary}
+															>
+																Delete Library
+															</Menu.Item>
+														)}
+													</>
+												)}
+											</Menu.Dropdown>
+										</Menu>
+									)}
+								<Title order={3} tt="capitalize">
+									{isAllLibraries
+										? "All Libraries"
+										: library?.name || "Library"}
+								</Title>
+								{currentCount !== null && (
+									<Text size="sm" c="dimmed" fw={500}>
+										{currentCount} {countLabel}
+									</Text>
 								)}
-							<Title order={3} tt="capitalize">
-								{isAllLibraries ? "All Libraries" : library?.name || "Library"}
-							</Title>
-							{currentCount !== null && (
-								<Text size="sm" c="dimmed" fw={500}>
-									{currentCount} {countLabel}
-								</Text>
-							)}
-							{/* Show scan progress badge when scanning */}
-							{activeScanTasks.length > 0 && activeScanTasks[0].progress && (
-								<Badge color="blue" variant="filled" size="sm">
-									Scanning... {activeScanTasks[0].progress.current} /{" "}
-									{activeScanTasks[0].progress.total}
-								</Badge>
-							)}
+								{/* Show scan progress badge when scanning */}
+								{activeScanTasks.length > 0 && activeScanTasks[0].progress && (
+									<Badge color="blue" variant="filled" size="sm">
+										Scanning... {activeScanTasks[0].progress.current} /{" "}
+										{activeScanTasks[0].progress.total}
+									</Badge>
+								)}
+							</Group>
 						</Group>
-					</Group>
 
-					{/* Toolbar with Tabs and Controls */}
-					<LibraryToolbar
-						currentTab={currentTab}
-						onTabChange={handleTabChange}
-						showRecommended={!isAllLibraries}
-						sort={sort}
-						onSortChange={(value) => {
-							if (libraryId) {
-								handleFilterChange({ sort: value });
-								const currentPrefs =
-									getTabPreferences(libraryId, currentTab) || {};
-								setTabPreferences(libraryId, currentTab, {
-									...currentPrefs,
-									sort: value,
-								});
-							}
-						}}
-						sortOptions={sortOptions}
-						pageSize={pageSize}
-						onPageSizeChange={(value) => {
-							if (libraryId) {
-								handleFilterChange({ pageSize: value });
-								const currentPrefs =
-									getTabPreferences(libraryId, currentTab) || {};
-								setTabPreferences(libraryId, currentTab, {
-									...currentPrefs,
-									pageSize: value,
-								});
-							}
-						}}
-					/>
+						{/* Toolbar with Tabs and Controls */}
+						<LibraryToolbar
+							currentTab={currentTab}
+							onTabChange={handleTabChange}
+							showRecommended={!isAllLibraries}
+							sort={sort}
+							onSortChange={(value) => {
+								if (libraryId) {
+									handleFilterChange({ sort: value });
+									const currentPrefs =
+										getTabPreferences(libraryId, currentTab) || {};
+									setTabPreferences(libraryId, currentTab, {
+										...currentPrefs,
+										sort: value,
+									});
+								}
+							}}
+							sortOptions={sortOptions}
+							pageSize={pageSize}
+							onPageSizeChange={(value) => {
+								if (libraryId) {
+									handleFilterChange({ pageSize: value });
+									const currentPrefs =
+										getTabPreferences(libraryId, currentTab) || {};
+									setTabPreferences(libraryId, currentTab, {
+										...currentPrefs,
+										pageSize: value,
+									});
+								}
+							}}
+						/>
 					</Stack>
 				</Box>
 

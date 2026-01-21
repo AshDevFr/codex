@@ -25,21 +25,19 @@ export function SeriesSharingTags({ seriesId }: SeriesSharingTagsProps) {
 	const isAdmin = user?.role === "admin";
 	const [isEditing, setIsEditing] = useState(false);
 
-	// Only render for admins
-	if (!isAdmin) {
-		return null;
-	}
-
 	// Fetch all sharing tags (for the multiselect options)
+	// Note: Hooks must be called unconditionally, even for non-admins
 	const { data: allTags, isLoading: allTagsLoading } = useQuery({
 		queryKey: ["sharing-tags"],
 		queryFn: sharingTagsApi.list,
+		enabled: isAdmin,
 	});
 
 	// Fetch current series sharing tags
 	const { data: seriesTags, isLoading: seriesTagsLoading } = useQuery({
 		queryKey: ["series-sharing-tags", seriesId],
 		queryFn: () => sharingTagsApi.getForSeries(seriesId),
+		enabled: isAdmin,
 	});
 
 	// Mutation for setting series sharing tags
@@ -88,6 +86,11 @@ export function SeriesSharingTags({ seriesId }: SeriesSharingTagsProps) {
 			});
 		},
 	});
+
+	// Only render for admins (after all hooks)
+	if (!isAdmin) {
+		return null;
+	}
 
 	const isLoading = allTagsLoading || seriesTagsLoading;
 	const selectedTagIds = seriesTags?.map((t) => t.id) || [];

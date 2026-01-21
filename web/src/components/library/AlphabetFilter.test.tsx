@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderWithProviders, screen, userEvent } from "@/test/utils";
-import { AlphabetFilter, type AlphabetCounts } from "./AlphabetFilter";
+import { type AlphabetCounts, AlphabetFilter } from "./AlphabetFilter";
 
 describe("AlphabetFilter", () => {
 	it("renders all letters including ALL and #", () => {
