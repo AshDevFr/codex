@@ -132,6 +132,115 @@ volumes:
   codex-data:
 ```
 
+## Separate Worker Containers (Advanced)
+
+For high-performance setups or when you need to scale workers independently from the web server, you can run dedicated worker containers. This requires PostgreSQL.
+
+:::info Why Separate Workers?
+Separating workers from the web server allows you to:
+- Scale background task processing independently
+- Isolate resource-intensive tasks (scanning, thumbnail generation) from API requests
+- Run more workers than web server instances
+:::
+
+This example uses YAML anchors (`x-codex-common`) to share configuration between services:
+
+```yaml
+# Shared configuration for all Codex services
+x-codex-common: &codex-common
+  image: ghcr.io/ashdevfr/codex:latest
+  volumes:
+    - /path/to/your/library:/library:ro
+    - codex-data:/app/data
+  environment: &codex-env
+    CODEX_AUTH_JWT_SECRET: "your-secure-secret-here"
+    CODEX_DATABASE_DB_TYPE: postgres
+    CODEX_DATABASE_POSTGRES_HOST: postgres
+    CODEX_DATABASE_POSTGRES_PORT: 5432
+    CODEX_DATABASE_POSTGRES_USERNAME: codex
+    CODEX_DATABASE_POSTGRES_PASSWORD: codex
+    CODEX_DATABASE_POSTGRES_DATABASE_NAME: codex
+  depends_on:
+    postgres:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: codex-postgres
+    environment:
+      POSTGRES_USER: codex
+      POSTGRES_PASSWORD: codex
+      POSTGRES_DB: codex
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codex"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Web server (API only, no workers)
+  codex:
+    <<: *codex-common
+    container_name: codex-web
+    ports:
+      - "8080:8080"
+    environment:
+      <<: *codex-env
+      # Disable workers in the web container
+      CODEX_DISABLE_WORKERS: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Dedicated worker container
+  codex-worker:
+    <<: *codex-common
+    container_name: codex-worker
+    # Run the worker command instead of serve
+    command: ["codex", "worker"]
+    environment:
+      <<: *codex-env
+      # Number of parallel task workers
+      CODEX_TASK_WORKER_COUNT: "4"
+      # Skip migrations (web container handles them)
+      CODEX_SKIP_MIGRATIONS: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      codex:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  codex-data:
+```
+
+### Key Configuration Options
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CODEX_DISABLE_WORKERS` | Disable background workers in web container | `false` |
+| `CODEX_SKIP_MIGRATIONS` | Skip database migrations on startup | `false` |
+| `CODEX_TASK_WORKER_COUNT` | Number of parallel task workers | `4` |
+
+### Scaling Workers
+
+To run multiple worker instances:
+
+```bash
+docker compose up -d --scale codex-worker=3
+```
+
+:::warning SQLite Not Supported
+Separate worker containers require PostgreSQL. SQLite does not support multiple processes accessing the database simultaneously.
+:::
+
 ## Volume Considerations
 
 | Volume | Purpose | Permissions |
