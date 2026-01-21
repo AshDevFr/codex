@@ -48,6 +48,9 @@ mod m20260112_000029_create_user_integrations;
 // Sharing tags for content access control
 mod m20260120_000030_create_sharing_tags;
 
+// Performance indexes for foreign keys
+mod m20260121_000031_add_missing_fk_indexes;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -93,6 +96,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260112_000029_create_user_integrations::Migration),
             // Sharing tags for content access control
             Box::new(m20260120_000030_create_sharing_tags::Migration),
+            // Performance indexes for foreign keys
+            Box::new(m20260121_000031_add_missing_fk_indexes::Migration),
         ]
     }
 }
