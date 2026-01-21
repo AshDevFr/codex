@@ -63,7 +63,7 @@ async fn test_jwt_token_flow() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -73,7 +73,7 @@ async fn test_jwt_token_flow() {
     let claims = jwt_service.verify_token(&token).unwrap();
     assert_eq!(claims.sub, created_user.id.to_string());
     assert_eq!(claims.username, "jwttest");
-    assert!(claims.is_admin);
+    assert_eq!(claims.role, "admin");
 
     // Token from different service should fail
     let different_service = JwtService::new("different_secret".to_string(), 24);

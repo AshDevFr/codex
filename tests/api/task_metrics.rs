@@ -72,7 +72,7 @@ async fn create_admin_and_token(db: &sea_orm::DatabaseConnection, state: &AppSta
 
     state
         .jwt_service
-        .generate_token(created.id, created.username, created.is_admin)
+        .generate_token(created.id, created.username.clone(), created.get_role())
         .unwrap()
 }
 
@@ -87,7 +87,7 @@ async fn create_regular_user_and_token(
 
     state
         .jwt_service
-        .generate_token(created.id, created.username, created.is_admin)
+        .generate_token(created.id, created.username.clone(), created.get_role())
         .unwrap()
 }
 

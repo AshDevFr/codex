@@ -6,11 +6,13 @@ use crate::api::{
     error::ApiError,
     extractors::{AuthContext, AuthState},
     handlers::auth::build_auth_cookie,
+    permissions::Permission,
 };
 use crate::db::{
     entities::users,
     repositories::{SettingsRepository, UserRepository},
 };
+use crate::require_permission;
 use crate::utils::password;
 use axum::{
     extract::State,
@@ -144,20 +146,18 @@ pub async fn initialize_setup(
     let password_hash = password::hash_password(&request.password)
         .map_err(|e| ApiError::Internal(format!("Password hashing error: {}", e)))?;
 
-    // Create first admin user with full permissions
-    use crate::api::permissions::{serialize_permissions, ADMIN_PERMISSIONS};
-    let permissions_json = serialize_permissions(&ADMIN_PERMISSIONS);
+    // Create first admin user with Admin role
+    use crate::api::permissions::UserRole;
 
     let new_user = users::Model {
         id: Uuid::new_v4(),
         username: request.username.clone(),
         email: request.email.clone(),
         password_hash,
-        is_admin: true,       // First user is always admin
-        is_active: true,      // Active by default for first user
-        email_verified: true, // Bypass email verification for first user
-        permissions: serde_json::from_str(&permissions_json)
-            .unwrap_or_else(|_| serde_json::json!([])),
+        role: UserRole::Admin.to_string(), // First user is always admin
+        is_active: true,                   // Active by default for first user
+        email_verified: true,              // Bypass email verification for first user
+        permissions: serde_json::json!([]), // Custom permissions (empty = use role defaults)
         created_at: Utc::now(),
         updated_at: Utc::now(),
         last_login_at: None,
@@ -174,7 +174,7 @@ pub async fn initialize_setup(
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .map_err(|e| ApiError::Internal(format!("Failed to generate token: {}", e)))?;
 
@@ -187,12 +187,13 @@ pub async fn initialize_setup(
     let app_name = SettingsRepository::get_app_name(&state.db).await;
 
     // Build response
+    let role = created_user.get_role().to_string();
     let response = InitializeSetupResponse {
         user: UserInfo {
             id: created_user.id,
             username: created_user.username,
             email: created_user.email,
-            is_admin: created_user.is_admin,
+            role,
             email_verified: created_user.email_verified,
         },
         access_token: access_token.clone(),
@@ -237,12 +238,8 @@ pub async fn configure_initial_settings(
     auth: AuthContext,
     Json(request): Json<ConfigureSettingsRequest>,
 ) -> Result<Json<ConfigureSettingsResponse>, ApiError> {
-    // Ensure user is admin
-    if !auth.is_admin {
-        return Err(ApiError::Forbidden(
-            "Only administrators can configure settings".to_string(),
-        ));
-    }
+    // Ensure user has system admin permission
+    require_permission!(auth, Permission::SystemAdmin)?;
 
     // If skipping configuration, return early
     if request.skip_configuration {

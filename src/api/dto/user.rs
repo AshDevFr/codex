@@ -1,3 +1,5 @@
+use crate::api::dto::UserSharingTagGrantDto;
+use crate::api::permissions::UserRole;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -18,9 +20,9 @@ pub struct UserDto {
     #[schema(example = "john.doe@example.com")]
     pub email: String,
 
-    /// Whether user has admin privileges
-    #[schema(example = false)]
-    pub is_admin: bool,
+    /// User role (reader, maintainer, admin)
+    #[schema(example = "reader")]
+    pub role: UserRole,
 
     /// Whether the account is active
     #[schema(example = true)]
@@ -39,6 +41,46 @@ pub struct UserDto {
     pub updated_at: DateTime<Utc>,
 }
 
+/// User detail DTO with sharing tag grants (for single user view)
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserDetailDto {
+    /// Unique user identifier
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
+    pub id: uuid::Uuid,
+
+    /// Username for login
+    #[schema(example = "johndoe")]
+    pub username: String,
+
+    /// User email address
+    #[schema(example = "john.doe@example.com")]
+    pub email: String,
+
+    /// User role (reader, maintainer, admin)
+    #[schema(example = "reader")]
+    pub role: UserRole,
+
+    /// Whether the account is active
+    #[schema(example = true)]
+    pub is_active: bool,
+
+    /// Timestamp of last login
+    #[schema(example = "2024-01-15T10:30:00Z")]
+    pub last_login_at: Option<DateTime<Utc>>,
+
+    /// Account creation timestamp
+    #[schema(example = "2024-01-01T00:00:00Z")]
+    pub created_at: DateTime<Utc>,
+
+    /// Last account update timestamp
+    #[schema(example = "2024-01-15T10:30:00Z")]
+    pub updated_at: DateTime<Utc>,
+
+    /// Sharing tag grants for this user
+    pub sharing_tags: Vec<UserSharingTagGrantDto>,
+}
+
 /// Create user request
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -55,10 +97,10 @@ pub struct CreateUserRequest {
     #[schema(example = "securePassword123!")]
     pub password: String,
 
-    /// Whether to grant admin privileges
-    #[schema(example = false)]
+    /// User role (reader, maintainer, admin). Defaults to reader if not specified.
+    #[schema(example = "reader")]
     #[serde(default)]
-    pub is_admin: bool,
+    pub role: Option<UserRole>,
 }
 
 /// Update user request
@@ -77,9 +119,9 @@ pub struct UpdateUserRequest {
     #[schema(example = "newSecurePassword123!")]
     pub password: Option<String>,
 
-    /// Update admin privileges
-    #[schema(example = false)]
-    pub is_admin: Option<bool>,
+    /// Update user role (reader, maintainer, admin)
+    #[schema(example = "reader")]
+    pub role: Option<UserRole>,
 
     /// Update active status
     #[schema(example = true)]

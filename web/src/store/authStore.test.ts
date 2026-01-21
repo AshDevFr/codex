@@ -25,7 +25,7 @@ describe("authStore", () => {
 			id: "1",
 			username: "testuser",
 			email: "test@example.com",
-			isAdmin: false,
+			role: "reader",
 			emailVerified: true,
 		};
 		const mockToken = "test-jwt-token";
@@ -44,7 +44,7 @@ describe("authStore", () => {
 			id: "1",
 			username: "testuser",
 			email: "test@example.com",
-			isAdmin: true,
+			role: "admin",
 			emailVerified: true,
 		};
 
@@ -67,7 +67,7 @@ describe("authStore", () => {
 			id: "1",
 			username: "testuser",
 			email: "test@example.com",
-			isAdmin: false,
+			role: "reader",
 			emailVerified: true,
 		};
 

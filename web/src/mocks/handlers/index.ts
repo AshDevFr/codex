@@ -15,6 +15,7 @@ import { metadataHandlers } from "./metadata";
 import { metricsHandlers } from "./metrics";
 import { seriesHandlers } from "./series";
 import { settingsHandlers } from "./settings";
+import { sharingTagsHandlers } from "./sharingTags";
 import { tasksHandlers } from "./tasks";
 import { usersHandlers } from "./users";
 
@@ -108,6 +109,7 @@ export const handlers = [
 	...eventHandlers,
 	...metadataHandlers,
 	...settingsHandlers,
+	...sharingTagsHandlers,
 	...usersHandlers,
 	...metricsHandlers,
 	...tasksHandlers,
@@ -126,5 +128,6 @@ export { metadataHandlers } from "./metadata";
 export { metricsHandlers } from "./metrics";
 export { seriesHandlers } from "./series";
 export { settingsHandlers } from "./settings";
+export { sharingTagsHandlers } from "./sharingTags";
 export { tasksHandlers } from "./tasks";
 export { usersHandlers } from "./users";

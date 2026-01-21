@@ -40,14 +40,10 @@ pub async fn list_api_keys(
 ) -> Result<Json<Vec<ApiKeyDto>>, ApiError> {
     auth.require_permission(&Permission::ApiKeysRead)?;
 
-    // Users can only see their own keys unless admin
-    let user_id = if auth.is_admin {
-        // Admin can see all keys - for now, we'll show only their own
-        // If you want admins to see all keys, you'd need to add a query parameter
-        auth.user_id
-    } else {
-        auth.user_id
-    };
+    // Users can only see their own keys
+    // Admins with UsersRead permission could theoretically see all keys,
+    // but for now we show only the user's own keys
+    let user_id = auth.user_id;
 
     let keys = ApiKeyRepository::list_by_user(&state.db, user_id)
         .await
@@ -103,8 +99,9 @@ pub async fn get_api_key(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch API key: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("API key not found".to_string()))?;
 
-    // Users can only access their own keys unless admin
-    if !auth.is_admin && key.user_id != auth.user_id {
+    // Users can only access their own keys unless they have UsersRead permission
+    let can_access_others = auth.has_permission(&Permission::UsersRead);
+    if !can_access_others && key.user_id != auth.user_id {
         return Err(ApiError::Forbidden(
             "You can only access your own API keys".to_string(),
         ));
@@ -161,8 +158,9 @@ pub async fn create_api_key(
             let perm = normalized.parse::<Permission>().map_err(|e| {
                 ApiError::BadRequest(format!("Invalid permission: {} ({})", perm_str, e))
             })?;
-            // Users can only grant permissions they have (unless admin)
-            if !auth.is_admin && !auth.has_permission(&perm) {
+            // Users can only grant permissions they have
+            // (Admins have all permissions via their role, so no special case needed)
+            if !auth.has_permission(&perm) {
                 return Err(ApiError::Forbidden(format!(
                     "You don't have permission to grant: {}",
                     perm_str
@@ -172,8 +170,8 @@ pub async fn create_api_key(
         }
         perms
     } else {
-        // Use user's current permissions
-        auth.permissions.iter().cloned().collect()
+        // Use user's current effective permissions (role + custom)
+        auth.effective_permissions()
     };
 
     // Generate API key
@@ -246,8 +244,9 @@ pub async fn update_api_key(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch API key: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("API key not found".to_string()))?;
 
-    // Users can only update their own keys unless admin
-    if !auth.is_admin && key.user_id != auth.user_id {
+    // Users can only update their own keys unless they have UsersWrite permission
+    let can_modify_others = auth.has_permission(&Permission::UsersWrite);
+    if !can_modify_others && key.user_id != auth.user_id {
         return Err(ApiError::Forbidden(
             "You can only update your own API keys".to_string(),
         ));
@@ -272,8 +271,9 @@ pub async fn update_api_key(
             let perm = normalized.parse::<Permission>().map_err(|e| {
                 ApiError::BadRequest(format!("Invalid permission: {} ({})", perm_str, e))
             })?;
-            // Users can only grant permissions they have (unless admin)
-            if !auth.is_admin && !auth.has_permission(&perm) {
+            // Users can only grant permissions they have
+            // (Admins have all permissions via their role, so no special case needed)
+            if !auth.has_permission(&perm) {
                 return Err(ApiError::Forbidden(format!(
                     "You don't have permission to grant: {}",
                     perm_str
@@ -350,8 +350,9 @@ pub async fn delete_api_key(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch API key: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("API key not found".to_string()))?;
 
-    // Users can only delete their own keys unless admin
-    if !auth.is_admin && key.user_id != auth.user_id {
+    // Users can only delete their own keys unless they have UsersDelete permission
+    let can_delete_others = auth.has_permission(&Permission::UsersDelete);
+    if !can_delete_others && key.user_id != auth.user_id {
         return Err(ApiError::Forbidden(
             "You can only delete your own API keys".to_string(),
         ));

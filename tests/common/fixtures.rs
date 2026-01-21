@@ -13,12 +13,13 @@ pub fn create_test_user(
     password_hash: &str,
     is_admin: bool,
 ) -> users::Model {
+    let role = if is_admin { "admin" } else { "reader" };
     users::Model {
         id: Uuid::new_v4(),
         username: username.to_string(),
         email: email.to_string(),
         password_hash: password_hash.to_string(),
-        is_admin,
+        role: role.to_string(),
         is_active: true,
         email_verified: false,
         permissions: serde_json::json!([]),
@@ -36,12 +37,13 @@ pub fn create_test_user_with_permissions(
     is_admin: bool,
     permissions: Vec<String>,
 ) -> users::Model {
+    let role = if is_admin { "admin" } else { "reader" };
     users::Model {
         id: Uuid::new_v4(),
         username: username.to_string(),
         email: email.to_string(),
         password_hash: password_hash.to_string(),
-        is_admin,
+        role: role.to_string(),
         is_active: true,
         email_verified: false,
         permissions: serde_json::json!(permissions),

@@ -82,7 +82,7 @@ describe("Login Component", () => {
 				id: "1",
 				username: "testuser",
 				email: "test@example.com",
-				isAdmin: false,
+				role: "reader",
 				emailVerified: true,
 			},
 		};

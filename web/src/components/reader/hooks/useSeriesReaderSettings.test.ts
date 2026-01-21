@@ -60,7 +60,7 @@ describe("useSeriesReaderSettings", () => {
 				username: "testuser",
 				email: "test@example.com",
 				emailVerified: true,
-				isAdmin: false,
+				role: "reader",
 			},
 			token: "test-token",
 			isAuthenticated: true,
@@ -546,7 +546,7 @@ describe("useSeriesReaderSettings", () => {
 					username: "user1",
 					email: "user1@example.com",
 					emailVerified: true,
-					isAdmin: false,
+					role: "reader",
 				},
 			});
 
@@ -568,7 +568,7 @@ describe("useSeriesReaderSettings", () => {
 					username: "user2",
 					email: "user2@example.com",
 					emailVerified: true,
-					isAdmin: false,
+					role: "reader",
 				},
 			});
 
@@ -634,7 +634,7 @@ describe("useSeriesReaderSettings", () => {
 					username: "user1",
 					email: "user1@example.com",
 					emailVerified: true,
-					isAdmin: false,
+					role: "reader",
 				},
 				token: "token-1",
 				isAuthenticated: true,
@@ -658,7 +658,7 @@ describe("useSeriesReaderSettings", () => {
 					username: "user2",
 					email: "user2@example.com",
 					emailVerified: true,
-					isAdmin: false,
+					role: "reader",
 				},
 				token: "token-2",
 				isAuthenticated: true,

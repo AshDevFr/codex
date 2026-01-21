@@ -28,7 +28,7 @@ async fn test_opds_root_catalog_with_jwt() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -132,7 +132,7 @@ async fn test_opds_list_libraries() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -188,7 +188,7 @@ async fn test_opds_library_series() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -250,7 +250,7 @@ async fn test_opds_series_books_with_thumbnails() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -302,7 +302,7 @@ async fn test_opds_search_descriptor() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -372,7 +372,7 @@ async fn test_opds_search_books() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -410,7 +410,7 @@ async fn test_opds_search_empty_query() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -471,7 +471,7 @@ async fn test_opds_pse_page_feed() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 

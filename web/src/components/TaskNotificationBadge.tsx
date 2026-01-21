@@ -12,7 +12,7 @@ export function TaskNotificationBadge() {
 	const navigate = useNavigate();
 	const { user } = useAuthStore();
 	const { activeTasks, pendingCounts } = useTaskProgress();
-	const isAdmin = user?.isAdmin;
+	const isAdmin = user?.role === "admin";
 
 	// Filter to only running tasks (processing tasks are shown as running)
 	// Note: pending tasks are shown separately via pendingCounts, not from activeTasks

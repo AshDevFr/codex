@@ -43,6 +43,7 @@ import {
 	SeriesBookList,
 	SeriesMetadataEditModal,
 	SeriesRating,
+	SeriesSharingTags,
 } from "@/components/series";
 
 // Helper to format reading direction
@@ -499,6 +500,9 @@ export function SeriesDetail() {
 							/>
 						</Group>
 					)}
+
+					{/* Sharing Tags (Admin only) */}
+					<SeriesSharingTags seriesId={series.id} />
 
 					{/* External Links */}
 					{metadata?.externalLinks && metadata.externalLinks.length > 0 && (

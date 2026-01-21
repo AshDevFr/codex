@@ -5,9 +5,10 @@ use crate::api::{
     },
     error::ApiError,
     extractors::{AuthContext, AuthState},
+    permissions::Permission,
 };
 use crate::db::repositories::SettingsRepository;
-use crate::require_admin;
+use crate::require_permission;
 use axum::{
     extract::{Path, Query, State},
     Json,
@@ -41,7 +42,7 @@ pub async fn list_settings(
     auth: AuthContext,
     Query(query): Query<ListSettingsQuery>,
 ) -> Result<Json<Vec<SettingDto>>, ApiError> {
-    require_admin!(auth)?;
+    require_permission!(auth, Permission::SystemAdmin)?;
 
     let settings = if let Some(category) = query.category {
         SettingsRepository::get_by_category(&state.db, &category)
@@ -98,7 +99,7 @@ pub async fn get_setting(
     auth: AuthContext,
     Path(setting_key): Path<String>,
 ) -> Result<Json<SettingDto>, ApiError> {
-    require_admin!(auth)?;
+    require_permission!(auth, Permission::SystemAdmin)?;
 
     let setting = SettingsRepository::get(&state.db, &setting_key)
         .await
@@ -151,7 +152,7 @@ pub async fn update_setting(
     Path(setting_key): Path<String>,
     Json(request): Json<UpdateSettingRequest>,
 ) -> Result<Json<SettingDto>, ApiError> {
-    require_admin!(auth)?;
+    require_permission!(auth, Permission::SystemAdmin)?;
 
     let ip_address = client_info.ip_address;
 
@@ -231,7 +232,7 @@ pub async fn bulk_update_settings(
     client_info: crate::api::extractors::ClientInfo,
     Json(request): Json<BulkUpdateSettingsRequest>,
 ) -> Result<Json<Vec<SettingDto>>, ApiError> {
-    require_admin!(auth)?;
+    require_permission!(auth, Permission::SystemAdmin)?;
 
     let updates: Vec<(String, String)> = request
         .updates
@@ -308,7 +309,7 @@ pub async fn reset_setting(
     client_info: crate::api::extractors::ClientInfo,
     Path(setting_key): Path<String>,
 ) -> Result<Json<SettingDto>, ApiError> {
-    require_admin!(auth)?;
+    require_permission!(auth, Permission::SystemAdmin)?;
 
     let ip_address = client_info.ip_address;
 
@@ -366,7 +367,7 @@ pub async fn get_setting_history(
     Path(setting_key): Path<String>,
     Query(query): Query<HistoryQuery>,
 ) -> Result<Json<Vec<SettingHistoryDto>>, ApiError> {
-    require_admin!(auth)?;
+    require_permission!(auth, Permission::SystemAdmin)?;
 
     let history = SettingsRepository::get_history(&state.db, &setting_key, query.limit)
         .await

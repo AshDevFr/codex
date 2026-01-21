@@ -41,19 +41,18 @@ pub async fn seed_command(config_path: PathBuf) -> Result<()> {
     let admin_password = generate_random_password(16);
     let password_hash = hash_password(&admin_password).context("Failed to hash admin password")?;
 
-    // Create admin user
+    // Create admin user with Admin role
     info!("Creating admin user...");
-    let permissions_json = serialize_permissions(&ADMIN_PERMISSIONS);
+    use crate::api::permissions::UserRole;
     let admin_user = users::Model {
         id: Uuid::new_v4(),
         username: "admin".to_string(),
         email: "admin@localhost".to_string(),
         password_hash,
-        is_admin: true,
+        role: UserRole::Admin.to_string(),
         is_active: true,
         email_verified: true,
-        permissions: serde_json::from_str(&permissions_json)
-            .unwrap_or_else(|_| serde_json::json!([])),
+        permissions: serde_json::json!([]), // Custom permissions (empty = use role defaults)
         created_at: Utc::now(),
         updated_at: Utc::now(),
         last_login_at: None,

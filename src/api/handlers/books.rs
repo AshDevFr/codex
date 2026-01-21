@@ -5,7 +5,7 @@ use crate::api::{
         BookMetadataDto, PaginationParams, SortDirection,
     },
     error::ApiError,
-    extractors::{AuthContext, AuthState, FlexibleAuthContext},
+    extractors::{AuthContext, AuthState, ContentFilter, FlexibleAuthContext},
     permissions::Permission,
 };
 use crate::db::repositories::{
@@ -241,8 +241,23 @@ pub async fn list_books(
         query.page_size.min(100)
     };
 
+    // Load content filter for sharing tags
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+
     // Fetch books based on filter
     let (books_list, total) = if let Some(ser_id) = query.series_id {
+        // Check if the series is visible to the user
+        if !content_filter.is_series_visible(ser_id) {
+            return Ok(Json(BookListResponse::new(
+                vec![],
+                query.page,
+                page_size,
+                0,
+            )));
+        }
+
         // By default, don't include deleted books in API responses
         let books = BookRepository::list_by_series(&state.db, ser_id, false)
             .await
@@ -263,13 +278,37 @@ pub async fn list_books(
 
         (paginated, total)
     } else {
-        // List all books with pagination
-        BookRepository::list_all(
-            &state.db, false, // exclude deleted
-            query.page, page_size,
+        // List all books with pagination, then filter by sharing tags
+        // Use i64::MAX as page_size to avoid SQLite integer overflow (u64::MAX > i64::MAX)
+        let (books, _) = BookRepository::list_all(
+            &state.db,
+            false, // exclude deleted
+            0,
+            i64::MAX as u64,
         )
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?;
+
+        // Filter books by sharing tags
+        let filtered: Vec<_> = books
+            .into_iter()
+            .filter(|b| content_filter.is_book_visible(b.series_id))
+            .collect();
+
+        let total = filtered.len() as u64;
+
+        // Apply pagination
+        let offset = query.page * page_size;
+        let start = offset as usize;
+
+        let paginated = if start >= filtered.len() {
+            vec![]
+        } else {
+            let end = (start + page_size as usize).min(filtered.len());
+            filtered[start..end].to_vec()
+        };
+
+        (paginated, total)
     };
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
@@ -643,6 +682,15 @@ pub async fn get_book(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Check sharing tag access for the book's series
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+
+    if !content_filter.is_book_visible(book.series_id) {
+        return Err(ApiError::NotFound("Book not found".to_string()));
+    }
 
     // Try to fetch metadata - now contains title, title_sort, number
     let metadata = BookMetadataRepository::get_by_book_id(&state.db, book_id)
@@ -1412,6 +1460,15 @@ pub async fn get_book_file(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Check sharing tag access for the book's series
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+
+    if !content_filter.is_book_visible(book.series_id) {
+        return Err(ApiError::NotFound("Book not found".to_string()));
+    }
 
     // Check if file exists
     let file_path = std::path::Path::new(&book.file_path);

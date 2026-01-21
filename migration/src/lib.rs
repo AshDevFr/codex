@@ -2,7 +2,7 @@ pub use sea_orm_migration::prelude::*;
 
 // Core tables
 mod m20260103_000001_create_libraries;
-mod m20260103_000002_create_users;
+pub mod m20260103_000002_create_users;
 pub mod m20260103_000003_create_series;
 mod m20260103_000004_create_books;
 mod m20260103_000005_create_pages;
@@ -44,6 +44,9 @@ mod m20260111_000026_seed_metrics_settings;
 mod m20260112_000027_create_user_preferences;
 mod m20260112_000028_create_system_integrations;
 mod m20260112_000029_create_user_integrations;
+
+// Sharing tags for content access control
+mod m20260120_000030_create_sharing_tags;
 
 pub struct Migrator;
 
@@ -88,6 +91,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260112_000027_create_user_preferences::Migration),
             Box::new(m20260112_000028_create_system_integrations::Migration),
             Box::new(m20260112_000029_create_user_integrations::Migration),
+            // Sharing tags for content access control
+            Box::new(m20260120_000030_create_sharing_tags::Migration),
         ]
     }
 }

@@ -33,7 +33,7 @@ describe("Sidebar Component (via AppLayout)", () => {
 			id: "1",
 			username: "testuser",
 			email: "test@example.com",
-			isAdmin: false,
+			role: "reader",
 			emailVerified: true,
 		};
 
@@ -60,7 +60,7 @@ describe("Sidebar Component (via AppLayout)", () => {
 			id: "1",
 			username: "admin",
 			email: "admin@example.com",
-			isAdmin: true,
+			role: "admin",
 			emailVerified: true,
 		};
 
@@ -84,7 +84,7 @@ describe("Sidebar Component (via AppLayout)", () => {
 			id: "1",
 			username: "testuser",
 			email: "test@example.com",
-			isAdmin: false,
+			role: "reader",
 			emailVerified: true,
 		};
 
@@ -110,7 +110,7 @@ describe("Sidebar Component (via AppLayout)", () => {
 			id: "1",
 			username: "testuser",
 			email: "test@example.com",
-			isAdmin: false,
+			role: "reader",
 			emailVerified: true,
 		};
 
@@ -134,7 +134,7 @@ describe("Sidebar Component (via AppLayout)", () => {
 			id: "1",
 			username: "admin",
 			email: "admin@example.com",
-			isAdmin: true,
+			role: "admin",
 			emailVerified: true,
 		};
 
@@ -163,7 +163,7 @@ describe("Sidebar Component (via AppLayout)", () => {
 			id: "1",
 			username: "testuser",
 			email: "test@example.com",
-			isAdmin: false,
+			role: "reader",
 			emailVerified: true,
 		};
 
@@ -194,7 +194,7 @@ describe("Sidebar Component (via AppLayout)", () => {
 			id: "1",
 			username: "testuser",
 			email: "test@example.com",
-			isAdmin: false,
+			role: "reader",
 			emailVerified: true,
 		};
 

@@ -49,8 +49,7 @@ curl -X POST http://localhost:8080/api/v1/users \
     "username": "reader",
     "email": "reader@example.com",
     "password": "user-password",
-    "is_admin": false,
-    "permissions": ["LibrariesRead", "SeriesRead", "BooksRead", "PagesRead"]
+    "role": "reader"
   }'
 ```
 
@@ -61,8 +60,8 @@ curl -X POST http://localhost:8080/api/v1/users \
 | `username` | Unique login name |
 | `email` | Email address (optional verification) |
 | `password` | Hashed with Argon2 |
-| `is_admin` | Full system access |
-| `permissions` | Granular permission list |
+| `role` | User role: `reader`, `maintainer`, or `admin` |
+| `permissions` | Custom permission overrides (optional) |
 | `email_verified` | Email verification status |
 | `created_at` | Account creation date |
 | `updated_at` | Last modification date |

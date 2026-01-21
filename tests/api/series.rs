@@ -22,7 +22,7 @@ async fn create_admin_and_token(
     let created = UserRepository::create(db, &user).await.unwrap();
     state
         .jwt_service
-        .generate_token(created.id, created.username, created.is_admin)
+        .generate_token(created.id, created.username.clone(), created.get_role())
         .unwrap()
 }
 
@@ -1034,7 +1034,11 @@ async fn test_list_in_progress_series() {
     let admin_user = UserRepository::create(&db, &admin).await.unwrap();
     let token = state
         .jwt_service
-        .generate_token(admin_user.id, admin_user.username, admin_user.is_admin)
+        .generate_token(
+            admin_user.id,
+            admin_user.username.clone(),
+            admin_user.get_role(),
+        )
         .unwrap();
 
     // Add reading progress for books in series1 and series2 (in-progress) for the admin user
@@ -1112,7 +1116,11 @@ async fn test_list_library_in_progress_series() {
     let admin_user = UserRepository::create(&db, &admin).await.unwrap();
     let token = state
         .jwt_service
-        .generate_token(admin_user.id, admin_user.username, admin_user.is_admin)
+        .generate_token(
+            admin_user.id,
+            admin_user.username.clone(),
+            admin_user.get_role(),
+        )
         .unwrap();
 
     // Add reading progress for both books for the admin user
@@ -3482,7 +3490,7 @@ async fn test_list_series_filtered_by_read_status_unread() {
         .generate_token(
             admin_user.id,
             admin_user.username.clone(),
-            admin_user.is_admin,
+            admin_user.get_role(),
         )
         .unwrap();
 
@@ -3578,7 +3586,7 @@ async fn test_list_series_filtered_by_read_status_in_progress() {
         .generate_token(
             admin_user.id,
             admin_user.username.clone(),
-            admin_user.is_admin,
+            admin_user.get_role(),
         )
         .unwrap();
 
@@ -3672,7 +3680,7 @@ async fn test_list_series_filtered_by_read_status_read() {
         .generate_token(
             admin_user.id,
             admin_user.username.clone(),
-            admin_user.is_admin,
+            admin_user.get_role(),
         )
         .unwrap();
 
@@ -3766,7 +3774,7 @@ async fn test_list_series_filtered_by_read_status_not_read() {
         .generate_token(
             admin_user.id,
             admin_user.username.clone(),
-            admin_user.is_admin,
+            admin_user.get_role(),
         )
         .unwrap();
 

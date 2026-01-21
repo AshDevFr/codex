@@ -287,7 +287,7 @@ impl UserPreferencesRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::permissions::ADMIN_PERMISSIONS;
+
     use crate::db::entities::users;
     use crate::db::repositories::UserRepository;
     use crate::db::test_helpers::setup_test_db;
@@ -295,16 +295,15 @@ mod tests {
 
     async fn create_test_user(db: &DatabaseConnection) -> users::Model {
         let password_hash = password::hash_password("password").unwrap();
-        let permissions_vec: Vec<_> = ADMIN_PERMISSIONS.iter().cloned().collect();
         let user = users::Model {
             id: Uuid::new_v4(),
             username: format!("testuser_{}", Uuid::new_v4()),
             email: format!("test_{}@example.com", Uuid::new_v4()),
             password_hash,
-            is_admin: true,
+            role: "admin".to_string(),
             is_active: true,
             email_verified: false,
-            permissions: serde_json::to_value(&permissions_vec).unwrap(),
+            permissions: serde_json::json!([]),
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_login_at: None,

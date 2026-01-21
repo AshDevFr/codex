@@ -33,3 +33,8 @@ pub mod tags;
 pub mod user_integrations;
 pub mod user_preferences;
 pub mod user_series_ratings;
+
+// Sharing tags for content access control
+pub mod series_sharing_tags;
+pub mod sharing_tags;
+pub mod user_sharing_tags;

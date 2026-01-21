@@ -208,7 +208,7 @@ mod tests {
             username: email.split('@').next().unwrap_or("testuser").to_string(),
             email: email.to_string(),
             password_hash: "hashedpassword".to_string(),
-            is_admin: false,
+            role: "reader".to_string(),
             is_active: true,
             email_verified: true,
             permissions: serde_json::json!([]),

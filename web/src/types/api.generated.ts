@@ -240,6 +240,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/sharing-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all sharing tags (admin only) */
+        get: operations["list_sharing_tags"];
+        put?: never;
+        /** Create a new sharing tag (admin only) */
+        post: operations["create_sharing_tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sharing-tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a sharing tag by ID (admin only) */
+        get: operations["get_sharing_tag"];
+        put?: never;
+        post?: never;
+        /** Delete a sharing tag (admin only) */
+        delete: operations["delete_sharing_tag"];
+        options?: never;
+        head?: never;
+        /** Update a sharing tag (admin only) */
+        patch: operations["update_sharing_tag"];
+        trace?: never;
+    };
     "/api/v1/api-keys": {
         parameters: {
             query?: never;
@@ -2149,6 +2186,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/{series_id}/sharing-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get sharing tags for a series (admin only) */
+        get: operations["get_series_sharing_tags"];
+        /** Set sharing tags for a series (replaces existing) (admin only) */
+        put: operations["set_series_sharing_tags"];
+        /** Add a sharing tag to a series (admin only) */
+        post: operations["add_series_sharing_tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{series_id}/sharing-tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a sharing tag from a series (admin only) */
+        delete: operations["remove_series_sharing_tag"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/{series_id}/tags": {
         parameters: {
             query?: never;
@@ -2769,6 +2842,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user/sharing-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get current user's sharing tag grants */
+        get: operations["get_my_sharing_tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users": {
         parameters: {
             query?: never;
@@ -2804,6 +2894,41 @@ export interface paths {
         head?: never;
         /** Update a user (admin only, partial update) */
         patch: operations["update_user"];
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/sharing-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get sharing tag grants for a user (admin only) */
+        get: operations["get_user_sharing_tags"];
+        /** Set a user's sharing tag grant (admin only) */
+        put: operations["set_user_sharing_tag"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/sharing-tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a user's sharing tag grant (admin only) */
+        delete: operations["remove_user_sharing_tag"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/health": {
@@ -3098,6 +3223,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description Access mode for sharing tag grants
+         * @enum {string}
+         */
+        AccessMode: "allow" | "deny";
         /** @description Request to add a single genre to a series */
         AddSeriesGenreRequest: {
             /**
@@ -3993,6 +4123,19 @@ export interface components {
             seriesConfig?: unknown;
             seriesStrategy?: null | components["schemas"]["SeriesStrategy"];
         };
+        /** @description Create sharing tag request */
+        CreateSharingTagRequest: {
+            /**
+             * @description Optional description
+             * @example Content appropriate for children
+             */
+            description?: string | null;
+            /**
+             * @description Display name for the sharing tag (must be unique)
+             * @example Kids Content
+             */
+            name: string;
+        };
         /** @description Request to create a new system integration */
         CreateSystemIntegrationRequest: {
             /** @description Non-sensitive configuration */
@@ -4052,15 +4195,11 @@ export interface components {
              */
             email: string;
             /**
-             * @description Whether to grant admin privileges
-             * @example false
-             */
-            isAdmin?: boolean;
-            /**
              * @description Password for the new account
              * @example securePassword123!
              */
             password: string;
+            role?: null | components["schemas"]["UserRole"];
             /**
              * @description Username for the new account
              * @example newuser
@@ -5039,6 +5178,15 @@ export interface components {
              */
             deleted_count: number;
         };
+        /** @description Add/remove single sharing tag from series request */
+        ModifySeriesSharingTagRequest: {
+            /**
+             * Format: uuid
+             * @description Sharing tag ID
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            sharingTagId: string;
+        };
         /**
          * @description Book number strategy type for determining book ordering numbers
          *
@@ -5482,16 +5630,13 @@ export interface components {
                  */
                 isActive: boolean;
                 /**
-                 * @description Whether user has admin privileges
-                 * @example false
-                 */
-                isAdmin: boolean;
-                /**
                  * Format: date-time
                  * @description Timestamp of last login
                  * @example 2024-01-15T10:30:00Z
                  */
                 lastLoginAt?: string | null;
+                /** @description User role (reader, maintainer, admin) */
+                role: components["schemas"]["UserRole"];
                 /**
                  * Format: date-time
                  * @description Last account update timestamp
@@ -6607,6 +6752,16 @@ export interface components {
              */
             genres: string[];
         };
+        /** @description Bulk set series sharing tags request */
+        SetSeriesSharingTagsRequest: {
+            /**
+             * @description List of sharing tag IDs to apply to the series
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440000"
+             *     ]
+             */
+            sharingTagIds: string[];
+        };
         /** @description Request to set tags for a series */
         SetSeriesTagsRequest: {
             /**
@@ -6636,6 +6791,17 @@ export interface components {
              * @example 85
              */
             rating: number;
+        };
+        /** @description Set user sharing tag grant request */
+        SetUserSharingTagGrantRequest: {
+            /** @description Access mode: allow or deny */
+            accessMode: components["schemas"]["AccessMode"];
+            /**
+             * Format: uuid
+             * @description Sharing tag ID to grant access to
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            sharingTagId: string;
         };
         /** @description Setting response DTO */
         SettingDto: {
@@ -6770,6 +6936,78 @@ export interface components {
             registrationEnabled: boolean;
             /** @description Whether initial setup is required */
             setupRequired: boolean;
+        };
+        /** @description Sharing tag data transfer object */
+        SharingTagDto: {
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * @description Optional description
+             * @example Content appropriate for children
+             */
+            description?: string | null;
+            /**
+             * Format: uuid
+             * @description Unique sharing tag identifier
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /**
+             * @description Display name of the sharing tag
+             * @example Kids Content
+             */
+            name: string;
+            /**
+             * Format: int64
+             * @description Number of series tagged with this sharing tag
+             * @example 42
+             */
+            seriesCount: number;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+            /**
+             * Format: int64
+             * @description Number of users with grants for this sharing tag
+             * @example 5
+             */
+            userCount: number;
+        };
+        /** @description Response for list of sharing tags */
+        SharingTagListResponse: {
+            /** @description List of sharing tags */
+            items: components["schemas"]["SharingTagDto"][];
+            /**
+             * @description Total count
+             * @example 10
+             */
+            total: number;
+        };
+        /** @description Simplified sharing tag for lists (without counts) */
+        SharingTagSummaryDto: {
+            /**
+             * @description Optional description
+             * @example Content appropriate for children
+             */
+            description?: string | null;
+            /**
+             * Format: uuid
+             * @description Unique sharing tag identifier
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /**
+             * @description Display name of the sharing tag
+             * @example Kids Content
+             */
+            name: string;
         };
         /** @description Configuration for smart book naming strategy */
         SmartBookConfig: {
@@ -7662,6 +7900,19 @@ export interface components {
              */
             value: string;
         };
+        /** @description Update sharing tag request */
+        UpdateSharingTagRequest: {
+            /**
+             * @description New description (set to null to remove)
+             * @example Content appropriate for the whole family
+             */
+            description?: string | null;
+            /**
+             * @description New display name (must be unique)
+             * @example Family Content
+             */
+            name?: string | null;
+        };
         /** @description Request to update a system integration */
         UpdateSystemIntegrationRequest: {
             /** @description Updated configuration */
@@ -7690,20 +7941,62 @@ export interface components {
              */
             isActive?: boolean | null;
             /**
-             * @description Update admin privileges
-             * @example false
-             */
-            isAdmin?: boolean | null;
-            /**
              * @description New password
              * @example newSecurePassword123!
              */
             password?: string | null;
+            role?: null | components["schemas"]["UserRole"];
             /**
              * @description New username
              * @example updateduser
              */
             username?: string | null;
+        };
+        /** @description User detail DTO with sharing tag grants (for single user view) */
+        UserDetailDto: {
+            /**
+             * Format: date-time
+             * @description Account creation timestamp
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * @description User email address
+             * @example john.doe@example.com
+             */
+            email: string;
+            /**
+             * Format: uuid
+             * @description Unique user identifier
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /**
+             * @description Whether the account is active
+             * @example true
+             */
+            isActive: boolean;
+            /**
+             * Format: date-time
+             * @description Timestamp of last login
+             * @example 2024-01-15T10:30:00Z
+             */
+            lastLoginAt?: string | null;
+            /** @description User role (reader, maintainer, admin) */
+            role: components["schemas"]["UserRole"];
+            /** @description Sharing tag grants for this user */
+            sharingTags: components["schemas"]["UserSharingTagGrantDto"][];
+            /**
+             * Format: date-time
+             * @description Last account update timestamp
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+            /**
+             * @description Username for login
+             * @example johndoe
+             */
+            username: string;
         };
         /** @description User data transfer object */
         UserDto: {
@@ -7730,16 +8023,13 @@ export interface components {
              */
             isActive: boolean;
             /**
-             * @description Whether user has admin privileges
-             * @example false
-             */
-            isAdmin: boolean;
-            /**
              * Format: date-time
              * @description Timestamp of last login
              * @example 2024-01-15T10:30:00Z
              */
             lastLoginAt?: string | null;
+            /** @description User role (reader, maintainer, admin) */
+            role: components["schemas"]["UserRole"];
             /**
              * Format: date-time
              * @description Last account update timestamp
@@ -7771,10 +8061,10 @@ export interface components {
              */
             id: string;
             /**
-             * @description Whether user has admin privileges
-             * @example true
+             * @description User role (reader, maintainer, admin)
+             * @example admin
              */
-            isAdmin: boolean;
+            role: string;
             /**
              * @description Username
              * @example admin
@@ -7888,6 +8178,14 @@ export interface components {
             /** @description List of user ratings */
             ratings: components["schemas"]["UserSeriesRatingDto"][];
         };
+        /**
+         * @description User roles for role-based access control (RBAC)
+         *
+         *     Roles define a base set of permissions that users inherit.
+         *     Custom permissions can be added on top of role permissions (union behavior).
+         * @enum {string}
+         */
+        UserRole: "reader" | "maintainer" | "admin";
         /** @description User series rating data transfer object */
         UserSeriesRatingDto: {
             /**
@@ -7925,6 +8223,45 @@ export interface components {
              * @example 2024-01-15T10:30:00Z
              */
             updatedAt: string;
+        };
+        /** @description User sharing tag grant data transfer object */
+        UserSharingTagGrantDto: {
+            /** @description Access mode: allow or deny */
+            accessMode: components["schemas"]["AccessMode"];
+            /**
+             * Format: date-time
+             * @description Grant creation timestamp
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Unique grant identifier
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Sharing tag ID
+             * @example 660e8400-e29b-41d4-a716-446655440000
+             */
+            sharingTagId: string;
+            /**
+             * @description Sharing tag name
+             * @example Kids Content
+             */
+            sharingTagName: string;
+        };
+        /** @description Response for user's sharing tag grants */
+        UserSharingTagGrantsResponse: {
+            /** @description List of grants */
+            grants: components["schemas"]["UserSharingTagGrantDto"][];
+            /**
+             * Format: uuid
+             * @description User ID
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            userId: string;
         };
         /** @description Operators for UUID comparisons (library_id, series_id, etc.) */
         UuidOperator: {
@@ -8660,6 +8997,191 @@ export interface operations {
                 content?: never;
             };
             /** @description Setting not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_sharing_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of sharing tags */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharingTagListResponse"];
+                };
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_sharing_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSharingTagRequest"];
+            };
+        };
+        responses: {
+            /** @description Sharing tag created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharingTagDto"];
+                };
+            };
+            /** @description Invalid request or tag name already exists */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_sharing_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Sharing tag ID */
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sharing tag details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharingTagDto"];
+                };
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sharing tag not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_sharing_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Sharing tag ID */
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sharing tag deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sharing tag not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_sharing_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Sharing tag ID */
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSharingTagRequest"];
+            };
+        };
+        responses: {
+            /** @description Sharing tag updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharingTagDto"];
+                };
+            };
+            /** @description Invalid request or tag name already exists */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sharing tag not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -12858,6 +13380,146 @@ export interface operations {
             };
         };
     };
+    get_series_sharing_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of sharing tags for the series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharingTagSummaryDto"][];
+                };
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_series_sharing_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSeriesSharingTagsRequest"];
+            };
+        };
+        responses: {
+            /** @description Sharing tags set */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharingTagSummaryDto"][];
+                };
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_series_sharing_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModifySeriesSharingTagRequest"];
+            };
+        };
+        responses: {
+            /** @description Sharing tag added */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tag already assigned */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_series_sharing_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+                /** @description Sharing tag ID */
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sharing tag removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sharing tag not assigned to series */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_series_tags: {
         parameters: {
             query?: never;
@@ -14229,6 +14891,26 @@ export interface operations {
             };
         };
     };
+    get_my_sharing_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of sharing tag grants for the current user */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSharingTagGrantsResponse"];
+                };
+            };
+        };
+    };
     list_users: {
         parameters: {
             query?: never;
@@ -14306,13 +14988,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description User details */
+            /** @description User details with sharing tags */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserDto"];
+                    "application/json": components["schemas"]["UserDetailDto"];
                 };
             };
             /** @description Forbidden - Admin only */
@@ -14399,6 +15081,114 @@ export interface operations {
                 content?: never;
             };
             /** @description User not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_user_sharing_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User ID */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of sharing tag grants for the user */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSharingTagGrantsResponse"];
+                };
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_user_sharing_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User ID */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetUserSharingTagGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Sharing tag grant set */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSharingTagGrantDto"];
+                };
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sharing tag not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_user_sharing_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User ID */
+                user_id: string;
+                /** @description Sharing tag ID */
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sharing tag grant removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Grant not found */
             404: {
                 headers: {
                     [name: string]: unknown;

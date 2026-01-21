@@ -25,6 +25,7 @@ import {
 	IconScan,
 	IconServer,
 	IconSettings,
+	IconShare,
 	IconTrash,
 	IconTrashX,
 	IconUser,
@@ -52,7 +53,7 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 	const { user, clearAuth } = useAuthStore();
 	// Only subscribe to getLastTab action (doesn't cause re-renders since it's not state)
 	const getLastTab = useLibraryPreferencesStore((state) => state.getLastTab);
-	const isAdmin = user?.isAdmin;
+	const isAdmin = user?.role === "admin";
 	const [addLibraryOpened, setAddLibraryOpened] = useState(false);
 	const [editLibraryOpened, setEditLibraryOpened] = useState(false);
 	const [selectedLibrary, setSelectedLibrary] = useState<Library | null>(null);
@@ -354,6 +355,13 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 										label="Users"
 										leftSection={<IconUsers size={16} />}
 										active={currentPath.startsWith("/settings/users")}
+									/>
+									<NavLink
+										component={Link}
+										to="/settings/sharing-tags"
+										label="Sharing Tags"
+										leftSection={<IconShare size={16} />}
+										active={currentPath.startsWith("/settings/sharing-tags")}
 									/>
 									<NavLink
 										component={Link}

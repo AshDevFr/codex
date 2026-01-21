@@ -52,9 +52,9 @@ pub struct UserInfo {
     #[schema(example = "admin@example.com")]
     pub email: String,
 
-    /// Whether user has admin privileges
-    #[schema(example = true)]
-    pub is_admin: bool,
+    /// User role (reader, maintainer, admin)
+    #[schema(example = "admin")]
+    pub role: String,
 
     /// Whether email has been verified
     #[schema(example = true)]

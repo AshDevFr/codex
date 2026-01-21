@@ -31,7 +31,7 @@ async fn test_opds2_root_catalog_with_jwt() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -141,7 +141,7 @@ async fn test_opds2_content_type() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -190,7 +190,7 @@ async fn test_opds2_list_libraries() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -251,7 +251,7 @@ async fn test_opds2_library_series() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -312,7 +312,7 @@ async fn test_opds2_library_series_pagination() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -397,7 +397,7 @@ async fn test_opds2_series_books() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -493,7 +493,7 @@ async fn test_opds2_search_books() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -534,7 +534,7 @@ async fn test_opds2_search_empty_query() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -595,7 +595,7 @@ async fn test_opds2_recent_additions() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -642,7 +642,7 @@ async fn test_opds2_library_not_found() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -683,7 +683,7 @@ async fn test_opds2_series_not_found() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -760,7 +760,7 @@ async fn test_opds2_series_books_with_reading_progress() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 
@@ -849,7 +849,7 @@ async fn test_opds2_completed_book_progress() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 

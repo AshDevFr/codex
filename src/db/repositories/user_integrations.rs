@@ -349,7 +349,7 @@ mod tests {
             username: Set("testuser".to_string()),
             email: Set("test@example.com".to_string()),
             password_hash: Set("hash".to_string()),
-            is_admin: Set(false),
+            role: Set("reader".to_string()),
             is_active: Set(true),
             email_verified: Set(true),
             permissions: Set(serde_json::json!([])),

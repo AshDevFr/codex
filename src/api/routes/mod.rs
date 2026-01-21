@@ -303,6 +303,23 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/series/:series_id/tags/:tag_id",
             delete(handlers::remove_series_tag),
         )
+        // Series sharing tags routes (protected, admin only)
+        .route(
+            "/series/:series_id/sharing-tags",
+            get(handlers::sharing_tags::get_series_sharing_tags),
+        )
+        .route(
+            "/series/:series_id/sharing-tags",
+            put(handlers::sharing_tags::set_series_sharing_tags),
+        )
+        .route(
+            "/series/:series_id/sharing-tags",
+            post(handlers::sharing_tags::add_series_sharing_tag),
+        )
+        .route(
+            "/series/:series_id/sharing-tags/:tag_id",
+            delete(handlers::sharing_tags::remove_series_sharing_tag),
+        )
         // Series user rating routes (protected)
         .route(
             "/series/:series_id/rating",
@@ -374,6 +391,11 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/tags/:tag_id", delete(handlers::delete_tag))
         // User ratings routes (protected)
         .route("/user/ratings", get(handlers::list_user_ratings))
+        // Current user's sharing tags route (protected)
+        .route(
+            "/user/sharing-tags",
+            get(handlers::sharing_tags::get_my_sharing_tags),
+        )
         // User preferences routes (protected)
         .route(
             "/user/preferences",
@@ -516,6 +538,19 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route("/users/:user_id", get(handlers::get_user))
         .route("/users/:user_id", patch(handlers::update_user))
         .route("/users/:user_id", delete(handlers::delete_user))
+        // User sharing tags routes (protected, admin only)
+        .route(
+            "/users/:user_id/sharing-tags",
+            get(handlers::sharing_tags::get_user_sharing_tags),
+        )
+        .route(
+            "/users/:user_id/sharing-tags",
+            put(handlers::sharing_tags::set_user_sharing_tag),
+        )
+        .route(
+            "/users/:user_id/sharing-tags/:tag_id",
+            delete(handlers::sharing_tags::remove_user_sharing_tag),
+        )
         // API key routes (protected)
         .route("/api-keys", get(handlers::api_keys::list_api_keys))
         .route("/api-keys", post(handlers::api_keys::create_api_key))
@@ -662,6 +697,27 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
         .route(
             "/admin/integrations/:id/test",
             post(handlers::system_integrations::test_system_integration),
+        )
+        // Sharing tags routes (protected, admin only)
+        .route(
+            "/admin/sharing-tags",
+            get(handlers::sharing_tags::list_sharing_tags),
+        )
+        .route(
+            "/admin/sharing-tags",
+            post(handlers::sharing_tags::create_sharing_tag),
+        )
+        .route(
+            "/admin/sharing-tags/:tag_id",
+            get(handlers::sharing_tags::get_sharing_tag),
+        )
+        .route(
+            "/admin/sharing-tags/:tag_id",
+            patch(handlers::sharing_tags::update_sharing_tag),
+        )
+        .route(
+            "/admin/sharing-tags/:tag_id",
+            delete(handlers::sharing_tags::delete_sharing_tag),
         )
         // Cleanup routes (protected, admin only)
         .route(

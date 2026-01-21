@@ -56,6 +56,8 @@ pub enum Relation {
     SeriesCovers,
     #[sea_orm(has_many = "super::user_series_ratings::Entity")]
     UserSeriesRatings,
+    #[sea_orm(has_many = "super::series_sharing_tags::Entity")]
+    SeriesSharingTags,
 }
 
 impl Related<super::books::Entity> for Entity {
@@ -140,6 +142,21 @@ impl Related<super::tags::Entity> for Entity {
     }
     fn via() -> Option<RelationDef> {
         Some(super::series_tags::Relation::Series.def().rev())
+    }
+}
+
+impl Related<super::series_sharing_tags::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::SeriesSharingTags.def()
+    }
+}
+
+impl Related<super::sharing_tags::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::series_sharing_tags::Relation::SharingTag.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(super::series_sharing_tags::Relation::Series.def().rev())
     }
 }
 

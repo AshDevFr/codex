@@ -26,7 +26,7 @@ async fn create_admin_and_token(
 
     state
         .jwt_service
-        .generate_token(created.id, created.username, created.is_admin)
+        .generate_token(created.id, created.username.clone(), created.get_role())
         .unwrap()
 }
 
@@ -41,7 +41,7 @@ async fn create_readonly_and_token(
 
     state
         .jwt_service
-        .generate_token(created.id, created.username, created.is_admin)
+        .generate_token(created.id, created.username.clone(), created.get_role())
         .unwrap()
 }
 
@@ -228,7 +228,8 @@ async fn test_get_scan_status() {
 }
 
 #[tokio::test]
-async fn test_get_scan_status_requires_read_permission() {
+async fn test_get_scan_status_reader_has_read_permission() {
+    // In the RBAC system, Reader role has LibrariesRead permission
     let (db, temp_dir) = setup_test_db().await;
 
     // Create a test library
@@ -243,11 +244,11 @@ async fn test_get_scan_status_requires_read_permission() {
 
     let state = create_test_app_state(db.clone()).await;
 
-    // Create a user with no permissions
+    // Create a Reader user (Reader role has LibrariesRead permission)
     let password_hash = password::hash_password("user123").unwrap();
     let user = create_test_user_with_permissions(
-        "noperms",
-        "noperms@example.com",
+        "reader",
+        "reader@example.com",
         &password_hash,
         false,
         vec![],
@@ -255,7 +256,7 @@ async fn test_get_scan_status_requires_read_permission() {
     let created = UserRepository::create(&db, &user).await.unwrap();
     let token = state
         .jwt_service
-        .generate_token(created.id, created.username, created.is_admin)
+        .generate_token(created.id, created.username.clone(), created.get_role())
         .unwrap();
 
     let app = create_test_router_with_app_state(state);
@@ -265,7 +266,8 @@ async fn test_get_scan_status_requires_read_permission() {
 
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
-    assert_eq!(status, StatusCode::FORBIDDEN);
+    // Reader has permission, so we get 404 (no scan found) not 403
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -409,16 +411,17 @@ async fn test_list_active_scans() {
 }
 
 #[tokio::test]
-async fn test_list_active_scans_requires_read_permission() {
-    let (db, temp_dir) = setup_test_db().await;
+async fn test_list_active_scans_reader_has_read_permission() {
+    // In the RBAC system, Reader role has LibrariesRead permission
+    let (db, _temp_dir) = setup_test_db().await;
 
     let state = create_test_app_state(db.clone()).await;
 
-    // Create a user with no permissions
+    // Create a Reader user (Reader role has LibrariesRead permission)
     let password_hash = password::hash_password("user123").unwrap();
     let user = create_test_user_with_permissions(
-        "noperms",
-        "noperms@example.com",
+        "reader",
+        "reader@example.com",
         &password_hash,
         false,
         vec![],
@@ -426,16 +429,18 @@ async fn test_list_active_scans_requires_read_permission() {
     let created = UserRepository::create(&db, &user).await.unwrap();
     let token = state
         .jwt_service
-        .generate_token(created.id, created.username, created.is_admin)
+        .generate_token(created.id, created.username.clone(), created.get_role())
         .unwrap();
 
     let app = create_test_router_with_app_state(state);
 
     let request = get_request_with_auth("/api/v1/scans/active", &token);
 
-    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+    let (status, _): (StatusCode, Option<Vec<ScanStatusDto>>) =
+        make_json_request(app, request).await;
 
-    assert_eq!(status, StatusCode::FORBIDDEN);
+    // Reader has permission, so we should get 200 OK
+    assert_eq!(status, StatusCode::OK);
 }
 
 // ============================================================================
@@ -456,15 +461,16 @@ async fn test_scan_progress_stream_requires_auth() {
 }
 
 #[tokio::test]
-async fn test_scan_progress_stream_requires_read_permission() {
-    let (db, temp_dir) = setup_test_db().await;
+async fn test_scan_progress_stream_reader_has_read_permission() {
+    // In the RBAC system, Reader role has LibrariesRead permission
+    let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_app_state(db.clone()).await;
 
-    // Create a user with no permissions
+    // Create a Reader user (Reader role has LibrariesRead permission)
     let password_hash = password::hash_password("user123").unwrap();
     let user = create_test_user_with_permissions(
-        "noperms",
-        "noperms@example.com",
+        "reader",
+        "reader@example.com",
         &password_hash,
         false,
         vec![],
@@ -472,7 +478,7 @@ async fn test_scan_progress_stream_requires_read_permission() {
     let created = UserRepository::create(&db, &user).await.unwrap();
     let token = state
         .jwt_service
-        .generate_token(created.id, created.username, created.is_admin)
+        .generate_token(created.id, created.username.clone(), created.get_role())
         .unwrap();
 
     let app = create_test_router_with_app_state(state);
@@ -481,7 +487,8 @@ async fn test_scan_progress_stream_requires_read_permission() {
 
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
-    assert_eq!(status, StatusCode::FORBIDDEN);
+    // Reader has permission, so we should get 200 OK (SSE stream starts)
+    assert_eq!(status, StatusCode::OK);
 }
 
 #[tokio::test]

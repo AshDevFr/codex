@@ -1,10 +1,11 @@
 use crate::api::error::ApiError;
-use crate::api::permissions::Permission;
+use crate::api::permissions::{Permission, UserRole};
 use crate::db::repositories::{ApiKeyRepository, UserRepository};
 use crate::utils::{jwt::JwtService, password};
 use axum::http::header::COOKIE;
 use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
 use sea_orm::DatabaseConnection;
+use std::collections::HashSet;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -13,11 +14,16 @@ use uuid::Uuid;
 pub struct AuthContext {
     pub user_id: Uuid,
     pub username: String,
-    pub is_admin: bool,
-    pub permissions: Vec<Permission>,
+    /// User's role (Reader, Maintainer, Admin)
+    pub role: UserRole,
+    /// Custom permissions that extend the role's base permissions
+    pub custom_permissions: Vec<Permission>,
     /// How the user was authenticated - used for audit logging
     #[allow(dead_code)]
     pub auth_method: AuthMethod,
+    /// For API key auth: the token's permissions (subset of user's)
+    /// This is used to constrain token permissions at request time
+    pub token_permissions: Option<Vec<Permission>>,
 }
 
 #[derive(Debug, Clone)]
@@ -28,18 +34,34 @@ pub enum AuthMethod {
 }
 
 impl AuthContext {
+    /// Get effective permissions (role permissions ∪ custom permissions)
+    /// If authenticated via API token, permissions are intersected with token permissions
+    pub fn effective_permissions(&self) -> HashSet<Permission> {
+        // Start with role permissions
+        let mut perms: HashSet<Permission> = self.role.permissions().clone();
+
+        // Union with custom permissions
+        perms.extend(self.custom_permissions.iter().cloned());
+
+        // If authenticated via API token, intersect with token permissions
+        if let Some(token_perms) = &self.token_permissions {
+            let token_set: HashSet<_> = token_perms.iter().cloned().collect();
+            perms = perms.intersection(&token_set).cloned().collect();
+        }
+
+        perms
+    }
+
     /// Check if the user has a specific permission
     pub fn has_permission(&self, permission: &Permission) -> bool {
-        self.is_admin || self.permissions.contains(permission)
+        self.effective_permissions().contains(permission)
     }
 
     /// Check if the user has any of the specified permissions
     #[allow(dead_code)] // Public API for permission checking
     pub fn has_any_permission(&self, permissions: &[Permission]) -> bool {
-        if self.is_admin {
-            return true;
-        }
-        permissions.iter().any(|p| self.permissions.contains(p))
+        let effective = self.effective_permissions();
+        permissions.iter().any(|p| effective.contains(p))
     }
 
     /// Require a specific permission (returns error if missing)
@@ -54,13 +76,9 @@ impl AuthContext {
         }
     }
 
-    /// Require admin access
+    /// Require admin access (checks for SystemAdmin permission)
     pub fn require_admin(&self) -> Result<(), ApiError> {
-        if self.is_admin {
-            Ok(())
-        } else {
-            Err(ApiError::Forbidden("Admin access required".to_string()))
-        }
+        self.require_permission(&Permission::SystemAdmin)
     }
 }
 
@@ -136,7 +154,7 @@ async fn extract_from_jwt(token: &str, state: &AppState) -> Result<AuthContext, 
     let user_id = Uuid::parse_str(&claims.sub)
         .map_err(|_| ApiError::Unauthorized("Invalid user ID in token".to_string()))?;
 
-    // Load user from database to get current permissions
+    // Load user from database to get current permissions and role
     let user = UserRepository::get_by_id(&state.db, user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load user: {}", e)))?
@@ -149,16 +167,20 @@ async fn extract_from_jwt(token: &str, state: &AppState) -> Result<AuthContext, 
         ));
     }
 
-    // Parse permissions from JSON
-    let permissions: Vec<Permission> = serde_json::from_value(user.permissions)
+    // Parse custom permissions from JSON (clone the value before consuming)
+    let custom_permissions: Vec<Permission> = serde_json::from_value(user.permissions.clone())
         .map_err(|e| ApiError::Internal(format!("Failed to parse permissions: {}", e)))?;
+
+    // Get role from user model (use role from JWT claims as fallback for backwards compatibility)
+    let role = user.get_role();
 
     Ok(AuthContext {
         user_id,
         username: claims.username,
-        is_admin: claims.is_admin,
-        permissions,
+        role,
+        custom_permissions,
         auth_method: AuthMethod::Jwt,
+        token_permissions: None,
     })
 }
 
@@ -205,9 +227,17 @@ async fn extract_from_api_key(api_key: &str, state: &AppState) -> Result<AuthCon
         ));
     }
 
-    // Parse permissions from API key (stored as JSON string)
-    let permissions: Vec<Permission> = serde_json::from_value(api_key_model.permissions)
-        .map_err(|e| ApiError::Internal(format!("Failed to parse permissions: {}", e)))?;
+    // Parse custom permissions from user (stored as JSON)
+    let custom_permissions: Vec<Permission> = serde_json::from_value(user.permissions.clone())
+        .map_err(|e| ApiError::Internal(format!("Failed to parse user permissions: {}", e)))?;
+
+    // Parse token permissions from API key (stored as JSON)
+    // These will be used to constrain the effective permissions
+    let token_permissions: Vec<Permission> = serde_json::from_value(api_key_model.permissions)
+        .map_err(|e| ApiError::Internal(format!("Failed to parse token permissions: {}", e)))?;
+
+    // Get role from user model
+    let role = user.get_role();
 
     // Update last used timestamp (fire and forget - don't block on this)
     let db = state.db.clone();
@@ -219,9 +249,10 @@ async fn extract_from_api_key(api_key: &str, state: &AppState) -> Result<AuthCon
     Ok(AuthContext {
         user_id: user.id,
         username: user.username,
-        is_admin: user.is_admin,
-        permissions,
+        role,
+        custom_permissions,
         auth_method: AuthMethod::ApiKey,
+        token_permissions: Some(token_permissions),
     })
 }
 
@@ -274,9 +305,12 @@ async fn extract_from_basic_auth(
         ));
     }
 
-    // Parse permissions from user model
-    let permissions: Vec<Permission> = serde_json::from_value(user.permissions)
+    // Parse custom permissions from user model (clone before consuming)
+    let custom_permissions: Vec<Permission> = serde_json::from_value(user.permissions.clone())
         .map_err(|e| ApiError::Internal(format!("Failed to parse permissions: {}", e)))?;
+
+    // Get role from user model
+    let role = user.get_role();
 
     // Update last login timestamp (fire and forget - don't block on this)
     let db = state.db.clone();
@@ -288,9 +322,10 @@ async fn extract_from_basic_auth(
     Ok(AuthContext {
         user_id: user.id,
         username: user.username,
-        is_admin: user.is_admin,
-        permissions,
+        role,
+        custom_permissions,
         auth_method: AuthMethod::BasicAuth,
+        token_permissions: None,
     })
 }
 

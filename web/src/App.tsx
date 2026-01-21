@@ -26,6 +26,7 @@ import {
 	MetricsSettings,
 	ProfileSettings,
 	ServerSettings,
+	SharingTagsSettings,
 	TasksSettings,
 	UsersSettings,
 } from "@/pages/settings";
@@ -215,6 +216,17 @@ function App() {
 						<ProtectedRoute>
 							<AppLayout currentPath="/settings/users">
 								<UsersSettings />
+							</AppLayout>
+						</ProtectedRoute>
+					}
+				/>
+
+				<Route
+					path="/settings/sharing-tags"
+					element={
+						<ProtectedRoute>
+							<AppLayout currentPath="/settings/sharing-tags">
+								<SharingTagsSettings />
 							</AppLayout>
 						</ProtectedRoute>
 					}

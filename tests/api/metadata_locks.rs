@@ -28,7 +28,7 @@ async fn create_admin_and_token(
     let created = UserRepository::create(db, &user).await.unwrap();
     state
         .jwt_service
-        .generate_token(created.id, created.username, created.is_admin)
+        .generate_token(created.id, created.username.clone(), created.get_role())
         .unwrap()
 }
 
@@ -575,7 +575,7 @@ async fn test_update_locks_requires_write_permission() {
     let state = create_test_auth_state(db.clone()).await;
     let token = state
         .jwt_service
-        .generate_token(created.id, created.username, created.is_admin)
+        .generate_token(created.id, created.username.clone(), created.get_role())
         .unwrap();
     let app = create_test_router(state).await;
 

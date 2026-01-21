@@ -9,3 +9,4 @@ export { SeriesMetadata } from "./SeriesMetadata";
 export { SeriesMetadataEditModal } from "./SeriesMetadataEditModal";
 export { SeriesRating } from "./SeriesRating";
 export { SeriesRatingModal } from "./SeriesRatingModal";
+export { SeriesSharingTags } from "./SeriesSharingTags";

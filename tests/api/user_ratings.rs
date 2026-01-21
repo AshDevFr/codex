@@ -21,7 +21,7 @@ async fn create_admin_and_token(
     let created = UserRepository::create(db, &user).await.unwrap();
     state
         .jwt_service
-        .generate_token(created.id, created.username, created.is_admin)
+        .generate_token(created.id, created.username.clone(), created.get_role())
         .unwrap()
 }
 
@@ -502,8 +502,8 @@ async fn test_get_series_average_rating_multiple_users() {
         .jwt_service
         .generate_token(
             created_user1.id,
-            created_user1.username,
-            created_user1.is_admin,
+            created_user1.username.clone(),
+            created_user1.get_role(),
         )
         .unwrap();
 
@@ -515,8 +515,8 @@ async fn test_get_series_average_rating_multiple_users() {
         .jwt_service
         .generate_token(
             created_user2.id,
-            created_user2.username,
-            created_user2.is_admin,
+            created_user2.username.clone(),
+            created_user2.get_role(),
         )
         .unwrap();
 

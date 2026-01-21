@@ -20,7 +20,13 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(Users::Email).text().not_null().unique_key())
                     .col(ColumnDef::new(Users::PasswordHash).text().not_null())
-                    .col(ColumnDef::new(Users::IsAdmin).boolean().not_null())
+                    // Role-based access control: reader, maintainer, admin
+                    .col(
+                        ColumnDef::new(Users::Role)
+                            .string_len(20)
+                            .not_null()
+                            .default("reader"),
+                    )
                     .col(
                         ColumnDef::new(Users::IsActive)
                             .boolean()
@@ -63,13 +69,13 @@ impl MigrationTrait for Migration {
 }
 
 #[derive(DeriveIden)]
-enum Users {
+pub enum Users {
     Table,
     Id,
     Username,
     Email,
     PasswordHash,
-    IsAdmin,
+    Role,
     IsActive,
     EmailVerified,
     Permissions,

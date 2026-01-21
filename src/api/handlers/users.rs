@@ -1,11 +1,12 @@
 use crate::api::{
-    dto::{CreateUserRequest, UpdateUserRequest, UserDto},
+    dto::{CreateUserRequest, UpdateUserRequest, UserDetailDto, UserDto, UserSharingTagGrantDto},
     error::ApiError,
     extractors::{AuthContext, AuthState},
+    permissions::{Permission, UserRole},
 };
 use crate::db::entities::users;
-use crate::db::repositories::UserRepository;
-use crate::require_admin;
+use crate::db::repositories::{SharingTagRepository, UserRepository};
+use crate::require_permission;
 use crate::utils::password;
 use axum::{
     extract::{Path, State},
@@ -33,7 +34,7 @@ pub async fn list_users(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
 ) -> Result<Json<Vec<UserDto>>, ApiError> {
-    require_admin!(auth)?;
+    require_permission!(auth, Permission::UsersRead)?;
 
     let users = UserRepository::list_all(&state.db)
         .await
@@ -41,15 +42,18 @@ pub async fn list_users(
 
     let dtos: Vec<UserDto> = users
         .into_iter()
-        .map(|user| UserDto {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            is_admin: user.is_admin,
-            is_active: user.is_active,
-            last_login_at: user.last_login_at,
-            created_at: user.created_at,
-            updated_at: user.updated_at,
+        .map(|user| {
+            let role = user.get_role();
+            UserDto {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                role,
+                is_active: user.is_active,
+                last_login_at: user.last_login_at,
+                created_at: user.created_at,
+                updated_at: user.updated_at,
+            }
         })
         .collect();
 
@@ -64,7 +68,7 @@ pub async fn list_users(
         ("user_id" = Uuid, Path, description = "User ID")
     ),
     responses(
-        (status = 200, description = "User details", body = UserDto),
+        (status = 200, description = "User details with sharing tags", body = UserDetailDto),
         (status = 404, description = "User not found"),
         (status = 403, description = "Forbidden - Admin only"),
     ),
@@ -78,23 +82,35 @@ pub async fn get_user(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Path(user_id): Path<Uuid>,
-) -> Result<Json<UserDto>, ApiError> {
-    require_admin!(auth)?;
+) -> Result<Json<UserDetailDto>, ApiError> {
+    require_permission!(auth, Permission::UsersRead)?;
 
     let user = UserRepository::get_by_id(&state.db, user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch user: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("User not found".to_string()))?;
 
-    let dto = UserDto {
+    // Fetch sharing tag grants for the user
+    let grants_with_tags = SharingTagRepository::get_grants_with_tags_for_user(&state.db, user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch user sharing tags: {}", e)))?;
+
+    let sharing_tags: Vec<UserSharingTagGrantDto> = grants_with_tags
+        .into_iter()
+        .map(|(grant, tag)| UserSharingTagGrantDto::from_models(grant, tag))
+        .collect();
+
+    let role = user.get_role();
+    let dto = UserDetailDto {
         id: user.id,
         username: user.username,
         email: user.email,
-        is_admin: user.is_admin,
+        role,
         is_active: user.is_active,
         last_login_at: user.last_login_at,
         created_at: user.created_at,
         updated_at: user.updated_at,
+        sharing_tags,
     };
 
     Ok(Json(dto))
@@ -121,7 +137,7 @@ pub async fn create_user(
     auth: AuthContext,
     Json(request): Json<CreateUserRequest>,
 ) -> Result<Json<UserDto>, ApiError> {
-    require_admin!(auth)?;
+    require_permission!(auth, Permission::UsersWrite)?;
 
     // Validate username is not taken
     if let Ok(Some(_)) = UserRepository::get_by_username(&state.db, &request.username).await {
@@ -137,22 +153,8 @@ pub async fn create_user(
     let password_hash = password::hash_password(&request.password)
         .map_err(|e| ApiError::Internal(format!("Failed to hash password: {}", e)))?;
 
-    // Determine permissions based on admin flag
-    let permissions = if request.is_admin {
-        let perms: Vec<_> = crate::api::permissions::ADMIN_PERMISSIONS
-            .iter()
-            .cloned()
-            .collect();
-        serde_json::to_value(perms)
-            .map_err(|e| ApiError::Internal(format!("Failed to serialize permissions: {}", e)))?
-    } else {
-        let perms: Vec<_> = crate::api::permissions::READONLY_PERMISSIONS
-            .iter()
-            .cloned()
-            .collect();
-        serde_json::to_value(perms)
-            .map_err(|e| ApiError::Internal(format!("Failed to serialize permissions: {}", e)))?
-    };
+    // Get role (defaults to Reader if not specified)
+    let role = request.role.unwrap_or(UserRole::Reader);
 
     let now = Utc::now();
     let model = users::Model {
@@ -160,10 +162,10 @@ pub async fn create_user(
         username: request.username,
         email: request.email,
         password_hash,
-        is_admin: request.is_admin,
+        role: role.to_string(),
         is_active: true,
         email_verified: true, // Admin-created users are verified by default
-        permissions,
+        permissions: serde_json::json!([]), // Custom permissions (empty = use role defaults)
         last_login_at: None,
         created_at: now,
         updated_at: now,
@@ -173,11 +175,12 @@ pub async fn create_user(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to create user: {}", e)))?;
 
+    let role = user.get_role();
     let dto = UserDto {
         id: user.id,
         username: user.username,
         email: user.email,
-        is_admin: user.is_admin,
+        role,
         is_active: user.is_active,
         last_login_at: user.last_login_at,
         created_at: user.created_at,
@@ -212,7 +215,7 @@ pub async fn update_user(
     Path(user_id): Path<Uuid>,
     Json(request): Json<UpdateUserRequest>,
 ) -> Result<Json<UserDto>, ApiError> {
-    require_admin!(auth)?;
+    require_permission!(auth, Permission::UsersWrite)?;
 
     // Fetch existing user
     let mut user = UserRepository::get_by_id(&state.db, user_id)
@@ -247,28 +250,8 @@ pub async fn update_user(
         user.password_hash = password_hash;
     }
 
-    if let Some(is_admin) = request.is_admin {
-        user.is_admin = is_admin;
-
-        // Update permissions based on admin flag
-        let permissions = if is_admin {
-            let perms: Vec<_> = crate::api::permissions::ADMIN_PERMISSIONS
-                .iter()
-                .cloned()
-                .collect();
-            serde_json::to_value(perms).map_err(|e| {
-                ApiError::Internal(format!("Failed to serialize permissions: {}", e))
-            })?
-        } else {
-            let perms: Vec<_> = crate::api::permissions::READONLY_PERMISSIONS
-                .iter()
-                .cloned()
-                .collect();
-            serde_json::to_value(perms).map_err(|e| {
-                ApiError::Internal(format!("Failed to serialize permissions: {}", e))
-            })?
-        };
-        user.permissions = permissions;
+    if let Some(role) = request.role {
+        user.role = role.to_string();
     }
 
     if let Some(is_active) = request.is_active {
@@ -281,11 +264,12 @@ pub async fn update_user(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to update user: {}", e)))?;
 
+    let role = updated.get_role();
     let dto = UserDto {
         id: updated.id,
         username: updated.username,
         email: updated.email,
-        is_admin: updated.is_admin,
+        role,
         is_active: updated.is_active,
         last_login_at: updated.last_login_at,
         created_at: updated.created_at,
@@ -318,7 +302,7 @@ pub async fn delete_user(
     auth: AuthContext,
     Path(user_id): Path<Uuid>,
 ) -> Result<(), ApiError> {
-    require_admin!(auth)?;
+    require_permission!(auth, Permission::UsersDelete)?;
 
     // Prevent self-deletion
     if auth.user_id == user_id {

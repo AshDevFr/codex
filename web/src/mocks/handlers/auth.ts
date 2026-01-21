@@ -6,7 +6,7 @@ import { delay, HttpResponse, http } from "msw";
 import { createUser } from "../data/factories";
 
 // Mock user state
-let currentUser = createUser({ username: "admin", isAdmin: true });
+let currentUser = createUser({ username: "admin", role: "admin" });
 let isAuthenticated = false;
 
 export const authHandlers = [
@@ -30,7 +30,7 @@ export const authHandlers = [
 		isAuthenticated = true;
 		currentUser = createUser({
 			username: body.username,
-			isAdmin: body.username === "admin",
+			role: body.username === "admin" ? "admin" : "reader",
 		});
 
 		return HttpResponse.json({
@@ -68,7 +68,7 @@ export const authHandlers = [
 		const newUser = createUser({
 			username: body.username,
 			email: body.email,
-			isAdmin: false,
+			role: "reader",
 		});
 
 		return HttpResponse.json({

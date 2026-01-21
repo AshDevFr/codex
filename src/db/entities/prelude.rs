@@ -11,3 +11,11 @@ pub use super::users::Entity as Users;
 
 // Series metadata enhancement entities
 pub use super::series_metadata::Entity as SeriesMetadata;
+
+// Sharing tags for content access control (WIP feature)
+#[allow(unused_imports)]
+pub use super::series_sharing_tags::Entity as SeriesSharingTags;
+#[allow(unused_imports)]
+pub use super::sharing_tags::Entity as SharingTags;
+#[allow(unused_imports)]
+pub use super::user_sharing_tags::Entity as UserSharingTags;

@@ -7,16 +7,17 @@ use crate::api::{
             ExternalRatingDto, ExternalRatingListResponse, FullSeriesMetadataResponse, GenreDto,
             GenreListResponse, MetadataLocks, PatchSeriesMetadataRequest, PatchSeriesRequest,
             ReplaceSeriesMetadataRequest, SeriesAverageRatingResponse, SeriesCoverDto,
-            SeriesCoverListResponse, SeriesMetadataResponse, SeriesSortParam, SeriesUpdateResponse,
-            SetSeriesGenresRequest, SetSeriesTagsRequest, SetUserRatingRequest, TagDto,
-            TagListResponse, TaxonomyCleanupResponse, UpdateAlternateTitleRequest,
-            UpdateMetadataLocksRequest, UserRatingsListResponse, UserSeriesRatingDto,
+            SeriesCoverListResponse, SeriesMetadataResponse, SeriesSortField, SeriesSortParam,
+            SeriesUpdateResponse, SetSeriesGenresRequest, SetSeriesTagsRequest,
+            SetUserRatingRequest, TagDto, TagListResponse, TaxonomyCleanupResponse,
+            UpdateAlternateTitleRequest, UpdateMetadataLocksRequest, UserRatingsListResponse,
+            UserSeriesRatingDto,
         },
         BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListRequest,
-        SeriesListResponse,
+        SeriesListResponse, SortDirection,
     },
     error::ApiError,
-    extractors::{AuthContext, AuthState, FlexibleAuthContext},
+    extractors::{AuthContext, AuthState, ContentFilter, FlexibleAuthContext},
     permissions::Permission,
 };
 use crate::db::entities::{series, series_metadata};
@@ -203,6 +204,15 @@ pub async fn list_series(
             .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
     };
 
+    // Apply sharing tag content filter (exclude series the user doesn't have access to)
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+
+    if content_filter.has_restrictions {
+        series_list.retain(|s| content_filter.is_series_visible(s.id));
+    }
+
     // Apply genre filter if specified
     if let Some(genres_param) = &query.genres {
         let genre_names: Vec<String> = genres_param
@@ -309,6 +319,15 @@ pub async fn get_series(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Check sharing tag access
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+
+    if !content_filter.is_series_visible(series_id) {
+        return Err(ApiError::NotFound("Series not found".to_string()));
+    }
 
     let user_id = Some(auth.user_id);
     let dto = series_to_dto(&state.db, series, user_id).await?;
@@ -478,15 +497,25 @@ pub async fn search_series(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
 
-    // Filter by library if specified
-    let filtered: Vec<_> = if let Some(lib_id) = request.library_id {
-        series_list
-            .into_iter()
-            .filter(|s| s.library_id == lib_id)
-            .collect()
-    } else {
-        series_list
-    };
+    // Apply sharing tag content filter
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+
+    // Filter by library and sharing tags
+    let filtered: Vec<_> = series_list
+        .into_iter()
+        .filter(|s| {
+            // Apply library filter if specified
+            if let Some(lib_id) = request.library_id {
+                if s.library_id != lib_id {
+                    return false;
+                }
+            }
+            // Apply sharing tag filter
+            content_filter.is_series_visible(s.id)
+        })
+        .collect();
 
     let user_id = Some(auth.user_id);
     let dtos: Vec<SeriesDto> = futures::future::join_all(
@@ -541,6 +570,16 @@ pub async fn list_series_filtered(
     let all_series = SeriesRepository::list_all(&state.db)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
+
+    // Apply sharing tag content filter
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+
+    let all_series: Vec<_> = all_series
+        .into_iter()
+        .filter(|s| content_filter.is_series_visible(s.id))
+        .collect();
 
     let all_series_ids: HashSet<Uuid> = all_series.iter().map(|s| s.id).collect();
 
@@ -1007,6 +1046,16 @@ pub async fn list_in_progress_series(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress series: {}", e)))?;
 
+    // Apply sharing tag content filter
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+
+    let series_list: Vec<_> = series_list
+        .into_iter()
+        .filter(|s| content_filter.is_series_visible(s.id))
+        .collect();
+
     let user_id = Some(auth.user_id);
     let dtos: Vec<SeriesDto> = futures::future::join_all(
         series_list
@@ -1069,6 +1118,16 @@ pub async fn list_recently_added_series(
                 ApiError::Internal(format!("Failed to fetch recently added series: {}", e))
             })?;
 
+    // Apply sharing tag content filter
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+
+    let series_list: Vec<_> = series_list
+        .into_iter()
+        .filter(|s| content_filter.is_series_visible(s.id))
+        .collect();
+
     let user_id = Some(auth.user_id);
     let dtos: Vec<SeriesDto> = futures::future::join_all(
         series_list
@@ -1116,6 +1175,16 @@ pub async fn list_library_recently_added_series(
                 ApiError::Internal(format!("Failed to fetch recently added series: {}", e))
             })?;
 
+    // Apply sharing tag content filter
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+
+    let series_list: Vec<_> = series_list
+        .into_iter()
+        .filter(|s| content_filter.is_series_visible(s.id))
+        .collect();
+
     let user_id = Some(auth.user_id);
     let dtos: Vec<SeriesDto> = futures::future::join_all(
         series_list
@@ -1161,6 +1230,16 @@ pub async fn list_recently_updated_series(
             .map_err(|e| {
                 ApiError::Internal(format!("Failed to fetch recently updated series: {}", e))
             })?;
+
+    // Apply sharing tag content filter
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+
+    let series_list: Vec<_> = series_list
+        .into_iter()
+        .filter(|s| content_filter.is_series_visible(s.id))
+        .collect();
 
     let user_id = Some(auth.user_id);
     let dtos: Vec<SeriesDto> = futures::future::join_all(
@@ -1208,6 +1287,16 @@ pub async fn list_library_recently_updated_series(
             .map_err(|e| {
                 ApiError::Internal(format!("Failed to fetch recently updated series: {}", e))
             })?;
+
+    // Apply sharing tag content filter
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+
+    let series_list: Vec<_> = series_list
+        .into_iter()
+        .filter(|s| content_filter.is_series_visible(s.id))
+        .collect();
 
     let user_id = Some(auth.user_id);
     let dtos: Vec<SeriesDto> = futures::future::join_all(
@@ -1264,24 +1353,26 @@ pub async fn list_library_series(
         .map(|s| SeriesSortParam::parse(s))
         .unwrap_or_default();
 
-    // Get total count for pagination
-    let total = SeriesRepository::count_by_library(&state.db, library_id)
+    // Load content filter for sharing tags
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to count series: {}", e)))?
-        as u64;
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
 
-    // Fetch sorted and paginated series
-    let offset = query.page * page_size;
+    // Fetch all series from library and filter by sharing tags
+    // Note: We fetch all then filter to get accurate counts and pagination
+    let mut all_series = SeriesRepository::list_by_library(&state.db, library_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
+
+    // Apply sharing tag filter
+    if content_filter.has_restrictions {
+        all_series.retain(|s| content_filter.is_series_visible(s.id));
+    }
+
+    // Convert to DTOs first so we can sort by all fields
     let user_id = Some(auth.user_id);
-
-    let series_list = SeriesRepository::list_by_library_sorted(
-        &state.db, library_id, &sort, user_id, offset, page_size,
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
-
-    let dtos: Vec<SeriesDto> = futures::future::join_all(
-        series_list
+    let mut dtos: Vec<SeriesDto> = futures::future::join_all(
+        all_series
             .into_iter()
             .map(|series| series_to_dto(&state.db, series, user_id)),
     )
@@ -1290,7 +1381,58 @@ pub async fn list_library_series(
     .collect::<Result<Vec<_>, _>>()
     .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
-    let response = SeriesListResponse::new(dtos, query.page, page_size, total);
+    // Apply sorting
+    match sort.field {
+        SeriesSortField::Name => {
+            dtos.sort_by(|a, b| {
+                let a_sort = a.title_sort.as_ref().unwrap_or(&a.title);
+                let b_sort = b.title_sort.as_ref().unwrap_or(&b.title);
+                a_sort.to_lowercase().cmp(&b_sort.to_lowercase())
+            });
+        }
+        SeriesSortField::DateAdded => {
+            dtos.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+        }
+        SeriesSortField::DateUpdated => {
+            dtos.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
+        }
+        SeriesSortField::ReleaseDate => {
+            dtos.sort_by(|a, b| a.year.cmp(&b.year));
+        }
+        SeriesSortField::DateRead => {
+            // DateRead sorting requires read progress data which isn't in SeriesDto
+            // Fall back to sorting by updated_at as a reasonable proxy for recent activity
+            dtos.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
+        }
+        SeriesSortField::BookCount => {
+            dtos.sort_by(|a, b| a.book_count.cmp(&b.book_count));
+        }
+    }
+
+    // Reverse if descending
+    if sort.direction == SortDirection::Desc {
+        dtos.reverse();
+    }
+
+    let total = dtos.len() as u64;
+
+    // Apply pagination after sorting
+    let offset = query.page * page_size;
+    let start = offset as usize;
+
+    if start >= dtos.len() {
+        return Ok(Json(SeriesListResponse::new(
+            vec![],
+            query.page,
+            page_size,
+            total,
+        )));
+    }
+
+    let end = (start + page_size as usize).min(dtos.len());
+    let paginated = dtos[start..end].to_vec();
+
+    let response = SeriesListResponse::new(paginated, query.page, page_size, total);
 
     Ok(Json(response))
 }
@@ -1323,6 +1465,16 @@ pub async fn list_library_in_progress_series(
     let series_list = SeriesRepository::list_in_progress(&state.db, auth.user_id, Some(library_id))
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress series: {}", e)))?;
+
+    // Apply sharing tag content filter
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+
+    let series_list: Vec<_> = series_list
+        .into_iter()
+        .filter(|s| content_filter.is_series_visible(s.id))
+        .collect();
 
     let user_id = Some(auth.user_id);
     let dtos: Vec<SeriesDto> = futures::future::join_all(
@@ -2791,11 +2943,7 @@ pub async fn delete_genre(
     auth: AuthContext,
     Path(genre_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
-    if !auth.is_admin {
-        return Err(ApiError::Forbidden(
-            "Admin access required to delete genres".to_string(),
-        ));
-    }
+    require_permission!(auth, Permission::SystemAdmin)?;
 
     let deleted = GenreRepository::delete(&state.db, genre_id)
         .await
@@ -2826,11 +2974,7 @@ pub async fn cleanup_genres(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
 ) -> Result<Json<TaxonomyCleanupResponse>, ApiError> {
-    if !auth.is_admin {
-        return Err(ApiError::Forbidden(
-            "Admin access required to cleanup genres".to_string(),
-        ));
-    }
+    require_permission!(auth, Permission::SystemAdmin)?;
 
     let deleted_names = GenreRepository::delete_unused(&state.db)
         .await
@@ -2979,11 +3123,7 @@ pub async fn delete_tag(
     auth: AuthContext,
     Path(tag_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
-    if !auth.is_admin {
-        return Err(ApiError::Forbidden(
-            "Admin access required to delete tags".to_string(),
-        ));
-    }
+    require_permission!(auth, Permission::SystemAdmin)?;
 
     let deleted = TagRepository::delete(&state.db, tag_id)
         .await
@@ -3014,11 +3154,7 @@ pub async fn cleanup_tags(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
 ) -> Result<Json<TaxonomyCleanupResponse>, ApiError> {
-    if !auth.is_admin {
-        return Err(ApiError::Forbidden(
-            "Admin access required to cleanup tags".to_string(),
-        ));
-    }
+    require_permission!(auth, Permission::SystemAdmin)?;
 
     let deleted_names = TagRepository::delete_unused(&state.db)
         .await

@@ -22,7 +22,7 @@ async fn create_admin_and_token(
     let created = UserRepository::create(db, &user).await.unwrap();
     state
         .jwt_service
-        .generate_token(created.id, created.username, created.is_admin)
+        .generate_token(created.id, created.username.clone(), created.get_role())
         .unwrap()
 }
 
@@ -552,7 +552,11 @@ async fn test_list_in_progress_books() {
     let admin_user = UserRepository::create(&db, &admin).await.unwrap();
     let token = state
         .jwt_service
-        .generate_token(admin_user.id, admin_user.username, admin_user.is_admin)
+        .generate_token(
+            admin_user.id,
+            admin_user.username.clone(),
+            admin_user.get_role(),
+        )
         .unwrap();
 
     // Add reading progress for the admin user
@@ -633,7 +637,11 @@ async fn test_list_on_deck_books() {
     let admin_user = UserRepository::create(&db, &admin).await.unwrap();
     let token = state
         .jwt_service
-        .generate_token(admin_user.id, admin_user.username, admin_user.is_admin)
+        .generate_token(
+            admin_user.id,
+            admin_user.username.clone(),
+            admin_user.get_role(),
+        )
         .unwrap();
 
     use codex::db::repositories::ReadProgressRepository;
@@ -706,7 +714,11 @@ async fn test_list_on_deck_excludes_series_with_in_progress() {
     let admin_user = UserRepository::create(&db, &admin).await.unwrap();
     let token = state
         .jwt_service
-        .generate_token(admin_user.id, admin_user.username, admin_user.is_admin)
+        .generate_token(
+            admin_user.id,
+            admin_user.username.clone(),
+            admin_user.get_role(),
+        )
         .unwrap();
 
     use codex::db::repositories::ReadProgressRepository;
@@ -767,7 +779,11 @@ async fn test_list_on_deck_empty_when_no_completed_books() {
     let admin_user = UserRepository::create(&db, &admin).await.unwrap();
     let token = state
         .jwt_service
-        .generate_token(admin_user.id, admin_user.username, admin_user.is_admin)
+        .generate_token(
+            admin_user.id,
+            admin_user.username.clone(),
+            admin_user.get_role(),
+        )
         .unwrap();
 
     let app = create_test_router(state).await;
@@ -1503,7 +1519,7 @@ async fn test_list_recently_read_books() {
         .generate_token(
             admin_user.id,
             admin_user.username.clone(),
-            admin_user.is_admin,
+            admin_user.get_role(),
         )
         .unwrap();
 
@@ -1574,7 +1590,7 @@ async fn test_list_recently_read_books_with_limit() {
         .generate_token(
             admin_user.id,
             admin_user.username.clone(),
-            admin_user.is_admin,
+            admin_user.get_role(),
         )
         .unwrap();
 
@@ -1648,7 +1664,7 @@ async fn test_list_library_recently_read_books() {
         .generate_token(
             admin_user.id,
             admin_user.username.clone(),
-            admin_user.is_admin,
+            admin_user.get_role(),
         )
         .unwrap();
 
@@ -2851,7 +2867,7 @@ async fn test_list_books_filtered_by_read_status_unread() {
         .generate_token(
             admin_user.id,
             admin_user.username.clone(),
-            admin_user.is_admin,
+            admin_user.get_role(),
         )
         .unwrap();
 
@@ -2941,7 +2957,7 @@ async fn test_list_books_filtered_by_read_status_in_progress() {
         .generate_token(
             admin_user.id,
             admin_user.username.clone(),
-            admin_user.is_admin,
+            admin_user.get_role(),
         )
         .unwrap();
 
@@ -3029,7 +3045,7 @@ async fn test_list_books_filtered_by_read_status_read() {
         .generate_token(
             admin_user.id,
             admin_user.username.clone(),
-            admin_user.is_admin,
+            admin_user.get_role(),
         )
         .unwrap();
 

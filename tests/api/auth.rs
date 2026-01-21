@@ -60,7 +60,7 @@ async fn test_login_success_with_username() {
     assert_eq!(login_response.expires_in, 86400); // 24 hours in seconds
     assert_eq!(login_response.user.username, "testuser");
     assert_eq!(login_response.user.email, "test@example.com");
-    assert!(!login_response.user.is_admin);
+    assert_eq!(login_response.user.role, "reader");
 }
 
 #[tokio::test]
@@ -116,7 +116,7 @@ async fn test_login_admin_user() {
 
     assert_eq!(status, StatusCode::OK);
     let login_response = response.unwrap();
-    assert!(login_response.user.is_admin);
+    assert_eq!(login_response.user.role, "admin");
 }
 
 #[tokio::test]
@@ -236,7 +236,7 @@ async fn test_logout_with_valid_token() {
         .generate_token(
             created_user.id,
             created_user.username.clone(),
-            created_user.is_admin,
+            created_user.get_role(),
         )
         .unwrap();
 

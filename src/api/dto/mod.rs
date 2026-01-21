@@ -22,6 +22,9 @@ pub mod user;
 pub mod user_integrations;
 pub mod user_preferences;
 
+// Sharing tags for content access control
+pub mod sharing_tag;
+
 pub use api_key::*;
 pub use auth::*;
 pub use book::*;
@@ -42,6 +45,8 @@ pub use settings::*;
 pub use setup::*;
 pub use system_integrations::*;
 pub use task_metrics::*;
+// Sharing tags (must be before user for UserDetailDto import)
+pub use sharing_tag::*;
 pub use user::*;
 pub use user_integrations::*;
 pub use user_preferences::*;

@@ -24,6 +24,9 @@ pub mod user_integrations;
 pub mod user_preferences;
 pub mod user_series_rating;
 
+// Sharing tags for content access control
+pub mod sharing_tag;
+
 // Re-export repositories
 pub use alternate_title::AlternateTitleRepository;
 pub use api_key::ApiKeyRepository;
@@ -49,3 +52,6 @@ pub use user::UserRepository;
 pub use user_integrations::UserIntegrationsRepository;
 pub use user_preferences::UserPreferencesRepository;
 pub use user_series_rating::UserSeriesRatingRepository;
+
+// Sharing tags
+pub use sharing_tag::SharingTagRepository;

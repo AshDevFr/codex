@@ -4,6 +4,7 @@
 
 #![allow(dead_code)]
 
+use crate::api::permissions::UserRole;
 use anyhow::{Context, Result};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
@@ -17,12 +18,19 @@ pub struct Claims {
     pub sub: String,
     /// Username
     pub username: String,
-    /// Is admin user
-    pub is_admin: bool,
+    /// User role (reader, maintainer, admin)
+    pub role: String,
     /// Expiration time (Unix timestamp)
     pub exp: usize,
     /// Issued at (Unix timestamp)
     pub iat: usize,
+}
+
+impl Claims {
+    /// Get the user's role as a UserRole enum
+    pub fn get_role(&self) -> UserRole {
+        self.role.parse().unwrap_or_default()
+    }
 }
 
 /// Service for generating and validating JWT tokens
@@ -49,7 +57,7 @@ impl JwtService {
     /// # Arguments
     /// * `user_id` - The user's UUID
     /// * `username` - The user's username
-    /// * `is_admin` - Whether the user is an admin
+    /// * `role` - The user's role
     ///
     /// # Returns
     /// The encoded JWT token string
@@ -57,7 +65,7 @@ impl JwtService {
         &self,
         user_id: Uuid,
         username: String,
-        is_admin: bool,
+        role: UserRole,
     ) -> Result<String> {
         let now = Utc::now();
         let exp = now + Duration::hours(self.expiry_hours);
@@ -65,7 +73,7 @@ impl JwtService {
         let claims = Claims {
             sub: user_id.to_string(),
             username,
-            is_admin,
+            role: role.to_string(),
             exp: exp.timestamp() as usize,
             iat: now.timestamp() as usize,
         };
@@ -136,7 +144,7 @@ mod tests {
         let username = "testuser".to_string();
 
         let token = service
-            .generate_token(user_id, username.clone(), false)
+            .generate_token(user_id, username.clone(), UserRole::Reader)
             .expect("Failed to generate token");
 
         // Token should not be empty
@@ -147,13 +155,13 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_token_valid() {
+    fn test_verify_token_valid_admin() {
         let service = create_test_service();
         let user_id = Uuid::new_v4();
         let username = "testuser".to_string();
 
         let token = service
-            .generate_token(user_id, username.clone(), true)
+            .generate_token(user_id, username.clone(), UserRole::Admin)
             .expect("Failed to generate token");
 
         let claims = service
@@ -162,7 +170,48 @@ mod tests {
 
         assert_eq!(claims.sub, user_id.to_string());
         assert_eq!(claims.username, username);
-        assert!(claims.is_admin);
+        assert_eq!(claims.role, "admin");
+        assert_eq!(claims.get_role(), UserRole::Admin);
+    }
+
+    #[test]
+    fn test_verify_token_valid_reader() {
+        let service = create_test_service();
+        let user_id = Uuid::new_v4();
+        let username = "testuser".to_string();
+
+        let token = service
+            .generate_token(user_id, username.clone(), UserRole::Reader)
+            .expect("Failed to generate token");
+
+        let claims = service
+            .verify_token(&token)
+            .expect("Failed to verify token");
+
+        assert_eq!(claims.sub, user_id.to_string());
+        assert_eq!(claims.username, username);
+        assert_eq!(claims.role, "reader");
+        assert_eq!(claims.get_role(), UserRole::Reader);
+    }
+
+    #[test]
+    fn test_verify_token_valid_maintainer() {
+        let service = create_test_service();
+        let user_id = Uuid::new_v4();
+        let username = "testuser".to_string();
+
+        let token = service
+            .generate_token(user_id, username.clone(), UserRole::Maintainer)
+            .expect("Failed to generate token");
+
+        let claims = service
+            .verify_token(&token)
+            .expect("Failed to verify token");
+
+        assert_eq!(claims.sub, user_id.to_string());
+        assert_eq!(claims.username, username);
+        assert_eq!(claims.role, "maintainer");
+        assert_eq!(claims.get_role(), UserRole::Maintainer);
     }
 
     #[test]
@@ -172,7 +221,7 @@ mod tests {
 
         let user_id = Uuid::new_v4();
         let token = service1
-            .generate_token(user_id, "testuser".to_string(), false)
+            .generate_token(user_id, "testuser".to_string(), UserRole::Reader)
             .expect("Failed to generate token");
 
         let result = service2.verify_token(&token);
@@ -185,7 +234,7 @@ mod tests {
         let user_id = Uuid::new_v4();
 
         let token = service
-            .generate_token(user_id, "testuser".to_string(), false)
+            .generate_token(user_id, "testuser".to_string(), UserRole::Reader)
             .expect("Failed to generate token");
 
         // Tamper with the token by changing a character
@@ -203,7 +252,7 @@ mod tests {
         let username = "testuser".to_string();
 
         let token = service
-            .generate_token(user_id, username.clone(), false)
+            .generate_token(user_id, username.clone(), UserRole::Reader)
             .expect("Failed to generate token");
 
         let claims = service
@@ -212,7 +261,7 @@ mod tests {
 
         assert_eq!(claims.sub, user_id.to_string());
         assert_eq!(claims.username, username);
-        assert!(!claims.is_admin);
+        assert_eq!(claims.role, "reader");
     }
 
     #[test]
@@ -221,7 +270,7 @@ mod tests {
         let user_id = Uuid::new_v4();
 
         let token = service
-            .generate_token(user_id, "testuser".to_string(), false)
+            .generate_token(user_id, "testuser".to_string(), UserRole::Reader)
             .expect("Failed to generate token");
 
         let claims = service

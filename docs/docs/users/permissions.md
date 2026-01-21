@@ -70,7 +70,7 @@ Codex uses a granular permission system for access control.
 
 ## Admin Users
 
-Admin users (`is_admin: true`) have full access to all features regardless of individual permissions. Use sparingly for security.
+Admin users (`role: "admin"`) have full access to all features regardless of individual permissions. Use sparingly for security.
 
 ## Permission Presets
 

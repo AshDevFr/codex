@@ -254,7 +254,7 @@ impl ReadProgressRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::permissions::ADMIN_PERMISSIONS;
+
     use crate::db::entities::{books, users};
     use crate::db::repositories::{
         BookRepository, LibraryRepository, SeriesRepository, UserRepository,
@@ -265,16 +265,15 @@ mod tests {
 
     async fn create_test_user(db: &DatabaseConnection) -> users::Model {
         let password_hash = password::hash_password("password").unwrap();
-        let permissions_vec: Vec<_> = ADMIN_PERMISSIONS.iter().cloned().collect();
         let user = users::Model {
             id: Uuid::new_v4(),
             username: "testuser".to_string(),
             email: "test@example.com".to_string(),
             password_hash,
-            is_admin: true,
+            role: "admin".to_string(),
             is_active: true,
             email_verified: false,
-            permissions: serde_json::to_value(&permissions_vec).unwrap(),
+            permissions: serde_json::json!([]),
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_login_at: None,

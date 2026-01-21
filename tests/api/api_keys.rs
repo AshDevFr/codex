@@ -52,7 +52,11 @@ async fn create_user_with_api_key_perms(
     let created_user = UserRepository::create(db, &user).await.unwrap();
     let token = state
         .jwt_service
-        .generate_token(created_user.id, created_user.username.clone(), is_admin)
+        .generate_token(
+            created_user.id,
+            created_user.username.clone(),
+            created_user.get_role(),
+        )
         .unwrap();
 
     (created_user.id, token)
@@ -100,7 +104,8 @@ async fn test_list_api_keys() {
 }
 
 #[tokio::test]
-async fn test_list_api_keys_requires_permission() {
+async fn test_list_api_keys_reader_has_permission() {
+    // In the RBAC system, Reader role has API key permissions for managing their own keys
     let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_app_state(db.clone()).await;
     let app = create_test_router_with_app_state(state.clone());
@@ -110,7 +115,11 @@ async fn test_list_api_keys_requires_permission() {
     let created_user = UserRepository::create(&db, &user).await.unwrap();
     let token = state
         .jwt_service
-        .generate_token(created_user.id, created_user.username.clone(), false)
+        .generate_token(
+            created_user.id,
+            created_user.username.clone(),
+            created_user.get_role(),
+        )
         .unwrap();
 
     let request = get_request_with_auth("/api/v1/api-keys", &token);
@@ -118,8 +127,8 @@ async fn test_list_api_keys_requires_permission() {
 
     assert_eq!(
         status,
-        StatusCode::FORBIDDEN,
-        "Should require ApiKeysRead permission"
+        StatusCode::OK,
+        "Reader role should have ApiKeysRead permission"
     );
 }
 
@@ -335,7 +344,8 @@ async fn test_create_api_key_with_expiration() {
 }
 
 #[tokio::test]
-async fn test_create_api_key_requires_permission() {
+async fn test_create_api_key_reader_has_permission() {
+    // In the RBAC system, Reader role has API key permissions for managing their own keys
     let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_app_state(db.clone()).await;
     let app = create_test_router_with_app_state(state.clone());
@@ -345,7 +355,11 @@ async fn test_create_api_key_requires_permission() {
     let created_user = UserRepository::create(&db, &user).await.unwrap();
     let token = state
         .jwt_service
-        .generate_token(created_user.id, created_user.username.clone(), false)
+        .generate_token(
+            created_user.id,
+            created_user.username.clone(),
+            created_user.get_role(),
+        )
         .unwrap();
 
     let create_request = CreateApiKeyRequest {
@@ -360,8 +374,8 @@ async fn test_create_api_key_requires_permission() {
 
     assert_eq!(
         status,
-        StatusCode::FORBIDDEN,
-        "Should require ApiKeysWrite permission"
+        StatusCode::CREATED,
+        "Reader role should have ApiKeysWrite permission"
     );
 }
 
@@ -653,7 +667,9 @@ async fn test_delete_api_key_other_user_forbidden() {
 }
 
 #[tokio::test]
-async fn test_delete_api_key_requires_permission() {
+async fn test_delete_api_key_reader_has_permission() {
+    // In the RBAC system, Reader role has API key permissions for managing their own keys
+    // Deleting a non-existent key should return 404, not 403 (proving they have the permission)
     let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_app_state(db.clone()).await;
     let app = create_test_router_with_app_state(state.clone());
@@ -663,17 +679,22 @@ async fn test_delete_api_key_requires_permission() {
     let created_user = UserRepository::create(&db, &user).await.unwrap();
     let token = state
         .jwt_service
-        .generate_token(created_user.id, created_user.username.clone(), false)
+        .generate_token(
+            created_user.id,
+            created_user.username.clone(),
+            created_user.get_role(),
+        )
         .unwrap();
 
     let fake_id = uuid::Uuid::new_v4();
     let request = delete_request_with_auth(&format!("/api/v1/api-keys/{}", fake_id), &token);
     let (status, _body) = make_request(app, request).await;
 
+    // Reader has permission, but the key doesn't exist, so we get 404 not 403
     assert_eq!(
         status,
-        StatusCode::FORBIDDEN,
-        "Should require ApiKeysDelete permission"
+        StatusCode::NOT_FOUND,
+        "Reader role should have ApiKeysDelete permission (404 means key not found, not forbidden)"
     );
 }
 

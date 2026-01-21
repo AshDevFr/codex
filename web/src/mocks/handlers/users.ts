@@ -11,7 +11,7 @@ const mockUsers = [
 		id: "admin-user-id",
 		username: "admin",
 		email: "admin@example.com",
-		isAdmin: true,
+		role: "admin",
 	}),
 	...createList(() => createUser(), 9),
 ];
@@ -115,13 +115,13 @@ export const usersHandlers = [
 			username: string;
 			email: string;
 			password: string;
-			isAdmin?: boolean;
+			role?: "reader" | "maintainer" | "admin";
 		};
 
 		const newUser = createUser({
 			username: body.username,
 			email: body.email,
-			isAdmin: body.isAdmin ?? false,
+			role: body.role ?? "reader",
 		});
 
 		mockUsers.push(newUser);
@@ -135,7 +135,7 @@ export const usersHandlers = [
 		const body = (await request.json()) as Partial<{
 			username: string;
 			email: string;
-			isAdmin: boolean;
+			role: "reader" | "maintainer" | "admin";
 			isActive: boolean;
 		}>;
 

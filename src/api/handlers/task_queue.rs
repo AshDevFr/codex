@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::repositories::TaskRepository;
+use crate::require_permission;
 use crate::tasks::types::{TaskStats, TaskType};
 
 use super::AppState;
@@ -515,12 +516,7 @@ pub async fn nuke_all_tasks(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
 ) -> Result<Json<PurgeTasksResponse>, ApiError> {
-    // Require admin
-    if !auth.is_admin {
-        return Err(ApiError::Forbidden(
-            "Admin access required to nuke all tasks".to_string(),
-        ));
-    }
+    require_permission!(auth, Permission::SystemAdmin)?;
 
     let deleted = TaskRepository::nuke_all_tasks(&state.db)
         .await

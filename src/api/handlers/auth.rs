@@ -5,6 +5,7 @@ use crate::api::{
     },
     error::ApiError,
     extractors::{AuthContext, AuthState},
+    permissions::UserRole, // Used for creating users with default role
 };
 use crate::db::{
     entities::users,
@@ -93,10 +94,10 @@ pub async fn login(
         return Err(ApiError::Unauthorized("Invalid credentials".to_string()));
     }
 
-    // Generate JWT token
+    // Generate JWT token using user's role
     let access_token = state
         .jwt_service
-        .generate_token(user.id, user.username.clone(), user.is_admin)
+        .generate_token(user.id, user.username.clone(), user.get_role())
         .map_err(|e| ApiError::Internal(format!("Failed to generate token: {}", e)))?;
 
     // Update last login timestamp
@@ -105,6 +106,7 @@ pub async fn login(
         .map_err(|e| ApiError::Internal(format!("Failed to update last login: {}", e)))?;
 
     // Build response
+    let role = user.get_role().to_string();
     let response = LoginResponse {
         access_token: access_token.clone(),
         token_type: "Bearer".to_string(),
@@ -113,7 +115,7 @@ pub async fn login(
             id: user.id,
             username: user.username,
             email: user.email,
-            is_admin: user.is_admin,
+            role,
             email_verified: user.email_verified,
         },
     };
@@ -227,20 +229,16 @@ pub async fn register(
     let is_active = !email_confirmation_required;
     let email_verified = !email_confirmation_required;
 
-    // Create user with reader permissions by default
-    use crate::api::permissions::{serialize_permissions, READER_PERMISSIONS};
-    let permissions_json = serialize_permissions(&READER_PERMISSIONS);
-
+    // Create user with Reader role by default (no custom permissions)
     let new_user = users::Model {
         id: Uuid::new_v4(),
         username: request.username.clone(),
         email: request.email.clone(),
         password_hash,
-        is_admin: false,
+        role: UserRole::Reader.to_string(),
         is_active,
         email_verified,
-        permissions: serde_json::from_str(&permissions_json)
-            .unwrap_or_else(|_| serde_json::json!([])),
+        permissions: serde_json::json!([]), // Custom permissions (empty = use role defaults)
         created_at: Utc::now(),
         updated_at: Utc::now(),
         last_login_at: None,
@@ -278,6 +276,7 @@ pub async fn register(
             .map_err(|e| ApiError::Internal(format!("Failed to send verification email: {}", e)))?;
 
         // Email confirmation required - don't generate token yet (no cookie)
+        let role = created_user.get_role().to_string();
         let response = RegisterResponse {
             access_token: None,
             token_type: None,
@@ -286,7 +285,7 @@ pub async fn register(
                 id: created_user.id,
                 username: created_user.username,
                 email: created_user.email,
-                is_admin: created_user.is_admin,
+                role,
                 email_verified: created_user.email_verified,
             },
             message: Some(
@@ -303,10 +302,11 @@ pub async fn register(
             .generate_token(
                 created_user.id,
                 created_user.username.clone(),
-                created_user.is_admin,
+                created_user.get_role(),
             )
             .map_err(|e| ApiError::Internal(format!("Failed to generate token: {}", e)))?;
 
+        let role = created_user.get_role().to_string();
         let response = RegisterResponse {
             access_token: Some(access_token.clone()),
             token_type: Some("Bearer".to_string()),
@@ -315,7 +315,7 @@ pub async fn register(
                 id: created_user.id,
                 username: created_user.username,
                 email: created_user.email,
-                is_admin: created_user.is_admin,
+                role,
                 email_verified: created_user.email_verified,
             },
             message: Some("Registration successful. You are now logged in.".to_string()),
@@ -399,11 +399,12 @@ pub async fn verify_email(
         .generate_token(
             updated_user.id,
             updated_user.username.clone(),
-            updated_user.is_admin,
+            updated_user.get_role(),
         )
         .map_err(|e| ApiError::Internal(format!("Failed to generate token: {}", e)))?;
 
     // Build response
+    let role = updated_user.get_role().to_string();
     let response = VerifyEmailResponse {
         message: "Email verified successfully. Your account is now active.".to_string(),
         access_token: access_token.clone(),
@@ -413,7 +414,7 @@ pub async fn verify_email(
             id: updated_user.id,
             username: updated_user.username,
             email: updated_user.email,
-            is_admin: updated_user.is_admin,
+            role,
             email_verified: updated_user.email_verified,
         },
     };

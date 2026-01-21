@@ -818,6 +818,224 @@
         ]
       }
     },
+    "/api/v1/admin/sharing-tags": {
+      "get": {
+        "tags": [
+          "sharing-tags"
+        ],
+        "summary": "List all sharing tags (admin only)",
+        "operationId": "list_sharing_tags",
+        "responses": {
+          "200": {
+            "description": "List of sharing tags",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharingTagListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "sharing-tags"
+        ],
+        "summary": "Create a new sharing tag (admin only)",
+        "operationId": "create_sharing_tag",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSharingTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Sharing tag created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharingTagDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or tag name already exists"
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/sharing-tags/{tag_id}": {
+      "get": {
+        "tags": [
+          "sharing-tags"
+        ],
+        "summary": "Get a sharing tag by ID (admin only)",
+        "operationId": "get_sharing_tag",
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "description": "Sharing tag ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sharing tag details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharingTagDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "Sharing tag not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "sharing-tags"
+        ],
+        "summary": "Delete a sharing tag (admin only)",
+        "operationId": "delete_sharing_tag",
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "description": "Sharing tag ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Sharing tag deleted"
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "Sharing tag not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "sharing-tags"
+        ],
+        "summary": "Update a sharing tag (admin only)",
+        "operationId": "update_sharing_tag",
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "description": "Sharing tag ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSharingTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Sharing tag updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharingTagDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or tag name already exists"
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "Sharing tag not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/api-keys": {
       "get": {
         "tags": [
@@ -6565,6 +6783,206 @@
         ]
       }
     },
+    "/api/v1/series/{series_id}/sharing-tags": {
+      "get": {
+        "tags": [
+          "sharing-tags"
+        ],
+        "summary": "Get sharing tags for a series (admin only)",
+        "operationId": "get_series_sharing_tags",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of sharing tags for the series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SharingTagSummaryDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "sharing-tags"
+        ],
+        "summary": "Set sharing tags for a series (replaces existing) (admin only)",
+        "operationId": "set_series_sharing_tags",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSeriesSharingTagsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Sharing tags set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SharingTagSummaryDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "sharing-tags"
+        ],
+        "summary": "Add a sharing tag to a series (admin only)",
+        "operationId": "add_series_sharing_tag",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModifySeriesSharingTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Sharing tag added"
+          },
+          "400": {
+            "description": "Tag already assigned"
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{series_id}/sharing-tags/{tag_id}": {
+      "delete": {
+        "tags": [
+          "sharing-tags"
+        ],
+        "summary": "Remove a sharing tag from a series (admin only)",
+        "operationId": "remove_series_sharing_tag",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tag_id",
+            "in": "path",
+            "description": "Sharing tag ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Sharing tag removed"
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "Sharing tag not assigned to series"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/{series_id}/tags": {
       "get": {
         "tags": [
@@ -8239,6 +8657,35 @@
         ]
       }
     },
+    "/api/v1/user/sharing-tags": {
+      "get": {
+        "tags": [
+          "sharing-tags"
+        ],
+        "summary": "Get current user's sharing tag grants",
+        "operationId": "get_my_sharing_tags",
+        "responses": {
+          "200": {
+            "description": "List of sharing tag grants for the current user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSharingTagGrantsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/users": {
       "get": {
         "tags": [
@@ -8338,11 +8785,11 @@
         ],
         "responses": {
           "200": {
-            "description": "User details",
+            "description": "User details with sharing tags",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UserDto"
+                  "$ref": "#/components/schemas/UserDetailDto"
                 }
               }
             }
@@ -8445,6 +8892,155 @@
           },
           "404": {
             "description": "User not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/sharing-tags": {
+      "get": {
+        "tags": [
+          "sharing-tags"
+        ],
+        "summary": "Get sharing tag grants for a user (admin only)",
+        "operationId": "get_user_sharing_tags",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of sharing tag grants for the user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSharingTagGrantsResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "sharing-tags"
+        ],
+        "summary": "Set a user's sharing tag grant (admin only)",
+        "operationId": "set_user_sharing_tag",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetUserSharingTagGrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Sharing tag grant set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSharingTagGrantDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "Sharing tag not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/sharing-tags/{tag_id}": {
+      "delete": {
+        "tags": [
+          "sharing-tags"
+        ],
+        "summary": "Remove a user's sharing tag grant (admin only)",
+        "operationId": "remove_user_sharing_tag",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tag_id",
+            "in": "path",
+            "description": "Sharing tag ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Sharing tag grant removed"
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "Grant not found"
           }
         },
         "security": [
@@ -9038,6 +9634,14 @@
   },
   "components": {
     "schemas": {
+      "AccessMode": {
+        "type": "string",
+        "description": "Access mode for sharing tag grants",
+        "enum": [
+          "allow",
+          "deny"
+        ]
+      },
       "AddSeriesGenreRequest": {
         "type": "object",
         "description": "Request to add a single genre to a series",
@@ -10658,6 +11262,28 @@
           }
         }
       },
+      "CreateSharingTagRequest": {
+        "type": "object",
+        "description": "Create sharing tag request",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional description",
+            "example": "Content appropriate for children"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name for the sharing tag (must be unique)",
+            "example": "Kids Content"
+          }
+        }
+      },
       "CreateSystemIntegrationRequest": {
         "type": "object",
         "description": "Request to create a new system integration",
@@ -10753,15 +11379,21 @@
             "description": "Email address for the new account",
             "example": "newuser@example.com"
           },
-          "isAdmin": {
-            "type": "boolean",
-            "description": "Whether to grant admin privileges",
-            "example": false
-          },
           "password": {
             "type": "string",
             "description": "Password for the new account",
             "example": "securePassword123!"
+          },
+          "role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserRole",
+                "description": "User role (reader, maintainer, admin). Defaults to reader if not specified."
+              }
+            ]
           },
           "username": {
             "type": "string",
@@ -12641,6 +13273,21 @@
           }
         }
       },
+      "ModifySeriesSharingTagRequest": {
+        "type": "object",
+        "description": "Add/remove single sharing tag from series request",
+        "required": [
+          "sharingTagId"
+        ],
+        "properties": {
+          "sharingTagId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sharing tag ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        }
+      },
       "NumberStrategy": {
         "type": "string",
         "description": "Book number strategy type for determining book ordering numbers\n\nDetermines how individual book numbers are resolved for sorting and display.",
@@ -13346,7 +13993,7 @@
                 "id",
                 "username",
                 "email",
-                "isAdmin",
+                "role",
                 "isActive",
                 "createdAt",
                 "updatedAt"
@@ -13374,11 +14021,6 @@
                   "description": "Whether the account is active",
                   "example": true
                 },
-                "isAdmin": {
-                  "type": "boolean",
-                  "description": "Whether user has admin privileges",
-                  "example": false
-                },
                 "lastLoginAt": {
                   "type": [
                     "string",
@@ -13387,6 +14029,10 @@
                   "format": "date-time",
                   "description": "Timestamp of last login",
                   "example": "2024-01-15T10:30:00Z"
+                },
+                "role": {
+                  "$ref": "#/components/schemas/UserRole",
+                  "description": "User role (reader, maintainer, admin)"
                 },
                 "updatedAt": {
                   "type": "string",
@@ -15293,6 +15939,26 @@
           }
         }
       },
+      "SetSeriesSharingTagsRequest": {
+        "type": "object",
+        "description": "Bulk set series sharing tags request",
+        "required": [
+          "sharingTagIds"
+        ],
+        "properties": {
+          "sharingTagIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "List of sharing tag IDs to apply to the series",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440000"
+            ]
+          }
+        }
+      },
       "SetSeriesTagsRequest": {
         "type": "object",
         "description": "Request to set tags for a series",
@@ -15336,6 +16002,26 @@
             "example": 85,
             "maximum": 100,
             "minimum": 1
+          }
+        }
+      },
+      "SetUserSharingTagGrantRequest": {
+        "type": "object",
+        "description": "Set user sharing tag grant request",
+        "required": [
+          "sharingTagId",
+          "accessMode"
+        ],
+        "properties": {
+          "accessMode": {
+            "$ref": "#/components/schemas/AccessMode",
+            "description": "Access mode: allow or deny"
+          },
+          "sharingTagId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sharing tag ID to grant access to",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
           }
         }
       },
@@ -15526,6 +16212,117 @@
           "setupRequired": {
             "type": "boolean",
             "description": "Whether initial setup is required"
+          }
+        }
+      },
+      "SharingTagDto": {
+        "type": "object",
+        "description": "Sharing tag data transfer object",
+        "required": [
+          "id",
+          "name",
+          "seriesCount",
+          "userCount",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional description",
+            "example": "Content appropriate for children"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique sharing tag identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the sharing tag",
+            "example": "Kids Content"
+          },
+          "seriesCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of series tagged with this sharing tag",
+            "example": 42,
+            "minimum": 0
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update timestamp",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "userCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of users with grants for this sharing tag",
+            "example": 5,
+            "minimum": 0
+          }
+        }
+      },
+      "SharingTagListResponse": {
+        "type": "object",
+        "description": "Response for list of sharing tags",
+        "required": [
+          "items",
+          "total"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SharingTagDto"
+            },
+            "description": "List of sharing tags"
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total count",
+            "example": 10,
+            "minimum": 0
+          }
+        }
+      },
+      "SharingTagSummaryDto": {
+        "type": "object",
+        "description": "Simplified sharing tag for lists (without counts)",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional description",
+            "example": "Content appropriate for children"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique sharing tag identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the sharing tag",
+            "example": "Kids Content"
           }
         }
       },
@@ -17155,6 +17952,28 @@
           }
         }
       },
+      "UpdateSharingTagRequest": {
+        "type": "object",
+        "description": "Update sharing tag request",
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "New description (set to null to remove)",
+            "example": "Content appropriate for the whole family"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "New display name (must be unique)",
+            "example": "Family Content"
+          }
+        }
+      },
       "UpdateSystemIntegrationRequest": {
         "type": "object",
         "description": "Request to update a system integration",
@@ -17195,14 +18014,6 @@
             "description": "Update active status",
             "example": true
           },
-          "isAdmin": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "Update admin privileges",
-            "example": false
-          },
           "password": {
             "type": [
               "string",
@@ -17210,6 +18021,17 @@
             ],
             "description": "New password",
             "example": "newSecurePassword123!"
+          },
+          "role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserRole",
+                "description": "Update user role (reader, maintainer, admin)"
+              }
+            ]
           },
           "username": {
             "type": [
@@ -17221,6 +18043,75 @@
           }
         }
       },
+      "UserDetailDto": {
+        "type": "object",
+        "description": "User detail DTO with sharing tag grants (for single user view)",
+        "required": [
+          "id",
+          "username",
+          "email",
+          "role",
+          "isActive",
+          "createdAt",
+          "updatedAt",
+          "sharingTags"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Account creation timestamp",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "email": {
+            "type": "string",
+            "description": "User email address",
+            "example": "john.doe@example.com"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique user identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Whether the account is active",
+            "example": true
+          },
+          "lastLoginAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Timestamp of last login",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole",
+            "description": "User role (reader, maintainer, admin)"
+          },
+          "sharingTags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserSharingTagGrantDto"
+            },
+            "description": "Sharing tag grants for this user"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last account update timestamp",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "username": {
+            "type": "string",
+            "description": "Username for login",
+            "example": "johndoe"
+          }
+        }
+      },
       "UserDto": {
         "type": "object",
         "description": "User data transfer object",
@@ -17228,7 +18119,7 @@
           "id",
           "username",
           "email",
-          "isAdmin",
+          "role",
           "isActive",
           "createdAt",
           "updatedAt"
@@ -17256,11 +18147,6 @@
             "description": "Whether the account is active",
             "example": true
           },
-          "isAdmin": {
-            "type": "boolean",
-            "description": "Whether user has admin privileges",
-            "example": false
-          },
           "lastLoginAt": {
             "type": [
               "string",
@@ -17269,6 +18155,10 @@
             "format": "date-time",
             "description": "Timestamp of last login",
             "example": "2024-01-15T10:30:00Z"
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole",
+            "description": "User role (reader, maintainer, admin)"
           },
           "updatedAt": {
             "type": "string",
@@ -17290,7 +18180,7 @@
           "id",
           "username",
           "email",
-          "isAdmin",
+          "role",
           "emailVerified"
         ],
         "properties": {
@@ -17310,10 +18200,10 @@
             "description": "User unique identifier",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
-          "isAdmin": {
-            "type": "boolean",
-            "description": "Whether user has admin privileges",
-            "example": true
+          "role": {
+            "type": "string",
+            "description": "User role (reader, maintainer, admin)",
+            "example": "admin"
           },
           "username": {
             "type": "string",
@@ -17512,6 +18402,15 @@
           }
         }
       },
+      "UserRole": {
+        "type": "string",
+        "description": "User roles for role-based access control (RBAC)\n\nRoles define a base set of permissions that users inherit.\nCustom permissions can be added on top of role permissions (union behavior).",
+        "enum": [
+          "reader",
+          "maintainer",
+          "admin"
+        ]
+      },
       "UserSeriesRatingDto": {
         "type": "object",
         "description": "User series rating data transfer object",
@@ -17560,6 +18459,69 @@
             "format": "date-time",
             "description": "When the rating was last updated",
             "example": "2024-01-15T10:30:00Z"
+          }
+        }
+      },
+      "UserSharingTagGrantDto": {
+        "type": "object",
+        "description": "User sharing tag grant data transfer object",
+        "required": [
+          "id",
+          "sharingTagId",
+          "sharingTagName",
+          "accessMode",
+          "createdAt"
+        ],
+        "properties": {
+          "accessMode": {
+            "$ref": "#/components/schemas/AccessMode",
+            "description": "Access mode: allow or deny"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Grant creation timestamp",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique grant identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "sharingTagId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sharing tag ID",
+            "example": "660e8400-e29b-41d4-a716-446655440000"
+          },
+          "sharingTagName": {
+            "type": "string",
+            "description": "Sharing tag name",
+            "example": "Kids Content"
+          }
+        }
+      },
+      "UserSharingTagGrantsResponse": {
+        "type": "object",
+        "description": "Response for user's sharing tag grants",
+        "required": [
+          "userId",
+          "grants"
+        ],
+        "properties": {
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserSharingTagGrantDto"
+            },
+            "description": "List of grants"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
           }
         }
       },
@@ -17764,6 +18726,10 @@
     {
       "name": "Admin",
       "description": "Administrative operations (cleanup, maintenance)"
+    },
+    {
+      "name": "sharing-tags",
+      "description": "Sharing tags for content access control (admin only)"
     },
     {
       "name": "events",

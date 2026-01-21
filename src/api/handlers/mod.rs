@@ -23,6 +23,9 @@ pub mod user_integrations;
 pub mod user_preferences;
 pub mod users;
 
+// Sharing tags for content access control
+pub mod sharing_tags;
+
 pub use auth::*;
 pub use books::*;
 pub use duplicates::*;

@@ -113,16 +113,14 @@ docs-start: ## Start documentation dev server
 	cd docs && npm start
 
 docs-start-fresh: ## Start documentation dev server with fresh API docs
-	@$(MAKE) docs-clean-api-docs
-	@$(MAKE) docs-gen-api-docs
+	@$(MAKE) docs-refresh-api-docs
 	@$(MAKE) docs-start
 
 docs-build: ## Build documentation for production
 	cd docs && npm run build
 
 docs-build-fresh: ## Build documentation for production with fresh API docs
-	@$(MAKE) docs-clean-api-docs
-	@$(MAKE) docs-gen-api-docs
+	@$(MAKE) docs-refresh-api-docs
 	@$(MAKE) docs-build
 
 docs-build-docker: ## Build documentation for production in Docker
@@ -133,6 +131,10 @@ docs-serve: ## Serve built documentation locally
 
 docs-clear: ## Clear documentation cache
 	cd docs && npm run clear
+
+docs-refresh-api-docs: ## Refresh API docs
+	@$(MAKE) docs-clean-api-docs
+	@$(MAKE) docs-gen-api-docs
 
 docs-gen-api-docs: ## Generate API docs
 	@$(MAKE) openapi

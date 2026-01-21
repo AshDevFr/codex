@@ -32,7 +32,7 @@ const renderWithMantine = (component: React.ReactElement) => {
 // Default mock for useAuthStore (admin user)
 const mockAuthStoreAdmin = () => {
 	vi.mocked(useAuthStore).mockReturnValue({
-		user: { id: "user-1", username: "admin", isAdmin: true },
+		user: { id: "user-1", username: "admin", role: "admin" },
 		token: "test-token",
 		isAuthenticated: true,
 		setAuth: vi.fn(),
@@ -43,7 +43,7 @@ const mockAuthStoreAdmin = () => {
 // Mock for non-admin user
 const mockAuthStoreNonAdmin = () => {
 	vi.mocked(useAuthStore).mockReturnValue({
-		user: { id: "user-2", username: "user", isAdmin: false },
+		user: { id: "user-2", username: "user", role: "reader" },
 		token: "test-token",
 		isAuthenticated: true,
 		setAuth: vi.fn(),

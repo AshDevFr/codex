@@ -21,7 +21,11 @@ async fn create_admin_and_token(
     let created_user = UserRepository::create(db, &user).await.unwrap();
     state
         .jwt_service
-        .generate_token(created_user.id, created_user.email, true)
+        .generate_token(
+            created_user.id,
+            created_user.username.clone(),
+            created_user.get_role(),
+        )
         .unwrap()
 }
 
@@ -36,7 +40,11 @@ async fn create_regular_user_and_token(
     let created_user = UserRepository::create(db, &user).await.unwrap();
     state
         .jwt_service
-        .generate_token(created_user.id, created_user.email, false)
+        .generate_token(
+            created_user.id,
+            created_user.username.clone(),
+            created_user.get_role(),
+        )
         .unwrap()
 }
 

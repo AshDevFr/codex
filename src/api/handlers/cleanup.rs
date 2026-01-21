@@ -15,9 +15,10 @@ use crate::api::{
     },
     error::ApiError,
     extractors::{AppState, AuthContext},
+    permissions::Permission,
 };
 use crate::db::repositories::{BookRepository, SeriesRepository, TaskRepository};
-use crate::require_admin;
+use crate::require_permission;
 use crate::services::file_cleanup::OrphanedFileType;
 use crate::tasks::types::TaskType;
 
@@ -58,7 +59,7 @@ pub async fn get_orphan_stats(
     auth: AuthContext,
     Query(query): Query<OrphanStatsQuery>,
 ) -> Result<Json<OrphanStatsDto>, ApiError> {
-    require_admin!(auth)?;
+    require_permission!(auth, Permission::SystemAdmin)?;
 
     let cleanup_service = &state.file_cleanup_service;
 
@@ -170,7 +171,7 @@ pub async fn trigger_cleanup(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
 ) -> Result<Json<TriggerCleanupResponse>, ApiError> {
-    require_admin!(auth)?;
+    require_permission!(auth, Permission::SystemAdmin)?;
 
     // Enqueue the cleanup task with low priority (cleanup runs last)
     let task_id = TaskRepository::enqueue(&state.db, TaskType::CleanupOrphanedFiles, -100, None)
@@ -215,7 +216,7 @@ pub async fn delete_orphans(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
 ) -> Result<Json<CleanupResultDto>, ApiError> {
-    require_admin!(auth)?;
+    require_permission!(auth, Permission::SystemAdmin)?;
 
     let cleanup_service = &state.file_cleanup_service;
 

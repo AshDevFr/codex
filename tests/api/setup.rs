@@ -183,7 +183,10 @@ async fn test_initialize_setup_creates_admin_user() {
     // Verify user details
     assert_eq!(init_response.user.username, "admin");
     assert_eq!(init_response.user.email, "admin@example.com");
-    assert!(init_response.user.is_admin, "First user should be admin");
+    assert_eq!(
+        init_response.user.role, "admin",
+        "First user should be admin"
+    );
     assert!(
         init_response.user.email_verified,
         "First user should have email verified"
@@ -197,7 +200,7 @@ async fn test_initialize_setup_creates_admin_user() {
 
     assert_eq!(db_user.username, "admin");
     assert_eq!(db_user.email, "admin@example.com");
-    assert!(db_user.is_admin, "User should be admin");
+    assert_eq!(db_user.role, "admin", "User should have admin role");
     assert!(db_user.is_active, "User should be active");
     assert!(db_user.email_verified, "User should have email verified");
 }
@@ -319,7 +322,7 @@ async fn test_configure_settings_requires_admin() {
     // Generate token for non-admin user
     let token = state
         .jwt_service
-        .generate_token(user.id, user.username.clone(), false)
+        .generate_token(user.id, user.username.clone(), user.get_role())
         .unwrap();
 
     let settings_request = ConfigureSettingsRequest {

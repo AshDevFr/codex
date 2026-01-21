@@ -138,7 +138,7 @@ impl fmt::Display for SeriesSortParam {
 }
 
 /// Series data transfer object
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SeriesDto {
     #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]

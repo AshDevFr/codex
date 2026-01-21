@@ -36,7 +36,7 @@ describe("ReaderSettings", () => {
 				username: "testuser",
 				email: "test@example.com",
 				emailVerified: true,
-				isAdmin: false,
+				role: "reader",
 			},
 			token: "test-token",
 			isAuthenticated: true,

@@ -296,8 +296,8 @@ export function ProfileSettings() {
 									</Group>
 									<Group>
 										<Text fw={500}>Role:</Text>
-										<Badge color={user?.isAdmin ? "blue" : "gray"}>
-											{user?.isAdmin ? "Admin" : "User"}
+										<Badge color={user?.role === "admin" ? "blue" : "gray"}>
+											{user?.role === "admin" ? "Admin" : user?.role === "maintainer" ? "Maintainer" : "User"}
 										</Badge>
 									</Group>
 								</Stack>

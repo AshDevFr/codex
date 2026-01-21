@@ -137,7 +137,7 @@ mod tests {
             username: "testuser".to_string(),
             email: "test@example.com".to_string(),
             password_hash: "hash123".to_string(),
-            is_admin: false,
+            role: "reader".to_string(),
             is_active: true,
             email_verified: false,
             permissions: serde_json::json!([]),

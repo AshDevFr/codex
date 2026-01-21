@@ -23,7 +23,7 @@ async fn create_admin_and_token(
     let created = UserRepository::create(db, &user).await.unwrap();
     state
         .jwt_service
-        .generate_token(created.id, created.username, created.is_admin)
+        .generate_token(created.id, created.username.clone(), created.get_role())
         .unwrap()
 }
 

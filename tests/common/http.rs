@@ -1,7 +1,9 @@
 use axum::Router;
 use codex::api::extractors::{AppState, AuthState};
+use codex::api::permissions::UserRole;
 use codex::api::routes::create_router;
 use codex::config::{ApiConfig, AuthConfig, EmailConfig, FilesConfig};
+use codex::db::entities::users;
 use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
 use codex::services::{FileCleanupService, SettingsService, ThumbnailService};
@@ -77,6 +79,16 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
         task_metrics_service: None, // Tests don't need metrics service
         scheduler: None,            // Tests don't need scheduler
     })
+}
+
+/// Helper to generate a JWT token for a test user
+/// This derives the role from the user's role field (or defaults to Reader)
+pub fn generate_test_token(state: &AppState, user: &users::Model) -> String {
+    let role = user.role.parse().unwrap_or(UserRole::Reader);
+    state
+        .jwt_service
+        .generate_token(user.id, user.username.clone(), role)
+        .expect("Failed to generate test token")
 }
 
 /// Helper to create a test API config

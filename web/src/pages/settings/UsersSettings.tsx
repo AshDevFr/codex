@@ -9,6 +9,7 @@ import {
 	Loader,
 	Modal,
 	PasswordInput,
+	Select,
 	Stack,
 	Switch,
 	Table,
@@ -29,6 +30,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { type UserDto, usersApi } from "@/api/users";
+import { UserSharingTagGrants } from "@/components/users";
 import { useAuthStore } from "@/store/authStore";
 
 export function UsersSettings() {
@@ -49,13 +51,20 @@ export function UsersSettings() {
 		queryFn: usersApi.list,
 	});
 
+	// Role options for the select
+	const roleOptions = [
+		{ value: "reader", label: "Reader" },
+		{ value: "maintainer", label: "Maintainer" },
+		{ value: "admin", label: "Admin" },
+	];
+
 	// Create user form
 	const createForm = useForm({
 		initialValues: {
 			username: "",
 			email: "",
 			password: "",
-			isAdmin: false,
+			role: "reader" as "reader" | "maintainer" | "admin",
 		},
 		validate: {
 			username: (value) =>
@@ -75,7 +84,7 @@ export function UsersSettings() {
 			username: "",
 			email: "",
 			password: "",
-			isAdmin: false,
+			role: "reader" as "reader" | "maintainer" | "admin",
 			isActive: true,
 		},
 	});
@@ -86,13 +95,13 @@ export function UsersSettings() {
 			username: string;
 			email: string;
 			password: string;
-			isAdmin: boolean;
+			role: "reader" | "maintainer" | "admin";
 		}) => {
 			return usersApi.create({
 				username: data.username,
 				email: data.email,
 				password: data.password,
-				isAdmin: data.isAdmin,
+				role: data.role,
 			});
 		},
 		onSuccess: () => {
@@ -124,7 +133,7 @@ export function UsersSettings() {
 				username?: string;
 				email?: string;
 				password?: string;
-				isAdmin?: boolean;
+				role?: "reader" | "maintainer" | "admin";
 				isActive?: boolean;
 			};
 		}) => {
@@ -132,7 +141,7 @@ export function UsersSettings() {
 				username: data.username,
 				email: data.email,
 				password: data.password || undefined,
-				isAdmin: data.isAdmin,
+				role: data.role,
 				isActive: data.isActive,
 			});
 		},
@@ -184,7 +193,7 @@ export function UsersSettings() {
 			username: user.username,
 			email: user.email,
 			password: "",
-			isAdmin: user.isAdmin,
+			role: user.role,
 			isActive: user.isActive,
 		});
 		setEditModalOpened(true);
@@ -248,8 +257,8 @@ export function UsersSettings() {
 										</Table.Td>
 										<Table.Td>{user.email}</Table.Td>
 										<Table.Td>
-											<Badge color={user.isAdmin ? "blue" : "gray"}>
-												{user.isAdmin ? "Admin" : "User"}
+											<Badge color={user.role === "admin" ? "blue" : user.role === "maintainer" ? "cyan" : "gray"}>
+												{user.role === "admin" ? "Admin" : user.role === "maintainer" ? "Maintainer" : "Reader"}
 											</Badge>
 										</Table.Td>
 										<Table.Td>
@@ -325,10 +334,11 @@ export function UsersSettings() {
 							placeholder="Enter password"
 							{...createForm.getInputProps("password")}
 						/>
-						<Switch
-							label="Admin privileges"
-							description="Admin users can manage server settings and other users"
-							{...createForm.getInputProps("isAdmin", { type: "checkbox" })}
+						<Select
+							label="Role"
+							description="Reader: View content. Maintainer: Manage libraries. Admin: Full access."
+							data={roleOptions}
+							{...createForm.getInputProps("role")}
 						/>
 						<Group justify="flex-end">
 							<Button
@@ -380,10 +390,11 @@ export function UsersSettings() {
 							placeholder="Leave blank to keep current password"
 							{...editForm.getInputProps("password")}
 						/>
-						<Switch
-							label="Admin privileges"
-							description="Admin users can manage server settings and other users"
-							{...editForm.getInputProps("isAdmin", { type: "checkbox" })}
+						<Select
+							label="Role"
+							description="Reader: View content. Maintainer: Manage libraries. Admin: Full access."
+							data={roleOptions}
+							{...editForm.getInputProps("role")}
 							disabled={selectedUser?.id === currentUser?.id}
 						/>
 						<Switch
@@ -394,10 +405,15 @@ export function UsersSettings() {
 						/>
 						{selectedUser?.id === currentUser?.id && (
 							<Alert icon={<IconAlertCircle size={16} />} color="yellow">
-								You cannot change your own admin status or deactivate your own
-								account.
+								You cannot change your own role or deactivate your own account.
 							</Alert>
 						)}
+
+						{/* Sharing Tag Grants */}
+						{selectedUser && (
+							<UserSharingTagGrants userId={selectedUser.id} />
+						)}
+
 						<Group justify="flex-end">
 							<Button
 								variant="subtle"

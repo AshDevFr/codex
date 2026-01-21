@@ -260,6 +260,21 @@ Codex provides OPDS catalog feeds for e-reader applications:
         handlers::system_integrations::disable_system_integration,
         handlers::system_integrations::test_system_integration,
 
+        // Sharing Tags endpoints
+        handlers::sharing_tags::list_sharing_tags,
+        handlers::sharing_tags::get_sharing_tag,
+        handlers::sharing_tags::create_sharing_tag,
+        handlers::sharing_tags::update_sharing_tag,
+        handlers::sharing_tags::delete_sharing_tag,
+        handlers::sharing_tags::get_series_sharing_tags,
+        handlers::sharing_tags::set_series_sharing_tags,
+        handlers::sharing_tags::add_series_sharing_tag,
+        handlers::sharing_tags::remove_series_sharing_tag,
+        handlers::sharing_tags::get_user_sharing_tags,
+        handlers::sharing_tags::set_user_sharing_tag,
+        handlers::sharing_tags::remove_user_sharing_tag,
+        handlers::sharing_tags::get_my_sharing_tags,
+
         // Cleanup endpoints
         handlers::cleanup::get_orphan_stats,
         handlers::cleanup::trigger_cleanup,
@@ -393,6 +408,19 @@ Codex provides OPDS catalog feeds for e-reader applications:
             dto::SeriesCoverDto,
             dto::SeriesCoverListResponse,
 
+            // Sharing Tag DTOs
+            dto::SharingTagDto,
+            dto::SharingTagSummaryDto,
+            dto::SharingTagListResponse,
+            dto::CreateSharingTagRequest,
+            dto::UpdateSharingTagRequest,
+            dto::SetSeriesSharingTagsRequest,
+            dto::ModifySeriesSharingTagRequest,
+            dto::UserSharingTagGrantDto,
+            dto::SetUserSharingTagGrantRequest,
+            dto::UserSharingTagGrantsResponse,
+            crate::db::entities::user_sharing_tags::AccessMode,
+
             dto::BookDto,
             dto::BookListResponse,
             dto::BookDetailResponse,
@@ -403,6 +431,7 @@ Codex provides OPDS catalog feeds for e-reader applications:
             dto::BookMetadataResponse,
             dto::PageDto,
             dto::UserDto,
+            dto::UserDetailDto,
             dto::CreateUserRequest,
             dto::UpdateUserRequest,
             dto::ApiKeyDto,
@@ -531,6 +560,7 @@ Codex provides OPDS catalog feeds for e-reader applications:
         (name = "System Integrations", description = "Admin-managed external service integrations"),
         (name = "duplicates", description = "Duplicate book detection and management"),
         (name = "Admin", description = "Administrative operations (cleanup, maintenance)"),
+        (name = "sharing-tags", description = "Sharing tags for content access control (admin only)"),
         (name = "events", description = "Server-Sent Events for real-time updates"),
         (name = "opds", description = "OPDS 1.2 catalog feed (Atom XML format)"),
         (name = "opds2", description = "OPDS 2.0 catalog feed (JSON format) - Modern JSON-based OPDS specification"),
