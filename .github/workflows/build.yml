@@ -23,6 +23,7 @@
 # =============================================================================
 
 name: Build
+
 permissions:
   contents: write
   packages: write
@@ -108,7 +109,7 @@ jobs:
       - name: Clippy check
         run: cargo clippy --features rar -- -D warnings
 
-  # Build frontend
+  # Run frontend tests and build
   frontend:
     name: Frontend
     # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
@@ -376,10 +377,7 @@ jobs:
   # Uses Dockerfile.cross which cross-compiles ARM on x86 (no QEMU emulation)
   docker:
     name: Docker
-    needs:
-      - test
-      - lint
-      - frontend
+    needs: [test, lint, frontend]
     # Only build Docker on main branch or release tags
     if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
     # SELF-HOSTED: Change to ubuntu-latest for GitHub runners
