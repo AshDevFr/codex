@@ -1,6 +1,7 @@
 import {
 	ActionIcon,
 	Alert,
+	Anchor,
 	Badge,
 	Box,
 	Button,
@@ -27,6 +28,7 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { type SharingTagDto, sharingTagsApi } from "@/api/sharingTags";
 
 export function SharingTagsSettings() {
@@ -220,14 +222,34 @@ export function SharingTagsSettings() {
 											</Text>
 										</Table.Td>
 										<Table.Td>
-											<Badge variant="light" color="blue">
-												{tag.seriesCount} series
-											</Badge>
+											<Anchor
+												component={Link}
+												to={`/libraries/all/series?stf=any:${encodeURIComponent(tag.name)}`}
+												underline="never"
+											>
+												<Badge
+													variant="light"
+													color="blue"
+													style={{ cursor: "pointer" }}
+												>
+													{tag.seriesCount} series
+												</Badge>
+											</Anchor>
 										</Table.Td>
 										<Table.Td>
-											<Badge variant="light" color="green">
-												{tag.userCount} users
-											</Badge>
+											<Anchor
+												component={Link}
+												to={`/settings/users?sharingTag=${encodeURIComponent(tag.name)}`}
+												underline="never"
+											>
+												<Badge
+													variant="light"
+													color="green"
+													style={{ cursor: "pointer" }}
+												>
+													{tag.userCount} users
+												</Badge>
+											</Anchor>
 										</Table.Td>
 										<Table.Td>
 											{new Date(tag.createdAt).toLocaleDateString()}

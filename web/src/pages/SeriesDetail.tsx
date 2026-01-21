@@ -13,6 +13,7 @@ import {
 	Stack,
 	Text,
 	Title,
+	Tooltip,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
@@ -33,6 +34,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { seriesApi } from "@/api/series";
 import { seriesMetadataApi } from "@/api/seriesMetadata";
 import { settingsApi } from "@/api/settings";
+import { sharingTagsApi } from "@/api/sharingTags";
+import { useAuthStore } from "@/store/authStore";
 import {
 	AlternateTitles,
 	CommunityRating,
@@ -43,7 +46,6 @@ import {
 	SeriesBookList,
 	SeriesMetadataEditModal,
 	SeriesRating,
-	SeriesSharingTags,
 } from "@/components/series";
 
 // Helper to format reading direction
@@ -68,6 +70,8 @@ export function SeriesDetail() {
 	const { seriesId } = useParams<{ seriesId: string }>();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
+	const { user } = useAuthStore();
+	const isAdmin = user?.role === "admin";
 	const [summaryOpened, { toggle: toggleSummary }] = useDisclosure(false);
 	const [editModalOpened, { open: openEditModal, close: closeEditModal }] =
 		useDisclosure(false);
@@ -99,6 +103,13 @@ export function SeriesDetail() {
 		queryKey: ["public-settings"],
 		queryFn: () => settingsApi.getPublicSettings(),
 		staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+	});
+
+	// Fetch sharing tags for this series (admin only)
+	const { data: seriesSharingTags } = useQuery({
+		queryKey: ["series-sharing-tags", seriesId],
+		queryFn: () => sharingTagsApi.getForSeries(seriesId!),
+		enabled: !!seriesId && isAdmin,
 	});
 
 	// Mark as read mutation
@@ -501,8 +512,26 @@ export function SeriesDetail() {
 						</Group>
 					)}
 
-					{/* Sharing Tags (Admin only) */}
-					<SeriesSharingTags seriesId={series.id} />
+					{/* Sharing Tags (admin only) */}
+					{isAdmin && seriesSharingTags && seriesSharingTags.length > 0 && (
+						<Group gap="md" align="flex-start">
+							<Text size="sm" c="dimmed" w={100}>
+								SHARING
+							</Text>
+							<Group gap="xs">
+								{seriesSharingTags.map((tag) => (
+									<Tooltip
+										key={tag.id}
+										label={tag.description || "Sharing tag"}
+									>
+										<Badge variant="light" color="violet" size="sm">
+											{tag.name}
+										</Badge>
+									</Tooltip>
+								))}
+							</Group>
+						</Group>
+					)}
 
 					{/* External Links */}
 					{metadata?.externalLinks && metadata.externalLinks.length > 0 && (

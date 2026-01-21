@@ -263,25 +263,38 @@ export function ProfileSettings() {
 
 				<Tabs defaultValue="account">
 					<Tabs.List>
-						<Tabs.Tab value="account" leftSection={<IconUser size={16} />}>
+						<Tabs.Tab
+							key="account"
+							value="account"
+							leftSection={<IconUser size={16} />}
+						>
 							Account
 						</Tabs.Tab>
 						<Tabs.Tab
+							key="preferences"
 							value="preferences"
 							leftSection={<IconPalette size={16} />}
 						>
 							Preferences
 						</Tabs.Tab>
-						<Tabs.Tab value="integrations" leftSection={<IconLink size={16} />}>
+						<Tabs.Tab
+							key="integrations"
+							value="integrations"
+							leftSection={<IconLink size={16} />}
+						>
 							Integrations
 						</Tabs.Tab>
-						<Tabs.Tab value="api-keys" leftSection={<IconKey size={16} />}>
+						<Tabs.Tab
+							key="api-keys"
+							value="api-keys"
+							leftSection={<IconKey size={16} />}
+						>
 							API Keys
 						</Tabs.Tab>
 					</Tabs.List>
 
 					{/* Account Tab */}
-					<Tabs.Panel value="account" pt="md">
+					<Tabs.Panel key="account" value="account" pt="md">
 						<Stack gap="lg">
 							<Card withBorder>
 								<Stack gap="md">
@@ -344,7 +357,7 @@ export function ProfileSettings() {
 					</Tabs.Panel>
 
 					{/* Preferences Tab */}
-					<Tabs.Panel value="preferences" pt="md">
+					<Tabs.Panel key="preferences" value="preferences" pt="md">
 						<Stack gap="lg">
 							<Card withBorder>
 								<Stack gap="md">
@@ -400,12 +413,12 @@ export function ProfileSettings() {
 					</Tabs.Panel>
 
 					{/* Integrations Tab */}
-					<Tabs.Panel value="integrations" pt="md">
+					<Tabs.Panel key="integrations" value="integrations" pt="md">
 						<Stack gap="lg">
 							{integrationsLoading ? (
 								<Text>Loading integrations...</Text>
 							) : (
-								<>
+								<Stack gap="lg">
 									{/* Connected Integrations */}
 									<Card withBorder>
 										<Stack gap="md">
@@ -534,13 +547,13 @@ export function ProfileSettings() {
 												)}
 										</Stack>
 									</Card>
-								</>
+								</Stack>
 							)}
 						</Stack>
 					</Tabs.Panel>
 
 					{/* API Keys Tab */}
-					<Tabs.Panel value="api-keys" pt="md">
+					<Tabs.Panel key="api-keys" value="api-keys" pt="md">
 						<Stack gap="lg">
 							<Card withBorder>
 								<Stack gap="md">

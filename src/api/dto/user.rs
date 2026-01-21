@@ -2,7 +2,7 @@ use crate::api::dto::UserSharingTagGrantDto;
 use crate::api::permissions::UserRole;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 /// User data transfer object
 #[derive(Debug, Serialize, ToSchema)]
@@ -126,4 +126,68 @@ pub struct UpdateUserRequest {
     /// Update active status
     #[schema(example = true)]
     pub is_active: Option<bool>,
+}
+
+fn default_page_size() -> u64 {
+    20
+}
+
+/// Query parameters for listing users with filtering and pagination
+#[derive(Debug, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct UserListParams {
+    /// Filter by role
+    #[serde(default)]
+    pub role: Option<UserRole>,
+
+    /// Filter by sharing tag name (users who have a grant for this tag)
+    #[serde(default)]
+    pub sharing_tag: Option<String>,
+
+    /// Filter by sharing tag access mode (allow/deny) - only used with sharing_tag
+    #[serde(default)]
+    pub sharing_tag_mode: Option<String>,
+
+    /// Page number (0-indexed)
+    #[serde(default)]
+    pub page: u64,
+
+    /// Number of items per page (max 100)
+    #[serde(default = "default_page_size")]
+    pub page_size: u64,
+}
+
+impl Default for UserListParams {
+    fn default() -> Self {
+        Self {
+            role: None,
+            sharing_tag: None,
+            sharing_tag_mode: None,
+            page: 0,
+            page_size: default_page_size(),
+        }
+    }
+}
+
+impl UserListParams {
+    /// Validate and clamp pagination parameters
+    pub fn validate(mut self, max_page_size: u64) -> Self {
+        if self.page_size == 0 {
+            self.page_size = default_page_size();
+        }
+        if self.page_size > max_page_size {
+            self.page_size = max_page_size;
+        }
+        self
+    }
+
+    /// Calculate offset for database queries
+    pub fn offset(&self) -> u64 {
+        self.page * self.page_size
+    }
+
+    /// Get limit for database queries
+    pub fn limit(&self) -> u64 {
+        self.page_size
+    }
 }

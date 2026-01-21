@@ -16,8 +16,11 @@ import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { IconAdjustments, IconX } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { genresApi } from "@/api/genres";
+import { sharingTagsApi } from "@/api/sharingTags";
 import { tagsApi } from "@/api/tags";
+import { useDraftFilterState } from "@/hooks/useDraftFilterState";
 import { useFilterState } from "@/hooks/useFilterState";
+import { useAuthStore } from "@/store/authStore";
 import { FilterGroup } from "./FilterGroup";
 import classes from "./FilterPanel.module.css";
 
@@ -48,8 +51,25 @@ const SERIES_STATUS_OPTIONS = [
  */
 export function FilterPanel() {
 	const [opened, { open, close }] = useDisclosure(false);
-	const filterState = useFilterState();
+	// Use committed state for the indicator badge (shows what's actually applied)
+	const { activeFilterCount: committedFilterCount, hasActiveFilters: hasCommittedFilters } = useFilterState();
+	// Use draft state for editing within the drawer
+	const draftState = useDraftFilterState();
 	const isMobile = useMediaQuery("(max-width: 768px)");
+	const user = useAuthStore((state) => state.user);
+	const isAdmin = user?.role === "admin";
+
+	// Handle Apply - commit draft to URL and close
+	const handleApply = () => {
+		draftState.applyFilters();
+		close();
+	};
+
+	// Handle Close - discard draft changes and close
+	const handleClose = () => {
+		draftState.discardChanges();
+		close();
+	};
 
 	// Fetch available genres (global, not library-specific)
 	const { data: genres = [], isLoading: genresLoading } = useQuery({
@@ -65,7 +85,15 @@ export function FilterPanel() {
 		staleTime: 60000,
 	});
 
-	const isLoading = genresLoading || tagsLoading;
+	// Fetch sharing tags (admin only)
+	const { data: sharingTags = [], isLoading: sharingTagsLoading } = useQuery({
+		queryKey: ["sharing-tags"],
+		queryFn: () => sharingTagsApi.list(),
+		staleTime: 60000,
+		enabled: isAdmin,
+	});
+
+	const isLoading = genresLoading || tagsLoading || (isAdmin && sharingTagsLoading);
 
 	// Transform API data to filter options
 	const genreOptions = genres.map((g) => ({
@@ -80,21 +108,28 @@ export function FilterPanel() {
 		count: t.seriesCount ?? undefined,
 	}));
 
+	const sharingTagOptions = sharingTags.map((st) => ({
+		value: st.name,
+		label: st.name,
+		count: st.seriesCount ?? undefined,
+	}));
+
 	// Check if we have any metadata-based filters available
 	const hasMetadataFilters = genreOptions.length > 0 || tagOptions.length > 0;
+	const hasSharingTagFilters = isAdmin && sharingTagOptions.length > 0;
 
 	return (
 		<>
-			{/* Trigger Button */}
+			{/* Trigger Button - shows committed filter count */}
 			<Indicator
-				label={filterState.activeFilterCount}
+				label={committedFilterCount}
 				size={16}
-				disabled={!filterState.hasActiveFilters}
+				disabled={!hasCommittedFilters}
 				color="red"
 			>
 				<ActionIcon
-					variant={filterState.hasActiveFilters ? "filled" : "subtle"}
-					color={filterState.hasActiveFilters ? "blue" : undefined}
+					variant={hasCommittedFilters ? "filled" : "subtle"}
+					color={hasCommittedFilters ? "blue" : undefined}
 					size="lg"
 					title="Filters"
 					aria-label="Filter options"
@@ -104,16 +139,16 @@ export function FilterPanel() {
 				</ActionIcon>
 			</Indicator>
 
-			{/* Filter Drawer */}
+			{/* Filter Drawer - uses draft state */}
 			<Drawer
 				opened={opened}
-				onClose={close}
+				onClose={handleClose}
 				title={
 					<Group gap="sm">
 						<Title order={4}>Filters</Title>
-						{filterState.hasActiveFilters && (
+						{draftState.hasActiveFilters && (
 							<Badge size="sm" variant="light">
-								{filterState.activeFilterCount} active
+								{draftState.activeFilterCount} active
 							</Badge>
 						)}
 					</Group>
@@ -145,10 +180,10 @@ export function FilterPanel() {
 								<FilterGroup
 									title="Read Status"
 									options={READ_STATUS_OPTIONS}
-									state={filterState.filters.readStatus}
-									onValueChange={filterState.setReadStatusState}
-									onModeChange={filterState.setReadStatusMode}
-									onClear={() => filterState.clearGroup("readStatus")}
+									state={draftState.draftFilters.readStatus}
+									onValueChange={draftState.setReadStatusState}
+									onModeChange={draftState.setReadStatusMode}
+									onClear={() => draftState.clearGroupDraft("readStatus")}
 									showModeToggle={false}
 								/>
 
@@ -163,10 +198,10 @@ export function FilterPanel() {
 								<FilterGroup
 									title="Status"
 									options={SERIES_STATUS_OPTIONS}
-									state={filterState.filters.status}
-									onValueChange={filterState.setStatusState}
-									onModeChange={filterState.setStatusMode}
-									onClear={() => filterState.clearGroup("status")}
+									state={draftState.draftFilters.status}
+									onValueChange={draftState.setStatusState}
+									onModeChange={draftState.setStatusMode}
+									onClear={() => draftState.clearGroupDraft("status")}
 									showModeToggle={false}
 								/>
 
@@ -183,10 +218,10 @@ export function FilterPanel() {
 											<FilterGroup
 												title="Genres"
 												options={genreOptions}
-												state={filterState.filters.genres}
-												onValueChange={filterState.setGenreState}
-												onModeChange={filterState.setGenreMode}
-												onClear={() => filterState.clearGroup("genres")}
+												state={draftState.draftFilters.genres}
+												onValueChange={draftState.setGenreState}
+												onModeChange={draftState.setGenreMode}
+												onClear={() => draftState.clearGroupDraft("genres")}
 											/>
 										)}
 
@@ -195,10 +230,10 @@ export function FilterPanel() {
 											<FilterGroup
 												title="Tags"
 												options={tagOptions}
-												state={filterState.filters.tags}
-												onValueChange={filterState.setTagState}
-												onModeChange={filterState.setTagMode}
-												onClear={() => filterState.clearGroup("tags")}
+												state={draftState.draftFilters.tags}
+												onValueChange={draftState.setTagState}
+												onModeChange={draftState.setTagMode}
+												onClear={() => draftState.clearGroupDraft("tags")}
 											/>
 										)}
 									</>
@@ -212,6 +247,25 @@ export function FilterPanel() {
 										series detail page.
 									</Text>
 								)}
+
+								{/* Access Control Section - Admin only */}
+								{hasSharingTagFilters && (
+									<>
+										<Divider my="xs" />
+										<Text size="xs" fw={700} tt="uppercase" c="dimmed">
+											Access Control
+										</Text>
+
+										<FilterGroup
+											title="Sharing Tags"
+											options={sharingTagOptions}
+											state={draftState.draftFilters.sharingTags}
+											onValueChange={draftState.setSharingTagState}
+											onModeChange={draftState.setSharingTagMode}
+											onClear={() => draftState.clearGroupDraft("sharingTags")}
+										/>
+									</>
+								)}
 							</Stack>
 						</ScrollArea>
 
@@ -222,12 +276,12 @@ export function FilterPanel() {
 								color="gray"
 								size="sm"
 								leftSection={<IconX size={16} />}
-								onClick={filterState.clearAll}
-								disabled={!filterState.hasActiveFilters}
+								onClick={draftState.clearAllDraft}
+								disabled={!draftState.hasActiveFilters}
 							>
 								Clear all
 							</Button>
-							<Button size="sm" onClick={close}>
+							<Button size="sm" onClick={handleApply}>
 								Apply
 							</Button>
 						</Group>

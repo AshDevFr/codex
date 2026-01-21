@@ -158,7 +158,7 @@ describe("Filter Types - Condition Building", () => {
 			expect(anyOf).toHaveLength(2);
 		});
 
-		it("should not wrap multiple includes for allOf mode", () => {
+		it("should wrap multiple includes in allOf for allOf mode", () => {
 			const group: FilterGroupState = {
 				mode: "allOf",
 				values: new Map([
@@ -168,11 +168,14 @@ describe("Filter Types - Condition Building", () => {
 			};
 			const conditions = filterGroupToConditions(group, "genre");
 
-			expect(conditions).toHaveLength(2);
-			expect(conditions[0]).toEqual({
+			expect(conditions).toHaveLength(1);
+			expect(conditions[0]).toHaveProperty("allOf");
+			const allOf = (conditions[0] as { allOf: SeriesCondition[] }).allOf;
+			expect(allOf).toHaveLength(2);
+			expect(allOf).toContainEqual({
 				genre: { operator: "is", value: "action" },
 			});
-			expect(conditions[1]).toEqual({
+			expect(allOf).toContainEqual({
 				genre: { operator: "is", value: "comedy" },
 			});
 		});
@@ -190,7 +193,7 @@ describe("Filter Types - Condition Building", () => {
 			});
 		});
 
-		it("should combine includes and excludes", () => {
+		it("should combine includes and excludes in same wrapper", () => {
 			const group: FilterGroupState = {
 				mode: "anyOf",
 				values: new Map([
@@ -200,11 +203,38 @@ describe("Filter Types - Condition Building", () => {
 			};
 			const conditions = filterGroupToConditions(group, "genre");
 
-			expect(conditions).toHaveLength(2);
-			expect(conditions[0]).toEqual({
+			// Both include and exclude should be wrapped in the group's mode (anyOf)
+			expect(conditions).toHaveLength(1);
+			expect(conditions[0]).toHaveProperty("anyOf");
+			const anyOf = (conditions[0] as { anyOf: SeriesCondition[] }).anyOf;
+			expect(anyOf).toHaveLength(2);
+			expect(anyOf).toContainEqual({
 				genre: { operator: "is", value: "action" },
 			});
-			expect(conditions[1]).toEqual({
+			expect(anyOf).toContainEqual({
+				genre: { operator: "isNot", value: "horror" },
+			});
+		});
+
+		it("should combine includes and excludes in allOf wrapper for allOf mode", () => {
+			const group: FilterGroupState = {
+				mode: "allOf",
+				values: new Map([
+					["action", "include"],
+					["horror", "exclude"],
+				]),
+			};
+			const conditions = filterGroupToConditions(group, "genre");
+
+			// Both include and exclude should be wrapped in the group's mode (allOf)
+			expect(conditions).toHaveLength(1);
+			expect(conditions[0]).toHaveProperty("allOf");
+			const allOf = (conditions[0] as { allOf: SeriesCondition[] }).allOf;
+			expect(allOf).toHaveLength(2);
+			expect(allOf).toContainEqual({
+				genre: { operator: "is", value: "action" },
+			});
+			expect(allOf).toContainEqual({
 				genre: { operator: "isNot", value: "horror" },
 			});
 		});

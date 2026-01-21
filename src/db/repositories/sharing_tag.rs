@@ -262,6 +262,143 @@ impl SharingTagRepository {
         Ok(series_ids)
     }
 
+    // ==================== Sharing Tag Filter Operations (for FilterService) ====================
+
+    /// Get all series IDs that have a sharing tag with the exact name (case-insensitive)
+    pub async fn get_series_with_sharing_tag_name(
+        db: &DatabaseConnection,
+        tag_name: &str,
+    ) -> Result<Vec<Uuid>> {
+        use crate::db::entities::series_sharing_tags::Entity as SeriesSharingTags;
+
+        let normalized = tag_name.to_lowercase().trim().to_string();
+
+        // Find the tag by normalized name
+        let tag = SharingTags::find()
+            .filter(sharing_tags::Column::NormalizedName.eq(&normalized))
+            .one(db)
+            .await?;
+
+        let Some(tag) = tag else {
+            return Ok(vec![]);
+        };
+
+        // Get series with this tag
+        let series_ids: Vec<Uuid> = SeriesSharingTags::find()
+            .filter(series_sharing_tags::Column::SharingTagId.eq(tag.id))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|st| st.series_id)
+            .collect();
+
+        Ok(series_ids)
+    }
+
+    /// Get series IDs with sharing tag names containing substring (case-insensitive)
+    pub async fn get_series_with_sharing_tag_containing(
+        db: &DatabaseConnection,
+        substring: &str,
+    ) -> Result<Vec<Uuid>> {
+        use crate::db::entities::series_sharing_tags::Entity as SeriesSharingTags;
+
+        let pattern = format!("%{}%", substring.to_lowercase());
+
+        // Find tags matching the pattern
+        let matching_tags: Vec<Uuid> = SharingTags::find()
+            .filter(sharing_tags::Column::NormalizedName.like(&pattern))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|t| t.id)
+            .collect();
+
+        if matching_tags.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get series with any of these tags
+        let series_ids: Vec<Uuid> = SeriesSharingTags::find()
+            .filter(series_sharing_tags::Column::SharingTagId.is_in(matching_tags))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|st| st.series_id)
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        Ok(series_ids)
+    }
+
+    /// Get series IDs with sharing tag names starting with prefix (case-insensitive)
+    pub async fn get_series_with_sharing_tag_starting_with(
+        db: &DatabaseConnection,
+        prefix: &str,
+    ) -> Result<Vec<Uuid>> {
+        use crate::db::entities::series_sharing_tags::Entity as SeriesSharingTags;
+
+        let pattern = format!("{}%", prefix.to_lowercase());
+
+        let matching_tags: Vec<Uuid> = SharingTags::find()
+            .filter(sharing_tags::Column::NormalizedName.like(&pattern))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|t| t.id)
+            .collect();
+
+        if matching_tags.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let series_ids: Vec<Uuid> = SeriesSharingTags::find()
+            .filter(series_sharing_tags::Column::SharingTagId.is_in(matching_tags))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|st| st.series_id)
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        Ok(series_ids)
+    }
+
+    /// Get series IDs with sharing tag names ending with suffix (case-insensitive)
+    pub async fn get_series_with_sharing_tag_ending_with(
+        db: &DatabaseConnection,
+        suffix: &str,
+    ) -> Result<Vec<Uuid>> {
+        use crate::db::entities::series_sharing_tags::Entity as SeriesSharingTags;
+
+        let pattern = format!("%{}", suffix.to_lowercase());
+
+        let matching_tags: Vec<Uuid> = SharingTags::find()
+            .filter(sharing_tags::Column::NormalizedName.like(&pattern))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|t| t.id)
+            .collect();
+
+        if matching_tags.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let series_ids: Vec<Uuid> = SeriesSharingTags::find()
+            .filter(series_sharing_tags::Column::SharingTagId.is_in(matching_tags))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|st| st.series_id)
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        Ok(series_ids)
+    }
+
     // ==================== User-Tag Grant Operations ====================
 
     /// Get all sharing tag grants for a user
@@ -548,6 +685,46 @@ impl SharingTagRepository {
         }
 
         Ok(excluded_series.into_iter().collect())
+    }
+
+    /// Get all series IDs that have any of the given tags
+    pub async fn get_series_ids_with_any_tags(
+        db: &DatabaseConnection,
+        tag_ids: &[Uuid],
+    ) -> Result<Vec<Uuid>> {
+        use crate::db::entities::series_sharing_tags::Entity as SeriesSharingTags;
+
+        if tag_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let series_ids: Vec<Uuid> = SeriesSharingTags::find()
+            .filter(series_sharing_tags::Column::SharingTagId.is_in(tag_ids.to_vec()))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|st| st.series_id)
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        Ok(series_ids)
+    }
+
+    /// Get set of all series IDs that have any sharing tags
+    pub async fn get_tagged_series_ids(
+        db: &DatabaseConnection,
+    ) -> Result<std::collections::HashSet<Uuid>> {
+        use crate::db::entities::series_sharing_tags::Entity as SeriesSharingTags;
+
+        let series_ids: std::collections::HashSet<Uuid> = SeriesSharingTags::find()
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|st| st.series_id)
+            .collect();
+
+        Ok(series_ids)
     }
 }
 

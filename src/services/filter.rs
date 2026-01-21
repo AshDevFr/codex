@@ -116,6 +116,10 @@ impl FilterService {
                 SeriesCondition::ReadStatus { read_status } => {
                     Self::filter_by_read_status(db, read_status, candidate_ids, user_id).await
                 }
+
+                SeriesCondition::SharingTag { sharing_tag } => {
+                    Self::filter_by_sharing_tag(db, sharing_tag, candidate_ids).await
+                }
             }
         })
     }
@@ -476,6 +480,160 @@ impl FilterService {
                     Ok(result.intersection(candidates).cloned().collect())
                 } else {
                     Ok(result)
+                }
+            }
+        }
+    }
+
+    async fn filter_by_sharing_tag(
+        db: &DatabaseConnection,
+        operator: &FieldOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use crate::db::repositories::SharingTagRepository;
+
+        match operator {
+            FieldOperator::Is { value } => {
+                let series_with_tag =
+                    SharingTagRepository::get_series_with_sharing_tag_name(db, value).await?;
+                let result: HashSet<Uuid> = series_with_tag.into_iter().collect();
+
+                if let Some(candidates) = candidate_ids {
+                    Ok(result.intersection(candidates).cloned().collect())
+                } else {
+                    Ok(result)
+                }
+            }
+            FieldOperator::IsNot { value } => {
+                let series_with_tag: HashSet<Uuid> =
+                    SharingTagRepository::get_series_with_sharing_tag_name(db, value)
+                        .await?
+                        .into_iter()
+                        .collect();
+
+                if let Some(candidates) = candidate_ids {
+                    Ok(candidates
+                        .iter()
+                        .filter(|id| !series_with_tag.contains(id))
+                        .cloned()
+                        .collect())
+                } else {
+                    use crate::db::entities::series;
+                    use sea_orm::EntityTrait;
+
+                    let all_series: HashSet<Uuid> = series::Entity::find()
+                        .all(db)
+                        .await?
+                        .into_iter()
+                        .map(|s| s.id)
+                        .collect();
+
+                    Ok(all_series
+                        .into_iter()
+                        .filter(|id| !series_with_tag.contains(id))
+                        .collect())
+                }
+            }
+            FieldOperator::Contains { value } => {
+                let series_ids =
+                    SharingTagRepository::get_series_with_sharing_tag_containing(db, value).await?;
+                let result: HashSet<Uuid> = series_ids.into_iter().collect();
+
+                if let Some(candidates) = candidate_ids {
+                    Ok(result.intersection(candidates).cloned().collect())
+                } else {
+                    Ok(result)
+                }
+            }
+            FieldOperator::DoesNotContain { value } => {
+                let series_with_matching: HashSet<Uuid> =
+                    SharingTagRepository::get_series_with_sharing_tag_containing(db, value)
+                        .await?
+                        .into_iter()
+                        .collect();
+
+                if let Some(candidates) = candidate_ids {
+                    Ok(candidates
+                        .iter()
+                        .filter(|id| !series_with_matching.contains(id))
+                        .cloned()
+                        .collect())
+                } else {
+                    use crate::db::entities::series;
+                    use sea_orm::EntityTrait;
+
+                    let all_series: HashSet<Uuid> = series::Entity::find()
+                        .all(db)
+                        .await?
+                        .into_iter()
+                        .map(|s| s.id)
+                        .collect();
+
+                    Ok(all_series
+                        .into_iter()
+                        .filter(|id| !series_with_matching.contains(id))
+                        .collect())
+                }
+            }
+            FieldOperator::BeginsWith { value } => {
+                let series_ids =
+                    SharingTagRepository::get_series_with_sharing_tag_starting_with(db, value)
+                        .await?;
+                let result: HashSet<Uuid> = series_ids.into_iter().collect();
+
+                if let Some(candidates) = candidate_ids {
+                    Ok(result.intersection(candidates).cloned().collect())
+                } else {
+                    Ok(result)
+                }
+            }
+            FieldOperator::EndsWith { value } => {
+                let series_ids =
+                    SharingTagRepository::get_series_with_sharing_tag_ending_with(db, value)
+                        .await?;
+                let result: HashSet<Uuid> = series_ids.into_iter().collect();
+
+                if let Some(candidates) = candidate_ids {
+                    Ok(result.intersection(candidates).cloned().collect())
+                } else {
+                    Ok(result)
+                }
+            }
+            FieldOperator::IsNull => {
+                // Series with no sharing tags
+                let series_with_tags = SharingTagRepository::get_tagged_series_ids(db).await?;
+
+                if let Some(candidates) = candidate_ids {
+                    Ok(candidates
+                        .iter()
+                        .filter(|id| !series_with_tags.contains(id))
+                        .cloned()
+                        .collect())
+                } else {
+                    use crate::db::entities::series;
+                    use sea_orm::EntityTrait;
+
+                    let all_series: HashSet<Uuid> = series::Entity::find()
+                        .all(db)
+                        .await?
+                        .into_iter()
+                        .map(|s| s.id)
+                        .collect();
+
+                    Ok(all_series
+                        .into_iter()
+                        .filter(|id| !series_with_tags.contains(id))
+                        .collect())
+                }
+            }
+            FieldOperator::IsNotNull => {
+                // Series with at least one sharing tag
+                let series_with_tags = SharingTagRepository::get_tagged_series_ids(db).await?;
+
+                if let Some(candidates) = candidate_ids {
+                    Ok(series_with_tags.intersection(candidates).cloned().collect())
+                } else {
+                    Ok(series_with_tags)
                 }
             }
         }
@@ -1644,6 +1802,91 @@ mod tests {
                 }
             }
             _ => panic!("Expected AllOf condition"),
+        }
+    }
+
+    #[test]
+    fn test_series_condition_sharing_tag_is() {
+        let condition = SeriesCondition::SharingTag {
+            sharing_tag: FieldOperator::Is {
+                value: "Kids Content".to_string(),
+            },
+        };
+
+        match condition {
+            SeriesCondition::SharingTag { sharing_tag } => match sharing_tag {
+                FieldOperator::Is { value } => {
+                    assert_eq!(value, "Kids Content");
+                }
+                _ => panic!("Expected Is operator"),
+            },
+            _ => panic!("Expected SharingTag condition"),
+        }
+    }
+
+    #[test]
+    fn test_series_condition_sharing_tag_is_not() {
+        let condition = SeriesCondition::SharingTag {
+            sharing_tag: FieldOperator::IsNot {
+                value: "Adults Only".to_string(),
+            },
+        };
+
+        match condition {
+            SeriesCondition::SharingTag { sharing_tag } => match sharing_tag {
+                FieldOperator::IsNot { value } => {
+                    assert_eq!(value, "Adults Only");
+                }
+                _ => panic!("Expected IsNot operator"),
+            },
+            _ => panic!("Expected SharingTag condition"),
+        }
+    }
+
+    #[test]
+    fn test_series_condition_sharing_tag_contains() {
+        let condition = SeriesCondition::SharingTag {
+            sharing_tag: FieldOperator::Contains {
+                value: "Kids".to_string(),
+            },
+        };
+
+        match condition {
+            SeriesCondition::SharingTag { sharing_tag } => match sharing_tag {
+                FieldOperator::Contains { value } => {
+                    assert_eq!(value, "Kids");
+                }
+                _ => panic!("Expected Contains operator"),
+            },
+            _ => panic!("Expected SharingTag condition"),
+        }
+    }
+
+    #[test]
+    fn test_series_condition_sharing_tag_is_null() {
+        let condition = SeriesCondition::SharingTag {
+            sharing_tag: FieldOperator::IsNull,
+        };
+
+        match condition {
+            SeriesCondition::SharingTag { sharing_tag } => {
+                assert!(matches!(sharing_tag, FieldOperator::IsNull));
+            }
+            _ => panic!("Expected SharingTag condition"),
+        }
+    }
+
+    #[test]
+    fn test_series_condition_sharing_tag_is_not_null() {
+        let condition = SeriesCondition::SharingTag {
+            sharing_tag: FieldOperator::IsNotNull,
+        };
+
+        match condition {
+            SeriesCondition::SharingTag { sharing_tag } => {
+                assert!(matches!(sharing_tag, FieldOperator::IsNotNull));
+            }
+            _ => panic!("Expected SharingTag condition"),
         }
     }
 }

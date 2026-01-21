@@ -7,7 +7,6 @@ import {
 	Stack,
 	Text,
 } from "@mantine/core";
-import { useDebouncedValue } from "@mantine/hooks";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -68,21 +67,30 @@ export function SeriesSection({
 	const navigate = useNavigate();
 
 	// Get filter state from URL (uses the advanced filtering system)
-	const { condition, hasActiveFilters } = useFilterState();
-
-	// Debounce the condition to avoid rapid API calls when clicking multiple filters
-	const [debouncedCondition] = useDebouncedValue(condition, 150);
+	// Filters are only applied when user clicks "Apply" in FilterPanel,
+	// so no debouncing is needed here
+	const { condition, filters, hasActiveFilters } = useFilterState();
 
 	// Read query parameters (URL uses 1-indexed pages for user-friendly URLs)
 	const page = parseInt(searchParams.get("page") || "1", 10);
 	const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
 	const sort = searchParams.get("sort") || "name,asc";
 
-	// Serialize condition for use in query key (stable reference)
-	const conditionKey = useMemo(
-		() => (debouncedCondition ? JSON.stringify(debouncedCondition) : "none"),
-		[debouncedCondition],
-	);
+	// Serialize filter state for use in query key (stable reference)
+	// We include the modes to ensure mode changes trigger a refetch even when
+	// the condition is semantically identical (e.g., "any" vs "all" with one value)
+	const filterKey = useMemo(() => {
+		const modes = {
+			genres: filters.genres.mode,
+			tags: filters.tags.mode,
+			status: filters.status.mode,
+			readStatus: filters.readStatus.mode,
+			publisher: filters.publisher.mode,
+			language: filters.language.mode,
+			sharingTags: filters.sharingTags.mode,
+		};
+		return condition ? JSON.stringify({ condition, modes }) : "none";
+	}, [condition, filters]);
 
 	// Fetch series data using the new POST search endpoint
 	const { data: seriesData, isLoading } = useQuery({
@@ -93,11 +101,11 @@ export function SeriesSection({
 			page,
 			pageSize,
 			sort,
-			conditionKey,
+			filterKey,
 		],
 		queryFn: () =>
 			seriesApi.search(libraryId, {
-				condition: debouncedCondition,
+				condition,
 				page: page - 1, // Convert to 0-indexed for backend
 				pageSize,
 				sort,

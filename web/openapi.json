@@ -8691,18 +8691,79 @@
         "tags": [
           "users"
         ],
-        "summary": "List all users (admin only)",
+        "summary": "List all users (admin only) with pagination and filtering",
         "operationId": "list_users",
+        "parameters": [
+          {
+            "name": "role",
+            "in": "query",
+            "description": "Filter by role",
+            "required": false,
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/components/schemas/UserRole"
+                }
+              ]
+            }
+          },
+          {
+            "name": "sharingTag",
+            "in": "query",
+            "description": "Filter by sharing tag name (users who have a grant for this tag)",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "sharingTagMode",
+            "in": "query",
+            "description": "Filter by sharing tag access mode (allow/deny) - only used with sharing_tag",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-indexed)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Number of items per page (max 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "List of users",
+            "description": "Paginated list of users",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/UserDto"
-                  }
+                  "$ref": "#/components/schemas/PaginatedResponse_UserDto"
                 }
               }
             }
@@ -13847,11 +13908,13 @@
                 "bookCount": {
                   "type": "integer",
                   "format": "int64",
+                  "description": "Total number of books in this series",
                   "example": 4
                 },
                 "createdAt": {
                   "type": "string",
                   "format": "date-time",
+                  "description": "When the series was created",
                   "example": "2024-01-01T00:00:00Z"
                 },
                 "hasCustomCover": {
@@ -13859,16 +13922,19 @@
                     "boolean",
                     "null"
                   ],
+                  "description": "Whether the series has a custom cover uploaded",
                   "example": false
                 },
                 "id": {
                   "type": "string",
                   "format": "uuid",
+                  "description": "Series unique identifier",
                   "example": "550e8400-e29b-41d4-a716-446655440002"
                 },
                 "libraryId": {
                   "type": "string",
                   "format": "uuid",
+                  "description": "Library unique identifier",
                   "example": "550e8400-e29b-41d4-a716-446655440000"
                 },
                 "libraryName": {
@@ -13881,6 +13947,7 @@
                     "string",
                     "null"
                   ],
+                  "description": "Filesystem path to the series directory",
                   "example": "/media/comics/Batman - Year One"
                 },
                 "publisher": {
@@ -13888,6 +13955,7 @@
                     "string",
                     "null"
                   ],
+                  "description": "Publisher name",
                   "example": "DC Comics"
                 },
                 "selectedCoverSource": {
@@ -13895,6 +13963,7 @@
                     "string",
                     "null"
                   ],
+                  "description": "Selected cover source (e.g., \"first_book\", \"custom\")",
                   "example": "first_book"
                 },
                 "summary": {
@@ -13924,11 +13993,13 @@
                     "null"
                   ],
                   "format": "int64",
+                  "description": "Number of unread books in this series (user-specific)",
                   "example": 2
                 },
                 "updatedAt": {
                   "type": "string",
                   "format": "date-time",
+                  "description": "When the series was last updated",
                   "example": "2024-01-15T10:30:00Z"
                 },
                 "year": {
@@ -13937,6 +14008,7 @@
                     "null"
                   ],
                   "format": "int32",
+                  "description": "Release year",
                   "example": 1987
                 }
               }
@@ -15491,6 +15563,18 @@
                 "$ref": "#/components/schemas/FieldOperator"
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Filter by sharing tag name",
+            "required": [
+              "sharingTag"
+            ],
+            "properties": {
+              "sharingTag": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
           }
         ],
         "description": "Series-level search conditions\n\nConditions can be composed using `allOf` (AND) and `anyOf` (OR).\nUses untagged enum for cleaner JSON without explicit type field."
@@ -15599,11 +15683,13 @@
           "bookCount": {
             "type": "integer",
             "format": "int64",
+            "description": "Total number of books in this series",
             "example": 4
           },
           "createdAt": {
             "type": "string",
             "format": "date-time",
+            "description": "When the series was created",
             "example": "2024-01-01T00:00:00Z"
           },
           "hasCustomCover": {
@@ -15611,16 +15697,19 @@
               "boolean",
               "null"
             ],
+            "description": "Whether the series has a custom cover uploaded",
             "example": false
           },
           "id": {
             "type": "string",
             "format": "uuid",
+            "description": "Series unique identifier",
             "example": "550e8400-e29b-41d4-a716-446655440002"
           },
           "libraryId": {
             "type": "string",
             "format": "uuid",
+            "description": "Library unique identifier",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
           "libraryName": {
@@ -15633,6 +15722,7 @@
               "string",
               "null"
             ],
+            "description": "Filesystem path to the series directory",
             "example": "/media/comics/Batman - Year One"
           },
           "publisher": {
@@ -15640,6 +15730,7 @@
               "string",
               "null"
             ],
+            "description": "Publisher name",
             "example": "DC Comics"
           },
           "selectedCoverSource": {
@@ -15647,6 +15738,7 @@
               "string",
               "null"
             ],
+            "description": "Selected cover source (e.g., \"first_book\", \"custom\")",
             "example": "first_book"
           },
           "summary": {
@@ -15676,11 +15768,13 @@
               "null"
             ],
             "format": "int64",
+            "description": "Number of unread books in this series (user-specific)",
             "example": 2
           },
           "updatedAt": {
             "type": "string",
             "format": "date-time",
+            "description": "When the series was last updated",
             "example": "2024-01-15T10:30:00Z"
           },
           "year": {
@@ -15689,6 +15783,7 @@
               "null"
             ],
             "format": "int32",
+            "description": "Release year",
             "example": 1987
           }
         }

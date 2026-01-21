@@ -141,44 +141,69 @@ impl fmt::Display for SeriesSortParam {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SeriesDto {
+    /// Series unique identifier
     #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]
     pub id: uuid::Uuid,
+
+    /// Library unique identifier
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub library_id: uuid::Uuid,
+
     /// Name of the library this series belongs to
     #[schema(example = "Comics")]
     pub library_name: String,
+
     /// Series title from series_metadata
     #[schema(example = "Batman: Year One")]
     pub title: String,
+
     /// Sort title from series_metadata (for ordering)
     #[schema(example = "batman year one")]
     pub title_sort: Option<String>,
+
     /// Summary/description from series_metadata
     #[schema(
         example = "The definitive origin story of Batman, following Bruce Wayne's first year as a vigilante."
     )]
     pub summary: Option<String>,
+
+    /// Publisher name
     #[schema(example = "DC Comics")]
     pub publisher: Option<String>,
+
+    /// Release year
     #[schema(example = 1987)]
     pub year: Option<i32>,
+
+    /// Total number of books in this series
     #[schema(example = 4)]
     pub book_count: i64,
+
+    /// Filesystem path to the series directory
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = "/media/comics/Batman - Year One")]
     pub path: Option<String>,
+
+    /// Selected cover source (e.g., "first_book", "custom")
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = "first_book")]
     pub selected_cover_source: Option<String>,
+
+    /// Whether the series has a custom cover uploaded
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = false)]
     pub has_custom_cover: Option<bool>,
+
+    /// Number of unread books in this series (user-specific)
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = 2)]
     pub unread_count: Option<i64>,
+
+    /// When the series was created
     #[schema(example = "2024-01-01T00:00:00Z")]
     pub created_at: DateTime<Utc>,
+
+    /// When the series was last updated
     #[schema(example = "2024-01-15T10:30:00Z")]
     pub updated_at: DateTime<Utc>,
 }

@@ -11,6 +11,7 @@ import {
 	SimpleGrid,
 	Stack,
 	Tabs,
+	TagsInput,
 	Text,
 	Tooltip,
 } from "@mantine/core";
@@ -25,6 +26,7 @@ import {
 	IconList,
 	IconPhoto,
 	IconRefresh,
+	IconShare,
 	IconTag,
 	IconTrash,
 	IconTypography,
@@ -35,6 +37,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { genresApi } from "@/api/genres";
 import { seriesApi } from "@/api/series";
+import { sharingTagsApi } from "@/api/sharingTags";
+import { useAuthStore } from "@/store/authStore";
 import {
 	type FullSeriesMetadata,
 	type MetadataLocks,
@@ -72,6 +76,7 @@ interface FormState {
 	totalBookCount: string;
 	genres: string[];
 	tags: string[];
+	sharingTags: string[];
 	alternateTitles: ListItem[];
 	externalLinks: ListItem[];
 	customMetadata: Record<string, unknown> | null;
@@ -137,6 +142,7 @@ function initializeFormState(
 		totalBookCount: metadata?.totalBookCount?.toString() || "",
 		genres: metadata?.genres.map((g) => g.name) || [],
 		tags: metadata?.tags?.map((t) => t.name) || [],
+		sharingTags: [], // Populated separately from seriesSharingTags query
 		alternateTitles:
 			metadata?.alternateTitles.map((t) => ({
 				id: t.id,
@@ -180,6 +186,8 @@ export function SeriesMetadataEditModal({
 	seriesTitle,
 }: SeriesMetadataEditModalProps) {
 	const queryClient = useQueryClient();
+	const { user } = useAuthStore();
+	const isAdmin = user?.role === "admin";
 	const [activeTab, setActiveTab] = useState<string | null>("general");
 	const [formState, setFormState] = useState<FormState>(
 		initializeFormState(undefined),
@@ -219,6 +227,20 @@ export function SeriesMetadataEditModal({
 		queryKey: ["series", seriesId, "covers"],
 		queryFn: () => seriesMetadataApi.listCovers(seriesId),
 		enabled: opened,
+	});
+
+	// Fetch all sharing tags (admin only)
+	const { data: allSharingTags } = useQuery({
+		queryKey: ["sharing-tags"],
+		queryFn: sharingTagsApi.list,
+		enabled: opened && isAdmin,
+	});
+
+	// Fetch current series sharing tags (admin only)
+	const { data: seriesSharingTags } = useQuery({
+		queryKey: ["series-sharing-tags", seriesId],
+		queryFn: () => sharingTagsApi.getForSeries(seriesId),
+		enabled: opened && isAdmin,
 	});
 
 	// Upload cover mutation
@@ -312,15 +334,18 @@ export function SeriesMetadataEditModal({
 		},
 	});
 
-	// Initialize form state when metadata loads
+	// Initialize form state when metadata and sharing tags load
 	useEffect(() => {
 		if (metadata) {
 			const newFormState = initializeFormState(metadata);
+			// Include sharing tags if available
+			const sharingTagNames = seriesSharingTags?.map((t) => t.name) || [];
+			newFormState.sharingTags = sharingTagNames;
 			setFormState(newFormState);
-			setOriginalFormState(newFormState);
+			setOriginalFormState({ ...newFormState });
 			setLocksState(initializeLocksState(metadata.locks));
 		}
-	}, [metadata]);
+	}, [metadata, seriesSharingTags]);
 
 	// Update field helper
 	const updateField = useCallback(
@@ -383,6 +408,40 @@ export function SeriesMetadataEditModal({
 				JSON.stringify((originalFormState?.tags || []).slice().sort());
 			if (tagsChanged) {
 				await tagsApi.setForSeries(seriesId, formState.tags);
+			}
+
+			// Update sharing tags if changed (admin only)
+			const sharingTagsChanged =
+				JSON.stringify(formState.sharingTags.slice().sort()) !==
+				JSON.stringify(
+					(originalFormState?.sharingTags || []).slice().sort(),
+				);
+			if (sharingTagsChanged && isAdmin) {
+				// Find which tags need to be created (names that don't exist yet)
+				const existingNames = new Set(
+					allSharingTags?.map((t) => t.name.toLowerCase()) || [],
+				);
+				const tagsToCreate = formState.sharingTags.filter(
+					(name) => !existingNames.has(name.toLowerCase()),
+				);
+
+				// Create new tags first
+				for (const name of tagsToCreate) {
+					await sharingTagsApi.create({ name });
+				}
+
+				// Refetch to get updated tag list with new IDs
+				const updatedTags = await sharingTagsApi.list();
+				const tagNameToId = new Map(
+					updatedTags.map((t) => [t.name.toLowerCase(), t.id]),
+				);
+
+				// Map names to IDs
+				const tagIds = formState.sharingTags
+					.map((name) => tagNameToId.get(name.toLowerCase()))
+					.filter((id): id is string => id !== undefined);
+
+				await sharingTagsApi.setForSeries(seriesId, tagIds);
 			}
 
 			// Handle alternate titles changes
@@ -469,6 +528,10 @@ export function SeriesMetadataEditModal({
 			queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
 			queryClient.invalidateQueries({
 				queryKey: ["series-metadata", seriesId],
+			});
+			queryClient.invalidateQueries({ queryKey: ["sharing-tags"] });
+			queryClient.invalidateQueries({
+				queryKey: ["series-sharing-tags", seriesId],
 			});
 			onClose();
 		},
@@ -956,6 +1019,26 @@ export function SeriesMetadataEditModal({
 		/>
 	);
 
+	// Sharing tags tab (admin only)
+	const renderSharingTab = () => {
+		// Get all existing tag names for suggestions
+		const existingTagNames = allSharingTags?.map((tag) => tag.name) || [];
+
+		return (
+			<Stack gap="md">
+				<TagsInput
+					label="Sharing Tags"
+					description="Users with a 'deny' grant for these tags won't see this series"
+					data={existingTagNames}
+					value={formState.sharingTags}
+					onChange={(value) => updateField("sharingTags", value)}
+					placeholder="Add sharing tags..."
+					comboboxProps={{ zIndex: 1100 }}
+				/>
+			</Stack>
+		);
+	};
+
 	return (
 		<Modal
 			opened={opened}
@@ -966,7 +1049,7 @@ export function SeriesMetadataEditModal({
 					<Text fw={500}>Edit {seriesTitle || "Series"}</Text>
 				</Group>
 			}
-			size="lg"
+			size={800}
 			centered
 			zIndex={1000}
 			overlayProps={{
@@ -1006,6 +1089,11 @@ export function SeriesMetadataEditModal({
 							<Tabs.Tab value="custom" leftSection={<IconCode size={16} />}>
 								Custom
 							</Tabs.Tab>
+							{isAdmin && (
+								<Tabs.Tab value="sharing" leftSection={<IconShare size={16} />}>
+									Sharing
+								</Tabs.Tab>
+							)}
 						</Tabs.List>
 
 						<Tabs.Panel value="general" pt="md">
@@ -1035,6 +1123,12 @@ export function SeriesMetadataEditModal({
 						<Tabs.Panel value="custom" pt="md">
 							{renderCustomTab()}
 						</Tabs.Panel>
+
+						{isAdmin && (
+							<Tabs.Panel value="sharing" pt="md">
+								{renderSharingTab()}
+							</Tabs.Panel>
+						)}
 					</Tabs>
 
 					<Group justify="flex-end" mt="md">

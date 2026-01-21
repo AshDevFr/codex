@@ -60,7 +60,7 @@ export const sharingTagsHandlers = [
 	// List all sharing tags
 	http.get("/api/v1/admin/sharing-tags", async () => {
 		await delay(100);
-		return HttpResponse.json(mockSharingTags);
+		return HttpResponse.json({ items: mockSharingTags });
 	}),
 
 	// Get single sharing tag

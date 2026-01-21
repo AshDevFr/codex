@@ -183,9 +183,9 @@ export function UserSharingTagGrants({
 				</Group>
 
 				<Text size="sm" c="dimmed">
-					Control which tagged content this user can see. "Deny" hides content
-					with the tag, "Allow" explicitly permits it (useful for future
-					whitelist mode).
+					Control which tagged content this user can see. "Deny" always hides
+					content with the tag. "Allow" enables whitelist mode: user only sees
+					content with their allowed tags. Deny takes precedence over allow.
 				</Text>
 
 				{/* Current grants */}

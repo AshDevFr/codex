@@ -85,6 +85,11 @@ pub enum SeriesCondition {
         #[serde(rename = "readStatus")]
         read_status: FieldOperator,
     },
+    /// Filter by sharing tag name
+    SharingTag {
+        #[serde(rename = "sharingTag")]
+        sharing_tag: FieldOperator,
+    },
 }
 
 /// Book-level search conditions

@@ -1,27 +1,31 @@
 use crate::api::{
-    dto::{CreateUserRequest, UpdateUserRequest, UserDetailDto, UserDto, UserSharingTagGrantDto},
+    dto::{
+        CreateUserRequest, PaginatedResponse, UpdateUserRequest, UserDetailDto, UserDto,
+        UserListParams, UserSharingTagGrantDto,
+    },
     error::ApiError,
     extractors::{AuthContext, AuthState},
     permissions::{Permission, UserRole},
 };
 use crate::db::entities::users;
-use crate::db::repositories::{SharingTagRepository, UserRepository};
+use crate::db::repositories::{SharingTagRepository, UserListFilter, UserRepository};
 use crate::require_permission;
 use crate::utils::password;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     Json,
 };
 use chrono::Utc;
 use std::sync::Arc;
 use uuid::Uuid;
 
-/// List all users (admin only)
+/// List all users (admin only) with pagination and filtering
 #[utoipa::path(
     get,
     path = "/api/v1/users",
+    params(UserListParams),
     responses(
-        (status = 200, description = "List of users", body = Vec<UserDto>),
+        (status = 200, description = "Paginated list of users", body = PaginatedResponse<UserDto>),
         (status = 403, description = "Forbidden - Admin only"),
     ),
     security(
@@ -33,14 +37,27 @@ use uuid::Uuid;
 pub async fn list_users(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-) -> Result<Json<Vec<UserDto>>, ApiError> {
+    Query(params): Query<UserListParams>,
+) -> Result<Json<PaginatedResponse<UserDto>>, ApiError> {
     require_permission!(auth, Permission::UsersRead)?;
 
-    let users = UserRepository::list_all(&state.db)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch users: {}", e)))?;
+    // Validate and clamp pagination params
+    let params = params.validate(100);
 
-    let dtos: Vec<UserDto> = users
+    // Build filter
+    let filter = UserListFilter {
+        role: params.role.map(|r| r.to_string()),
+        sharing_tag: params.sharing_tag.clone(),
+        sharing_tag_mode: params.sharing_tag_mode.clone(),
+    };
+
+    let result =
+        UserRepository::list_paginated(&state.db, &filter, params.offset(), params.limit())
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch users: {}", e)))?;
+
+    let dtos: Vec<UserDto> = result
+        .users
         .into_iter()
         .map(|user| {
             let role = user.get_role();
@@ -57,7 +74,12 @@ pub async fn list_users(
         })
         .collect();
 
-    Ok(Json(dtos))
+    Ok(Json(PaginatedResponse::new(
+        dtos,
+        params.page,
+        params.page_size,
+        result.total,
+    )))
 }
 
 /// Get user by ID (admin only)

@@ -5,9 +5,11 @@ import {
 	Box,
 	Button,
 	Card,
+	Collapse,
 	Group,
 	Loader,
 	Modal,
+	Pagination,
 	PasswordInput,
 	Select,
 	Stack,
@@ -18,37 +20,88 @@ import {
 	Title,
 	Tooltip,
 } from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
 import {
 	IconAlertCircle,
 	IconEdit,
+	IconFilter,
 	IconTrash,
 	IconUser,
 	IconUserPlus,
+	IconX,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { type UserDto, usersApi } from "@/api/users";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { sharingTagsApi } from "@/api/sharingTags";
+import { type UserDto, type UserListParams, usersApi } from "@/api/users";
 import { UserSharingTagGrants } from "@/components/users";
 import { useAuthStore } from "@/store/authStore";
+
+const PAGE_SIZE = 20;
 
 export function UsersSettings() {
 	const queryClient = useQueryClient();
 	const { user: currentUser } = useAuthStore();
+	const [searchParams, setSearchParams] = useSearchParams();
 	const [createModalOpened, setCreateModalOpened] = useState(false);
 	const [editModalOpened, setEditModalOpened] = useState(false);
 	const [deleteModalOpened, setDeleteModalOpened] = useState(false);
 	const [selectedUser, setSelectedUser] = useState<UserDto | null>(null);
 
-	// Fetch users
+	// Initialize filter state from URL params
+	const initialSharingTag = searchParams.get("sharingTag");
+	const [filtersOpened, { toggle: toggleFilters }] = useDisclosure(
+		// Auto-open filters if there's a sharingTag in URL
+		!!initialSharingTag
+	);
+
+	// Filter state - initialized from URL
+	const [page, setPage] = useState(0);
+	const [roleFilter, setRoleFilter] = useState<string | null>(
+		searchParams.get("role")
+	);
+	const [sharingTagFilter, setSharingTagFilter] = useState<string | null>(
+		initialSharingTag
+	);
+	const [sharingTagModeFilter, setSharingTagModeFilter] = useState<string | null>(
+		searchParams.get("sharingTagMode")
+	);
+
+	// Sync URL when filters change
+	useEffect(() => {
+		const params = new URLSearchParams();
+		if (roleFilter) params.set("role", roleFilter);
+		if (sharingTagFilter) params.set("sharingTag", sharingTagFilter);
+		if (sharingTagModeFilter) params.set("sharingTagMode", sharingTagModeFilter);
+		setSearchParams(params, { replace: true });
+	}, [roleFilter, sharingTagFilter, sharingTagModeFilter, setSearchParams]);
+
+	// Build query params
+	const queryParams: UserListParams = {
+		page,
+		pageSize: PAGE_SIZE,
+		role: roleFilter as UserListParams["role"],
+		sharingTag: sharingTagFilter ?? undefined,
+		sharingTagMode: sharingTagModeFilter as UserListParams["sharingTagMode"],
+	};
+
+	// Fetch users with filters and pagination
 	const {
-		data: users,
+		data: usersResponse,
 		isLoading,
 		error,
 	} = useQuery({
-		queryKey: ["users"],
-		queryFn: usersApi.list,
+		queryKey: ["users", queryParams],
+		queryFn: () => usersApi.list(queryParams),
+	});
+
+	// Fetch sharing tags for filter dropdown
+	const { data: sharingTags = [] } = useQuery({
+		queryKey: ["sharing-tags"],
+		queryFn: sharingTagsApi.list,
 	});
 
 	// Role options for the select
@@ -57,6 +110,35 @@ export function UsersSettings() {
 		{ value: "maintainer", label: "Maintainer" },
 		{ value: "admin", label: "Admin" },
 	];
+
+	// Sharing tag options for filter
+	const sharingTagOptions = sharingTags.map((tag) => ({
+		value: tag.name,
+		label: tag.name,
+	}));
+
+	// Access mode options for filter
+	const accessModeOptions = [
+		{ value: "allow", label: "Allow" },
+		{ value: "deny", label: "Deny" },
+	];
+
+	// Check if any filters are active
+	const hasActiveFilters = roleFilter !== null || sharingTagFilter !== null;
+	const activeFilterCount = [roleFilter, sharingTagFilter].filter(Boolean).length;
+
+	// Clear all filters
+	const clearFilters = () => {
+		setRoleFilter(null);
+		setSharingTagFilter(null);
+		setSharingTagModeFilter(null);
+		setPage(0);
+	};
+
+	// Handle page change (Mantine Pagination is 1-indexed)
+	const handlePageChange = (newPage: number) => {
+		setPage(newPage - 1); // Convert to 0-indexed for API
+	};
 
 	// Create user form
 	const createForm = useForm({
@@ -204,18 +286,103 @@ export function UsersSettings() {
 		setDeleteModalOpened(true);
 	};
 
+	// Pagination info
+	const users = usersResponse?.data ?? [];
+	const total = usersResponse?.total ?? 0;
+	const totalPages = usersResponse?.totalPages ?? 1;
+	const showPagination = total > PAGE_SIZE;
+
 	return (
 		<Box py="xl" px="md">
 			<Stack gap="xl">
 				<Group justify="space-between">
 					<Title order={1}>User Management</Title>
-					<Button
-						leftSection={<IconUserPlus size={16} />}
-						onClick={() => setCreateModalOpened(true)}
-					>
-						Create User
-					</Button>
+					<Group>
+						<Button
+							variant={hasActiveFilters ? "filled" : "subtle"}
+							color={hasActiveFilters ? "blue" : "gray"}
+							leftSection={<IconFilter size={16} />}
+							onClick={toggleFilters}
+							rightSection={
+								hasActiveFilters ? (
+									<Badge size="sm" variant="light" color="white">
+										{activeFilterCount}
+									</Badge>
+								) : null
+							}
+						>
+							Filters
+						</Button>
+						<Button
+							leftSection={<IconUserPlus size={16} />}
+							onClick={() => setCreateModalOpened(true)}
+						>
+							Create User
+						</Button>
+					</Group>
 				</Group>
+
+				{/* Filter Panel */}
+				<Collapse in={filtersOpened}>
+					<Card withBorder p="md">
+						<Stack gap="md">
+							<Group justify="space-between">
+								<Text fw={500}>Filters</Text>
+								{hasActiveFilters && (
+									<Button
+										variant="subtle"
+										color="gray"
+										size="xs"
+										leftSection={<IconX size={14} />}
+										onClick={clearFilters}
+									>
+										Clear all
+									</Button>
+								)}
+							</Group>
+							<Group grow>
+								<Select
+									label="Role"
+									placeholder="All roles"
+									data={roleOptions}
+									value={roleFilter}
+									onChange={(value) => {
+										setRoleFilter(value);
+										setPage(0);
+									}}
+									clearable
+								/>
+								<Select
+									label="Sharing Tag"
+									placeholder="All users"
+									data={sharingTagOptions}
+									value={sharingTagFilter}
+									onChange={(value) => {
+										setSharingTagFilter(value);
+										if (!value) {
+											setSharingTagModeFilter(null);
+										}
+										setPage(0);
+									}}
+									clearable
+									disabled={sharingTagOptions.length === 0}
+								/>
+								<Select
+									label="Access Mode"
+									placeholder="Any mode"
+									data={accessModeOptions}
+									value={sharingTagModeFilter}
+									onChange={(value) => {
+										setSharingTagModeFilter(value);
+										setPage(0);
+									}}
+									clearable
+									disabled={!sharingTagFilter}
+								/>
+							</Group>
+						</Stack>
+					</Card>
+				</Collapse>
 
 				{isLoading ? (
 					<Group justify="center" py="xl">
@@ -225,82 +392,125 @@ export function UsersSettings() {
 					<Alert icon={<IconAlertCircle size={16} />} color="red">
 						Failed to load users. Please try again.
 					</Alert>
-				) : (
-					<Card withBorder>
-						<Table>
-							<Table.Thead>
-								<Table.Tr>
-									<Table.Th>User</Table.Th>
-									<Table.Th>Email</Table.Th>
-									<Table.Th>Role</Table.Th>
-									<Table.Th>Status</Table.Th>
-									<Table.Th>Created</Table.Th>
-									<Table.Th>Last Login</Table.Th>
-									<Table.Th>Actions</Table.Th>
-								</Table.Tr>
-							</Table.Thead>
-							<Table.Tbody>
-								{users?.map((user: UserDto) => (
-									<Table.Tr key={user.id}>
-										<Table.Td>
-											<Group gap="sm">
-												<IconUser size={20} />
-												<div>
-													<Text fw={500}>{user.username}</Text>
-													{user.id === currentUser?.id && (
-														<Text size="xs" c="dimmed">
-															(You)
-														</Text>
-													)}
-												</div>
-											</Group>
-										</Table.Td>
-										<Table.Td>{user.email}</Table.Td>
-										<Table.Td>
-											<Badge color={user.role === "admin" ? "blue" : user.role === "maintainer" ? "cyan" : "gray"}>
-												{user.role === "admin" ? "Admin" : user.role === "maintainer" ? "Maintainer" : "Reader"}
-											</Badge>
-										</Table.Td>
-										<Table.Td>
-											<Badge color={user.isActive ? "green" : "red"}>
-												{user.isActive ? "Active" : "Inactive"}
-											</Badge>
-										</Table.Td>
-										<Table.Td>
-											{new Date(user.createdAt).toLocaleDateString()}
-										</Table.Td>
-										<Table.Td>
-											{user.lastLoginAt
-												? new Date(user.lastLoginAt).toLocaleString()
-												: "Never"}
-										</Table.Td>
-										<Table.Td>
-											<Group gap="xs">
-												<Tooltip label="Edit User">
-													<ActionIcon
-														variant="subtle"
-														onClick={() => handleEditUser(user)}
-													>
-														<IconEdit size={16} />
-													</ActionIcon>
-												</Tooltip>
-												<Tooltip label="Delete User">
-													<ActionIcon
-														variant="subtle"
-														color="red"
-														onClick={() => handleDeleteUser(user)}
-														disabled={user.id === currentUser?.id}
-													>
-														<IconTrash size={16} />
-													</ActionIcon>
-												</Tooltip>
-											</Group>
-										</Table.Td>
-									</Table.Tr>
-								))}
-							</Table.Tbody>
-						</Table>
+				) : users.length === 0 ? (
+					<Card withBorder p="xl">
+						<Stack align="center" gap="sm">
+							<Text size="lg" fw={600}>
+								No users found
+							</Text>
+							<Text size="sm" c="dimmed">
+								{hasActiveFilters
+									? "Try adjusting your filters"
+									: "Create your first user to get started"}
+							</Text>
+						</Stack>
 					</Card>
+				) : (
+					<>
+						{/* Top Pagination */}
+						{showPagination && (
+							<Group justify="center">
+								<Pagination
+									value={page + 1}
+									onChange={handlePageChange}
+									total={totalPages}
+								/>
+							</Group>
+						)}
+
+						<Card withBorder>
+							<Table>
+								<Table.Thead>
+									<Table.Tr>
+										<Table.Th>User</Table.Th>
+										<Table.Th>Email</Table.Th>
+										<Table.Th>Role</Table.Th>
+										<Table.Th>Status</Table.Th>
+										<Table.Th>Created</Table.Th>
+										<Table.Th>Last Login</Table.Th>
+										<Table.Th>Actions</Table.Th>
+									</Table.Tr>
+								</Table.Thead>
+								<Table.Tbody>
+									{users.map((user: UserDto) => (
+										<Table.Tr key={user.id}>
+											<Table.Td>
+												<Group gap="sm">
+													<IconUser size={20} />
+													<div>
+														<Text fw={500}>{user.username}</Text>
+														{user.id === currentUser?.id && (
+															<Text size="xs" c="dimmed">
+																(You)
+															</Text>
+														)}
+													</div>
+												</Group>
+											</Table.Td>
+											<Table.Td>{user.email}</Table.Td>
+											<Table.Td>
+												<Badge color={user.role === "admin" ? "blue" : user.role === "maintainer" ? "cyan" : "gray"}>
+													{user.role === "admin" ? "Admin" : user.role === "maintainer" ? "Maintainer" : "Reader"}
+												</Badge>
+											</Table.Td>
+											<Table.Td>
+												<Badge color={user.isActive ? "green" : "red"}>
+													{user.isActive ? "Active" : "Inactive"}
+												</Badge>
+											</Table.Td>
+											<Table.Td>
+												{new Date(user.createdAt).toLocaleDateString()}
+											</Table.Td>
+											<Table.Td>
+												{user.lastLoginAt
+													? new Date(user.lastLoginAt).toLocaleString()
+													: "Never"}
+											</Table.Td>
+											<Table.Td>
+												<Group gap="xs">
+													<Tooltip label="Edit User">
+														<ActionIcon
+															variant="subtle"
+															onClick={() => handleEditUser(user)}
+														>
+															<IconEdit size={16} />
+														</ActionIcon>
+													</Tooltip>
+													<Tooltip label="Delete User">
+														<ActionIcon
+															variant="subtle"
+															color="red"
+															onClick={() => handleDeleteUser(user)}
+															disabled={user.id === currentUser?.id}
+														>
+															<IconTrash size={16} />
+														</ActionIcon>
+													</Tooltip>
+												</Group>
+											</Table.Td>
+										</Table.Tr>
+									))}
+								</Table.Tbody>
+							</Table>
+						</Card>
+
+						{/* Bottom Pagination */}
+						{showPagination && (
+							<Group justify="center">
+								<Pagination
+									value={page + 1}
+									onChange={handlePageChange}
+									total={totalPages}
+								/>
+							</Group>
+						)}
+
+						{/* Results info */}
+						<Text size="sm" c="dimmed" ta="center">
+							Showing {page * PAGE_SIZE + 1} to{" "}
+							{Math.min((page + 1) * PAGE_SIZE, total)} of {total} users
+						</Text>
+					</>
 				)}
 			</Stack>
 

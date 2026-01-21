@@ -1,8 +1,26 @@
-use crate::db::entities::{users, users::Entity as User};
+use crate::db::entities::{sharing_tags, user_sharing_tags, users, users::Entity as User};
 use anyhow::Result;
 use chrono::Utc;
 use sea_orm::*;
 use uuid::Uuid;
+
+/// Parameters for filtering and paginating user list
+#[derive(Debug, Clone, Default)]
+pub struct UserListFilter {
+    /// Filter by role
+    pub role: Option<String>,
+    /// Filter by sharing tag name (users who have a grant for this tag)
+    pub sharing_tag: Option<String>,
+    /// Filter by sharing tag access mode (allow/deny) - only used with sharing_tag
+    pub sharing_tag_mode: Option<String>,
+}
+
+/// Paginated result for user listing
+#[derive(Debug)]
+pub struct UserListResult {
+    pub users: Vec<users::Model>,
+    pub total: u64,
+}
 
 pub struct UserRepository;
 
@@ -90,6 +108,69 @@ impl UserRepository {
     pub async fn list_all(db: &DatabaseConnection) -> Result<Vec<users::Model>> {
         let users = User::find().all(db).await?;
         Ok(users)
+    }
+
+    /// List users with filtering and pagination
+    pub async fn list_paginated(
+        db: &DatabaseConnection,
+        filter: &UserListFilter,
+        offset: u64,
+        limit: u64,
+    ) -> Result<UserListResult> {
+        // Build base query with optional sharing tag join
+        let user_ids = if filter.sharing_tag.is_some() {
+            // When filtering by sharing tag, we need to find users with grants for that tag
+            let tag_name = filter.sharing_tag.as_ref().unwrap();
+
+            let mut query = user_sharing_tags::Entity::find()
+                .inner_join(sharing_tags::Entity)
+                .filter(sharing_tags::Column::Name.eq(tag_name));
+
+            // Optionally filter by access mode
+            if let Some(mode) = &filter.sharing_tag_mode {
+                query = query.filter(user_sharing_tags::Column::AccessMode.eq(mode));
+            }
+
+            // Get user IDs with this sharing tag grant
+            let grants: Vec<user_sharing_tags::Model> = query.all(db).await?;
+            let ids: Vec<Uuid> = grants.into_iter().map(|g| g.user_id).collect();
+            Some(ids)
+        } else {
+            None
+        };
+
+        // Build the user query
+        let mut query = User::find();
+
+        // Filter by role if specified
+        if let Some(role) = &filter.role {
+            query = query.filter(users::Column::Role.eq(role));
+        }
+
+        // Filter by user IDs if we have a sharing tag filter
+        if let Some(ids) = &user_ids {
+            if ids.is_empty() {
+                // No users match the sharing tag filter
+                return Ok(UserListResult {
+                    users: vec![],
+                    total: 0,
+                });
+            }
+            query = query.filter(users::Column::Id.is_in(ids.iter().cloned()));
+        }
+
+        // Count total matching users
+        let total = query.clone().count(db).await?;
+
+        // Apply pagination and fetch results
+        let users = query
+            .order_by_asc(users::Column::Username)
+            .offset(offset)
+            .limit(limit)
+            .all(db)
+            .await?;
+
+        Ok(UserListResult { users, total })
     }
 
     /// Check if any users exist in the database

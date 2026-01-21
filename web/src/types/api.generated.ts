@@ -2866,7 +2866,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List all users (admin only) */
+        /** List all users (admin only) with pagination and filtering */
         get: operations["list_users"];
         put?: never;
         /** Create a new user (admin only) */
@@ -5516,23 +5516,30 @@ export interface components {
             data: {
                 /**
                  * Format: int64
+                 * @description Total number of books in this series
                  * @example 4
                  */
                 bookCount: number;
                 /**
                  * Format: date-time
+                 * @description When the series was created
                  * @example 2024-01-01T00:00:00Z
                  */
                 createdAt: string;
-                /** @example false */
+                /**
+                 * @description Whether the series has a custom cover uploaded
+                 * @example false
+                 */
                 hasCustomCover?: boolean | null;
                 /**
                  * Format: uuid
+                 * @description Series unique identifier
                  * @example 550e8400-e29b-41d4-a716-446655440002
                  */
                 id: string;
                 /**
                  * Format: uuid
+                 * @description Library unique identifier
                  * @example 550e8400-e29b-41d4-a716-446655440000
                  */
                 libraryId: string;
@@ -5541,11 +5548,20 @@ export interface components {
                  * @example Comics
                  */
                 libraryName: string;
-                /** @example /media/comics/Batman - Year One */
+                /**
+                 * @description Filesystem path to the series directory
+                 * @example /media/comics/Batman - Year One
+                 */
                 path?: string | null;
-                /** @example DC Comics */
+                /**
+                 * @description Publisher name
+                 * @example DC Comics
+                 */
                 publisher?: string | null;
-                /** @example first_book */
+                /**
+                 * @description Selected cover source (e.g., "first_book", "custom")
+                 * @example first_book
+                 */
                 selectedCoverSource?: string | null;
                 /**
                  * @description Summary/description from series_metadata
@@ -5564,16 +5580,19 @@ export interface components {
                 titleSort?: string | null;
                 /**
                  * Format: int64
+                 * @description Number of unread books in this series (user-specific)
                  * @example 2
                  */
                 unreadCount?: number | null;
                 /**
                  * Format: date-time
+                 * @description When the series was last updated
                  * @example 2024-01-15T10:30:00Z
                  */
                 updatedAt: string;
                 /**
                  * Format: int32
+                 * @description Release year
                  * @example 1987
                  */
                 year?: number | null;
@@ -6487,6 +6506,8 @@ export interface components {
             name: components["schemas"]["FieldOperator"];
         } | {
             readStatus: components["schemas"]["FieldOperator"];
+        } | {
+            sharingTag: components["schemas"]["FieldOperator"];
         };
         /** @description Series cover data transfer object */
         SeriesCoverDto: {
@@ -6551,23 +6572,30 @@ export interface components {
         SeriesDto: {
             /**
              * Format: int64
+             * @description Total number of books in this series
              * @example 4
              */
             bookCount: number;
             /**
              * Format: date-time
+             * @description When the series was created
              * @example 2024-01-01T00:00:00Z
              */
             createdAt: string;
-            /** @example false */
+            /**
+             * @description Whether the series has a custom cover uploaded
+             * @example false
+             */
             hasCustomCover?: boolean | null;
             /**
              * Format: uuid
+             * @description Series unique identifier
              * @example 550e8400-e29b-41d4-a716-446655440002
              */
             id: string;
             /**
              * Format: uuid
+             * @description Library unique identifier
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             libraryId: string;
@@ -6576,11 +6604,20 @@ export interface components {
              * @example Comics
              */
             libraryName: string;
-            /** @example /media/comics/Batman - Year One */
+            /**
+             * @description Filesystem path to the series directory
+             * @example /media/comics/Batman - Year One
+             */
             path?: string | null;
-            /** @example DC Comics */
+            /**
+             * @description Publisher name
+             * @example DC Comics
+             */
             publisher?: string | null;
-            /** @example first_book */
+            /**
+             * @description Selected cover source (e.g., "first_book", "custom")
+             * @example first_book
+             */
             selectedCoverSource?: string | null;
             /**
              * @description Summary/description from series_metadata
@@ -6599,16 +6636,19 @@ export interface components {
             titleSort?: string | null;
             /**
              * Format: int64
+             * @description Number of unread books in this series (user-specific)
              * @example 2
              */
             unreadCount?: number | null;
             /**
              * Format: date-time
+             * @description When the series was last updated
              * @example 2024-01-15T10:30:00Z
              */
             updatedAt: string;
             /**
              * Format: int32
+             * @description Release year
              * @example 1987
              */
             year?: number | null;
@@ -14913,20 +14953,31 @@ export interface operations {
     };
     list_users: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter by role */
+                role?: null | components["schemas"]["UserRole"];
+                /** @description Filter by sharing tag name (users who have a grant for this tag) */
+                sharingTag?: string | null;
+                /** @description Filter by sharing tag access mode (allow/deny) - only used with sharing_tag */
+                sharingTagMode?: string | null;
+                /** @description Page number (0-indexed) */
+                page?: number;
+                /** @description Number of items per page (max 100) */
+                pageSize?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description List of users */
+            /** @description Paginated list of users */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserDto"][];
+                    "application/json": components["schemas"]["PaginatedResponse_UserDto"];
                 };
             };
             /** @description Forbidden - Admin only */

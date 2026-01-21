@@ -48,7 +48,7 @@ pub use settings::SettingsRepository;
 pub use system_integrations::SystemIntegrationsRepository;
 pub use tag::TagRepository;
 pub use task::TaskRepository;
-pub use user::UserRepository;
+pub use user::{UserListFilter, UserListResult, UserRepository};
 pub use user_integrations::UserIntegrationsRepository;
 pub use user_preferences::UserPreferencesRepository;
 pub use user_series_rating::UserSeriesRatingRepository;

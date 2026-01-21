@@ -89,10 +89,36 @@ const mockUserIntegrations: Array<{
 ];
 
 export const usersHandlers = [
-	// List all users
-	http.get("/api/v1/users", async () => {
+	// List all users (paginated)
+	http.get("/api/v1/users", async ({ request }) => {
 		await delay(100);
-		return HttpResponse.json(mockUsers);
+		const url = new URL(request.url);
+		const page = parseInt(url.searchParams.get("page") || "0", 10);
+		const pageSize = parseInt(url.searchParams.get("pageSize") || "20", 10);
+		const role = url.searchParams.get("role");
+		// sharingTag filter available but not implemented in mock (would require mock sharing tag grants)
+		// const sharingTag = url.searchParams.get("sharingTag");
+
+		// Apply filters
+		let filteredUsers = [...mockUsers];
+		if (role) {
+			filteredUsers = filteredUsers.filter((u) => u.role === role);
+		}
+
+		// Apply pagination
+		const total = filteredUsers.length;
+		const totalPages = Math.ceil(total / pageSize);
+		const start = page * pageSize;
+		const end = start + pageSize;
+		const paginatedUsers = filteredUsers.slice(start, end);
+
+		return HttpResponse.json({
+			data: paginatedUsers,
+			page,
+			pageSize,
+			total,
+			totalPages,
+		});
 	}),
 
 	// Get single user

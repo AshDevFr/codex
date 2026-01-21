@@ -7,7 +7,6 @@ import {
 	Stack,
 	Text,
 } from "@mantine/core";
-import { useDebouncedValue } from "@mantine/hooks";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -78,15 +77,12 @@ export function BooksSection({
 	const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
 	const sort = searchParams.get("sort") || "title,asc";
 
-	// Debounce the filter condition to avoid rapid API calls when clicking multiple chips
-	const [debouncedCondition] = useDebouncedValue(filterState.condition, 150);
-	const [debouncedIncludeDeleted] = useDebouncedValue(showDeletedBooks, 150);
-
 	// Serialize the condition for use as a query key (stable string representation)
+	// No debouncing needed since filters are only applied on explicit "Apply" click
 	const conditionKey = useMemo(() => {
-		if (!debouncedCondition) return "none";
-		return JSON.stringify(debouncedCondition);
-	}, [debouncedCondition]);
+		if (!filterState.condition) return "none";
+		return JSON.stringify(filterState.condition);
+	}, [filterState.condition]);
 
 	// Fetch books data using the search endpoint with conditions
 	const { data: booksData, isLoading } = useQuery({
@@ -98,15 +94,15 @@ export function BooksSection({
 			pageSize,
 			sort,
 			conditionKey,
-			debouncedIncludeDeleted,
+			showDeletedBooks,
 		],
 		queryFn: () =>
 			booksApi.search(libraryId, {
-				condition: debouncedCondition,
+				condition: filterState.condition,
 				page: page - 1, // Convert to 0-indexed for backend
 				pageSize,
 				sort,
-				includeDeleted: debouncedIncludeDeleted,
+				includeDeleted: showDeletedBooks,
 			}),
 		staleTime: 30000, // 30 seconds - shorter than global default
 		refetchOnMount: true, // Always refetch when component mounts

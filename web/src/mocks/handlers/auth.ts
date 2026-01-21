@@ -2,11 +2,26 @@
  * Auth API mock handlers
  */
 
+import { faker } from "@faker-js/faker";
 import { delay, HttpResponse, http } from "msw";
-import { createUser } from "../data/factories";
+import type { components } from "@/types/api.generated";
+
+type UserInfo = components["schemas"]["UserInfo"];
+
+// Helper to create a UserInfo object (used in login/register responses)
+const createUserInfo = (
+	overrides: Partial<UserInfo> = {},
+): UserInfo => ({
+	id: faker.string.uuid(),
+	username: faker.internet.username(),
+	email: faker.internet.email(),
+	role: "reader",
+	emailVerified: true,
+	...overrides,
+});
 
 // Mock user state
-let currentUser = createUser({ username: "admin", role: "admin" });
+let currentUser: UserInfo = createUserInfo({ username: "admin", role: "admin" });
 let isAuthenticated = false;
 
 export const authHandlers = [
@@ -28,8 +43,9 @@ export const authHandlers = [
 
 		// Mock successful login
 		isAuthenticated = true;
-		currentUser = createUser({
+		currentUser = createUserInfo({
 			username: body.username,
+			email: `${body.username}@example.com`,
 			role: body.username === "admin" ? "admin" : "reader",
 		});
 
@@ -65,7 +81,7 @@ export const authHandlers = [
 			);
 		}
 
-		const newUser = createUser({
+		const newUser = createUserInfo({
 			username: body.username,
 			email: body.email,
 			role: "reader",

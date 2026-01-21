@@ -8,12 +8,34 @@ export type UpdateUserRequest = components["schemas"]["UpdateUserRequest"];
 export type PaginatedUsersResponse =
 	components["schemas"]["PaginatedResponse_UserDto"];
 
+/** Parameters for listing users with filtering and pagination */
+export interface UserListParams {
+	/** Filter by role */
+	role?: "reader" | "maintainer" | "admin";
+	/** Filter by sharing tag name (users who have a grant for this tag) */
+	sharingTag?: string;
+	/** Filter by sharing tag access mode (allow/deny) - only used with sharingTag */
+	sharingTagMode?: "allow" | "deny";
+	/** Page number (0-indexed) */
+	page?: number;
+	/** Number of items per page (max 100) */
+	pageSize?: number;
+}
+
 export const usersApi = {
 	/**
-	 * List all users (admin only)
+	 * List users with pagination and filtering (admin only)
 	 */
-	list: async (): Promise<UserDto[]> => {
-		const response = await api.get<UserDto[]>("/users");
+	list: async (params?: UserListParams): Promise<PaginatedUsersResponse> => {
+		const response = await api.get<PaginatedUsersResponse>("/users", {
+			params: {
+				role: params?.role,
+				sharingTag: params?.sharingTag,
+				sharingTagMode: params?.sharingTagMode,
+				page: params?.page ?? 0,
+				pageSize: params?.pageSize ?? 20,
+			},
+		});
 		return response.data;
 	},
 

@@ -59,7 +59,8 @@ export type SeriesCondition =
 	| { publisher: FieldOperator }
 	| { language: FieldOperator }
 	| { name: FieldOperator }
-	| { readStatus: FieldOperator };
+	| { readStatus: FieldOperator }
+	| { sharingTag: FieldOperator };
 
 // =============================================================================
 // Book conditions (matches backend BookCondition)
@@ -126,6 +127,7 @@ export interface SeriesFilterState {
 	readStatus: FilterGroupState;
 	publisher: FilterGroupState;
 	language: FilterGroupState;
+	sharingTags: FilterGroupState;
 }
 
 /**
@@ -163,6 +165,7 @@ export function createEmptySeriesFilterState(): SeriesFilterState {
 		readStatus: createEmptyFilterGroup(),
 		publisher: createEmptyFilterGroup(),
 		language: createEmptyFilterGroup(),
+		sharingTags: createEmptyFilterGroup(),
 	};
 }
 
@@ -239,39 +242,39 @@ export function filterGroupToConditions<
 		| "status"
 		| "readStatus"
 		| "publisher"
-		| "language",
+		| "language"
+		| "sharingTag",
 >(group: FilterGroupState, field: T): SeriesCondition[] {
-	const conditions: SeriesCondition[] = [];
 	const includes = getIncludedValues(group);
 	const excludes = getExcludedValues(group);
 
-	// Build include conditions
-	if (includes.length > 0) {
-		const includeConditions = includes.map((value) => ({
-			[field]: { operator: "is" as const, value },
-		})) as SeriesCondition[];
+	// Build all conditions for this group (includes and excludes)
+	const includeConditions = includes.map((value) => ({
+		[field]: { operator: "is" as const, value },
+	})) as SeriesCondition[];
 
-		if (group.mode === "allOf") {
-			// All must match - add each as separate condition
-			conditions.push(...includeConditions);
-		} else {
-			// Any can match - wrap in anyOf
-			if (includeConditions.length === 1) {
-				conditions.push(includeConditions[0]);
-			} else {
-				conditions.push({ anyOf: includeConditions });
-			}
-		}
+	const excludeConditions = excludes.map((value) => ({
+		[field]: { operator: "isNot" as const, value },
+	})) as SeriesCondition[];
+
+	const allGroupConditions = [...includeConditions, ...excludeConditions];
+
+	// If no conditions, return empty array
+	if (allGroupConditions.length === 0) {
+		return [];
 	}
 
-	// Build exclude conditions (always AND - must not have ANY of them)
-	for (const value of excludes) {
-		conditions.push({
-			[field]: { operator: "isNot" as const, value },
-		} as SeriesCondition);
+	// If only one condition, return it directly
+	if (allGroupConditions.length === 1) {
+		return allGroupConditions;
 	}
 
-	return conditions;
+	// Wrap all conditions in the group's mode (allOf or anyOf)
+	if (group.mode === "allOf") {
+		return [{ allOf: allGroupConditions }];
+	} else {
+		return [{ anyOf: allGroupConditions }];
+	}
 }
 
 /**
@@ -302,6 +305,11 @@ export function seriesFilterStateToCondition(
 	// Add language conditions
 	allConditions.push(...filterGroupToConditions(state.language, "language"));
 
+	// Add sharing tag conditions
+	allConditions.push(
+		...filterGroupToConditions(state.sharingTags, "sharingTag"),
+	);
+
 	// Return combined condition
 	if (allConditions.length === 0) {
 		return undefined;
@@ -318,37 +326,36 @@ export function seriesFilterStateToCondition(
 export function bookFilterGroupToConditions<
 	T extends "genre" | "tag" | "readStatus",
 >(group: FilterGroupState, field: T): BookCondition[] {
-	const conditions: BookCondition[] = [];
 	const includes = getIncludedValues(group);
 	const excludes = getExcludedValues(group);
 
-	// Build include conditions
-	if (includes.length > 0) {
-		const includeConditions = includes.map((value) => ({
-			[field]: { operator: "is" as const, value },
-		})) as BookCondition[];
+	// Build all conditions for this group (includes and excludes)
+	const includeConditions = includes.map((value) => ({
+		[field]: { operator: "is" as const, value },
+	})) as BookCondition[];
 
-		if (group.mode === "allOf") {
-			// All must match - add each as separate condition
-			conditions.push(...includeConditions);
-		} else {
-			// Any can match - wrap in anyOf
-			if (includeConditions.length === 1) {
-				conditions.push(includeConditions[0]);
-			} else {
-				conditions.push({ anyOf: includeConditions });
-			}
-		}
+	const excludeConditions = excludes.map((value) => ({
+		[field]: { operator: "isNot" as const, value },
+	})) as BookCondition[];
+
+	const allGroupConditions = [...includeConditions, ...excludeConditions];
+
+	// If no conditions, return empty array
+	if (allGroupConditions.length === 0) {
+		return [];
 	}
 
-	// Build exclude conditions (always AND - must not have ANY of them)
-	for (const value of excludes) {
-		conditions.push({
-			[field]: { operator: "isNot" as const, value },
-		} as BookCondition);
+	// If only one condition, return it directly
+	if (allGroupConditions.length === 1) {
+		return allGroupConditions;
 	}
 
-	return conditions;
+	// Wrap all conditions in the group's mode (allOf or anyOf)
+	if (group.mode === "allOf") {
+		return [{ allOf: allGroupConditions }];
+	} else {
+		return [{ anyOf: allGroupConditions }];
+	}
 }
 
 /**
@@ -487,6 +494,7 @@ export const FILTER_PARAM_KEYS = {
 	readStatus: "rf",
 	publisher: "pf",
 	language: "lf",
+	sharingTags: "stf",
 } as const;
 
 /**
@@ -516,6 +524,10 @@ export function serializeSeriesFilters(
 	const languageParam = serializeFilterGroup(state.language);
 	if (languageParam) params.set(FILTER_PARAM_KEYS.language, languageParam);
 
+	const sharingTagParam = serializeFilterGroup(state.sharingTags);
+	if (sharingTagParam)
+		params.set(FILTER_PARAM_KEYS.sharingTags, sharingTagParam);
+
 	return params;
 }
 
@@ -530,6 +542,7 @@ export function parseSeriesFilters(params: URLSearchParams): SeriesFilterState {
 		readStatus: parseFilterGroup(params.get(FILTER_PARAM_KEYS.readStatus)),
 		publisher: parseFilterGroup(params.get(FILTER_PARAM_KEYS.publisher)),
 		language: parseFilterGroup(params.get(FILTER_PARAM_KEYS.language)),
+		sharingTags: parseFilterGroup(params.get(FILTER_PARAM_KEYS.sharingTags)),
 	};
 }
 

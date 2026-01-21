@@ -134,15 +134,32 @@ export const tasksHandlers = [
 		return HttpResponse.json({ purged_count: purgedCount });
 	}),
 
-	// Task progress stream (SSE) - returns empty stream for mocking
+	// Task progress stream (SSE) - handled by eventHandlers in events.ts
+	// Keeping this as a fallback that returns a stream that stays open
 	http.get("/api/v1/tasks/stream", async () => {
-		// Return an SSE stream that sends a keep-alive every few seconds
 		const encoder = new TextEncoder();
+		let intervalId: ReturnType<typeof setInterval> | null = null;
+
 		const stream = new ReadableStream({
 			start(controller) {
 				controller.enqueue(encoder.encode("data: keep-alive\n\n"));
-				// Close after initial keep-alive for simplicity in mocks
-				controller.close();
+				// Keep stream open to prevent reconnection spam
+				intervalId = setInterval(() => {
+					try {
+						controller.enqueue(encoder.encode("data: keep-alive\n\n"));
+					} catch {
+						if (intervalId) {
+							clearInterval(intervalId);
+							intervalId = null;
+						}
+					}
+				}, 30000);
+			},
+			cancel() {
+				if (intervalId) {
+					clearInterval(intervalId);
+					intervalId = null;
+				}
 			},
 		});
 

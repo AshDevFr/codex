@@ -59,9 +59,8 @@ const utilityHandlers = [
 				id: "admin-user-id",
 				username: body.username,
 				email: body.email,
-				isAdmin: true,
-				createdAt: new Date().toISOString(),
-				updatedAt: new Date().toISOString(),
+				role: "admin",
+				emailVerified: true,
 			},
 		});
 	}),
