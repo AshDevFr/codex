@@ -136,9 +136,9 @@ pub struct BookDto {
     #[schema(example = "Batman: Year One #1")]
     pub title: String,
 
-    /// Sort title for ordering
+    /// Title used for sorting (title_sort field)
     #[schema(example = "batman year one 001")]
-    pub sort_title: Option<String>,
+    pub title_sort: Option<String>,
 
     /// Filesystem path to the book file
     #[schema(example = "/media/comics/Batman/Batman - Year One 001.cbz")]

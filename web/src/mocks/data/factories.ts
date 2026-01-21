@@ -625,7 +625,7 @@ export const createBook = (overrides: Partial<MockBook> = {}): MockBook => {
 		seriesId: overrides.seriesId || faker.string.uuid(),
 		seriesName,
 		title,
-		sortTitle: title.toLowerCase(),
+		titleSort: title.toLowerCase(),
 		filePath: `/media/comics/${seriesName.replace(/[:\s]+/g, "-")}/${title.replace(/[:\s#]+/g, "-")}.${fileFormat}`,
 		fileFormat,
 		fileSize: faker.number.int({ min: 10_000_000, max: 100_000_000 }),

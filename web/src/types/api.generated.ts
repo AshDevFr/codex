@@ -3518,15 +3518,15 @@ export interface components {
              */
             seriesName: string;
             /**
-             * @description Sort title for ordering
-             * @example batman year one 001
-             */
-            sortTitle?: string | null;
-            /**
              * @description Book title
              * @example Batman: Year One #1
              */
             title: string;
+            /**
+             * @description Title used for sorting (title_sort field)
+             * @example batman year one 001
+             */
+            titleSort?: string | null;
             /**
              * Format: date-time
              * @description When the book was last updated
@@ -5469,15 +5469,15 @@ export interface components {
                  */
                 seriesName: string;
                 /**
-                 * @description Sort title for ordering
-                 * @example batman year one 001
-                 */
-                sortTitle?: string | null;
-                /**
                  * @description Book title
                  * @example Batman: Year One #1
                  */
                 title: string;
+                /**
+                 * @description Title used for sorting (title_sort field)
+                 * @example batman year one 001
+                 */
+                titleSort?: string | null;
                 /**
                  * Format: date-time
                  * @description When the book was last updated
@@ -6506,6 +6506,8 @@ export interface components {
             language: components["schemas"]["FieldOperator"];
         } | {
             name: components["schemas"]["FieldOperator"];
+        } | {
+            titleSort: components["schemas"]["FieldOperator"];
         } | {
             readStatus: components["schemas"]["FieldOperator"];
         } | {

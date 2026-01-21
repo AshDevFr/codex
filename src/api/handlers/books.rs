@@ -166,8 +166,8 @@ pub async fn books_to_dtos(
                 }
             });
 
-            // Get sort_title from book_metadata
-            let sort_title = book_meta.and_then(|m| m.title_sort.clone());
+            // Get title_sort from book_metadata
+            let title_sort = book_meta.and_then(|m| m.title_sort.clone());
 
             // Get number from book_metadata
             let number = book_meta
@@ -189,7 +189,7 @@ pub async fn books_to_dtos(
                 series_id: book.series_id,
                 series_name,
                 title,
-                sort_title,
+                title_sort,
                 file_path: book.file_path,
                 file_format: book.format,
                 file_size: book.file_size,

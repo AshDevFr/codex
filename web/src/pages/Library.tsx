@@ -463,10 +463,20 @@ export function LibraryPage() {
 
 	return (
 		<>
-			<Box py="xl" px="md">
-				<Stack gap="xl">
-					{/* Header with library name, count, and action menu */}
-					<Group gap="md" align="center" justify="space-between">
+			<Box
+				style={{
+					display: "flex",
+					flexDirection: "column",
+					height: "calc(100vh - 64px)", // Subtract AppShell header height
+					overflow: "hidden",
+					margin: "calc(-1 * var(--mantine-spacing-md))", // Offset AppShell padding
+				}}
+			>
+				{/* Fixed header area - does not scroll */}
+				<Box px="md" pt="sm" pb="xs" style={{ flexShrink: 0, backgroundColor: "var(--mantine-color-body)" }}>
+					<Stack gap="xs">
+						{/* Header with library name, count, and action menu */}
+						<Group gap="md" align="center" justify="space-between">
 						<Group gap="xs" align="baseline">
 							{!isAllLibraries &&
 								library &&
@@ -538,17 +548,17 @@ export function LibraryPage() {
 										</Menu.Dropdown>
 									</Menu>
 								)}
-							<Title order={1} tt="capitalize">
+							<Title order={3} tt="capitalize">
 								{isAllLibraries ? "All Libraries" : library?.name || "Library"}
 							</Title>
 							{currentCount !== null && (
-								<Text size="lg" c="dimmed" fw={500}>
+								<Text size="sm" c="dimmed" fw={500}>
 									{currentCount} {countLabel}
 								</Text>
 							)}
 							{/* Show scan progress badge when scanning */}
 							{activeScanTasks.length > 0 && activeScanTasks[0].progress && (
-								<Badge color="blue" variant="filled" size="lg">
+								<Badge color="blue" variant="filled" size="sm">
 									Scanning... {activeScanTasks[0].progress.current} /{" "}
 									{activeScanTasks[0].progress.total}
 								</Badge>
@@ -587,30 +597,38 @@ export function LibraryPage() {
 							}
 						}}
 					/>
+					</Stack>
+				</Box>
 
-					{/* Tab Content */}
-					<Box pt="xl">
-						{currentTab === "recommended" && !isAllLibraries && (
-							<RecommendedSection libraryId={libraryId} />
-						)}
+				{/* Scrollable content area */}
+				<Box
+					px="md"
+					pb="xl"
+					style={{
+						flex: 1,
+						overflowY: "auto",
+					}}
+				>
+					{currentTab === "recommended" && !isAllLibraries && (
+						<RecommendedSection libraryId={libraryId} />
+					)}
 
-						{currentTab === "series" && (
-							<SeriesSection
-								libraryId={libraryId}
-								searchParams={searchParams}
-								onTotalChange={setSeriesCount}
-							/>
-						)}
+					{currentTab === "series" && (
+						<SeriesSection
+							libraryId={libraryId}
+							searchParams={searchParams}
+							onTotalChange={setSeriesCount}
+						/>
+					)}
 
-						{currentTab === "books" && (
-							<BooksSection
-								libraryId={libraryId}
-								searchParams={searchParams}
-								onTotalChange={setBooksCount}
-							/>
-						)}
-					</Box>
-				</Stack>
+					{currentTab === "books" && (
+						<BooksSection
+							libraryId={libraryId}
+							searchParams={searchParams}
+							onTotalChange={setBooksCount}
+						/>
+					)}
+				</Box>
 			</Box>
 
 			{/* Edit Library Modal */}

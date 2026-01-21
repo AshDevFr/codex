@@ -1,7 +1,7 @@
 use crate::api::{
     dto::{
         series::{
-            AddSeriesGenreRequest, AddSeriesTagRequest, AlternateTitleDto,
+            AddSeriesGenreRequest, AddSeriesTagRequest, AlphabeticalGroupDto, AlternateTitleDto,
             AlternateTitleListResponse, CreateAlternateTitleRequest, CreateExternalLinkRequest,
             CreateExternalRatingRequest, ExternalLinkDto, ExternalLinkListResponse,
             ExternalRatingDto, ExternalRatingListResponse, FullSeriesMetadataResponse, GenreDto,
@@ -658,6 +658,114 @@ pub async fn list_series_filtered(
     let response = SeriesListResponse::new(dtos, request.page, page_size, total);
 
     Ok(Json(response))
+}
+
+/// Get alphabetical groups for series
+///
+/// Returns a list of alphabetical groups with counts, showing how many series
+/// start with each letter/character. This is useful for building A-Z navigation.
+/// The same filters as list_series_filtered can be applied.
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/list/alphabetical-groups",
+    request_body = SeriesListRequest,
+    responses(
+        (status = 200, description = "List of alphabetical groups with counts", body = Vec<AlphabeticalGroupDto>),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn list_series_alphabetical_groups(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Json(request): Json<SeriesListRequest>,
+) -> Result<Json<Vec<AlphabeticalGroupDto>>, ApiError> {
+    use crate::services::FilterService;
+    use std::collections::HashMap;
+
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    // Get all series IDs first (we'll filter from this)
+    let all_series = SeriesRepository::list_all(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
+
+    // Apply sharing tag content filter
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+
+    let all_series: Vec<_> = all_series
+        .into_iter()
+        .filter(|s| content_filter.is_series_visible(s.id))
+        .collect();
+
+    let all_series_ids: std::collections::HashSet<Uuid> = all_series.iter().map(|s| s.id).collect();
+
+    // Apply filter condition if provided (with user context for ReadStatus filtering)
+    let matching_ids = if let Some(ref condition) = request.condition {
+        FilterService::get_matching_series_for_user(
+            &state.db,
+            condition,
+            Some(&all_series_ids),
+            Some(auth.user_id),
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to apply filter: {}", e)))?
+    } else {
+        all_series_ids.clone()
+    };
+
+    // Get the filtered series
+    let filtered_series: Vec<_> = all_series
+        .into_iter()
+        .filter(|s| matching_ids.contains(&s.id))
+        .collect();
+
+    // Get metadata for all filtered series to access title_sort
+    let series_ids: Vec<Uuid> = filtered_series.iter().map(|s| s.id).collect();
+
+    // Fetch all series metadata in one query
+    let metadata_map = SeriesMetadataRepository::get_by_series_ids(&state.db, &series_ids)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch metadata: {}", e)))?;
+
+    // Count series by first character of sort title (or title if sort title not set)
+    let mut group_counts: HashMap<String, i64> = HashMap::new();
+
+    for series in &filtered_series {
+        let metadata = metadata_map.get(&series.id);
+
+        // Get title_sort (fallback to title, then series name)
+        let title_sort = metadata
+            .and_then(|m| m.title_sort.as_ref().or(Some(&m.title)))
+            .map(|s| s.as_str())
+            .unwrap_or(&series.name);
+
+        // Get first character, normalize to lowercase
+        let first_char = title_sort
+            .chars()
+            .next()
+            .map(|c| c.to_lowercase().to_string())
+            .unwrap_or_else(|| "#".to_string());
+
+        *group_counts.entry(first_char).or_insert(0) += 1;
+    }
+
+    // Convert to sorted list of AlphabeticalGroupDto
+    let mut groups: Vec<AlphabeticalGroupDto> = group_counts
+        .into_iter()
+        .map(|(group, count)| AlphabeticalGroupDto { group, count })
+        .collect();
+
+    // Sort alphabetically (numbers/special chars first, then letters)
+    groups.sort_by(|a, b| a.group.cmp(&b.group));
+
+    Ok(Json(groups))
 }
 
 /// Get books in a series

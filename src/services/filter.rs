@@ -113,6 +113,10 @@ impl FilterService {
                     Self::filter_by_name(db, name, candidate_ids).await
                 }
 
+                SeriesCondition::TitleSort { title_sort } => {
+                    Self::filter_by_title_sort(db, title_sort, candidate_ids).await
+                }
+
                 SeriesCondition::ReadStatus { read_status } => {
                     Self::filter_by_read_status(db, read_status, candidate_ids, user_id).await
                 }
@@ -841,6 +845,197 @@ impl FilterService {
         };
 
         // Select series_id from series_metadata (not the primary key)
+        let series_ids: Vec<Uuid> = filtered_query
+            .select_only()
+            .column(series_metadata::Column::SeriesId)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
+            series_ids
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect()
+        } else {
+            series_ids.into_iter().collect()
+        };
+
+        Ok(result)
+    }
+
+    /// Filter series by title_sort field in series_metadata
+    ///
+    /// This is used for alphabetical A-Z filtering where we filter by the first letter
+    /// of the title_sort field. The matching is case-insensitive.
+    async fn filter_by_title_sort(
+        db: &DatabaseConnection,
+        operator: &FieldOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use crate::db::entities::series_metadata;
+        use sea_orm::{ColumnTrait, Condition, EntityTrait, QueryFilter, QuerySelect};
+
+        let query = series_metadata::Entity::find();
+
+        // For title_sort, we fall back to title if title_sort is null
+        // We use COALESCE-like logic: if title_sort is set, use it; otherwise use title
+        let filtered_query = match operator {
+            FieldOperator::Is { value } => {
+                // Exact match on title_sort or title (case-insensitive)
+                let lower_value = value.to_lowercase();
+                query.filter(
+                    Condition::any()
+                        .add(
+                            series_metadata::Column::TitleSort.is_not_null().and(
+                                sea_orm::prelude::Expr::expr(sea_orm::sea_query::Func::lower(
+                                    sea_orm::prelude::Expr::col(series_metadata::Column::TitleSort),
+                                ))
+                                .eq(lower_value.clone()),
+                            ),
+                        )
+                        .add(
+                            series_metadata::Column::TitleSort.is_null().and(
+                                sea_orm::prelude::Expr::expr(sea_orm::sea_query::Func::lower(
+                                    sea_orm::prelude::Expr::col(series_metadata::Column::Title),
+                                ))
+                                .eq(lower_value),
+                            ),
+                        ),
+                )
+            }
+            FieldOperator::IsNot { value } => {
+                let lower_value = value.to_lowercase();
+                query.filter(
+                    Condition::all()
+                        .add(
+                            Condition::any()
+                                .add(series_metadata::Column::TitleSort.is_null())
+                                .add(
+                                    sea_orm::prelude::Expr::expr(sea_orm::sea_query::Func::lower(
+                                        sea_orm::prelude::Expr::col(
+                                            series_metadata::Column::TitleSort,
+                                        ),
+                                    ))
+                                    .ne(lower_value.clone()),
+                                ),
+                        )
+                        .add(
+                            Condition::any()
+                                .add(series_metadata::Column::TitleSort.is_not_null())
+                                .add(
+                                    sea_orm::prelude::Expr::expr(sea_orm::sea_query::Func::lower(
+                                        sea_orm::prelude::Expr::col(series_metadata::Column::Title),
+                                    ))
+                                    .ne(lower_value),
+                                ),
+                        ),
+                )
+            }
+            FieldOperator::IsNull => {
+                // Both title_sort and title are null - shouldn't happen as title is required
+                return Ok(HashSet::new());
+            }
+            FieldOperator::IsNotNull => {
+                // title is always set, so return all
+                query.filter(series_metadata::Column::Title.is_not_null())
+            }
+            FieldOperator::Contains { value } => {
+                let pattern = format!("%{}%", value.to_lowercase());
+                query.filter(
+                    Condition::any()
+                        .add(
+                            series_metadata::Column::TitleSort.is_not_null().and(
+                                sea_orm::prelude::Expr::expr(sea_orm::sea_query::Func::lower(
+                                    sea_orm::prelude::Expr::col(series_metadata::Column::TitleSort),
+                                ))
+                                .like(pattern.clone()),
+                            ),
+                        )
+                        .add(
+                            series_metadata::Column::TitleSort.is_null().and(
+                                sea_orm::prelude::Expr::expr(sea_orm::sea_query::Func::lower(
+                                    sea_orm::prelude::Expr::col(series_metadata::Column::Title),
+                                ))
+                                .like(pattern),
+                            ),
+                        ),
+                )
+            }
+            FieldOperator::DoesNotContain { value } => {
+                let pattern = format!("%{}%", value.to_lowercase());
+                query.filter(
+                    Condition::all()
+                        .add(
+                            Condition::any()
+                                .add(series_metadata::Column::TitleSort.is_null())
+                                .add(
+                                    sea_orm::prelude::Expr::expr(sea_orm::sea_query::Func::lower(
+                                        sea_orm::prelude::Expr::col(
+                                            series_metadata::Column::TitleSort,
+                                        ),
+                                    ))
+                                    .not_like(pattern.clone()),
+                                ),
+                        )
+                        .add(
+                            Condition::any()
+                                .add(series_metadata::Column::TitleSort.is_not_null())
+                                .add(
+                                    sea_orm::prelude::Expr::expr(sea_orm::sea_query::Func::lower(
+                                        sea_orm::prelude::Expr::col(series_metadata::Column::Title),
+                                    ))
+                                    .not_like(pattern),
+                                ),
+                        ),
+                )
+            }
+            FieldOperator::BeginsWith { value } => {
+                let pattern = format!("{}%", value.to_lowercase());
+                query.filter(
+                    Condition::any()
+                        .add(
+                            series_metadata::Column::TitleSort.is_not_null().and(
+                                sea_orm::prelude::Expr::expr(sea_orm::sea_query::Func::lower(
+                                    sea_orm::prelude::Expr::col(series_metadata::Column::TitleSort),
+                                ))
+                                .like(pattern.clone()),
+                            ),
+                        )
+                        .add(
+                            series_metadata::Column::TitleSort.is_null().and(
+                                sea_orm::prelude::Expr::expr(sea_orm::sea_query::Func::lower(
+                                    sea_orm::prelude::Expr::col(series_metadata::Column::Title),
+                                ))
+                                .like(pattern),
+                            ),
+                        ),
+                )
+            }
+            FieldOperator::EndsWith { value } => {
+                let pattern = format!("%{}", value.to_lowercase());
+                query.filter(
+                    Condition::any()
+                        .add(
+                            series_metadata::Column::TitleSort.is_not_null().and(
+                                sea_orm::prelude::Expr::expr(sea_orm::sea_query::Func::lower(
+                                    sea_orm::prelude::Expr::col(series_metadata::Column::TitleSort),
+                                ))
+                                .like(pattern.clone()),
+                            ),
+                        )
+                        .add(
+                            series_metadata::Column::TitleSort.is_null().and(
+                                sea_orm::prelude::Expr::expr(sea_orm::sea_query::Func::lower(
+                                    sea_orm::prelude::Expr::col(series_metadata::Column::Title),
+                                ))
+                                .like(pattern),
+                            ),
+                        ),
+                )
+            }
+        };
+
         let series_ids: Vec<Uuid> = filtered_query
             .select_only()
             .column(series_metadata::Column::SeriesId)

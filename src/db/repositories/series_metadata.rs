@@ -24,6 +24,27 @@ impl SeriesMetadataRepository {
         Ok(result)
     }
 
+    /// Get metadata for multiple series by their IDs
+    ///
+    /// Returns a HashMap keyed by series_id for efficient lookups
+    pub async fn get_by_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, series_metadata::Model>> {
+        use sea_orm::{ColumnTrait, QueryFilter};
+
+        if series_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let results = SeriesMetadata::find()
+            .filter(series_metadata::Column::SeriesId.is_in(series_ids.to_vec()))
+            .all(db)
+            .await?;
+
+        Ok(results.into_iter().map(|m| (m.series_id, m)).collect())
+    }
+
     /// Create initial metadata for a series
     /// This is typically called when a series is created
     pub async fn create(

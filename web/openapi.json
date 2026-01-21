@@ -10255,18 +10255,18 @@
             "description": "Name of the series",
             "example": "Batman: Year One"
           },
-          "sortTitle": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Sort title for ordering",
-            "example": "batman year one 001"
-          },
           "title": {
             "type": "string",
             "description": "Book title",
             "example": "Batman: Year One #1"
+          },
+          "titleSort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Title used for sorting (title_sort field)",
+            "example": "batman year one 001"
           },
           "updatedAt": {
             "type": "string",
@@ -13826,18 +13826,18 @@
                   "description": "Name of the series",
                   "example": "Batman: Year One"
                 },
-                "sortTitle": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Sort title for ordering",
-                  "example": "batman year one 001"
-                },
                 "title": {
                   "type": "string",
                   "description": "Book title",
                   "example": "Batman: Year One #1"
+                },
+                "titleSort": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Title used for sorting (title_sort field)",
+                  "example": "batman year one 001"
                 },
                 "updatedAt": {
                   "type": "string",
@@ -15556,6 +15556,18 @@
             ],
             "properties": {
               "name": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by series title_sort field (used for alphabetical filtering)",
+            "required": [
+              "titleSort"
+            ],
+            "properties": {
+              "titleSort": {
                 "$ref": "#/components/schemas/FieldOperator"
               }
             }

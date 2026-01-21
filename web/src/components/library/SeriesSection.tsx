@@ -8,12 +8,18 @@ import {
 	Text,
 } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { seriesApi } from "@/api/series";
 import { ActiveFilters } from "@/components/library/ActiveFilters";
+import {
+	AlphabetFilter,
+	type AlphabetCounts,
+	type AlphabetLetter,
+} from "@/components/library/AlphabetFilter";
 import { MediaCard } from "@/components/library/MediaCard";
 import { useFilterState } from "@/hooks/useFilterState";
+import type { SeriesCondition } from "@/types";
 
 /** Fixed skeleton IDs to avoid array index keys */
 const SKELETON_IDS = [
@@ -65,6 +71,7 @@ export function SeriesSection({
 	onTotalChange,
 }: SeriesSectionProps) {
 	const navigate = useNavigate();
+	const [, setSearchParams] = useSearchParams();
 
 	// Get filter state from URL (uses the advanced filtering system)
 	// Filters are only applied when user clicks "Apply" in FilterPanel,
@@ -75,6 +82,41 @@ export function SeriesSection({
 	const page = parseInt(searchParams.get("page") || "1", 10);
 	const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
 	const sort = searchParams.get("sort") || "name,asc";
+
+	// Read alphabet filter from URL
+	const firstLetter = searchParams.get("letter") as AlphabetLetter | null;
+
+	// Build the alphabet filter condition
+	const alphabetCondition = useMemo((): SeriesCondition | null => {
+		if (!firstLetter) return null;
+
+		if (firstLetter === "#") {
+			// Match series starting with a number (0-9)
+			// We use anyOf to match any digit
+			return {
+				anyOf: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"].map(
+					(digit) => ({
+						titleSort: { operator: "beginsWith" as const, value: digit },
+					}),
+				),
+			};
+		}
+
+		// Match series starting with the selected letter (case-insensitive via backend)
+		return {
+			titleSort: { operator: "beginsWith" as const, value: firstLetter },
+		};
+	}, [firstLetter]);
+
+	// Combine filter conditions with alphabet condition
+	const combinedCondition = useMemo((): SeriesCondition | undefined => {
+		if (!condition && !alphabetCondition) return undefined;
+		if (!condition) return alphabetCondition ?? undefined;
+		if (!alphabetCondition) return condition;
+
+		// Both exist, combine with allOf
+		return { allOf: [condition, alphabetCondition] };
+	}, [condition, alphabetCondition]);
 
 	// Serialize filter state for use in query key (stable reference)
 	// We include the modes to ensure mode changes trigger a refetch even when
@@ -89,15 +131,17 @@ export function SeriesSection({
 			language: filters.language.mode,
 			sharingTags: filters.sharingTags.mode,
 		};
-		return condition ? JSON.stringify({ condition, modes }) : "none";
-	}, [condition, filters]);
+		return combinedCondition
+			? JSON.stringify({ condition: combinedCondition, modes })
+			: "none";
+	}, [combinedCondition, filters]);
 
 	// Fetch series data using the new POST search endpoint
 	const { data: seriesData, isLoading } = useQuery({
 		queryKey: ["series", "search", libraryId, page, pageSize, sort, filterKey],
 		queryFn: () =>
 			seriesApi.search(libraryId, {
-				condition,
+				condition: combinedCondition,
 				page: page - 1, // Convert to 0-indexed for backend
 				pageSize,
 				sort,
@@ -105,6 +149,41 @@ export function SeriesSection({
 		staleTime: 30000, // 30 seconds - shorter than global default
 		refetchOnMount: true, // Always refetch when component mounts
 	});
+
+	// Serialize base condition (without alphabet filter) for alphabetical groups query
+	const baseConditionKey = useMemo(
+		() => (condition ? JSON.stringify(condition) : "none"),
+		[condition],
+	);
+
+	// Fetch alphabetical groups for the A-Z filter (without alphabet filter applied)
+	const { data: alphabeticalGroups } = useQuery({
+		queryKey: [
+			"series",
+			"alphabetical-groups",
+			libraryId,
+			baseConditionKey,
+		],
+		queryFn: () => seriesApi.getAlphabeticalGroups(libraryId, condition),
+		staleTime: 60000, // 1 minute - these don't change often
+	});
+
+	// Convert alphabetical groups to counts map
+	const alphabetCounts = useMemo((): AlphabetCounts | undefined => {
+		if (!alphabeticalGroups) return undefined;
+
+		const counts: AlphabetCounts = new Map();
+		for (const group of alphabeticalGroups) {
+			counts.set(group.group, group.count);
+		}
+		return counts;
+	}, [alphabeticalGroups]);
+
+	// Calculate total count from alphabetical groups
+	const totalSeriesCount = useMemo(() => {
+		if (!alphabeticalGroups) return undefined;
+		return alphabeticalGroups.reduce((sum, group) => sum + group.count, 0);
+	}, [alphabeticalGroups]);
 
 	// Update URL when filters change
 	const handleFilterChange = (updates: Record<string, string | number>) => {
@@ -143,8 +222,35 @@ export function SeriesSection({
 		}
 	}, [seriesData, onTotalChange]);
 
+	// Handle alphabet filter selection
+	const handleLetterSelect = useCallback(
+		(letter: AlphabetLetter | null) => {
+			const params = new URLSearchParams(searchParams);
+
+			if (letter) {
+				params.set("letter", letter);
+			} else {
+				params.delete("letter");
+			}
+
+			// Reset to page 1 when letter filter changes
+			params.set("page", "1");
+
+			setSearchParams(params, { replace: true });
+		},
+		[searchParams, setSearchParams],
+	);
+
 	return (
 		<Stack gap="md">
+			{/* Alphabet Filter */}
+			<AlphabetFilter
+				selected={firstLetter}
+				onSelect={handleLetterSelect}
+				counts={alphabetCounts}
+				totalCount={totalSeriesCount}
+			/>
+
 			{/* Active Filters Summary */}
 			{hasActiveFilters && <ActiveFilters />}
 

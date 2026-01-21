@@ -80,6 +80,11 @@ pub enum SeriesCondition {
     Language { language: FieldOperator },
     /// Filter by series name/title
     Name { name: FieldOperator },
+    /// Filter by series title_sort field (used for alphabetical filtering)
+    TitleSort {
+        #[serde(rename = "titleSort")]
+        title_sort: FieldOperator,
+    },
     /// Filter by read status (unread, in_progress, read)
     ReadStatus {
         #[serde(rename = "readStatus")]
@@ -452,5 +457,58 @@ mod tests {
         let json = serde_json::to_string(&condition).unwrap();
         assert!(json.contains(r#""hasError""#));
         assert!(json.contains(r#""operator":"isTrue""#));
+    }
+
+    #[test]
+    fn test_title_sort_condition_begins_with() {
+        let condition = SeriesCondition::TitleSort {
+            title_sort: FieldOperator::BeginsWith {
+                value: "A".to_string(),
+            },
+        };
+
+        let json = serde_json::to_string(&condition).unwrap();
+        assert!(json.contains(r#""titleSort""#));
+        assert!(json.contains(r#""operator":"beginsWith""#));
+        assert!(json.contains(r#""value":"A""#));
+    }
+
+    #[test]
+    fn test_title_sort_condition_deserialization() {
+        let json = r#"{"titleSort":{"operator":"beginsWith","value":"B"}}"#;
+        let condition: SeriesCondition = serde_json::from_str(json).unwrap();
+
+        match condition {
+            SeriesCondition::TitleSort {
+                title_sort: FieldOperator::BeginsWith { value },
+            } => {
+                assert_eq!(value, "B");
+            }
+            _ => panic!("Expected TitleSort condition with BeginsWith operator"),
+        }
+    }
+
+    #[test]
+    fn test_title_sort_combined_with_other_filters() {
+        // Combined condition: titleSort begins with "A" AND genre is "Action"
+        let condition = SeriesCondition::AllOf {
+            all_of: vec![
+                SeriesCondition::TitleSort {
+                    title_sort: FieldOperator::BeginsWith {
+                        value: "A".to_string(),
+                    },
+                },
+                SeriesCondition::Genre {
+                    genre: FieldOperator::Is {
+                        value: "Action".to_string(),
+                    },
+                },
+            ],
+        };
+
+        let json = serde_json::to_string(&condition).unwrap();
+        assert!(json.contains(r#""allOf""#));
+        assert!(json.contains(r#""titleSort""#));
+        assert!(json.contains(r#""genre""#));
     }
 }

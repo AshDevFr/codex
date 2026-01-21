@@ -59,6 +59,7 @@ export type SeriesCondition =
 	| { publisher: FieldOperator }
 	| { language: FieldOperator }
 	| { name: FieldOperator }
+	| { titleSort: FieldOperator }
 	| { readStatus: FieldOperator }
 	| { sharingTag: FieldOperator };
 

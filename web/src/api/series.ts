@@ -230,4 +230,54 @@ export const seriesApi = {
 		}>(`/series/${seriesId}`, data);
 		return response.data;
 	},
+
+	/**
+	 * Get alphabetical groups with counts for series navigation.
+	 *
+	 * Returns a list of first characters (lowercase) with the count of series
+	 * starting with that character. Useful for A-Z navigation filters.
+	 *
+	 * @param libraryId - Library to filter by, or "all" for all libraries
+	 * @param condition - Optional additional filter condition
+	 */
+	getAlphabeticalGroups: async (
+		libraryId: string,
+		condition?: SeriesCondition,
+	): Promise<AlphabeticalGroup[]> => {
+		// Build the full condition including library filter
+		let finalCondition: SeriesCondition | undefined = condition;
+
+		// Add library filter if not "all"
+		if (libraryId !== "all") {
+			const libraryCondition: SeriesCondition = {
+				libraryId: { operator: "is", value: libraryId },
+			};
+
+			if (finalCondition) {
+				finalCondition = {
+					allOf: [libraryCondition, finalCondition],
+				};
+			} else {
+				finalCondition = libraryCondition;
+			}
+		}
+
+		const body: SeriesListRequest = {
+			condition: finalCondition,
+		};
+
+		const response = await api.post<AlphabeticalGroup[]>(
+			"/series/list/alphabetical-groups",
+			body,
+		);
+		return response.data;
+	},
 };
+
+/** Alphabetical group with count */
+export interface AlphabeticalGroup {
+	/** The first character (lowercase letter, digit, or special character) */
+	group: string;
+	/** Number of series starting with this character */
+	count: number;
+}

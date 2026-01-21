@@ -211,6 +211,21 @@ pub struct SeriesDto {
 /// Series list response
 pub type SeriesListResponse = PaginatedResponse<SeriesDto>;
 
+/// Alphabetical group with count
+///
+/// Represents a group of series starting with a specific letter/character
+/// along with the count of series in that group.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AlphabeticalGroupDto {
+    /// The first character (lowercase letter, digit, or special character)
+    #[schema(example = "a")]
+    pub group: String,
+
+    /// Number of series starting with this character
+    #[schema(example = 20)]
+    pub count: i64,
+}
+
 /// Search series request
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

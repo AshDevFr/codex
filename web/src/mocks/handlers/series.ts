@@ -327,6 +327,64 @@ export const seriesHandlers = [
 		);
 	}),
 
+	// POST /series/list/alphabetical-groups - Get counts per first letter
+	http.post("/api/v1/series/list/alphabetical-groups", async ({ request }) => {
+		await delay(100);
+		const body = (await request.json()) as {
+			condition?: unknown;
+		};
+
+		// For mock purposes, we'll do basic filtering
+		let results = [...mockSeries];
+
+		// Apply basic library filtering if condition contains libraryId
+		if (body.condition && typeof body.condition === "object") {
+			const condition = body.condition as Record<string, unknown>;
+
+			// Handle direct libraryId condition
+			if ("libraryId" in condition) {
+				const libOp = condition.libraryId as {
+					operator: string;
+					value: string;
+				};
+				if (libOp.operator === "is") {
+					results = results.filter((s) => s.libraryId === libOp.value);
+				}
+			}
+
+			// Handle allOf wrapper with libraryId
+			if ("allOf" in condition && Array.isArray(condition.allOf)) {
+				for (const c of condition.allOf) {
+					if (c && typeof c === "object" && "libraryId" in c) {
+						const libOp = (c as Record<string, unknown>).libraryId as {
+							operator: string;
+							value: string;
+						};
+						if (libOp.operator === "is") {
+							results = results.filter((s) => s.libraryId === libOp.value);
+						}
+					}
+				}
+			}
+		}
+
+		// Group by first letter of title (lowercase)
+		const groups = new Map<string, number>();
+		for (const series of results) {
+			const firstChar = series.title.charAt(0).toLowerCase();
+			// Use # for digits, otherwise the letter
+			const group = /\d/.test(firstChar) ? firstChar : firstChar;
+			groups.set(group, (groups.get(group) || 0) + 1);
+		}
+
+		// Convert to array format
+		const alphabeticalGroups = Array.from(groups.entries())
+			.map(([group, count]) => ({ group, count }))
+			.sort((a, b) => a.group.localeCompare(b.group));
+
+		return HttpResponse.json(alphabeticalGroups);
+	}),
+
 	// List in-progress series
 	// Supports ?library_id= query param for library filtering
 	// Returns plain array (not paginated) - matches API expectation
