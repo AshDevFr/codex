@@ -398,6 +398,136 @@ impl BookRepository {
         Ok((books, total))
     }
 
+    /// List books by library with sorting (database-level)
+    ///
+    /// This method handles all sort types at the database level with proper JOINs:
+    /// - Title: sorts by book_metadata.title_sort, then title, then file_name
+    /// - Series: compound sort by series name + book number
+    /// - DateAdded: sorts by books.created_at
+    /// - ReleaseDate: sorts by book_metadata.year
+    /// - ChapterNumber: sorts by book_metadata.number
+    /// - FileSize: sorts by books.file_size
+    /// - Filename: sorts by books.file_name
+    /// - PageCount: sorts by books.page_count
+    pub async fn list_by_library_sorted(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        sort: &crate::api::dto::book::BookSortParam,
+        include_deleted: bool,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::api::dto::book::BookSortField;
+        use crate::api::dto::series::SortDirection;
+        use crate::db::entities::{book_metadata, series, series_metadata};
+        use sea_orm::JoinType;
+
+        // Build base query
+        let mut base_query = Books::find().filter(books::Column::LibraryId.eq(library_id));
+
+        if !include_deleted {
+            base_query = base_query.filter(books::Column::Deleted.eq(false));
+        }
+
+        // Get total count (before sorting/pagination)
+        let total = base_query
+            .clone()
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count books in library")?;
+
+        let order = match sort.direction {
+            SortDirection::Asc => Order::Asc,
+            SortDirection::Desc => Order::Desc,
+        };
+
+        // Apply sort based on field
+        let books = match sort.field {
+            BookSortField::Series => {
+                // Compound sort: series title_sort/title, then book number, then book title
+                base_query
+                    .join(JoinType::LeftJoin, books::Relation::Series.def())
+                    .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+                    .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                    .order_by(series_metadata::Column::TitleSort, order.clone())
+                    .order_by(series_metadata::Column::Title, order.clone())
+                    .order_by(book_metadata::Column::Number, Order::Asc)
+                    .order_by(book_metadata::Column::Title, Order::Asc)
+                    .offset(page * page_size)
+                    .limit(page_size)
+                    .all(db)
+                    .await
+                    .context("Failed to list books with series sort")?
+            }
+            BookSortField::Title => {
+                // Sort by title_sort, then title, then file_name
+                base_query
+                    .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                    .order_by(book_metadata::Column::TitleSort, order.clone())
+                    .order_by(book_metadata::Column::Title, order)
+                    .order_by_asc(books::Column::FileName)
+                    .offset(page * page_size)
+                    .limit(page_size)
+                    .all(db)
+                    .await
+                    .context("Failed to list books with title sort")?
+            }
+            BookSortField::DateAdded => base_query
+                .order_by(books::Column::CreatedAt, order)
+                .offset(page * page_size)
+                .limit(page_size)
+                .all(db)
+                .await
+                .context("Failed to list books with date added sort")?,
+            BookSortField::ReleaseDate => {
+                // Sort by year from book_metadata
+                base_query
+                    .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                    .order_by(book_metadata::Column::Year, order)
+                    .offset(page * page_size)
+                    .limit(page_size)
+                    .all(db)
+                    .await
+                    .context("Failed to list books with release date sort")?
+            }
+            BookSortField::ChapterNumber => {
+                // Sort by number from book_metadata
+                base_query
+                    .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                    .order_by(book_metadata::Column::Number, order)
+                    .offset(page * page_size)
+                    .limit(page_size)
+                    .all(db)
+                    .await
+                    .context("Failed to list books with chapter number sort")?
+            }
+            BookSortField::FileSize => base_query
+                .order_by(books::Column::FileSize, order)
+                .offset(page * page_size)
+                .limit(page_size)
+                .all(db)
+                .await
+                .context("Failed to list books with file size sort")?,
+            BookSortField::Filename => base_query
+                .order_by(books::Column::FileName, order)
+                .offset(page * page_size)
+                .limit(page_size)
+                .all(db)
+                .await
+                .context("Failed to list books with filename sort")?,
+            BookSortField::PageCount => base_query
+                .order_by(books::Column::PageCount, order)
+                .offset(page * page_size)
+                .limit(page_size)
+                .all(db)
+                .await
+                .context("Failed to list books with page count sort")?,
+        };
+
+        Ok((books, total))
+    }
+
     /// List recently added books with pagination
     pub async fn list_recently_added(
         db: &DatabaseConnection,

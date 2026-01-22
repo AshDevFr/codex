@@ -3809,3 +3809,225 @@ async fn test_list_series_filtered_by_read_status_not_read() {
     assert!(names.contains(&"Unread Series"));
     assert!(names.contains(&"In Progress Series"));
 }
+
+// ============================================================================
+// Sorting Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_series_sort_by_name_uses_title_sort() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with titles that would sort differently with title_sort
+    // Title: "The Batman" with title_sort: "Batman, The" -> should sort as "B"
+    // Title: "Avengers" with title_sort: None -> should sort as "A"
+    // Title: "A Spider-Man" with title_sort: "Spider-Man" -> should sort as "S"
+
+    // SeriesRepository::create already creates series_metadata, so we just update title_sort
+    let series1 = SeriesRepository::create(&db, library.id, "The Batman", None)
+        .await
+        .unwrap();
+    // Set title_sort to "Batman, The" so it sorts under B
+    SeriesMetadataRepository::update_title(
+        &db,
+        series1.id,
+        "The Batman".to_string(),
+        Some("Batman, The".to_string()),
+    )
+    .await
+    .unwrap();
+
+    let _series2 = SeriesRepository::create(&db, library.id, "Avengers", None)
+        .await
+        .unwrap();
+    // No title_sort update needed, should sort by title "Avengers" under A
+
+    let series3 = SeriesRepository::create(&db, library.id, "A Spider-Man", None)
+        .await
+        .unwrap();
+    // Set title_sort to "Spider-Man" so it sorts under S instead of A
+    SeriesMetadataRepository::update_title(
+        &db,
+        series3.id,
+        "A Spider-Man".to_string(),
+        Some("Spider-Man".to_string()),
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Sort by name ascending - should use title_sort
+    // Expected order: Avengers (A), Batman, The (B), Spider-Man (S)
+    let request = get_request_with_auth("/api/v1/series?sort=name,asc", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 3);
+
+    // Verify sort order uses title_sort
+    let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
+    assert_eq!(
+        titles,
+        vec!["Avengers", "The Batman", "A Spider-Man"],
+        "Sort should use title_sort field: Avengers (A) < Batman, The (B) < Spider-Man (S)"
+    );
+}
+
+#[tokio::test]
+async fn test_list_series_sort_by_name_descending() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // SeriesRepository::create already creates series_metadata
+    let _series1 = SeriesRepository::create(&db, library.id, "Alpha", None)
+        .await
+        .unwrap();
+
+    let _series2 = SeriesRepository::create(&db, library.id, "Beta", None)
+        .await
+        .unwrap();
+
+    let _series3 = SeriesRepository::create(&db, library.id, "Gamma", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Sort by name descending
+    let request = get_request_with_auth("/api/v1/series?sort=name,desc", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
+    assert_eq!(titles, vec!["Gamma", "Beta", "Alpha"]);
+}
+
+#[tokio::test]
+async fn test_list_series_sort_by_date_added() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series in specific order - SeriesRepository::create already creates metadata
+    let _series1 = SeriesRepository::create(&db, library.id, "First", None)
+        .await
+        .unwrap();
+
+    // Small delay to ensure different timestamps
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+    let _series2 = SeriesRepository::create(&db, library.id, "Second", None)
+        .await
+        .unwrap();
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+    let _series3 = SeriesRepository::create(&db, library.id, "Third", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    // Sort by date added ascending (oldest first)
+    let request = get_request_with_auth("/api/v1/series?sort=created_at,asc", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
+    assert_eq!(titles, vec!["First", "Second", "Third"]);
+
+    // Sort by date added descending (newest first)
+    let app2 = create_test_router(state).await;
+    let request = get_request_with_auth("/api/v1/series?sort=created_at,desc", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app2, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
+    assert_eq!(titles, vec!["Third", "Second", "First"]);
+}
+
+#[tokio::test]
+async fn test_list_series_sort_with_pagination() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create 5 series: Alpha, Beta, Gamma, Delta, Epsilon
+    // SeriesRepository::create already creates metadata
+    for name in &["Alpha", "Beta", "Gamma", "Delta", "Epsilon"] {
+        let _series = SeriesRepository::create(&db, library.id, name, None)
+            .await
+            .unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    // Get page 0 with page_size=2, sorted by name ascending
+    // Should get Alpha, Beta
+    let request = get_request_with_auth("/api/v1/series?sort=name,asc&page=0&page_size=2", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 2);
+    assert_eq!(series_list.total, 5);
+    assert_eq!(series_list.page, 0);
+    let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
+    assert_eq!(titles, vec!["Alpha", "Beta"]);
+
+    // Get page 1 with page_size=2
+    // Should get Delta, Epsilon (D and E after A, B)
+    let app2 = create_test_router(state.clone()).await;
+    let request = get_request_with_auth("/api/v1/series?sort=name,asc&page=1&page_size=2", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app2, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 2);
+    let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
+    assert_eq!(titles, vec!["Delta", "Epsilon"]);
+
+    // Get page 2 with page_size=2
+    // Should get Gamma (only 1 remaining)
+    let app3 = create_test_router(state).await;
+    let request = get_request_with_auth("/api/v1/series?sort=name,asc&page=2&page_size=2", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app3, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
+    assert_eq!(titles, vec!["Gamma"]);
+}

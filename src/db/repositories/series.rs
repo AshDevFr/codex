@@ -381,6 +381,138 @@ impl SeriesRepository {
         }
     }
 
+    /// List series by IDs with sorting (database-level)
+    ///
+    /// This method is used when filtering has already been done (e.g., by content filter,
+    /// genre filter, tag filter) and we have a set of IDs to fetch with proper sorting.
+    /// This avoids the broken in-memory sorting pattern.
+    pub async fn list_by_ids_sorted(
+        db: &DatabaseConnection,
+        ids: &[Uuid],
+        sort: &SeriesSortParam,
+        user_id: Option<Uuid>,
+        offset: u64,
+        limit: u64,
+    ) -> Result<(Vec<series::Model>, u64)> {
+        if ids.is_empty() {
+            return Ok((vec![], 0));
+        }
+
+        let total = ids.len() as u64;
+
+        let order = match sort.direction {
+            SortDirection::Asc => Order::Asc,
+            SortDirection::Desc => Order::Desc,
+        };
+
+        let base_condition = series::Column::Id.is_in(ids.to_vec());
+
+        let series = match sort.field {
+            SeriesSortField::Name => {
+                // Sort by title_sort first (if set), then title from metadata
+                Series::find()
+                    .filter(base_condition)
+                    .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+                    .order_by(series_metadata::Column::TitleSort, order.clone())
+                    .order_by(series_metadata::Column::Title, order)
+                    .offset(offset)
+                    .limit(limit)
+                    .all(db)
+                    .await
+                    .context("Failed to list series by IDs with name sort")?
+            }
+            SeriesSortField::DateAdded => Series::find()
+                .filter(base_condition)
+                .order_by(series::Column::CreatedAt, order)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list series by IDs with date added sort")?,
+            SeriesSortField::DateUpdated => Series::find()
+                .filter(base_condition)
+                .order_by(series::Column::UpdatedAt, order)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list series by IDs with date updated sort")?,
+            SeriesSortField::ReleaseDate => {
+                // Sort by year from series_metadata
+                Series::find()
+                    .filter(base_condition)
+                    .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+                    .order_by(series_metadata::Column::Year, order)
+                    .offset(offset)
+                    .limit(limit)
+                    .all(db)
+                    .await
+                    .context("Failed to list series by IDs with release date sort")?
+            }
+            SeriesSortField::BookCount => {
+                // TODO: Implement proper book count sorting with subquery
+                // For now, fall back to created_at
+                Series::find()
+                    .filter(base_condition)
+                    .order_by(series::Column::CreatedAt, order)
+                    .offset(offset)
+                    .limit(limit)
+                    .all(db)
+                    .await
+                    .context("Failed to list series by IDs with book count sort")?
+            }
+            SeriesSortField::DateRead => {
+                // User-specific sort - requires user_id
+                Self::list_by_ids_with_date_read_sort(db, ids, &order, user_id, offset, limit)
+                    .await?
+            }
+        };
+
+        Ok((series, total))
+    }
+
+    /// Helper for list_by_ids_sorted with DateRead sort
+    async fn list_by_ids_with_date_read_sort(
+        db: &DatabaseConnection,
+        ids: &[Uuid],
+        order: &Order,
+        user_id: Option<Uuid>,
+        offset: u64,
+        limit: u64,
+    ) -> Result<Vec<series::Model>> {
+        use sea_orm::sea_query::Expr;
+
+        let base_condition = series::Column::Id.is_in(ids.to_vec());
+
+        let mut query = Series::find()
+            .filter(base_condition)
+            .join(JoinType::LeftJoin, series::Relation::Books.def())
+            .join(JoinType::LeftJoin, books::Relation::ReadProgress.def());
+
+        // Filter by user if provided
+        if let Some(uid) = user_id {
+            query = query.filter(
+                Condition::any()
+                    .add(read_progress::Column::UserId.eq(uid))
+                    .add(read_progress::Column::UserId.is_null()),
+            );
+        }
+
+        // Group by series and order by max read_at
+        query
+            .column_as(
+                Expr::col((read_progress::Entity, read_progress::Column::UpdatedAt)).max(),
+                "last_read_at",
+            )
+            .group_by(series::Column::Id)
+            .order_by(Expr::col(Alias::new("last_read_at")), order.clone())
+            .offset(offset)
+            .limit(limit)
+            .all(db)
+            .await
+            .context("Failed to list series by IDs with date read sort")
+    }
+
     /// List series sorted by last read date (user-specific)
     async fn list_with_date_read_sort(
         db: &DatabaseConnection,

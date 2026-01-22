@@ -95,11 +95,6 @@ impl BookSortParam {
 
         Self { field, direction }
     }
-
-    /// Check if this sort requires database-level JOIN (series compound sort)
-    pub fn requires_join(&self) -> bool {
-        matches!(self.field, BookSortField::Series)
-    }
 }
 
 impl fmt::Display for BookSortParam {

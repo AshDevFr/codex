@@ -7,14 +7,13 @@ use crate::api::{
             ExternalRatingDto, ExternalRatingListResponse, FullSeriesMetadataResponse, GenreDto,
             GenreListResponse, MetadataLocks, PatchSeriesMetadataRequest, PatchSeriesRequest,
             ReplaceSeriesMetadataRequest, SeriesAverageRatingResponse, SeriesCoverDto,
-            SeriesCoverListResponse, SeriesMetadataResponse, SeriesSortField, SeriesSortParam,
-            SeriesUpdateResponse, SetSeriesGenresRequest, SetSeriesTagsRequest,
-            SetUserRatingRequest, TagDto, TagListResponse, TaxonomyCleanupResponse,
-            UpdateAlternateTitleRequest, UpdateMetadataLocksRequest, UserRatingsListResponse,
-            UserSeriesRatingDto,
+            SeriesCoverListResponse, SeriesMetadataResponse, SeriesSortParam, SeriesUpdateResponse,
+            SetSeriesGenresRequest, SetSeriesTagsRequest, SetUserRatingRequest, TagDto,
+            TagListResponse, TaxonomyCleanupResponse, UpdateAlternateTitleRequest,
+            UpdateMetadataLocksRequest, UserRatingsListResponse, UserSeriesRatingDto,
         },
         BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListRequest,
-        SeriesListResponse, SortDirection,
+        SeriesListResponse,
     },
     error::ApiError,
     extractors::{AuthContext, AuthState, ContentFilter, FlexibleAuthContext},
@@ -193,8 +192,8 @@ pub async fn list_series(
         query.page_size.min(100)
     };
 
-    // Fetch series based on filter (all libraries or specific library)
-    let mut series_list = if let Some(library_id) = query.library_id {
+    // Fetch all series IDs first (for filtering)
+    let all_series = if let Some(library_id) = query.library_id {
         SeriesRepository::list_by_library(&state.db, library_id)
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
@@ -204,13 +203,16 @@ pub async fn list_series(
             .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
     };
 
+    // Collect IDs after applying filters
+    let mut filtered_ids: Vec<Uuid> = all_series.iter().map(|s| s.id).collect();
+
     // Apply sharing tag content filter (exclude series the user doesn't have access to)
     let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
 
     if content_filter.has_restrictions {
-        series_list.retain(|s| content_filter.is_series_visible(s.id));
+        filtered_ids.retain(|id| content_filter.is_series_visible(*id));
     }
 
     // Apply genre filter if specified
@@ -229,7 +231,7 @@ pub async fn list_series(
                         ApiError::Internal(format!("Failed to filter by genres: {}", e))
                     })?;
 
-            series_list.retain(|s| matching_series_ids.contains(&s.id));
+            filtered_ids.retain(|id| matching_series_ids.contains(id));
         }
     }
 
@@ -247,37 +249,33 @@ pub async fn list_series(
                     .await
                     .map_err(|e| ApiError::Internal(format!("Failed to filter by tags: {}", e)))?;
 
-            series_list.retain(|s| matching_series_ids.contains(&s.id));
+            filtered_ids.retain(|id| matching_series_ids.contains(id));
         }
     }
 
-    // Apply sorting if specified
-    if let Some(sort_param) = &query.sort {
-        apply_series_sorting(&mut series_list, sort_param);
-    }
+    // Parse sort parameter (default to name,asc)
+    let sort = query
+        .sort
+        .as_ref()
+        .map(|s| SeriesSortParam::parse(s))
+        .unwrap_or_default();
 
-    let total = series_list.len() as u64;
-
-    // Apply pagination manually
+    // Use database-level sorting with the filtered IDs
     let offset = query.page * page_size;
-    let start = offset as usize;
-
-    // If start is beyond the list, return empty results
-    if start >= series_list.len() {
-        return Ok(Json(SeriesListResponse::new(
-            vec![],
-            query.page,
-            page_size,
-            total,
-        )));
-    }
-
-    let end = (start + page_size as usize).min(series_list.len());
-    let paginated = series_list[start..end].to_vec();
+    let (series_list, total) = SeriesRepository::list_by_ids_sorted(
+        &state.db,
+        &filtered_ids,
+        &sort,
+        Some(auth.user_id),
+        offset,
+        page_size,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch sorted series: {}", e)))?;
 
     let user_id = Some(auth.user_id);
     let dtos: Vec<SeriesDto> = futures::future::join_all(
-        paginated
+        series_list
             .into_iter()
             .map(|series| series_to_dto(&state.db, series, user_id)),
     )
@@ -597,56 +595,52 @@ pub async fn list_series_filtered(
         all_series_ids.clone()
     };
 
-    // Apply full-text search if provided
-    let mut filtered_series: Vec<_> = if let Some(ref search_query) = request.full_text_search {
+    // Apply full-text search if provided - get the final list of IDs
+    let filtered_ids: Vec<Uuid> = if let Some(ref search_query) = request.full_text_search {
         if !search_query.trim().is_empty() {
             // Use full-text search with candidate filtering
             let candidate_ids: Vec<Uuid> = matching_ids.iter().cloned().collect();
-            SeriesRepository::full_text_search_filtered(&state.db, search_query, &candidate_ids)
-                .await
-                .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?
+            let search_results = SeriesRepository::full_text_search_filtered(
+                &state.db,
+                search_query,
+                &candidate_ids,
+            )
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
+            search_results.iter().map(|s| s.id).collect()
         } else {
             // Empty search query, use condition-filtered results
-            all_series
-                .into_iter()
-                .filter(|s| matching_ids.contains(&s.id))
-                .collect()
+            matching_ids.into_iter().collect()
         }
     } else {
         // No full-text search, use condition-filtered results
-        all_series
-            .into_iter()
-            .filter(|s| matching_ids.contains(&s.id))
-            .collect()
+        matching_ids.into_iter().collect()
     };
 
-    // Apply sorting if specified
-    if let Some(ref sort_param) = request.sort {
-        apply_series_sorting(&mut filtered_series, sort_param);
-    }
+    // Parse sort parameter (default to name,asc)
+    let sort = request
+        .sort
+        .as_ref()
+        .map(|s| SeriesSortParam::parse(s))
+        .unwrap_or_default();
 
-    let total = filtered_series.len() as u64;
-
-    // Apply pagination
+    // Use database-level sorting with the filtered IDs
     let offset = request.page * page_size;
-    let start = offset as usize;
-
-    if start >= filtered_series.len() {
-        return Ok(Json(SeriesListResponse::new(
-            vec![],
-            request.page,
-            page_size,
-            total,
-        )));
-    }
-
-    let end = (start + page_size as usize).min(filtered_series.len());
-    let paginated = filtered_series[start..end].to_vec();
+    let (series_list, total) = SeriesRepository::list_by_ids_sorted(
+        &state.db,
+        &filtered_ids,
+        &sort,
+        Some(auth.user_id),
+        offset,
+        page_size,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch sorted series: {}", e)))?;
 
     // Convert to DTOs
     let user_id = Some(auth.user_id);
     let dtos: Vec<SeriesDto> = futures::future::join_all(
-        paginated
+        series_list
             .into_iter()
             .map(|series| series_to_dto(&state.db, series, user_id)),
     )
@@ -1466,21 +1460,39 @@ pub async fn list_library_series(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
 
-    // Fetch all series from library and filter by sharing tags
-    // Note: We fetch all then filter to get accurate counts and pagination
-    let mut all_series = SeriesRepository::list_by_library(&state.db, library_id)
+    // Fetch all series IDs from library for filtering
+    let all_series = SeriesRepository::list_by_library(&state.db, library_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
 
-    // Apply sharing tag filter
-    if content_filter.has_restrictions {
-        all_series.retain(|s| content_filter.is_series_visible(s.id));
-    }
-
-    // Convert to DTOs first so we can sort by all fields
-    let user_id = Some(auth.user_id);
-    let mut dtos: Vec<SeriesDto> = futures::future::join_all(
+    // Collect IDs after applying sharing tag filter
+    let filtered_ids: Vec<Uuid> = if content_filter.has_restrictions {
         all_series
+            .iter()
+            .filter(|s| content_filter.is_series_visible(s.id))
+            .map(|s| s.id)
+            .collect()
+    } else {
+        all_series.iter().map(|s| s.id).collect()
+    };
+
+    // Use database-level sorting with the filtered IDs
+    let offset = query.page * page_size;
+    let (series_list, total) = SeriesRepository::list_by_ids_sorted(
+        &state.db,
+        &filtered_ids,
+        &sort,
+        Some(auth.user_id),
+        offset,
+        page_size,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch sorted series: {}", e)))?;
+
+    // Convert to DTOs
+    let user_id = Some(auth.user_id);
+    let dtos: Vec<SeriesDto> = futures::future::join_all(
+        series_list
             .into_iter()
             .map(|series| series_to_dto(&state.db, series, user_id)),
     )
@@ -1489,58 +1501,7 @@ pub async fn list_library_series(
     .collect::<Result<Vec<_>, _>>()
     .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
-    // Apply sorting
-    match sort.field {
-        SeriesSortField::Name => {
-            dtos.sort_by(|a, b| {
-                let a_sort = a.title_sort.as_ref().unwrap_or(&a.title);
-                let b_sort = b.title_sort.as_ref().unwrap_or(&b.title);
-                a_sort.to_lowercase().cmp(&b_sort.to_lowercase())
-            });
-        }
-        SeriesSortField::DateAdded => {
-            dtos.sort_by(|a, b| a.created_at.cmp(&b.created_at));
-        }
-        SeriesSortField::DateUpdated => {
-            dtos.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
-        }
-        SeriesSortField::ReleaseDate => {
-            dtos.sort_by(|a, b| a.year.cmp(&b.year));
-        }
-        SeriesSortField::DateRead => {
-            // DateRead sorting requires read progress data which isn't in SeriesDto
-            // Fall back to sorting by updated_at as a reasonable proxy for recent activity
-            dtos.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
-        }
-        SeriesSortField::BookCount => {
-            dtos.sort_by(|a, b| a.book_count.cmp(&b.book_count));
-        }
-    }
-
-    // Reverse if descending
-    if sort.direction == SortDirection::Desc {
-        dtos.reverse();
-    }
-
-    let total = dtos.len() as u64;
-
-    // Apply pagination after sorting
-    let offset = query.page * page_size;
-    let start = offset as usize;
-
-    if start >= dtos.len() {
-        return Ok(Json(SeriesListResponse::new(
-            vec![],
-            query.page,
-            page_size,
-            total,
-        )));
-    }
-
-    let end = (start + page_size as usize).min(dtos.len());
-    let paginated = dtos[start..end].to_vec();
-
-    let response = SeriesListResponse::new(paginated, query.page, page_size, total);
+    let response = SeriesListResponse::new(dtos, query.page, page_size, total);
 
     Ok(Json(response))
 }
@@ -1596,60 +1557,6 @@ pub async fn list_library_in_progress_series(
     .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
     Ok(Json(dtos))
-}
-
-/// Apply sorting to series list
-///
-/// Note: name and book_count are now in separate tables (series_metadata and computed from books).
-/// For accurate sorting on those fields, use repository-level database queries with joins.
-/// This in-memory fallback sorts by available fields on the series entity.
-fn apply_series_sorting(series_list: &mut [crate::db::entities::series::Model], sort_param: &str) {
-    let parts: Vec<&str> = sort_param.split(',').collect();
-    if parts.len() != 2 {
-        return; // Invalid format, skip sorting
-    }
-
-    let field = parts[0];
-    let direction = parts[1];
-    let ascending = direction == "asc";
-
-    match field {
-        "name" | "book_count" => {
-            // These fields now require metadata/book table joins
-            // Fall back to created_at for in-memory sorting
-            // For accurate sorting, use database-level sorting via repository
-            series_list.sort_by(|a, b| {
-                let cmp = a.created_at.cmp(&b.created_at);
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
-        "created_at" => {
-            series_list.sort_by(|a, b| {
-                let cmp = a.created_at.cmp(&b.created_at);
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
-        "updated_at" => {
-            series_list.sort_by(|a, b| {
-                let cmp = a.updated_at.cmp(&b.updated_at);
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
-        // Note: "year" sorting requires metadata table join - use repository-level sorting
-        _ => {} // Unknown field, skip sorting
-    }
 }
 
 /// Helper function to get the default series cover (first book's first page)

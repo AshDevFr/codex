@@ -51,6 +51,9 @@ mod m20260120_000030_create_sharing_tags;
 // Performance indexes for foreign keys
 mod m20260121_000031_add_missing_fk_indexes;
 
+// Sorting indexes for efficient ORDER BY operations
+mod m20260122_000032_add_sorting_indexes;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -98,6 +101,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260120_000030_create_sharing_tags::Migration),
             // Performance indexes for foreign keys
             Box::new(m20260121_000031_add_missing_fk_indexes::Migration),
+            // Sorting indexes for efficient ORDER BY operations
+            Box::new(m20260122_000032_add_sorting_indexes::Migration),
         ]
     }
 }

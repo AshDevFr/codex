@@ -1,8 +1,7 @@
 use crate::api::{
     dto::{
-        book::{BookSortField, BookSortParam},
-        AdjacentBooksResponse, BookDetailResponse, BookDto, BookListRequest, BookListResponse,
-        BookMetadataDto, PaginationParams, SortDirection,
+        book::BookSortParam, AdjacentBooksResponse, BookDetailResponse, BookDto, BookListRequest,
+        BookListResponse, BookMetadataDto, PaginationParams,
     },
     error::ApiError,
     extractors::{AuthContext, AuthState, ContentFilter, FlexibleAuthContext},
@@ -575,85 +574,6 @@ pub async fn list_series_books_with_errors(
     Ok(Json(response))
 }
 
-/// Apply in-memory sorting to books list using BookSortParam
-///
-/// Note: Title and Number sorting now uses file_name as fallback since those
-/// fields have moved to book_metadata table. For accurate title/number sorting,
-/// the repository should handle this at the database level with a JOIN.
-fn apply_book_sorting_with_param(
-    books_list: &mut [crate::db::entities::books::Model],
-    sort: &BookSortParam,
-) {
-    let ascending = sort.direction == SortDirection::Asc;
-
-    match sort.field {
-        BookSortField::Title | BookSortField::Series => {
-            // Title and Series sort now fall back to file_name since title is in book_metadata
-            // For accurate sorting, use database-level sorting via repository
-            books_list.sort_by(|a, b| {
-                let cmp = a.file_name.cmp(&b.file_name);
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
-        BookSortField::DateAdded => {
-            books_list.sort_by(|a, b| {
-                let cmp = a.created_at.cmp(&b.created_at);
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
-        BookSortField::ReleaseDate | BookSortField::ChapterNumber => {
-            // Number is now in book_metadata; fall back to created_at for in-memory sort
-            // For accurate sorting, use database-level sorting via repository
-            books_list.sort_by(|a, b| {
-                let cmp = a.created_at.cmp(&b.created_at);
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
-        BookSortField::FileSize => {
-            books_list.sort_by(|a, b| {
-                let cmp = a.file_size.cmp(&b.file_size);
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
-        BookSortField::Filename => {
-            books_list.sort_by(|a, b| {
-                let cmp = a.file_name.cmp(&b.file_name);
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
-        BookSortField::PageCount => {
-            books_list.sort_by(|a, b| {
-                let cmp = a.page_count.cmp(&b.page_count);
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
-    }
-}
-
 /// Get book by ID
 #[utoipa::path(
     get,
@@ -1002,27 +922,13 @@ pub async fn list_library_books(
         .map(|s| BookSortParam::parse(s))
         .unwrap_or_default();
 
-    // Check if sort requires database-level JOIN (series compound sort)
-    let (books_list, total) = if sort.requires_join() {
-        let ascending = sort.direction == SortDirection::Asc;
-        BookRepository::list_by_library_series_sorted(
-            &state.db, library_id, false, // exclude deleted
-            ascending, query.page, page_size,
-        )
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch library books: {}", e)))?
-    } else {
-        // Use standard fetch and apply in-memory sorting
-        let (mut books, total) = BookRepository::list_by_library(
-            &state.db, library_id, false, // exclude deleted
-            query.page, page_size,
-        )
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch library books: {}", e)))?;
-
-        apply_book_sorting_with_param(&mut books, &sort);
-        (books, total)
-    };
+    // Use database-level sorting for all sort types
+    let (books_list, total) = BookRepository::list_by_library_sorted(
+        &state.db, library_id, &sort, false, // exclude deleted
+        query.page, page_size,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch library books: {}", e)))?;
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
