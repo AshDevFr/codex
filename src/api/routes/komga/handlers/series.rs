@@ -29,10 +29,11 @@ use axum::{
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio::fs;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 /// Query parameters for paginated series endpoints
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct SeriesPaginationQuery {
     /// Page number (0-indexed, Komga-style)
     #[serde(default)]
@@ -67,6 +68,23 @@ fn default_page_size() -> i32 {
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/series",
+    responses(
+        (status = 200, description = "Paginated list of series", body = KomgaPage<KomgaSeriesDto>),
+        (status = 401, description = "Unauthorized"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        SeriesPaginationQuery
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn list_series(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -76,7 +94,7 @@ pub async fn list_series(
 
     let user_id = Some(auth.user_id);
     let page = query.page.max(0) as u64;
-    let size = query.size.max(1).min(500) as u64;
+    let size = query.size.clamp(1, 500) as u64;
     let offset = page * size;
 
     // Get series based on filters
@@ -129,6 +147,23 @@ pub async fn list_series(
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/series/new",
+    responses(
+        (status = 200, description = "Paginated list of recently added series", body = KomgaPage<KomgaSeriesDto>),
+        (status = 401, description = "Unauthorized"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        SeriesPaginationQuery
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn get_series_new(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -138,7 +173,7 @@ pub async fn get_series_new(
 
     let user_id = Some(auth.user_id);
     let page = query.page.max(0) as u64;
-    let size = query.size.max(1).min(500) as u64;
+    let size = query.size.clamp(1, 500) as u64;
 
     // Get recently added series
     // For now, we fetch a larger batch to enable pagination
@@ -197,6 +232,23 @@ pub async fn get_series_new(
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/series/updated",
+    responses(
+        (status = 200, description = "Paginated list of recently updated series", body = KomgaPage<KomgaSeriesDto>),
+        (status = 401, description = "Unauthorized"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        SeriesPaginationQuery
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn get_series_updated(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -206,7 +258,7 @@ pub async fn get_series_updated(
 
     let user_id = Some(auth.user_id);
     let page = query.page.max(0) as u64;
-    let size = query.size.max(1).min(500) as u64;
+    let size = query.size.clamp(1, 500) as u64;
 
     // Get recently updated series
     let series_list = SeriesRepository::list_recently_updated(
@@ -258,6 +310,24 @@ pub async fn get_series_updated(
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/series/{series_id}",
+    responses(
+        (status = 200, description = "Series details", body = KomgaSeriesDto),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Series not found"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("series_id" = Uuid, Path, description = "Series ID")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn get_series(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -287,6 +357,24 @@ pub async fn get_series(
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/series/{series_id}/thumbnail",
+    responses(
+        (status = 200, description = "Series thumbnail image", content_type = "image/jpeg"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Series not found"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("series_id" = Uuid, Path, description = "Series ID")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn get_series_thumbnail(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -342,6 +430,25 @@ pub async fn get_series_thumbnail(
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/series/{series_id}/books",
+    responses(
+        (status = 200, description = "Paginated list of books in series", body = KomgaPage<KomgaBookDto>),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Series not found"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("series_id" = Uuid, Path, description = "Series ID"),
+        SeriesPaginationQuery
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn get_series_books(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -352,7 +459,7 @@ pub async fn get_series_books(
 
     let user_id = Some(auth.user_id);
     let page = query.page.max(0) as u64;
-    let size = query.size.max(1).min(500) as u64;
+    let size = query.size.clamp(1, 500) as u64;
     let offset = page * size;
 
     // Verify series exists and get its data

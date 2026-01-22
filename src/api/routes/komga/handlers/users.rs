@@ -35,6 +35,22 @@ use std::sync::Arc;
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/users/me",
+    responses(
+        (status = 200, description = "Current user information", body = KomgaUserDto),
+        (status = 401, description = "Unauthorized"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn get_current_user(
     State(_state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,

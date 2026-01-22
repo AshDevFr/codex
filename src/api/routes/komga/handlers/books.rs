@@ -24,10 +24,11 @@ use axum::{
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio_util::io::ReaderStream;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 /// Query parameters for paginated book endpoints
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct BooksPaginationQuery {
     /// Page number (0-indexed, Komga-style)
     #[serde(default)]
@@ -36,6 +37,7 @@ pub struct BooksPaginationQuery {
     #[serde(default = "default_page_size")]
     pub size: i32,
     /// Sort parameter (e.g., "createdDate,desc", "metadata.numberSort,asc")
+    #[allow(dead_code)]
     pub sort: Option<String>,
 }
 
@@ -54,6 +56,24 @@ fn default_page_size() -> i32 {
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/books/{book_id}",
+    responses(
+        (status = 200, description = "Book details", body = KomgaBookDto),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Book not found"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn get_book(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -99,6 +119,24 @@ pub async fn get_book(
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/books/{book_id}/thumbnail",
+    responses(
+        (status = 200, description = "Book thumbnail image", content_type = "image/jpeg"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Book not found or has no pages"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn get_book_thumbnail(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -152,6 +190,23 @@ pub async fn get_book_thumbnail(
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/books/ondeck",
+    responses(
+        (status = 200, description = "Paginated list of in-progress books", body = KomgaPage<KomgaBookDto>),
+        (status = 401, description = "Unauthorized"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        BooksPaginationQuery
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn get_books_ondeck(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -161,7 +216,7 @@ pub async fn get_books_ondeck(
 
     let user_id = auth.user_id;
     let page = query.page.max(0) as u64;
-    let size = query.size.max(1).min(500) as u64;
+    let size = query.size.clamp(1, 500) as u64;
 
     // Get in-progress books (completed = false)
     let (books, total) = BookRepository::list_with_progress(
@@ -220,6 +275,24 @@ pub async fn get_books_ondeck(
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    post,
+    path = "/{prefix}/api/v1/books/list",
+    request_body = KomgaBooksSearchRequestDto,
+    responses(
+        (status = 200, description = "Paginated list of books matching filter", body = KomgaPage<KomgaBookDto>),
+        (status = 401, description = "Unauthorized"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        BooksPaginationQuery
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn search_books(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -230,7 +303,7 @@ pub async fn search_books(
 
     let user_id = Some(auth.user_id);
     let page = query.page.max(0) as u64;
-    let size = query.size.max(1).min(500) as u64;
+    let size = query.size.clamp(1, 500) as u64;
 
     // Parse filter criteria
     let library_id = body
@@ -314,6 +387,24 @@ pub async fn search_books(
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/books/{book_id}/next",
+    responses(
+        (status = 200, description = "Next book in series", body = KomgaBookDto),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "No next book"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn get_next_book(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -373,6 +464,24 @@ pub async fn get_next_book(
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/books/{book_id}/previous",
+    responses(
+        (status = 200, description = "Previous book in series", body = KomgaBookDto),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "No previous book"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn get_previous_book(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -429,6 +538,24 @@ pub async fn get_previous_book(
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/books/{book_id}/file",
+    responses(
+        (status = 200, description = "Book file download", content_type = "application/octet-stream"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Book not found or file missing"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn download_book_file(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,

@@ -3,11 +3,12 @@
 //! These DTOs match the exact structure Komic expects from Komga's `/api/v1/users/me` endpoint.
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Komga user DTO
 ///
 /// Response for GET /api/v1/users/me
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaUserDto {
     /// User unique identifier (UUID as string)
@@ -73,7 +74,7 @@ impl KomgaUserDto {
 }
 
 /// Komga content restrictions DTO
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaContentRestrictionsDto {
     /// Age restriction (null means no restriction)
@@ -88,7 +89,7 @@ pub struct KomgaContentRestrictionsDto {
 }
 
 /// Komga age restriction DTO
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaAgeRestrictionDto {
     /// Age limit

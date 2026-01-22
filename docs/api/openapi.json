@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Codex API",
-    "description": "REST API for Codex, a digital library server for comics, manga, and ebooks.\n\n## Interactive API Documentation\n\nYou can explore and test this API interactively:\n\n- **Hosted Documentation**: Visit [codex.4sh.dev/docs/api](https://codex.4sh.dev/docs/api) for the full API reference\n- **Your Instance**: If you have Scalar UI enabled, access `/api/docs` on your Codex server\n\n## Authentication\n\nMost endpoints require authentication. Codex supports two authentication methods:\n\n1. **JWT Bearer Token**: Obtain a token via `POST /api/v1/auth/login`, then include it as `Authorization: Bearer <token>`\n2. **API Key**: Generate an API key in the web UI or via the API, then include it as `X-API-Key: <key>` header\n\n## OPDS Support\n\nCodex provides OPDS catalog feeds for e-reader applications:\n\n- **OPDS 1.2** (Atom XML): `/opds/v1/catalog` - Compatible with most e-readers\n- **OPDS 2.0** (JSON): `/opds/v2` - Modern JSON-based format with enhanced features",
+    "description": "REST API for Codex, a digital library server for comics, manga, and ebooks.\n\n## Interactive API Documentation\n\nYou can explore and test this API interactively:\n\n- **Hosted Documentation**: Visit [codex.4sh.dev/docs/api](https://codex.4sh.dev/docs/api) for the full API reference\n- **Your Instance**: If you have Scalar UI enabled, access `/api/docs` on your Codex server\n\n## Authentication\n\nMost endpoints require authentication. Codex supports two authentication methods:\n\n1. **JWT Bearer Token**: Obtain a token via `POST /api/v1/auth/login`, then include it as `Authorization: Bearer <token>`\n2. **API Key**: Generate an API key in the web UI or via the API, then include it as `X-API-Key: <key>` header\n\n## OPDS Support\n\nCodex provides OPDS catalog feeds for e-reader applications:\n\n- **OPDS 1.2** (Atom XML): `/opds/v1/catalog` - Compatible with most e-readers\n- **OPDS 2.0** (JSON): `/opds/v2` - Modern JSON-based format with enhanced features\n\n## Komga-Compatible API\n\nCodex provides an optional Komga-compatible API for third-party apps like Komic:\n\n- **Disabled by default** - Enable via `komga_api.enabled: true` in config\n- **Configurable prefix** - Default path: `/{prefix}/api/v1/` where prefix defaults to `komgav1`\n- **Same authentication** - Supports JWT, API keys, and Basic Auth\n\nNote: The `{prefix}` path parameter in Komga endpoints is configurable at runtime.",
     "license": {
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
@@ -9819,6 +9819,1419 @@
           }
         ]
       }
+    },
+    "/{prefix}/api/v1/books/list": {
+      "post": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Search/filter books",
+        "description": "Returns books matching the filter criteria.\nThis uses POST to support complex filter bodies.\n\n## Endpoint\n`POST /{prefix}/api/v1/books/list`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n- `sort` - Sort parameter (e.g., \"createdDate,desc\")\n\n## Request Body\nJSON object with filter criteria (library_id, series_id, search_term, etc.)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "search_books",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-indexed, Komga-style)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size (default: 20)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort parameter (e.g., \"createdDate,desc\", \"metadata.numberSort,asc\")",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KomgaBooksSearchRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Paginated list of books matching filter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaPage_KomgaBookDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/books/ondeck": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Get \"on deck\" books",
+        "description": "Returns books that are currently in-progress (started but not completed).\nThis is the \"continue reading\" shelf in Komic.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/ondeck`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "get_books_ondeck",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-indexed, Komga-style)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size (default: 20)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort parameter (e.g., \"createdDate,desc\", \"metadata.numberSort,asc\")",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of in-progress books",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaPage_KomgaBookDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/books/{book_id}": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Get a book by ID",
+        "description": "Returns a single book in Komga-compatible format.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "get_book",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Book details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaBookDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/books/{book_id}/file": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Download book file",
+        "description": "Streams the original book file (CBZ, CBR, EPUB, PDF) for download.\nIncludes proper Content-Disposition header with UTF-8 encoding.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/file`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "download_book_file",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Book file download",
+            "content": {
+              "application/octet-stream": {}
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Book not found or file missing"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/books/{book_id}/next": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Get next book in series",
+        "description": "Returns the next book in the same series by sort order.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/next`\n\n## Response\n- 200: Next book DTO\n- 404: No next book (this is the last book in series)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "get_next_book",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Next book in series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaBookDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "No next book"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/books/{book_id}/pages": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "List all pages for a book",
+        "description": "Returns an array of page metadata for all pages in a book.\nPages are ordered by page number (1-indexed).\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/pages`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key\n\n## Response\nReturns an array of `KomgaPageDto` objects with page metadata including\nfilename, MIME type, dimensions, and size.",
+        "operationId": "list_pages",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of pages in the book",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/KomgaPageDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/books/{book_id}/pages/{page_number}": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Get a specific page image",
+        "description": "Streams the raw page image for the requested page number.\nPage numbers are 1-indexed.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/pages/{pageNumber}`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key (via cookie fallback for browser image tags)\n\n## Response\nReturns the raw image data with appropriate Content-Type header.\nResponse is cached for 1 year (immutable content).",
+        "operationId": "get_page",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page_number",
+            "in": "path",
+            "description": "Page number (1-indexed)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page image",
+            "content": {
+              "image/*": {}
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Book or page not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/books/{book_id}/pages/{page_number}/thumbnail": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Get a page thumbnail",
+        "description": "Returns a thumbnail version of the requested page.\nThumbnails are resized to max 300px width/height while maintaining aspect ratio.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/pages/{pageNumber}/thumbnail`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key (via cookie fallback for browser image tags)\n\n## Response\nReturns a JPEG thumbnail with appropriate caching headers.",
+        "operationId": "get_page_thumbnail",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page_number",
+            "in": "path",
+            "description": "Page number (1-indexed)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page thumbnail image",
+            "content": {
+              "image/jpeg": {}
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Book or page not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/books/{book_id}/previous": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Get previous book in series",
+        "description": "Returns the previous book in the same series by sort order.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/previous`\n\n## Response\n- 200: Previous book DTO\n- 404: No previous book (this is the first book in series)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "get_previous_book",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Previous book in series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaBookDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "No previous book"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/books/{book_id}/read-progress": {
+      "delete": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Delete reading progress for a book (mark as unread)",
+        "description": "Removes all reading progress for a book, effectively marking it as unread.\n\n## Endpoint\n`DELETE /{prefix}/api/v1/books/{bookId}/read-progress`\n\n## Response\n- 204 No Content on success\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "delete_progress",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Progress deleted successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Update reading progress for a book",
+        "description": "Updates the user's reading progress for a specific book.\nKomic sends: `{ \"completed\": false, \"page\": 151 }`\n\n## Endpoint\n`PATCH /{prefix}/api/v1/books/{bookId}/read-progress`\n\n## Request Body\n- `page` - Current page number (1-indexed, optional)\n- `completed` - Whether book is completed (optional)\n- `device_id` - Device ID (optional, not used by Komic)\n- `device_name` - Device name (optional, not used by Komic)\n\n## Response\n- 204 No Content on success (Komga behavior)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "update_progress",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KomgaReadProgressUpdateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Progress updated successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/books/{book_id}/thumbnail": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Get book thumbnail",
+        "description": "Returns a thumbnail image for the book's first page.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/thumbnail`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "get_book_thumbnail",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Book thumbnail image",
+            "content": {
+              "image/jpeg": {}
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Book not found or has no pages"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/libraries": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "List all libraries",
+        "description": "Returns all libraries in Komga-compatible format.\n\n## Endpoint\n`GET /{prefix}/api/v1/libraries`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "list_libraries",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of libraries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/KomgaLibraryDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/libraries/{library_id}": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Get library by ID",
+        "description": "Returns a single library in Komga-compatible format.\n\n## Endpoint\n`GET /{prefix}/api/v1/libraries/{libraryId}`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "get_library",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Library details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaLibraryDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Library not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/libraries/{library_id}/thumbnail": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Get library thumbnail",
+        "description": "Returns a thumbnail image for the library. Uses the first series' cover\nas the library thumbnail, or returns a 404 if no series exist.\n\n## Endpoint\n`GET /{prefix}/api/v1/libraries/{libraryId}/thumbnail`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key (via cookie fallback for browser image tags)",
+        "operationId": "get_library_thumbnail",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Library thumbnail image",
+            "content": {
+              "image/jpeg": {}
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Library not found or no series in library"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/series": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "List all series (paginated)",
+        "description": "Returns all series in Komga-compatible format with pagination.\n\n## Endpoint\n`GET /{prefix}/api/v1/series`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n- `library_id` - Optional filter by library UUID\n- `search` - Optional search query\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "list_series",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-indexed, Komga-style)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size (default: 20)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "library_id",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Search query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaPage_KomgaSeriesDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/series/new": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Get recently added series",
+        "description": "Returns series sorted by created date descending (newest first).\n\n## Endpoint\n`GET /{prefix}/api/v1/series/new`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n- `library_id` - Optional filter by library UUID\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "get_series_new",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-indexed, Komga-style)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size (default: 20)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "library_id",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Search query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of recently added series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaPage_KomgaSeriesDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/series/updated": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Get recently updated series",
+        "description": "Returns series sorted by last modified date descending (most recently updated first).\n\n## Endpoint\n`GET /{prefix}/api/v1/series/updated`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n- `library_id` - Optional filter by library UUID\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "get_series_updated",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-indexed, Komga-style)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size (default: 20)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "library_id",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Search query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of recently updated series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaPage_KomgaSeriesDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/series/{series_id}": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Get series by ID",
+        "description": "Returns a single series in Komga-compatible format.\n\n## Endpoint\n`GET /{prefix}/api/v1/series/{seriesId}`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "get_series",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Series details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaSeriesDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/series/{series_id}/books": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Get books in a series",
+        "description": "Returns all books in a series with pagination.\n\n## Endpoint\n`GET /{prefix}/api/v1/series/{seriesId}/books`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "get_series_books",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-indexed, Komga-style)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size (default: 20)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "library_id",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Search query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of books in series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaPage_KomgaBookDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/series/{series_id}/thumbnail": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Get series thumbnail",
+        "description": "Returns a thumbnail image for the series.\n\n## Endpoint\n`GET /{prefix}/api/v1/series/{seriesId}/thumbnail`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "get_series_thumbnail",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Series thumbnail image",
+            "content": {
+              "image/jpeg": {}
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/users/me": {
+      "get": {
+        "tags": [
+          "komga"
+        ],
+        "summary": "Get current user information",
+        "description": "Returns information about the currently authenticated user in Komga format.\nThis endpoint is used by Komic and other apps to verify authentication\nand determine user capabilities.\n\n## Endpoint\n`GET /{prefix}/api/v1/users/me`\n\n## Response\nReturns a `KomgaUserDto` containing:\n- User ID (UUID as string)\n- Email address\n- Roles (ADMIN, USER, FILE_DOWNLOAD)\n- Library access settings\n- Content restrictions\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "get_current_user",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komgav1)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current user information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaUserDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -10841,6 +12254,29 @@
           "series_name",
           "custom"
         ]
+      },
+      "BooksPaginationQuery": {
+        "type": "object",
+        "description": "Query parameters for paginated book endpoints",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Page number (0-indexed, Komga-style)"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Page size (default: 20)"
+          },
+          "sort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Sort parameter (e.g., \"createdDate,desc\", \"metadata.numberSort,asc\")"
+          }
+        }
       },
       "BoolOperator": {
         "oneOf": [
@@ -12923,6 +14359,1455 @@
             "type": "boolean",
             "description": "Whether the test was successful",
             "example": true
+          }
+        }
+      },
+      "KomgaAgeRestrictionDto": {
+        "type": "object",
+        "description": "Komga age restriction DTO",
+        "required": [
+          "age",
+          "restriction"
+        ],
+        "properties": {
+          "age": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Age limit"
+          },
+          "restriction": {
+            "type": "string",
+            "description": "Restriction type (ALLOW_ONLY, EXCLUDE)"
+          }
+        }
+      },
+      "KomgaAlternateTitleDto": {
+        "type": "object",
+        "description": "Komga alternate title DTO",
+        "required": [
+          "label",
+          "title"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Title label (e.g., \"Japanese\", \"Romaji\")"
+          },
+          "title": {
+            "type": "string",
+            "description": "The alternate title text"
+          }
+        }
+      },
+      "KomgaAuthorDto": {
+        "type": "object",
+        "description": "Komga author DTO",
+        "required": [
+          "name",
+          "role"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Author name"
+          },
+          "role": {
+            "type": "string",
+            "description": "Author role (WRITER, PENCILLER, INKER, COLORIST, LETTERER, COVER, EDITOR)"
+          }
+        }
+      },
+      "KomgaBookDto": {
+        "type": "object",
+        "description": "Komga book DTO\n\nBased on actual Komic traffic analysis. This is the main book representation.",
+        "required": [
+          "id",
+          "seriesId",
+          "seriesTitle",
+          "libraryId",
+          "name",
+          "url",
+          "number",
+          "created",
+          "lastModified",
+          "fileLastModified",
+          "sizeBytes",
+          "size",
+          "media",
+          "metadata"
+        ],
+        "properties": {
+          "created": {
+            "type": "string",
+            "description": "Created timestamp (ISO 8601)"
+          },
+          "deleted": {
+            "type": "boolean",
+            "description": "Whether book is deleted (soft delete)"
+          },
+          "fileHash": {
+            "type": "string",
+            "description": "File hash"
+          },
+          "fileLastModified": {
+            "type": "string",
+            "description": "File last modified timestamp (ISO 8601)"
+          },
+          "id": {
+            "type": "string",
+            "description": "Book unique identifier (UUID as string)"
+          },
+          "lastModified": {
+            "type": "string",
+            "description": "Last modified timestamp (ISO 8601)"
+          },
+          "libraryId": {
+            "type": "string",
+            "description": "Library ID"
+          },
+          "media": {
+            "$ref": "#/components/schemas/KomgaMediaDto",
+            "description": "Media information"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/KomgaBookMetadataDto",
+            "description": "Book metadata"
+          },
+          "name": {
+            "type": "string",
+            "description": "Book filename/name"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Book number in series"
+          },
+          "oneshot": {
+            "type": "boolean",
+            "description": "Whether this is a oneshot"
+          },
+          "readProgress": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/KomgaReadProgressDto",
+                "description": "User's read progress (null if not started)"
+              }
+            ]
+          },
+          "seriesId": {
+            "type": "string",
+            "description": "Series ID"
+          },
+          "seriesTitle": {
+            "type": "string",
+            "description": "Series title (required by Komic for display)"
+          },
+          "size": {
+            "type": "string",
+            "description": "Human-readable file size (e.g., \"869.9 MiB\")"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "File size in bytes"
+          },
+          "url": {
+            "type": "string",
+            "description": "File URL/path"
+          }
+        }
+      },
+      "KomgaBookLinkDto": {
+        "type": "object",
+        "description": "Komga book link DTO",
+        "required": [
+          "label",
+          "url"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Link label"
+          },
+          "url": {
+            "type": "string",
+            "description": "Link URL"
+          }
+        }
+      },
+      "KomgaBookMetadataDto": {
+        "type": "object",
+        "description": "Komga book metadata DTO",
+        "required": [
+          "title",
+          "number",
+          "numberSort",
+          "created",
+          "lastModified"
+        ],
+        "properties": {
+          "authors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KomgaAuthorDto"
+            },
+            "description": "Authors list"
+          },
+          "authorsLock": {
+            "type": "boolean",
+            "description": "Whether authors are locked"
+          },
+          "created": {
+            "type": "string",
+            "description": "Created timestamp (ISO 8601)"
+          },
+          "isbn": {
+            "type": "string",
+            "description": "ISBN"
+          },
+          "isbnLock": {
+            "type": "boolean",
+            "description": "Whether ISBN is locked"
+          },
+          "lastModified": {
+            "type": "string",
+            "description": "Last modified timestamp (ISO 8601)"
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KomgaBookLinkDto"
+            },
+            "description": "Links"
+          },
+          "linksLock": {
+            "type": "boolean",
+            "description": "Whether links are locked"
+          },
+          "number": {
+            "type": "string",
+            "description": "Book number (display string)"
+          },
+          "numberLock": {
+            "type": "boolean",
+            "description": "Whether number is locked"
+          },
+          "numberSort": {
+            "type": "number",
+            "format": "double",
+            "description": "Number for sorting (float for chapter ordering)"
+          },
+          "numberSortLock": {
+            "type": "boolean",
+            "description": "Whether number_sort is locked"
+          },
+          "releaseDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Release date (YYYY-MM-DD or full ISO 8601)"
+          },
+          "releaseDateLock": {
+            "type": "boolean",
+            "description": "Whether release_date is locked"
+          },
+          "summary": {
+            "type": "string",
+            "description": "Book summary"
+          },
+          "summaryLock": {
+            "type": "boolean",
+            "description": "Whether summary is locked"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tags list"
+          },
+          "tagsLock": {
+            "type": "boolean",
+            "description": "Whether tags are locked"
+          },
+          "title": {
+            "type": "string",
+            "description": "Book title"
+          },
+          "titleLock": {
+            "type": "boolean",
+            "description": "Whether title is locked"
+          }
+        }
+      },
+      "KomgaBooksMetadataAggregationDto": {
+        "type": "object",
+        "description": "Komga books metadata aggregation DTO\n\nAggregated metadata from all books in the series.",
+        "required": [
+          "created",
+          "lastModified"
+        ],
+        "properties": {
+          "authors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KomgaAuthorDto"
+            },
+            "description": "Authors from all books"
+          },
+          "created": {
+            "type": "string",
+            "description": "Created timestamp (ISO 8601)"
+          },
+          "lastModified": {
+            "type": "string",
+            "description": "Last modified timestamp (ISO 8601)"
+          },
+          "releaseDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Release date range (earliest)"
+          },
+          "summary": {
+            "type": "string",
+            "description": "Summary (from first book or series)"
+          },
+          "summaryNumber": {
+            "type": "string",
+            "description": "Summary number (if multiple summaries)"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tags from all books"
+          }
+        }
+      },
+      "KomgaBooksSearchRequestDto": {
+        "type": "object",
+        "description": "Request DTO for searching/filtering books (POST /api/v1/books/list)",
+        "properties": {
+          "author": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Authors filter"
+          },
+          "deleted": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Deleted filter"
+          },
+          "libraryId": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Library IDs to filter by"
+          },
+          "mediaStatus": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Media status filter"
+          },
+          "readStatus": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Read status filter"
+          },
+          "searchTerm": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Search term"
+          },
+          "seriesId": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Series IDs to filter by"
+          },
+          "tag": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Tags filter"
+          }
+        }
+      },
+      "KomgaContentRestrictionsDto": {
+        "type": "object",
+        "description": "Komga content restrictions DTO",
+        "properties": {
+          "ageRestriction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/KomgaAgeRestrictionDto",
+                "description": "Age restriction (null means no restriction)"
+              }
+            ]
+          },
+          "labelsAllow": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Labels restriction"
+          },
+          "labelsExclude": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Labels to exclude"
+          }
+        }
+      },
+      "KomgaLibraryDto": {
+        "type": "object",
+        "description": "Komga library DTO\n\nBased on actual Komic traffic analysis - includes all fields observed in responses.",
+        "required": [
+          "id",
+          "name",
+          "root"
+        ],
+        "properties": {
+          "analyzeDimensions": {
+            "type": "boolean",
+            "description": "Whether to analyze page dimensions"
+          },
+          "convertToCbz": {
+            "type": "boolean",
+            "description": "Whether to convert archives to CBZ"
+          },
+          "emptyTrashAfterScan": {
+            "type": "boolean",
+            "description": "Whether to empty trash after scan"
+          },
+          "hashFiles": {
+            "type": "boolean",
+            "description": "Whether to hash files for deduplication"
+          },
+          "hashKoreader": {
+            "type": "boolean",
+            "description": "Whether to hash files for KOReader sync"
+          },
+          "hashPages": {
+            "type": "boolean",
+            "description": "Whether to hash pages"
+          },
+          "id": {
+            "type": "string",
+            "description": "Library unique identifier (UUID as string)"
+          },
+          "importBarcodeIsbn": {
+            "type": "boolean",
+            "description": "Whether to import barcode/ISBN"
+          },
+          "importComicInfoBook": {
+            "type": "boolean",
+            "description": "Whether to import book info from ComicInfo.xml"
+          },
+          "importComicInfoCollection": {
+            "type": "boolean",
+            "description": "Whether to import collection info from ComicInfo.xml"
+          },
+          "importComicInfoReadList": {
+            "type": "boolean",
+            "description": "Whether to import read list from ComicInfo.xml"
+          },
+          "importComicInfoSeries": {
+            "type": "boolean",
+            "description": "Whether to import series info from ComicInfo.xml"
+          },
+          "importComicInfoSeriesAppendVolume": {
+            "type": "boolean",
+            "description": "Whether to append volume to series name from ComicInfo"
+          },
+          "importEpubBook": {
+            "type": "boolean",
+            "description": "Whether to import EPUB book metadata"
+          },
+          "importEpubSeries": {
+            "type": "boolean",
+            "description": "Whether to import EPUB series metadata"
+          },
+          "importLocalArtwork": {
+            "type": "boolean",
+            "description": "Whether to import local artwork"
+          },
+          "importMylarSeries": {
+            "type": "boolean",
+            "description": "Whether to import Mylar series data"
+          },
+          "name": {
+            "type": "string",
+            "description": "Library display name"
+          },
+          "oneshotsDirectory": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Directory path for oneshots (optional)"
+          },
+          "repairExtensions": {
+            "type": "boolean",
+            "description": "Whether to repair file extensions"
+          },
+          "root": {
+            "type": "string",
+            "description": "Root filesystem path"
+          },
+          "scanCbx": {
+            "type": "boolean",
+            "description": "Whether to scan CBZ/CBR files"
+          },
+          "scanDirectoryExclusions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Directory exclusion patterns"
+          },
+          "scanEpub": {
+            "type": "boolean",
+            "description": "Whether to scan EPUB files"
+          },
+          "scanForceModifiedTime": {
+            "type": "boolean",
+            "description": "Whether to force modified time for scan"
+          },
+          "scanInterval": {
+            "type": "string",
+            "description": "Scan interval (WEEKLY, DAILY, HOURLY, EVERY_6H, EVERY_12H, DISABLED)"
+          },
+          "scanOnStartup": {
+            "type": "boolean",
+            "description": "Whether to scan on startup"
+          },
+          "scanPdf": {
+            "type": "boolean",
+            "description": "Whether to scan PDF files"
+          },
+          "seriesCover": {
+            "type": "string",
+            "description": "Series cover selection strategy (FIRST, FIRST_UNREAD_OR_FIRST, FIRST_UNREAD_OR_LAST, LAST)"
+          },
+          "unavailable": {
+            "type": "boolean",
+            "description": "Whether library is unavailable (path doesn't exist)"
+          }
+        }
+      },
+      "KomgaMediaDto": {
+        "type": "object",
+        "description": "Komga media DTO\n\nInformation about the book's media/file.",
+        "required": [
+          "status",
+          "mediaType",
+          "mediaProfile",
+          "pagesCount"
+        ],
+        "properties": {
+          "comment": {
+            "type": "string",
+            "description": "Comment/notes about media analysis"
+          },
+          "epubDivinaCompatible": {
+            "type": "boolean",
+            "description": "Whether EPUB is DIVINA-compatible"
+          },
+          "epubIsKepub": {
+            "type": "boolean",
+            "description": "Whether EPUB is a KePub file"
+          },
+          "mediaProfile": {
+            "type": "string",
+            "description": "Media profile (DIVINA for comics/manga, PDF for PDFs)"
+          },
+          "mediaType": {
+            "type": "string",
+            "description": "MIME type (e.g., \"application/zip\", \"application/epub+zip\", \"application/pdf\")"
+          },
+          "pagesCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of pages"
+          },
+          "status": {
+            "type": "string",
+            "description": "Media status (READY, UNKNOWN, ERROR, UNSUPPORTED, OUTDATED)"
+          }
+        }
+      },
+      "KomgaPageDto": {
+        "type": "object",
+        "description": "Komga page DTO\n\nRepresents a single page within a book.\nBased on actual Komic traffic analysis for GET /api/v1/books/{id}/pages",
+        "required": [
+          "fileName",
+          "mediaType",
+          "number",
+          "width",
+          "height",
+          "sizeBytes",
+          "size"
+        ],
+        "properties": {
+          "fileName": {
+            "type": "string",
+            "description": "Original filename within archive"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Image height in pixels"
+          },
+          "mediaType": {
+            "type": "string",
+            "description": "MIME type (e.g., \"image/png\", \"image/jpeg\", \"image/webp\")"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Page number (1-indexed)"
+          },
+          "size": {
+            "type": "string",
+            "description": "Human-readable file size (e.g., \"2.5 MiB\")"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Page file size in bytes"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Image width in pixels"
+          }
+        }
+      },
+      "KomgaPage_KomgaBookDto": {
+        "type": "object",
+        "description": "Komga paginated response wrapper (Spring Data Page format)\n\nThis matches the exact structure Komic expects from Komga.",
+        "required": [
+          "content",
+          "pageable",
+          "totalElements",
+          "totalPages",
+          "last",
+          "number",
+          "size",
+          "numberOfElements",
+          "first",
+          "empty",
+          "sort"
+        ],
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "Komga book DTO\n\nBased on actual Komic traffic analysis. This is the main book representation.",
+              "required": [
+                "id",
+                "seriesId",
+                "seriesTitle",
+                "libraryId",
+                "name",
+                "url",
+                "number",
+                "created",
+                "lastModified",
+                "fileLastModified",
+                "sizeBytes",
+                "size",
+                "media",
+                "metadata"
+              ],
+              "properties": {
+                "created": {
+                  "type": "string",
+                  "description": "Created timestamp (ISO 8601)"
+                },
+                "deleted": {
+                  "type": "boolean",
+                  "description": "Whether book is deleted (soft delete)"
+                },
+                "fileHash": {
+                  "type": "string",
+                  "description": "File hash"
+                },
+                "fileLastModified": {
+                  "type": "string",
+                  "description": "File last modified timestamp (ISO 8601)"
+                },
+                "id": {
+                  "type": "string",
+                  "description": "Book unique identifier (UUID as string)"
+                },
+                "lastModified": {
+                  "type": "string",
+                  "description": "Last modified timestamp (ISO 8601)"
+                },
+                "libraryId": {
+                  "type": "string",
+                  "description": "Library ID"
+                },
+                "media": {
+                  "$ref": "#/components/schemas/KomgaMediaDto",
+                  "description": "Media information"
+                },
+                "metadata": {
+                  "$ref": "#/components/schemas/KomgaBookMetadataDto",
+                  "description": "Book metadata"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Book filename/name"
+                },
+                "number": {
+                  "type": "integer",
+                  "format": "int32",
+                  "description": "Book number in series"
+                },
+                "oneshot": {
+                  "type": "boolean",
+                  "description": "Whether this is a oneshot"
+                },
+                "readProgress": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/KomgaReadProgressDto",
+                      "description": "User's read progress (null if not started)"
+                    }
+                  ]
+                },
+                "seriesId": {
+                  "type": "string",
+                  "description": "Series ID"
+                },
+                "seriesTitle": {
+                  "type": "string",
+                  "description": "Series title (required by Komic for display)"
+                },
+                "size": {
+                  "type": "string",
+                  "description": "Human-readable file size (e.g., \"869.9 MiB\")"
+                },
+                "sizeBytes": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "File size in bytes"
+                },
+                "url": {
+                  "type": "string",
+                  "description": "File URL/path"
+                }
+              }
+            },
+            "description": "The content items for this page"
+          },
+          "empty": {
+            "type": "boolean",
+            "description": "Whether the page is empty"
+          },
+          "first": {
+            "type": "boolean",
+            "description": "Whether this is the first page"
+          },
+          "last": {
+            "type": "boolean",
+            "description": "Whether this is the last page"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Current page number (0-indexed)"
+          },
+          "numberOfElements": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of elements on this page"
+          },
+          "pageable": {
+            "$ref": "#/components/schemas/KomgaPageable",
+            "description": "Pageable information"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Page size"
+          },
+          "sort": {
+            "$ref": "#/components/schemas/KomgaSort",
+            "description": "Sort information"
+          },
+          "totalElements": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of elements across all pages"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total number of pages"
+          }
+        }
+      },
+      "KomgaPage_KomgaSeriesDto": {
+        "type": "object",
+        "description": "Komga paginated response wrapper (Spring Data Page format)\n\nThis matches the exact structure Komic expects from Komga.",
+        "required": [
+          "content",
+          "pageable",
+          "totalElements",
+          "totalPages",
+          "last",
+          "number",
+          "size",
+          "numberOfElements",
+          "first",
+          "empty",
+          "sort"
+        ],
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "Komga series DTO\n\nBased on actual Komic traffic analysis.",
+              "required": [
+                "id",
+                "libraryId",
+                "name",
+                "url",
+                "created",
+                "lastModified",
+                "fileLastModified",
+                "booksCount",
+                "booksReadCount",
+                "booksUnreadCount",
+                "booksInProgressCount",
+                "metadata",
+                "booksMetadata"
+              ],
+              "properties": {
+                "booksCount": {
+                  "type": "integer",
+                  "format": "int32",
+                  "description": "Total books count"
+                },
+                "booksInProgressCount": {
+                  "type": "integer",
+                  "format": "int32",
+                  "description": "In-progress books count"
+                },
+                "booksMetadata": {
+                  "$ref": "#/components/schemas/KomgaBooksMetadataAggregationDto",
+                  "description": "Aggregated books metadata"
+                },
+                "booksReadCount": {
+                  "type": "integer",
+                  "format": "int32",
+                  "description": "Read books count"
+                },
+                "booksUnreadCount": {
+                  "type": "integer",
+                  "format": "int32",
+                  "description": "Unread books count"
+                },
+                "created": {
+                  "type": "string",
+                  "description": "Created timestamp (ISO 8601)"
+                },
+                "deleted": {
+                  "type": "boolean",
+                  "description": "Whether series is deleted (soft delete)"
+                },
+                "fileLastModified": {
+                  "type": "string",
+                  "description": "File last modified timestamp (ISO 8601)"
+                },
+                "id": {
+                  "type": "string",
+                  "description": "Series unique identifier (UUID as string)"
+                },
+                "lastModified": {
+                  "type": "string",
+                  "description": "Last modified timestamp (ISO 8601)"
+                },
+                "libraryId": {
+                  "type": "string",
+                  "description": "Library ID"
+                },
+                "metadata": {
+                  "$ref": "#/components/schemas/KomgaSeriesMetadataDto",
+                  "description": "Series metadata"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Series name"
+                },
+                "oneshot": {
+                  "type": "boolean",
+                  "description": "Whether this is a oneshot (single book)"
+                },
+                "url": {
+                  "type": "string",
+                  "description": "File URL/path"
+                }
+              }
+            },
+            "description": "The content items for this page"
+          },
+          "empty": {
+            "type": "boolean",
+            "description": "Whether the page is empty"
+          },
+          "first": {
+            "type": "boolean",
+            "description": "Whether this is the first page"
+          },
+          "last": {
+            "type": "boolean",
+            "description": "Whether this is the last page"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Current page number (0-indexed)"
+          },
+          "numberOfElements": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of elements on this page"
+          },
+          "pageable": {
+            "$ref": "#/components/schemas/KomgaPageable",
+            "description": "Pageable information"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Page size"
+          },
+          "sort": {
+            "$ref": "#/components/schemas/KomgaSort",
+            "description": "Sort information"
+          },
+          "totalElements": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of elements across all pages"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total number of pages"
+          }
+        }
+      },
+      "KomgaPageable": {
+        "type": "object",
+        "description": "Komga pageable information (Spring Data style)",
+        "required": [
+          "pageNumber",
+          "pageSize",
+          "sort",
+          "offset",
+          "paged",
+          "unpaged"
+        ],
+        "properties": {
+          "offset": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Offset from start (page_number * page_size)"
+          },
+          "pageNumber": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Current page number (0-indexed)"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Page size (number of items per page)"
+          },
+          "paged": {
+            "type": "boolean",
+            "description": "Whether the pageable is paged (always true for paginated results)"
+          },
+          "sort": {
+            "$ref": "#/components/schemas/KomgaSort",
+            "description": "Sort information"
+          },
+          "unpaged": {
+            "type": "boolean",
+            "description": "Whether the pageable is unpaged (always false for paginated results)"
+          }
+        }
+      },
+      "KomgaReadProgressDto": {
+        "type": "object",
+        "description": "Komga read progress DTO",
+        "required": [
+          "page",
+          "completed",
+          "created",
+          "lastModified"
+        ],
+        "properties": {
+          "completed": {
+            "type": "boolean",
+            "description": "Whether the book is completed"
+          },
+          "created": {
+            "type": "string",
+            "description": "Created timestamp (ISO 8601)"
+          },
+          "deviceId": {
+            "type": "string",
+            "description": "Device ID that last updated progress"
+          },
+          "deviceName": {
+            "type": "string",
+            "description": "Device name that last updated progress"
+          },
+          "lastModified": {
+            "type": "string",
+            "description": "Last modified timestamp (ISO 8601)"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Current page number (1-indexed)"
+          },
+          "readDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "When the book was last read (ISO 8601)"
+          }
+        }
+      },
+      "KomgaReadProgressUpdateDto": {
+        "type": "object",
+        "description": "Request DTO for updating read progress\n\nObserved from actual Komic traffic: `{ \"completed\": false, \"page\": 151 }`",
+        "properties": {
+          "completed": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether book is completed"
+          },
+          "deviceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Device ID (optional, may be used by some clients)"
+          },
+          "deviceName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Device name (optional, may be used by some clients)"
+          },
+          "page": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Current page number (1-indexed)"
+          }
+        }
+      },
+      "KomgaSeriesDto": {
+        "type": "object",
+        "description": "Komga series DTO\n\nBased on actual Komic traffic analysis.",
+        "required": [
+          "id",
+          "libraryId",
+          "name",
+          "url",
+          "created",
+          "lastModified",
+          "fileLastModified",
+          "booksCount",
+          "booksReadCount",
+          "booksUnreadCount",
+          "booksInProgressCount",
+          "metadata",
+          "booksMetadata"
+        ],
+        "properties": {
+          "booksCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total books count"
+          },
+          "booksInProgressCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "In-progress books count"
+          },
+          "booksMetadata": {
+            "$ref": "#/components/schemas/KomgaBooksMetadataAggregationDto",
+            "description": "Aggregated books metadata"
+          },
+          "booksReadCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Read books count"
+          },
+          "booksUnreadCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Unread books count"
+          },
+          "created": {
+            "type": "string",
+            "description": "Created timestamp (ISO 8601)"
+          },
+          "deleted": {
+            "type": "boolean",
+            "description": "Whether series is deleted (soft delete)"
+          },
+          "fileLastModified": {
+            "type": "string",
+            "description": "File last modified timestamp (ISO 8601)"
+          },
+          "id": {
+            "type": "string",
+            "description": "Series unique identifier (UUID as string)"
+          },
+          "lastModified": {
+            "type": "string",
+            "description": "Last modified timestamp (ISO 8601)"
+          },
+          "libraryId": {
+            "type": "string",
+            "description": "Library ID"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/KomgaSeriesMetadataDto",
+            "description": "Series metadata"
+          },
+          "name": {
+            "type": "string",
+            "description": "Series name"
+          },
+          "oneshot": {
+            "type": "boolean",
+            "description": "Whether this is a oneshot (single book)"
+          },
+          "url": {
+            "type": "string",
+            "description": "File URL/path"
+          }
+        }
+      },
+      "KomgaSeriesMetadataDto": {
+        "type": "object",
+        "description": "Komga series metadata DTO",
+        "required": [
+          "status",
+          "title",
+          "titleSort",
+          "created",
+          "lastModified"
+        ],
+        "properties": {
+          "ageRating": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Age rating"
+          },
+          "ageRatingLock": {
+            "type": "boolean",
+            "description": "Whether age_rating is locked"
+          },
+          "alternateTitles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KomgaAlternateTitleDto"
+            },
+            "description": "Alternate titles"
+          },
+          "alternateTitlesLock": {
+            "type": "boolean",
+            "description": "Whether alternate_titles are locked"
+          },
+          "created": {
+            "type": "string",
+            "description": "Metadata created timestamp (ISO 8601)"
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Genres list"
+          },
+          "genresLock": {
+            "type": "boolean",
+            "description": "Whether genres are locked"
+          },
+          "language": {
+            "type": "string",
+            "description": "Language code"
+          },
+          "languageLock": {
+            "type": "boolean",
+            "description": "Whether language is locked"
+          },
+          "lastModified": {
+            "type": "string",
+            "description": "Metadata last modified timestamp (ISO 8601)"
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KomgaWebLinkDto"
+            },
+            "description": "External links"
+          },
+          "linksLock": {
+            "type": "boolean",
+            "description": "Whether links are locked"
+          },
+          "publisher": {
+            "type": "string",
+            "description": "Publisher name"
+          },
+          "publisherLock": {
+            "type": "boolean",
+            "description": "Whether publisher is locked"
+          },
+          "readingDirection": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reading direction (LEFT_TO_RIGHT, RIGHT_TO_LEFT, VERTICAL, WEBTOON)"
+          },
+          "readingDirectionLock": {
+            "type": "boolean",
+            "description": "Whether reading_direction is locked"
+          },
+          "sharingLabels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sharing labels"
+          },
+          "sharingLabelsLock": {
+            "type": "boolean",
+            "description": "Whether sharing_labels are locked"
+          },
+          "status": {
+            "type": "string",
+            "description": "Series status (ENDED, ONGOING, ABANDONED, HIATUS)"
+          },
+          "statusLock": {
+            "type": "boolean",
+            "description": "Whether status is locked"
+          },
+          "summary": {
+            "type": "string",
+            "description": "Series summary/description"
+          },
+          "summaryLock": {
+            "type": "boolean",
+            "description": "Whether summary is locked"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tags list"
+          },
+          "tagsLock": {
+            "type": "boolean",
+            "description": "Whether tags are locked"
+          },
+          "title": {
+            "type": "string",
+            "description": "Series title"
+          },
+          "titleLock": {
+            "type": "boolean",
+            "description": "Whether title is locked"
+          },
+          "titleSort": {
+            "type": "string",
+            "description": "Sort title"
+          },
+          "titleSortLock": {
+            "type": "boolean",
+            "description": "Whether title_sort is locked"
+          },
+          "totalBookCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Total book count (expected)"
+          },
+          "totalBookCountLock": {
+            "type": "boolean",
+            "description": "Whether total_book_count is locked"
+          }
+        }
+      },
+      "KomgaSort": {
+        "type": "object",
+        "description": "Komga pagination sort information",
+        "required": [
+          "sorted",
+          "unsorted",
+          "empty"
+        ],
+        "properties": {
+          "empty": {
+            "type": "boolean",
+            "description": "Whether the sort is empty"
+          },
+          "sorted": {
+            "type": "boolean",
+            "description": "Whether the results are sorted in ascending or descending order"
+          },
+          "unsorted": {
+            "type": "boolean",
+            "description": "Whether the results are unsorted"
+          }
+        }
+      },
+      "KomgaUserDto": {
+        "type": "object",
+        "description": "Komga user DTO\n\nResponse for GET /api/v1/users/me",
+        "required": [
+          "id",
+          "email",
+          "roles"
+        ],
+        "properties": {
+          "contentRestrictions": {
+            "$ref": "#/components/schemas/KomgaContentRestrictionsDto",
+            "description": "User's content restrictions"
+          },
+          "email": {
+            "type": "string",
+            "description": "User email address"
+          },
+          "id": {
+            "type": "string",
+            "description": "User unique identifier (UUID as string)"
+          },
+          "labelsAllow": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Whether user can share content"
+          },
+          "labelsExclude": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Labels to exclude from sharing"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "User roles (e.g., [\"ADMIN\"], [\"USER\"])"
+          },
+          "sharedAllLibraries": {
+            "type": "boolean",
+            "description": "Whether all libraries are shared with this user"
+          },
+          "sharedLibrariesIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shared libraries access - list of library IDs user can access\nEmpty means access to all libraries"
+          }
+        }
+      },
+      "KomgaWebLinkDto": {
+        "type": "object",
+        "description": "Komga web link DTO",
+        "required": [
+          "label",
+          "url"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Link label"
+          },
+          "url": {
+            "type": "string",
+            "description": "Link URL"
           }
         }
       },
@@ -16204,6 +19089,37 @@
           }
         }
       },
+      "SeriesPaginationQuery": {
+        "type": "object",
+        "description": "Query parameters for paginated series endpoints",
+        "properties": {
+          "library_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Filter by library ID"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Page number (0-indexed, Komga-style)"
+          },
+          "search": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Search query"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Page size (default: 20)"
+          }
+        }
+      },
       "SeriesStrategy": {
         "type": "string",
         "description": "Series scanning strategy type for library organization\n\nDetermines how series are detected and organized from the filesystem structure.",
@@ -19157,6 +22073,10 @@
     {
       "name": "opds2",
       "description": "OPDS 2.0 catalog feed (JSON format) - Modern JSON-based OPDS specification"
+    },
+    {
+      "name": "komga",
+      "description": "Komga-compatible API for third-party apps (Komic, etc.). Enable via config. Default path: /{prefix}/api/v1/ where prefix defaults to 'komgav1'"
     }
   ]
 }

@@ -53,7 +53,7 @@ use std::sync::Arc;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```text
 /// // In main router setup:
 /// if config.komga_api.enabled {
 ///     let prefix = format!("/{}/api/v1", config.komga_api.prefix);
