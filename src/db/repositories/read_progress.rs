@@ -13,6 +13,18 @@ use uuid::Uuid;
 pub struct ReadProgressRepository;
 
 impl ReadProgressRepository {
+    /// Check if a database error is a unique constraint violation
+    /// Handles both SQLite ("UNIQUE constraint failed") and PostgreSQL ("duplicate key")
+    /// and matches both DbErr::Query and DbErr::Exec variants
+    fn is_unique_constraint_error(err: &DbErr) -> bool {
+        let error_str = match err {
+            DbErr::Query(RuntimeErr::SqlxError(sqlx_err)) => sqlx_err.to_string(),
+            DbErr::Exec(RuntimeErr::SqlxError(sqlx_err)) => sqlx_err.to_string(),
+            _ => return false,
+        };
+        error_str.contains("UNIQUE constraint failed") || error_str.contains("duplicate key")
+    }
+
     /// Get reading progress for a specific user and book
     pub async fn get_by_user_and_book(
         db: &DatabaseConnection,
@@ -81,10 +93,7 @@ impl ReadProgressRepository {
 
             match new_progress.insert(db).await {
                 Ok(result) => Ok(result),
-                Err(DbErr::Query(RuntimeErr::SqlxError(sqlx_err)))
-                    if sqlx_err.to_string().contains("UNIQUE constraint failed")
-                        || sqlx_err.to_string().contains("duplicate key") =>
-                {
+                Err(ref e) if Self::is_unique_constraint_error(e) => {
                     // Race condition: another request created the record, fetch and update it
                     let existing = Self::get_by_user_and_book(db, user_id, book_id)
                         .await?
