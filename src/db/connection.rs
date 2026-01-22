@@ -5,8 +5,9 @@
 #![allow(dead_code)]
 
 use anyhow::{Context, Result};
-use sea_orm::{ConnectionTrait, Database as SeaDatabase, DatabaseConnection};
+use sea_orm::{ConnectOptions, ConnectionTrait, Database as SeaDatabase, DatabaseConnection};
 use std::path::Path;
+use std::time::Duration;
 use tokio::fs;
 use tracing::info;
 use uuid::Uuid;
@@ -77,8 +78,24 @@ impl Database {
                 // Build SeaORM connection URL
                 let database_url = format!("sqlite://{}?mode=rwc", sqlite_config.path);
 
-                // Connect to database
-                let conn = SeaDatabase::connect(&database_url)
+                // Configure connection pool options
+                let mut opt = ConnectOptions::new(database_url);
+                opt.max_connections(sqlite_config.max_connections)
+                    .min_connections(sqlite_config.min_connections)
+                    .acquire_timeout(Duration::from_secs(sqlite_config.acquire_timeout_seconds))
+                    .idle_timeout(Duration::from_secs(sqlite_config.idle_timeout_seconds))
+                    .max_lifetime(Duration::from_secs(sqlite_config.max_lifetime_seconds))
+                    .sqlx_logging(false); // Disable sqlx query logging (we use tracing)
+
+                info!(
+                    "SQLite connection pool: max={}, min={}, acquire_timeout={}s",
+                    sqlite_config.max_connections,
+                    sqlite_config.min_connections,
+                    sqlite_config.acquire_timeout_seconds
+                );
+
+                // Connect to database with pool configuration
+                let conn = SeaDatabase::connect(opt)
                     .await
                     .context("Failed to create SQLite connection")?;
 
@@ -130,7 +147,23 @@ impl Database {
                     postgres_config.database_name
                 );
 
-                SeaDatabase::connect(&connection_string)
+                // Configure connection pool options
+                let mut opt = ConnectOptions::new(connection_string);
+                opt.max_connections(postgres_config.max_connections)
+                    .min_connections(postgres_config.min_connections)
+                    .acquire_timeout(Duration::from_secs(postgres_config.acquire_timeout_seconds))
+                    .idle_timeout(Duration::from_secs(postgres_config.idle_timeout_seconds))
+                    .max_lifetime(Duration::from_secs(postgres_config.max_lifetime_seconds))
+                    .sqlx_logging(false); // Disable sqlx query logging (we use tracing)
+
+                info!(
+                    "PostgreSQL connection pool: max={}, min={}, acquire_timeout={}s",
+                    postgres_config.max_connections,
+                    postgres_config.min_connections,
+                    postgres_config.acquire_timeout_seconds
+                );
+
+                SeaDatabase::connect(opt)
                     .await
                     .context("Failed to create PostgreSQL connection")?
             }
@@ -441,6 +474,7 @@ mod tests {
             sqlite: Some(SQLiteConfig {
                 path: db_path.to_str().unwrap().to_string(),
                 pragmas: None,
+                ..SQLiteConfig::default()
             }),
         };
 
@@ -475,6 +509,7 @@ mod tests {
                     .unwrap_or_else(|_| "codex_test".to_string()),
                 database_name: std::env::var("POSTGRES_DB")
                     .unwrap_or_else(|_| "codex_test".to_string()),
+                ..crate::config::PostgresConfig::default()
             }),
             sqlite: None,
         };

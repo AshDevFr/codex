@@ -397,6 +397,7 @@ mod tests {
                 sqlite: Some(SQLiteConfig {
                     path: "./test.db".to_string(),
                     pragmas: None,
+                    ..SQLiteConfig::default()
                 }),
             },
             application: ApplicationConfig {

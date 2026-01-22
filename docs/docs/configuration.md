@@ -63,6 +63,35 @@ database:
 - Crash recovery improvements
 :::
 
+### SQLite Connection Pool
+
+SQLite connection pool settings can be tuned for your workload:
+
+```yaml
+database:
+  db_type: sqlite
+  sqlite:
+    path: ./data/codex.db
+    # Connection pool settings
+    max_connections: 16        # Maximum pool size (default: 16)
+    min_connections: 2         # Minimum warm connections (default: 2)
+    acquire_timeout_seconds: 30  # Wait time for connection (default: 30)
+    idle_timeout_seconds: 300    # Idle connection timeout (default: 300 = 5 min)
+    max_lifetime_seconds: 1800   # Max connection lifetime (default: 1800 = 30 min)
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `max_connections` | `16` | Maximum connections in pool |
+| `min_connections` | `2` | Minimum warm connections |
+| `acquire_timeout_seconds` | `30` | How long to wait for a connection |
+| `idle_timeout_seconds` | `300` | Idle connection timeout (5 min) |
+| `max_lifetime_seconds` | `1800` | Maximum connection lifetime (30 min) |
+
+:::tip SQLite Pool Sizing
+SQLite with WAL mode handles concurrent reads well, but writes are serialized. The default of 16 connections works well for most workloads. Increase if you see "connection pool timeout" errors during heavy load.
+:::
+
 ### PostgreSQL (Recommended for Production)
 
 Best for multi-user environments, large libraries, or horizontal scaling.
@@ -77,6 +106,12 @@ database:
     password: codex
     database_name: codex
     ssl_mode: prefer
+    # Connection pool settings
+    max_connections: 100       # Maximum pool size (default: 100)
+    min_connections: 5         # Minimum warm connections (default: 5)
+    acquire_timeout_seconds: 30  # Wait time for connection (default: 30)
+    idle_timeout_seconds: 600    # Idle connection timeout (default: 600 = 10 min)
+    max_lifetime_seconds: 3600   # Max connection lifetime (default: 3600 = 1 hour)
 ```
 
 #### PostgreSQL SSL Modes

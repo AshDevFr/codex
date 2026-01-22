@@ -34,6 +34,7 @@ async fn test_migrations_complete_on_fresh_database() {
         sqlite: Some(SQLiteConfig {
             path: db_path.to_str().unwrap().to_string(),
             pragmas: None,
+            ..SQLiteConfig::default()
         }),
     };
 

@@ -24,6 +24,7 @@ async fn test_init_database_without_skip_migrations() {
             sqlite: Some(SQLiteConfig {
                 path: db_path.to_str().unwrap().to_string(),
                 pragmas: None,
+                ..SQLiteConfig::default()
             }),
         },
         api: codex::config::ApiConfig {
@@ -94,6 +95,7 @@ async fn test_init_database_with_skip_migrations_complete() {
             sqlite: Some(SQLiteConfig {
                 path: db_path.to_str().unwrap().to_string(),
                 pragmas: None,
+                ..SQLiteConfig::default()
             }),
         },
         api: codex::config::ApiConfig {
@@ -165,6 +167,7 @@ async fn test_init_database_with_skip_migrations_wait_for_completion() {
             sqlite: Some(SQLiteConfig {
                 path: db_path.to_str().unwrap().to_string(),
                 pragmas: None,
+                ..SQLiteConfig::default()
             }),
         },
         api: codex::config::ApiConfig {
@@ -252,6 +255,7 @@ async fn test_init_database_with_skip_migrations_variant_1() {
             sqlite: Some(SQLiteConfig {
                 path: db_path.to_str().unwrap().to_string(),
                 pragmas: None,
+                ..SQLiteConfig::default()
             }),
         },
         api: codex::config::ApiConfig {
@@ -323,6 +327,7 @@ async fn test_init_database_with_skip_migrations_timeout() {
             sqlite: Some(SQLiteConfig {
                 path: db_path.to_str().unwrap().to_string(),
                 pragmas: None,
+                ..SQLiteConfig::default()
             }),
         },
         api: codex::config::ApiConfig {

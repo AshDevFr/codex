@@ -568,6 +568,7 @@ mod tests {
                 sqlite: Some(SQLiteConfig {
                     path: db_path.to_string_lossy().to_string(),
                     pragmas: None,
+                    ..SQLiteConfig::default()
                 }),
                 postgres: None,
             },

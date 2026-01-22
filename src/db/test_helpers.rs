@@ -28,6 +28,7 @@ pub async fn create_test_db() -> (Database, TempDir) {
         sqlite: Some(SQLiteConfig {
             path: db_path.to_str().unwrap().to_string(),
             pragmas: Some(pragmas),
+            ..SQLiteConfig::default()
         }),
     };
 

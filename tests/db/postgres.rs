@@ -34,6 +34,7 @@ async fn create_test_postgres_db() -> Database {
                 .unwrap_or_else(|_| "codex_test".to_string()),
             database_name: std::env::var("POSTGRES_DB")
                 .unwrap_or_else(|_| "codex_test".to_string()),
+            ..PostgresConfig::default()
         }),
         sqlite: None,
     };

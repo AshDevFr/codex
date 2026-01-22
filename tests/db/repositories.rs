@@ -944,6 +944,7 @@ async fn test_database_reconnect() {
         sqlite: Some(SQLiteConfig {
             path: db_path.to_str().unwrap().to_string(),
             pragmas: None,
+            ..SQLiteConfig::default()
         }),
     };
 

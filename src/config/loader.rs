@@ -58,6 +58,7 @@ application:
                 sqlite: Some(SQLiteConfig {
                     path: "./codex.db".to_string(),
                     pragmas: None,
+                    ..SQLiteConfig::default()
                 }),
             },
             application: ApplicationConfig {
@@ -134,6 +135,7 @@ scanner:
                 sqlite: Some(SQLiteConfig {
                     path: "./codex.db".to_string(),
                     pragmas: None,
+                    ..SQLiteConfig::default()
                 }),
             },
             application: ApplicationConfig {

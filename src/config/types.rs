@@ -14,7 +14,7 @@ pub struct TaskConfig {
 impl Default for TaskConfig {
     fn default() -> Self {
         Self {
-            worker_count: env_or("CODEX_TASK_WORKER_COUNT", 4),
+            worker_count: env_or("CODEX_TASK_WORKER_COUNT", 2),
         }
     }
 }
@@ -65,26 +65,12 @@ impl Default for Config {
 
         // Build database config based on type
         let (postgres_config, sqlite_config) = match db_type {
-            DatabaseType::Postgres => (
-                Some(PostgresConfig {
-                    host: env_string_opt("CODEX_DATABASE_POSTGRES_HOST")
-                        .unwrap_or_else(|| "localhost".to_string()),
-                    port: env_or("CODEX_DATABASE_POSTGRES_PORT", 5432),
-                    username: env_string_opt("CODEX_DATABASE_POSTGRES_USERNAME")
-                        .unwrap_or_else(|| "codex".to_string()),
-                    password: env_string_opt("CODEX_DATABASE_POSTGRES_PASSWORD")
-                        .unwrap_or_else(|| "codex".to_string()),
-                    database_name: env_string_opt("CODEX_DATABASE_POSTGRES_DATABASE_NAME")
-                        .unwrap_or_else(|| "codex".to_string()),
-                }),
-                None,
-            ),
+            DatabaseType::Postgres => (Some(PostgresConfig::default()), None),
             DatabaseType::SQLite => (
                 None,
                 Some(SQLiteConfig {
-                    path: env_string_opt("CODEX_DATABASE_SQLITE_PATH")
-                        .unwrap_or_else(|| "data/codex.db".to_string()),
                     pragmas: Some(pragmas),
+                    ..SQLiteConfig::default()
                 }),
             ),
         };
@@ -233,6 +219,27 @@ pub struct PostgresConfig {
     pub username: String,
     pub password: String,
     pub database_name: String,
+
+    // Connection Pool Settings
+    /// Maximum number of connections in the pool (default: 100)
+    /// PostgreSQL handles concurrent connections well, so higher values are fine
+    pub max_connections: u32,
+
+    /// Minimum number of connections to maintain in the pool (default: 5)
+    /// Keeps connections warm for better latency
+    pub min_connections: u32,
+
+    /// Connection acquire timeout in seconds (default: 30)
+    /// How long to wait for a connection before failing
+    pub acquire_timeout_seconds: u64,
+
+    /// Idle connection timeout in seconds (default: 600 = 10 minutes)
+    /// Network connections are expensive to establish, keep them longer
+    pub idle_timeout_seconds: u64,
+
+    /// Maximum lifetime of a connection in seconds (default: 3600 = 1 hour)
+    /// Prevents stale connections from accumulating
+    pub max_lifetime_seconds: u64,
 }
 
 impl Default for PostgresConfig {
@@ -247,6 +254,12 @@ impl Default for PostgresConfig {
                 .unwrap_or_else(|| "codex".to_string()),
             database_name: env_string_opt("CODEX_DATABASE_POSTGRES_DATABASE_NAME")
                 .unwrap_or_else(|| "codex".to_string()),
+            // Pool settings - PostgreSQL can handle more concurrent connections
+            max_connections: env_or("CODEX_DATABASE_POSTGRES_MAX_CONNECTIONS", 100),
+            min_connections: env_or("CODEX_DATABASE_POSTGRES_MIN_CONNECTIONS", 5),
+            acquire_timeout_seconds: env_or("CODEX_DATABASE_POSTGRES_ACQUIRE_TIMEOUT", 30),
+            idle_timeout_seconds: env_or("CODEX_DATABASE_POSTGRES_IDLE_TIMEOUT", 600),
+            max_lifetime_seconds: env_or("CODEX_DATABASE_POSTGRES_MAX_LIFETIME", 3600),
         }
     }
 }
@@ -256,6 +269,28 @@ impl Default for PostgresConfig {
 pub struct SQLiteConfig {
     pub path: String,
     pub pragmas: Option<HashMap<String, String>>,
+
+    // Connection Pool Settings
+    /// Maximum number of connections in the pool (default: 16)
+    /// SQLite with WAL mode handles concurrent reads well, but writes are serialized.
+    /// 16 connections is enough for most workloads without overwhelming the single-writer lock.
+    pub max_connections: u32,
+
+    /// Minimum number of connections to maintain in the pool (default: 2)
+    /// Keep a couple warm connections ready
+    pub min_connections: u32,
+
+    /// Connection acquire timeout in seconds (default: 30)
+    /// How long to wait for a connection before failing
+    pub acquire_timeout_seconds: u64,
+
+    /// Idle connection timeout in seconds (default: 300 = 5 minutes)
+    /// SQLite connections are cheap, can timeout sooner
+    pub idle_timeout_seconds: u64,
+
+    /// Maximum lifetime of a connection in seconds (default: 1800 = 30 minutes)
+    /// Reasonable for file-based database
+    pub max_lifetime_seconds: u64,
 }
 
 impl Default for SQLiteConfig {
@@ -270,6 +305,12 @@ impl Default for SQLiteConfig {
             path: env_string_opt("CODEX_DATABASE_SQLITE_PATH")
                 .unwrap_or_else(|| "data/codex.db".to_string()),
             pragmas: Some(pragmas),
+            // Pool settings - SQLite is more conservative due to single-writer lock
+            max_connections: env_or("CODEX_DATABASE_SQLITE_MAX_CONNECTIONS", 16),
+            min_connections: env_or("CODEX_DATABASE_SQLITE_MIN_CONNECTIONS", 2),
+            acquire_timeout_seconds: env_or("CODEX_DATABASE_SQLITE_ACQUIRE_TIMEOUT", 30),
+            idle_timeout_seconds: env_or("CODEX_DATABASE_SQLITE_IDLE_TIMEOUT", 300),
+            max_lifetime_seconds: env_or("CODEX_DATABASE_SQLITE_MAX_LIFETIME", 1800),
         }
     }
 }
@@ -449,6 +490,7 @@ mod tests {
             username: "user".to_string(),
             password: "pass".to_string(),
             database_name: "codex".to_string(),
+            ..PostgresConfig::default()
         };
 
         assert_eq!(config.host, "localhost");
@@ -461,6 +503,7 @@ mod tests {
         let config = SQLiteConfig {
             path: "/var/lib/codex.db".to_string(),
             pragmas: None,
+            ..SQLiteConfig::default()
         };
 
         assert_eq!(config.path, "/var/lib/codex.db");
@@ -475,6 +518,7 @@ mod tests {
         let config = SQLiteConfig {
             path: "/var/lib/codex.db".to_string(),
             pragmas: Some(pragmas),
+            ..SQLiteConfig::default()
         };
 
         assert!(config.pragmas.is_some());
@@ -502,6 +546,7 @@ mod tests {
                 username: "user".to_string(),
                 password: "pass".to_string(),
                 database_name: "codex".to_string(),
+                ..PostgresConfig::default()
             }),
             sqlite: None,
         };
@@ -519,6 +564,7 @@ mod tests {
             sqlite: Some(SQLiteConfig {
                 path: "/var/lib/codex.db".to_string(),
                 pragmas: None,
+                ..SQLiteConfig::default()
             }),
         };
 
@@ -536,6 +582,7 @@ mod tests {
                 sqlite: Some(SQLiteConfig {
                     path: "./codex.db".to_string(),
                     pragmas: None,
+                    ..SQLiteConfig::default()
                 }),
             },
             application: ApplicationConfig {
@@ -640,7 +687,7 @@ mod tests {
     #[test]
     fn test_task_config_default() {
         let config = TaskConfig::default();
-        assert_eq!(config.worker_count, 4);
+        assert_eq!(config.worker_count, 2);
     }
 
     #[test]

@@ -19,6 +19,7 @@ pub async fn setup_test_db() -> (sea_orm::DatabaseConnection, TempDir) {
         sqlite: Some(SQLiteConfig {
             path: db_path.to_str().unwrap().to_string(),
             pragmas: Some(pragmas),
+            ..SQLiteConfig::default()
         }),
     };
 
@@ -40,6 +41,7 @@ pub async fn setup_test_db_wrapper() -> (Database, TempDir) {
         sqlite: Some(SQLiteConfig {
             path: db_path.to_str().unwrap().to_string(),
             pragmas: None,
+            ..SQLiteConfig::default()
         }),
     };
 
@@ -73,6 +75,7 @@ pub async fn setup_test_db_postgres() -> Option<sea_orm::DatabaseConnection> {
             username: extract_username(&postgres_url),
             password: extract_password(&postgres_url),
             database_name: extract_database(&postgres_url),
+            ..PostgresConfig::default()
         }),
     };
 
