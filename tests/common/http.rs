@@ -2,7 +2,7 @@ use axum::Router;
 use codex::api::extractors::{AppState, AuthState};
 use codex::api::permissions::UserRole;
 use codex::api::routes::create_router;
-use codex::config::{ApiConfig, AuthConfig, DatabaseConfig, EmailConfig, FilesConfig, PdfConfig};
+use codex::config::{AuthConfig, Config, DatabaseConfig, EmailConfig, FilesConfig, PdfConfig};
 use codex::db::entities::users;
 use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
@@ -114,18 +114,24 @@ pub fn generate_test_token(state: &AppState, user: &users::Model) -> String {
         .expect("Failed to generate test token")
 }
 
-/// Helper to create a test API config
-pub fn create_test_api_config() -> ApiConfig {
-    ApiConfig {
-        base_path: "/api/v1".to_string(),
-        enable_api_docs: false,
-        api_docs_path: "/docs".to_string(),
-        // Disable CORS in tests to avoid conflicts with allow_credentials
-        // Tests don't need CORS since they make direct requests, not cross-origin
-        cors_enabled: false,
-        cors_origins: vec![],
-        max_page_size: 100,
-    }
+/// Helper to create a test config (Komga API disabled by default)
+pub fn create_test_config() -> Config {
+    let mut config = Config::default();
+    // Disable CORS in tests to avoid conflicts with allow_credentials
+    // Tests don't need CORS since they make direct requests, not cross-origin
+    config.api.cors_enabled = false;
+    config.api.enable_api_docs = false;
+    // Komga API is disabled by default
+    config.komga_api.enabled = false;
+    config
+}
+
+/// Helper to create a test config with Komga API enabled
+pub fn create_test_config_with_komga() -> Config {
+    let mut config = create_test_config();
+    config.komga_api.enabled = true;
+    config.komga_api.prefix = "komgav1".to_string();
+    config
 }
 
 /// Helper to create the API router with test state (deprecated - use create_test_router_with_app_state)
@@ -164,14 +170,14 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
         auth_tracking_service,
         pdf_page_cache,
     });
-    let api_config = create_test_api_config();
-    create_router(app_state, &api_config)
+    let config = create_test_config();
+    create_router(app_state, &config)
 }
 
 /// Helper to create the API router with AppState
 pub fn create_test_router_with_app_state(state: Arc<AppState>) -> Router {
-    let api_config = create_test_api_config();
-    create_router(state, &api_config)
+    let config = create_test_config();
+    create_router(state, &config)
 }
 
 /// Helper to set up a test app with database and router (convenience function)
@@ -179,6 +185,32 @@ pub async fn setup_test_app(db: DatabaseConnection) -> (Arc<AppState>, Router) {
     let state = create_test_app_state(db).await;
     let router = create_test_router_with_app_state(state.clone());
     (state, router)
+}
+
+/// Helper to create the API router with Komga API enabled
+pub fn create_test_router_with_komga(state: Arc<AppState>) -> Router {
+    let config = create_test_config_with_komga();
+    create_router(state, &config)
+}
+
+/// Helper to set up a test app with Komga API enabled
+pub async fn setup_test_app_with_komga(db: DatabaseConnection) -> (Arc<AppState>, Router) {
+    let state = create_test_app_state(db).await;
+    let router = create_test_router_with_komga(state.clone());
+    (state, router)
+}
+
+/// Helper to create a GET request with Basic Auth header
+pub fn get_request_with_basic_auth(uri: &str, username: &str, password: &str) -> Request<String> {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    let credentials = format!("{}:{}", username, password);
+    let encoded = STANDARD.encode(&credentials);
+    Request::builder()
+        .method("GET")
+        .uri(uri)
+        .header("Authorization", format!("Basic {}", encoded))
+        .body(String::new())
+        .unwrap()
 }
 
 /// Helper to make an HTTP request and get the response
@@ -296,6 +328,17 @@ pub fn post_json_request_with_auth<T: serde::Serialize>(
         .unwrap()
 }
 
+/// Helper to create a POST request with raw JSON string and Authorization header
+pub fn post_request_with_auth_json(uri: &str, token: &str, json: &str) -> Request<String> {
+    Request::builder()
+        .method("POST")
+        .uri(uri)
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", token))
+        .body(json.to_string())
+        .unwrap()
+}
+
 /// Helper to create a PUT request with JSON body (no auth)
 pub fn put_json_request<T: serde::Serialize>(uri: &str, body: &T) -> Request<String> {
     let json = serde_json::to_string(body).unwrap();
@@ -347,6 +390,17 @@ pub fn patch_json_request_with_auth<T: serde::Serialize>(
         .header("Content-Type", "application/json")
         .header("Authorization", format!("Bearer {}", token))
         .body(json)
+        .unwrap()
+}
+
+/// Helper to create a PATCH request with raw JSON string and Authorization header
+pub fn patch_request_with_auth_json(uri: &str, token: &str, json: &str) -> Request<String> {
+    Request::builder()
+        .method("PATCH")
+        .uri(uri)
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", token))
+        .body(json.to_string())
         .unwrap()
 }
 

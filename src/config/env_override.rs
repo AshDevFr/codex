@@ -1,6 +1,6 @@
 use super::types::{
-    ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, LogLevel,
-    LoggingConfig, PostgresConfig, SQLiteConfig, ScannerConfig, TaskConfig,
+    ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, KomgaApiConfig,
+    LogLevel, LoggingConfig, PostgresConfig, SQLiteConfig, ScannerConfig, TaskConfig,
 };
 use std::env;
 
@@ -31,6 +31,19 @@ impl EnvOverride for ScannerConfig {
     }
 }
 
+impl EnvOverride for KomgaApiConfig {
+    fn apply_env_overrides(&mut self, prefix: &str) {
+        if let Ok(enabled) = env::var(format!("{}_ENABLED", prefix)) {
+            self.enabled = enabled.eq_ignore_ascii_case("true") || enabled == "1";
+        }
+        if let Ok(prefix_value) = env::var(format!("{}_PREFIX", prefix)) {
+            if !prefix_value.is_empty() {
+                self.prefix = prefix_value;
+            }
+        }
+    }
+}
+
 impl EnvOverride for Config {
     fn apply_env_overrides(&mut self, prefix: &str) {
         self.application
@@ -44,6 +57,8 @@ impl EnvOverride for Config {
         self.task.apply_env_overrides(&format!("{}_TASK", prefix));
         self.scanner
             .apply_env_overrides(&format!("{}_SCANNER", prefix));
+        self.komga_api
+            .apply_env_overrides(&format!("{}_KOMGA_API", prefix));
     }
 }
 
@@ -388,7 +403,7 @@ mod tests {
         // We'll use a helper to create a minimal config
         use crate::config::{
             ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
-            FilesConfig, LoggingConfig, PdfConfig, SQLiteConfig,
+            FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, SQLiteConfig,
         };
         let mut config = Config {
             database: DatabaseConfig {
@@ -414,6 +429,7 @@ mod tests {
             },
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
+            komga_api: KomgaApiConfig::default(),
         };
 
         // Set env vars BEFORE applying overrides
@@ -464,5 +480,142 @@ mod tests {
 
         env::remove_var("CODEX_TASK_WORKER_COUNT");
         env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
+    }
+
+    #[test]
+    #[serial]
+    fn test_komga_api_config_env_override() {
+        // Clear any existing env vars first
+        env::remove_var("CODEX_KOMGA_API_ENABLED");
+        env::remove_var("CODEX_KOMGA_API_PREFIX");
+
+        // Create config with explicit values
+        let mut config = KomgaApiConfig {
+            enabled: false,
+            prefix: "default".to_string(),
+        };
+
+        // Set env vars and apply overrides
+        env::set_var("CODEX_KOMGA_API_ENABLED", "true");
+        env::set_var("CODEX_KOMGA_API_PREFIX", "custom");
+        config.apply_env_overrides("CODEX_KOMGA_API");
+
+        assert!(config.enabled);
+        assert_eq!(config.prefix, "custom");
+
+        env::remove_var("CODEX_KOMGA_API_ENABLED");
+        env::remove_var("CODEX_KOMGA_API_PREFIX");
+    }
+
+    #[test]
+    #[serial]
+    fn test_komga_api_config_env_override_enabled_with_1() {
+        // Test that "1" is also accepted for enabled
+        env::remove_var("CODEX_KOMGA_API_ENABLED");
+
+        let mut config = KomgaApiConfig {
+            enabled: false,
+            prefix: "default".to_string(),
+        };
+
+        env::set_var("CODEX_KOMGA_API_ENABLED", "1");
+        config.apply_env_overrides("CODEX_KOMGA_API");
+
+        assert!(config.enabled);
+
+        env::remove_var("CODEX_KOMGA_API_ENABLED");
+    }
+
+    #[test]
+    #[serial]
+    fn test_komga_api_config_env_override_partial() {
+        // Test that partial env vars work (only enabled, not prefix)
+        env::remove_var("CODEX_KOMGA_API_ENABLED");
+        env::remove_var("CODEX_KOMGA_API_PREFIX");
+
+        let mut config = KomgaApiConfig {
+            enabled: false,
+            prefix: "original".to_string(),
+        };
+
+        env::set_var("CODEX_KOMGA_API_ENABLED", "true");
+        // Don't set PREFIX
+        config.apply_env_overrides("CODEX_KOMGA_API");
+
+        assert!(config.enabled);
+        assert_eq!(config.prefix, "original"); // Should remain unchanged
+
+        env::remove_var("CODEX_KOMGA_API_ENABLED");
+    }
+
+    #[test]
+    #[serial]
+    fn test_komga_api_config_env_override_empty_prefix_ignored() {
+        // Test that empty PREFIX env var is ignored
+        env::remove_var("CODEX_KOMGA_API_PREFIX");
+
+        let mut config = KomgaApiConfig {
+            enabled: false,
+            prefix: "original".to_string(),
+        };
+
+        env::set_var("CODEX_KOMGA_API_PREFIX", "");
+        config.apply_env_overrides("CODEX_KOMGA_API");
+
+        assert_eq!(config.prefix, "original"); // Should remain unchanged
+
+        env::remove_var("CODEX_KOMGA_API_PREFIX");
+    }
+
+    #[test]
+    #[serial]
+    fn test_config_komga_api_env_override_via_main_config() {
+        // Test that komga_api env overrides work through Config::apply_env_overrides
+        env::remove_var("CODEX_KOMGA_API_ENABLED");
+        env::remove_var("CODEX_KOMGA_API_PREFIX");
+
+        use crate::config::{
+            ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
+            FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, SQLiteConfig,
+        };
+        let mut config = Config {
+            database: DatabaseConfig {
+                db_type: DatabaseType::SQLite,
+                postgres: None,
+                sqlite: Some(SQLiteConfig {
+                    path: "./test.db".to_string(),
+                    pragmas: None,
+                    ..SQLiteConfig::default()
+                }),
+            },
+            application: ApplicationConfig {
+                host: "127.0.0.1".to_string(),
+                port: 8080,
+            },
+            logging: LoggingConfig::default(),
+            auth: AuthConfig::default(),
+            api: ApiConfig::default(),
+            email: EmailConfig::default(),
+            task: TaskConfig { worker_count: 4 },
+            scanner: ScannerConfig {
+                max_concurrent_scans: 2,
+            },
+            files: FilesConfig::default(),
+            pdf: PdfConfig::default(),
+            komga_api: KomgaApiConfig {
+                enabled: false,
+                prefix: "default".to_string(),
+            },
+        };
+
+        env::set_var("CODEX_KOMGA_API_ENABLED", "true");
+        env::set_var("CODEX_KOMGA_API_PREFIX", "mykomga");
+        config.apply_env_overrides("CODEX");
+
+        assert!(config.komga_api.enabled);
+        assert_eq!(config.komga_api.prefix, "mykomga");
+
+        env::remove_var("CODEX_KOMGA_API_ENABLED");
+        env::remove_var("CODEX_KOMGA_API_PREFIX");
     }
 }

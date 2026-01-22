@@ -11,6 +11,34 @@ pub struct TaskConfig {
     pub worker_count: u32,
 }
 
+/// Configuration for the Komga-compatible API layer
+/// This enables third-party apps like Komic to connect to Codex using the Komga API format
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct KomgaApiConfig {
+    /// Enable Komga-compatible API endpoints
+    /// When enabled, routes are mounted at /{prefix}/api/v1/*
+    pub enabled: bool,
+
+    /// URL prefix for Komga API (default: "komgav1")
+    /// The final URL structure will be: /{prefix}/api/v1/...
+    /// Example with default: /komgav1/api/v1/libraries
+    pub prefix: String,
+}
+
+fn default_komga_prefix() -> String {
+    "komgav1".to_string()
+}
+
+impl Default for KomgaApiConfig {
+    fn default() -> Self {
+        Self {
+            enabled: env_bool_or("CODEX_KOMGA_API_ENABLED", false),
+            prefix: env_string_opt("CODEX_KOMGA_API_PREFIX").unwrap_or_else(default_komga_prefix),
+        }
+    }
+}
+
 impl Default for TaskConfig {
     fn default() -> Self {
         Self {
@@ -41,6 +69,8 @@ pub struct Config {
     pub files: FilesConfig,
     #[serde(default)]
     pub pdf: PdfConfig,
+    #[serde(default)]
+    pub komga_api: KomgaApiConfig,
 }
 
 impl Default for Config {
@@ -96,6 +126,7 @@ impl Default for Config {
             scanner: ScannerConfig::default(),
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
+            komga_api: KomgaApiConfig::default(),
         }
     }
 }
@@ -709,6 +740,7 @@ mod tests {
             scanner: ScannerConfig::default(),
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
+            komga_api: KomgaApiConfig::default(),
         };
 
         // Application name moved to database settings
@@ -906,5 +938,85 @@ pdf:
         assert_eq!(config.pdf.render_dpi, 300);
         assert_eq!(config.pdf.jpeg_quality, 95);
         assert!(config.pdf.cache_rendered_pages);
+    }
+
+    #[test]
+    fn test_komga_api_config_default() {
+        let config = KomgaApiConfig::default();
+        // Disabled by default for security
+        assert!(!config.enabled);
+        // Default prefix is "komgav1"
+        assert_eq!(config.prefix, "komgav1");
+    }
+
+    #[test]
+    fn test_komga_api_config_serialization() {
+        let config = KomgaApiConfig {
+            enabled: true,
+            prefix: "custom_prefix".to_string(),
+        };
+
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        assert!(yaml.contains("enabled"));
+        assert!(yaml.contains("true"));
+        assert!(yaml.contains("custom_prefix"));
+
+        let deserialized: KomgaApiConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert!(deserialized.enabled);
+        assert_eq!(deserialized.prefix, "custom_prefix");
+    }
+
+    #[test]
+    fn test_komga_api_config_from_yaml() {
+        let yaml_content = r#"
+enabled: true
+prefix: "mykomga"
+"#;
+
+        let config: KomgaApiConfig = serde_yaml::from_str(yaml_content).unwrap();
+        assert!(config.enabled);
+        assert_eq!(config.prefix, "mykomga");
+    }
+
+    #[test]
+    fn test_komga_api_config_default_when_empty_yaml() {
+        let yaml_content = "{}";
+
+        let config: KomgaApiConfig = serde_yaml::from_str(yaml_content).unwrap();
+        // Should use defaults when not specified
+        assert!(!config.enabled);
+        assert_eq!(config.prefix, "komgav1");
+    }
+
+    #[test]
+    fn test_config_includes_komga_api() {
+        let yaml_content = r#"
+database:
+  db_type: sqlite
+  sqlite:
+    path: ./test.db
+komga_api:
+  enabled: true
+  prefix: "komga"
+"#;
+
+        let config: Config = serde_yaml::from_str(yaml_content).unwrap();
+        assert!(config.komga_api.enabled);
+        assert_eq!(config.komga_api.prefix, "komga");
+    }
+
+    #[test]
+    fn test_config_komga_api_uses_defaults() {
+        // When komga_api is not specified, it should use defaults
+        let yaml_content = r#"
+database:
+  db_type: sqlite
+  sqlite:
+    path: ./test.db
+"#;
+
+        let config: Config = serde_yaml::from_str(yaml_content).unwrap();
+        assert!(!config.komga_api.enabled);
+        assert_eq!(config.komga_api.prefix, "komgav1");
     }
 }
