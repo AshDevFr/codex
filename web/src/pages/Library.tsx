@@ -209,8 +209,7 @@ export function LibraryPage() {
 				message: `${variables.mode === "deep" ? "Deep" : "Normal"} scan has been initiated`,
 				color: "blue",
 			});
-			queryClient.refetchQueries({ queryKey: ["libraries"] });
-			queryClient.refetchQueries({ queryKey: ["library", libraryId] });
+			// Note: No refetch needed - real-time updates come via SSE through useEntityEvents
 		},
 		onError: (error: Error) => {
 			notifications.show({

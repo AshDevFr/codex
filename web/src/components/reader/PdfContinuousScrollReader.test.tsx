@@ -19,9 +19,10 @@ vi.mock("react-pdf", () => ({
 		loading?: React.ReactNode;
 	}) => {
 		// Simulate document load after a short delay
-		setTimeout(() => {
+		// Use queueMicrotask for synchronous-like behavior that doesn't leak
+		queueMicrotask(() => {
 			onLoadSuccess?.({ numPages: 10 });
-		}, 10);
+		});
 		return (
 			<div data-testid="pdf-document" data-file={file}>
 				{loading}
