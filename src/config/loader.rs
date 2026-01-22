@@ -22,7 +22,7 @@ mod tests {
     use super::*;
     use crate::config::{
         ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
-        FilesConfig, LoggingConfig, SQLiteConfig, ScannerConfig, TaskConfig,
+        FilesConfig, KomgaApiConfig, LoggingConfig, SQLiteConfig, ScannerConfig, TaskConfig,
     };
     use tempfile::NamedTempFile;
 
@@ -72,6 +72,7 @@ application:
             task: TaskConfig::default(),
             scanner: ScannerConfig::default(),
             files: FilesConfig::default(),
+            komga_api: KomgaApiConfig::default(),
         };
 
         let temp_file = NamedTempFile::new().unwrap();
@@ -151,6 +152,7 @@ scanner:
                 max_concurrent_scans: 4,
             },
             files: FilesConfig::default(),
+            komga_api: KomgaApiConfig::default(),
         };
 
         let temp_file = NamedTempFile::new().unwrap();

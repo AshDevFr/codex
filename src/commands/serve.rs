@@ -201,34 +201,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     }
     info!("  Max page size: {}", config.api.max_page_size);
 
-    let mut app = crate::api::create_router(api_state, &config.api);
-
-    // Conditionally mount Scalar API docs if enabled
-    if config.api.enable_api_docs {
-        use crate::api::ApiDoc;
-        use utoipa::OpenApi;
-        use utoipa_scalar::{Scalar, Servable};
-
-        info!("API docs (Scalar) enabled at {}", config.api.api_docs_path);
-
-        // Scalar needs a 'static string, so we leak it
-        // This is acceptable since it's created once at server startup
-        let api_docs_path: &'static str =
-            Box::leak(config.api.api_docs_path.clone().into_boxed_str());
-        app = app.merge(Scalar::with_url(api_docs_path, ApiDoc::openapi()));
-    }
-
-    info!("Registered routes:");
-    info!("  GET  /health - Health check endpoint");
-    info!("  POST /api/v1/auth/login - Login endpoint");
-    info!("  POST /api/v1/auth/logout - Logout endpoint");
-    info!("  GET  /api/v1/libraries - List libraries");
-    info!("  GET  /api/v1/series - List series");
-    info!("  GET  /api/v1/books - List books");
-    info!("  GET  /api/v1/users - List users (admin)");
-    if config.api.enable_api_docs {
-        info!("  GET  {} - API docs (Scalar)", config.api.api_docs_path);
-    }
+    let app = crate::api::create_router(api_state, &config);
 
     // Keep log guard alive
     let _log_guard = log_guard;

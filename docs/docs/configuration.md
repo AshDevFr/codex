@@ -266,6 +266,63 @@ email:
   verification_url_base: http://localhost:8080
 ```
 
+## Komga-Compatible API (Optional)
+
+Codex can expose a Komga-compatible API, allowing you to use third-party apps designed for Komga (such as Komic for iOS) with your Codex server.
+
+:::info
+This feature is **disabled by default** and must be explicitly enabled in your configuration.
+:::
+
+```yaml
+komga_api:
+  enabled: true
+  prefix: "komgav1"  # URL prefix (default: komgav1)
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `enabled` | `false` | Enable Komga-compatible API endpoints |
+| `prefix` | `komgav1` | URL prefix for Komga API (results in `/{prefix}/api/v1/...`) |
+
+When enabled, the Komga API will be available at:
+```
+http://your-server:8080/komgav1/api/v1/libraries
+http://your-server:8080/komgav1/api/v1/series
+http://your-server:8080/komgav1/api/v1/books
+...
+```
+
+### Configuring Third-Party Apps
+
+To connect apps like Komic to Codex:
+
+1. **Server URL**: `http://your-server:8080/komgav1`
+2. **Authentication**: Use your Codex username and password (Basic Auth)
+
+:::tip Custom Prefix
+You can change the URL prefix to avoid conflicts or for preference. For example, setting `prefix: "compat"` would make the API available at `/compat/api/v1/...`.
+:::
+
+### Supported Features
+
+- Library browsing
+- Series and book navigation
+- Thumbnail display
+- Page streaming for reading
+- Reading progress sync
+- Book file downloads
+- Next/previous book navigation
+
+### Limitations
+
+- **Read-only**: Metadata editing through the Komga API is not supported
+- **No collections/read lists**: These Komga features are not implemented
+- **Basic search only**: Full Komga search syntax is not supported
+- **No oneshot detection**: All items return `oneshot: false`
+
+For more details, see the [Third-Party Apps documentation](./third-party-apps).
+
 ## Environment Variables
 
 All configuration options can be overridden with environment variables using the `CODEX_` prefix.
@@ -319,6 +376,10 @@ CODEX_SCANNER_MAX_CONCURRENT_SCANS=2
 # Files (thumbnails and uploads)
 CODEX_FILES_THUMBNAIL_DIR=data/thumbnails
 CODEX_FILES_UPLOADS_DIR=data/uploads
+
+# Komga-Compatible API
+CODEX_KOMGA_API_ENABLED=true
+CODEX_KOMGA_API_PREFIX=komgav1
 ```
 
 ## Runtime vs Startup Settings
