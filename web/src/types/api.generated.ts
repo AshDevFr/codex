@@ -3219,6 +3219,687 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/{prefix}/api/v1/books/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search/filter books
+         * @description Returns books matching the filter criteria.
+         *     This uses POST to support complex filter bodies.
+         *
+         *     ## Endpoint
+         *     `POST /{prefix}/api/v1/books/list`
+         *
+         *     ## Query Parameters
+         *     - `page` - Page number (0-indexed, default: 0)
+         *     - `size` - Page size (default: 20)
+         *     - `sort` - Sort parameter (e.g., "createdDate,desc")
+         *
+         *     ## Request Body
+         *     JSON object with filter criteria (library_id, series_id, search_term, etc.)
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        post: operations["search_books"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/books/ondeck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get "on deck" books
+         * @description Returns books that are currently in-progress (started but not completed).
+         *     This is the "continue reading" shelf in Komic.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/books/ondeck`
+         *
+         *     ## Query Parameters
+         *     - `page` - Page number (0-indexed, default: 0)
+         *     - `size` - Page size (default: 20)
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["get_books_ondeck"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/books/{book_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a book by ID
+         * @description Returns a single book in Komga-compatible format.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/books/{bookId}`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["get_book"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/books/{book_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download book file
+         * @description Streams the original book file (CBZ, CBR, EPUB, PDF) for download.
+         *     Includes proper Content-Disposition header with UTF-8 encoding.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/books/{bookId}/file`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["download_book_file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/books/{book_id}/next": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get next book in series
+         * @description Returns the next book in the same series by sort order.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/books/{bookId}/next`
+         *
+         *     ## Response
+         *     - 200: Next book DTO
+         *     - 404: No next book (this is the last book in series)
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["get_next_book"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/books/{book_id}/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all pages for a book
+         * @description Returns an array of page metadata for all pages in a book.
+         *     Pages are ordered by page number (1-indexed).
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/books/{bookId}/pages`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         *
+         *     ## Response
+         *     Returns an array of `KomgaPageDto` objects with page metadata including
+         *     filename, MIME type, dimensions, and size.
+         */
+        get: operations["list_pages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/books/{book_id}/pages/{page_number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a specific page image
+         * @description Streams the raw page image for the requested page number.
+         *     Page numbers are 1-indexed.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/books/{bookId}/pages/{pageNumber}`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key (via cookie fallback for browser image tags)
+         *
+         *     ## Response
+         *     Returns the raw image data with appropriate Content-Type header.
+         *     Response is cached for 1 year (immutable content).
+         */
+        get: operations["get_page"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/books/{book_id}/pages/{page_number}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a page thumbnail
+         * @description Returns a thumbnail version of the requested page.
+         *     Thumbnails are resized to max 300px width/height while maintaining aspect ratio.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/books/{bookId}/pages/{pageNumber}/thumbnail`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key (via cookie fallback for browser image tags)
+         *
+         *     ## Response
+         *     Returns a JPEG thumbnail with appropriate caching headers.
+         */
+        get: operations["get_page_thumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/books/{book_id}/previous": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get previous book in series
+         * @description Returns the previous book in the same series by sort order.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/books/{bookId}/previous`
+         *
+         *     ## Response
+         *     - 200: Previous book DTO
+         *     - 404: No previous book (this is the first book in series)
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["get_previous_book"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/books/{book_id}/read-progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete reading progress for a book (mark as unread)
+         * @description Removes all reading progress for a book, effectively marking it as unread.
+         *
+         *     ## Endpoint
+         *     `DELETE /{prefix}/api/v1/books/{bookId}/read-progress`
+         *
+         *     ## Response
+         *     - 204 No Content on success
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        delete: operations["delete_progress"];
+        options?: never;
+        head?: never;
+        /**
+         * Update reading progress for a book
+         * @description Updates the user's reading progress for a specific book.
+         *     Komic sends: `{ "completed": false, "page": 151 }`
+         *
+         *     ## Endpoint
+         *     `PATCH /{prefix}/api/v1/books/{bookId}/read-progress`
+         *
+         *     ## Request Body
+         *     - `page` - Current page number (1-indexed, optional)
+         *     - `completed` - Whether book is completed (optional)
+         *     - `device_id` - Device ID (optional, not used by Komic)
+         *     - `device_name` - Device name (optional, not used by Komic)
+         *
+         *     ## Response
+         *     - 204 No Content on success (Komga behavior)
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        patch: operations["update_progress"];
+        trace?: never;
+    };
+    "/{prefix}/api/v1/books/{book_id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get book thumbnail
+         * @description Returns a thumbnail image for the book's first page.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/books/{bookId}/thumbnail`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["get_book_thumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/libraries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all libraries
+         * @description Returns all libraries in Komga-compatible format.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/libraries`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["list_libraries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/libraries/{library_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get library by ID
+         * @description Returns a single library in Komga-compatible format.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/libraries/{libraryId}`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["get_library"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/libraries/{library_id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get library thumbnail
+         * @description Returns a thumbnail image for the library. Uses the first series' cover
+         *     as the library thumbnail, or returns a 404 if no series exist.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/libraries/{libraryId}/thumbnail`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key (via cookie fallback for browser image tags)
+         */
+        get: operations["get_library_thumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all series (paginated)
+         * @description Returns all series in Komga-compatible format with pagination.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/series`
+         *
+         *     ## Query Parameters
+         *     - `page` - Page number (0-indexed, default: 0)
+         *     - `size` - Page size (default: 20)
+         *     - `library_id` - Optional filter by library UUID
+         *     - `search` - Optional search query
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["list_series"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/series/new": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get recently added series
+         * @description Returns series sorted by created date descending (newest first).
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/series/new`
+         *
+         *     ## Query Parameters
+         *     - `page` - Page number (0-indexed, default: 0)
+         *     - `size` - Page size (default: 20)
+         *     - `library_id` - Optional filter by library UUID
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["get_series_new"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/series/updated": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get recently updated series
+         * @description Returns series sorted by last modified date descending (most recently updated first).
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/series/updated`
+         *
+         *     ## Query Parameters
+         *     - `page` - Page number (0-indexed, default: 0)
+         *     - `size` - Page size (default: 20)
+         *     - `library_id` - Optional filter by library UUID
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["get_series_updated"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/series/{series_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get series by ID
+         * @description Returns a single series in Komga-compatible format.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/series/{seriesId}`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["get_series"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/series/{series_id}/books": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get books in a series
+         * @description Returns all books in a series with pagination.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/series/{seriesId}/books`
+         *
+         *     ## Query Parameters
+         *     - `page` - Page number (0-indexed, default: 0)
+         *     - `size` - Page size (default: 20)
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["get_series_books"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/series/{series_id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get series thumbnail
+         * @description Returns a thumbnail image for the series.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/series/{seriesId}/thumbnail`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["get_series_thumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/users/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get current user information
+         * @description Returns information about the currently authenticated user in Komga format.
+         *     This endpoint is used by Komic and other apps to verify authentication
+         *     and determine user capabilities.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/users/me`
+         *
+         *     ## Response
+         *     Returns a `KomgaUserDto` containing:
+         *     - User ID (UUID as string)
+         *     - Email address
+         *     - Roles (ADMIN, USER, FILE_DOWNLOAD)
+         *     - Library access settings
+         *     - Content restrictions
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["get_current_user"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3808,6 +4489,21 @@ export interface components {
          * @enum {string}
          */
         BookStrategy: "filename" | "metadata_first" | "smart" | "series_name" | "custom";
+        /** @description Query parameters for paginated book endpoints */
+        BooksPaginationQuery: {
+            /**
+             * Format: int32
+             * @description Page number (0-indexed, Komga-style)
+             */
+            page?: number;
+            /**
+             * Format: int32
+             * @description Page size (default: 20)
+             */
+            size?: number;
+            /** @description Sort parameter (e.g., "createdDate,desc", "metadata.numberSort,asc") */
+            sort?: string | null;
+        };
         /** @description Operators for boolean comparisons */
         BoolOperator: {
             /** @enum {string} */
@@ -4820,6 +5516,699 @@ export interface components {
              * @example true
              */
             success: boolean;
+        };
+        /** @description Komga age restriction DTO */
+        KomgaAgeRestrictionDto: {
+            /**
+             * Format: int32
+             * @description Age limit
+             */
+            age: number;
+            /** @description Restriction type (ALLOW_ONLY, EXCLUDE) */
+            restriction: string;
+        };
+        /** @description Komga alternate title DTO */
+        KomgaAlternateTitleDto: {
+            /** @description Title label (e.g., "Japanese", "Romaji") */
+            label: string;
+            /** @description The alternate title text */
+            title: string;
+        };
+        /** @description Komga author DTO */
+        KomgaAuthorDto: {
+            /** @description Author name */
+            name: string;
+            /** @description Author role (WRITER, PENCILLER, INKER, COLORIST, LETTERER, COVER, EDITOR) */
+            role: string;
+        };
+        /**
+         * @description Komga book DTO
+         *
+         *     Based on actual Komic traffic analysis. This is the main book representation.
+         */
+        KomgaBookDto: {
+            /** @description Created timestamp (ISO 8601) */
+            created: string;
+            /** @description Whether book is deleted (soft delete) */
+            deleted?: boolean;
+            /** @description File hash */
+            fileHash?: string;
+            /** @description File last modified timestamp (ISO 8601) */
+            fileLastModified: string;
+            /** @description Book unique identifier (UUID as string) */
+            id: string;
+            /** @description Last modified timestamp (ISO 8601) */
+            lastModified: string;
+            /** @description Library ID */
+            libraryId: string;
+            /** @description Media information */
+            media: components["schemas"]["KomgaMediaDto"];
+            /** @description Book metadata */
+            metadata: components["schemas"]["KomgaBookMetadataDto"];
+            /** @description Book filename/name */
+            name: string;
+            /**
+             * Format: int32
+             * @description Book number in series
+             */
+            number: number;
+            /** @description Whether this is a oneshot */
+            oneshot?: boolean;
+            readProgress?: null | components["schemas"]["KomgaReadProgressDto"];
+            /** @description Series ID */
+            seriesId: string;
+            /** @description Series title (required by Komic for display) */
+            seriesTitle: string;
+            /** @description Human-readable file size (e.g., "869.9 MiB") */
+            size: string;
+            /**
+             * Format: int64
+             * @description File size in bytes
+             */
+            sizeBytes: number;
+            /** @description File URL/path */
+            url: string;
+        };
+        /** @description Komga book link DTO */
+        KomgaBookLinkDto: {
+            /** @description Link label */
+            label: string;
+            /** @description Link URL */
+            url: string;
+        };
+        /** @description Komga book metadata DTO */
+        KomgaBookMetadataDto: {
+            /** @description Authors list */
+            authors?: components["schemas"]["KomgaAuthorDto"][];
+            /** @description Whether authors are locked */
+            authorsLock?: boolean;
+            /** @description Created timestamp (ISO 8601) */
+            created: string;
+            /** @description ISBN */
+            isbn?: string;
+            /** @description Whether ISBN is locked */
+            isbnLock?: boolean;
+            /** @description Last modified timestamp (ISO 8601) */
+            lastModified: string;
+            /** @description Links */
+            links?: components["schemas"]["KomgaBookLinkDto"][];
+            /** @description Whether links are locked */
+            linksLock?: boolean;
+            /** @description Book number (display string) */
+            number: string;
+            /** @description Whether number is locked */
+            numberLock?: boolean;
+            /**
+             * Format: double
+             * @description Number for sorting (float for chapter ordering)
+             */
+            numberSort: number;
+            /** @description Whether number_sort is locked */
+            numberSortLock?: boolean;
+            /** @description Release date (YYYY-MM-DD or full ISO 8601) */
+            releaseDate?: string | null;
+            /** @description Whether release_date is locked */
+            releaseDateLock?: boolean;
+            /** @description Book summary */
+            summary?: string;
+            /** @description Whether summary is locked */
+            summaryLock?: boolean;
+            /** @description Tags list */
+            tags?: string[];
+            /** @description Whether tags are locked */
+            tagsLock?: boolean;
+            /** @description Book title */
+            title: string;
+            /** @description Whether title is locked */
+            titleLock?: boolean;
+        };
+        /**
+         * @description Komga books metadata aggregation DTO
+         *
+         *     Aggregated metadata from all books in the series.
+         */
+        KomgaBooksMetadataAggregationDto: {
+            /** @description Authors from all books */
+            authors?: components["schemas"]["KomgaAuthorDto"][];
+            /** @description Created timestamp (ISO 8601) */
+            created: string;
+            /** @description Last modified timestamp (ISO 8601) */
+            lastModified: string;
+            /** @description Release date range (earliest) */
+            releaseDate?: string | null;
+            /** @description Summary (from first book or series) */
+            summary?: string;
+            /** @description Summary number (if multiple summaries) */
+            summaryNumber?: string;
+            /** @description Tags from all books */
+            tags?: string[];
+        };
+        /** @description Request DTO for searching/filtering books (POST /api/v1/books/list) */
+        KomgaBooksSearchRequestDto: {
+            /** @description Authors filter */
+            author?: string[] | null;
+            /** @description Deleted filter */
+            deleted?: boolean | null;
+            /** @description Library IDs to filter by */
+            libraryId?: string[] | null;
+            /** @description Media status filter */
+            mediaStatus?: string[] | null;
+            /** @description Read status filter */
+            readStatus?: string[] | null;
+            /** @description Search term */
+            searchTerm?: string | null;
+            /** @description Series IDs to filter by */
+            seriesId?: string[] | null;
+            /** @description Tags filter */
+            tag?: string[] | null;
+        };
+        /** @description Komga content restrictions DTO */
+        KomgaContentRestrictionsDto: {
+            ageRestriction?: null | components["schemas"]["KomgaAgeRestrictionDto"];
+            /** @description Labels restriction */
+            labelsAllow?: string[];
+            /** @description Labels to exclude */
+            labelsExclude?: string[];
+        };
+        /**
+         * @description Komga library DTO
+         *
+         *     Based on actual Komic traffic analysis - includes all fields observed in responses.
+         */
+        KomgaLibraryDto: {
+            /** @description Whether to analyze page dimensions */
+            analyzeDimensions?: boolean;
+            /** @description Whether to convert archives to CBZ */
+            convertToCbz?: boolean;
+            /** @description Whether to empty trash after scan */
+            emptyTrashAfterScan?: boolean;
+            /** @description Whether to hash files for deduplication */
+            hashFiles?: boolean;
+            /** @description Whether to hash files for KOReader sync */
+            hashKoreader?: boolean;
+            /** @description Whether to hash pages */
+            hashPages?: boolean;
+            /** @description Library unique identifier (UUID as string) */
+            id: string;
+            /** @description Whether to import barcode/ISBN */
+            importBarcodeIsbn?: boolean;
+            /** @description Whether to import book info from ComicInfo.xml */
+            importComicInfoBook?: boolean;
+            /** @description Whether to import collection info from ComicInfo.xml */
+            importComicInfoCollection?: boolean;
+            /** @description Whether to import read list from ComicInfo.xml */
+            importComicInfoReadList?: boolean;
+            /** @description Whether to import series info from ComicInfo.xml */
+            importComicInfoSeries?: boolean;
+            /** @description Whether to append volume to series name from ComicInfo */
+            importComicInfoSeriesAppendVolume?: boolean;
+            /** @description Whether to import EPUB book metadata */
+            importEpubBook?: boolean;
+            /** @description Whether to import EPUB series metadata */
+            importEpubSeries?: boolean;
+            /** @description Whether to import local artwork */
+            importLocalArtwork?: boolean;
+            /** @description Whether to import Mylar series data */
+            importMylarSeries?: boolean;
+            /** @description Library display name */
+            name: string;
+            /** @description Directory path for oneshots (optional) */
+            oneshotsDirectory?: string | null;
+            /** @description Whether to repair file extensions */
+            repairExtensions?: boolean;
+            /** @description Root filesystem path */
+            root: string;
+            /** @description Whether to scan CBZ/CBR files */
+            scanCbx?: boolean;
+            /** @description Directory exclusion patterns */
+            scanDirectoryExclusions?: string[];
+            /** @description Whether to scan EPUB files */
+            scanEpub?: boolean;
+            /** @description Whether to force modified time for scan */
+            scanForceModifiedTime?: boolean;
+            /** @description Scan interval (WEEKLY, DAILY, HOURLY, EVERY_6H, EVERY_12H, DISABLED) */
+            scanInterval?: string;
+            /** @description Whether to scan on startup */
+            scanOnStartup?: boolean;
+            /** @description Whether to scan PDF files */
+            scanPdf?: boolean;
+            /** @description Series cover selection strategy (FIRST, FIRST_UNREAD_OR_FIRST, FIRST_UNREAD_OR_LAST, LAST) */
+            seriesCover?: string;
+            /** @description Whether library is unavailable (path doesn't exist) */
+            unavailable?: boolean;
+        };
+        /**
+         * @description Komga media DTO
+         *
+         *     Information about the book's media/file.
+         */
+        KomgaMediaDto: {
+            /** @description Comment/notes about media analysis */
+            comment?: string;
+            /** @description Whether EPUB is DIVINA-compatible */
+            epubDivinaCompatible?: boolean;
+            /** @description Whether EPUB is a KePub file */
+            epubIsKepub?: boolean;
+            /** @description Media profile (DIVINA for comics/manga, PDF for PDFs) */
+            mediaProfile: string;
+            /** @description MIME type (e.g., "application/zip", "application/epub+zip", "application/pdf") */
+            mediaType: string;
+            /**
+             * Format: int32
+             * @description Number of pages
+             */
+            pagesCount: number;
+            /** @description Media status (READY, UNKNOWN, ERROR, UNSUPPORTED, OUTDATED) */
+            status: string;
+        };
+        /**
+         * @description Komga page DTO
+         *
+         *     Represents a single page within a book.
+         *     Based on actual Komic traffic analysis for GET /api/v1/books/{id}/pages
+         */
+        KomgaPageDto: {
+            /** @description Original filename within archive */
+            fileName: string;
+            /**
+             * Format: int32
+             * @description Image height in pixels
+             */
+            height: number;
+            /** @description MIME type (e.g., "image/png", "image/jpeg", "image/webp") */
+            mediaType: string;
+            /**
+             * Format: int32
+             * @description Page number (1-indexed)
+             */
+            number: number;
+            /** @description Human-readable file size (e.g., "2.5 MiB") */
+            size: string;
+            /**
+             * Format: int64
+             * @description Page file size in bytes
+             */
+            sizeBytes: number;
+            /**
+             * Format: int32
+             * @description Image width in pixels
+             */
+            width: number;
+        };
+        /**
+         * @description Komga paginated response wrapper (Spring Data Page format)
+         *
+         *     This matches the exact structure Komic expects from Komga.
+         */
+        KomgaPage_KomgaBookDto: {
+            /** @description The content items for this page */
+            content: {
+                /** @description Created timestamp (ISO 8601) */
+                created: string;
+                /** @description Whether book is deleted (soft delete) */
+                deleted?: boolean;
+                /** @description File hash */
+                fileHash?: string;
+                /** @description File last modified timestamp (ISO 8601) */
+                fileLastModified: string;
+                /** @description Book unique identifier (UUID as string) */
+                id: string;
+                /** @description Last modified timestamp (ISO 8601) */
+                lastModified: string;
+                /** @description Library ID */
+                libraryId: string;
+                /** @description Media information */
+                media: components["schemas"]["KomgaMediaDto"];
+                /** @description Book metadata */
+                metadata: components["schemas"]["KomgaBookMetadataDto"];
+                /** @description Book filename/name */
+                name: string;
+                /**
+                 * Format: int32
+                 * @description Book number in series
+                 */
+                number: number;
+                /** @description Whether this is a oneshot */
+                oneshot?: boolean;
+                readProgress?: null | components["schemas"]["KomgaReadProgressDto"];
+                /** @description Series ID */
+                seriesId: string;
+                /** @description Series title (required by Komic for display) */
+                seriesTitle: string;
+                /** @description Human-readable file size (e.g., "869.9 MiB") */
+                size: string;
+                /**
+                 * Format: int64
+                 * @description File size in bytes
+                 */
+                sizeBytes: number;
+                /** @description File URL/path */
+                url: string;
+            }[];
+            /** @description Whether the page is empty */
+            empty: boolean;
+            /** @description Whether this is the first page */
+            first: boolean;
+            /** @description Whether this is the last page */
+            last: boolean;
+            /**
+             * Format: int32
+             * @description Current page number (0-indexed)
+             */
+            number: number;
+            /**
+             * Format: int32
+             * @description Number of elements on this page
+             */
+            numberOfElements: number;
+            /** @description Pageable information */
+            pageable: components["schemas"]["KomgaPageable"];
+            /**
+             * Format: int32
+             * @description Page size
+             */
+            size: number;
+            /** @description Sort information */
+            sort: components["schemas"]["KomgaSort"];
+            /**
+             * Format: int64
+             * @description Total number of elements across all pages
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Total number of pages
+             */
+            totalPages: number;
+        };
+        /**
+         * @description Komga paginated response wrapper (Spring Data Page format)
+         *
+         *     This matches the exact structure Komic expects from Komga.
+         */
+        KomgaPage_KomgaSeriesDto: {
+            /** @description The content items for this page */
+            content: {
+                /**
+                 * Format: int32
+                 * @description Total books count
+                 */
+                booksCount: number;
+                /**
+                 * Format: int32
+                 * @description In-progress books count
+                 */
+                booksInProgressCount: number;
+                /** @description Aggregated books metadata */
+                booksMetadata: components["schemas"]["KomgaBooksMetadataAggregationDto"];
+                /**
+                 * Format: int32
+                 * @description Read books count
+                 */
+                booksReadCount: number;
+                /**
+                 * Format: int32
+                 * @description Unread books count
+                 */
+                booksUnreadCount: number;
+                /** @description Created timestamp (ISO 8601) */
+                created: string;
+                /** @description Whether series is deleted (soft delete) */
+                deleted?: boolean;
+                /** @description File last modified timestamp (ISO 8601) */
+                fileLastModified: string;
+                /** @description Series unique identifier (UUID as string) */
+                id: string;
+                /** @description Last modified timestamp (ISO 8601) */
+                lastModified: string;
+                /** @description Library ID */
+                libraryId: string;
+                /** @description Series metadata */
+                metadata: components["schemas"]["KomgaSeriesMetadataDto"];
+                /** @description Series name */
+                name: string;
+                /** @description Whether this is a oneshot (single book) */
+                oneshot?: boolean;
+                /** @description File URL/path */
+                url: string;
+            }[];
+            /** @description Whether the page is empty */
+            empty: boolean;
+            /** @description Whether this is the first page */
+            first: boolean;
+            /** @description Whether this is the last page */
+            last: boolean;
+            /**
+             * Format: int32
+             * @description Current page number (0-indexed)
+             */
+            number: number;
+            /**
+             * Format: int32
+             * @description Number of elements on this page
+             */
+            numberOfElements: number;
+            /** @description Pageable information */
+            pageable: components["schemas"]["KomgaPageable"];
+            /**
+             * Format: int32
+             * @description Page size
+             */
+            size: number;
+            /** @description Sort information */
+            sort: components["schemas"]["KomgaSort"];
+            /**
+             * Format: int64
+             * @description Total number of elements across all pages
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Total number of pages
+             */
+            totalPages: number;
+        };
+        /** @description Komga pageable information (Spring Data style) */
+        KomgaPageable: {
+            /**
+             * Format: int64
+             * @description Offset from start (page_number * page_size)
+             */
+            offset: number;
+            /**
+             * Format: int32
+             * @description Current page number (0-indexed)
+             */
+            pageNumber: number;
+            /**
+             * Format: int32
+             * @description Page size (number of items per page)
+             */
+            pageSize: number;
+            /** @description Whether the pageable is paged (always true for paginated results) */
+            paged: boolean;
+            /** @description Sort information */
+            sort: components["schemas"]["KomgaSort"];
+            /** @description Whether the pageable is unpaged (always false for paginated results) */
+            unpaged: boolean;
+        };
+        /** @description Komga read progress DTO */
+        KomgaReadProgressDto: {
+            /** @description Whether the book is completed */
+            completed: boolean;
+            /** @description Created timestamp (ISO 8601) */
+            created: string;
+            /** @description Device ID that last updated progress */
+            deviceId?: string;
+            /** @description Device name that last updated progress */
+            deviceName?: string;
+            /** @description Last modified timestamp (ISO 8601) */
+            lastModified: string;
+            /**
+             * Format: int32
+             * @description Current page number (1-indexed)
+             */
+            page: number;
+            /** @description When the book was last read (ISO 8601) */
+            readDate?: string | null;
+        };
+        /**
+         * @description Request DTO for updating read progress
+         *
+         *     Observed from actual Komic traffic: `{ "completed": false, "page": 151 }`
+         */
+        KomgaReadProgressUpdateDto: {
+            /** @description Whether book is completed */
+            completed?: boolean | null;
+            /** @description Device ID (optional, may be used by some clients) */
+            deviceId?: string | null;
+            /** @description Device name (optional, may be used by some clients) */
+            deviceName?: string | null;
+            /**
+             * Format: int32
+             * @description Current page number (1-indexed)
+             */
+            page?: number | null;
+        };
+        /**
+         * @description Komga series DTO
+         *
+         *     Based on actual Komic traffic analysis.
+         */
+        KomgaSeriesDto: {
+            /**
+             * Format: int32
+             * @description Total books count
+             */
+            booksCount: number;
+            /**
+             * Format: int32
+             * @description In-progress books count
+             */
+            booksInProgressCount: number;
+            /** @description Aggregated books metadata */
+            booksMetadata: components["schemas"]["KomgaBooksMetadataAggregationDto"];
+            /**
+             * Format: int32
+             * @description Read books count
+             */
+            booksReadCount: number;
+            /**
+             * Format: int32
+             * @description Unread books count
+             */
+            booksUnreadCount: number;
+            /** @description Created timestamp (ISO 8601) */
+            created: string;
+            /** @description Whether series is deleted (soft delete) */
+            deleted?: boolean;
+            /** @description File last modified timestamp (ISO 8601) */
+            fileLastModified: string;
+            /** @description Series unique identifier (UUID as string) */
+            id: string;
+            /** @description Last modified timestamp (ISO 8601) */
+            lastModified: string;
+            /** @description Library ID */
+            libraryId: string;
+            /** @description Series metadata */
+            metadata: components["schemas"]["KomgaSeriesMetadataDto"];
+            /** @description Series name */
+            name: string;
+            /** @description Whether this is a oneshot (single book) */
+            oneshot?: boolean;
+            /** @description File URL/path */
+            url: string;
+        };
+        /** @description Komga series metadata DTO */
+        KomgaSeriesMetadataDto: {
+            /**
+             * Format: int32
+             * @description Age rating
+             */
+            ageRating?: number | null;
+            /** @description Whether age_rating is locked */
+            ageRatingLock?: boolean;
+            /** @description Alternate titles */
+            alternateTitles?: components["schemas"]["KomgaAlternateTitleDto"][];
+            /** @description Whether alternate_titles are locked */
+            alternateTitlesLock?: boolean;
+            /** @description Metadata created timestamp (ISO 8601) */
+            created: string;
+            /** @description Genres list */
+            genres?: string[];
+            /** @description Whether genres are locked */
+            genresLock?: boolean;
+            /** @description Language code */
+            language?: string;
+            /** @description Whether language is locked */
+            languageLock?: boolean;
+            /** @description Metadata last modified timestamp (ISO 8601) */
+            lastModified: string;
+            /** @description External links */
+            links?: components["schemas"]["KomgaWebLinkDto"][];
+            /** @description Whether links are locked */
+            linksLock?: boolean;
+            /** @description Publisher name */
+            publisher?: string;
+            /** @description Whether publisher is locked */
+            publisherLock?: boolean;
+            /** @description Reading direction (LEFT_TO_RIGHT, RIGHT_TO_LEFT, VERTICAL, WEBTOON) */
+            readingDirection?: string | null;
+            /** @description Whether reading_direction is locked */
+            readingDirectionLock?: boolean;
+            /** @description Sharing labels */
+            sharingLabels?: string[];
+            /** @description Whether sharing_labels are locked */
+            sharingLabelsLock?: boolean;
+            /** @description Series status (ENDED, ONGOING, ABANDONED, HIATUS) */
+            status: string;
+            /** @description Whether status is locked */
+            statusLock?: boolean;
+            /** @description Series summary/description */
+            summary?: string;
+            /** @description Whether summary is locked */
+            summaryLock?: boolean;
+            /** @description Tags list */
+            tags?: string[];
+            /** @description Whether tags are locked */
+            tagsLock?: boolean;
+            /** @description Series title */
+            title: string;
+            /** @description Whether title is locked */
+            titleLock?: boolean;
+            /** @description Sort title */
+            titleSort: string;
+            /** @description Whether title_sort is locked */
+            titleSortLock?: boolean;
+            /**
+             * Format: int32
+             * @description Total book count (expected)
+             */
+            totalBookCount?: number | null;
+            /** @description Whether total_book_count is locked */
+            totalBookCountLock?: boolean;
+        };
+        /** @description Komga pagination sort information */
+        KomgaSort: {
+            /** @description Whether the sort is empty */
+            empty: boolean;
+            /** @description Whether the results are sorted in ascending or descending order */
+            sorted: boolean;
+            /** @description Whether the results are unsorted */
+            unsorted: boolean;
+        };
+        /**
+         * @description Komga user DTO
+         *
+         *     Response for GET /api/v1/users/me
+         */
+        KomgaUserDto: {
+            /** @description User's content restrictions */
+            contentRestrictions?: components["schemas"]["KomgaContentRestrictionsDto"];
+            /** @description User email address */
+            email: string;
+            /** @description User unique identifier (UUID as string) */
+            id: string;
+            /** @description Whether user can share content */
+            labelsAllow?: string[];
+            /** @description Labels to exclude from sharing */
+            labelsExclude?: string[];
+            /** @description User roles (e.g., ["ADMIN"], ["USER"]) */
+            roles: string[];
+            /** @description Whether all libraries are shared with this user */
+            sharedAllLibraries?: boolean;
+            /**
+             * @description Shared libraries access - list of library IDs user can access
+             *     Empty means access to all libraries
+             */
+            sharedLibrariesIds?: string[];
+        };
+        /** @description Komga web link DTO */
+        KomgaWebLinkDto: {
+            /** @description Link label */
+            label: string;
+            /** @description Link URL */
+            url: string;
         };
         /** @description Library data transfer object */
         LibraryDto: {
@@ -6760,6 +8149,26 @@ export interface components {
              * @example 1987
              */
             year?: number | null;
+        };
+        /** @description Query parameters for paginated series endpoints */
+        SeriesPaginationQuery: {
+            /**
+             * Format: uuid
+             * @description Filter by library ID
+             */
+            library_id?: string | null;
+            /**
+             * Format: int32
+             * @description Page number (0-indexed, Komga-style)
+             */
+            page?: number;
+            /** @description Search query */
+            search?: string | null;
+            /**
+             * Format: int32
+             * @description Page size (default: 20)
+             */
+            size?: number;
         };
         /**
          * @description Series scanning strategy type for library organization
@@ -15703,6 +17112,859 @@ export interface operations {
             };
             /** @description Series not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    search_books: {
+        parameters: {
+            query?: {
+                /** @description Page number (0-indexed, Komga-style) */
+                page?: number;
+                /** @description Page size (default: 20) */
+                size?: number;
+                /** @description Sort parameter (e.g., "createdDate,desc", "metadata.numberSort,asc") */
+                sort?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KomgaBooksSearchRequestDto"];
+            };
+        };
+        responses: {
+            /** @description Paginated list of books matching filter */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaPage_KomgaBookDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_books_ondeck: {
+        parameters: {
+            query?: {
+                /** @description Page number (0-indexed, Komga-style) */
+                page?: number;
+                /** @description Page size (default: 20) */
+                size?: number;
+                /** @description Sort parameter (e.g., "createdDate,desc", "metadata.numberSort,asc") */
+                sort?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated list of in-progress books */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaPage_KomgaBookDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_book: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Book details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaBookDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    download_book_file: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Book file download */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": unknown;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found or file missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_next_book: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Next book in series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaBookDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No next book */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_pages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of pages in the book */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaPageDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_page: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+                /** @description Book ID */
+                book_id: string;
+                /** @description Page number (1-indexed) */
+                page_number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": unknown;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book or page not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_page_thumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+                /** @description Book ID */
+                book_id: string;
+                /** @description Page number (1-indexed) */
+                page_number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page thumbnail image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book or page not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_previous_book: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Previous book in series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaBookDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No previous book */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_progress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Progress deleted successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_progress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KomgaReadProgressUpdateDto"];
+            };
+        };
+        responses: {
+            /** @description Progress updated successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_book_thumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Book thumbnail image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found or has no pages */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_libraries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of libraries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaLibraryDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_library: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+                /** @description Library ID */
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Library details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaLibraryDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Library not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_library_thumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+                /** @description Library ID */
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Library thumbnail image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Library not found or no series in library */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_series: {
+        parameters: {
+            query?: {
+                /** @description Page number (0-indexed, Komga-style) */
+                page?: number;
+                /** @description Page size (default: 20) */
+                size?: number;
+                /** @description Filter by library ID */
+                library_id?: string | null;
+                /** @description Search query */
+                search?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated list of series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaPage_KomgaSeriesDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_series_new: {
+        parameters: {
+            query?: {
+                /** @description Page number (0-indexed, Komga-style) */
+                page?: number;
+                /** @description Page size (default: 20) */
+                size?: number;
+                /** @description Filter by library ID */
+                library_id?: string | null;
+                /** @description Search query */
+                search?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated list of recently added series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaPage_KomgaSeriesDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_series_updated: {
+        parameters: {
+            query?: {
+                /** @description Page number (0-indexed, Komga-style) */
+                page?: number;
+                /** @description Page size (default: 20) */
+                size?: number;
+                /** @description Filter by library ID */
+                library_id?: string | null;
+                /** @description Search query */
+                search?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated list of recently updated series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaPage_KomgaSeriesDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_series: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Series details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaSeriesDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_series_books: {
+        parameters: {
+            query?: {
+                /** @description Page number (0-indexed, Komga-style) */
+                page?: number;
+                /** @description Page size (default: 20) */
+                size?: number;
+                /** @description Filter by library ID */
+                library_id?: string | null;
+                /** @description Search query */
+                search?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated list of books in series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaPage_KomgaBookDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_series_thumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Series thumbnail image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_current_user: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komgav1) */
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current user information */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaUserDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

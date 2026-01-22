@@ -36,6 +36,22 @@ use uuid::Uuid;
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/libraries",
+    responses(
+        (status = 200, description = "List of libraries", body = Vec<KomgaLibraryDto>),
+        (status = 401, description = "Unauthorized"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn list_libraries(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -73,6 +89,24 @@ pub async fn list_libraries(
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/libraries/{library_id}",
+    responses(
+        (status = 200, description = "Library details", body = KomgaLibraryDto),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Library not found"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("library_id" = Uuid, Path, description = "Library ID")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn get_library(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -108,6 +142,24 @@ pub async fn get_library(
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key (via cookie fallback for browser image tags)
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/libraries/{library_id}/thumbnail",
+    responses(
+        (status = 200, description = "Library thumbnail image", content_type = "image/jpeg"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Library not found or no series in library"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("library_id" = Uuid, Path, description = "Library ID")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn get_library_thumbnail(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,

@@ -3,13 +3,14 @@
 //! These DTOs match the exact structure Komic expects from Komga's book endpoints.
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use super::series::KomgaAuthorDto;
 
 /// Komga media DTO
 ///
 /// Information about the book's media/file.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaMediaDto {
     /// Media status (READY, UNKNOWN, ERROR, UNSUPPORTED, OUTDATED)
@@ -81,7 +82,7 @@ impl KomgaMediaDto {
 }
 
 /// Komga book metadata DTO
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaBookMetadataDto {
     /// Book title
@@ -170,7 +171,7 @@ impl Default for KomgaBookMetadataDto {
 }
 
 /// Komga book link DTO
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaBookLinkDto {
     /// Link label
@@ -180,7 +181,7 @@ pub struct KomgaBookLinkDto {
 }
 
 /// Komga read progress DTO
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaReadProgressDto {
     /// Current page number (1-indexed)
@@ -220,7 +221,7 @@ impl Default for KomgaReadProgressDto {
 /// Komga book DTO
 ///
 /// Based on actual Komic traffic analysis. This is the main book representation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaBookDto {
     /// Book unique identifier (UUID as string)
@@ -367,7 +368,7 @@ pub fn format_file_size(bytes: i64) -> String {
 /// Request DTO for updating read progress
 ///
 /// Observed from actual Komic traffic: `{ "completed": false, "page": 151 }`
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaReadProgressUpdateDto {
     /// Current page number (1-indexed)
@@ -385,7 +386,7 @@ pub struct KomgaReadProgressUpdateDto {
 }
 
 /// Request DTO for searching/filtering books (POST /api/v1/books/list)
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaBooksSearchRequestDto {
     /// Library IDs to filter by

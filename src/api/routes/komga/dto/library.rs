@@ -3,11 +3,12 @@
 //! These DTOs match the exact structure Komic expects from Komga's `/api/v1/libraries` endpoint.
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Komga library DTO
 ///
 /// Based on actual Komic traffic analysis - includes all fields observed in responses.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaLibraryDto {
     /// Library unique identifier (UUID as string)

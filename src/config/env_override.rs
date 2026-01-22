@@ -584,6 +584,11 @@ mod tests {
                 sqlite: Some(SQLiteConfig {
                     path: "./test.db".to_string(),
                     pragmas: None,
+                    max_connections: 16,
+                    min_connections: 2,
+                    acquire_timeout_seconds: 30,
+                    idle_timeout_seconds: 300,
+                    max_lifetime_seconds: 1800,
                 }),
             },
             application: ApplicationConfig {

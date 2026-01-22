@@ -1,4 +1,4 @@
-use crate::api::{error::ErrorResponse, routes::v1::dto, routes::v1::handlers};
+use crate::api::{error::ErrorResponse, routes::komga, routes::v1::dto, routes::v1::handlers};
 use utoipa::OpenApi;
 
 /// OpenAPI documentation for Codex REST API
@@ -31,7 +31,17 @@ Most endpoints require authentication. Codex supports two authentication methods
 Codex provides OPDS catalog feeds for e-reader applications:
 
 - **OPDS 1.2** (Atom XML): `/opds/v1/catalog` - Compatible with most e-readers
-- **OPDS 2.0** (JSON): `/opds/v2` - Modern JSON-based format with enhanced features"#,
+- **OPDS 2.0** (JSON): `/opds/v2` - Modern JSON-based format with enhanced features
+
+## Komga-Compatible API
+
+Codex provides an optional Komga-compatible API for third-party apps like Komic:
+
+- **Disabled by default** - Enable via `komga_api.enabled: true` in config
+- **Configurable prefix** - Default path: `/{prefix}/api/v1/` where prefix defaults to `komgav1`
+- **Same authentication** - Supports JWT, API keys, and Basic Auth
+
+Note: The `{prefix}` path parameter in Komga endpoints is configurable at runtime."#,
         license(
             name = "MIT",
             url = "https://opensource.org/licenses/MIT"
@@ -305,6 +315,30 @@ Codex provides OPDS catalog feeds for e-reader applications:
         crate::api::routes::opds2::handlers::catalog::opds2_series_books,
         crate::api::routes::opds2::handlers::catalog::opds2_recent,
         crate::api::routes::opds2::handlers::search::opds2_search,
+
+        // Komga-compatible API endpoints (for third-party apps)
+        komga::handlers::list_libraries,
+        komga::handlers::get_library,
+        komga::handlers::get_library_thumbnail,
+        komga::handlers::list_series,
+        komga::handlers::get_series_new,
+        komga::handlers::get_series_updated,
+        komga::handlers::get_series,
+        komga::handlers::get_series_thumbnail,
+        komga::handlers::get_series_books,
+        komga::handlers::get_book,
+        komga::handlers::get_book_thumbnail,
+        komga::handlers::get_books_ondeck,
+        komga::handlers::search_books,
+        komga::handlers::get_next_book,
+        komga::handlers::get_previous_book,
+        komga::handlers::download_book_file,
+        komga::handlers::list_pages,
+        komga::handlers::get_page,
+        komga::handlers::get_page_thumbnail,
+        komga::handlers::update_progress,
+        komga::handlers::delete_progress,
+        komga::handlers::get_current_user,
     ),
     components(
         schemas(
@@ -535,6 +569,30 @@ Codex provides OPDS catalog feeds for e-reader applications:
             crate::api::routes::opds2::dto::SeriesInfo,
             crate::api::routes::opds2::dto::Group,
             crate::api::routes::opds2::dto::ReadingProgress,
+
+            // Komga-compatible API DTOs
+            komga::dto::KomgaLibraryDto,
+            komga::dto::KomgaSeriesDto,
+            komga::dto::KomgaSeriesMetadataDto,
+            komga::dto::KomgaBooksMetadataAggregationDto,
+            komga::dto::KomgaAuthorDto,
+            komga::dto::KomgaWebLinkDto,
+            komga::dto::KomgaAlternateTitleDto,
+            komga::dto::KomgaBookDto,
+            komga::dto::KomgaMediaDto,
+            komga::dto::KomgaBookMetadataDto,
+            komga::dto::KomgaBookLinkDto,
+            komga::dto::KomgaReadProgressDto,
+            komga::dto::KomgaReadProgressUpdateDto,
+            komga::dto::KomgaBooksSearchRequestDto,
+            komga::dto::KomgaPageDto,
+            komga::dto::KomgaSort,
+            komga::dto::KomgaPageable,
+            komga::dto::KomgaUserDto,
+            komga::dto::KomgaContentRestrictionsDto,
+            komga::dto::KomgaAgeRestrictionDto,
+            komga::handlers::series::SeriesPaginationQuery,
+            komga::handlers::books::BooksPaginationQuery,
         )
     ),
     tags(
@@ -564,6 +622,7 @@ Codex provides OPDS catalog feeds for e-reader applications:
         (name = "events", description = "Server-Sent Events for real-time updates"),
         (name = "opds", description = "OPDS 1.2 catalog feed (Atom XML format)"),
         (name = "opds2", description = "OPDS 2.0 catalog feed (JSON format) - Modern JSON-based OPDS specification"),
+        (name = "komga", description = "Komga-compatible API for third-party apps (Komic, etc.). Enable via config. Default path: /{prefix}/api/v1/ where prefix defaults to 'komgav1'"),
     ),
     modifiers(&SecurityAddon),
 )]

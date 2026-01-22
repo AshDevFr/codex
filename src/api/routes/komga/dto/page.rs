@@ -3,6 +3,7 @@
 //! These DTOs match the exact structure Komic expects from Komga's page endpoints.
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use super::book::format_file_size;
 
@@ -10,7 +11,7 @@ use super::book::format_file_size;
 ///
 /// Represents a single page within a book.
 /// Based on actual Komic traffic analysis for GET /api/v1/books/{id}/pages
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaPageDto {
     /// Original filename within archive
@@ -45,6 +46,7 @@ impl Default for KomgaPageDto {
 
 impl KomgaPageDto {
     /// Create a new page DTO
+    #[allow(dead_code)]
     pub fn new(
         file_name: String,
         media_type: String,

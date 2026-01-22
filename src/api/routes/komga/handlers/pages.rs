@@ -38,6 +38,24 @@ use uuid::Uuid;
 /// ## Response
 /// Returns an array of `KomgaPageDto` objects with page metadata including
 /// filename, MIME type, dimensions, and size.
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/books/{book_id}/pages",
+    responses(
+        (status = 200, description = "List of pages in the book", body = Vec<KomgaPageDto>),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Book not found"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn list_pages(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -107,6 +125,25 @@ pub async fn list_pages(
 /// ## Response
 /// Returns the raw image data with appropriate Content-Type header.
 /// Response is cached for 1 year (immutable content).
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/books/{book_id}/pages/{page_number}",
+    responses(
+        (status = 200, description = "Page image", content_type = "image/*"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Book or page not found"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("book_id" = Uuid, Path, description = "Book ID"),
+        ("page_number" = i32, Path, description = "Page number (1-indexed)")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn get_page(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -176,6 +213,25 @@ pub async fn get_page(
 ///
 /// ## Response
 /// Returns a JPEG thumbnail with appropriate caching headers.
+#[utoipa::path(
+    get,
+    path = "/{prefix}/api/v1/books/{book_id}/pages/{page_number}/thumbnail",
+    responses(
+        (status = 200, description = "Page thumbnail image", content_type = "image/jpeg"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Book or page not found"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("book_id" = Uuid, Path, description = "Book ID"),
+        ("page_number" = i32, Path, description = "Page number (1-indexed)")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn get_page_thumbnail(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,

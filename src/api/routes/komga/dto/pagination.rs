@@ -3,9 +3,10 @@
 //! These DTOs match the Spring Data Page format used by Komga.
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Komga pagination sort information
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaSort {
     /// Whether the results are sorted in ascending or descending order
@@ -27,6 +28,7 @@ impl KomgaSort {
     }
 
     /// Create an unsorted instance
+    #[allow(dead_code)]
     pub fn unsorted() -> Self {
         Self {
             sorted: false,
@@ -37,7 +39,7 @@ impl KomgaSort {
 }
 
 /// Komga pageable information (Spring Data style)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaPageable {
     /// Current page number (0-indexed)
@@ -77,8 +79,9 @@ impl Default for KomgaPageable {
 /// Komga paginated response wrapper (Spring Data Page format)
 ///
 /// This matches the exact structure Komic expects from Komga.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+#[schema(as = KomgaPage)]
 pub struct KomgaPage<T> {
     /// The content items for this page
     pub content: Vec<T>,

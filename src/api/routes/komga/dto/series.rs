@@ -3,9 +3,10 @@
 //! These DTOs match the exact structure Komic expects from Komga's series endpoints.
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Komga web link DTO
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaWebLinkDto {
     /// Link label
@@ -15,7 +16,7 @@ pub struct KomgaWebLinkDto {
 }
 
 /// Komga alternate title DTO
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaAlternateTitleDto {
     /// Title label (e.g., "Japanese", "Romaji")
@@ -25,7 +26,7 @@ pub struct KomgaAlternateTitleDto {
 }
 
 /// Komga series metadata DTO
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaSeriesMetadataDto {
     /// Series status (ENDED, ONGOING, ABANDONED, HIATUS)
@@ -156,7 +157,7 @@ impl Default for KomgaSeriesMetadataDto {
 /// Komga books metadata aggregation DTO
 ///
 /// Aggregated metadata from all books in the series.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaBooksMetadataAggregationDto {
     /// Authors from all books
@@ -181,7 +182,7 @@ pub struct KomgaBooksMetadataAggregationDto {
 }
 
 /// Komga author DTO
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaAuthorDto {
     /// Author name
@@ -193,7 +194,7 @@ pub struct KomgaAuthorDto {
 /// Komga series DTO
 ///
 /// Based on actual Komic traffic analysis.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct KomgaSeriesDto {
     /// Series unique identifier (UUID as string)

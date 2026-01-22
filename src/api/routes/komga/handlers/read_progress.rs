@@ -40,6 +40,25 @@ use uuid::Uuid;
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    patch,
+    path = "/{prefix}/api/v1/books/{book_id}/read-progress",
+    request_body = KomgaReadProgressUpdateDto,
+    responses(
+        (status = 204, description = "Progress updated successfully"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Book not found"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn update_progress(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -63,9 +82,7 @@ pub async fn update_progress(
     // Determine completed status
     // If completed is explicitly set, use that value
     // Otherwise, consider completed if current_page >= page_count
-    let completed = request
-        .completed
-        .unwrap_or_else(|| current_page >= book.page_count);
+    let completed = request.completed.unwrap_or(current_page >= book.page_count);
 
     // Update progress using existing repository
     ReadProgressRepository::upsert(&state.db, user_id, book_id, current_page, completed)
@@ -90,6 +107,24 @@ pub async fn update_progress(
 /// - Bearer token (JWT)
 /// - Basic Auth
 /// - API Key
+#[utoipa::path(
+    delete,
+    path = "/{prefix}/api/v1/books/{book_id}/read-progress",
+    responses(
+        (status = 204, description = "Progress deleted successfully"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Book not found"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
 pub async fn delete_progress(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -116,7 +151,6 @@ pub async fn delete_progress(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::api::routes::komga::dto::book::KomgaReadProgressUpdateDto;
 
     #[test]
