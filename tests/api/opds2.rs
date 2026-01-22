@@ -2,8 +2,8 @@
 mod common;
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use codex::api::dto::opds2::Opds2Feed;
 use codex::api::error::ErrorResponse;
+use codex::api::routes::opds2::dto::Opds2Feed;
 use codex::db::repositories::{
     LibraryRepository, ReadProgressRepository, SeriesRepository, UserRepository,
 };

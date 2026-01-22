@@ -1,8 +1,8 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::metrics::MetricsDto;
 use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::metrics::MetricsDto;
 use codex::db::repositories::{
     BookRepository, LibraryRepository, SeriesRepository, UserRepository,
 };

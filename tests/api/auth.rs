@@ -1,8 +1,8 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::auth::{LoginRequest, LoginResponse};
 use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::auth::{LoginRequest, LoginResponse};
 use codex::db::repositories::UserRepository;
 use codex::utils::password;
 use common::*;

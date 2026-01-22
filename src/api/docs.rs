@@ -1,4 +1,4 @@
-use crate::api::{dto, error::ErrorResponse, handlers};
+use crate::api::{error::ErrorResponse, routes::v1::dto, routes::v1::handlers};
 use utoipa::OpenApi;
 
 /// OpenAPI documentation for Codex REST API
@@ -290,21 +290,21 @@ Codex provides OPDS catalog feeds for e-reader applications:
         handlers::events::task_progress_stream,
 
         // OPDS 1.2 catalog endpoints (XML format)
-        handlers::opds::catalog::root_catalog,
-        handlers::opds::catalog::opds_list_libraries,
-        handlers::opds::catalog::opds_library_series,
-        handlers::opds::catalog::opds_series_books,
-        handlers::opds::search::opensearch_descriptor,
-        handlers::opds::search::opds_search,
-        handlers::opds::pse::opds_book_pages,
+        crate::api::routes::opds::handlers::catalog::root_catalog,
+        crate::api::routes::opds::handlers::catalog::opds_list_libraries,
+        crate::api::routes::opds::handlers::catalog::opds_library_series,
+        crate::api::routes::opds::handlers::catalog::opds_series_books,
+        crate::api::routes::opds::handlers::search::opensearch_descriptor,
+        crate::api::routes::opds::handlers::search::opds_search,
+        crate::api::routes::opds::handlers::pse::opds_book_pages,
 
         // OPDS 2.0 catalog endpoints (JSON format)
-        handlers::opds2::catalog::opds2_root,
-        handlers::opds2::catalog::opds2_libraries,
-        handlers::opds2::catalog::opds2_library_series,
-        handlers::opds2::catalog::opds2_series_books,
-        handlers::opds2::catalog::opds2_recent,
-        handlers::opds2::search::opds2_search,
+        crate::api::routes::opds2::handlers::catalog::opds2_root,
+        crate::api::routes::opds2::handlers::catalog::opds2_libraries,
+        crate::api::routes::opds2::handlers::catalog::opds2_library_series,
+        crate::api::routes::opds2::handlers::catalog::opds2_series_books,
+        crate::api::routes::opds2::handlers::catalog::opds2_recent,
+        crate::api::routes::opds2::handlers::search::opds2_search,
     ),
     components(
         schemas(
@@ -523,18 +523,18 @@ Codex provides OPDS catalog feeds for e-reader applications:
             ErrorResponse,
 
             // OPDS 2.0 DTOs
-            dto::opds2::Opds2Feed,
-            dto::opds2::Opds2Link,
-            dto::opds2::LinkProperties,
-            dto::opds2::FeedMetadata,
-            dto::opds2::PublicationMetadata,
-            dto::opds2::Publication,
-            dto::opds2::ImageLink,
-            dto::opds2::Contributor,
-            dto::opds2::BelongsTo,
-            dto::opds2::SeriesInfo,
-            dto::opds2::Group,
-            dto::opds2::ReadingProgress,
+            crate::api::routes::opds2::dto::Opds2Feed,
+            crate::api::routes::opds2::dto::Opds2Link,
+            crate::api::routes::opds2::dto::LinkProperties,
+            crate::api::routes::opds2::dto::FeedMetadata,
+            crate::api::routes::opds2::dto::PublicationMetadata,
+            crate::api::routes::opds2::dto::Publication,
+            crate::api::routes::opds2::dto::ImageLink,
+            crate::api::routes::opds2::dto::Contributor,
+            crate::api::routes::opds2::dto::BelongsTo,
+            crate::api::routes::opds2::dto::SeriesInfo,
+            crate::api::routes::opds2::dto::Group,
+            crate::api::routes::opds2::dto::ReadingProgress,
         )
     ),
     tags(

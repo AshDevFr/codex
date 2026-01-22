@@ -2,7 +2,7 @@
 mod common;
 
 use codex::api::error::ErrorResponse;
-use codex::api::handlers::task_queue::CreateTaskResponse;
+use codex::api::routes::v1::handlers::task_queue::CreateTaskResponse;
 use codex::db::repositories::{
     BookRepository, LibraryRepository, SeriesRepository, TaskRepository, UserRepository,
 };

@@ -3,11 +3,11 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::{
-    MetricsCleanupResponse, MetricsNukeResponse, TaskMetricsHistoryResponse, TaskMetricsResponse,
-};
 use codex::api::error::ErrorResponse;
 use codex::api::extractors::AppState;
+use codex::api::routes::v1::dto::{
+    MetricsCleanupResponse, MetricsNukeResponse, TaskMetricsHistoryResponse, TaskMetricsResponse,
+};
 use codex::config::{AuthConfig, EmailConfig, FilesConfig};
 use codex::db::repositories::UserRepository;
 use codex::events::EventBroadcaster;

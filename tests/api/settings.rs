@@ -1,7 +1,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::settings::{
+use codex::api::routes::v1::dto::settings::{
     BulkSettingUpdate, BulkUpdateSettingsRequest, SettingDto, SettingHistoryDto,
     UpdateSettingRequest,
 };
@@ -766,8 +766,10 @@ async fn test_branding_endpoint_returns_default_app_name() {
 
     // No authentication needed for branding endpoint
     let request = get_request("/api/v1/settings/branding");
-    let (status, response): (StatusCode, Option<codex::api::dto::BrandingSettingsDto>) =
-        make_json_request(app, request).await;
+    let (status, response): (
+        StatusCode,
+        Option<codex::api::routes::v1::dto::BrandingSettingsDto>,
+    ) = make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let branding = response.expect("Expected branding response");
@@ -787,8 +789,10 @@ async fn test_branding_endpoint_no_auth_required() {
         .body(String::new())
         .unwrap();
 
-    let (status, _): (StatusCode, Option<codex::api::dto::BrandingSettingsDto>) =
-        make_json_request(app, request).await;
+    let (status, _): (
+        StatusCode,
+        Option<codex::api::routes::v1::dto::BrandingSettingsDto>,
+    ) = make_json_request(app, request).await;
 
     // Should succeed without authentication
     assert_eq!(status, StatusCode::OK);
@@ -815,8 +819,10 @@ async fn test_branding_endpoint_returns_custom_app_name() {
 
     // Now test the branding endpoint returns the custom name
     let request = get_request("/api/v1/settings/branding");
-    let (status, response): (StatusCode, Option<codex::api::dto::BrandingSettingsDto>) =
-        make_json_request(app, request).await;
+    let (status, response): (
+        StatusCode,
+        Option<codex::api::routes::v1::dto::BrandingSettingsDto>,
+    ) = make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let branding = response.expect("Expected branding response");
@@ -834,7 +840,7 @@ async fn test_application_name_in_public_settings() {
     let request = get_request_with_auth("/api/v1/settings/public", &token);
     let (status, response): (
         StatusCode,
-        Option<std::collections::HashMap<String, codex::api::dto::PublicSettingDto>>,
+        Option<std::collections::HashMap<String, codex::api::routes::v1::dto::PublicSettingDto>>,
     ) = make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);

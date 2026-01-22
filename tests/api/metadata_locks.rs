@@ -3,10 +3,10 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::series::{
+use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::series::{
     FullSeriesMetadataResponse, MetadataLocks, UpdateMetadataLocksRequest,
 };
-use codex::api::error::ErrorResponse;
 use codex::db::repositories::{
     AlternateTitleRepository, ExternalLinkRepository, ExternalRatingRepository, GenreRepository,
     LibraryRepository, SeriesRepository, TagRepository, UserRepository,

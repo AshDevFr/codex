@@ -13,7 +13,7 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
-use crate::api::dto::series::{SeriesSortField, SeriesSortParam, SortDirection};
+use crate::api::routes::v1::dto::series::{SeriesSortField, SeriesSortParam, SortDirection};
 use crate::db::entities::{books, prelude::*, read_progress, series, series_metadata};
 use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 use std::sync::Arc;

@@ -4,7 +4,9 @@
 
 #![allow(dead_code)]
 
-use crate::api::dto::{BookCondition, BoolOperator, FieldOperator, SeriesCondition, UuidOperator};
+use crate::api::routes::v1::dto::{
+    BookCondition, BoolOperator, FieldOperator, SeriesCondition, UuidOperator,
+};
 use crate::db::repositories::{GenreRepository, TagRepository};
 use anyhow::Result;
 use sea_orm::DatabaseConnection;
@@ -1662,7 +1664,9 @@ impl FilterService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::dto::{BookCondition, FieldOperator, SeriesCondition, UuidOperator};
+    use crate::api::routes::v1::dto::{
+        BookCondition, FieldOperator, SeriesCondition, UuidOperator,
+    };
 
     // Unit tests for condition building and basic logic
 

@@ -3,11 +3,11 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::series::{
+use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::series::{
     AddSeriesGenreRequest, GenreDto, GenreListResponse, SetSeriesGenresRequest,
     TaxonomyCleanupResponse,
 };
-use codex::api::error::ErrorResponse;
 use codex::db::repositories::{
     GenreRepository, LibraryRepository, SeriesRepository, UserRepository,
 };

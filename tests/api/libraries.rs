@@ -4,9 +4,11 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::library::{CreateLibraryRequest, LibraryDto, UpdateLibraryRequest};
 use codex::api::error::ErrorResponse;
 use codex::api::permissions::{serialize_permissions, Permission};
+use codex::api::routes::v1::dto::library::{
+    CreateLibraryRequest, LibraryDto, UpdateLibraryRequest,
+};
 use codex::db::repositories::{
     ApiKeyRepository, BookRepository, LibraryRepository, SeriesRepository, UserRepository,
 };

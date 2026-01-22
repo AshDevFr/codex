@@ -2,7 +2,7 @@
 mod common;
 
 use codex::api::error::ErrorResponse;
-use codex::api::handlers::filesystem::{BrowseResponse, FileSystemEntry};
+use codex::api::routes::v1::handlers::filesystem::{BrowseResponse, FileSystemEntry};
 use codex::db::repositories::UserRepository;
 use codex::utils::password;
 use common::*;

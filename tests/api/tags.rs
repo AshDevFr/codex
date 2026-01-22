@@ -3,10 +3,10 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::series::{
+use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::series::{
     AddSeriesTagRequest, SetSeriesTagsRequest, TagDto, TagListResponse, TaxonomyCleanupResponse,
 };
-use codex::api::error::ErrorResponse;
 use codex::db::repositories::{LibraryRepository, SeriesRepository, TagRepository, UserRepository};
 use codex::db::ScanningStrategy;
 use codex::utils::password;
