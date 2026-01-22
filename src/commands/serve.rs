@@ -215,7 +215,25 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         // This is acceptable since it's created once at server startup
         let api_docs_path: &'static str =
             Box::leak(config.api.api_docs_path.clone().into_boxed_str());
-        app = app.merge(Scalar::with_url(api_docs_path, ApiDoc::openapi()));
+
+        // Custom HTML template to set the page title to "Codex API" instead of "Scalar"
+        let scalar = Scalar::with_url(api_docs_path, ApiDoc::openapi()).custom_html(
+            r#"<!doctype html>
+<html>
+  <head>
+    <title>Codex API</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <script id="api-reference" type="application/json">
+      $spec
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+  </body>
+</html>"#,
+        );
+        app = app.merge(scalar);
     }
 
     info!("Registered routes:");
