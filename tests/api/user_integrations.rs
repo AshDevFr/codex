@@ -3,12 +3,12 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::user_integrations::{
+use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::user_integrations::{
     ConnectIntegrationRequest, ConnectIntegrationResponse, OAuthCallbackRequest,
     SyncTriggerResponse, UpdateIntegrationSettingsRequest, UserIntegrationDto,
     UserIntegrationsListResponse,
 };
-use codex::api::error::ErrorResponse;
 use codex::db::repositories::UserRepository;
 use codex::utils::password;
 use common::*;

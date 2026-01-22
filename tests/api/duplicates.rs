@@ -5,8 +5,10 @@
 mod common;
 
 use chrono::Utc;
-use codex::api::dto::duplicates::{ListDuplicatesResponse, TriggerDuplicateScanResponse};
 use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::duplicates::{
+    ListDuplicatesResponse, TriggerDuplicateScanResponse,
+};
 use codex::db::entities::{books, series, series_metadata};
 use codex::db::repositories::{
     BookDuplicatesRepository, BookRepository, LibraryRepository, UserRepository,

@@ -1,8 +1,8 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::book::{BookDto, BookListResponse};
 use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::book::{BookDto, BookListResponse};
 use codex::db::repositories::{
     BookRepository, LibraryRepository, SeriesRepository, UserRepository,
 };
@@ -1901,7 +1901,7 @@ async fn test_get_book_file_requires_auth() {
 // Book Metadata Tests (PUT and PATCH)
 // ============================================================================
 
-use codex::api::dto::book::{BookMetadataResponse, ReplaceBookMetadataRequest};
+use codex::api::routes::v1::dto::book::{BookMetadataResponse, ReplaceBookMetadataRequest};
 
 #[tokio::test]
 async fn test_replace_book_metadata_creates_record() {
@@ -2380,7 +2380,7 @@ async fn test_book_metadata_without_auth() {
 // POST /books/list Filtering Tests
 // ============================================================================
 
-use codex::api::dto::filter::{
+use codex::api::routes::v1::dto::filter::{
     BookCondition, BookListRequest, BoolOperator, FieldOperator, UuidOperator,
 };
 

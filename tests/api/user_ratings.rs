@@ -3,8 +3,10 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::series::{SetUserRatingRequest, UserRatingsListResponse, UserSeriesRatingDto};
 use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::series::{
+    SetUserRatingRequest, UserRatingsListResponse, UserSeriesRatingDto,
+};
 use codex::db::repositories::{LibraryRepository, SeriesRepository, UserRepository};
 use codex::db::ScanningStrategy;
 use codex::utils::password;
@@ -402,7 +404,7 @@ async fn test_list_user_ratings_unauthorized() {
 // Average Rating Tests
 // ============================================================================
 
-use codex::api::dto::series::SeriesAverageRatingResponse;
+use codex::api::routes::v1::dto::series::SeriesAverageRatingResponse;
 
 #[tokio::test]
 async fn test_get_series_average_rating_no_ratings() {

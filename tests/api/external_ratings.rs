@@ -3,10 +3,10 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::series::{
+use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::series::{
     CreateExternalRatingRequest, ExternalRatingDto, ExternalRatingListResponse,
 };
-use codex::api::error::ErrorResponse;
 use codex::db::repositories::{LibraryRepository, SeriesRepository, UserRepository};
 use codex::db::ScanningStrategy;
 use codex::utils::password;

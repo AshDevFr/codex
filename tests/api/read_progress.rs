@@ -1,8 +1,8 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::{MarkReadResponse, ReadProgressResponse};
 use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::{MarkReadResponse, ReadProgressResponse};
 use codex::db::repositories::{
     BookRepository, LibraryRepository, ReadProgressRepository, SeriesRepository, UserRepository,
 };

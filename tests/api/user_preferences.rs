@@ -3,11 +3,11 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::user_preferences::{
+use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::user_preferences::{
     BulkSetPreferencesRequest, DeletePreferenceResponse, SetPreferenceRequest,
     SetPreferencesResponse, UserPreferenceDto, UserPreferencesResponse,
 };
-use codex::api::error::ErrorResponse;
 use codex::db::repositories::UserRepository;
 use codex::utils::password;
 use common::*;

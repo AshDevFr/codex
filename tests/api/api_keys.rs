@@ -1,10 +1,10 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::api_key::{
+use codex::api::permissions::{Permission, ADMIN_PERMISSIONS, READONLY_PERMISSIONS};
+use codex::api::routes::v1::dto::api_key::{
     ApiKeyDto, CreateApiKeyRequest, CreateApiKeyResponse, UpdateApiKeyRequest,
 };
-use codex::api::permissions::{Permission, ADMIN_PERMISSIONS, READONLY_PERMISSIONS};
 use codex::db::repositories::{ApiKeyRepository, UserRepository};
 use codex::utils::password;
 use common::*;

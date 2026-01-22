@@ -4,8 +4,8 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::scan::ScanStatusDto;
 use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::scan::ScanStatusDto;
 use codex::db::repositories::{LibraryRepository, UserRepository};
 use codex::db::ScanningStrategy;
 use codex::scanner::ScanMode;

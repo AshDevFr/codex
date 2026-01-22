@@ -1,9 +1,9 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::book::BookDto;
-use codex::api::dto::series::{SearchSeriesRequest, SeriesDto, SeriesListResponse};
 use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::book::BookDto;
+use codex::api::routes::v1::dto::series::{SearchSeriesRequest, SeriesDto, SeriesListResponse};
 use codex::db::repositories::{
     BookRepository, LibraryRepository, SeriesMetadataRepository, SeriesRepository, UserRepository,
 };
@@ -862,7 +862,7 @@ async fn test_list_library_series() {
         get_request_with_auth(&format!("/api/v1/libraries/{}/series", library1.id), &token);
     let (status, response): (
         StatusCode,
-        Option<codex::api::dto::series::SeriesListResponse>,
+        Option<codex::api::routes::v1::dto::series::SeriesListResponse>,
     ) = make_json_request(app.clone(), request).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -876,7 +876,7 @@ async fn test_list_library_series() {
         get_request_with_auth(&format!("/api/v1/libraries/{}/series", library2.id), &token);
     let (status, response): (
         StatusCode,
-        Option<codex::api::dto::series::SeriesListResponse>,
+        Option<codex::api::routes::v1::dto::series::SeriesListResponse>,
     ) = make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -915,7 +915,7 @@ async fn test_list_library_series_with_pagination() {
     );
     let (status, response): (
         StatusCode,
-        Option<codex::api::dto::series::SeriesListResponse>,
+        Option<codex::api::routes::v1::dto::series::SeriesListResponse>,
     ) = make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -935,7 +935,7 @@ async fn test_list_library_series_with_pagination() {
     );
     let (status, response): (
         StatusCode,
-        Option<codex::api::dto::series::SeriesListResponse>,
+        Option<codex::api::routes::v1::dto::series::SeriesListResponse>,
     ) = make_json_request(app2, request).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -966,7 +966,7 @@ async fn test_list_library_series_empty() {
         get_request_with_auth(&format!("/api/v1/libraries/{}/series", library.id), &token);
     let (status, response): (
         StatusCode,
-        Option<codex::api::dto::series::SeriesListResponse>,
+        Option<codex::api::routes::v1::dto::series::SeriesListResponse>,
     ) = make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -1782,7 +1782,9 @@ fn create_simple_png() -> Vec<u8> {
 
 #[tokio::test]
 async fn test_replace_series_metadata_success() {
-    use codex::api::dto::series::{ReplaceSeriesMetadataRequest, SeriesMetadataResponse};
+    use codex::api::routes::v1::dto::series::{
+        ReplaceSeriesMetadataRequest, SeriesMetadataResponse,
+    };
 
     let (db, _temp_dir) = setup_test_db().await;
 
@@ -1838,7 +1840,9 @@ async fn test_replace_series_metadata_success() {
 
 #[tokio::test]
 async fn test_replace_series_metadata_clears_omitted_fields() {
-    use codex::api::dto::series::{ReplaceSeriesMetadataRequest, SeriesMetadataResponse};
+    use codex::api::routes::v1::dto::series::{
+        ReplaceSeriesMetadataRequest, SeriesMetadataResponse,
+    };
 
     let (db, _temp_dir) = setup_test_db().await;
 
@@ -1902,7 +1906,7 @@ async fn test_replace_series_metadata_clears_omitted_fields() {
 
 #[tokio::test]
 async fn test_replace_series_metadata_not_found() {
-    use codex::api::dto::series::ReplaceSeriesMetadataRequest;
+    use codex::api::routes::v1::dto::series::ReplaceSeriesMetadataRequest;
 
     let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_auth_state(db.clone()).await;
@@ -1940,7 +1944,7 @@ async fn test_replace_series_metadata_not_found() {
 
 #[tokio::test]
 async fn test_replace_series_metadata_without_auth() {
-    use codex::api::dto::series::ReplaceSeriesMetadataRequest;
+    use codex::api::routes::v1::dto::series::ReplaceSeriesMetadataRequest;
 
     let (db, _temp_dir) = setup_test_db().await;
 
@@ -1988,7 +1992,7 @@ async fn test_replace_series_metadata_without_auth() {
 
 #[tokio::test]
 async fn test_patch_series_metadata_partial_update() {
-    use codex::api::dto::series::SeriesMetadataResponse;
+    use codex::api::routes::v1::dto::series::SeriesMetadataResponse;
 
     let (db, _temp_dir) = setup_test_db().await;
 
@@ -2039,7 +2043,7 @@ async fn test_patch_series_metadata_partial_update() {
 
 #[tokio::test]
 async fn test_patch_series_metadata_explicit_null_clears_field() {
-    use codex::api::dto::series::SeriesMetadataResponse;
+    use codex::api::routes::v1::dto::series::SeriesMetadataResponse;
 
     let (db, _temp_dir) = setup_test_db().await;
 
@@ -2090,7 +2094,7 @@ async fn test_patch_series_metadata_explicit_null_clears_field() {
 
 #[tokio::test]
 async fn test_patch_series_metadata_multiple_fields() {
-    use codex::api::dto::series::SeriesMetadataResponse;
+    use codex::api::routes::v1::dto::series::SeriesMetadataResponse;
 
     let (db, _temp_dir) = setup_test_db().await;
 
@@ -2132,7 +2136,7 @@ async fn test_patch_series_metadata_multiple_fields() {
 
 #[tokio::test]
 async fn test_patch_series_metadata_empty_body_no_changes() {
-    use codex::api::dto::series::SeriesMetadataResponse;
+    use codex::api::routes::v1::dto::series::SeriesMetadataResponse;
 
     let (db, _temp_dir) = setup_test_db().await;
 
@@ -2690,7 +2694,9 @@ async fn test_list_series_filter_empty_string_ignored() {
 // POST /series/list Filtering Tests
 // ============================================================================
 
-use codex::api::dto::filter::{FieldOperator, SeriesCondition, SeriesListRequest, UuidOperator};
+use codex::api::routes::v1::dto::filter::{
+    FieldOperator, SeriesCondition, SeriesListRequest, UuidOperator,
+};
 
 #[tokio::test]
 async fn test_list_series_filtered_no_condition() {

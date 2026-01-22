@@ -3,8 +3,8 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::series::{SeriesCoverDto, SeriesCoverListResponse};
 use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::series::{SeriesCoverDto, SeriesCoverListResponse};
 use codex::db::repositories::{
     LibraryRepository, SeriesCoversRepository, SeriesRepository, UserRepository,
 };

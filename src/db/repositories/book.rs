@@ -412,13 +412,13 @@ impl BookRepository {
     pub async fn list_by_library_sorted(
         db: &DatabaseConnection,
         library_id: Uuid,
-        sort: &crate::api::dto::book::BookSortParam,
+        sort: &crate::api::routes::v1::dto::book::BookSortParam,
         include_deleted: bool,
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<books::Model>, u64)> {
-        use crate::api::dto::book::BookSortField;
-        use crate::api::dto::series::SortDirection;
+        use crate::api::routes::v1::dto::book::BookSortField;
+        use crate::api::routes::v1::dto::series::SortDirection;
         use crate::db::entities::{book_metadata, series, series_metadata};
         use sea_orm::JoinType;
 
