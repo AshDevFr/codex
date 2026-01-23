@@ -8,6 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
@@ -340,9 +341,13 @@ pub async fn init_database(config: &Config) -> anyhow::Result<Database> {
 }
 
 /// Initialize settings service with auto-reload
+///
+/// Accepts a `CancellationToken` for graceful shutdown support.
+/// Returns a tuple of (SettingsService, JoinHandle for the auto-reload task).
 pub async fn init_settings_service(
     db: &DatabaseConnection,
-) -> anyhow::Result<Arc<SettingsService>> {
+    cancel_token: CancellationToken,
+) -> anyhow::Result<(Arc<SettingsService>, tokio::task::JoinHandle<()>)> {
     info!("Initializing settings service...");
     let settings_service = Arc::new(
         SettingsService::new(db.clone())
@@ -355,13 +360,10 @@ pub async fn init_settings_service(
     );
 
     // Start auto-reload task for settings service (reload every 10 seconds)
-    let settings_clone = settings_service.clone();
-    tokio::spawn(async move {
-        settings_clone.start_auto_reload(10).await;
-    });
+    let auto_reload_handle = settings_service.clone().start_auto_reload(10, cancel_token);
     info!("Settings service auto-reload task started (10 second interval)");
 
-    Ok(settings_service)
+    Ok((settings_service, auto_reload_handle))
 }
 
 /// Get worker count from config (which already includes env override)

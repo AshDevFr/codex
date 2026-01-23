@@ -6,6 +6,7 @@ use crate::config::DatabaseType;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 /// Serve command handler - starts the media server
@@ -51,8 +52,12 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     scheduler.lock().await.start().await?;
     info!("Job scheduler started successfully");
 
+    // Create cancellation token for graceful shutdown of background tasks
+    let background_task_cancel = CancellationToken::new();
+
     // Initialize settings service
-    let settings_service = init_settings_service(db.sea_orm_connection()).await?;
+    let (settings_service, settings_auto_reload_handle) =
+        init_settings_service(db.sea_orm_connection(), background_task_cancel.clone()).await?;
 
     // Create event broadcaster for real-time updates
     let event_broadcaster = Arc::new(crate::events::EventBroadcaster::new(1000));
@@ -117,8 +122,34 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Task metrics service initialized");
 
     // Start background jobs for metrics (flush, cleanup, rollup)
-    task_metrics_service.clone().start_background_jobs();
+    let task_metrics_handles = task_metrics_service
+        .clone()
+        .start_background_jobs(background_task_cancel.clone());
     info!("Task metrics background jobs started");
+
+    // Initialize read progress batching service
+    let read_progress_service = Arc::new(crate::services::ReadProgressService::new(
+        db.sea_orm_connection().clone(),
+    ));
+    info!("Read progress batching service initialized");
+
+    // Start background flush job for read progress
+    let read_progress_handle = read_progress_service
+        .clone()
+        .start_background_flush(background_task_cancel.clone());
+    info!("Read progress background flush started (5s interval)");
+
+    // Initialize auth tracking batching service
+    let auth_tracking_service = Arc::new(crate::services::AuthTrackingService::new(
+        db.sea_orm_connection().clone(),
+    ));
+    info!("Auth tracking batching service initialized");
+
+    // Start background flush job for auth tracking
+    let auth_tracking_handle = auth_tracking_service
+        .clone()
+        .start_background_flush(background_task_cancel.clone());
+    info!("Auth tracking background flush started (60s interval)");
 
     // Initialize worker tracking variables
     let mut worker_handles = Vec::new();
@@ -175,6 +206,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             config.auth.jwt_expiry_hours,
         )),
         auth_config: Arc::new(config.auth.clone()),
+        database_config: Arc::new(config.database.clone()),
         email_service,
         event_broadcaster: event_broadcaster.clone(),
         settings_service,
@@ -186,6 +218,8 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         } else {
             Some(scheduler.clone())
         },
+        read_progress_service,
+        auth_tracking_service,
     });
 
     // Build router using API module
@@ -275,6 +309,37 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
 
     // Run server with graceful shutdown
     let server_result = graceful.await;
+
+    // Signal all background tasks to shutdown
+    info!("Signaling background tasks to shutdown...");
+    background_task_cancel.cancel();
+
+    // Await settings auto-reload task completion
+    info!("Waiting for settings auto-reload task to complete...");
+    if let Err(e) = settings_auto_reload_handle.await {
+        tracing::warn!("Settings auto-reload task panicked: {}", e);
+    }
+
+    // Await task metrics background jobs completion
+    info!("Waiting for task metrics background jobs to complete...");
+    for (i, handle) in task_metrics_handles.into_iter().enumerate() {
+        if let Err(e) = handle.await {
+            tracing::warn!("Task metrics background job {} panicked: {}", i, e);
+        }
+    }
+
+    // Await read progress background flush task completion
+    info!("Waiting for read progress flush task to complete...");
+    if let Err(e) = read_progress_handle.await {
+        tracing::warn!("Read progress flush task panicked: {}", e);
+    }
+
+    // Await auth tracking background flush task completion
+    info!("Waiting for auth tracking flush task to complete...");
+    if let Err(e) = auth_tracking_handle.await {
+        tracing::warn!("Auth tracking flush task panicked: {}", e);
+    }
+    info!("Background tasks shutdown complete");
 
     // Shutdown scheduler
     info!("Shutting down job scheduler...");

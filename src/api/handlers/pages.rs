@@ -3,8 +3,9 @@ use crate::api::{
     extractors::{AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
-use crate::db::repositories::{BookRepository, PageRepository, ReadProgressRepository};
+use crate::db::repositories::{BookRepository, PageRepository};
 use crate::require_permission;
+use crate::utils::{with_deadline, DeadlineResult};
 use axum::{
     body::Body,
     extract::{Path, State},
@@ -69,39 +70,13 @@ pub async fn get_page_image(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch page: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Page not found".to_string()))?;
 
-    // Update reading progress implicitly (PSE-style tracking)
-    // Only update if this page is further than current progress
-    let user_id = auth.user_id;
-    let db = state.db.clone();
-    let total_pages = book.page_count;
-    tokio::spawn(async move {
-        // Check current progress
-        if let Ok(current_progress) =
-            ReadProgressRepository::get_by_user_and_book(&db, user_id, book_id).await
-        {
-            let should_update = match current_progress {
-                Some(progress) => {
-                    // Only update if reading a later page (forward progress)
-                    page_number > progress.current_page
-                }
-                None => true, // No existing progress, create new
-            };
-
-            if should_update {
-                let is_completed = page_number >= total_pages;
-                if let Err(e) =
-                    ReadProgressRepository::upsert(&db, user_id, book_id, page_number, is_completed)
-                        .await
-                {
-                    tracing::warn!(
-                        "Failed to update reading progress for book {}: {}",
-                        book_id,
-                        e
-                    );
-                }
-            }
-        }
-    });
+    // Update reading progress via batching service (PSE-style tracking)
+    // Progress updates are buffered in memory and flushed periodically
+    // to reduce database load during high-traffic page viewing
+    state
+        .read_progress_service
+        .record_progress(auth.user_id, book_id, page_number, book.page_count)
+        .await;
 
     // Extract image from book file based on format
     let image_data = extract_page_image(&book.file_path, &book.format, page_number)
@@ -188,18 +163,31 @@ pub async fn get_book_thumbnail(
     let thumbnail_data = generate_thumbnail(&image_data, 400)
         .map_err(|e| ApiError::Internal(format!("Failed to generate thumbnail: {}", e)))?;
 
-    // Save to cache for future requests (fire and forget)
-    let thumbnail_service = state.thumbnail_service.clone();
-    let db = state.db.clone();
-    let thumbnail_data_clone = thumbnail_data.clone();
-    tokio::spawn(async move {
-        if let Err(e) = thumbnail_service
-            .save_generated_thumbnail(&db, book_id, &thumbnail_data_clone)
-            .await
-        {
+    // Save to cache for future requests (with configurable deadline to prevent blocking)
+    // Using inline await instead of fire-and-forget to manage connection pool usage
+    let deadline_secs = state.database_config.operation_deadline_seconds();
+    match with_deadline(
+        deadline_secs,
+        state
+            .thumbnail_service
+            .save_generated_thumbnail(&state.db, book_id, &thumbnail_data),
+    )
+    .await
+    {
+        DeadlineResult::Ok(_path) => {
+            // Successfully saved
+        }
+        DeadlineResult::Err(e) => {
             tracing::warn!("Failed to cache thumbnail for book {}: {}", book_id, e);
         }
-    });
+        DeadlineResult::TimedOut => {
+            tracing::warn!(
+                "Timeout saving thumbnail for book {} (>{}s), skipping cache",
+                book_id,
+                deadline_secs
+            );
+        }
+    }
 
     // Build response with caching headers
     Ok(Response::builder()

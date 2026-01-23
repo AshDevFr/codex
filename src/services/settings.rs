@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{interval, Duration};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -44,18 +45,31 @@ impl SettingsService {
     }
 
     /// Start the automatic reload background task
-    pub async fn start_auto_reload(self: Arc<Self>, reload_interval_seconds: u64) {
+    ///
+    /// Accepts a `CancellationToken` for graceful shutdown support.
+    /// Returns a `JoinHandle` that can be used to await task completion.
+    pub fn start_auto_reload(
+        self: Arc<Self>,
+        reload_interval_seconds: u64,
+        cancel_token: CancellationToken,
+    ) -> tokio::task::JoinHandle<()> {
         let mut reload_interval = interval(Duration::from_secs(reload_interval_seconds));
 
         tokio::spawn(async move {
             loop {
-                reload_interval.tick().await;
-
-                if let Err(e) = self.reload().await {
-                    tracing::error!("Failed to reload settings: {}", e);
+                tokio::select! {
+                    _ = cancel_token.cancelled() => {
+                        tracing::info!("Settings auto-reload task shutting down");
+                        break;
+                    }
+                    _ = reload_interval.tick() => {
+                        if let Err(e) = self.reload().await {
+                            tracing::error!("Failed to reload settings: {}", e);
+                        }
+                    }
                 }
             }
-        });
+        })
     }
 
     /// Get setting with cache
@@ -263,5 +277,38 @@ mod tests {
             .await
             .expect("Failed to get setting");
         assert_eq!(value, 240);
+    }
+
+    #[tokio::test]
+    async fn test_settings_service_auto_reload_graceful_shutdown() {
+        let db = setup_test_db().await;
+        let service = Arc::new(
+            SettingsService::new(db)
+                .await
+                .expect("Failed to create service"),
+        );
+
+        // Create a cancellation token
+        let cancel_token = CancellationToken::new();
+
+        // Start auto-reload with a short interval (1 second for test)
+        let handle = service.clone().start_auto_reload(1, cancel_token.clone());
+
+        // Let it run for a bit
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Verify the task is still running
+        assert!(!handle.is_finished());
+
+        // Cancel and wait for graceful shutdown
+        cancel_token.cancel();
+
+        // The task should complete within a reasonable time
+        let result = tokio::time::timeout(tokio::time::Duration::from_secs(2), handle).await;
+        assert!(result.is_ok(), "Auto-reload task did not shutdown in time");
+        assert!(
+            result.unwrap().is_ok(),
+            "Auto-reload task panicked during shutdown"
+        );
     }
 }

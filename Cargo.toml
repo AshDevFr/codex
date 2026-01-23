@@ -125,6 +125,9 @@ utoipa-scalar = { version = "0.2", features = ["axum"] }
 tokio-cron-scheduler = "0.10"
 tokio-util = { version = "0.7", features = ["io"] }
 
+# Concurrent data structures
+dashmap = "6.1"
+
 # Static file embedding for frontend
 rust-embed = "8.5"
 mime_guess = "2.0"

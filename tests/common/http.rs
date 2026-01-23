@@ -2,11 +2,13 @@ use axum::Router;
 use codex::api::extractors::{AppState, AuthState};
 use codex::api::permissions::UserRole;
 use codex::api::routes::create_router;
-use codex::config::{ApiConfig, AuthConfig, EmailConfig, FilesConfig};
+use codex::config::{ApiConfig, AuthConfig, DatabaseConfig, EmailConfig, FilesConfig};
 use codex::db::entities::users;
 use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
-use codex::services::{FileCleanupService, SettingsService, ThumbnailService};
+use codex::services::{
+    AuthTrackingService, FileCleanupService, ReadProgressService, SettingsService, ThumbnailService,
+};
 use codex::utils::jwt::JwtService;
 use http_body_util::BodyExt;
 use hyper::{body::Bytes, Request, StatusCode};
@@ -23,6 +25,7 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
     ));
 
     let auth_config = Arc::new(AuthConfig::default());
+    let database_config = Arc::new(DatabaseConfig::default());
     let email_service = Arc::new(EmailService::new(EmailConfig::default()));
     let event_broadcaster = Arc::new(EventBroadcaster::new(1000));
     let settings_service = Arc::new(
@@ -33,11 +36,14 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
     let files_config = FilesConfig::default();
     let thumbnail_service = Arc::new(ThumbnailService::new(files_config.clone()));
     let file_cleanup_service = Arc::new(FileCleanupService::new(files_config));
+    let read_progress_service = Arc::new(ReadProgressService::new(db.clone()));
+    let auth_tracking_service = Arc::new(AuthTrackingService::new(db.clone()));
 
     Arc::new(AppState {
         db,
         jwt_service,
         auth_config,
+        database_config,
         email_service,
         event_broadcaster,
         settings_service,
@@ -45,6 +51,8 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
         file_cleanup_service,
         task_metrics_service: None, // Tests don't need metrics service
         scheduler: None,            // Tests don't need scheduler
+        read_progress_service,
+        auth_tracking_service,
     })
 }
 
@@ -56,6 +64,7 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
     ));
 
     let auth_config = Arc::new(AuthConfig::default());
+    let database_config = Arc::new(DatabaseConfig::default());
     let email_service = Arc::new(EmailService::new(EmailConfig::default()));
     let event_broadcaster = Arc::new(EventBroadcaster::new(1000));
     let settings_service = Arc::new(
@@ -66,11 +75,14 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
     let files_config = FilesConfig::default();
     let thumbnail_service = Arc::new(ThumbnailService::new(files_config.clone()));
     let file_cleanup_service = Arc::new(FileCleanupService::new(files_config));
+    let read_progress_service = Arc::new(ReadProgressService::new(db.clone()));
+    let auth_tracking_service = Arc::new(AuthTrackingService::new(db.clone()));
 
     Arc::new(AppState {
         db,
         jwt_service,
         auth_config,
+        database_config,
         email_service,
         event_broadcaster,
         settings_service,
@@ -78,6 +90,8 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
         file_cleanup_service,
         task_metrics_service: None, // Tests don't need metrics service
         scheduler: None,            // Tests don't need scheduler
+        read_progress_service,
+        auth_tracking_service,
     })
 }
 
@@ -109,6 +123,7 @@ pub fn create_test_api_config() -> ApiConfig {
 pub async fn create_test_router(state: Arc<AuthState>) -> Router {
     // Convert AuthState to AppState for compatibility
     let auth_config = Arc::new(AuthConfig::default());
+    let database_config = Arc::new(DatabaseConfig::default());
     let email_service = Arc::new(EmailService::new(EmailConfig::default()));
     let event_broadcaster = Arc::new(EventBroadcaster::new(1000));
     let settings_service = Arc::new(
@@ -119,10 +134,13 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
     let files_config = FilesConfig::default();
     let thumbnail_service = Arc::new(ThumbnailService::new(files_config.clone()));
     let file_cleanup_service = Arc::new(FileCleanupService::new(files_config));
+    let read_progress_service = Arc::new(ReadProgressService::new(state.db.clone()));
+    let auth_tracking_service = Arc::new(AuthTrackingService::new(state.db.clone()));
     let app_state = Arc::new(AppState {
         db: state.db.clone(),
         jwt_service: state.jwt_service.clone(),
         auth_config,
+        database_config,
         email_service,
         event_broadcaster,
         settings_service,
@@ -130,6 +148,8 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
         file_cleanup_service,
         task_metrics_service: None, // Tests don't need metrics service
         scheduler: None,            // Tests don't need scheduler
+        read_progress_service,
+        auth_tracking_service,
     });
     let api_config = create_test_api_config();
     create_router(app_state, &api_config)

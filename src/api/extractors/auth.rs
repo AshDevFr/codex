@@ -88,6 +88,8 @@ pub struct AppState {
     pub db: DatabaseConnection,
     pub jwt_service: Arc<JwtService>,
     pub auth_config: Arc<crate::config::AuthConfig>,
+    /// Database configuration - used for operation deadlines and pool settings
+    pub database_config: Arc<crate::config::DatabaseConfig>,
     pub email_service: Arc<crate::services::email::EmailService>,
     pub event_broadcaster: Arc<crate::events::EventBroadcaster>,
     /// Settings service - used for runtime configuration
@@ -102,6 +104,12 @@ pub struct AppState {
     /// Scheduler for managing scheduled tasks (library scans, deduplication, etc.)
     /// None when workers are disabled (CODEX_DISABLE_WORKERS=true) or in test environments
     pub scheduler: Option<Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>>,
+    /// Read progress batching service for efficient page view tracking
+    /// Batches progress updates in memory and flushes periodically to reduce DB load
+    pub read_progress_service: Arc<crate::services::ReadProgressService>,
+    /// Auth tracking service for batched last_used/last_login timestamp updates
+    /// Reduces DB load by batching API key usage and user login timestamps
+    pub auth_tracking_service: Arc<crate::services::AuthTrackingService>,
 }
 
 // Legacy alias for backwards compatibility during transition
@@ -239,12 +247,10 @@ async fn extract_from_api_key(api_key: &str, state: &AppState) -> Result<AuthCon
     // Get role from user model
     let role = user.get_role();
 
-    // Update last used timestamp (fire and forget - don't block on this)
-    let db = state.db.clone();
-    let key_id = api_key_model.id;
-    tokio::spawn(async move {
-        let _ = ApiKeyRepository::update_last_used(&db, key_id).await;
-    });
+    // Record API key usage (batched, non-blocking)
+    state
+        .auth_tracking_service
+        .record_api_key_used(api_key_model.id);
 
     Ok(AuthContext {
         user_id: user.id,
@@ -312,12 +318,8 @@ async fn extract_from_basic_auth(
     // Get role from user model
     let role = user.get_role();
 
-    // Update last login timestamp (fire and forget - don't block on this)
-    let db = state.db.clone();
-    let user_id = user.id;
-    tokio::spawn(async move {
-        let _ = UserRepository::update_last_login(&db, user_id).await;
-    });
+    // Record user login (batched, non-blocking)
+    state.auth_tracking_service.record_user_login(user.id);
 
     Ok(AuthContext {
         user_id: user.id,

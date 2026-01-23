@@ -170,6 +170,26 @@ pub struct DatabaseConfig {
     pub sqlite: Option<SQLiteConfig>,
 }
 
+impl DatabaseConfig {
+    /// Get the operation deadline in seconds for the current database type
+    ///
+    /// Returns the configured operation deadline, or a default of 30 seconds.
+    pub fn operation_deadline_seconds(&self) -> u64 {
+        match self.db_type {
+            DatabaseType::Postgres => self
+                .postgres
+                .as_ref()
+                .map(|c| c.operation_deadline_seconds)
+                .unwrap_or(30),
+            DatabaseType::SQLite => self
+                .sqlite
+                .as_ref()
+                .map(|c| c.operation_deadline_seconds)
+                .unwrap_or(30),
+        }
+    }
+}
+
 impl Default for DatabaseConfig {
     fn default() -> Self {
         use std::env;
@@ -240,6 +260,11 @@ pub struct PostgresConfig {
     /// Maximum lifetime of a connection in seconds (default: 3600 = 1 hour)
     /// Prevents stale connections from accumulating
     pub max_lifetime_seconds: u64,
+
+    /// Operation deadline in seconds (default: 30)
+    /// Maximum time a database operation can hold a connection before timing out.
+    /// Prevents indefinite connection holds from slow queries or stuck operations.
+    pub operation_deadline_seconds: u64,
 }
 
 impl Default for PostgresConfig {
@@ -260,6 +285,7 @@ impl Default for PostgresConfig {
             acquire_timeout_seconds: env_or("CODEX_DATABASE_POSTGRES_ACQUIRE_TIMEOUT", 30),
             idle_timeout_seconds: env_or("CODEX_DATABASE_POSTGRES_IDLE_TIMEOUT", 600),
             max_lifetime_seconds: env_or("CODEX_DATABASE_POSTGRES_MAX_LIFETIME", 3600),
+            operation_deadline_seconds: env_or("CODEX_DATABASE_POSTGRES_OPERATION_DEADLINE", 30),
         }
     }
 }
@@ -291,6 +317,11 @@ pub struct SQLiteConfig {
     /// Maximum lifetime of a connection in seconds (default: 1800 = 30 minutes)
     /// Reasonable for file-based database
     pub max_lifetime_seconds: u64,
+
+    /// Operation deadline in seconds (default: 30)
+    /// Maximum time a database operation can hold a connection before timing out.
+    /// Prevents indefinite connection holds from slow queries or stuck operations.
+    pub operation_deadline_seconds: u64,
 }
 
 impl Default for SQLiteConfig {
@@ -311,6 +342,7 @@ impl Default for SQLiteConfig {
             acquire_timeout_seconds: env_or("CODEX_DATABASE_SQLITE_ACQUIRE_TIMEOUT", 30),
             idle_timeout_seconds: env_or("CODEX_DATABASE_SQLITE_IDLE_TIMEOUT", 300),
             max_lifetime_seconds: env_or("CODEX_DATABASE_SQLITE_MAX_LIFETIME", 1800),
+            operation_deadline_seconds: env_or("CODEX_DATABASE_SQLITE_OPERATION_DEADLINE", 30),
         }
     }
 }
@@ -571,6 +603,48 @@ mod tests {
         assert!(matches!(config.db_type, DatabaseType::SQLite));
         assert!(config.postgres.is_none());
         assert!(config.sqlite.is_some());
+    }
+
+    #[test]
+    fn test_operation_deadline_seconds_sqlite() {
+        let config = DatabaseConfig {
+            db_type: DatabaseType::SQLite,
+            postgres: None,
+            sqlite: Some(SQLiteConfig {
+                path: "./test.db".to_string(),
+                pragmas: None,
+                operation_deadline_seconds: 45,
+                ..SQLiteConfig::default()
+            }),
+        };
+
+        assert_eq!(config.operation_deadline_seconds(), 45);
+    }
+
+    #[test]
+    fn test_operation_deadline_seconds_postgres() {
+        let config = DatabaseConfig {
+            db_type: DatabaseType::Postgres,
+            postgres: Some(PostgresConfig {
+                host: "localhost".to_string(),
+                port: 5432,
+                username: "user".to_string(),
+                password: "pass".to_string(),
+                database_name: "codex".to_string(),
+                operation_deadline_seconds: 60,
+                ..PostgresConfig::default()
+            }),
+            sqlite: None,
+        };
+
+        assert_eq!(config.operation_deadline_seconds(), 60);
+    }
+
+    #[test]
+    fn test_operation_deadline_seconds_default() {
+        // Test default values (should be 30 seconds)
+        let config = DatabaseConfig::default();
+        assert_eq!(config.operation_deadline_seconds(), 30);
     }
 
     #[test]

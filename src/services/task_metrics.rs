@@ -5,6 +5,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{interval, Duration as TokioDuration};
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
 use uuid::Uuid;
 
@@ -259,6 +260,13 @@ impl TaskMetricsService {
 
         let mut collector = self.collector.write().await;
         collector.record(completion);
+    }
+
+    /// Get the count of pending completions waiting to be flushed
+    #[cfg(test)]
+    pub async fn pending_completions(&self) -> usize {
+        let collector = self.collector.read().await;
+        collector.pending_completions.len()
     }
 
     /// Flush pending metrics to the database
@@ -638,53 +646,93 @@ impl TaskMetricsService {
     }
 
     /// Start background jobs for flushing, cleanup, and rollup
-    pub fn start_background_jobs(self: Arc<Self>) {
-        let service = self.clone();
+    ///
+    /// Accepts a `CancellationToken` for graceful shutdown support.
+    /// Returns `JoinHandle`s for each background task that can be awaited on shutdown.
+    pub fn start_background_jobs(
+        self: Arc<Self>,
+        cancel_token: CancellationToken,
+    ) -> Vec<tokio::task::JoinHandle<()>> {
+        let mut handles = Vec::with_capacity(3);
 
         // Flush job - every 1 minute
-        tokio::spawn(async move {
-            let mut flush_interval = interval(TokioDuration::from_secs(60));
+        {
+            let service = self.clone();
+            let token = cancel_token.clone();
+            handles.push(tokio::spawn(async move {
+                let mut flush_interval = interval(TokioDuration::from_secs(60));
 
-            loop {
-                flush_interval.tick().await;
-
-                if let Err(e) = service.flush().await {
-                    error!("Failed to flush task metrics: {}", e);
-                }
-            }
-        });
-
-        let service = self.clone();
-        // Cleanup job - every hour
-        tokio::spawn(async move {
-            let mut cleanup_interval = interval(TokioDuration::from_secs(3600));
-
-            loop {
-                cleanup_interval.tick().await;
-
-                if let Err(e) = service.cleanup().await {
-                    error!("Failed to cleanup task metrics: {}", e);
-                }
-            }
-        });
-
-        // Rollup job - every day at midnight (check hourly)
-        let service = self;
-        tokio::spawn(async move {
-            let mut rollup_interval = interval(TokioDuration::from_secs(3600));
-
-            loop {
-                rollup_interval.tick().await;
-
-                // Only run rollup at midnight (hour 0)
-                let now = Utc::now();
-                if now.time().hour() == 0 {
-                    if let Err(e) = service.rollup().await {
-                        error!("Failed to rollup task metrics: {}", e);
+                loop {
+                    tokio::select! {
+                        _ = token.cancelled() => {
+                            // Final flush before shutdown
+                            debug!("Task metrics flush job shutting down, performing final flush");
+                            if let Err(e) = service.flush().await {
+                                error!("Failed to flush task metrics during shutdown: {}", e);
+                            }
+                            break;
+                        }
+                        _ = flush_interval.tick() => {
+                            if let Err(e) = service.flush().await {
+                                error!("Failed to flush task metrics: {}", e);
+                            }
+                        }
                     }
                 }
-            }
-        });
+            }));
+        }
+
+        // Cleanup job - every hour
+        {
+            let service = self.clone();
+            let token = cancel_token.clone();
+            handles.push(tokio::spawn(async move {
+                let mut cleanup_interval = interval(TokioDuration::from_secs(3600));
+
+                loop {
+                    tokio::select! {
+                        _ = token.cancelled() => {
+                            debug!("Task metrics cleanup job shutting down");
+                            break;
+                        }
+                        _ = cleanup_interval.tick() => {
+                            if let Err(e) = service.cleanup().await {
+                                error!("Failed to cleanup task metrics: {}", e);
+                            }
+                        }
+                    }
+                }
+            }));
+        }
+
+        // Rollup job - every day at midnight (check hourly)
+        {
+            let service = self;
+            let token = cancel_token;
+            handles.push(tokio::spawn(async move {
+                let mut rollup_interval = interval(TokioDuration::from_secs(3600));
+
+                loop {
+                    tokio::select! {
+                        _ = token.cancelled() => {
+                            debug!("Task metrics rollup job shutting down");
+                            break;
+                        }
+                        _ = rollup_interval.tick() => {
+                            // Only run rollup at midnight (hour 0)
+                            let now = Utc::now();
+                            if now.time().hour() == 0 {
+                                if let Err(e) = service.rollup().await {
+                                    error!("Failed to rollup task metrics: {}", e);
+                                }
+                            }
+                        }
+                    }
+                }
+            }));
+        }
+
+        handles
     }
 }
 
@@ -988,6 +1036,114 @@ mod tests {
             metrics.p95_duration_ms <= 1000,
             "P95 should be <= 1000, but got {}",
             metrics.p95_duration_ms
+        );
+    }
+
+    #[tokio::test]
+    async fn test_background_jobs_graceful_shutdown() {
+        let db = setup_test_db().await;
+        let settings = Arc::new(SettingsService::new(db.clone()).await.unwrap());
+        let service = Arc::new(TaskMetricsService::new(db, settings));
+
+        // Record some data to ensure flush has something to process during shutdown
+        service
+            .record(
+                "shutdown_test".to_string(),
+                None,
+                true,
+                false,
+                100,
+                10,
+                1,
+                100,
+                None,
+            )
+            .await;
+
+        // Create a cancellation token
+        let cancel_token = CancellationToken::new();
+
+        // Start background jobs
+        let handles = service.clone().start_background_jobs(cancel_token.clone());
+
+        // Verify we got 3 handles (flush, cleanup, rollup)
+        assert_eq!(handles.len(), 3);
+
+        // Let them run for a bit
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Verify all tasks are still running
+        for handle in &handles {
+            assert!(!handle.is_finished());
+        }
+
+        // Cancel and wait for graceful shutdown
+        cancel_token.cancel();
+
+        // All tasks should complete within a reasonable time
+        for (i, handle) in handles.into_iter().enumerate() {
+            let result = tokio::time::timeout(tokio::time::Duration::from_secs(5), handle).await;
+            assert!(
+                result.is_ok(),
+                "Background job {} did not shutdown in time",
+                i
+            );
+            assert!(
+                result.unwrap().is_ok(),
+                "Background job {} panicked during shutdown",
+                i
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_background_jobs_final_flush_on_shutdown() {
+        let db = setup_test_db().await;
+        let settings = Arc::new(SettingsService::new(db.clone()).await.unwrap());
+        let service = Arc::new(TaskMetricsService::new(db, settings));
+
+        // Record some data
+        service
+            .record(
+                "final_flush_test".to_string(),
+                None,
+                true,
+                false,
+                100,
+                10,
+                1,
+                100,
+                None,
+            )
+            .await;
+
+        // Verify data is pending
+        let pending = service.pending_completions().await;
+        assert_eq!(pending, 1, "Should have 1 pending completion");
+
+        // Create a cancellation token
+        let cancel_token = CancellationToken::new();
+
+        // Start background jobs
+        let handles = service.clone().start_background_jobs(cancel_token.clone());
+
+        // Give the tasks time to start
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+        // Cancel immediately (before the first interval tick)
+        cancel_token.cancel();
+
+        // Wait for all tasks to complete
+        for handle in handles {
+            let _ = handle.await;
+        }
+
+        // After shutdown, the flush task should have performed a final flush
+        // The pending completions should be 0 since they were flushed
+        let pending = service.pending_completions().await;
+        assert_eq!(
+            pending, 0,
+            "Pending completions should be 0 after final flush during shutdown"
         );
     }
 }
