@@ -112,10 +112,8 @@ impl UserRepository {
         limit: u64,
     ) -> Result<UserListResult> {
         // Build base query with optional sharing tag join
-        let user_ids = if filter.sharing_tag.is_some() {
+        let user_ids = if let Some(tag_name) = &filter.sharing_tag {
             // When filtering by sharing tag, we need to find users with grants for that tag
-            let tag_name = filter.sharing_tag.as_ref().unwrap();
-
             let mut query = user_sharing_tags::Entity::find()
                 .inner_join(sharing_tags::Entity)
                 .filter(sharing_tags::Column::Name.eq(tag_name));
