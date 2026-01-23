@@ -8,34 +8,63 @@ database:
       journal_mode: WAL
       synchronous: NORMAL
       # Note: foreign_keys is ALWAYS ON for data integrity (cannot be disabled)
+    # Connection Pool Settings (optional - defaults shown)
+    # max_connections: 16
+    # min_connections: 2
+    # acquire_timeout_seconds: 30
+    # idle_timeout_seconds: 300
+    # max_lifetime_seconds: 1800
+    # operation_deadline_seconds: 30
 
 application:
-  # NOTE: application.name moved to database settings (runtime configurable)
-  # This value serves as fallback if database setting not found
-  name: Codex
   host: 127.0.0.1
   port: 8080
 
 logging:
   level: info
+  console: true
   # file: ./logs/codex.log  # Uncomment to enable file logging
 
 # Auth config - uses defaults, override with CODEX_AUTH_* env vars
 # Defaults: JWT 24h expiry, Argon2 (19456, 2, 1)
 auth:
   jwt_secret: "CHANGE_ME_IN_PRODUCTION" # Override with CODEX_AUTH_JWT_SECRET env var
+  # jwt_expiry_hours: 24
+  # refresh_token_enabled: false
+  # refresh_token_expiry_days: 30
+  # email_confirmation_required: false
+  # argon2_memory_cost: 19456
+  # argon2_time_cost: 2
+  # argon2_parallelism: 1
 
 # API config - all fields use defaults
 # Defaults: enable_api_docs=false, api_docs_path="/docs", cors_enabled=true, max_page_size=100
 # Uncomment below to enable API docs (Scalar):
 # api:
+#   base_path: /api/v1
 #   enable_api_docs: true
+#   api_docs_path: /docs
+#   cors_enabled: true
+#   cors_origins:
+#     - "*"
+#   max_page_size: 100
+
+# Email Settings (optional - for email verification)
+# email:
+#   smtp_host: localhost
+#   smtp_port: 587
+#   smtp_username: ""
+#   smtp_password: ""
+#   smtp_from_email: noreply@example.com
+#   smtp_from_name: Codex
+#   verification_token_expiry_hours: 24
+#   verification_url_base: http://localhost:8080
 
 # Task Worker Settings (Startup-Time - Require Restart)
 # ======================================================
 # These settings control worker behavior and require a restart to take effect.
 task:
-  worker_count: 4 # Number of parallel task workers (override: CODEX_TASK_WORKER_COUNT)
+  worker_count: 2 # Number of parallel task workers (override: CODEX_TASK_WORKER_COUNT)
 
 # Scanner Settings (Startup-Time - Require Restart)
 # ==================================================
@@ -45,8 +74,22 @@ scanner:
 # Files Settings (Startup-Time - Require Restart)
 # ================================================
 # Directory paths for thumbnails and user uploads.
-# Runtime settings (max_dimension, jpeg_quality) are stored in the database
-# and can be changed via the Settings API without restart.
 files:
   thumbnail_dir: data/thumbnails # Thumbnail cache directory (override: CODEX_FILES_THUMBNAIL_DIR)
   uploads_dir: data/uploads # User uploads directory (override: CODEX_FILES_UPLOADS_DIR)
+
+# PDF Rendering Settings
+# ======================
+# pdf:
+#   pdfium_library_path: null  # Path to PDFium library (optional, auto-detected)
+#   render_dpi: 150            # Default render DPI (72-300)
+#   jpeg_quality: 85           # JPEG quality for rendered pages (1-100)
+#   cache_rendered_pages: true # Enable rendered page caching
+#   cache_dir: data/cache      # Directory for caching rendered PDF pages
+
+# Komga-Compatible API (disabled by default)
+# ==========================================
+# Enables third-party apps like Komic to connect using Komga API format
+# komga_api:
+#   enabled: false
+#   prefix: komgav1  # URL prefix: /{prefix}/api/v1/...

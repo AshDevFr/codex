@@ -12,22 +12,36 @@
 #   CODEX_DATABASE_POSTGRES_DATABASE_NAME=codex
 #   CODEX_AUTH_JWT_SECRET=<from secret>
 #
-# Optional overrides (most settings now in database):
+# Optional overrides:
 #   CODEX_APPLICATION_HOST=0.0.0.0
 #   CODEX_APPLICATION_PORT=8080
 #   CODEX_API_ENABLE_API_DOCS=false
+#   CODEX_LOGGING_LEVEL=info
+#   CODEX_LOGGING_CONSOLE=true
+#   CODEX_LOGGING_FILE=/var/log/codex/codex.log
 #
 # Startup-Time Settings (Require Pod Restart)
 # ============================================
 # These settings are in the config file and require a pod restart to change.
 # Override via environment variables if needed:
-#   CODEX_TASK_WORKER_COUNT=4
+#   CODEX_TASK_WORKER_COUNT=2
 #   CODEX_SCANNER_MAX_CONCURRENT_SCANS=2
 #   CODEX_FILES_THUMBNAIL_DIR=data/thumbnails
 #   CODEX_FILES_UPLOADS_DIR=data/uploads
+#
+# PDF Settings:
+#   CODEX_PDF_PDFIUM_LIBRARY_PATH=/usr/lib/libpdfium.so
+#   CODEX_PDF_RENDER_DPI=150
+#   CODEX_PDF_JPEG_QUALITY=85
+#   CODEX_PDF_CACHE_RENDERED_PAGES=true
+#   CODEX_PDF_CACHE_DIR=data/cache
+#
+# Komga API (for third-party app compatibility):
+#   CODEX_KOMGA_API_ENABLED=false
+#   CODEX_KOMGA_API_PREFIX=komgav1
 
 task:
-  worker_count: 4 # Number of parallel task workers per pod
+  worker_count: 2 # Number of parallel task workers per pod
 
 scanner:
   max_concurrent_scans: 2 # Max concurrent library scans
@@ -46,8 +60,23 @@ files:
 
 # Uncomment to override defaults:
 # application:
-#   name: Codex Production
+#   host: 0.0.0.0
+#   port: 8080
 
 # Uncomment to enable file logging:
 # logging:
+#   level: info
+#   console: true
 #   file: /var/log/codex/codex.log
+
+# PDF Rendering Settings:
+# pdf:
+#   render_dpi: 150
+#   jpeg_quality: 85
+#   cache_rendered_pages: true
+#   cache_dir: data/cache
+
+# Komga-Compatible API (for third-party apps):
+# komga_api:
+#   enabled: false
+#   prefix: komgav1

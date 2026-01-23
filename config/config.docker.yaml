@@ -8,32 +8,60 @@ database:
     username: codex
     password: codex
     database_name: codex
+    # Connection Pool Settings (optional - defaults shown)
+    # max_connections: 100
+    # min_connections: 5
+    # acquire_timeout_seconds: 30
+    # idle_timeout_seconds: 600
+    # max_lifetime_seconds: 3600
+    # operation_deadline_seconds: 30
 
 application:
-  # NOTE: application.name moved to database settings (runtime configurable)
-  name: Codex
   host: 0.0.0.0
   port: 8080
 
 logging:
-  # NOTE: logging.level moved to database settings (runtime configurable)
   level: info
+  console: true
   # file: ./logs/codex.log  # Uncomment to enable file logging
 
 # Auth config - uses defaults, override with CODEX_AUTH_* env vars
-# Security settings - kept in config (not moved to database)
 auth:
   jwt_secret: "CHANGE_ME_IN_PRODUCTION" # Override with CODEX_AUTH_JWT_SECRET env var
+  # jwt_expiry_hours: 24
+  # refresh_token_enabled: false
+  # refresh_token_expiry_days: 30
+  # email_confirmation_required: false
+  # argon2_memory_cost: 19456
+  # argon2_time_cost: 2
+  # argon2_parallelism: 1
 
-# API config - security boundaries, kept in config (not moved to database)
+# API config - enabled for easier API testing in Docker
 api:
-  enable_api_docs: true # Enabled in Docker for easier API testing
+  enable_api_docs: true
+  # base_path: /api/v1
+  # api_docs_path: /docs
+  # cors_enabled: true
+  # cors_origins:
+  #   - "*"
+  # max_page_size: 100
+
+# Email Settings (optional - for email verification)
+# email:
+#   smtp_host: localhost
+#   smtp_port: 587
+#   smtp_username: ""
+#   smtp_password: ""
+#   smtp_from_email: noreply@example.com
+#   smtp_from_name: Codex
+#   verification_token_expiry_hours: 24
+#   verification_url_base: http://localhost:8080
 
 # Task Worker Settings (Startup-Time - Require Restart)
 # ======================================================
 # These settings control worker behavior and require a restart to take effect.
 task:
-  worker_count: 4 # Number of parallel task workers (override: CODEX_TASK_WORKER_COUNT)
+  worker_count: 2 # Number of parallel task workers (override: CODEX_TASK_WORKER_COUNT)
 
 # Scanner Settings (Startup-Time - Require Restart)
 # ==================================================
@@ -43,8 +71,22 @@ scanner:
 # Files Settings (Startup-Time - Require Restart)
 # ================================================
 # Directory paths for thumbnails and user uploads.
-# Runtime settings (max_dimension, jpeg_quality) are stored in the database
-# and can be changed via the Settings API without restart.
 files:
   thumbnail_dir: data/thumbnails # Thumbnail cache directory (override: CODEX_FILES_THUMBNAIL_DIR)
   uploads_dir: data/uploads # User uploads directory (override: CODEX_FILES_UPLOADS_DIR)
+
+# PDF Rendering Settings
+# ======================
+# pdf:
+#   pdfium_library_path: null  # Path to PDFium library (optional, auto-detected)
+#   render_dpi: 150            # Default render DPI (72-300)
+#   jpeg_quality: 85           # JPEG quality for rendered pages (1-100)
+#   cache_rendered_pages: true # Enable rendered page caching
+#   cache_dir: data/cache      # Directory for caching rendered PDF pages
+
+# Komga-Compatible API (disabled by default)
+# ==========================================
+# Enables third-party apps like Komic to connect using Komga API format
+# komga_api:
+#   enabled: false
+#   prefix: komgav1  # URL prefix: /{prefix}/api/v1/...
