@@ -1,0 +1,30 @@
+# Cargo configuration for faster builds
+# See: https://doc.rust-lang.org/cargo/reference/config.html
+
+# =============================================================================
+# Linker Configuration
+# =============================================================================
+# Using faster linkers significantly reduces link time during development.
+# - macOS: lld (install with: brew install lld)
+# - Linux: mold (install with: apt install mold)
+#
+# If the linker is not installed, Cargo will fall back to the default linker.
+# =============================================================================
+
+# macOS (Apple Silicon)
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# macOS (Intel)
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# Linux (x86_64) - used in CI
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+# Linux (ARM64)
+[target.aarch64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]

@@ -41,10 +41,12 @@ jobs:
       - name: Install base dependencies
         run: |
           apt-get update
-          apt-get install -y git curl build-essential pkg-config
+          apt-get install -y git curl build-essential pkg-config clang mold
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
       - name: Cache Cargo dependencies
         uses: actions/cache@v4
         with:
@@ -53,12 +55,14 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
             target/
           key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-test-
       - name: Run tests
-        run: cargo test --features rar
+        run: cargo nextest run --features rar
         env:
           CARGO_PROFILE_TEST_OPT_LEVEL: 1
 
@@ -73,7 +77,7 @@ jobs:
       - name: Install base dependencies
         run: |
           apt-get update
-          apt-get install -y git curl build-essential pkg-config
+          apt-get install -y git curl build-essential pkg-config clang mold
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -87,6 +91,8 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
             target/
           key: ${{ runner.os }}-cargo-lint-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |

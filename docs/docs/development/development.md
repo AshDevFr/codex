@@ -121,6 +121,60 @@ cargo test --no-default-features
 
 For running PostgreSQL tests, start the test container with `make test-up` and run `make test-postgres`.
 
+### Fast Parallel Tests (cargo-nextest)
+
+For significantly faster test execution, install [cargo-nextest](https://nexte.st/):
+
+```bash
+cargo install cargo-nextest --locked
+```
+
+Then run tests with:
+
+```bash
+# Fast parallel tests
+make test-fast
+
+# Fast PostgreSQL tests
+make test-fast-postgres
+```
+
+Nextest runs tests in parallel and is typically 2-3x faster than `cargo test`.
+
+## Speeding Up Builds
+
+Codex is configured to use faster linkers when available. This significantly reduces link times during development.
+
+### macOS
+
+Install the lld linker:
+
+```bash
+brew install lld
+```
+
+### Linux
+
+Install the mold linker:
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install mold clang
+
+# Fedora
+sudo dnf install mold clang
+```
+
+### Verify Setup
+
+Check that your development tools are properly installed:
+
+```bash
+make dev-check
+```
+
+This will show which optional performance tools are available.
+
 ## Development Workflow
 
 ### Running the Server

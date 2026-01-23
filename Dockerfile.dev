@@ -12,7 +12,9 @@ RUN apk add --no-cache \
     postgresql-client \
     curl \
     libstdc++ \
-    libgcc
+    libgcc \
+    clang \
+    mold
 
 # Install PDFium library for PDF page rendering
 # This enables rendering of text-only and vector PDF pages in development
@@ -32,13 +34,14 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 RUN ln -sf /usr/local/lib/libpdfium.so /usr/lib/libpdfium.so
 ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/lib:$LD_LIBRARY_PATH
 
-# Install cargo-watch for hot reloading
-RUN cargo install cargo-watch
+# Install cargo-watch for hot reloading and cargo-nextest for fast parallel tests
+RUN cargo install cargo-watch cargo-nextest --locked
 
 WORKDIR /app
 
 # Copy Cargo workspace files for dependency caching
 COPY Cargo.toml Cargo.lock ./
+COPY .cargo/ ./.cargo/
 COPY migration/Cargo.toml ./migration/
 
 # Create dummy source files to build dependencies

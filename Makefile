@@ -65,6 +65,19 @@ dev-seed: ## Create initial admin user in dev environment
 dev-watch: ## Start with watch mode (auto-sync code changes)
 	docker compose -f docker-compose.yml -f compose.watch.yml --profile dev watch
 
+dev-check: ## Check development tool installation
+	@echo "$(BLUE)Checking development tools...$(NC)"
+	@echo ""
+	@echo "$(BLUE)Required:$(NC)"
+	@command -v cargo >/dev/null 2>&1 && echo "  $(GREEN)✓ cargo$(NC)" || echo "  $(YELLOW)✗ cargo (install from https://rustup.rs)$(NC)"
+	@command -v node >/dev/null 2>&1 && echo "  $(GREEN)✓ node$(NC)" || echo "  $(YELLOW)✗ node (install from https://nodejs.org)$(NC)"
+	@command -v docker >/dev/null 2>&1 && echo "  $(GREEN)✓ docker$(NC)" || echo "  $(YELLOW)✗ docker (install Docker Desktop)$(NC)"
+	@echo ""
+	@echo "$(BLUE)Optional (for faster builds):$(NC)"
+	@command -v lld >/dev/null 2>&1 && echo "  $(GREEN)✓ lld$(NC) (faster linker)" || echo "  $(YELLOW)✗ lld$(NC) - install: brew install lld"
+	@command -v mold >/dev/null 2>&1 && echo "  $(GREEN)✓ mold$(NC) (faster linker)" || echo "  $(YELLOW)✗ mold$(NC) - install: apt install mold (Linux only)"
+	@cargo nextest --version >/dev/null 2>&1 && echo "  $(GREEN)✓ cargo-nextest$(NC) (faster tests)" || echo "  $(YELLOW)✗ cargo-nextest$(NC) - install: cargo install cargo-nextest --locked"
+
 # =============================================================================
 # Testing
 # =============================================================================
@@ -101,6 +114,30 @@ test-down: ## Stop test database
 
 test-clean: ## Stop test database and remove volumes
 	docker compose --profile test down -v
+
+# Fast tests using cargo-nextest (parallel execution)
+# Install: cargo install cargo-nextest --locked
+
+test-fast: ## Run backend tests with nextest (faster, parallel)
+	cargo nextest run
+
+test-fast-all: ## Run all tests with nextest (faster, parallel)
+	@echo "$(YELLOW)Running frontend tests...$(NC)"
+	cd web && npm run test:run
+	@echo "$(GREEN)Frontend tests complete!$(NC)"
+	@$(MAKE) test-fast-postgres
+
+test-fast-postgres: ## Run PostgreSQL tests with nextest
+	@$(MAKE) test-up
+	@$(MAKE) test-fast-postgres-run
+	@$(MAKE) test-down
+
+test-fast-postgres-run: ## Run PostgreSQL tests with nextest (assumes DB running)
+	@echo "$(YELLOW)Waiting for PostgreSQL to be ready...$(NC)"
+	@until docker exec codex-postgres-test pg_isready -U codex_test > /dev/null 2>&1; do sleep 1; done
+	@echo "$(GREEN)PostgreSQL is ready!$(NC)"
+	POSTGRES_HOST=localhost POSTGRES_PORT=5433 POSTGRES_USER=codex_test POSTGRES_PASSWORD=codex_test POSTGRES_DB=codex_test \
+		cargo nextest run --features rar --run-ignored all
 
 # =============================================================================
 # Documentation (Docusaurus)

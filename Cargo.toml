@@ -141,6 +141,19 @@ http-body-util = "0.1"
 hyper = { version = "1.0", features = ["full"] }
 serial_test = "3.2"
 
+# =============================================================================
+# Development Profile - Optimized for fast incremental builds
+# =============================================================================
+[profile.dev]
+incremental = true
+debug = 1  # Reduced from default 2, still allows backtraces
+
+[profile.dev.package."*"]
+opt-level = 0  # Keep dependencies unoptimized for fast builds
+
+# =============================================================================
+# Distribution Profile - Optimized for release binaries
+# =============================================================================
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
