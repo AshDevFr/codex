@@ -11,7 +11,9 @@ use sea_orm::{ActiveModelTrait, DatabaseConnection, Set};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::UNIX_EPOCH;
 use tokio::fs;
+use tokio_util::io::ReaderStream;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -19,6 +21,17 @@ use crate::config::FilesConfig;
 use crate::db::entities::books;
 use crate::db::repositories::{BookRepository, SeriesRepository, SettingsRepository};
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
+
+/// Metadata for a cached thumbnail file (for HTTP conditional caching)
+#[derive(Debug, Clone)]
+pub struct ThumbnailMeta {
+    /// File size in bytes
+    pub size: u64,
+    /// Last modified time as Unix timestamp (seconds)
+    pub modified_unix: u64,
+    /// ETag based on book ID, size, and modified time
+    pub etag: String,
+}
 
 /// Service for managing thumbnail cache
 pub struct ThumbnailService {
@@ -108,6 +121,46 @@ impl ThumbnailService {
         fs::read(&path)
             .await
             .with_context(|| format!("Failed to read thumbnail from {:?}", path))
+    }
+
+    /// Get metadata for a cached thumbnail (for HTTP conditional requests)
+    ///
+    /// Returns file metadata including size, modified time, and ETag for use
+    /// with HTTP caching headers (ETag, Last-Modified, If-None-Match, etc.)
+    pub async fn get_thumbnail_metadata(&self, book_id: Uuid) -> Option<ThumbnailMeta> {
+        let path = self.get_thumbnail_path(book_id);
+        let metadata = fs::metadata(&path).await.ok()?;
+
+        let size = metadata.len();
+        let modified_unix = metadata
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        // Generate ETag from book_id + size + modified time for uniqueness
+        let etag = format!("\"{:x}-{:x}-{:x}\"", book_id.as_u128(), size, modified_unix);
+
+        Some(ThumbnailMeta {
+            size,
+            modified_unix,
+            etag,
+        })
+    }
+
+    /// Open a cached thumbnail for streaming
+    ///
+    /// Returns a stream for reading the cached file directly without loading
+    /// the entire file into memory.
+    pub async fn get_thumbnail_stream(
+        &self,
+        book_id: Uuid,
+    ) -> Option<ReaderStream<tokio::fs::File>> {
+        let path = self.get_thumbnail_path(book_id);
+        let file = tokio::fs::File::open(&path).await.ok()?;
+        debug!("Streaming thumbnail for book {}", book_id);
+        Some(ReaderStream::new(file))
     }
 
     /// Generate and save a thumbnail for a book
@@ -434,5 +487,94 @@ mod tests {
         let service = ThumbnailService::new(test_files_config());
         let uploads_dir = service.get_uploads_dir();
         assert_eq!(uploads_dir.to_string_lossy(), "data/uploads");
+    }
+
+    #[tokio::test]
+    async fn test_get_thumbnail_metadata_not_found() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let config = FilesConfig {
+            thumbnail_dir: temp_dir.path().to_string_lossy().to_string(),
+            uploads_dir: "data/uploads".to_string(),
+        };
+        let service = ThumbnailService::new(config);
+        let book_id = Uuid::new_v4();
+
+        // No metadata for non-existent thumbnail
+        assert!(service.get_thumbnail_metadata(book_id).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_get_thumbnail_metadata_exists() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let config = FilesConfig {
+            thumbnail_dir: temp_dir.path().to_string_lossy().to_string(),
+            uploads_dir: "data/uploads".to_string(),
+        };
+        let service = ThumbnailService::new(config);
+        let book_id = Uuid::new_v4();
+
+        // Create a dummy thumbnail
+        let thumb_path = service.get_thumbnail_path(book_id);
+        fs::create_dir_all(thumb_path.parent().unwrap())
+            .await
+            .unwrap();
+        fs::write(&thumb_path, b"fake thumbnail data")
+            .await
+            .unwrap();
+
+        // Get metadata
+        let meta = service.get_thumbnail_metadata(book_id).await;
+        assert!(meta.is_some());
+
+        let meta = meta.unwrap();
+        assert_eq!(meta.size, 19); // "fake thumbnail data" = 19 bytes
+        assert!(meta.modified_unix > 0);
+        assert!(meta.etag.starts_with('"') && meta.etag.ends_with('"'));
+    }
+
+    #[tokio::test]
+    async fn test_get_thumbnail_stream_not_found() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let config = FilesConfig {
+            thumbnail_dir: temp_dir.path().to_string_lossy().to_string(),
+            uploads_dir: "data/uploads".to_string(),
+        };
+        let service = ThumbnailService::new(config);
+        let book_id = Uuid::new_v4();
+
+        // No stream for non-existent thumbnail
+        assert!(service.get_thumbnail_stream(book_id).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_get_thumbnail_stream_exists() {
+        use tokio_stream::StreamExt;
+
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let config = FilesConfig {
+            thumbnail_dir: temp_dir.path().to_string_lossy().to_string(),
+            uploads_dir: "data/uploads".to_string(),
+        };
+        let service = ThumbnailService::new(config);
+        let book_id = Uuid::new_v4();
+
+        // Create a dummy thumbnail
+        let thumb_path = service.get_thumbnail_path(book_id);
+        fs::create_dir_all(thumb_path.parent().unwrap())
+            .await
+            .unwrap();
+        let test_data = b"fake thumbnail data for streaming";
+        fs::write(&thumb_path, test_data).await.unwrap();
+
+        // Get stream and read data
+        let stream = service.get_thumbnail_stream(book_id).await;
+        assert!(stream.is_some());
+
+        let mut stream = stream.unwrap();
+        let mut collected = Vec::new();
+        while let Some(chunk) = stream.next().await {
+            collected.extend_from_slice(&chunk.unwrap());
+        }
+        assert_eq!(collected, test_data);
     }
 }

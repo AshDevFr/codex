@@ -154,6 +154,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/pdf-cache": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Clear the entire PDF cache immediately (synchronous)
+         * @description Deletes all cached PDF pages immediately. This operation cannot be undone.
+         *     For selective cleanup based on age, use the trigger_pdf_cache_cleanup endpoint instead.
+         *
+         *     # Permission Required
+         *     - Admin access required
+         */
+        delete: operations["clear_pdf_cache"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/pdf-cache/cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger PDF cache cleanup task
+         * @description Enqueues a background task to clean up cached PDF pages older than
+         *     the configured max age (default: 30 days, configurable via settings).
+         *
+         *     # Permission Required
+         *     - Admin access required
+         *
+         *     Returns the task ID which can be used to track progress.
+         */
+        post: operations["trigger_pdf_cache_cleanup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/pdf-cache/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get PDF cache statistics
+         * @description Returns statistics about the PDF page cache including total files,
+         *     total size, number of books with cached pages, and cache status.
+         *
+         *     # Permission Required
+         *     - Admin access required
+         */
+        get: operations["get_pdf_cache_stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings": {
         parameters: {
             query?: never;
@@ -698,7 +772,9 @@ export interface paths {
         };
         /**
          * Get page image from a book
-         * @description Extracts and serves the image for a specific page from CBZ/CBR/EPUB/PDF
+         * @description Extracts and serves the image for a specific page from CBZ/CBR/EPUB/PDF.
+         *     For PDF pages, supports HTTP conditional caching with ETag and Last-Modified
+         *     headers, returning 304 Not Modified when the client has a valid cached copy.
          */
         get: operations["get_page_image"];
         put?: never;
@@ -754,7 +830,9 @@ export interface paths {
         };
         /**
          * Get thumbnail/cover image for a book
-         * @description Extracts the first page and resizes it to a thumbnail (max 400px width/height)
+         * @description Extracts the first page and resizes it to a thumbnail (max 400px width/height).
+         *     Supports HTTP conditional caching with ETag and Last-Modified headers,
+         *     returning 304 Not Modified when the client has a valid cached copy.
          */
         get: operations["get_book_thumbnail"];
         put?: never;
@@ -1889,7 +1967,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a specific cover image for a series */
+        /**
+         * Get a specific cover image for a series
+         * @description Supports HTTP conditional caching with ETag and Last-Modified headers,
+         *     returning 304 Not Modified when the client has a valid cached copy.
+         */
         get: operations["get_series_cover_image"];
         put?: never;
         post?: never;
@@ -5886,6 +5968,68 @@ export interface components {
              */
             year?: number | null;
         };
+        /** @description Result of a PDF cache cleanup operation */
+        PdfCacheCleanupResultDto: {
+            /**
+             * Format: int64
+             * @description Bytes freed by the cleanup
+             * @example 26214400
+             */
+            bytes_reclaimed: number;
+            /**
+             * @description Human-readable size reclaimed (e.g., "25.0 MB")
+             * @example 25.0 MB
+             */
+            bytes_reclaimed_human: string;
+            /**
+             * Format: int64
+             * @description Number of cached page files deleted
+             * @example 250
+             */
+            files_deleted: number;
+        };
+        /** @description Statistics about the PDF page cache */
+        PdfCacheStatsDto: {
+            /**
+             * Format: int64
+             * @description Number of unique books with cached pages
+             * @example 45
+             */
+            book_count: number;
+            /**
+             * @description Path to the cache directory
+             * @example /data/cache
+             */
+            cache_dir: string;
+            /**
+             * @description Whether the PDF page cache is enabled
+             * @example true
+             */
+            cache_enabled: boolean;
+            /**
+             * Format: int32
+             * @description Age of the oldest cached file in days (if any files exist)
+             * @example 15
+             */
+            oldest_file_age_days?: number | null;
+            /**
+             * Format: int64
+             * @description Total number of cached page files
+             * @example 1500
+             */
+            total_files: number;
+            /**
+             * Format: int64
+             * @description Total size of cache in bytes
+             * @example 157286400
+             */
+            total_size_bytes: number;
+            /**
+             * @description Human-readable total size (e.g., "150.0 MB")
+             * @example 150.0 MB
+             */
+            total_size_human: string;
+        };
         /** @description Preview scan request */
         PreviewScanRequest: {
             /**
@@ -7552,6 +7696,9 @@ export interface components {
         } | {
             /** @enum {string} */
             type: "cleanup_orphaned_files";
+        } | {
+            /** @enum {string} */
+            type: "cleanup_pdf_cache";
         };
         /** @description Metrics for a specific task type */
         TaskTypeMetricsDto: {
@@ -7727,6 +7874,26 @@ export interface components {
             /**
              * Format: uuid
              * @description Task ID for tracking the scan progress
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            task_id: string;
+        };
+        /** @description Response when triggering a PDF cache cleanup task */
+        TriggerPdfCacheCleanupResponse: {
+            /**
+             * Format: int32
+             * @description Max age setting being used for cleanup (in days)
+             * @example 30
+             */
+            max_age_days: number;
+            /**
+             * @description Message describing the action taken
+             * @example PDF cache cleanup task queued successfully
+             */
+            message: string;
+            /**
+             * Format: uuid
+             * @description ID of the queued cleanup task
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             task_id: string;
@@ -8829,6 +8996,112 @@ export interface operations {
             };
             /** @description Integration not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    clear_pdf_cache: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cache cleared successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "bytes_reclaimed": 157286400,
+                     *       "bytes_reclaimed_human": "150.0 MB",
+                     *       "files_deleted": 1500
+                     *     }
+                     */
+                    "application/json": components["schemas"]["PdfCacheCleanupResultDto"];
+                };
+            };
+            /** @description Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    trigger_pdf_cache_cleanup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleanup task queued successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "max_age_days": 30,
+                     *       "message": "PDF cache cleanup task queued successfully",
+                     *       "task_id": "550e8400-e29b-41d4-a716-446655440000"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["TriggerPdfCacheCleanupResponse"];
+                };
+            };
+            /** @description Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_pdf_cache_stats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cache statistics retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "book_count": 45,
+                     *       "cache_dir": "/data/cache",
+                     *       "cache_enabled": true,
+                     *       "oldest_file_age_days": 15,
+                     *       "total_files": 1500,
+                     *       "total_size_bytes": 157286400,
+                     *       "total_size_human": "150.0 MB"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["PdfCacheStatsDto"];
+                };
+            };
+            /** @description Admin access required */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10100,6 +10373,13 @@ export interface operations {
                     "image/jpeg": unknown;
                 };
             };
+            /** @description Not modified (client cache is valid) */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Forbidden */
             403: {
                 headers: {
@@ -10303,6 +10583,13 @@ export interface operations {
                 content: {
                     "image/jpeg": unknown;
                 };
+            };
+            /** @description Not modified (client cache is valid) */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Forbidden */
             403: {
@@ -12528,6 +12815,13 @@ export interface operations {
                 content: {
                     "image/jpeg": unknown;
                 };
+            };
+            /** @description Not modified (client cache is valid) */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Forbidden */
             403: {

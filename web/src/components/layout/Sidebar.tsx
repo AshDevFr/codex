@@ -18,6 +18,7 @@ import {
 	IconCopy,
 	IconDotsVertical,
 	IconEdit,
+	IconFileTypePdf,
 	IconHome,
 	IconLogout,
 	IconPlus,
@@ -404,6 +405,13 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 										label="Cleanup"
 										leftSection={<IconBrush size={16} />}
 										active={currentPath.startsWith("/settings/cleanup")}
+									/>
+									<NavLink
+										component={Link}
+										to="/settings/pdf-cache"
+										label="PDF Cache"
+										leftSection={<IconFileTypePdf size={16} />}
+										active={currentPath.startsWith("/settings/pdf-cache")}
 									/>
 								</>
 							)}

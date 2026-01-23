@@ -736,6 +736,19 @@ fn api_v1_routes(state: Arc<AppState>) -> Router {
             "/admin/cleanup-orphans",
             delete(handlers::cleanup::delete_orphans),
         )
+        // PDF cache management routes (protected, admin only)
+        .route(
+            "/admin/pdf-cache/stats",
+            get(handlers::pdf_cache::get_pdf_cache_stats),
+        )
+        .route(
+            "/admin/pdf-cache/cleanup",
+            post(handlers::pdf_cache::trigger_pdf_cache_cleanup),
+        )
+        .route(
+            "/admin/pdf-cache",
+            delete(handlers::pdf_cache::clear_pdf_cache),
+        )
         // Add state to all routes
         .with_state(state)
 }

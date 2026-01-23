@@ -10,7 +10,27 @@ RUN apk add --no-cache \
     musl-dev \
     build-base \
     postgresql-client \
-    curl
+    curl \
+    libstdc++ \
+    libgcc
+
+# Install PDFium library for PDF page rendering
+# This enables rendering of text-only and vector PDF pages in development
+# Note: Downloads architecture-specific binary based on TARGETARCH
+ARG TARGETARCH
+ARG PDFIUM_VERSION=latest
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        wget -q -O- https://github.com/bblanchon/pdfium-binaries/releases/${PDFIUM_VERSION}/download/pdfium-linux-musl-arm64.tgz \
+        | tar -xz -C /usr/local; \
+    else \
+        wget -q -O- https://github.com/bblanchon/pdfium-binaries/releases/${PDFIUM_VERSION}/download/pdfium-linux-musl-x64.tgz \
+        | tar -xz -C /usr/local; \
+    fi
+
+# Ensure PDFium library can be found at runtime
+# Create symlink in /usr/lib for standard library search path
+RUN ln -sf /usr/local/lib/libpdfium.so /usr/lib/libpdfium.so
+ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/lib:$LD_LIBRARY_PATH
 
 # Install cargo-watch for hot reloading
 RUN cargo install cargo-watch
@@ -22,7 +42,10 @@ COPY Cargo.toml Cargo.lock ./
 COPY migration/Cargo.toml ./migration/
 
 # Create dummy source files to build dependencies
+# Disable static linking to enable dlopen() for PDFium dynamic loading
+# This is required because musl's static linking doesn't support dlopen()
 ENV OPENSSL_STATIC=1
+ENV RUSTFLAGS="-C target-feature=-crt-static"
 RUN mkdir -p src migration/src && \
     echo "fn main() {}" > src/main.rs && \
     echo "pub use sea_orm_migration::prelude::*; pub struct Migrator; impl MigratorTrait for Migrator { fn migrations() -> Vec<Box<dyn MigrationTrait>> { vec![] } }" > migration/src/lib.rs && \

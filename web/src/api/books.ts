@@ -183,10 +183,13 @@ export const booksApi = {
 		return response.data;
 	},
 
-	// Generate thumbnail for a book
-	generateThumbnail: async (bookId: string): Promise<{ message: string }> => {
-		const response = await api.post<{ message: string }>(
-			`/books/${bookId}/thumbnail`,
+	// Generate thumbnail for a book (queues a background task)
+	generateThumbnail: async (
+		bookId: string,
+	): Promise<{ task_id: string }> => {
+		const response = await api.post<{ task_id: string }>(
+			`/books/${bookId}/thumbnail/generate`,
+			{ force: true },
 		);
 		return response.data;
 	},

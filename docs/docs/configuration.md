@@ -266,6 +266,94 @@ email:
   verification_url_base: http://localhost:8080
 ```
 
+## PDF Rendering Configuration
+
+Codex can render PDF pages server-side using the PDFium library. This enables:
+- Thumbnails and covers for all PDF types (text-only, vector graphics, scanned)
+- Server-side page rendering for the streaming reader mode
+
+```yaml
+pdf:
+  # pdfium_library_path: /path/to/libpdfium.so  # Optional, auto-detected if not set
+  render_dpi: 150              # Render DPI (72-300, higher = better quality, larger files)
+  jpeg_quality: 85             # JPEG compression quality (1-100)
+  cache_rendered_pages: true   # Cache rendered pages to disk
+  cache_dir: data/cache        # Cache directory for rendered PDF pages
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `pdfium_library_path` | Auto-detect | Path to PDFium shared library. Usually not needed - Codex automatically searches the executable directory and system library paths |
+| `render_dpi` | `150` | Render resolution in DPI. Higher values produce sharper images but larger files |
+| `jpeg_quality` | `85` | JPEG compression quality (1-100). Higher values = better quality, larger files |
+| `cache_rendered_pages` | `true` | Enable disk caching of rendered PDF pages |
+| `cache_dir` | `data/cache` | Directory for PDF page cache (stored in `{cache_dir}/pdf_pages/`) |
+
+### PDFium Library Installation
+
+#### Docker (Recommended)
+
+PDFium is bundled in the official Docker image. No additional setup required.
+
+#### Binary Installation (Linux)
+
+For standalone binary deployments, install PDFium separately:
+
+```bash
+# Download pre-built PDFium library (Debian/Ubuntu with glibc)
+wget -O- https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz \
+  | sudo tar -xz -C /usr/local
+sudo ldconfig
+
+# Or for Alpine/musl-based systems
+wget -O- https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-musl-x64.tgz \
+  | sudo tar -xz -C /usr/local
+```
+
+#### macOS
+
+```bash
+# Download PDFium for macOS
+wget -O- https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-mac-x64.tgz \
+  | sudo tar -xz -C /usr/local
+
+# Or for Apple Silicon (arm64)
+wget -O- https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-mac-arm64.tgz \
+  | sudo tar -xz -C /usr/local
+```
+
+#### Windows
+
+1. Download `pdfium-win-x64.zip` from [bblanchon/pdfium-binaries releases](https://github.com/bblanchon/pdfium-binaries/releases)
+2. Extract `pdfium.dll` to a directory in your `PATH`
+3. Or set `CODEX_PDF_PDFIUM_LIBRARY_PATH` to the full path of `pdfium.dll`
+
+### Without PDFium
+
+If PDFium is not installed:
+- **Scanned PDFs** (with embedded images): Work normally via embedded image extraction
+- **Text-only PDFs**: Page extraction will fail, but the PDF can still be viewed in native mode
+
+:::tip Native PDF Mode
+Users can switch to native PDF mode in the reader settings, which downloads the full PDF and renders it client-side using pdf.js. This works without PDFium but uses more bandwidth.
+:::
+
+### Cache Management
+
+Rendered PDF pages are cached to disk to improve performance. The cache structure is:
+
+```
+{cache_dir}/pdf_pages/{book_id_prefix}/{book_id}/page_{number}_{dpi}.jpg
+```
+
+Cache is automatically invalidated when:
+- A book file is updated (detected by file hash change during scan)
+- The book is deleted from the library
+
+To manually clear the cache:
+- Delete a specific book's cache: Remove `{cache_dir}/pdf_pages/{book_id}/`
+- Clear all cached pages: Remove `{cache_dir}/pdf_pages/`
+
 ## Environment Variables
 
 All configuration options can be overridden with environment variables using the `CODEX_` prefix.
@@ -319,6 +407,13 @@ CODEX_SCANNER_MAX_CONCURRENT_SCANS=2
 # Files (thumbnails and uploads)
 CODEX_FILES_THUMBNAIL_DIR=data/thumbnails
 CODEX_FILES_UPLOADS_DIR=data/uploads
+
+# PDF Rendering
+# CODEX_PDF_PDFIUM_LIBRARY_PATH=/usr/local/lib/libpdfium.so  # Optional, auto-detected
+CODEX_PDF_RENDER_DPI=150
+CODEX_PDF_JPEG_QUALITY=85
+CODEX_PDF_CACHE_RENDERED_PAGES=true
+CODEX_PDF_CACHE_DIR=data/cache
 ```
 
 ## Runtime vs Startup Settings
@@ -344,6 +439,7 @@ These settings are read from the config file at startup:
 - Thumbnail cache directory
 - JWT secret
 - Server host/port
+- PDF rendering settings (DPI, cache directory, PDFium library path)
 
 ## Example Configurations
 

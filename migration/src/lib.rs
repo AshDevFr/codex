@@ -54,6 +54,9 @@ mod m20260121_000031_add_missing_fk_indexes;
 // Sorting indexes for efficient ORDER BY operations
 mod m20260122_000032_add_sorting_indexes;
 
+// PDF cache cleanup settings
+mod m20260122_000033_seed_pdf_cache_settings;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -103,6 +106,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260121_000031_add_missing_fk_indexes::Migration),
             // Sorting indexes for efficient ORDER BY operations
             Box::new(m20260122_000032_add_sorting_indexes::Migration),
+            // PDF cache cleanup settings
+            Box::new(m20260122_000033_seed_pdf_cache_settings::Migration),
         ]
     }
 }

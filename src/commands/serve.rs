@@ -151,6 +151,40 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         .start_background_flush(background_task_cancel.clone());
     info!("Auth tracking background flush started (60s interval)");
 
+    // Initialize PDFium library for PDF page rendering
+    // Treat empty string same as None (auto-detect from system paths)
+    let pdfium_path = config
+        .pdf
+        .pdfium_library_path
+        .as_ref()
+        .filter(|s| !s.is_empty())
+        .map(std::path::Path::new);
+    match crate::parsers::pdf::init_pdfium(pdfium_path) {
+        Ok(()) => {
+            info!("PDFium library initialized successfully");
+        }
+        Err(e) => {
+            tracing::warn!(
+                "PDFium initialization failed: {}. PDF page rendering will be unavailable for text-only PDFs.",
+                e
+            );
+        }
+    }
+
+    // Initialize PDF page cache service
+    let pdf_page_cache = Arc::new(crate::services::PdfPageCache::new(
+        &config.pdf.cache_dir,
+        config.pdf.cache_rendered_pages,
+    ));
+    if config.pdf.cache_rendered_pages {
+        info!(
+            "PDF page cache initialized (cache_dir: {})",
+            config.pdf.cache_dir
+        );
+    } else {
+        info!("PDF page cache disabled");
+    }
+
     // Initialize worker tracking variables
     let mut worker_handles = Vec::new();
     let mut worker_shutdown_channels = Vec::new();
@@ -182,6 +216,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             thumbnail_service.clone(),
             Some(task_metrics_service.clone()),
             config.files.clone(),
+            Some(pdf_page_cache.clone()),
         );
         worker_handles = handles;
         worker_shutdown_channels = channels;
@@ -207,6 +242,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         )),
         auth_config: Arc::new(config.auth.clone()),
         database_config: Arc::new(config.database.clone()),
+        pdf_config: Arc::new(config.pdf.clone()),
         email_service,
         event_broadcaster: event_broadcaster.clone(),
         settings_service,
@@ -220,6 +256,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         },
         read_progress_service,
         auth_tracking_service,
+        pdf_page_cache,
     });
 
     // Build router using API module

@@ -90,6 +90,8 @@ pub struct AppState {
     pub auth_config: Arc<crate::config::AuthConfig>,
     /// Database configuration - used for operation deadlines and pool settings
     pub database_config: Arc<crate::config::DatabaseConfig>,
+    /// PDF configuration - used for rendering settings and cache config
+    pub pdf_config: Arc<crate::config::PdfConfig>,
     pub email_service: Arc<crate::services::email::EmailService>,
     pub event_broadcaster: Arc<crate::events::EventBroadcaster>,
     /// Settings service - used for runtime configuration
@@ -110,6 +112,9 @@ pub struct AppState {
     /// Auth tracking service for batched last_used/last_login timestamp updates
     /// Reduces DB load by batching API key usage and user login timestamps
     pub auth_tracking_service: Arc<crate::services::AuthTrackingService>,
+    /// PDF page cache service for caching rendered PDF pages
+    /// Reduces CPU load by caching expensive PDF page renders to disk
+    pub pdf_page_cache: Arc<crate::services::PdfPageCache>,
 }
 
 // Legacy alias for backwards compatibility during transition

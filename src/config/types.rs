@@ -39,6 +39,8 @@ pub struct Config {
     pub scanner: ScannerConfig,
     #[serde(default)]
     pub files: FilesConfig,
+    #[serde(default)]
+    pub pdf: PdfConfig,
 }
 
 impl Default for Config {
@@ -93,6 +95,7 @@ impl Default for Config {
             task: TaskConfig::default(),
             scanner: ScannerConfig::default(),
             files: FilesConfig::default(),
+            pdf: PdfConfig::default(),
         }
     }
 }
@@ -466,6 +469,41 @@ pub struct EmailConfig {
     pub verification_url_base: String,
 }
 
+/// PDF rendering configuration
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct PdfConfig {
+    /// Path to PDFium library (optional)
+    /// If not set, will search current directory and system paths
+    pub pdfium_library_path: Option<String>,
+
+    /// Default render DPI (72-300, default 150)
+    /// Higher values produce better quality but larger files
+    pub render_dpi: u16,
+
+    /// JPEG quality for rendered pages (1-100, default 85)
+    pub jpeg_quality: u8,
+
+    /// Enable rendered page caching (default: true)
+    pub cache_rendered_pages: bool,
+
+    /// Directory for caching rendered PDF pages (default: data/cache)
+    pub cache_dir: String,
+}
+
+impl Default for PdfConfig {
+    fn default() -> Self {
+        Self {
+            pdfium_library_path: env_string_opt("CODEX_PDF_PDFIUM_LIBRARY_PATH"),
+            render_dpi: env_or("CODEX_PDF_RENDER_DPI", 150),
+            jpeg_quality: env_or("CODEX_PDF_JPEG_QUALITY", 85),
+            cache_rendered_pages: env_bool_or("CODEX_PDF_CACHE_RENDERED_PAGES", true),
+            cache_dir: env_string_opt("CODEX_PDF_CACHE_DIR")
+                .unwrap_or_else(|| "data/cache".to_string()),
+        }
+    }
+}
+
 impl Default for EmailConfig {
     fn default() -> Self {
         Self {
@@ -670,6 +708,7 @@ mod tests {
             task: TaskConfig::default(),
             scanner: ScannerConfig::default(),
             files: FilesConfig::default(),
+            pdf: PdfConfig::default(),
         };
 
         // Application name moved to database settings
@@ -812,5 +851,60 @@ scanner:
         let config: Config = serde_yaml::from_str(yaml_content).unwrap();
         assert_eq!(config.task.worker_count, 8);
         assert_eq!(config.scanner.max_concurrent_scans, 4);
+    }
+
+    #[test]
+    fn test_pdf_config_default() {
+        let config = PdfConfig::default();
+        assert_eq!(config.render_dpi, 150);
+        assert_eq!(config.jpeg_quality, 85);
+        assert!(config.cache_rendered_pages);
+        assert_eq!(config.cache_dir, "data/cache");
+        // pdfium_library_path is None by default (unless env var is set)
+    }
+
+    #[test]
+    fn test_pdf_config_serialization() {
+        let config = PdfConfig {
+            pdfium_library_path: Some("/usr/lib/libpdfium.so".to_string()),
+            render_dpi: 200,
+            jpeg_quality: 90,
+            cache_rendered_pages: false,
+            cache_dir: "/var/cache/codex".to_string(),
+        };
+
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        assert!(yaml.contains("pdfium_library_path"));
+        assert!(yaml.contains("render_dpi"));
+        assert!(yaml.contains("200"));
+
+        let deserialized: PdfConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(
+            deserialized.pdfium_library_path,
+            Some("/usr/lib/libpdfium.so".to_string())
+        );
+        assert_eq!(deserialized.render_dpi, 200);
+        assert_eq!(deserialized.jpeg_quality, 90);
+        assert!(!deserialized.cache_rendered_pages);
+        assert_eq!(deserialized.cache_dir, "/var/cache/codex");
+    }
+
+    #[test]
+    fn test_config_with_pdf() {
+        let yaml_content = r#"
+database:
+  db_type: sqlite
+  sqlite:
+    path: ./test.db
+pdf:
+  render_dpi: 300
+  jpeg_quality: 95
+  cache_rendered_pages: true
+"#;
+
+        let config: Config = serde_yaml::from_str(yaml_content).unwrap();
+        assert_eq!(config.pdf.render_dpi, 300);
+        assert_eq!(config.pdf.jpeg_quality, 95);
+        assert!(config.pdf.cache_rendered_pages);
     }
 }

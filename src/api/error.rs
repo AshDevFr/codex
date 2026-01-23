@@ -13,6 +13,8 @@ pub enum ApiError {
     NotFound(String),
     BadRequest(String),
     Conflict(String),
+    /// Resource exists but cannot be processed (e.g., PDF without PDFium)
+    UnprocessableEntity(String),
     Internal(String),
 }
 
@@ -32,6 +34,9 @@ impl IntoResponse for ApiError {
             ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, "NotFound", msg),
             ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, "BadRequest", msg),
             ApiError::Conflict(msg) => (StatusCode::CONFLICT, "Conflict", msg),
+            ApiError::UnprocessableEntity(msg) => {
+                (StatusCode::UNPROCESSABLE_ENTITY, "UnprocessableEntity", msg)
+            }
             ApiError::Internal(msg) => {
                 tracing::error!("Internal server error: {}", msg);
                 (
@@ -57,13 +62,43 @@ impl IntoResponse for ApiError {
 // Implement From for common error types
 impl From<anyhow::Error> for ApiError {
     fn from(err: anyhow::Error) -> Self {
-        ApiError::Internal(err.to_string())
+        let err_msg = err.to_string();
+
+        // Check for PDFium not available error - this is a known limitation, not a server error
+        if err_msg.contains("PDFium renderer is not available") {
+            return ApiError::UnprocessableEntity(
+                "This PDF contains text or vector graphics that require PDFium to render. \
+                 PDFium is not installed or configured on this server."
+                    .to_string(),
+            );
+        }
+
+        ApiError::Internal(err_msg)
     }
 }
 
 impl From<sea_orm::DbErr> for ApiError {
     fn from(err: sea_orm::DbErr) -> Self {
         ApiError::Internal(err.to_string())
+    }
+}
+
+impl ApiError {
+    /// Convert an anyhow error to ApiError with additional context message.
+    /// Preserves special error handling (e.g., PDFium errors become UnprocessableEntity).
+    pub fn from_anyhow_with_context(err: anyhow::Error, context: &str) -> Self {
+        let err_msg = err.to_string();
+
+        // Check for PDFium not available error - this is a known limitation, not a server error
+        if err_msg.contains("PDFium renderer is not available") {
+            return ApiError::UnprocessableEntity(
+                "This PDF contains text or vector graphics that require PDFium to render. \
+                 PDFium is not installed or configured on this server."
+                    .to_string(),
+            );
+        }
+
+        ApiError::Internal(format!("{}: {}", context, err_msg))
     }
 }
 

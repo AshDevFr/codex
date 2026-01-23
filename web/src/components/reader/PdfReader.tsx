@@ -27,11 +27,9 @@ import { ReaderToolbar } from "./ReaderToolbar";
 import "react-pdf/dist/esm/Page/TextLayer.css";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 
-// Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-	"pdfjs-dist/build/pdf.worker.min.mjs",
-	import.meta.url,
-).toString();
+// Configure PDF.js worker - use CDN with the exact version bundled in react-pdf
+// This avoids version mismatches when pdfjs-dist is also installed as a direct dependency
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 export type PdfZoomLevel =
 	| "fit-page"
@@ -56,12 +54,6 @@ export interface PdfReaderProps {
 	incognito?: boolean;
 	/** Callback when reader should close */
 	onClose: () => void;
-	/** Whether this book has a per-book PDF mode preference saved */
-	hasPerBookPdfMode?: boolean;
-	/** Callback to save per-book PDF mode preference */
-	onSavePerBookPdfMode?: (mode: "streaming" | "native") => void;
-	/** Callback to clear per-book PDF mode preference */
-	onClearPerBookPdfMode?: () => void;
 }
 
 /**
@@ -81,9 +73,6 @@ export function PdfReader({
 	startPage,
 	incognito,
 	onClose,
-	hasPerBookPdfMode,
-	onSavePerBookPdfMode,
-	onClearPerBookPdfMode,
 }: PdfReaderProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const pageContainerRef = useRef<HTMLDivElement>(null);
@@ -107,6 +96,34 @@ export function PdfReader({
 
 	// PDF zoom state (local, not in global store since it's PDF-specific)
 	const [zoomLevel, setZoomLevel] = useState<PdfZoomLevel>("fit-page");
+
+	// Cycle through PDF zoom levels (for toolbar fit button)
+	const cyclePdfZoom = useCallback(() => {
+		setZoomLevel((current) => {
+			switch (current) {
+				case "fit-page":
+					return "fit-width";
+				case "fit-width":
+					return "100%";
+				case "100%":
+					return "fit-page";
+				default:
+					return "fit-page";
+			}
+		});
+	}, []);
+
+	// Map PDF zoom level to FitMode for toolbar display
+	const toolbarFitMode = useMemo(() => {
+		switch (zoomLevel) {
+			case "fit-page":
+				return "screen" as const;
+			case "fit-width":
+				return "width" as const;
+			default:
+				return "original" as const;
+		}
+	}, [zoomLevel]);
 
 	// Reader store state
 	const currentPage = useReaderStore((state) => state.currentPage);
@@ -139,8 +156,8 @@ export function PdfReader({
 
 	// Series navigation with boundary detection
 	const {
-		handleNextPage,
-		handlePrevPage,
+		handleNextPage: baseNextPage,
+		handlePrevPage: basePrevPage,
 		goToNextBook,
 		goToPrevBook,
 		canGoNextBook,
@@ -152,6 +169,27 @@ export function PdfReader({
 		},
 	});
 
+	// Spread-aware navigation: in double-page modes, move by 2 pages
+	const handleNextPage = useCallback(() => {
+		if (pdfSpreadMode === "single" || pdfContinuousScroll) {
+			baseNextPage();
+		} else {
+			// Double-page mode: advance by 2 pages
+			baseNextPage();
+			baseNextPage();
+		}
+	}, [pdfSpreadMode, pdfContinuousScroll, baseNextPage]);
+
+	const handlePrevPage = useCallback(() => {
+		if (pdfSpreadMode === "single" || pdfContinuousScroll) {
+			basePrevPage();
+		} else {
+			// Double-page mode: go back by 2 pages
+			basePrevPage();
+			basePrevPage();
+		}
+	}, [pdfSpreadMode, pdfContinuousScroll, basePrevPage]);
+
 	// Read progress hook (use numPages from PDF if available, disabled in incognito mode)
 	const effectiveTotalPages = numPages > 0 ? numPages : _backendTotalPages;
 	const { initialPage, isLoading: progressLoading } = useReadProgress({
@@ -161,39 +199,75 @@ export function PdfReader({
 	});
 
 	// Calculate page dimensions based on zoom level
-	const getPageDimensions = useCallback(() => {
+	// Note: PDF scale 1.0 = 72 DPI, which is small on modern displays
+	// We use a base scale of 1.5 to make 100% appear at a readable size
+	// (roughly equivalent to viewing at 96 DPI on a standard display)
+	const BASE_SCALE = 1.5;
+
+	const getPageDimensions = useCallback((): {
+		width?: number;
+		height?: number;
+		scale?: number;
+	} => {
+		const isDoublePageMode = pdfSpreadMode !== "single";
+
+		// For scale-based zoom levels, we don't need container dimensions
+		// This ensures zoom changes work even before container is measured
+		switch (zoomLevel) {
+			case "50%":
+				return { scale: 0.5 * BASE_SCALE };
+			case "75%":
+				return { scale: 0.75 * BASE_SCALE };
+			case "100%":
+				return { scale: 1.0 * BASE_SCALE };
+			case "125%":
+				return { scale: 1.25 * BASE_SCALE };
+			case "150%":
+				return { scale: 1.5 * BASE_SCALE };
+			case "200%":
+				return { scale: 2.0 * BASE_SCALE };
+		}
+
+		// For fit modes, we need container dimensions
 		if (!containerDimensions.width || !containerDimensions.height) {
-			return { width: undefined, height: undefined };
+			// Fallback to scale-based rendering until container is measured
+			// Use a smaller scale for double-page mode since we need to fit two pages
+			return { scale: isDoublePageMode ? BASE_SCALE * 0.4 : BASE_SCALE * 0.7 };
 		}
 
 		const toolbarHeight = 64;
 		const padding = 40;
+		const gap = isDoublePageMode ? 8 : 0;
 		const availableWidth = containerDimensions.width - padding;
 		const availableHeight =
 			containerDimensions.height - toolbarHeight - padding;
 
+		// For double-page mode, each page gets half the available width
+		const perPageWidth = isDoublePageMode
+			? Math.floor((availableWidth - gap) / 2)
+			: availableWidth;
+
+		// Typical PDF page aspect ratio (US Letter ~8.5x11 = 0.773, A4 ~0.707)
+		// Use a conservative ratio that works for most documents
+		const typicalPageAspectRatio = 0.75; // width/height
+
 		switch (zoomLevel) {
-			case "fit-page":
-				// Let react-pdf calculate based on height
-				return { width: undefined, height: availableHeight };
+			case "fit-page": {
+				// Fit page: the page should fit within both width and height constraints
+				// react-pdf ignores height when width is provided, so we must calculate
+				// the width that will result in a page that fits the height
+				const widthFromHeight = Math.floor(availableHeight * typicalPageAspectRatio);
+				// Use the smaller of the two to ensure it fits both constraints
+				const fitWidth = Math.min(perPageWidth, widthFromHeight);
+				return { width: fitWidth };
+			}
 			case "fit-width":
-				return { width: availableWidth, height: undefined };
-			case "50%":
-				return { scale: 0.5 };
-			case "75%":
-				return { scale: 0.75 };
-			case "100%":
-				return { scale: 1.0 };
-			case "125%":
-				return { scale: 1.25 };
-			case "150%":
-				return { scale: 1.5 };
-			case "200%":
-				return { scale: 2.0 };
+				// Fit width: only constrain by width, allow vertical scrolling
+				return { width: perPageWidth };
 			default:
-				return { width: undefined, height: undefined };
+				return { scale: BASE_SCALE };
 		}
-	}, [containerDimensions, zoomLevel]);
+	}, [containerDimensions, zoomLevel, pdfSpreadMode]);
 
 	// Initialize reader when PDF loads and progress is ready
 	useEffect(() => {
@@ -398,25 +472,19 @@ export function PdfReader({
 		[getPageDimensions],
 	);
 
-	// Calculate spread page dimensions (half width for double page modes)
+	// Calculate spread page dimensions
+	// Note: getPageDimensions already handles double-page mode for fit-page and fit-width
+	// We only need to adjust scale-based zoom levels here
 	const spreadPageDimensions = useMemo(() => {
 		if (pdfSpreadMode === "single") {
 			return pageDimensions;
 		}
-		// For double modes, halve the width to fit two pages
-		if ("width" in pageDimensions && pageDimensions.width !== undefined) {
-			return {
-				...pageDimensions,
-				width: Math.floor(pageDimensions.width / 2) - 10,
-			};
-		}
+		// For scale-based zoom levels (50%, 75%, 100%, etc.), halve the scale for double-page
 		if ("scale" in pageDimensions && pageDimensions.scale !== undefined) {
 			return { ...pageDimensions, scale: pageDimensions.scale * 0.5 };
 		}
-		// For fit-page mode, use half height to maintain aspect ratio with two pages
-		if ("height" in pageDimensions && pageDimensions.height !== undefined) {
-			return { ...pageDimensions, height: pageDimensions.height * 0.9 };
-		}
+		// For fit-page and fit-width modes, getPageDimensions already calculated
+		// the correct per-page dimensions, so just pass through
 		return pageDimensions;
 	}, [pageDimensions, pdfSpreadMode]);
 
@@ -540,6 +608,8 @@ export function PdfReader({
 				nextBook={adjacentBooks?.next}
 				onPrevBook={canGoPrevBook ? goToPrevBook : undefined}
 				onNextBook={canGoNextBook ? goToNextBook : undefined}
+				fitMode={toolbarFitMode}
+				onCycleFitMode={cyclePdfZoom}
 			/>
 
 			{/* Boundary notification */}
@@ -628,7 +698,13 @@ export function PdfReader({
 							onLoadSuccess={handleDocumentLoadSuccess}
 							onLoadError={handleDocumentLoadError}
 							loading={
-								<Center style={{ width: "100%", height: 400 }}>
+								<Center
+									style={{
+										width: "100%",
+										height: "calc(100vh - 128px)",
+										backgroundColor: "transparent",
+									}}
+								>
 									<Loader size="lg" color="gray" />
 								</Center>
 							}
@@ -642,33 +718,21 @@ export function PdfReader({
 									alignItems: "flex-start",
 								}}
 							>
-								{/* Left page (or single page) */}
+									{/* Left page (or single page) */}
 								{spreadPages.left && (
 									<Page
 										pageNumber={spreadPages.left}
-										width={
-											pdfSpreadMode === "single"
-												? pageDimensions.width
-												: spreadPageDimensions.width
-										}
-										height={
-											pdfSpreadMode === "single"
-												? pageDimensions.height
-												: spreadPageDimensions.height
-										}
-										scale={
-											pdfSpreadMode === "single"
-												? "scale" in pageDimensions
-													? pageDimensions.scale
-													: undefined
-												: "scale" in spreadPageDimensions
-													? spreadPageDimensions.scale
-													: undefined
-										}
+										{...(pdfSpreadMode === "single" ? pageDimensions : spreadPageDimensions)}
 										renderTextLayer={true}
 										renderAnnotationLayer={true}
 										loading={
-											<Center style={{ width: "100%", height: 400 }}>
+											<Center
+												style={{
+													width: 300,
+													height: 400,
+													backgroundColor: "transparent",
+												}}
+											>
 												<Loader size="md" color="gray" />
 											</Center>
 										}
@@ -697,17 +761,17 @@ export function PdfReader({
 								{spreadPages.right && (
 									<Page
 										pageNumber={spreadPages.right}
-										width={spreadPageDimensions.width}
-										height={spreadPageDimensions.height}
-										scale={
-											"scale" in spreadPageDimensions
-												? spreadPageDimensions.scale
-												: undefined
-										}
+										{...spreadPageDimensions}
 										renderTextLayer={true}
 										renderAnnotationLayer={true}
 										loading={
-											<Center style={{ width: "100%", height: 400 }}>
+											<Center
+												style={{
+													width: 300,
+													height: 400,
+													backgroundColor: "transparent",
+												}}
+											>
 												<Loader size="md" color="gray" />
 											</Center>
 										}
@@ -744,9 +808,6 @@ export function PdfReader({
 				onClose={() => setSettingsOpened(false)}
 				zoomLevel={zoomLevel}
 				onZoomChange={setZoomLevel}
-				hasPerBookPdfMode={hasPerBookPdfMode}
-				onSavePerBookPdfMode={onSavePerBookPdfMode}
-				onClearPerBookPdfMode={onClearPerBookPdfMode}
 			/>
 		</Box>
 	);

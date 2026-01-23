@@ -11,6 +11,7 @@ pub mod metrics;
 pub mod opds;
 pub mod opds2;
 pub mod pages;
+pub mod pdf_cache;
 pub mod read_progress;
 pub mod scan;
 pub mod series;

@@ -59,6 +59,14 @@ pub fn ensure_data_directories(config: &Config) -> anyhow::Result<()> {
         );
     }
 
+    // Ensure PDF cache directory exists
+    let pdf_cache_path = Path::new(&config.pdf.cache_dir);
+    ensure_dir_exists(pdf_cache_path)?;
+    info!(
+        "Ensured PDF cache directory exists: {}",
+        config.pdf.cache_dir
+    );
+
     Ok(())
 }
 
@@ -388,6 +396,7 @@ pub async fn get_worker_count(
 
 /// Spawn task workers
 /// Returns handles and shutdown channels for graceful shutdown
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_workers(
     db: &DatabaseConnection,
     worker_count: u32,
@@ -396,6 +405,7 @@ pub fn spawn_workers(
     thumbnail_service: Arc<crate::services::ThumbnailService>,
     task_metrics_service: Option<Arc<TaskMetricsService>>,
     files_config: crate::config::FilesConfig,
+    pdf_page_cache: Option<Arc<crate::services::PdfPageCache>>,
 ) -> (
     Vec<tokio::task::JoinHandle<()>>,
     Vec<tokio::sync::broadcast::Sender<()>>,
@@ -422,6 +432,11 @@ pub fn spawn_workers(
         // Add task metrics service if available
         if let Some(ref metrics) = task_metrics_service {
             task_worker = task_worker.with_task_metrics_service(metrics.clone());
+        }
+
+        // Add PDF cache handler if available
+        if let Some(ref pdf_cache) = pdf_page_cache {
+            task_worker = task_worker.with_pdf_cache(pdf_cache.clone(), settings_service.clone());
         }
 
         let (mut task_worker, worker_shutdown_tx) = task_worker.with_shutdown();
@@ -559,6 +574,7 @@ mod tests {
         let thumbnail_dir = temp_dir.path().join("thumbnails");
         let uploads_dir = temp_dir.path().join("uploads");
         let db_path = temp_dir.path().join("data").join("codex.db");
+        let pdf_cache_dir = temp_dir.path().join("pdf_cache");
 
         let config = Config {
             files: FilesConfig {
@@ -574,18 +590,24 @@ mod tests {
                 }),
                 postgres: None,
             },
+            pdf: crate::config::PdfConfig {
+                cache_dir: pdf_cache_dir.to_string_lossy().to_string(),
+                ..crate::config::PdfConfig::default()
+            },
             ..Config::default()
         };
 
         assert!(!thumbnail_dir.exists());
         assert!(!uploads_dir.exists());
         assert!(!db_path.parent().unwrap().exists());
+        assert!(!pdf_cache_dir.exists());
 
         ensure_data_directories(&config).unwrap();
 
         assert!(thumbnail_dir.exists());
         assert!(uploads_dir.exists());
         assert!(db_path.parent().unwrap().exists());
+        assert!(pdf_cache_dir.exists());
     }
 
     #[test]

@@ -280,6 +280,11 @@ Codex provides OPDS catalog feeds for e-reader applications:
         handlers::cleanup::trigger_cleanup,
         handlers::cleanup::delete_orphans,
 
+        // PDF cache management endpoints
+        handlers::pdf_cache::get_pdf_cache_stats,
+        handlers::pdf_cache::trigger_pdf_cache_cleanup,
+        handlers::pdf_cache::clear_pdf_cache,
+
         // Duplicates endpoints
         handlers::duplicates::list_duplicates,
         handlers::duplicates::trigger_duplicate_scan,
@@ -513,6 +518,11 @@ Codex provides OPDS catalog feeds for e-reader applications:
             dto::CleanupResultDto,
             dto::TriggerCleanupResponse,
             dto::OrphanStatsQuery,
+
+            // PDF Cache DTOs
+            dto::PdfCacheStatsDto,
+            dto::PdfCacheCleanupResultDto,
+            dto::TriggerPdfCacheCleanupResponse,
 
             // SSE Event DTOs
             crate::events::EntityChangeEvent,

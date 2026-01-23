@@ -546,10 +546,10 @@ export const bookHandlers = [
 		return HttpResponse.json({ prev, next });
 	}),
 
-	// Generate thumbnail for a book
-	http.post("/api/v1/books/:id/thumbnail", async () => {
+	// Generate thumbnail for a book (queues a background task)
+	http.post("/api/v1/books/:id/thumbnail/generate", async () => {
 		await delay(100);
-		return HttpResponse.json({ message: "Thumbnail generation queued" });
+		return HttpResponse.json({ task_id: crypto.randomUUID() });
 	}),
 
 	// Analyze book

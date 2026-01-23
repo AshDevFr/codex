@@ -148,10 +148,11 @@ fn test_extract_page_from_pdf_first_page() {
 #[test]
 fn test_extract_page_from_pdf_last_page() {
     let temp_dir = TempDir::new().unwrap();
-    let pdf_path = common::create_test_pdf(&temp_dir, 2, 2);
+    let pdf_path = common::create_test_pdf(&temp_dir, 3, 2);
 
-    // PDF with 2 pages, 2 images per page = 4 total images
-    let image_data = extract_page_from_pdf(&pdf_path, 4).unwrap();
+    // PDF with 3 pages - extract the last page (page 3)
+    // Note: page_number is 1-indexed and refers to actual PDF pages, not embedded images
+    let image_data = extract_page_from_pdf(&pdf_path, 3).unwrap();
 
     // Should return valid image data
     assert!(!image_data.is_empty());
@@ -160,9 +161,10 @@ fn test_extract_page_from_pdf_last_page() {
 #[test]
 fn test_extract_page_from_pdf_middle_page() {
     let temp_dir = TempDir::new().unwrap();
-    let pdf_path = common::create_test_pdf(&temp_dir, 3, 2);
+    let pdf_path = common::create_test_pdf(&temp_dir, 5, 2);
 
-    // PDF with 3 pages, 2 images per page = 6 total images
+    // PDF with 5 pages - extract the middle page (page 3)
+    // Note: page_number is 1-indexed and refers to actual PDF pages
     let image_data = extract_page_from_pdf(&pdf_path, 3).unwrap();
 
     // Should return valid image data
@@ -174,9 +176,9 @@ fn test_extract_page_from_pdf_invalid_page_number() {
     let temp_dir = TempDir::new().unwrap();
     let pdf_path = common::create_test_pdf(&temp_dir, 2, 2);
 
-    // PDF with 2 pages, 2 images per page = 4 total images
-    // Page 5 should fail
-    let result = extract_page_from_pdf(&pdf_path, 5);
+    // PDF with 2 pages - page 3 should fail
+    // Note: page_number is 1-indexed and refers to actual PDF pages
+    let result = extract_page_from_pdf(&pdf_path, 3);
     assert!(result.is_err());
 }
 

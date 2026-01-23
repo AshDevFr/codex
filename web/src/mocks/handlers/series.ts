@@ -829,12 +829,10 @@ export const seriesHandlers = [
 		});
 	}),
 
-	// Generate thumbnails for series
-	http.post("/api/v1/series/:id/thumbnails", async () => {
+	// Generate thumbnails for series (queues a background task)
+	http.post("/api/v1/series/:id/thumbnails/generate", async () => {
 		await delay(100);
-		return HttpResponse.json({
-			message: "Thumbnail generation queued for all books",
-		});
+		return HttpResponse.json({ task_id: crypto.randomUUID() });
 	}),
 
 	// ============================================

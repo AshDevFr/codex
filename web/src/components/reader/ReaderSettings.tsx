@@ -22,6 +22,7 @@ import {
 	type FitMode,
 	type PageLayout,
 	type PageTransition,
+	type PdfMode,
 	type ReadingDirection,
 	selectEffectiveReadingDirection,
 	useReaderStore,
@@ -35,6 +36,8 @@ interface ReaderSettingsProps {
 	onClose: () => void;
 	/** Series ID for updating reading direction (optional) */
 	seriesId?: string | null;
+	/** Book format (CBZ, CBR, PDF, EPUB) - enables format-specific settings */
+	format?: string;
 }
 
 /**
@@ -51,12 +54,15 @@ export function ReaderSettings({
 	opened,
 	onClose,
 	seriesId,
+	format,
 }: ReaderSettingsProps) {
 	const queryClient = useQueryClient();
 	const globalSettings = useReaderStore((state) => state.settings);
 	const effectiveReadingDirection = useReaderStore(
 		selectEffectiveReadingDirection,
 	);
+	const pdfMode = useReaderStore((state) => state.settings.pdfMode);
+	const setPdfMode = useReaderStore((state) => state.setPdfMode);
 
 	// Global-only settings (not forkable per-series)
 	const setAutoHideToolbar = useReaderStore(
@@ -245,6 +251,38 @@ export function ReaderSettings({
 						{seriesId ? "Saved to series" : "Session only"}
 					</Text>
 				</Box>
+
+				{/* PDF rendering mode toggle - only shown for PDF format */}
+				{format?.toUpperCase() === "PDF" && (
+					<>
+						<Box>
+							<Text size="sm" fw={500} mb="xs">
+								PDF Rendering Mode
+							</Text>
+							<SegmentedControl
+								fullWidth
+								value={pdfMode}
+								onChange={(value) => setPdfMode(value as PdfMode)}
+								data={[
+									{ label: "Auto", value: "auto" },
+									{ label: "Streaming", value: "streaming" },
+									{ label: "Native", value: "native" },
+								]}
+							/>
+							<Text size="xs" c="dimmed" mt="xs">
+								{pdfMode === "auto"
+									? "Automatically selects based on file size (>100MB uses streaming)"
+									: pdfMode === "streaming"
+										? "Server renders pages as images (lower bandwidth)"
+										: "Downloads full PDF for text selection and search"}
+							</Text>
+							<Text size="xs" c="yellow" mt={4}>
+								Re-open the book after changing to apply
+							</Text>
+						</Box>
+						<Divider />
+					</>
+				)}
 
 				<Group justify="space-between">
 					<Text size="sm" fw={500}>

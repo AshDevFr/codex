@@ -8,12 +8,12 @@ use codex::api::dto::{
 };
 use codex::api::error::ErrorResponse;
 use codex::api::extractors::AppState;
-use codex::config::{AuthConfig, DatabaseConfig, EmailConfig, FilesConfig};
+use codex::config::{AuthConfig, DatabaseConfig, EmailConfig, FilesConfig, PdfConfig};
 use codex::db::repositories::UserRepository;
 use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
 use codex::services::{
-    AuthTrackingService, FileCleanupService, ReadProgressService, SettingsService,
+    AuthTrackingService, FileCleanupService, PdfPageCache, ReadProgressService, SettingsService,
     TaskMetricsService, ThumbnailService,
 };
 use codex::utils::jwt::JwtService;
@@ -37,6 +37,7 @@ async fn create_test_app_state_with_metrics(db: DatabaseConnection) -> Arc<AppSt
 
     let auth_config = Arc::new(AuthConfig::default());
     let database_config = Arc::new(DatabaseConfig::default());
+    let pdf_config = Arc::new(PdfConfig::default());
     let email_service = Arc::new(EmailService::new(EmailConfig::default()));
     let event_broadcaster = Arc::new(EventBroadcaster::new(1000));
     let settings_service = Arc::new(
@@ -55,12 +56,14 @@ async fn create_test_app_state_with_metrics(db: DatabaseConnection) -> Arc<AppSt
     ));
     let read_progress_service = Arc::new(ReadProgressService::new(db.clone()));
     let auth_tracking_service = Arc::new(AuthTrackingService::new(db.clone()));
+    let pdf_page_cache = Arc::new(PdfPageCache::new(&pdf_config.cache_dir, false)); // Disabled in tests
 
     Arc::new(AppState {
         db,
         jwt_service,
         auth_config,
         database_config,
+        pdf_config,
         email_service,
         event_broadcaster,
         settings_service,
@@ -70,6 +73,7 @@ async fn create_test_app_state_with_metrics(db: DatabaseConnection) -> Arc<AppSt
         scheduler: None,
         read_progress_service,
         auth_tracking_service,
+        pdf_page_cache,
     })
 }
 

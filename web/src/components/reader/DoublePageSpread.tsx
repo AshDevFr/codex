@@ -1,4 +1,4 @@
-import { Box, Center } from "@mantine/core";
+import { Box, Center, Loader } from "@mantine/core";
 import { useCallback, useState } from "react";
 import type {
 	BackgroundColor,
@@ -310,6 +310,7 @@ export function DoublePageSpread({
 							maxWidth: isSinglePage ? "100%" : "50%",
 							height: "100%",
 							overflow: "hidden",
+							position: "relative",
 						}}
 						data-testid={`spread-page-${page.pageNumber}`}
 					>
@@ -318,19 +319,32 @@ export function DoublePageSpread({
 								Failed to load page {page.pageNumber}
 							</Center>
 						) : (
-							<img
-								src={page.src}
-								alt={`Page ${page.pageNumber}`}
-								style={{
-									...getSpreadFitModeStyles(fitMode, isSinglePage),
-									objectFit: "contain",
-									opacity: state.isLoading ? 0 : 1,
-									transition: "opacity 50ms ease-in",
-								}}
-								onLoad={(e) => handleImageLoad(page.pageNumber, page.src, e)}
-								onError={() => handleImageError(page.pageNumber, page.src)}
-								draggable={false}
-							/>
+							<>
+								<img
+									src={page.src}
+									alt={`Page ${page.pageNumber}`}
+									style={{
+										...getSpreadFitModeStyles(fitMode, isSinglePage),
+										objectFit: "contain",
+										opacity: state.isLoading ? 0 : 1,
+										transition: "opacity 50ms ease-in",
+									}}
+									onLoad={(e) => handleImageLoad(page.pageNumber, page.src, e)}
+									onError={() => handleImageError(page.pageNumber, page.src)}
+									draggable={false}
+								/>
+								{state.isLoading && (
+									<Center
+										style={{
+											position: "absolute",
+											inset: 0,
+											pointerEvents: "none",
+										}}
+									>
+										<Loader size="lg" color="gray" />
+									</Center>
+								)}
+							</>
 						)}
 					</Box>
 				);

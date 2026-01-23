@@ -35,6 +35,9 @@ impl Scheduler {
         // Load deduplication schedule
         self.load_deduplication_schedule().await?;
 
+        // Load PDF cache cleanup schedule
+        self.load_pdf_cache_cleanup_schedule().await?;
+
         // Start the scheduler
         self.scheduler
             .start()
@@ -133,6 +136,45 @@ impl Scheduler {
             .context("Failed to add deduplication job to scheduler")?;
 
         info!("Added deduplication schedule: {}", cron);
+
+        Ok(())
+    }
+
+    /// Load PDF cache cleanup schedule from settings
+    async fn load_pdf_cache_cleanup_schedule(&mut self) -> Result<()> {
+        // Initialize settings service to read PDF cache settings
+        let settings = SettingsService::new(self.db.clone()).await?;
+
+        // Get cron schedule (empty string = disabled)
+        let cron = settings.get_string("pdf_cache.cron_schedule", "").await?;
+
+        if cron.is_empty() {
+            debug!("PDF cache cleanup disabled (no cron schedule)");
+            return Ok(());
+        }
+
+        // Create cron job
+        let db = self.db.clone();
+        let job = Job::new_async(cron.as_str(), move |_uuid, _lock| {
+            let db = db.clone();
+            Box::pin(async move {
+                info!("Triggering scheduled PDF cache cleanup");
+
+                let task_type = TaskType::CleanupPdfCache;
+                match TaskRepository::enqueue(&db, task_type, 0, None).await {
+                    Ok(_) => debug!("PDF cache cleanup task enqueued"),
+                    Err(e) => error!("Failed to enqueue PDF cache cleanup: {}", e),
+                }
+            })
+        })
+        .context("Failed to create PDF cache cleanup cron job")?;
+
+        self.scheduler
+            .add(job)
+            .await
+            .context("Failed to add PDF cache cleanup job to scheduler")?;
+
+        info!("Added PDF cache cleanup schedule: {}", cron);
 
         Ok(())
     }

@@ -11,6 +11,7 @@ pub mod opds;
 pub mod opds2;
 pub mod page;
 pub mod patch;
+pub mod pdf_cache;
 pub mod read_progress;
 pub mod scan;
 pub mod series;
@@ -38,6 +39,7 @@ pub use opds::*;
 // opds2 not glob re-exported to avoid name conflicts with opds (feed, link)
 // Use dto::opds2::* directly when needed
 pub use page::*;
+pub use pdf_cache::*;
 pub use read_progress::*;
 pub use scan::*;
 pub use series::*;

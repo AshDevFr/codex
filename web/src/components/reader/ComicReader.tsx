@@ -67,7 +67,7 @@ export function ComicReader({
 	seriesId,
 	title,
 	totalPages,
-	format: _format,
+	format,
 	readingDirectionOverride,
 	startPage,
 	incognito,
@@ -670,6 +670,7 @@ export function ComicReader({
 				opened={settingsOpened}
 				onClose={() => setSettingsOpened(false)}
 				seriesId={seriesId}
+				format={format}
 			/>
 		</Box>
 	);

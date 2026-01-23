@@ -300,6 +300,304 @@ pub fn create_test_cbz_files_in_dir(dir: &std::path::Path) {
     }
 }
 
+/// Create a test PDF with only text content (no embedded images)
+///
+/// This creates a PDF that requires PDFium rendering to extract page images.
+/// It cannot be processed by the fast path (embedded image extraction).
+pub fn create_text_only_pdf(temp_dir: &TempDir, num_pages: usize) -> PathBuf {
+    let pdf_path = temp_dir.path().join("text_only.pdf");
+
+    let mut doc = Document::with_version("1.5");
+    let pages_id = doc.new_object_id();
+    let mut page_ids = Vec::new();
+
+    for page_num in 0..num_pages {
+        let page_id = doc.new_object_id();
+        page_ids.push(page_id);
+
+        // Create content stream with text only (no images)
+        let content_id = doc.new_object_id();
+        let content_text = format!(
+            "BT /F1 24 Tf 100 700 Td (Text-only Page {}) Tj 0 -30 Td (This page has no embedded images) Tj 0 -30 Td (It requires PDFium rendering) Tj ET",
+            page_num + 1
+        );
+
+        let content = Stream::new(dictionary! {}, content_text.as_bytes().to_vec());
+        doc.objects.insert(content_id, Object::Stream(content));
+
+        // Resources with only a font (no XObject/images)
+        let resources_dict = dictionary! {
+            "Font" => dictionary! {
+                "F1" => dictionary! {
+                    "Type" => "Font",
+                    "Subtype" => "Type1",
+                    "BaseFont" => "Helvetica",
+                }
+            }
+        };
+
+        let page_dict = dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "Contents" => content_id,
+            "Resources" => resources_dict,
+            "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        };
+
+        doc.objects.insert(page_id, Object::Dictionary(page_dict));
+    }
+
+    // Create Pages object
+    let pages_dict = dictionary! {
+        "Type" => "Pages",
+        "Kids" => page_ids.iter().map(|id| Object::Reference(*id)).collect::<Vec<_>>(),
+        "Count" => page_ids.len() as u32,
+    };
+    doc.objects.insert(pages_id, Object::Dictionary(pages_dict));
+
+    // Create catalog
+    let catalog_id = doc.new_object_id();
+    let catalog = dictionary! {
+        "Type" => "Catalog",
+        "Pages" => pages_id,
+    };
+    doc.objects.insert(catalog_id, Object::Dictionary(catalog));
+    doc.trailer.set("Root", Object::Reference(catalog_id));
+
+    doc.save(&pdf_path).unwrap();
+    pdf_path
+}
+
+/// Create a test PDF with vector graphics content (paths/shapes, no images)
+///
+/// This creates a PDF with vector drawing commands that requires PDFium rendering.
+pub fn create_vector_graphics_pdf(temp_dir: &TempDir, num_pages: usize) -> PathBuf {
+    let pdf_path = temp_dir.path().join("vector_graphics.pdf");
+
+    let mut doc = Document::with_version("1.5");
+    let pages_id = doc.new_object_id();
+    let mut page_ids = Vec::new();
+
+    for _page_num in 0..num_pages {
+        let page_id = doc.new_object_id();
+        page_ids.push(page_id);
+
+        // Create content stream with vector graphics (paths)
+        let content_id = doc.new_object_id();
+        // PDF path drawing commands: rectangle, circle approximation, lines
+        let content_text = r#"
+            % Draw a red rectangle
+            1 0 0 RG
+            50 600 200 100 re S
+            % Draw a blue filled rectangle
+            0 0 1 rg
+            300 600 150 80 re f
+            % Draw some lines
+            0.5 0.5 0.5 RG
+            100 400 m 300 500 l 500 400 l S
+            % Draw a triangle
+            0 1 0 RG
+            200 200 m 300 350 l 400 200 l h S
+        "#;
+
+        let content = Stream::new(dictionary! {}, content_text.as_bytes().to_vec());
+        doc.objects.insert(content_id, Object::Stream(content));
+
+        let resources_dict = dictionary! {};
+
+        let page_dict = dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "Contents" => content_id,
+            "Resources" => resources_dict,
+            "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        };
+
+        doc.objects.insert(page_id, Object::Dictionary(page_dict));
+    }
+
+    let pages_dict = dictionary! {
+        "Type" => "Pages",
+        "Kids" => page_ids.iter().map(|id| Object::Reference(*id)).collect::<Vec<_>>(),
+        "Count" => page_ids.len() as u32,
+    };
+    doc.objects.insert(pages_id, Object::Dictionary(pages_dict));
+
+    let catalog_id = doc.new_object_id();
+    let catalog = dictionary! {
+        "Type" => "Catalog",
+        "Pages" => pages_id,
+    };
+    doc.objects.insert(catalog_id, Object::Dictionary(catalog));
+    doc.trailer.set("Root", Object::Reference(catalog_id));
+
+    doc.save(&pdf_path).unwrap();
+    pdf_path
+}
+
+/// Create a test PDF with mixed content (text, vector graphics, and embedded images)
+pub fn create_mixed_content_pdf(
+    temp_dir: &TempDir,
+    num_pages: usize,
+    num_images_per_page: usize,
+) -> PathBuf {
+    let pdf_path = temp_dir.path().join("mixed_content.pdf");
+
+    let mut doc = Document::with_version("1.5");
+    let pages_id = doc.new_object_id();
+    let mut page_ids = Vec::new();
+
+    for page_num in 0..num_pages {
+        let page_id = doc.new_object_id();
+        page_ids.push(page_id);
+
+        let content_id = doc.new_object_id();
+        // Mixed content: text + vector paths + image references
+        let mut content_text = format!(
+            "BT /F1 18 Tf 50 750 Td (Mixed Content Page {}) Tj ET\n",
+            page_num + 1
+        );
+        content_text.push_str("% Vector graphics\n");
+        content_text.push_str("0.8 0 0 RG 100 600 100 50 re S\n");
+
+        // Add image references
+        for i in 0..num_images_per_page {
+            content_text.push_str(&format!(
+                "q 50 0 0 50 {} 400 cm /Im{} Do Q\n",
+                100 + i * 60,
+                i + 1
+            ));
+        }
+
+        let content = Stream::new(dictionary! {}, content_text.as_bytes().to_vec());
+        doc.objects.insert(content_id, Object::Stream(content));
+
+        let mut resources_dict = dictionary! {
+            "Font" => dictionary! {
+                "F1" => dictionary! {
+                    "Type" => "Font",
+                    "Subtype" => "Type1",
+                    "BaseFont" => "Helvetica",
+                }
+            }
+        };
+
+        // Add images to XObject dictionary
+        if num_images_per_page > 0 {
+            let mut xobject_dict = Dictionary::new();
+
+            for img_num in 0..num_images_per_page {
+                let image_data = create_test_png(10, 10);
+                let image_id = doc.new_object_id();
+                let image_name = format!("Im{}", img_num + 1);
+
+                let image_dict = dictionary! {
+                    "Type" => "XObject",
+                    "Subtype" => "Image",
+                    "Width" => 10,
+                    "Height" => 10,
+                    "ColorSpace" => "DeviceRGB",
+                    "BitsPerComponent" => 8,
+                    "Filter" => "FlateDecode",
+                };
+
+                let image_stream = Stream::new(image_dict.clone(), image_data);
+                doc.objects.insert(image_id, Object::Stream(image_stream));
+                xobject_dict.set(image_name.as_bytes(), Object::Reference(image_id));
+            }
+
+            resources_dict.set("XObject", Object::Dictionary(xobject_dict));
+        }
+
+        let page_dict = dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "Contents" => content_id,
+            "Resources" => resources_dict,
+            "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        };
+
+        doc.objects.insert(page_id, Object::Dictionary(page_dict));
+    }
+
+    let pages_dict = dictionary! {
+        "Type" => "Pages",
+        "Kids" => page_ids.iter().map(|id| Object::Reference(*id)).collect::<Vec<_>>(),
+        "Count" => page_ids.len() as u32,
+    };
+    doc.objects.insert(pages_id, Object::Dictionary(pages_dict));
+
+    let catalog_id = doc.new_object_id();
+    let catalog = dictionary! {
+        "Type" => "Catalog",
+        "Pages" => pages_id,
+    };
+    doc.objects.insert(catalog_id, Object::Dictionary(catalog));
+    doc.trailer.set("Root", Object::Reference(catalog_id));
+
+    doc.save(&pdf_path).unwrap();
+    pdf_path
+}
+
+/// Create a multi-page PDF for performance/pagination testing
+pub fn create_multi_page_pdf(temp_dir: &TempDir, num_pages: usize) -> PathBuf {
+    // Reuse the text-only PDF creation but with a different filename
+    let pdf_path = temp_dir.path().join("multi_page.pdf");
+
+    let mut doc = Document::with_version("1.5");
+    let pages_id = doc.new_object_id();
+    let mut page_ids = Vec::new();
+
+    for page_num in 0..num_pages {
+        let page_id = doc.new_object_id();
+        page_ids.push(page_id);
+
+        let content_id = doc.new_object_id();
+        let content_text = format!("BT /F1 48 Tf 200 400 Td (Page {}) Tj ET", page_num + 1);
+
+        let content = Stream::new(dictionary! {}, content_text.as_bytes().to_vec());
+        doc.objects.insert(content_id, Object::Stream(content));
+
+        let resources_dict = dictionary! {
+            "Font" => dictionary! {
+                "F1" => dictionary! {
+                    "Type" => "Font",
+                    "Subtype" => "Type1",
+                    "BaseFont" => "Helvetica",
+                }
+            }
+        };
+
+        let page_dict = dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "Contents" => content_id,
+            "Resources" => resources_dict,
+            "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        };
+
+        doc.objects.insert(page_id, Object::Dictionary(page_dict));
+    }
+
+    let pages_dict = dictionary! {
+        "Type" => "Pages",
+        "Kids" => page_ids.iter().map(|id| Object::Reference(*id)).collect::<Vec<_>>(),
+        "Count" => page_ids.len() as u32,
+    };
+    doc.objects.insert(pages_id, Object::Dictionary(pages_dict));
+
+    let catalog_id = doc.new_object_id();
+    let catalog = dictionary! {
+        "Type" => "Catalog",
+        "Pages" => pages_id,
+    };
+    doc.objects.insert(catalog_id, Object::Dictionary(catalog));
+    doc.trailer.set("Root", Object::Reference(catalog_id));
+
+    doc.save(&pdf_path).unwrap();
+    pdf_path
+}
+
 /// Create a test CBZ file with rich ComicInfo.xml metadata
 pub fn create_test_cbz_with_metadata(temp_dir: &TempDir, filename: &str) -> std::path::PathBuf {
     use std::fs;

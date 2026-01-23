@@ -9,17 +9,21 @@ use crate::utils::{with_deadline, DeadlineResult};
 use axum::{
     body::Body,
     extract::{Path, State},
-    http::{header, StatusCode},
+    http::{header, HeaderMap, StatusCode},
     response::Response,
 };
+use httpdate::fmt_http_date;
 use image::{imageops::FilterType, ImageFormat};
 use std::io::Cursor;
 use std::sync::Arc;
+use std::time::{Duration, UNIX_EPOCH};
 use uuid::Uuid;
 
 /// Get page image from a book
 ///
-/// Extracts and serves the image for a specific page from CBZ/CBR/EPUB/PDF
+/// Extracts and serves the image for a specific page from CBZ/CBR/EPUB/PDF.
+/// For PDF pages, supports HTTP conditional caching with ETag and Last-Modified
+/// headers, returning 304 Not Modified when the client has a valid cached copy.
 #[utoipa::path(
     get,
     path = "/api/v1/books/{book_id}/pages/{page_number}",
@@ -29,6 +33,7 @@ use uuid::Uuid;
     ),
     responses(
         (status = 200, description = "Page image", content_type = "image/jpeg"),
+        (status = 304, description = "Not modified (client cache is valid)"),
         (status = 404, description = "Book or page not found"),
         (status = 403, description = "Forbidden"),
     ),
@@ -41,6 +46,7 @@ use uuid::Uuid;
 pub async fn get_page_image(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
+    headers: HeaderMap,
     Path((book_id, page_number)): Path<(Uuid, i32)>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::PagesRead)?;
@@ -78,11 +84,6 @@ pub async fn get_page_image(
         .record_progress(auth.user_id, book_id, page_number, book.page_count)
         .await;
 
-    // Extract image from book file based on format
-    let image_data = extract_page_image(&book.file_path, &book.format, page_number)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to extract page image: {}", e)))?;
-
     // Determine content type from file format
     let content_type = match page.format.to_lowercase().as_str() {
         "jpg" | "jpeg" => "image/jpeg",
@@ -94,6 +95,24 @@ pub async fn get_page_image(
         _ => "application/octet-stream",
     };
 
+    // For PDFs, try streaming from cache with HTTP conditional caching
+    if book.format.eq_ignore_ascii_case("pdf") {
+        return serve_pdf_page_with_streaming(
+            &state,
+            &headers,
+            book_id,
+            page_number,
+            &book.file_path,
+            content_type,
+        )
+        .await;
+    }
+
+    // For non-PDF formats, extract and serve directly
+    let image_data = extract_page_image(&book.file_path, &book.format, page_number)
+        .await
+        .map_err(|e| ApiError::from_anyhow_with_context(e, "Failed to extract page image"))?;
+
     // Build response with caching headers
     Ok(Response::builder()
         .status(StatusCode::OK)
@@ -104,9 +123,116 @@ pub async fn get_page_image(
         .unwrap())
 }
 
+/// Serve a PDF page with streaming and HTTP conditional caching
+///
+/// This function:
+/// 1. Checks if the page is in cache and gets metadata
+/// 2. If cached, checks If-None-Match/If-Modified-Since headers for 304 responses
+/// 3. Streams the cached file directly without loading into memory
+/// 4. Falls back to rendering if not cached
+async fn serve_pdf_page_with_streaming(
+    state: &Arc<AuthState>,
+    headers: &HeaderMap,
+    book_id: Uuid,
+    page_number: i32,
+    file_path: &str,
+    content_type: &str,
+) -> Result<Response, ApiError> {
+    let dpi = state.pdf_config.render_dpi;
+    let cache = &state.pdf_page_cache;
+
+    // Check cache for metadata (fast - just stat the file)
+    if let Some(meta) = cache.get_metadata(book_id, page_number, dpi).await {
+        // Check If-None-Match header for ETag validation
+        if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
+            if let Ok(client_etag) = if_none_match.to_str() {
+                // Compare ETags (handle weak ETags by stripping W/ prefix)
+                let client_etag = client_etag.trim().trim_start_matches("W/");
+                if client_etag == meta.etag
+                    || client_etag.trim_matches('"') == meta.etag.trim_matches('"')
+                {
+                    return Ok(Response::builder()
+                        .status(StatusCode::NOT_MODIFIED)
+                        .header(header::ETAG, &meta.etag)
+                        .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                        .body(Body::empty())
+                        .unwrap());
+                }
+            }
+        }
+
+        // Check If-Modified-Since header
+        if let Some(if_modified_since) = headers.get(header::IF_MODIFIED_SINCE) {
+            if let Ok(date_str) = if_modified_since.to_str() {
+                if let Ok(client_time) = httpdate::parse_http_date(date_str) {
+                    let file_time = UNIX_EPOCH + Duration::from_secs(meta.modified_unix);
+                    // If file hasn't been modified since client's copy, return 304
+                    if file_time <= client_time {
+                        return Ok(Response::builder()
+                            .status(StatusCode::NOT_MODIFIED)
+                            .header(header::ETAG, &meta.etag)
+                            .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                            .body(Body::empty())
+                            .unwrap());
+                    }
+                }
+            }
+        }
+
+        // Cache hit - stream the file directly
+        if let Some(stream) = cache.get_stream(book_id, page_number, dpi).await {
+            let last_modified = UNIX_EPOCH + Duration::from_secs(meta.modified_unix);
+            let last_modified_str = fmt_http_date(last_modified);
+
+            return Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, content_type)
+                .header(header::CONTENT_LENGTH, meta.size)
+                .header(header::ETAG, &meta.etag)
+                .header(header::LAST_MODIFIED, last_modified_str)
+                .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                .body(Body::from_stream(stream))
+                .unwrap());
+        }
+    }
+
+    // Cache miss - render the page
+    let path = std::path::Path::new(file_path);
+    let image_data = crate::parsers::pdf::extract_page_from_pdf_with_dpi(path, page_number, dpi)
+        .map_err(|e| ApiError::from_anyhow_with_context(e, "Failed to extract page image"))?;
+
+    // Store in cache asynchronously
+    let cache_clone = cache.clone();
+    let image_data_clone = image_data.clone();
+    tokio::spawn(async move {
+        if let Err(e) = cache_clone
+            .set(book_id, page_number, dpi, &image_data_clone)
+            .await
+        {
+            tracing::warn!(
+                "Failed to cache PDF page {} for book {}: {}",
+                page_number,
+                book_id,
+                e
+            );
+        }
+    });
+
+    // Return rendered image
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CACHE_CONTROL, "public, max-age=31536000")
+        .header(header::CONTENT_LENGTH, image_data.len())
+        .body(Body::from(image_data))
+        .unwrap())
+}
+
 /// Get thumbnail/cover image for a book
 ///
-/// Extracts the first page and resizes it to a thumbnail (max 400px width/height)
+/// Extracts the first page and resizes it to a thumbnail (max 400px width/height).
+/// Supports HTTP conditional caching with ETag and Last-Modified headers,
+/// returning 304 Not Modified when the client has a valid cached copy.
 #[utoipa::path(
     get,
     path = "/api/v1/books/{book_id}/thumbnail",
@@ -115,6 +241,7 @@ pub async fn get_page_image(
     ),
     responses(
         (status = 200, description = "Thumbnail image", content_type = "image/jpeg"),
+        (status = 304, description = "Not modified (client cache is valid)"),
         (status = 404, description = "Book not found"),
         (status = 403, description = "Forbidden"),
     ),
@@ -127,6 +254,7 @@ pub async fn get_page_image(
 pub async fn get_book_thumbnail(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
+    headers: HeaderMap,
     Path(book_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
@@ -142,22 +270,94 @@ pub async fn get_book_thumbnail(
         return Err(ApiError::NotFound("Book has no pages".to_string()));
     }
 
-    // Try to serve cached thumbnail first
-    if let Ok(thumbnail_data) = state.thumbnail_service.read_thumbnail(book_id).await {
-        return Ok(Response::builder()
-            .status(StatusCode::OK)
-            .header(header::CONTENT_TYPE, "image/jpeg")
-            .header(header::CACHE_CONTROL, "public, max-age=31536000") // Cache for 1 year
-            .header(header::CONTENT_LENGTH, thumbnail_data.len())
-            .body(Body::from(thumbnail_data))
-            .unwrap());
+    // Try to serve cached thumbnail with HTTP conditional caching
+    if let Some(meta) = state
+        .thumbnail_service
+        .get_thumbnail_metadata(book_id)
+        .await
+    {
+        // Check If-None-Match header for ETag validation
+        if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
+            if let Ok(client_etag) = if_none_match.to_str() {
+                let client_etag = client_etag.trim().trim_start_matches("W/");
+                if client_etag == meta.etag
+                    || client_etag.trim_matches('"') == meta.etag.trim_matches('"')
+                {
+                    return Ok(Response::builder()
+                        .status(StatusCode::NOT_MODIFIED)
+                        .header(header::ETAG, &meta.etag)
+                        .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                        .body(Body::empty())
+                        .unwrap());
+                }
+            }
+        }
+
+        // Check If-Modified-Since header
+        if let Some(if_modified_since) = headers.get(header::IF_MODIFIED_SINCE) {
+            if let Ok(date_str) = if_modified_since.to_str() {
+                if let Ok(client_time) = httpdate::parse_http_date(date_str) {
+                    let file_time = UNIX_EPOCH + Duration::from_secs(meta.modified_unix);
+                    if file_time <= client_time {
+                        return Ok(Response::builder()
+                            .status(StatusCode::NOT_MODIFIED)
+                            .header(header::ETAG, &meta.etag)
+                            .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                            .body(Body::empty())
+                            .unwrap());
+                    }
+                }
+            }
+        }
+
+        // Cache hit - stream the thumbnail directly
+        if let Some(stream) = state.thumbnail_service.get_thumbnail_stream(book_id).await {
+            let last_modified = UNIX_EPOCH + Duration::from_secs(meta.modified_unix);
+            let last_modified_str = fmt_http_date(last_modified);
+
+            return Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "image/jpeg")
+                .header(header::CONTENT_LENGTH, meta.size)
+                .header(header::ETAG, &meta.etag)
+                .header(header::LAST_MODIFIED, last_modified_str)
+                .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                .body(Body::from_stream(stream))
+                .unwrap());
+        }
     }
 
     // Cache miss - generate thumbnail on-demand
-    // Extract first page
-    let image_data = extract_page_image(&book.file_path, &book.format, 1)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to extract cover image: {}", e)))?;
+    // Extract first page (for PDFs, try cache first then render)
+    let image_data = if book.format.eq_ignore_ascii_case("pdf") {
+        let dpi = state.pdf_config.render_dpi;
+        // Try cache first
+        if let Some(cached) = state.pdf_page_cache.get(book_id, 1, dpi).await {
+            cached
+        } else {
+            // Render and cache
+            let path = std::path::Path::new(&book.file_path);
+            let data =
+                crate::parsers::pdf::extract_page_from_pdf_with_dpi(path, 1, dpi).map_err(|e| {
+                    ApiError::from_anyhow_with_context(e, "Failed to extract cover image")
+                })?;
+
+            // Cache asynchronously
+            let cache = state.pdf_page_cache.clone();
+            let data_clone = data.clone();
+            tokio::spawn(async move {
+                if let Err(e) = cache.set(book_id, 1, dpi, &data_clone).await {
+                    tracing::warn!("Failed to cache PDF page 1 for book {}: {}", book_id, e);
+                }
+            });
+
+            data
+        }
+    } else {
+        extract_page_image(&book.file_path, &book.format, 1)
+            .await
+            .map_err(|e| ApiError::from_anyhow_with_context(e, "Failed to extract cover image"))?
+    };
 
     // Generate thumbnail (max 400px width or height)
     let thumbnail_data = generate_thumbnail(&image_data, 400)

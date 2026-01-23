@@ -77,6 +77,40 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         .start_background_jobs(background_task_cancel.clone());
     info!("Task metrics background jobs started");
 
+    // Initialize PDF page cache service
+    let pdf_page_cache = Arc::new(crate::services::PdfPageCache::new(
+        &config.pdf.cache_dir,
+        config.pdf.cache_rendered_pages,
+    ));
+    if config.pdf.cache_rendered_pages {
+        info!(
+            "PDF page cache initialized (cache_dir: {})",
+            config.pdf.cache_dir
+        );
+    } else {
+        info!("PDF page cache disabled");
+    }
+
+    // Initialize PDFium library for PDF page rendering
+    // Treat empty string same as None (auto-detect from system paths)
+    let pdfium_path = config
+        .pdf
+        .pdfium_library_path
+        .as_ref()
+        .filter(|s| !s.is_empty())
+        .map(std::path::Path::new);
+    match crate::parsers::pdf::init_pdfium(pdfium_path) {
+        Ok(()) => {
+            info!("PDFium library initialized successfully");
+        }
+        Err(e) => {
+            tracing::warn!(
+                "PDFium initialization failed: {}. PDF page rendering will be unavailable for text-only PDFs.",
+                e
+            );
+        }
+    }
+
     // Spawn multiple workers for parallel task processing
     let (worker_handles, worker_shutdown_channels) = spawn_workers(
         db.sea_orm_connection(),
@@ -86,6 +120,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         thumbnail_service,
         Some(task_metrics_service),
         config.files.clone(),
+        Some(pdf_page_cache),
     );
 
     info!("All {} task workers started successfully", worker_count);

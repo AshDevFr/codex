@@ -82,12 +82,13 @@ export const seriesApi = {
 		return response.data;
 	},
 
-	// Generate thumbnails for all books in series
+	// Generate thumbnails for all books in series (queues a background task)
 	generateThumbnails: async (
 		seriesId: string,
-	): Promise<{ message: string }> => {
-		const response = await api.post<{ message: string }>(
-			`/series/${seriesId}/thumbnails`,
+	): Promise<{ task_id: string }> => {
+		const response = await api.post<{ task_id: string }>(
+			`/series/${seriesId}/thumbnails/generate`,
+			{ force: true },
 		);
 		return response.data;
 	},

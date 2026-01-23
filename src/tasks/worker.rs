@@ -19,11 +19,13 @@ use uuid::Uuid;
 use crate::config::FilesConfig;
 use crate::db::repositories::TaskRepository;
 use crate::events::{EventBroadcaster, RecordedEvent, TaskProgressEvent};
+use crate::services::PdfPageCache;
 use crate::services::{SettingsService, TaskMetricsService, ThumbnailService};
 use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, CleanupBookFilesHandler, CleanupOrphanedFilesHandler,
-    CleanupSeriesFilesHandler, FindDuplicatesHandler, GenerateThumbnailHandler,
-    GenerateThumbnailsHandler, PurgeDeletedHandler, ScanLibraryHandler, TaskHandler,
+    CleanupPdfCacheHandler, CleanupSeriesFilesHandler, FindDuplicatesHandler,
+    GenerateThumbnailHandler, GenerateThumbnailsHandler, PurgeDeletedHandler, ScanLibraryHandler,
+    TaskHandler,
 };
 
 /// Task worker that processes tasks from the queue
@@ -151,6 +153,21 @@ impl TaskWorker {
         self.handlers.insert(
             "cleanup_orphaned_files".to_string(),
             Arc::new(CleanupOrphanedFilesHandler::new(files_config)),
+        );
+        self
+    }
+
+    /// Set the PDF cache and settings service for PDF cache cleanup handler
+    ///
+    /// This registers the CleanupPdfCache task handler.
+    pub fn with_pdf_cache(
+        mut self,
+        pdf_cache: Arc<PdfPageCache>,
+        settings_service: Arc<SettingsService>,
+    ) -> Self {
+        self.handlers.insert(
+            "cleanup_pdf_cache".to_string(),
+            Arc::new(CleanupPdfCacheHandler::new(pdf_cache, settings_service)),
         );
         self
     }

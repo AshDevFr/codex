@@ -14,6 +14,7 @@ import { eventHandlers } from "./events";
 import { libraryHandlers } from "./libraries";
 import { metadataHandlers } from "./metadata";
 import { metricsHandlers } from "./metrics";
+import { pdfCacheHandlers } from "./pdfCache";
 import { seriesHandlers } from "./series";
 import { settingsHandlers } from "./settings";
 import { sharingTagsHandlers } from "./sharingTags";
@@ -110,6 +111,7 @@ export const handlers = [
 	...cleanupHandlers,
 	...eventHandlers,
 	...metadataHandlers,
+	...pdfCacheHandlers,
 	...settingsHandlers,
 	...sharingTagsHandlers,
 	...usersHandlers,
@@ -129,6 +131,7 @@ export { eventHandlers } from "./events";
 export { libraryHandlers } from "./libraries";
 export { metadataHandlers } from "./metadata";
 export { metricsHandlers } from "./metrics";
+export { pdfCacheHandlers } from "./pdfCache";
 export { seriesHandlers } from "./series";
 export { settingsHandlers } from "./settings";
 export { sharingTagsHandlers } from "./sharingTags";

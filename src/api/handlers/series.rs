@@ -33,18 +33,21 @@ use crate::utils::{
 use axum::{
     body::Body,
     extract::{Multipart, Path, Query, State},
-    http::{header, StatusCode},
+    http::{header, HeaderMap, StatusCode},
     response::Response,
     Json,
 };
 use chrono::Utc;
+use httpdate::fmt_http_date;
 use image::{imageops::FilterType, ImageFormat};
 use sea_orm::DatabaseConnection;
 use serde::Deserialize;
 use std::io::{Cursor, Write};
 use std::sync::Arc;
+use std::time::{Duration, UNIX_EPOCH};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
+use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 use zip::write::SimpleFileOptions;
 
@@ -1581,7 +1584,7 @@ async fn get_default_series_cover(
     // Extract first page from the book
     extract_page_image(&first_book.file_path, &first_book.format, 1)
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to extract cover image: {}", e)))
+        .map_err(|e| ApiError::from_anyhow_with_context(e, "Failed to extract cover image"))
 }
 
 /// Generate a thumbnail from an image
@@ -4324,6 +4327,9 @@ pub async fn delete_series_cover(
 }
 
 /// Get a specific cover image for a series
+///
+/// Supports HTTP conditional caching with ETag and Last-Modified headers,
+/// returning 304 Not Modified when the client has a valid cached copy.
 #[utoipa::path(
     get,
     path = "/api/v1/series/{series_id}/covers/{cover_id}/image",
@@ -4333,6 +4339,7 @@ pub async fn delete_series_cover(
     ),
     responses(
         (status = 200, description = "Cover image", content_type = "image/jpeg"),
+        (status = 304, description = "Not modified (client cache is valid)"),
         (status = 404, description = "Series or cover not found"),
         (status = 403, description = "Forbidden"),
     ),
@@ -4345,6 +4352,7 @@ pub async fn delete_series_cover(
 pub async fn get_series_cover_image(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
+    headers: HeaderMap,
     Path((series_id, cover_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
@@ -4366,18 +4374,79 @@ pub async fn get_series_cover_image(
         return Err(ApiError::NotFound("Cover not found".to_string()));
     }
 
-    // Read the cover file
-    let image_data = fs::read(&cover.path).await.map_err(|e| {
-        ApiError::Internal(format!("Failed to read cover from {}: {}", cover.path, e))
+    // Get file metadata for conditional caching
+    let metadata = fs::metadata(&cover.path).await.map_err(|e| {
+        ApiError::Internal(format!(
+            "Failed to read cover metadata from {}: {}",
+            cover.path, e
+        ))
     })?;
 
-    // Build response with caching headers
+    let size = metadata.len();
+    let modified_unix = metadata
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    // Generate ETag from cover_id + size + modified time
+    let etag = format!(
+        "\"{:x}-{:x}-{:x}\"",
+        cover_id.as_u128(),
+        size,
+        modified_unix
+    );
+
+    // Check If-None-Match header for ETag validation
+    if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
+        if let Ok(client_etag) = if_none_match.to_str() {
+            let client_etag = client_etag.trim().trim_start_matches("W/");
+            if client_etag == etag || client_etag.trim_matches('"') == etag.trim_matches('"') {
+                return Ok(Response::builder()
+                    .status(StatusCode::NOT_MODIFIED)
+                    .header(header::ETAG, &etag)
+                    .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                    .body(Body::empty())
+                    .unwrap());
+            }
+        }
+    }
+
+    // Check If-Modified-Since header
+    if let Some(if_modified_since) = headers.get(header::IF_MODIFIED_SINCE) {
+        if let Ok(date_str) = if_modified_since.to_str() {
+            if let Ok(client_time) = httpdate::parse_http_date(date_str) {
+                let file_time = UNIX_EPOCH + Duration::from_secs(modified_unix);
+                if file_time <= client_time {
+                    return Ok(Response::builder()
+                        .status(StatusCode::NOT_MODIFIED)
+                        .header(header::ETAG, &etag)
+                        .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                        .body(Body::empty())
+                        .unwrap());
+                }
+            }
+        }
+    }
+
+    // Stream the cover file directly
+    let file = tokio::fs::File::open(&cover.path).await.map_err(|e| {
+        ApiError::Internal(format!("Failed to open cover from {}: {}", cover.path, e))
+    })?;
+    let stream = ReaderStream::new(file);
+
+    let last_modified = UNIX_EPOCH + Duration::from_secs(modified_unix);
+    let last_modified_str = fmt_http_date(last_modified);
+
     Ok(Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "image/jpeg")
-        .header(header::CACHE_CONTROL, "public, max-age=3600")
-        .header(header::CONTENT_LENGTH, image_data.len())
-        .body(Body::from(image_data))
+        .header(header::CONTENT_LENGTH, size)
+        .header(header::ETAG, &etag)
+        .header(header::LAST_MODIFIED, last_modified_str)
+        .header(header::CACHE_CONTROL, "public, max-age=31536000")
+        .body(Body::from_stream(stream))
         .unwrap())
 }
 

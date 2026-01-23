@@ -516,6 +516,124 @@
         ]
       }
     },
+    "/api/v1/admin/pdf-cache": {
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Clear the entire PDF cache immediately (synchronous)",
+        "description": "Deletes all cached PDF pages immediately. This operation cannot be undone.\nFor selective cleanup based on age, use the trigger_pdf_cache_cleanup endpoint instead.\n\n# Permission Required\n- Admin access required",
+        "operationId": "clear_pdf_cache",
+        "responses": {
+          "200": {
+            "description": "Cache cleared successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PdfCacheCleanupResultDto"
+                },
+                "example": {
+                  "bytes_reclaimed": 157286400,
+                  "bytes_reclaimed_human": "150.0 MB",
+                  "files_deleted": 1500
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/pdf-cache/cleanup": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Trigger PDF cache cleanup task",
+        "description": "Enqueues a background task to clean up cached PDF pages older than\nthe configured max age (default: 30 days, configurable via settings).\n\n# Permission Required\n- Admin access required\n\nReturns the task ID which can be used to track progress.",
+        "operationId": "trigger_pdf_cache_cleanup",
+        "responses": {
+          "200": {
+            "description": "Cleanup task queued successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerPdfCacheCleanupResponse"
+                },
+                "example": {
+                  "max_age_days": 30,
+                  "message": "PDF cache cleanup task queued successfully",
+                  "task_id": "550e8400-e29b-41d4-a716-446655440000"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/pdf-cache/stats": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get PDF cache statistics",
+        "description": "Returns statistics about the PDF page cache including total files,\ntotal size, number of books with cached pages, and cache status.\n\n# Permission Required\n- Admin access required",
+        "operationId": "get_pdf_cache_stats",
+        "responses": {
+          "200": {
+            "description": "Cache statistics retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PdfCacheStatsDto"
+                },
+                "example": {
+                  "book_count": 45,
+                  "cache_dir": "/data/cache",
+                  "cache_enabled": true,
+                  "oldest_file_age_days": 15,
+                  "total_files": 1500,
+                  "total_size_bytes": 157286400,
+                  "total_size_human": "150.0 MB"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/settings": {
       "get": {
         "tags": [
@@ -2213,7 +2331,7 @@
           "pages"
         ],
         "summary": "Get page image from a book",
-        "description": "Extracts and serves the image for a specific page from CBZ/CBR/EPUB/PDF",
+        "description": "Extracts and serves the image for a specific page from CBZ/CBR/EPUB/PDF.\nFor PDF pages, supports HTTP conditional caching with ETag and Last-Modified\nheaders, returning 304 Not Modified when the client has a valid cached copy.",
         "operationId": "get_page_image",
         "parameters": [
           {
@@ -2243,6 +2361,9 @@
             "content": {
               "image/jpeg": {}
             }
+          },
+          "304": {
+            "description": "Not modified (client cache is valid)"
           },
           "403": {
             "description": "Forbidden"
@@ -2459,7 +2580,7 @@
           "books"
         ],
         "summary": "Get thumbnail/cover image for a book",
-        "description": "Extracts the first page and resizes it to a thumbnail (max 400px width/height)",
+        "description": "Extracts the first page and resizes it to a thumbnail (max 400px width/height).\nSupports HTTP conditional caching with ETag and Last-Modified headers,\nreturning 304 Not Modified when the client has a valid cached copy.",
         "operationId": "get_book_thumbnail",
         "parameters": [
           {
@@ -2479,6 +2600,9 @@
             "content": {
               "image/jpeg": {}
             }
+          },
+          "304": {
+            "description": "Not modified (client cache is valid)"
           },
           "403": {
             "description": "Forbidden"
@@ -5570,6 +5694,7 @@
           "series"
         ],
         "summary": "Get a specific cover image for a series",
+        "description": "Supports HTTP conditional caching with ETag and Last-Modified headers,\nreturning 304 Not Modified when the client has a valid cached copy.",
         "operationId": "get_series_cover_image",
         "parameters": [
           {
@@ -5599,6 +5724,9 @@
             "content": {
               "image/jpeg": {}
             }
+          },
+          "304": {
+            "description": "Not modified (client cache is valid)"
           },
           "403": {
             "description": "Forbidden"
@@ -14450,6 +14578,96 @@
           }
         }
       },
+      "PdfCacheCleanupResultDto": {
+        "type": "object",
+        "description": "Result of a PDF cache cleanup operation",
+        "required": [
+          "files_deleted",
+          "bytes_reclaimed",
+          "bytes_reclaimed_human"
+        ],
+        "properties": {
+          "bytes_reclaimed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bytes freed by the cleanup",
+            "example": 26214400,
+            "minimum": 0
+          },
+          "bytes_reclaimed_human": {
+            "type": "string",
+            "description": "Human-readable size reclaimed (e.g., \"25.0 MB\")",
+            "example": "25.0 MB"
+          },
+          "files_deleted": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of cached page files deleted",
+            "example": 250,
+            "minimum": 0
+          }
+        }
+      },
+      "PdfCacheStatsDto": {
+        "type": "object",
+        "description": "Statistics about the PDF page cache",
+        "required": [
+          "total_files",
+          "total_size_bytes",
+          "total_size_human",
+          "book_count",
+          "cache_dir",
+          "cache_enabled"
+        ],
+        "properties": {
+          "book_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of unique books with cached pages",
+            "example": 45,
+            "minimum": 0
+          },
+          "cache_dir": {
+            "type": "string",
+            "description": "Path to the cache directory",
+            "example": "/data/cache"
+          },
+          "cache_enabled": {
+            "type": "boolean",
+            "description": "Whether the PDF page cache is enabled",
+            "example": true
+          },
+          "oldest_file_age_days": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Age of the oldest cached file in days (if any files exist)",
+            "example": 15,
+            "minimum": 0
+          },
+          "total_files": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of cached page files",
+            "example": 1500,
+            "minimum": 0
+          },
+          "total_size_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total size of cache in bytes",
+            "example": 157286400,
+            "minimum": 0
+          },
+          "total_size_human": {
+            "type": "string",
+            "description": "Human-readable total size (e.g., \"150.0 MB\")",
+            "example": "150.0 MB"
+          }
+        }
+      },
       "PreviewScanRequest": {
         "type": "object",
         "description": "Preview scan request",
@@ -17410,6 +17628,21 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Clean up old pages from the PDF page cache",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "cleanup_pdf_cache"
+                ]
+              }
+            }
           }
         ],
         "description": "Task types supported by the distributed task queue"
@@ -17689,6 +17922,35 @@
             "type": "string",
             "format": "uuid",
             "description": "Task ID for tracking the scan progress",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        }
+      },
+      "TriggerPdfCacheCleanupResponse": {
+        "type": "object",
+        "description": "Response when triggering a PDF cache cleanup task",
+        "required": [
+          "task_id",
+          "message",
+          "max_age_days"
+        ],
+        "properties": {
+          "max_age_days": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Max age setting being used for cleanup (in days)",
+            "example": 30,
+            "minimum": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "Message describing the action taken",
+            "example": "PDF cache cleanup task queued successfully"
+          },
+          "task_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the queued cleanup task",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           }
         }

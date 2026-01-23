@@ -1,4 +1,5 @@
 use crate::parsers::isbn_utils::extract_isbns;
+use crate::parsers::pdf::renderer;
 use crate::parsers::traits::FormatParser;
 use crate::parsers::{BookMetadata, FileFormat, ImageFormat, PageInfo};
 use crate::utils::{hash_file, CodexError, Result};
@@ -6,6 +7,9 @@ use chrono::{DateTime, Utc};
 use image::GenericImageView;
 use lopdf::Document;
 use std::path::Path;
+
+/// Default DPI for rendering PDF pages when no embedded image is available
+const DEFAULT_RENDER_DPI: u16 = 150;
 
 /// Extracted PDF image data: (data bytes, format, width, height, size)
 type PdfImageData = (Vec<u8>, ImageFormat, u32, u32, u64);
@@ -219,57 +223,20 @@ impl FormatParser for PdfParser {
         // Compute file hash
         let file_hash = hash_file(path)?;
 
-        // Load the PDF document
+        // Load the PDF document with lopdf
         let doc = Document::load(path)
             .map_err(|e| CodexError::ParseError(format!("Failed to load PDF: {}", e)))?;
 
         // Extract ISBNs from PDF metadata
         let isbns = Self::extract_isbns_from_pdf(&doc);
 
-        // Get page count
+        // Get the actual page count from the PDF
         let page_count = doc.get_pages().len();
 
-        // Extract images from all pages
-        let mut pages = Vec::new();
-        let mut page_image_counter = 1;
-
-        for page_num in 0..page_count as u32 {
-            if let Ok(page_images) = Self::extract_images_from_page(&doc, page_num) {
-                for (image_data, format, width, height, file_size) in page_images {
-                    // Try to verify dimensions with image crate
-                    let (final_width, final_height) =
-                        if let Ok(img) = image::load_from_memory(&image_data) {
-                            img.dimensions()
-                        } else {
-                            (width, height)
-                        };
-
-                    pages.push(PageInfo {
-                        page_number: page_image_counter,
-                        file_name: format!(
-                            "page_{}_image_{}.{}",
-                            page_num + 1,
-                            page_image_counter,
-                            match format {
-                                ImageFormat::JPEG => "jpg",
-                                ImageFormat::PNG => "png",
-                                ImageFormat::WEBP => "webp",
-                                ImageFormat::GIF => "gif",
-                                ImageFormat::BMP => "bmp",
-                                ImageFormat::AVIF => "avif",
-                                ImageFormat::SVG => "svg",
-                            }
-                        ),
-                        format,
-                        width: final_width,
-                        height: final_height,
-                        file_size,
-                    });
-
-                    page_image_counter += 1;
-                }
-            }
-        }
+        // Build page info for each PDF page
+        // We create an entry for every page regardless of whether it has an embedded image
+        // This ensures the page count matches the actual PDF structure
+        let pages = Self::build_page_info_list(&doc, path, page_count);
 
         Ok(BookMetadata {
             file_path: path.to_string_lossy().to_string(),
@@ -285,6 +252,81 @@ impl FormatParser for PdfParser {
     }
 }
 
+impl PdfParser {
+    /// Build page info list for all PDF pages
+    ///
+    /// This creates a PageInfo entry for every page in the PDF. For pages with
+    /// embedded images, we extract the image dimensions. For pages without
+    /// embedded images (text-only, vector graphics), we try to get dimensions
+    /// from PDFium if available, otherwise use default US Letter dimensions.
+    fn build_page_info_list(doc: &Document, path: &Path, page_count: usize) -> Vec<PageInfo> {
+        let mut pages = Vec::with_capacity(page_count);
+
+        for page_idx in 0..page_count {
+            let page_number = page_idx + 1; // 1-indexed for PageInfo
+
+            // Try to get embedded image info first (fast path)
+            if let Ok(page_images) = Self::extract_images_from_page(doc, page_idx as u32) {
+                if let Some((image_data, format, width, height, img_file_size)) =
+                    page_images.into_iter().next()
+                {
+                    // Try to verify dimensions with image crate
+                    let (final_width, final_height) =
+                        if let Ok(img) = image::load_from_memory(&image_data) {
+                            img.dimensions()
+                        } else {
+                            (width, height)
+                        };
+
+                    pages.push(PageInfo {
+                        page_number,
+                        file_name: format!(
+                            "page_{}.{}",
+                            page_number,
+                            match format {
+                                ImageFormat::JPEG => "jpg",
+                                ImageFormat::PNG => "png",
+                                ImageFormat::WEBP => "webp",
+                                ImageFormat::GIF => "gif",
+                                ImageFormat::BMP => "bmp",
+                                ImageFormat::AVIF => "avif",
+                                ImageFormat::SVG => "svg",
+                            }
+                        ),
+                        format,
+                        width: final_width,
+                        height: final_height,
+                        file_size: img_file_size,
+                    });
+                    continue;
+                }
+            }
+
+            // No embedded image found - try to get dimensions from PDFium renderer
+            let (width, height) = if renderer::is_initialized() {
+                // Get pixel dimensions at default rendering DPI (page_number is 1-indexed for API)
+                renderer::get_page_dimensions_pixels(path, page_number as i32, DEFAULT_RENDER_DPI)
+                    .unwrap_or((1275, 1650)) // Default to US Letter at 150 DPI
+            } else {
+                // PDFium not available, use default US Letter dimensions at 150 DPI
+                // 8.5" x 11" at 150 DPI = 1275 x 1650 pixels
+                (1275, 1650)
+            };
+
+            pages.push(PageInfo {
+                page_number,
+                file_name: format!("page_{}.jpg", page_number), // Rendered pages are JPEG
+                format: ImageFormat::JPEG,
+                width,
+                height,
+                file_size: 0, // Unknown until rendered
+            });
+        }
+
+        pages
+    }
+}
+
 impl Default for PdfParser {
     fn default() -> Self {
         Self::new()
@@ -293,34 +335,111 @@ impl Default for PdfParser {
 
 /// Extract a specific page image from a PDF file
 ///
+/// This function uses a two-step strategy:
+/// 1. **Fast path**: Try to extract an embedded image from the PDF page (works for scanned PDFs)
+/// 2. **Fallback**: Render the page using PDFium (handles text-only and vector graphics PDFs)
+///
 /// # Arguments
 /// * `path` - Path to the PDF file
 /// * `page_number` - Page number (1-indexed)
 ///
 /// # Returns
-/// The raw image data as bytes
+/// The raw image data as bytes (JPEG format for rendered pages, original format for embedded images)
 pub fn extract_page_from_pdf<P: AsRef<Path>>(path: P, page_number: i32) -> anyhow::Result<Vec<u8>> {
-    let doc = Document::load(path).map_err(|e| anyhow::anyhow!("Failed to load PDF: {}", e))?;
+    extract_page_from_pdf_with_dpi(path, page_number, DEFAULT_RENDER_DPI)
+}
 
-    // Get the total number of pages
-    let page_count = doc.get_pages().len();
+/// Extract a specific page image from a PDF file with configurable DPI
+///
+/// This function uses a two-step strategy:
+/// 1. **Fast path**: Try to extract an embedded image from the PDF page (works for scanned PDFs)
+/// 2. **Fallback**: Render the page using PDFium (handles text-only and vector graphics PDFs)
+///
+/// # Arguments
+/// * `path` - Path to the PDF file
+/// * `page_number` - Page number (1-indexed)
+/// * `dpi` - DPI for rendering (only used if page needs to be rendered)
+///
+/// # Returns
+/// The raw image data as bytes (JPEG format for rendered pages, original format for embedded images)
+pub fn extract_page_from_pdf_with_dpi<P: AsRef<Path>>(
+    path: P,
+    page_number: i32,
+    dpi: u16,
+) -> anyhow::Result<Vec<u8>> {
+    let path = path.as_ref();
 
-    // Extract images from all pages and find the one we need
-    let mut current_image_index = 0;
-    let target_index = (page_number - 1) as usize;
-
-    for pdf_page_num in 0..page_count as u32 {
-        if let Ok(page_images) = PdfParser::extract_images_from_page(&doc, pdf_page_num) {
-            for (image_data, _format, _width, _height, _file_size) in page_images {
-                if current_image_index == target_index {
-                    return Ok(image_data);
-                }
-                current_image_index += 1;
-            }
-        }
+    // Fast path: try to extract embedded image first
+    // This is much faster for PDFs that contain embedded images (scanned documents)
+    if let Ok(image_data) = try_extract_embedded_image(path, page_number) {
+        tracing::debug!(
+            path = %path.display(),
+            page = page_number,
+            "Extracted embedded image from PDF page"
+        );
+        return Ok(image_data);
     }
 
-    anyhow::bail!("Page {} not found in PDF", page_number)
+    // Fallback: render the page using PDFium
+    // This handles text-only PDFs, vector graphics, and mixed content
+    if !renderer::is_initialized() {
+        anyhow::bail!(
+            "Page {} could not be extracted from PDF: no embedded image found and PDFium renderer is not available",
+            page_number
+        );
+    }
+
+    tracing::debug!(
+        path = %path.display(),
+        page = page_number,
+        dpi = dpi,
+        "Rendering PDF page with PDFium"
+    );
+
+    renderer::render_page(path, page_number, dpi)
+}
+
+/// Try to extract an embedded image from a specific PDF page
+///
+/// This function attempts to find an embedded image XObject on the specified page.
+/// It's a "fast path" that works well for scanned PDFs where each page is essentially
+/// a single large image.
+///
+/// # Arguments
+/// * `path` - Path to the PDF file
+/// * `page_number` - Page number (1-indexed)
+///
+/// # Returns
+/// * `Ok(Vec<u8>)` - The raw image data
+/// * `Err` - If no suitable embedded image could be found on this page
+fn try_extract_embedded_image<P: AsRef<Path>>(
+    path: P,
+    page_number: i32,
+) -> anyhow::Result<Vec<u8>> {
+    let doc = Document::load(path).map_err(|e| anyhow::anyhow!("Failed to load PDF: {}", e))?;
+
+    // Validate page number
+    let page_count = doc.get_pages().len();
+    if page_number < 1 || page_number as usize > page_count {
+        anyhow::bail!(
+            "Page {} out of range (PDF has {} pages)",
+            page_number,
+            page_count
+        );
+    }
+
+    // Get images from the specific page (0-indexed)
+    let page_index = (page_number - 1) as u32;
+    let page_images = PdfParser::extract_images_from_page(&doc, page_index)?;
+
+    // Return the first (and typically only) image from this page
+    // For scanned PDFs, each page usually has exactly one full-page image
+    if let Some((image_data, _format, _width, _height, _file_size)) = page_images.into_iter().next()
+    {
+        return Ok(image_data);
+    }
+
+    anyhow::bail!("No embedded image found on page {}", page_number)
 }
 
 #[cfg(test)]
@@ -361,7 +480,92 @@ mod tests {
         assert_eq!(isbns.len(), 0);
     }
 
-    // Note: Testing PDF ISBN extraction with actual metadata requires
-    // creating a PDF with Info dictionary, which is complex.
-    // Integration tests with real PDF files will provide better coverage.
+    #[test]
+    fn test_extract_page_from_pdf_invalid_path() {
+        let result = extract_page_from_pdf("/nonexistent/file.pdf", 1);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        // When PDFium is not initialized, the embedded image extraction fails silently
+        // and we get an error about PDFium not being available
+        // When PDFium IS initialized, we get a "Failed to load PDF" error from PDFium
+        assert!(
+            err_msg.contains("Failed to load PDF")
+                || err_msg.contains("No such file")
+                || err_msg.contains("PDFium renderer is not available"),
+            "Unexpected error message: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_extract_page_from_pdf_with_dpi_invalid_path() {
+        let result = extract_page_from_pdf_with_dpi("/nonexistent/file.pdf", 1, 200);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        // When PDFium is not initialized, the embedded image extraction fails silently
+        // and we get an error about PDFium not being available
+        // When PDFium IS initialized, we get a "Failed to load PDF" error from PDFium
+        assert!(
+            err_msg.contains("Failed to load PDF")
+                || err_msg.contains("No such file")
+                || err_msg.contains("PDFium renderer is not available"),
+            "Unexpected error message: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_try_extract_embedded_image_invalid_path() {
+        let result = try_extract_embedded_image("/nonexistent/file.pdf", 1);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_try_extract_embedded_image_invalid_page_number() {
+        // Create a minimal PDF to test page validation
+        // We can't easily create a valid PDF in memory, so we test with a path
+        // that would fail at the Document::load step
+        let result = try_extract_embedded_image("/nonexistent/file.pdf", 0);
+        assert!(result.is_err());
+
+        let result = try_extract_embedded_image("/nonexistent/file.pdf", -1);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_default_render_dpi_constant() {
+        // Verify the default DPI constant is set correctly
+        assert_eq!(DEFAULT_RENDER_DPI, 150);
+    }
+
+    #[test]
+    fn test_extract_page_uses_default_dpi() {
+        // Verify that extract_page_from_pdf delegates to extract_page_from_pdf_with_dpi
+        // We can't easily test this without a real PDF, but we verify the code path exists
+        // by checking that both functions fail with the same error for invalid input
+        let result1 = extract_page_from_pdf("/nonexistent/file.pdf", 1);
+        let result2 =
+            extract_page_from_pdf_with_dpi("/nonexistent/file.pdf", 1, DEFAULT_RENDER_DPI);
+
+        assert!(result1.is_err());
+        assert!(result2.is_err());
+        // Both should fail with the same error type
+        assert_eq!(
+            result1.unwrap_err().to_string(),
+            result2.unwrap_err().to_string()
+        );
+    }
+
+    #[test]
+    fn test_build_page_info_list_empty_pdf() {
+        // Create a minimal PDF document (no pages)
+        let doc = Document::with_version("1.4");
+        let path = Path::new("/test/file.pdf");
+        let pages = PdfParser::build_page_info_list(&doc, path, 0);
+        assert!(pages.is_empty());
+    }
+
+    // Note: Testing PDF page extraction with actual files requires
+    // integration tests with real PDF fixtures.
+    // See tests/parsers/pdf_rendering.rs for comprehensive tests.
 }

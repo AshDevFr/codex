@@ -20,6 +20,7 @@ mod api {
     mod metrics;
     mod opds;
     mod opds2;
+    mod pdf_cache;
     mod read_progress;
     mod scan;
     mod series;

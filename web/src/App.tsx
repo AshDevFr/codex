@@ -24,6 +24,7 @@ import {
 	CleanupSettings,
 	DuplicatesSettings,
 	MetricsSettings,
+	PdfCacheSettings,
 	ProfileSettings,
 	ServerSettings,
 	SharingTagsSettings,
@@ -260,6 +261,17 @@ function App() {
 						<ProtectedRoute>
 							<AppLayout currentPath="/settings/cleanup">
 								<CleanupSettings />
+							</AppLayout>
+						</ProtectedRoute>
+					}
+				/>
+
+				<Route
+					path="/settings/pdf-cache"
+					element={
+						<ProtectedRoute>
+							<AppLayout currentPath="/settings/pdf-cache">
+								<PdfCacheSettings />
 							</AppLayout>
 						</ProtectedRoute>
 					}

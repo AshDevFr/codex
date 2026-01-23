@@ -70,6 +70,9 @@ pub enum TaskType {
 
     /// Scan filesystem for orphaned files and delete them
     CleanupOrphanedFiles,
+
+    /// Clean up old pages from the PDF page cache
+    CleanupPdfCache,
 }
 
 fn default_mode() -> String {
@@ -91,6 +94,7 @@ impl TaskType {
             TaskType::CleanupBookFiles { .. } => "cleanup_book_files",
             TaskType::CleanupSeriesFiles { .. } => "cleanup_series_files",
             TaskType::CleanupOrphanedFiles => "cleanup_orphaned_files",
+            TaskType::CleanupPdfCache => "cleanup_pdf_cache",
         }
     }
 

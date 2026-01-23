@@ -7,4 +7,5 @@ mod parsers {
     mod cbz;
     mod epub;
     mod pdf;
+    mod pdf_rendering;
 }

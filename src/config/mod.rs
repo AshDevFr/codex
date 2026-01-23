@@ -6,7 +6,7 @@ mod types;
 #[allow(unused_imports)]
 pub use types::{
     ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, EmailConfig,
-    FilesConfig, LoggingConfig, PostgresConfig, SQLiteConfig, ScannerConfig, TaskConfig,
+    FilesConfig, LoggingConfig, PdfConfig, PostgresConfig, SQLiteConfig, ScannerConfig, TaskConfig,
 };
 
 pub use env_override::EnvOverride;

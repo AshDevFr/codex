@@ -29,7 +29,8 @@ export type FitMode =
 export type PageLayout = "single" | "double" | "continuous";
 export type ReadingDirection = "ltr" | "rtl" | "ttb" | "webtoon";
 export type BackgroundColor = "black" | "gray" | "white";
-export type PdfMode = "streaming" | "native";
+/** PDF rendering mode: auto selects based on file size, streaming uses server-rendered images, native uses pdf.js */
+export type PdfMode = "auto" | "streaming" | "native";
 /** PDF spread mode for native PDF reader */
 export type PdfSpreadMode = "single" | "double" | "double-odd";
 export type EpubTheme =
@@ -365,7 +366,7 @@ const DEFAULT_SETTINGS: ReaderSettings = {
 	pageLayout: "single",
 	readingDirection: "ltr",
 	backgroundColor: "black",
-	pdfMode: "streaming",
+	pdfMode: "auto",
 	pdfSpreadMode: "single",
 	pdfContinuousScroll: false,
 	autoHideToolbar: true,

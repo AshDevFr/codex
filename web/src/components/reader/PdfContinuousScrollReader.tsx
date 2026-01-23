@@ -8,11 +8,9 @@ import type { PdfZoomLevel } from "./PdfReader";
 import "react-pdf/dist/esm/Page/TextLayer.css";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 
-// Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-	"pdfjs-dist/build/pdf.worker.min.mjs",
-	import.meta.url,
-).toString();
+// Configure PDF.js worker - use CDN with the exact version bundled in react-pdf
+// This avoids version mismatches when pdfjs-dist is also installed as a direct dependency
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 // =============================================================================
 // Types
@@ -332,7 +330,14 @@ export function PdfContinuousScrollReader({
 				onLoadSuccess={handleDocumentLoadSuccess}
 				onLoadError={onDocumentLoadError}
 				loading={
-					<Center style={{ width: "100%", height: 400 }}>
+					<Center
+						style={{
+							width: "100%",
+							height: "100%",
+							minHeight: "calc(100vh - 128px)",
+							backgroundColor: "transparent",
+						}}
+					>
 						<Loader size="lg" color="gray" />
 					</Center>
 				}
@@ -378,7 +383,13 @@ export function PdfContinuousScrollReader({
 										renderTextLayer={true}
 										renderAnnotationLayer={true}
 										loading={
-											<Center style={{ width: "100%", height: 400 }}>
+											<Center
+												style={{
+													width: "100%",
+													height: 400,
+													backgroundColor: "transparent",
+												}}
+											>
 												<Loader size="md" color="gray" />
 											</Center>
 										}

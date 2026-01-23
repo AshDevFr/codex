@@ -1,8 +1,7 @@
-import { Center, Loader, Text } from "@mantine/core";
+import { Center, Text } from "@mantine/core";
 import { type ReadingDirection, useReaderStore } from "@/store/readerStore";
 import { ComicReader } from "./ComicReader";
 import { EpubReader } from "./EpubReader";
-import { usePerBookSettings } from "./hooks";
 import { PdfReader } from "./PdfReader";
 
 /** Size threshold for defaulting to streaming mode (100MB) */
@@ -57,26 +56,6 @@ export function ReaderRouter({
 	const normalizedFormat = format.toUpperCase();
 	const pdfMode = useReaderStore((state) => state.settings.pdfMode);
 
-	// Load per-book settings (handles localStorage loading for per-book PDF mode)
-	const {
-		isLoaded: perBookSettingsLoaded,
-		hasPerBookPdfMode,
-		savePerBookPdfMode,
-		clearPerBookPdfMode,
-	} = usePerBookSettings(bookId, normalizedFormat);
-
-	// Wait for per-book settings to load before rendering
-	// This ensures the correct PDF mode is applied from the start
-	if (!perBookSettingsLoaded && normalizedFormat === "PDF") {
-		return (
-			<Center
-				style={{ width: "100vw", height: "100vh", backgroundColor: "#000" }}
-			>
-				<Loader size="lg" color="gray" />
-			</Center>
-		);
-	}
-
 	// Convert reading direction string to typed value
 	const readingDirectionOverride: ReadingDirection | null =
 		readingDirection === "rtl"
@@ -110,14 +89,16 @@ export function ReaderRouter({
 
 		case "PDF": {
 			// Determine effective PDF mode:
-			// - User preference from settings
-			// - Smart default: large files (>100MB) use streaming, smaller use native
+			// - "streaming": Always use server-rendered images (ComicReader)
+			// - "native": Always use pdf.js (PdfReader)
+			// - "auto": Choose based on file size (>100MB → streaming, otherwise native)
 			const effectivePdfMode =
 				pdfMode === "streaming"
 					? "streaming"
 					: pdfMode === "native"
 						? "native"
-						: fileSize && fileSize > PDF_STREAMING_THRESHOLD
+						: // Auto mode: large files use streaming for better performance
+							fileSize && fileSize > PDF_STREAMING_THRESHOLD
 							? "streaming"
 							: "native";
 
@@ -130,9 +111,6 @@ export function ReaderRouter({
 						startPage={startPage}
 						incognito={incognito}
 						onClose={onClose}
-						hasPerBookPdfMode={hasPerBookPdfMode}
-						onSavePerBookPdfMode={savePerBookPdfMode}
-						onClearPerBookPdfMode={clearPerBookPdfMode}
 					/>
 				);
 			}
