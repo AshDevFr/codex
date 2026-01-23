@@ -163,7 +163,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_opds_feed_serialization() {
+    fn test_feed_serialization() {
         let now = Utc::now();
         let feed = OpdsFeed::new("urn:uuid:root", "Test Catalog", now, false)
             .add_link(OpdsLink::self_link("/opds"))
@@ -179,7 +179,7 @@ mod tests {
     }
 
     #[test]
-    fn test_opds_feed_with_pse() {
+    fn test_feed_with_pse() {
         let now = Utc::now();
         let feed = OpdsFeed::new("urn:uuid:root", "Test Catalog", now, true);
 
@@ -189,7 +189,7 @@ mod tests {
     }
 
     #[test]
-    fn test_opds_feed_with_entries() {
+    fn test_feed_with_entries() {
         let now = Utc::now();
 
         let entry = OpdsEntry::new("urn:uuid:book-1", "Test Book", now)

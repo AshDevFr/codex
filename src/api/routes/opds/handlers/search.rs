@@ -118,7 +118,7 @@ pub async fn opensearch_descriptor(
     ),
     tag = "opds"
 )]
-pub async fn opds_search(
+pub async fn search(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Query(params): Query<SearchParams>,

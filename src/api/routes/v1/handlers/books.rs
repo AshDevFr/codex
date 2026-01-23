@@ -1,7 +1,6 @@
 use super::super::dto::{
-    book::{BookSortField, BookSortParam},
-    AdjacentBooksResponse, BookDetailResponse, BookDto, BookListRequest, BookListResponse,
-    BookMetadataDto, PaginationParams, SortDirection,
+    book::BookSortParam, AdjacentBooksResponse, BookDetailResponse, BookDto, BookListRequest,
+    BookListResponse, BookMetadataDto, PaginationParams,
 };
 use crate::api::{
     error::ApiError,

@@ -3149,7 +3149,7 @@ export interface paths {
          * OpenSearch descriptor endpoint
          * @description Returns the OpenSearch XML descriptor for OPDS clients
          */
-        get: operations["opensearch_descriptor"];
+        get: operations["opds_opensearch_descriptor"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3331,7 +3331,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        post: operations["search_books"];
+        post: operations["komga_search_books"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3362,7 +3362,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        get: operations["get_books_ondeck"];
+        get: operations["komga_get_books_ondeck"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3390,7 +3390,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        get: operations["get_book"];
+        get: operations["komga_get_book"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3419,7 +3419,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        get: operations["download_book_file"];
+        get: operations["komga_download_book_file"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3451,7 +3451,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        get: operations["get_next_book"];
+        get: operations["komga_get_next_book"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3484,7 +3484,7 @@ export interface paths {
          *     Returns an array of `KomgaPageDto` objects with page metadata including
          *     filename, MIME type, dimensions, and size.
          */
-        get: operations["list_pages"];
+        get: operations["komga_list_pages"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3517,7 +3517,7 @@ export interface paths {
          *     Returns the raw image data with appropriate Content-Type header.
          *     Response is cached for 1 year (immutable content).
          */
-        get: operations["get_page"];
+        get: operations["komga_get_page"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3549,7 +3549,7 @@ export interface paths {
          *     ## Response
          *     Returns a JPEG thumbnail with appropriate caching headers.
          */
-        get: operations["get_page_thumbnail"];
+        get: operations["komga_get_page_thumbnail"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3581,7 +3581,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        get: operations["get_previous_book"];
+        get: operations["komga_get_previous_book"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3615,7 +3615,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        delete: operations["delete_progress"];
+        delete: operations["komga_delete_progress"];
         options?: never;
         head?: never;
         /**
@@ -3640,7 +3640,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        patch: operations["update_progress"];
+        patch: operations["komga_update_progress"];
         trace?: never;
     };
     "/{prefix}/api/v1/books/{book_id}/thumbnail": {
@@ -3662,7 +3662,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        get: operations["get_book_thumbnail"];
+        get: operations["komga_get_book_thumbnail"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3690,7 +3690,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        get: operations["list_libraries"];
+        get: operations["komga_list_libraries"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3718,7 +3718,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        get: operations["get_library"];
+        get: operations["komga_get_library"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3747,7 +3747,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key (via cookie fallback for browser image tags)
          */
-        get: operations["get_library_thumbnail"];
+        get: operations["komga_get_library_thumbnail"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3781,7 +3781,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        get: operations["list_series"];
+        get: operations["komga_list_series"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3814,7 +3814,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        get: operations["get_series_new"];
+        get: operations["komga_get_series_new"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3847,7 +3847,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        get: operations["get_series_updated"];
+        get: operations["komga_get_series_updated"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3875,7 +3875,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        get: operations["get_series"];
+        get: operations["komga_get_series"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3907,7 +3907,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        get: operations["get_series_books"];
+        get: operations["komga_get_series_books"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3935,7 +3935,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        get: operations["get_series_thumbnail"];
+        get: operations["komga_get_series_thumbnail"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3973,7 +3973,7 @@ export interface paths {
          *     - Basic Auth
          *     - API Key
          */
-        get: operations["get_current_user"];
+        get: operations["komga_get_current_user"];
         put?: never;
         post?: never;
         delete?: never;
@@ -17158,7 +17158,7 @@ export interface operations {
             };
         };
     };
-    opensearch_descriptor: {
+    opds_opensearch_descriptor: {
         parameters: {
             query?: never;
             header?: never;
@@ -17413,7 +17413,7 @@ export interface operations {
             };
         };
     };
-    search_books: {
+    komga_search_books: {
         parameters: {
             query?: {
                 /** @description Page number (0-indexed, Komga-style) */
@@ -17454,7 +17454,7 @@ export interface operations {
             };
         };
     };
-    get_books_ondeck: {
+    komga_get_books_ondeck: {
         parameters: {
             query?: {
                 /** @description Page number (0-indexed, Komga-style) */
@@ -17491,7 +17491,7 @@ export interface operations {
             };
         };
     };
-    get_book: {
+    komga_get_book: {
         parameters: {
             query?: never;
             header?: never;
@@ -17530,7 +17530,7 @@ export interface operations {
             };
         };
     };
-    download_book_file: {
+    komga_download_book_file: {
         parameters: {
             query?: never;
             header?: never;
@@ -17569,7 +17569,7 @@ export interface operations {
             };
         };
     };
-    get_next_book: {
+    komga_get_next_book: {
         parameters: {
             query?: never;
             header?: never;
@@ -17608,7 +17608,7 @@ export interface operations {
             };
         };
     };
-    list_pages: {
+    komga_list_pages: {
         parameters: {
             query?: never;
             header?: never;
@@ -17647,7 +17647,7 @@ export interface operations {
             };
         };
     };
-    get_page: {
+    komga_get_page: {
         parameters: {
             query?: never;
             header?: never;
@@ -17688,7 +17688,7 @@ export interface operations {
             };
         };
     };
-    get_page_thumbnail: {
+    komga_get_page_thumbnail: {
         parameters: {
             query?: never;
             header?: never;
@@ -17729,7 +17729,7 @@ export interface operations {
             };
         };
     };
-    get_previous_book: {
+    komga_get_previous_book: {
         parameters: {
             query?: never;
             header?: never;
@@ -17768,7 +17768,7 @@ export interface operations {
             };
         };
     };
-    delete_progress: {
+    komga_delete_progress: {
         parameters: {
             query?: never;
             header?: never;
@@ -17805,7 +17805,7 @@ export interface operations {
             };
         };
     };
-    update_progress: {
+    komga_update_progress: {
         parameters: {
             query?: never;
             header?: never;
@@ -17846,7 +17846,7 @@ export interface operations {
             };
         };
     };
-    get_book_thumbnail: {
+    komga_get_book_thumbnail: {
         parameters: {
             query?: never;
             header?: never;
@@ -17885,7 +17885,7 @@ export interface operations {
             };
         };
     };
-    list_libraries: {
+    komga_list_libraries: {
         parameters: {
             query?: never;
             header?: never;
@@ -17915,7 +17915,7 @@ export interface operations {
             };
         };
     };
-    get_library: {
+    komga_get_library: {
         parameters: {
             query?: never;
             header?: never;
@@ -17954,7 +17954,7 @@ export interface operations {
             };
         };
     };
-    get_library_thumbnail: {
+    komga_get_library_thumbnail: {
         parameters: {
             query?: never;
             header?: never;
@@ -17993,7 +17993,7 @@ export interface operations {
             };
         };
     };
-    list_series: {
+    komga_list_series: {
         parameters: {
             query?: {
                 /** @description Page number (0-indexed, Komga-style) */
@@ -18032,7 +18032,7 @@ export interface operations {
             };
         };
     };
-    get_series_new: {
+    komga_get_series_new: {
         parameters: {
             query?: {
                 /** @description Page number (0-indexed, Komga-style) */
@@ -18071,7 +18071,7 @@ export interface operations {
             };
         };
     };
-    get_series_updated: {
+    komga_get_series_updated: {
         parameters: {
             query?: {
                 /** @description Page number (0-indexed, Komga-style) */
@@ -18110,7 +18110,7 @@ export interface operations {
             };
         };
     };
-    get_series: {
+    komga_get_series: {
         parameters: {
             query?: never;
             header?: never;
@@ -18149,7 +18149,7 @@ export interface operations {
             };
         };
     };
-    get_series_books: {
+    komga_get_series_books: {
         parameters: {
             query?: {
                 /** @description Page number (0-indexed, Komga-style) */
@@ -18197,7 +18197,7 @@ export interface operations {
             };
         };
     };
-    get_series_thumbnail: {
+    komga_get_series_thumbnail: {
         parameters: {
             query?: never;
             header?: never;
@@ -18236,7 +18236,7 @@ export interface operations {
             };
         };
     };
-    get_current_user: {
+    komga_get_current_user: {
         parameters: {
             query?: never;
             header?: never;

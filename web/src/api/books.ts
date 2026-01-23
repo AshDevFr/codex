@@ -184,9 +184,7 @@ export const booksApi = {
 	},
 
 	// Generate thumbnail for a book (queues a background task)
-	generateThumbnail: async (
-		bookId: string,
-	): Promise<{ task_id: string }> => {
+	generateThumbnail: async (bookId: string): Promise<{ task_id: string }> => {
 		const response = await api.post<{ task_id: string }>(
 			`/books/${bookId}/thumbnail/generate`,
 			{ force: true },

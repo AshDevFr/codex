@@ -154,7 +154,7 @@ pub async fn root_catalog(
     ),
     tag = "opds"
 )]
-pub async fn opds_list_libraries(
+pub async fn list_libraries(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
 ) -> Result<OpdsResponse, ApiError> {
@@ -224,7 +224,7 @@ pub async fn opds_list_libraries(
     ),
     tag = "opds"
 )]
-pub async fn opds_library_series(
+pub async fn library_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Path(library_id): Path<Uuid>,
@@ -358,7 +358,7 @@ pub async fn opds_library_series(
     ),
     tag = "opds"
 )]
-pub async fn opds_series_books(
+pub async fn series_books(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Path(series_id): Path<Uuid>,

@@ -9473,7 +9473,7 @@
         ],
         "summary": "OpenSearch descriptor endpoint",
         "description": "Returns the OpenSearch XML descriptor for OPDS clients",
-        "operationId": "opensearch_descriptor",
+        "operationId": "opds_opensearch_descriptor",
         "responses": {
           "200": {
             "description": "OpenSearch descriptor",
@@ -9827,7 +9827,7 @@
         ],
         "summary": "Search/filter books",
         "description": "Returns books matching the filter criteria.\nThis uses POST to support complex filter bodies.\n\n## Endpoint\n`POST /{prefix}/api/v1/books/list`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n- `sort` - Sort parameter (e.g., \"createdDate,desc\")\n\n## Request Body\nJSON object with filter criteria (library_id, series_id, search_term, etc.)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "search_books",
+        "operationId": "komga_search_books",
         "parameters": [
           {
             "name": "prefix",
@@ -9913,7 +9913,7 @@
         ],
         "summary": "Get \"on deck\" books",
         "description": "Returns books that are currently in-progress (started but not completed).\nThis is the \"continue reading\" shelf in Komic.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/ondeck`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "get_books_ondeck",
+        "operationId": "komga_get_books_ondeck",
         "parameters": [
           {
             "name": "prefix",
@@ -9989,7 +9989,7 @@
         ],
         "summary": "Get a book by ID",
         "description": "Returns a single book in Komga-compatible format.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "get_book",
+        "operationId": "komga_get_book",
         "parameters": [
           {
             "name": "prefix",
@@ -10046,7 +10046,7 @@
         ],
         "summary": "Download book file",
         "description": "Streams the original book file (CBZ, CBR, EPUB, PDF) for download.\nIncludes proper Content-Disposition header with UTF-8 encoding.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/file`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "download_book_file",
+        "operationId": "komga_download_book_file",
         "parameters": [
           {
             "name": "prefix",
@@ -10099,7 +10099,7 @@
         ],
         "summary": "Get next book in series",
         "description": "Returns the next book in the same series by sort order.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/next`\n\n## Response\n- 200: Next book DTO\n- 404: No next book (this is the last book in series)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "get_next_book",
+        "operationId": "komga_get_next_book",
         "parameters": [
           {
             "name": "prefix",
@@ -10156,7 +10156,7 @@
         ],
         "summary": "List all pages for a book",
         "description": "Returns an array of page metadata for all pages in a book.\nPages are ordered by page number (1-indexed).\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/pages`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key\n\n## Response\nReturns an array of `KomgaPageDto` objects with page metadata including\nfilename, MIME type, dimensions, and size.",
-        "operationId": "list_pages",
+        "operationId": "komga_list_pages",
         "parameters": [
           {
             "name": "prefix",
@@ -10216,7 +10216,7 @@
         ],
         "summary": "Get a specific page image",
         "description": "Streams the raw page image for the requested page number.\nPage numbers are 1-indexed.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/pages/{pageNumber}`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key (via cookie fallback for browser image tags)\n\n## Response\nReturns the raw image data with appropriate Content-Type header.\nResponse is cached for 1 year (immutable content).",
-        "operationId": "get_page",
+        "operationId": "komga_get_page",
         "parameters": [
           {
             "name": "prefix",
@@ -10279,7 +10279,7 @@
         ],
         "summary": "Get a page thumbnail",
         "description": "Returns a thumbnail version of the requested page.\nThumbnails are resized to max 300px width/height while maintaining aspect ratio.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/pages/{pageNumber}/thumbnail`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key (via cookie fallback for browser image tags)\n\n## Response\nReturns a JPEG thumbnail with appropriate caching headers.",
-        "operationId": "get_page_thumbnail",
+        "operationId": "komga_get_page_thumbnail",
         "parameters": [
           {
             "name": "prefix",
@@ -10342,7 +10342,7 @@
         ],
         "summary": "Get previous book in series",
         "description": "Returns the previous book in the same series by sort order.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/previous`\n\n## Response\n- 200: Previous book DTO\n- 404: No previous book (this is the first book in series)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "get_previous_book",
+        "operationId": "komga_get_previous_book",
         "parameters": [
           {
             "name": "prefix",
@@ -10399,7 +10399,7 @@
         ],
         "summary": "Delete reading progress for a book (mark as unread)",
         "description": "Removes all reading progress for a book, effectively marking it as unread.\n\n## Endpoint\n`DELETE /{prefix}/api/v1/books/{bookId}/read-progress`\n\n## Response\n- 204 No Content on success\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "delete_progress",
+        "operationId": "komga_delete_progress",
         "parameters": [
           {
             "name": "prefix",
@@ -10447,7 +10447,7 @@
         ],
         "summary": "Update reading progress for a book",
         "description": "Updates the user's reading progress for a specific book.\nKomic sends: `{ \"completed\": false, \"page\": 151 }`\n\n## Endpoint\n`PATCH /{prefix}/api/v1/books/{bookId}/read-progress`\n\n## Request Body\n- `page` - Current page number (1-indexed, optional)\n- `completed` - Whether book is completed (optional)\n- `device_id` - Device ID (optional, not used by Komic)\n- `device_name` - Device name (optional, not used by Komic)\n\n## Response\n- 204 No Content on success (Komga behavior)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "update_progress",
+        "operationId": "komga_update_progress",
         "parameters": [
           {
             "name": "prefix",
@@ -10507,7 +10507,7 @@
         ],
         "summary": "Get book thumbnail",
         "description": "Returns a thumbnail image for the book's first page.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/thumbnail`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "get_book_thumbnail",
+        "operationId": "komga_get_book_thumbnail",
         "parameters": [
           {
             "name": "prefix",
@@ -10560,7 +10560,7 @@
         ],
         "summary": "List all libraries",
         "description": "Returns all libraries in Komga-compatible format.\n\n## Endpoint\n`GET /{prefix}/api/v1/libraries`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "list_libraries",
+        "operationId": "komga_list_libraries",
         "parameters": [
           {
             "name": "prefix",
@@ -10607,7 +10607,7 @@
         ],
         "summary": "Get library by ID",
         "description": "Returns a single library in Komga-compatible format.\n\n## Endpoint\n`GET /{prefix}/api/v1/libraries/{libraryId}`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "get_library",
+        "operationId": "komga_get_library",
         "parameters": [
           {
             "name": "prefix",
@@ -10664,7 +10664,7 @@
         ],
         "summary": "Get library thumbnail",
         "description": "Returns a thumbnail image for the library. Uses the first series' cover\nas the library thumbnail, or returns a 404 if no series exist.\n\n## Endpoint\n`GET /{prefix}/api/v1/libraries/{libraryId}/thumbnail`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key (via cookie fallback for browser image tags)",
-        "operationId": "get_library_thumbnail",
+        "operationId": "komga_get_library_thumbnail",
         "parameters": [
           {
             "name": "prefix",
@@ -10717,7 +10717,7 @@
         ],
         "summary": "List all series (paginated)",
         "description": "Returns all series in Komga-compatible format with pagination.\n\n## Endpoint\n`GET /{prefix}/api/v1/series`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n- `library_id` - Optional filter by library UUID\n- `search` - Optional search query\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "list_series",
+        "operationId": "komga_list_series",
         "parameters": [
           {
             "name": "prefix",
@@ -10806,7 +10806,7 @@
         ],
         "summary": "Get recently added series",
         "description": "Returns series sorted by created date descending (newest first).\n\n## Endpoint\n`GET /{prefix}/api/v1/series/new`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n- `library_id` - Optional filter by library UUID\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "get_series_new",
+        "operationId": "komga_get_series_new",
         "parameters": [
           {
             "name": "prefix",
@@ -10895,7 +10895,7 @@
         ],
         "summary": "Get recently updated series",
         "description": "Returns series sorted by last modified date descending (most recently updated first).\n\n## Endpoint\n`GET /{prefix}/api/v1/series/updated`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n- `library_id` - Optional filter by library UUID\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "get_series_updated",
+        "operationId": "komga_get_series_updated",
         "parameters": [
           {
             "name": "prefix",
@@ -10984,7 +10984,7 @@
         ],
         "summary": "Get series by ID",
         "description": "Returns a single series in Komga-compatible format.\n\n## Endpoint\n`GET /{prefix}/api/v1/series/{seriesId}`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "get_series",
+        "operationId": "komga_get_series",
         "parameters": [
           {
             "name": "prefix",
@@ -11041,7 +11041,7 @@
         ],
         "summary": "Get books in a series",
         "description": "Returns all books in a series with pagination.\n\n## Endpoint\n`GET /{prefix}/api/v1/series/{seriesId}/books`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "get_series_books",
+        "operationId": "komga_get_series_books",
         "parameters": [
           {
             "name": "prefix",
@@ -11143,7 +11143,7 @@
         ],
         "summary": "Get series thumbnail",
         "description": "Returns a thumbnail image for the series.\n\n## Endpoint\n`GET /{prefix}/api/v1/series/{seriesId}/thumbnail`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "get_series_thumbnail",
+        "operationId": "komga_get_series_thumbnail",
         "parameters": [
           {
             "name": "prefix",
@@ -11196,7 +11196,7 @@
         ],
         "summary": "Get current user information",
         "description": "Returns information about the currently authenticated user in Komga format.\nThis endpoint is used by Komic and other apps to verify authentication\nand determine user capabilities.\n\n## Endpoint\n`GET /{prefix}/api/v1/users/me`\n\n## Response\nReturns a `KomgaUserDto` containing:\n- User ID (UUID as string)\n- Email address\n- Roles (ADMIN, USER, FILE_DOWNLOAD)\n- Library access settings\n- Content restrictions\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
-        "operationId": "get_current_user",
+        "operationId": "komga_get_current_user",
         "parameters": [
           {
             "name": "prefix",

@@ -77,9 +77,8 @@ export const pdfCacheApi = {
 	 * For large caches, prefer using the async triggerCleanup endpoint instead.
 	 */
 	clearCache: async (): Promise<PdfCacheCleanupResultDto> => {
-		const response = await api.delete<PdfCacheCleanupResultDto>(
-			"/admin/pdf-cache",
-		);
+		const response =
+			await api.delete<PdfCacheCleanupResultDto>("/admin/pdf-cache");
 		return response.data;
 	},
 };

@@ -24,7 +24,10 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import type { PdfCacheCleanupResultDto, PdfCacheStatsDto } from "@/api/pdfCache";
+import type {
+	PdfCacheCleanupResultDto,
+	PdfCacheStatsDto,
+} from "@/api/pdfCache";
 import { pdfCacheApi } from "@/api/pdfCache";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 
@@ -231,7 +234,8 @@ export function PdfCacheSettings() {
 					When using streaming mode for PDF files, pages are rendered on the
 					server and cached to improve subsequent load times. The cache is
 					automatically cleaned up based on the configured max age (default 30
-					days). You can manually trigger cleanup or clear the entire cache here.
+					days). You can manually trigger cleanup or clear the entire cache
+					here.
 				</Alert>
 
 				{/* Cache Status */}
@@ -313,9 +317,9 @@ export function PdfCacheSettings() {
 						</Group>
 						{hasCachedFiles ? (
 							<Text c="dimmed">
-								The cache contains {stats?.total_files.toLocaleString()} rendered
-								pages from {stats?.book_count.toLocaleString()} books, using{" "}
-								{stats?.total_size_human} of disk space.
+								The cache contains {stats?.total_files.toLocaleString()}{" "}
+								rendered pages from {stats?.book_count.toLocaleString()} books,
+								using {stats?.total_size_human} of disk space.
 								{stats?.oldest_file_age_days !== undefined && (
 									<>
 										{" "}

@@ -59,7 +59,7 @@ impl IntoResponse for Opds2Response {
     ),
     tag = "opds2"
 )]
-pub async fn opds2_root(
+pub async fn root(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
 ) -> Result<Opds2Response, ApiError> {
@@ -101,7 +101,7 @@ pub async fn opds2_root(
     ),
     tag = "opds2"
 )]
-pub async fn opds2_libraries(
+pub async fn libraries(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
 ) -> Result<Opds2Response, ApiError> {
@@ -158,7 +158,7 @@ pub async fn opds2_libraries(
     ),
     tag = "opds2"
 )]
-pub async fn opds2_library_series(
+pub async fn library_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Path(library_id): Path<Uuid>,
@@ -269,7 +269,7 @@ pub async fn opds2_library_series(
     ),
     tag = "opds2"
 )]
-pub async fn opds2_series_books(
+pub async fn series_books(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
@@ -395,7 +395,7 @@ pub async fn opds2_series_books(
     ),
     tag = "opds2"
 )]
-pub async fn opds2_recent(
+pub async fn recent(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Query(pagination): Query<OpdsPaginationParams>,

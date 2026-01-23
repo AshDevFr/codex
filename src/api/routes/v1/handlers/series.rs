@@ -6,13 +6,13 @@ use super::super::dto::{
         ExternalRatingListResponse, FullSeriesMetadataResponse, GenreDto, GenreListResponse,
         MetadataLocks, PatchSeriesMetadataRequest, PatchSeriesRequest,
         ReplaceSeriesMetadataRequest, SeriesAverageRatingResponse, SeriesCoverDto,
-        SeriesCoverListResponse, SeriesMetadataResponse, SeriesSortField, SeriesSortParam,
-        SeriesUpdateResponse, SetSeriesGenresRequest, SetSeriesTagsRequest, SetUserRatingRequest,
-        TagDto, TagListResponse, TaxonomyCleanupResponse, UpdateAlternateTitleRequest,
+        SeriesCoverListResponse, SeriesMetadataResponse, SeriesSortParam, SeriesUpdateResponse,
+        SetSeriesGenresRequest, SetSeriesTagsRequest, SetUserRatingRequest, TagDto,
+        TagListResponse, TaxonomyCleanupResponse, UpdateAlternateTitleRequest,
         UpdateMetadataLocksRequest, UserRatingsListResponse, UserSeriesRatingDto,
     },
     BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListRequest,
-    SeriesListResponse, SortDirection,
+    SeriesListResponse,
 };
 use crate::api::{
     error::ApiError,

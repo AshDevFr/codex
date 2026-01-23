@@ -256,7 +256,9 @@ export function PdfReader({
 				// Fit page: the page should fit within both width and height constraints
 				// react-pdf ignores height when width is provided, so we must calculate
 				// the width that will result in a page that fits the height
-				const widthFromHeight = Math.floor(availableHeight * typicalPageAspectRatio);
+				const widthFromHeight = Math.floor(
+					availableHeight * typicalPageAspectRatio,
+				);
 				// Use the smaller of the two to ensure it fits both constraints
 				const fitWidth = Math.min(perPageWidth, widthFromHeight);
 				return { width: fitWidth };
@@ -718,11 +720,13 @@ export function PdfReader({
 									alignItems: "flex-start",
 								}}
 							>
-									{/* Left page (or single page) */}
+								{/* Left page (or single page) */}
 								{spreadPages.left && (
 									<Page
 										pageNumber={spreadPages.left}
-										{...(pdfSpreadMode === "single" ? pageDimensions : spreadPageDimensions)}
+										{...(pdfSpreadMode === "single"
+											? pageDimensions
+											: spreadPageDimensions)}
 										renderTextLayer={true}
 										renderAnnotationLayer={true}
 										loading={

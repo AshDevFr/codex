@@ -3,8 +3,8 @@
 //! Defines all OPDS 1.2 catalog routes.
 
 use super::handlers::{
-    opds_book_pages, opds_library_series, opds_list_libraries, opds_search, opds_series_books,
-    opensearch_descriptor, root_catalog,
+    book_pages, library_series, list_libraries, opensearch_descriptor, root_catalog, search,
+    series_books,
 };
 use crate::api::extractors::AppState;
 use axum::{routing::get, Router};
@@ -14,11 +14,11 @@ use std::sync::Arc;
 pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/", get(root_catalog))
-        .route("/libraries", get(opds_list_libraries))
-        .route("/libraries/:library_id", get(opds_library_series))
-        .route("/series/:series_id", get(opds_series_books))
-        .route("/books/:book_id/pages", get(opds_book_pages))
+        .route("/libraries", get(list_libraries))
+        .route("/libraries/:library_id", get(library_series))
+        .route("/series/:series_id", get(series_books))
+        .route("/books/:book_id/pages", get(book_pages))
         .route("/search.xml", get(opensearch_descriptor))
-        .route("/search", get(opds_search))
+        .route("/search", get(search))
         .with_state(state)
 }

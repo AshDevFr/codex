@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useReaderStore } from "@/store/readerStore";
-import { fireEvent, renderWithProviders, screen, userEvent } from "@/test/utils";
+import {
+	fireEvent,
+	renderWithProviders,
+	screen,
+	userEvent,
+} from "@/test/utils";
 import type { PdfZoomLevel } from "./PdfReader";
 import { PdfReaderSettings } from "./PdfReaderSettings";
 
@@ -44,7 +49,9 @@ describe("PdfReaderSettings", () => {
 
 			expect(screen.getByText("PDF Rendering Mode")).toBeInTheDocument();
 			expect(screen.getByRole("radio", { name: "Auto" })).toBeInTheDocument();
-			expect(screen.getByRole("radio", { name: "Streaming" })).toBeInTheDocument();
+			expect(
+				screen.getByRole("radio", { name: "Streaming" }),
+			).toBeInTheDocument();
 			expect(screen.getByRole("radio", { name: "Native" })).toBeInTheDocument();
 		});
 
@@ -59,7 +66,9 @@ describe("PdfReaderSettings", () => {
 			renderWithProviders(<PdfReaderSettings {...defaultProps} />);
 
 			expect(
-				screen.getByText("Automatically selects based on file size (>100MB uses streaming)"),
+				screen.getByText(
+					"Automatically selects based on file size (>100MB uses streaming)",
+				),
 			).toBeInTheDocument();
 		});
 
@@ -126,8 +135,12 @@ describe("PdfReaderSettings", () => {
 			renderWithProviders(<PdfReaderSettings {...defaultProps} />);
 
 			expect(screen.getByText("Zoom")).toBeInTheDocument();
-			expect(screen.getByRole("radio", { name: "Fit Page" })).toBeInTheDocument();
-			expect(screen.getByRole("radio", { name: "Fit Width" })).toBeInTheDocument();
+			expect(
+				screen.getByRole("radio", { name: "Fit Page" }),
+			).toBeInTheDocument();
+			expect(
+				screen.getByRole("radio", { name: "Fit Width" }),
+			).toBeInTheDocument();
 			expect(screen.getByRole("radio", { name: "100%" })).toBeInTheDocument();
 		});
 
@@ -199,9 +212,12 @@ describe("PdfReaderSettings", () => {
 
 			// Enable continuous scroll
 			const switches = screen.getAllByRole("switch");
-			const continuousScrollSwitch = switches.find(
-				(s) => s.closest('[class*="Group"]')?.textContent?.includes("Continuous Scroll")
-			) || switches[1]; // Fallback to second switch
+			const continuousScrollSwitch =
+				switches.find((s) =>
+					s
+						.closest('[class*="Group"]')
+						?.textContent?.includes("Continuous Scroll"),
+				) || switches[1]; // Fallback to second switch
 			await user.click(continuousScrollSwitch);
 
 			// Page layout should be hidden

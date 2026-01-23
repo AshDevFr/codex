@@ -53,7 +53,7 @@ impl IntoResponse for OpdsPseResponse {
     ),
     tag = "opds"
 )]
-pub async fn opds_book_pages(
+pub async fn book_pages(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Path(book_id): Path<Uuid>,

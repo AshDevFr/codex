@@ -1,6 +1,6 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { renderWithProviders, screen, userEvent } from "@/test/utils";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useReaderStore } from "@/store/readerStore";
+import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import { ReaderSettings } from "./ReaderSettings";
 
 // Reset store before each test
@@ -51,9 +51,7 @@ describe("ReaderSettings", () => {
 		});
 
 		it("should not show PDF mode toggle when format is undefined", () => {
-			renderWithProviders(
-				<ReaderSettings opened={true} onClose={vi.fn()} />,
-			);
+			renderWithProviders(<ReaderSettings opened={true} onClose={vi.fn()} />);
 
 			expect(screen.queryByText("PDF Rendering Mode")).not.toBeInTheDocument();
 		});
@@ -145,7 +143,9 @@ describe("ReaderSettings", () => {
 			await user.click(screen.getByText("Auto"));
 
 			expect(
-				screen.getByText("Automatically selects based on file size (>100MB uses streaming)"),
+				screen.getByText(
+					"Automatically selects based on file size (>100MB uses streaming)",
+				),
 			).toBeInTheDocument();
 		});
 
@@ -162,17 +162,13 @@ describe("ReaderSettings", () => {
 
 	describe("Modal Behavior", () => {
 		it("should render modal when opened is true", () => {
-			renderWithProviders(
-				<ReaderSettings opened={true} onClose={vi.fn()} />,
-			);
+			renderWithProviders(<ReaderSettings opened={true} onClose={vi.fn()} />);
 
 			expect(screen.getByText("Reader Settings")).toBeInTheDocument();
 		});
 
 		it("should not render modal content when opened is false", () => {
-			renderWithProviders(
-				<ReaderSettings opened={false} onClose={vi.fn()} />,
-			);
+			renderWithProviders(<ReaderSettings opened={false} onClose={vi.fn()} />);
 
 			expect(screen.queryByText("Reader Settings")).not.toBeInTheDocument();
 		});

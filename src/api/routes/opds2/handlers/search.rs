@@ -48,7 +48,7 @@ pub struct Opds2SearchParams {
     ),
     tag = "opds2"
 )]
-pub async fn opds2_search(
+pub async fn search(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Query(params): Query<Opds2SearchParams>,

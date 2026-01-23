@@ -169,7 +169,9 @@ export function PdfReaderSettings({
 								<SegmentedControl
 									fullWidth
 									value={settings.backgroundColor}
-									onChange={(value) => setBackgroundColor(value as BackgroundColor)}
+									onChange={(value) =>
+										setBackgroundColor(value as BackgroundColor)
+									}
 									data={[
 										{ label: "Black", value: "black" },
 										{ label: "Gray", value: "gray" },
@@ -187,7 +189,9 @@ export function PdfReaderSettings({
 									<SegmentedControl
 										fullWidth
 										value={settings.pdfSpreadMode}
-										onChange={(value) => setPdfSpreadMode(value as PdfSpreadMode)}
+										onChange={(value) =>
+											setPdfSpreadMode(value as PdfSpreadMode)
+										}
 										data={[
 											{ label: "Single", value: "single" },
 											{ label: "Double", value: "double" },

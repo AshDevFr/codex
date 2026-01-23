@@ -3,9 +3,11 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::dto::{PdfCacheCleanupResultDto, PdfCacheStatsDto, TriggerPdfCacheCleanupResponse};
 use codex::api::error::ErrorResponse;
 use codex::api::extractors::AppState;
+use codex::api::routes::v1::dto::{
+    PdfCacheCleanupResultDto, PdfCacheStatsDto, TriggerPdfCacheCleanupResponse,
+};
 use codex::config::{AuthConfig, DatabaseConfig, EmailConfig, FilesConfig, PdfConfig};
 use codex::db::repositories::UserRepository;
 use codex::events::EventBroadcaster;

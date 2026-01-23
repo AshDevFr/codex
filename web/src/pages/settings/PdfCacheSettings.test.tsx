@@ -1,7 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { renderWithProviders } from "@/test/utils";
 import * as pdfCacheApi from "@/api/pdfCache";
+import { renderWithProviders } from "@/test/utils";
 import { PdfCacheSettings } from "./PdfCacheSettings";
 
 // Mock the PDF cache API
@@ -86,8 +86,12 @@ describe("PdfCacheSettings", () => {
 		renderWithProviders(<PdfCacheSettings />);
 
 		await waitFor(() => {
-			expect(screen.getByRole("button", { name: /cleanup old/i })).toBeInTheDocument();
-			expect(screen.getByRole("button", { name: /clear all/i })).toBeInTheDocument();
+			expect(
+				screen.getByRole("button", { name: /cleanup old/i }),
+			).toBeInTheDocument();
+			expect(
+				screen.getByRole("button", { name: /clear all/i }),
+			).toBeInTheDocument();
 		});
 	});
 
@@ -95,7 +99,9 @@ describe("PdfCacheSettings", () => {
 		renderWithProviders(<PdfCacheSettings />);
 
 		await waitFor(() => {
-			expect(screen.getByRole("button", { name: /refresh/i })).toBeInTheDocument();
+			expect(
+				screen.getByRole("button", { name: /refresh/i }),
+			).toBeInTheDocument();
 		});
 	});
 
@@ -114,8 +120,12 @@ describe("PdfCacheSettings", () => {
 			expect(screen.getByText("Cache empty")).toBeInTheDocument();
 		});
 
-		expect(screen.queryByRole("button", { name: /cleanup old/i })).not.toBeInTheDocument();
-		expect(screen.queryByRole("button", { name: /clear all/i })).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: /cleanup old/i }),
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: /clear all/i }),
+		).not.toBeInTheDocument();
 	});
 
 	it("should show warning when cache is disabled", async () => {
@@ -127,7 +137,9 @@ describe("PdfCacheSettings", () => {
 		renderWithProviders(<PdfCacheSettings />);
 
 		await waitFor(() => {
-			expect(screen.getByText(/PDF page caching is currently disabled/i)).toBeInTheDocument();
+			expect(
+				screen.getByText(/PDF page caching is currently disabled/i),
+			).toBeInTheDocument();
 		});
 	});
 
