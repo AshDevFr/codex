@@ -5,8 +5,9 @@
 use super::super::dto::book::KomgaBookDto;
 use super::super::dto::pagination::KomgaPage;
 use super::super::dto::series::{
-    codex_to_komga_reading_direction, codex_to_komga_status, KomgaBooksMetadataAggregationDto,
-    KomgaSeriesDto, KomgaSeriesMetadataDto,
+    codex_to_komga_reading_direction, codex_to_komga_status, extract_read_status_from_condition,
+    KomgaBooksMetadataAggregationDto, KomgaSeriesDto, KomgaSeriesMetadataDto,
+    KomgaSeriesSearchRequestDto,
 };
 use super::libraries::{extract_page_image, generate_thumbnail};
 use crate::api::{
@@ -45,6 +46,91 @@ pub struct SeriesPaginationQuery {
     pub library_id: Option<Uuid>,
     /// Search query
     pub search: Option<String>,
+    /// Sort parameter (e.g., "metadata.titleSort,asc", "createdDate,desc")
+    pub sort: Option<String>,
+}
+
+/// Parse sort parameter into field and direction
+/// Format: "field,direction" e.g., "metadata.titleSort,asc" or "createdDate,desc"
+fn parse_sort_param(sort: Option<&str>) -> (Option<&str>, bool) {
+    match sort {
+        Some(s) => {
+            let parts: Vec<&str> = s.split(',').collect();
+            let field = parts.first().copied();
+            let ascending = parts.get(1).is_none_or(|d| d.to_lowercase() != "desc");
+            (field, ascending)
+        }
+        None => (None, true),
+    }
+}
+
+/// Sort book DTOs based on sort parameter
+fn sort_book_dtos(dtos: &mut [KomgaBookDto], sort_field: Option<&str>, ascending: bool) {
+    match sort_field {
+        Some("metadata.numberSort") | Some("numberSort") => {
+            dtos.sort_by(|a, b| {
+                let cmp = a
+                    .metadata
+                    .number_sort
+                    .partial_cmp(&b.metadata.number_sort)
+                    .unwrap_or(std::cmp::Ordering::Equal);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        Some("metadata.number") | Some("number") => {
+            dtos.sort_by(|a, b| {
+                let cmp = a.number.cmp(&b.number);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        Some("createdDate") | Some("created") => {
+            dtos.sort_by(|a, b| {
+                let cmp = a.created.cmp(&b.created);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        Some("lastModifiedDate") | Some("lastModified") => {
+            dtos.sort_by(|a, b| {
+                let cmp = a.last_modified.cmp(&b.last_modified);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        Some("name") | Some("metadata.title") => {
+            dtos.sort_by(|a, b| {
+                let cmp = a.name.to_lowercase().cmp(&b.name.to_lowercase());
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        _ => {
+            // Default sort by numberSort ascending
+            dtos.sort_by(|a, b| {
+                a.metadata
+                    .number_sort
+                    .partial_cmp(&b.metadata.number_sort)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+    }
 }
 
 fn default_page_size() -> i32 {
@@ -76,7 +162,7 @@ fn default_page_size() -> i32 {
         (status = 401, description = "Unauthorized"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         SeriesPaginationQuery
     ),
     security(
@@ -131,6 +217,193 @@ pub async fn list_series(
     Ok(Json(KomgaPage::new(dtos, query.page, query.size, total)))
 }
 
+/// Search/filter series
+///
+/// Returns series matching the filter criteria.
+/// This uses POST to support complex filter bodies.
+///
+/// ## Endpoint
+/// `POST /{prefix}/api/v1/series/list`
+///
+/// ## Query Parameters
+/// - `page` - Page number (0-indexed, default: 0)
+/// - `size` - Page size (default: 20)
+/// - `sort` - Sort parameter (e.g., "createdDate,desc")
+///
+/// ## Request Body
+/// JSON object with filter criteria (library_id, fullTextSearch, condition, etc.)
+///
+/// ## Authentication
+/// - Bearer token (JWT)
+/// - Basic Auth
+/// - API Key
+#[utoipa::path(
+    post,
+    path = "/{prefix}/api/v1/series/list",
+    request_body = KomgaSeriesSearchRequestDto,
+    responses(
+        (status = 200, description = "Paginated list of series matching filter", body = KomgaPage<KomgaSeriesDto>),
+        (status = 401, description = "Unauthorized"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
+        SeriesPaginationQuery
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "komga"
+)]
+pub async fn search_series(
+    State(state): State<Arc<AuthState>>,
+    FlexibleAuthContext(auth): FlexibleAuthContext,
+    Query(query): Query<SeriesPaginationQuery>,
+    Json(body): Json<KomgaSeriesSearchRequestDto>,
+) -> Result<Json<KomgaPage<KomgaSeriesDto>>, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    let user_id = Some(auth.user_id);
+    let page = query.page.max(0) as u64;
+    let size = query.size.clamp(1, 500) as u64;
+
+    // Parse library_id from body if present
+    let library_id = body
+        .library_id
+        .as_ref()
+        .and_then(|ids| ids.first())
+        .and_then(|id| Uuid::parse_str(id).ok());
+
+    // Use fullTextSearch from body as search term
+    let search_term = body.full_text_search.as_ref().filter(|s| !s.is_empty());
+
+    // Extract readStatus from condition if present
+    let read_status = body
+        .condition
+        .as_ref()
+        .and_then(extract_read_status_from_condition);
+
+    // Get series based on filters
+    let series_list = if let Some(library_id) = library_id {
+        SeriesRepository::list_by_library(&state.db, library_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+    } else if let Some(search) = search_term {
+        SeriesRepository::search_by_name(&state.db, search)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?
+    } else {
+        SeriesRepository::list_all(&state.db)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+    };
+
+    // Convert all series to DTOs first (needed for readStatus filtering)
+    let mut all_dtos = Vec::with_capacity(series_list.len());
+    for series in series_list {
+        let dto = build_series_dto(&state, &series, user_id).await?;
+        all_dtos.push(dto);
+    }
+
+    // Apply readStatus filter if present
+    let mut filtered_dtos: Vec<_> = match read_status {
+        Some("IN_PROGRESS") => {
+            // Series with at least one book in progress
+            all_dtos
+                .into_iter()
+                .filter(|s| s.books_in_progress_count > 0)
+                .collect()
+        }
+        Some("READ") => {
+            // Series where all books are read (fully completed)
+            all_dtos
+                .into_iter()
+                .filter(|s| s.books_count > 0 && s.books_read_count == s.books_count)
+                .collect()
+        }
+        Some("UNREAD") => {
+            // Series with at least one unread book (and no in-progress)
+            all_dtos
+                .into_iter()
+                .filter(|s| s.books_unread_count > 0 && s.books_in_progress_count == 0)
+                .collect()
+        }
+        _ => all_dtos,
+    };
+
+    // Apply sorting
+    let (sort_field, ascending) = parse_sort_param(query.sort.as_deref());
+    match sort_field {
+        Some("metadata.titleSort") | Some("titleSort") => {
+            filtered_dtos.sort_by(|a, b| {
+                let cmp = a
+                    .metadata
+                    .title_sort
+                    .to_lowercase()
+                    .cmp(&b.metadata.title_sort.to_lowercase());
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        Some("createdDate") | Some("created") => {
+            filtered_dtos.sort_by(|a, b| {
+                let cmp = a.created.cmp(&b.created);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        Some("lastModifiedDate") | Some("lastModified") => {
+            filtered_dtos.sort_by(|a, b| {
+                let cmp = a.last_modified.cmp(&b.last_modified);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        Some("name") => {
+            filtered_dtos.sort_by(|a, b| {
+                let cmp = a.name.to_lowercase().cmp(&b.name.to_lowercase());
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        _ => {
+            // Default sort by titleSort ascending
+            filtered_dtos.sort_by(|a, b| {
+                a.metadata
+                    .title_sort
+                    .to_lowercase()
+                    .cmp(&b.metadata.title_sort.to_lowercase())
+            });
+        }
+    }
+
+    let total = filtered_dtos.len() as i64;
+
+    // Apply pagination after filtering and sorting
+    let offset = page * size;
+    let paginated: Vec<_> = filtered_dtos
+        .into_iter()
+        .skip(offset as usize)
+        .take(size as usize)
+        .collect();
+
+    Ok(Json(KomgaPage::new(
+        paginated, query.page, query.size, total,
+    )))
+}
+
 /// Get recently added series
 ///
 /// Returns series sorted by created date descending (newest first).
@@ -155,7 +428,7 @@ pub async fn list_series(
         (status = 401, description = "Unauthorized"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         SeriesPaginationQuery
     ),
     security(
@@ -240,7 +513,7 @@ pub async fn get_series_new(
         (status = 401, description = "Unauthorized"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         SeriesPaginationQuery
     ),
     security(
@@ -319,7 +592,7 @@ pub async fn get_series_updated(
         (status = 404, description = "Series not found"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         ("series_id" = Uuid, Path, description = "Series ID")
     ),
     security(
@@ -366,7 +639,7 @@ pub async fn get_series(
         (status = 404, description = "Series not found"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         ("series_id" = Uuid, Path, description = "Series ID")
     ),
     security(
@@ -439,7 +712,7 @@ pub async fn get_series_thumbnail(
         (status = 404, description = "Series not found"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         ("series_id" = Uuid, Path, description = "Series ID"),
         SeriesPaginationQuery
     ),
@@ -485,16 +758,9 @@ pub async fn get_series_books(
 
     let total = books.len() as i64;
 
-    // Apply pagination
-    let paginated: Vec<_> = books
-        .into_iter()
-        .skip(offset as usize)
-        .take(size as usize)
-        .collect();
-
-    // Convert to DTOs
-    let mut dtos = Vec::with_capacity(paginated.len());
-    for (idx, book) in paginated.into_iter().enumerate() {
+    // Convert all books to DTOs first (for sorting)
+    let mut all_dtos = Vec::with_capacity(books.len());
+    for (idx, book) in books.into_iter().enumerate() {
         // Get read progress for this book and user
         let read_progress = if let Some(uid) = user_id {
             ReadProgressRepository::get_by_user_and_book(&state.db, uid, book.id)
@@ -508,11 +774,22 @@ pub async fn get_series_books(
         let dto = KomgaBookDto::from_codex(
             &book,
             &series_title,
-            (offset as i32) + (idx as i32) + 1, // 1-indexed number
+            (idx as i32) + 1, // 1-indexed number
             read_progress.as_ref(),
         );
-        dtos.push(dto);
+        all_dtos.push(dto);
     }
+
+    // Apply sorting
+    let (sort_field, ascending) = parse_sort_param(query.sort.as_deref());
+    sort_book_dtos(&mut all_dtos, sort_field, ascending);
+
+    // Apply pagination after sorting
+    let dtos: Vec<_> = all_dtos
+        .into_iter()
+        .skip(offset as usize)
+        .take(size as usize)
+        .collect();
 
     Ok(Json(KomgaPage::new(dtos, query.page, query.size, total)))
 }

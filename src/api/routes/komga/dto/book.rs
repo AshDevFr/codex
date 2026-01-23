@@ -413,6 +413,94 @@ pub struct KomgaBooksSearchRequestDto {
     /// Deleted filter
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted: Option<bool>,
+    /// Condition object for complex queries (used by Komic for readStatus filtering)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<serde_json::Value>,
+    /// Full text search query
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub full_text_search: Option<String>,
+}
+
+/// Extract readStatus value from Komga condition object
+///
+/// Komic sends conditions like:
+/// ```json
+/// {
+///   "condition": {
+///     "allOf": [
+///       { "readStatus": { "operator": "is", "value": "IN_PROGRESS" } }
+///     ]
+///   }
+/// }
+/// ```
+pub fn extract_read_status_from_condition(condition: &serde_json::Value) -> Option<&str> {
+    // Check allOf array
+    if let Some(all_of) = condition.get("allOf").and_then(|v| v.as_array()) {
+        for item in all_of {
+            // Check for direct readStatus
+            if let Some(value) = item
+                .get("readStatus")
+                .and_then(|rs| rs.get("value"))
+                .and_then(|v| v.as_str())
+            {
+                return Some(value);
+            }
+            // Check for anyOf containing readStatus (nested condition)
+            if let Some(any_of) = item.get("anyOf").and_then(|v| v.as_array()) {
+                for inner_item in any_of {
+                    if let Some(value) = inner_item
+                        .get("readStatus")
+                        .and_then(|rs| rs.get("value"))
+                        .and_then(|v| v.as_str())
+                    {
+                        return Some(value);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Extract seriesId value from Komga condition object
+///
+/// Komic sends conditions like:
+/// ```json
+/// {
+///   "condition": {
+///     "allOf": [
+///       { "seriesId": { "operator": "is", "value": "54018da2-5b41-4fa7-8376-ba1bbe8eb7a9" } }
+///     ]
+///   }
+/// }
+/// ```
+pub fn extract_series_id_from_condition(condition: &serde_json::Value) -> Option<&str> {
+    // Check allOf array
+    if let Some(all_of) = condition.get("allOf").and_then(|v| v.as_array()) {
+        for item in all_of {
+            // Check for direct seriesId
+            if let Some(value) = item
+                .get("seriesId")
+                .and_then(|rs| rs.get("value"))
+                .and_then(|v| v.as_str())
+            {
+                return Some(value);
+            }
+            // Check for anyOf containing seriesId (nested condition)
+            if let Some(any_of) = item.get("anyOf").and_then(|v| v.as_array()) {
+                for inner_item in any_of {
+                    if let Some(value) = inner_item
+                        .get("seriesId")
+                        .and_then(|rs| rs.get("value"))
+                        .and_then(|v| v.as_str())
+                    {
+                        return Some(value);
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -598,5 +686,89 @@ mod tests {
         let json = serde_json::to_string(&book).unwrap();
         assert!(json.contains("\"readProgress\""));
         assert!(json.contains("\"page\":50"));
+    }
+
+    #[test]
+    fn test_extract_read_status_in_progress() {
+        let condition: serde_json::Value = serde_json::from_str(
+            r#"{"allOf":[{"readStatus":{"operator":"is","value":"IN_PROGRESS"}}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            extract_read_status_from_condition(&condition),
+            Some("IN_PROGRESS")
+        );
+    }
+
+    #[test]
+    fn test_extract_read_status_read() {
+        let condition: serde_json::Value =
+            serde_json::from_str(r#"{"allOf":[{"readStatus":{"operator":"is","value":"READ"}}]}"#)
+                .unwrap();
+        assert_eq!(extract_read_status_from_condition(&condition), Some("READ"));
+    }
+
+    #[test]
+    fn test_extract_read_status_unread() {
+        let condition: serde_json::Value = serde_json::from_str(
+            r#"{"allOf":[{"readStatus":{"operator":"is","value":"UNREAD"}}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            extract_read_status_from_condition(&condition),
+            Some("UNREAD")
+        );
+    }
+
+    #[test]
+    fn test_extract_read_status_empty_condition() {
+        let condition: serde_json::Value = serde_json::from_str(r#"{"allOf":[]}"#).unwrap();
+        assert_eq!(extract_read_status_from_condition(&condition), None);
+    }
+
+    #[test]
+    fn test_extract_read_status_no_read_status() {
+        let condition: serde_json::Value =
+            serde_json::from_str(r#"{"allOf":[{"someOther":"value"}]}"#).unwrap();
+        assert_eq!(extract_read_status_from_condition(&condition), None);
+    }
+
+    #[test]
+    fn test_extract_read_status_nested_any_of() {
+        // This is the actual format Komic sends for readStatus filter
+        let condition: serde_json::Value = serde_json::from_str(
+            r#"{"allOf":[{"anyOf":[{"readStatus":{"operator":"is","value":"IN_PROGRESS"}}]}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            extract_read_status_from_condition(&condition),
+            Some("IN_PROGRESS")
+        );
+    }
+
+    #[test]
+    fn test_extract_series_id_from_condition() {
+        let condition: serde_json::Value = serde_json::from_str(
+            r#"{"allOf":[{"seriesId":{"operator":"is","value":"54018da2-5b41-4fa7-8376-ba1bbe8eb7a9"}}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            extract_series_id_from_condition(&condition),
+            Some("54018da2-5b41-4fa7-8376-ba1bbe8eb7a9")
+        );
+    }
+
+    #[test]
+    fn test_extract_series_id_empty_condition() {
+        let condition: serde_json::Value = serde_json::from_str(r#"{"allOf":[]}"#).unwrap();
+        assert_eq!(extract_series_id_from_condition(&condition), None);
+    }
+
+    #[test]
+    fn test_extract_series_id_no_series_id() {
+        let condition: serde_json::Value =
+            serde_json::from_str(r#"{"allOf":[{"readStatus":{"operator":"is","value":"READ"}}]}"#)
+                .unwrap();
+        assert_eq!(extract_series_id_from_condition(&condition), None);
     }
 }

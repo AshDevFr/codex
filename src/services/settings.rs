@@ -172,7 +172,7 @@ impl SettingsService {
         let mut last_reload = self.last_reload.write().await;
         *last_reload = Utc::now();
 
-        tracing::info!(
+        tracing::debug!(
             "Settings reloaded successfully, {} settings in cache",
             cache.len()
         );

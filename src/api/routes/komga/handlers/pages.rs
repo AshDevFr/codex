@@ -47,7 +47,7 @@ use uuid::Uuid;
         (status = 404, description = "Book not found"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         ("book_id" = Uuid, Path, description = "Book ID")
     ),
     security(
@@ -134,7 +134,7 @@ pub async fn list_pages(
         (status = 404, description = "Book or page not found"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         ("book_id" = Uuid, Path, description = "Book ID"),
         ("page_number" = i32, Path, description = "Page number (1-indexed)")
     ),
@@ -222,7 +222,7 @@ pub async fn get_page(
         (status = 404, description = "Book or page not found"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         ("book_id" = Uuid, Path, description = "Book ID"),
         ("page_number" = i32, Path, description = "Page number (1-indexed)")
     ),

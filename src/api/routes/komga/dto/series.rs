@@ -276,6 +276,88 @@ pub fn codex_to_komga_status(status: Option<&str>) -> String {
     }
 }
 
+/// Extract readStatus value from Komga condition object for series filtering
+///
+/// Komic sends conditions like:
+/// ```json
+/// {
+///   "condition": {
+///     "allOf": [
+///       { "anyOf": [{ "readStatus": { "operator": "is", "value": "IN_PROGRESS" } }] }
+///     ]
+///   }
+/// }
+/// ```
+pub fn extract_read_status_from_condition(condition: &serde_json::Value) -> Option<&str> {
+    // Check allOf array
+    if let Some(all_of) = condition.get("allOf").and_then(|v| v.as_array()) {
+        for item in all_of {
+            // Check for direct readStatus
+            if let Some(value) = item
+                .get("readStatus")
+                .and_then(|rs| rs.get("value"))
+                .and_then(|v| v.as_str())
+            {
+                return Some(value);
+            }
+            // Check for anyOf containing readStatus (nested condition)
+            if let Some(any_of) = item.get("anyOf").and_then(|v| v.as_array()) {
+                for inner_item in any_of {
+                    if let Some(value) = inner_item
+                        .get("readStatus")
+                        .and_then(|rs| rs.get("value"))
+                        .and_then(|v| v.as_str())
+                    {
+                        return Some(value);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Request DTO for searching/filtering series (POST /api/v1/series/list)
+///
+/// This is used by Komic to filter series with complex conditions.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct KomgaSeriesSearchRequestDto {
+    /// Library IDs to filter by
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub library_id: Option<Vec<String>>,
+    /// Full text search query
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub full_text_search: Option<String>,
+    /// Condition object for complex queries (currently accepted but not processed)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<serde_json::Value>,
+    /// Read status filter
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub read_status: Option<Vec<String>>,
+    /// Tags filter
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tag: Option<Vec<String>>,
+    /// Genres filter
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub genre: Option<Vec<String>>,
+    /// Collection IDs to filter by
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collection_id: Option<Vec<String>>,
+    /// Publishers filter
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub publisher: Option<Vec<String>>,
+    /// Language filter
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<Vec<String>>,
+    /// Whether to include deleted series
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deleted: Option<bool>,
+    /// Whether to include only oneshots
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oneshot: Option<bool>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -419,5 +501,56 @@ mod tests {
         assert!(json.contains("\"tags\""));
         assert!(json.contains("\"releaseDate\""));
         assert!(json.contains("\"summaryNumber\""));
+    }
+
+    #[test]
+    fn test_series_search_request_deserialization() {
+        // Test actual Komic request format
+        let json = r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#;
+        let request: KomgaSeriesSearchRequestDto = serde_json::from_str(json).unwrap();
+        assert!(request.condition.is_some());
+        assert_eq!(request.full_text_search, Some(String::new()));
+    }
+
+    #[test]
+    fn test_series_search_request_with_filters() {
+        let request = KomgaSeriesSearchRequestDto {
+            library_id: Some(vec!["lib1".to_string()]),
+            full_text_search: Some("batman".to_string()),
+            read_status: Some(vec!["IN_PROGRESS".to_string()]),
+            ..Default::default()
+        };
+
+        let json = serde_json::to_string(&request).unwrap();
+        assert!(json.contains("\"libraryId\""));
+        assert!(json.contains("\"fullTextSearch\""));
+        assert!(json.contains("\"readStatus\""));
+    }
+
+    #[test]
+    fn test_extract_read_status_nested_any_of() {
+        // This is the actual format Komic sends for series readStatus filter
+        let condition: serde_json::Value = serde_json::from_str(
+            r#"{"allOf":[{"anyOf":[{"readStatus":{"operator":"is","value":"IN_PROGRESS"}}]}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            extract_read_status_from_condition(&condition),
+            Some("IN_PROGRESS")
+        );
+    }
+
+    #[test]
+    fn test_extract_read_status_direct() {
+        let condition: serde_json::Value =
+            serde_json::from_str(r#"{"allOf":[{"readStatus":{"operator":"is","value":"READ"}}]}"#)
+                .unwrap();
+        assert_eq!(extract_read_status_from_condition(&condition), Some("READ"));
+    }
+
+    #[test]
+    fn test_extract_read_status_empty() {
+        let condition: serde_json::Value = serde_json::from_str(r#"{"allOf":[]}"#).unwrap();
+        assert_eq!(extract_read_status_from_condition(&condition), None);
     }
 }

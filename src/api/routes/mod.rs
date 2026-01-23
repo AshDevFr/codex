@@ -38,9 +38,10 @@ pub fn create_router(state: Arc<AppState>, config: &Config) -> Router {
 
     // Conditionally mount Komga-compatible API if enabled
     if config.komga_api.enabled {
-        let komga_path = format!("/{}/api/v1", config.komga_api.prefix);
+        let komga_path = format!("/{}", config.komga_api.prefix);
         tracing::info!(
-            "Komga-compatible API enabled at {} (prefix: {})",
+            "Komga-compatible API enabled at {}/api/v1 and {}/api/v2 (prefix: {})",
+            komga_path,
             komga_path,
             config.komga_api.prefix
         );

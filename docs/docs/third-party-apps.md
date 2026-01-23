@@ -21,7 +21,7 @@ Codex supports integration with third-party reading apps through its Komga-compa
    ```
 
 2. In Komic, add a new server:
-   - **Server URL**: `http://your-server:8080/komgav1`
+   - **Server URL**: `http://your-server:8080/komga`
    - **Username**: Your Codex username
    - **Password**: Your Codex password
 
@@ -48,14 +48,14 @@ The Komga-compatible API is disabled by default for security. To enable it:
 # codex.yaml
 komga_api:
   enabled: true
-  prefix: "komgav1"  # Optional, this is the default
+  prefix: "komga"  # Optional, this is the default
 ```
 
 ### Via Environment Variables
 
 ```bash
 CODEX_KOMGA_API_ENABLED=true
-CODEX_KOMGA_API_PREFIX=komgav1
+CODEX_KOMGA_API_PREFIX=komga
 ```
 
 ## API Endpoints
@@ -133,7 +133,7 @@ The Komga API uses Spring Data-style pagination:
 
 Example:
 ```
-GET /komgav1/api/v1/series?page=0&size=50
+GET /komga/api/v1/series?page=0&size=50
 ```
 
 ## Testing the Connection
@@ -142,16 +142,16 @@ You can test the Komga API using curl:
 
 ```bash
 # Test authentication
-curl -u "username:password" http://localhost:8080/komgav1/api/v1/users/me
+curl -u "username:password" http://localhost:8080/komga/api/v1/users/me
 
 # List libraries
-curl -u "username:password" http://localhost:8080/komgav1/api/v1/libraries
+curl -u "username:password" http://localhost:8080/komga/api/v1/libraries
 
 # List series
-curl -u "username:password" "http://localhost:8080/komgav1/api/v1/series?page=0&size=10"
+curl -u "username:password" "http://localhost:8080/komga/api/v1/series?page=0&size=10"
 
 # Get a book's pages
-curl -u "username:password" http://localhost:8080/komgav1/api/v1/books/{book-id}/pages
+curl -u "username:password" http://localhost:8080/komga/api/v1/books/{book-id}/pages
 ```
 
 ## Troubleshooting
@@ -160,7 +160,7 @@ curl -u "username:password" http://localhost:8080/komgav1/api/v1/books/{book-id}
 
 1. Ensure `komga_api.enabled` is set to `true` in your configuration
 2. Restart Codex after changing the configuration
-3. Verify the URL includes the prefix (default: `/komgav1`)
+3. Verify the URL includes the prefix (default: `/komga`)
 
 ### "401 Unauthorized"
 

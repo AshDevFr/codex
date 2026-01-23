@@ -44,7 +44,7 @@ use uuid::Uuid;
         (status = 401, description = "Unauthorized"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)")
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)")
     ),
     security(
         ("jwt_bearer" = []),
@@ -98,7 +98,7 @@ pub async fn list_libraries(
         (status = 404, description = "Library not found"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         ("library_id" = Uuid, Path, description = "Library ID")
     ),
     security(
@@ -151,7 +151,7 @@ pub async fn get_library(
         (status = 404, description = "Library not found or no series in library"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         ("library_id" = Uuid, Path, description = "Library ID")
     ),
     security(

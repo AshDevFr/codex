@@ -365,19 +365,19 @@ This feature is **disabled by default** and must be explicitly enabled in your c
 ```yaml
 komga_api:
   enabled: true
-  prefix: "komgav1"  # URL prefix (default: komgav1)
+  prefix: "komga"  # URL prefix (default: komga)
 ```
 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `enabled` | `false` | Enable Komga-compatible API endpoints |
-| `prefix` | `komgav1` | URL prefix for Komga API (results in `/{prefix}/api/v1/...`) |
+| `prefix` | `komga` | URL prefix for Komga API (results in `/{prefix}/api/v1/...`) |
 
 When enabled, the Komga API will be available at:
 ```
-http://your-server:8080/komgav1/api/v1/libraries
-http://your-server:8080/komgav1/api/v1/series
-http://your-server:8080/komgav1/api/v1/books
+http://your-server:8080/komga/api/v1/libraries
+http://your-server:8080/komga/api/v1/series
+http://your-server:8080/komga/api/v1/books
 ...
 ```
 
@@ -385,7 +385,7 @@ http://your-server:8080/komgav1/api/v1/books
 
 To connect apps like Komic to Codex:
 
-1. **Server URL**: `http://your-server:8080/komgav1`
+1. **Server URL**: `http://your-server:8080/komga`
 2. **Authentication**: Use your Codex username and password (Basic Auth)
 
 :::tip Custom Prefix
@@ -474,7 +474,7 @@ CODEX_PDF_CACHE_DIR=data/cache
 
 # Komga-Compatible API
 CODEX_KOMGA_API_ENABLED=true
-CODEX_KOMGA_API_PREFIX=komgav1
+CODEX_KOMGA_API_PREFIX=komga
 ```
 
 ## Runtime vs Startup Settings

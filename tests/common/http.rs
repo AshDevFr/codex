@@ -130,7 +130,7 @@ pub fn create_test_config() -> Config {
 pub fn create_test_config_with_komga() -> Config {
     let mut config = create_test_config();
     config.komga_api.enabled = true;
-    config.komga_api.prefix = "komgav1".to_string();
+    config.komga_api.prefix = "komga".to_string();
     config
 }
 

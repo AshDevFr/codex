@@ -8,6 +8,7 @@ pub mod library;
 pub mod page;
 pub mod pagination;
 pub mod series;
+pub mod stubs;
 pub mod user;
 
 // Re-export commonly used types for the public Komga-compatible API.
@@ -36,3 +37,5 @@ pub use user::{KomgaAgeRestrictionDto, KomgaContentRestrictionsDto, KomgaUserDto
 pub use book::format_file_size;
 #[allow(unused_imports)]
 pub use series::{codex_to_komga_reading_direction, codex_to_komga_status};
+#[allow(unused_imports)]
+pub use stubs::{KomgaCollectionDto, KomgaReadListDto, StubPaginationQuery};

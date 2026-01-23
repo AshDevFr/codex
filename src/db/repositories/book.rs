@@ -668,6 +668,60 @@ impl BookRepository {
         Ok((books, total))
     }
 
+    /// List unread books for a user (books without progress records)
+    ///
+    /// Returns books that the user has not started reading yet (no progress record exists).
+    pub async fn list_unread(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        library_id: Option<Uuid>,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::db::entities::{read_progress, series};
+        use sea_orm::JoinType;
+
+        // Get all book IDs that have progress for this user
+        let books_with_progress: Vec<Uuid> = read_progress::Entity::find()
+            .select_only()
+            .column(read_progress::Column::BookId)
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .into_tuple()
+            .all(db)
+            .await
+            .context("Failed to get books with progress")?;
+
+        // Query books that are NOT in the progress list
+        let mut query = Books::find()
+            .filter(books::Column::Deleted.eq(false))
+            .filter(books::Column::Id.is_not_in(books_with_progress));
+
+        // Filter by library if specified
+        if let Some(lib_id) = library_id {
+            query = query
+                .join(JoinType::InnerJoin, books::Relation::Series.def())
+                .filter(series::Column::LibraryId.eq(lib_id));
+        }
+
+        // Get total count
+        let total = query
+            .clone()
+            .count(db)
+            .await
+            .context("Failed to count unread books")?;
+
+        // Get paginated results, ordered by created_at descending (newest first)
+        let books = query
+            .order_by_desc(books::Column::CreatedAt)
+            .offset(page * page_size)
+            .limit(page_size)
+            .all(db)
+            .await
+            .context("Failed to list unread books")?;
+
+        Ok((books, total))
+    }
+
     /// Get "on deck" books - next unread book in series where user has completed at least one book
     /// and has no books currently in-progress in that series.
     ///

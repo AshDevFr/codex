@@ -43,7 +43,7 @@ use std::sync::Arc;
         (status = 401, description = "Unauthorized"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)")
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)")
     ),
     security(
         ("jwt_bearer" = []),

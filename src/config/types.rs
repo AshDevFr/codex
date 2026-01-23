@@ -20,14 +20,14 @@ pub struct KomgaApiConfig {
     /// When enabled, routes are mounted at /{prefix}/api/v1/*
     pub enabled: bool,
 
-    /// URL prefix for Komga API (default: "komgav1")
+    /// URL prefix for Komga API (default: "komga")
     /// The final URL structure will be: /{prefix}/api/v1/...
-    /// Example with default: /komgav1/api/v1/libraries
+    /// Example with default: /komga/api/v1/libraries
     pub prefix: String,
 }
 
 fn default_komga_prefix() -> String {
-    "komgav1".to_string()
+    "komga".to_string()
 }
 
 impl Default for KomgaApiConfig {
@@ -945,8 +945,8 @@ pdf:
         let config = KomgaApiConfig::default();
         // Disabled by default for security
         assert!(!config.enabled);
-        // Default prefix is "komgav1"
-        assert_eq!(config.prefix, "komgav1");
+        // Default prefix is "komga"
+        assert_eq!(config.prefix, "komga");
     }
 
     #[test]
@@ -985,7 +985,7 @@ prefix: "mykomga"
         let config: KomgaApiConfig = serde_yaml::from_str(yaml_content).unwrap();
         // Should use defaults when not specified
         assert!(!config.enabled);
-        assert_eq!(config.prefix, "komgav1");
+        assert_eq!(config.prefix, "komga");
     }
 
     #[test]
@@ -1017,6 +1017,6 @@ database:
 
         let config: Config = serde_yaml::from_str(yaml_content).unwrap();
         assert!(!config.komga_api.enabled);
-        assert_eq!(config.komga_api.prefix, "komgav1");
+        assert_eq!(config.komga_api.prefix, "komga");
     }
 }

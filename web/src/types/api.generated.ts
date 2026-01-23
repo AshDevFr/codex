@@ -5749,8 +5749,12 @@ export interface components {
         KomgaBooksSearchRequestDto: {
             /** @description Authors filter */
             author?: string[] | null;
+            /** @description Condition object for complex queries (used by Komic for readStatus filtering) */
+            condition?: unknown;
             /** @description Deleted filter */
             deleted?: boolean | null;
+            /** @description Full text search query */
+            fullTextSearch?: string | null;
             /** @description Library IDs to filter by */
             libraryId?: string[] | null;
             /** @description Media status filter */
@@ -8313,6 +8317,8 @@ export interface components {
              * @description Page size (default: 20)
              */
             size?: number;
+            /** @description Sort parameter (e.g., "metadata.titleSort,asc", "createdDate,desc") */
+            sort?: string | null;
         };
         /**
          * @description Series scanning strategy type for library organization
@@ -17425,7 +17431,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
             };
             cookie?: never;
@@ -17466,7 +17472,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
             };
             cookie?: never;
@@ -17496,7 +17502,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
                 /** @description Book ID */
                 book_id: string;
@@ -17535,7 +17541,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
                 /** @description Book ID */
                 book_id: string;
@@ -17574,7 +17580,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
                 /** @description Book ID */
                 book_id: string;
@@ -17613,7 +17619,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
                 /** @description Book ID */
                 book_id: string;
@@ -17652,7 +17658,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
                 /** @description Book ID */
                 book_id: string;
@@ -17693,7 +17699,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
                 /** @description Book ID */
                 book_id: string;
@@ -17734,7 +17740,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
                 /** @description Book ID */
                 book_id: string;
@@ -17773,7 +17779,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
                 /** @description Book ID */
                 book_id: string;
@@ -17810,7 +17816,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
                 /** @description Book ID */
                 book_id: string;
@@ -17851,7 +17857,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
                 /** @description Book ID */
                 book_id: string;
@@ -17890,7 +17896,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
             };
             cookie?: never;
@@ -17920,7 +17926,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
                 /** @description Library ID */
                 library_id: string;
@@ -17959,7 +17965,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
                 /** @description Library ID */
                 library_id: string;
@@ -18004,10 +18010,12 @@ export interface operations {
                 library_id?: string | null;
                 /** @description Search query */
                 search?: string | null;
+                /** @description Sort parameter (e.g., "metadata.titleSort,asc", "createdDate,desc") */
+                sort?: string | null;
             };
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
             };
             cookie?: never;
@@ -18043,10 +18051,12 @@ export interface operations {
                 library_id?: string | null;
                 /** @description Search query */
                 search?: string | null;
+                /** @description Sort parameter (e.g., "metadata.titleSort,asc", "createdDate,desc") */
+                sort?: string | null;
             };
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
             };
             cookie?: never;
@@ -18082,10 +18092,12 @@ export interface operations {
                 library_id?: string | null;
                 /** @description Search query */
                 search?: string | null;
+                /** @description Sort parameter (e.g., "metadata.titleSort,asc", "createdDate,desc") */
+                sort?: string | null;
             };
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
             };
             cookie?: never;
@@ -18115,7 +18127,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
                 /** @description Series ID */
                 series_id: string;
@@ -18160,10 +18172,12 @@ export interface operations {
                 library_id?: string | null;
                 /** @description Search query */
                 search?: string | null;
+                /** @description Sort parameter (e.g., "metadata.titleSort,asc", "createdDate,desc") */
+                sort?: string | null;
             };
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
                 /** @description Series ID */
                 series_id: string;
@@ -18202,7 +18216,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
                 /** @description Series ID */
                 series_id: string;
@@ -18241,7 +18255,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Komga API prefix (default: komgav1) */
+                /** @description Komga API prefix (default: komga) */
                 prefix: string;
             };
             cookie?: never;

@@ -38,7 +38,7 @@
 #
 # Komga API (for third-party app compatibility):
 #   CODEX_KOMGA_API_ENABLED=false
-#   CODEX_KOMGA_API_PREFIX=komgav1
+#   CODEX_KOMGA_API_PREFIX=komga
 
 task:
   worker_count: 2 # Number of parallel task workers per pod
@@ -79,4 +79,4 @@ files:
 # Komga-Compatible API (for third-party apps):
 # komga_api:
 #   enabled: false
-#   prefix: komgav1
+#   prefix: komga

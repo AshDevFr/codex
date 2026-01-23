@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Codex API",
-    "description": "REST API for Codex, a digital library server for comics, manga, and ebooks.\n\n## Interactive API Documentation\n\nYou can explore and test this API interactively:\n\n- **Hosted Documentation**: Visit [codex.4sh.dev/docs/api](https://codex.4sh.dev/docs/api) for the full API reference\n- **Your Instance**: If you have Scalar UI enabled, access `/api/docs` on your Codex server\n\n## Authentication\n\nMost endpoints require authentication. Codex supports two authentication methods:\n\n1. **JWT Bearer Token**: Obtain a token via `POST /api/v1/auth/login`, then include it as `Authorization: Bearer <token>`\n2. **API Key**: Generate an API key in the web UI or via the API, then include it as `X-API-Key: <key>` header\n\n## OPDS Support\n\nCodex provides OPDS catalog feeds for e-reader applications:\n\n- **OPDS 1.2** (Atom XML): `/opds/v1/catalog` - Compatible with most e-readers\n- **OPDS 2.0** (JSON): `/opds/v2` - Modern JSON-based format with enhanced features\n\n## Komga-Compatible API\n\nCodex provides an optional Komga-compatible API for third-party apps like Komic:\n\n- **Disabled by default** - Enable via `komga_api.enabled: true` in config\n- **Configurable prefix** - Default path: `/{prefix}/api/v1/` where prefix defaults to `komgav1`\n- **Same authentication** - Supports JWT, API keys, and Basic Auth\n\nNote: The `{prefix}` path parameter in Komga endpoints is configurable at runtime.",
+    "description": "REST API for Codex, a digital library server for comics, manga, and ebooks.\n\n## Interactive API Documentation\n\nYou can explore and test this API interactively:\n\n- **Hosted Documentation**: Visit [codex.4sh.dev/docs/api](https://codex.4sh.dev/docs/api) for the full API reference\n- **Your Instance**: If you have Scalar UI enabled, access `/api/docs` on your Codex server\n\n## Authentication\n\nMost endpoints require authentication. Codex supports two authentication methods:\n\n1. **JWT Bearer Token**: Obtain a token via `POST /api/v1/auth/login`, then include it as `Authorization: Bearer <token>`\n2. **API Key**: Generate an API key in the web UI or via the API, then include it as `X-API-Key: <key>` header\n\n## OPDS Support\n\nCodex provides OPDS catalog feeds for e-reader applications:\n\n- **OPDS 1.2** (Atom XML): `/opds/v1/catalog` - Compatible with most e-readers\n- **OPDS 2.0** (JSON): `/opds/v2` - Modern JSON-based format with enhanced features\n\n## Komga-Compatible API\n\nCodex provides an optional Komga-compatible API for third-party apps like Komic:\n\n- **Disabled by default** - Enable via `komga_api.enabled: true` in config\n- **Configurable prefix** - Default path: `/{prefix}/api/v1/` where prefix defaults to `komga`\n- **Same authentication** - Supports JWT, API keys, and Basic Auth\n\nNote: The `{prefix}` path parameter in Komga endpoints is configurable at runtime.",
     "license": {
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
@@ -9832,7 +9832,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -9918,7 +9918,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -9994,7 +9994,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -10051,7 +10051,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -10104,7 +10104,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -10161,7 +10161,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -10221,7 +10221,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -10284,7 +10284,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -10347,7 +10347,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -10404,7 +10404,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -10452,7 +10452,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -10512,7 +10512,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -10565,7 +10565,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -10612,7 +10612,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -10669,7 +10669,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -10722,7 +10722,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -10765,6 +10765,18 @@
             "name": "search",
             "in": "query",
             "description": "Search query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort parameter (e.g., \"metadata.titleSort,asc\", \"createdDate,desc\")",
             "required": false,
             "schema": {
               "type": [
@@ -10811,7 +10823,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -10854,6 +10866,18 @@
             "name": "search",
             "in": "query",
             "description": "Search query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort parameter (e.g., \"metadata.titleSort,asc\", \"createdDate,desc\")",
             "required": false,
             "schema": {
               "type": [
@@ -10900,7 +10924,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -10950,6 +10974,18 @@
                 "null"
               ]
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort parameter (e.g., \"metadata.titleSort,asc\", \"createdDate,desc\")",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
         "responses": {
@@ -10989,7 +11025,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -11046,7 +11082,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -11106,6 +11142,18 @@
                 "null"
               ]
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort parameter (e.g., \"metadata.titleSort,asc\", \"createdDate,desc\")",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
         "responses": {
@@ -11148,7 +11196,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -11201,7 +11249,7 @@
           {
             "name": "prefix",
             "in": "path",
-            "description": "Komga API prefix (default: komgav1)",
+            "description": "Komga API prefix (default: komga)",
             "required": true,
             "schema": {
               "type": "string"
@@ -14705,12 +14753,22 @@
             },
             "description": "Authors filter"
           },
+          "condition": {
+            "description": "Condition object for complex queries (used by Komic for readStatus filtering)"
+          },
           "deleted": {
             "type": [
               "boolean",
               "null"
             ],
             "description": "Deleted filter"
+          },
+          "fullTextSearch": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Full text search query"
           },
           "libraryId": {
             "type": [
@@ -19117,6 +19175,13 @@
             "type": "integer",
             "format": "int32",
             "description": "Page size (default: 20)"
+          },
+          "sort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Sort parameter (e.g., \"metadata.titleSort,asc\", \"createdDate,desc\")"
           }
         }
       },
@@ -22076,7 +22141,7 @@
     },
     {
       "name": "komga",
-      "description": "Komga-compatible API for third-party apps (Komic, etc.). Enable via config. Default path: /{prefix}/api/v1/ where prefix defaults to 'komgav1'"
+      "description": "Komga-compatible API for third-party apps (Komic, etc.). Enable via config. Default path: /{prefix}/api/v1/ where prefix defaults to 'komga'"
     }
   ]
 }

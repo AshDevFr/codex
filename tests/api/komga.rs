@@ -63,7 +63,7 @@ async fn test_komga_list_libraries_with_bearer_auth() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let request = get_request_with_auth("/komgav1/api/v1/libraries", &token);
+    let request = get_request_with_auth("/komga/api/v1/libraries", &token);
     let (status, response): (StatusCode, Option<Vec<KomgaLibraryDto>>) =
         make_json_request(app, request).await;
 
@@ -96,7 +96,7 @@ async fn test_komga_list_libraries_with_basic_auth() {
     let app = create_test_router_with_komga(state);
 
     // Use Basic Auth (what Komic uses)
-    let request = get_request_with_basic_auth("/komgav1/api/v1/libraries", "admin", "admin123");
+    let request = get_request_with_basic_auth("/komga/api/v1/libraries", "admin", "admin123");
     let (status, response): (StatusCode, Option<Vec<KomgaLibraryDto>>) =
         make_json_request(app, request).await;
 
@@ -112,7 +112,7 @@ async fn test_komga_list_libraries_without_auth() {
     let state = create_test_auth_state(db).await;
     let app = create_test_router_with_komga(state);
 
-    let request = get_request("/komgav1/api/v1/libraries");
+    let request = get_request("/komga/api/v1/libraries");
     let (status, response): (StatusCode, Option<ErrorResponse>) =
         make_json_request(app, request).await;
 
@@ -137,7 +137,7 @@ async fn test_komga_get_library_by_id() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let uri = format!("/komgav1/api/v1/libraries/{}", library.id);
+    let uri = format!("/komga/api/v1/libraries/{}", library.id);
     let request = get_request_with_auth(&uri, &token);
     let (status, response): (StatusCode, Option<KomgaLibraryDto>) =
         make_json_request(app, request).await;
@@ -159,7 +159,7 @@ async fn test_komga_get_library_not_found() {
 
     // Use a random UUID that doesn't exist
     let fake_id = uuid::Uuid::new_v4();
-    let uri = format!("/komgav1/api/v1/libraries/{}", fake_id);
+    let uri = format!("/komga/api/v1/libraries/{}", fake_id);
     let request = get_request_with_auth(&uri, &token);
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
@@ -184,7 +184,7 @@ async fn test_komga_library_thumbnail_no_series() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let uri = format!("/komgav1/api/v1/libraries/{}/thumbnail", library.id);
+    let uri = format!("/komga/api/v1/libraries/{}/thumbnail", library.id);
     let request = get_request_with_auth(&uri, &token);
     let (status, _) = make_raw_request(app, request).await;
 
@@ -211,7 +211,7 @@ async fn test_komga_api_disabled_returns_404() {
     // Use router WITHOUT Komga API enabled (default router)
     let app = create_test_router_with_app_state(state);
 
-    let request = get_request_with_auth("/komgav1/api/v1/libraries", &token);
+    let request = get_request_with_auth("/komga/api/v1/libraries", &token);
     let (status, _): (StatusCode, Option<serde_json::Value>) =
         make_json_request(app, request).await;
 
@@ -235,7 +235,7 @@ async fn test_komga_library_dto_format() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let request = get_request_with_auth("/komgav1/api/v1/libraries", &token);
+    let request = get_request_with_auth("/komga/api/v1/libraries", &token);
     let (status, body) = make_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -284,7 +284,7 @@ async fn test_komga_list_series() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let request = get_request_with_auth("/komgav1/api/v1/series", &token);
+    let request = get_request_with_auth("/komga/api/v1/series", &token);
     let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
         make_json_request(app, request).await;
 
@@ -314,7 +314,7 @@ async fn test_komga_list_series_pagination() {
     let app = create_test_router_with_komga(state);
 
     // Request page 0 with size 2
-    let request = get_request_with_auth("/komgav1/api/v1/series?page=0&size=2", &token);
+    let request = get_request_with_auth("/komga/api/v1/series?page=0&size=2", &token);
     let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
         make_json_request(app, request).await;
 
@@ -355,7 +355,7 @@ async fn test_komga_list_series_filter_by_library() {
     let app = create_test_router_with_komga(state);
 
     // Filter by library1
-    let uri = format!("/komgav1/api/v1/series?library_id={}", library1.id);
+    let uri = format!("/komga/api/v1/series?library_id={}", library1.id);
     let request = get_request_with_auth(&uri, &token);
     let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
         make_json_request(app, request).await;
@@ -385,7 +385,7 @@ async fn test_komga_get_series_by_id() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let uri = format!("/komgav1/api/v1/series/{}", series.id);
+    let uri = format!("/komga/api/v1/series/{}", series.id);
     let request = get_request_with_auth(&uri, &token);
     let (status, response): (StatusCode, Option<KomgaSeriesDto>) =
         make_json_request(app, request).await;
@@ -406,7 +406,7 @@ async fn test_komga_get_series_not_found() {
     let app = create_test_router_with_komga(state);
 
     let fake_id = uuid::Uuid::new_v4();
-    let uri = format!("/komgav1/api/v1/series/{}", fake_id);
+    let uri = format!("/komga/api/v1/series/{}", fake_id);
     let request = get_request_with_auth(&uri, &token);
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
@@ -431,7 +431,7 @@ async fn test_komga_series_new() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let request = get_request_with_auth("/komgav1/api/v1/series/new", &token);
+    let request = get_request_with_auth("/komga/api/v1/series/new", &token);
     let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
         make_json_request(app, request).await;
 
@@ -462,7 +462,7 @@ async fn test_komga_series_updated() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let request = get_request_with_auth("/komgav1/api/v1/series/updated", &token);
+    let request = get_request_with_auth("/komga/api/v1/series/updated", &token);
     let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
         make_json_request(app, request).await;
 
@@ -486,7 +486,7 @@ async fn test_komga_series_thumbnail_no_books() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let uri = format!("/komgav1/api/v1/series/{}/thumbnail", series.id);
+    let uri = format!("/komga/api/v1/series/{}/thumbnail", series.id);
     let request = get_request_with_auth(&uri, &token);
     let (status, _) = make_raw_request(app, request).await;
 
@@ -509,7 +509,7 @@ async fn test_komga_series_dto_format() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let request = get_request_with_auth("/komgav1/api/v1/series", &token);
+    let request = get_request_with_auth("/komga/api/v1/series", &token);
     let (status, body) = make_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -580,7 +580,7 @@ async fn test_komga_get_book_by_id() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let uri = format!("/komgav1/api/v1/books/{}", created_book.id);
+    let uri = format!("/komga/api/v1/books/{}", created_book.id);
     let request = get_request_with_auth(&uri, &token);
     let (status, response): (StatusCode, Option<KomgaBookDto>) =
         make_json_request(app, request).await;
@@ -603,7 +603,7 @@ async fn test_komga_get_book_not_found() {
     let app = create_test_router_with_komga(state);
 
     let fake_id = uuid::Uuid::new_v4();
-    let uri = format!("/komgav1/api/v1/books/{}", fake_id);
+    let uri = format!("/komga/api/v1/books/{}", fake_id);
     let request = get_request_with_auth(&uri, &token);
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
@@ -637,7 +637,7 @@ async fn test_komga_get_book_thumbnail_no_pages() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let uri = format!("/komgav1/api/v1/books/{}/thumbnail", created_book.id);
+    let uri = format!("/komga/api/v1/books/{}/thumbnail", created_book.id);
     let request = get_request_with_auth(&uri, &token);
     let (status, _) = make_raw_request(app, request).await;
 
@@ -653,7 +653,7 @@ async fn test_komga_books_ondeck_empty() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let request = get_request_with_auth("/komgav1/api/v1/books/ondeck", &token);
+    let request = get_request_with_auth("/komga/api/v1/books/ondeck", &token);
     let (status, response): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
         make_json_request(app, request).await;
 
@@ -673,7 +673,7 @@ async fn test_komga_search_books_empty() {
     let app = create_test_router_with_komga(state);
 
     // POST /books/list with empty body
-    let request = post_request_with_auth_json("/komgav1/api/v1/books/list", &token, "{}");
+    let request = post_request_with_auth_json("/komga/api/v1/books/list", &token, "{}");
     let (status, response): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
         make_json_request(app, request).await;
 
@@ -723,7 +723,7 @@ async fn test_komga_search_books_with_filter() {
 
     // POST /books/list with series_id filter
     let body = format!(r#"{{"seriesId": ["{}"]}}"#, series.id);
-    let request = post_request_with_auth_json("/komgav1/api/v1/books/list", &token, &body);
+    let request = post_request_with_auth_json("/komga/api/v1/books/list", &token, &body);
     let (status, response): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
         make_json_request(app, request).await;
 
@@ -772,7 +772,7 @@ async fn test_komga_get_next_book() {
     let app = create_test_router_with_komga(state);
 
     // Get next book after book1
-    let uri = format!("/komgav1/api/v1/books/{}/next", created_book1.id);
+    let uri = format!("/komga/api/v1/books/{}/next", created_book1.id);
     let request = get_request_with_auth(&uri, &token);
     let (status, response): (StatusCode, Option<KomgaBookDto>) =
         make_json_request(app, request).await;
@@ -810,7 +810,7 @@ async fn test_komga_get_next_book_not_found() {
     let app = create_test_router_with_komga(state);
 
     // Get next book - should be 404 since this is the only book
-    let uri = format!("/komgav1/api/v1/books/{}/next", created_book.id);
+    let uri = format!("/komga/api/v1/books/{}/next", created_book.id);
     let request = get_request_with_auth(&uri, &token);
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
@@ -856,7 +856,7 @@ async fn test_komga_get_previous_book() {
     let app = create_test_router_with_komga(state);
 
     // Get previous book before book2
-    let uri = format!("/komgav1/api/v1/books/{}/previous", created_book2.id);
+    let uri = format!("/komga/api/v1/books/{}/previous", created_book2.id);
     let request = get_request_with_auth(&uri, &token);
     let (status, response): (StatusCode, Option<KomgaBookDto>) =
         make_json_request(app, request).await;
@@ -894,7 +894,7 @@ async fn test_komga_get_previous_book_not_found() {
     let app = create_test_router_with_komga(state);
 
     // Get previous book - should be 404 since this is the only book
-    let uri = format!("/komgav1/api/v1/books/{}/previous", created_book.id);
+    let uri = format!("/komga/api/v1/books/{}/previous", created_book.id);
     let request = get_request_with_auth(&uri, &token);
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
@@ -928,7 +928,7 @@ async fn test_komga_book_dto_format() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let uri = format!("/komgav1/api/v1/books/{}", created_book.id);
+    let uri = format!("/komga/api/v1/books/{}", created_book.id);
     let request = get_request_with_auth(&uri, &token);
     let (status, body) = make_request(app, request).await;
 
@@ -992,7 +992,7 @@ async fn test_komga_list_pages_for_book() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let uri = format!("/komgav1/api/v1/books/{}/pages", created_book.id);
+    let uri = format!("/komga/api/v1/books/{}/pages", created_book.id);
     let request = get_request_with_auth(&uri, &token);
     let (status, response): (
         StatusCode,
@@ -1021,7 +1021,7 @@ async fn test_komga_list_pages_book_not_found() {
     let app = create_test_router_with_komga(state);
 
     let fake_id = uuid::Uuid::new_v4();
-    let uri = format!("/komgav1/api/v1/books/{}/pages", fake_id);
+    let uri = format!("/komga/api/v1/books/{}/pages", fake_id);
     let request = get_request_with_auth(&uri, &token);
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
@@ -1036,7 +1036,7 @@ async fn test_komga_list_pages_without_auth() {
     let app = create_test_router_with_komga(state);
 
     let fake_id = uuid::Uuid::new_v4();
-    let uri = format!("/komgav1/api/v1/books/{}/pages", fake_id);
+    let uri = format!("/komga/api/v1/books/{}/pages", fake_id);
     let request = get_request(&uri);
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
@@ -1071,7 +1071,7 @@ async fn test_komga_get_page_invalid_number() {
     let app = create_test_router_with_komga(state);
 
     // Page 0 should be bad request
-    let uri = format!("/komgav1/api/v1/books/{}/pages/0", created_book.id);
+    let uri = format!("/komga/api/v1/books/{}/pages/0", created_book.id);
     let request = get_request_with_auth(&uri, &token);
     let (status, _) = make_raw_request(app, request).await;
 
@@ -1106,7 +1106,7 @@ async fn test_komga_get_page_out_of_bounds() {
     let app = create_test_router_with_komga(state);
 
     // Page 100 should be not found (book only has 10 pages)
-    let uri = format!("/komgav1/api/v1/books/{}/pages/100", created_book.id);
+    let uri = format!("/komga/api/v1/books/{}/pages/100", created_book.id);
     let request = get_request_with_auth(&uri, &token);
     let (status, _) = make_raw_request(app, request).await;
 
@@ -1141,10 +1141,7 @@ async fn test_komga_get_page_thumbnail_invalid_number() {
     let app = create_test_router_with_komga(state);
 
     // Page -5 cannot be parsed by axum Path extractor, but page 0 should fail
-    let uri = format!(
-        "/komgav1/api/v1/books/{}/pages/0/thumbnail",
-        created_book.id
-    );
+    let uri = format!("/komga/api/v1/books/{}/pages/0/thumbnail", created_book.id);
     let request = get_request_with_auth(&uri, &token);
     let (status, _) = make_raw_request(app, request).await;
 
@@ -1178,7 +1175,7 @@ async fn test_komga_page_dto_format() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let uri = format!("/komgav1/api/v1/books/{}/pages", created_book.id);
+    let uri = format!("/komga/api/v1/books/{}/pages", created_book.id);
     let request = get_request_with_auth(&uri, &token);
     let (status, body) = make_request(app, request).await;
 
@@ -1235,7 +1232,7 @@ async fn test_komga_update_read_progress() {
     let app = create_test_router_with_komga(state);
 
     // Update progress - typical Komic format
-    let uri = format!("/komgav1/api/v1/books/{}/read-progress", created_book.id);
+    let uri = format!("/komga/api/v1/books/{}/read-progress", created_book.id);
     let body = r#"{"completed":false,"page":42}"#;
     let request = patch_request_with_auth_json(&uri, &token, body);
     let (status, _) = make_raw_request(app, request).await;
@@ -1272,7 +1269,7 @@ async fn test_komga_update_read_progress_marks_completed() {
     let app = create_test_router_with_komga(state);
 
     // Update progress - mark as completed
-    let uri = format!("/komgav1/api/v1/books/{}/read-progress", created_book.id);
+    let uri = format!("/komga/api/v1/books/{}/read-progress", created_book.id);
     let body = r#"{"completed":true,"page":50}"#;
     let request = patch_request_with_auth_json(&uri, &token, body);
     let (status, _) = make_raw_request(app, request).await;
@@ -1307,7 +1304,7 @@ async fn test_komga_update_read_progress_without_auth() {
     let app = create_test_router_with_komga(state);
 
     // Try to update progress without auth
-    let uri = format!("/komgav1/api/v1/books/{}/read-progress", created_book.id);
+    let uri = format!("/komga/api/v1/books/{}/read-progress", created_book.id);
     let request = patch_json_request(&uri, &serde_json::json!({"page": 42}));
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
@@ -1324,7 +1321,7 @@ async fn test_komga_update_read_progress_book_not_found() {
 
     // Try to update progress for non-existent book
     let fake_id = uuid::Uuid::new_v4();
-    let uri = format!("/komgav1/api/v1/books/{}/read-progress", fake_id);
+    let uri = format!("/komga/api/v1/books/{}/read-progress", fake_id);
     let body = r#"{"completed":false,"page":42}"#;
     let request = patch_request_with_auth_json(&uri, &token, body);
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
@@ -1360,7 +1357,7 @@ async fn test_komga_delete_read_progress() {
     let app = create_test_router_with_komga(state);
 
     // Delete progress
-    let uri = format!("/komgav1/api/v1/books/{}/read-progress", created_book.id);
+    let uri = format!("/komga/api/v1/books/{}/read-progress", created_book.id);
     let request = delete_request_with_auth(&uri, &token);
     let (status, _) = make_raw_request(app, request).await;
 
@@ -1395,7 +1392,7 @@ async fn test_komga_delete_read_progress_without_auth() {
     let app = create_test_router_with_komga(state);
 
     // Try to delete progress without auth
-    let uri = format!("/komgav1/api/v1/books/{}/read-progress", created_book.id);
+    let uri = format!("/komga/api/v1/books/{}/read-progress", created_book.id);
     let request = delete_request(&uri);
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
@@ -1412,7 +1409,7 @@ async fn test_komga_delete_read_progress_book_not_found() {
 
     // Try to delete progress for non-existent book
     let fake_id = uuid::Uuid::new_v4();
-    let uri = format!("/komgav1/api/v1/books/{}/read-progress", fake_id);
+    let uri = format!("/komga/api/v1/books/{}/read-progress", fake_id);
     let request = delete_request_with_auth(&uri, &token);
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
@@ -1448,7 +1445,7 @@ async fn test_komga_read_progress_reflected_in_book_response() {
     // First, update progress
     {
         let app = create_test_router_with_komga(state.clone());
-        let uri = format!("/komgav1/api/v1/books/{}/read-progress", created_book.id);
+        let uri = format!("/komga/api/v1/books/{}/read-progress", created_book.id);
         let body = r#"{"completed":false,"page":42}"#;
         let request = patch_request_with_auth_json(&uri, &token, body);
         let (status, _) = make_raw_request(app, request).await;
@@ -1458,7 +1455,7 @@ async fn test_komga_read_progress_reflected_in_book_response() {
     // Then, verify progress is reflected in book response
     {
         let app = create_test_router_with_komga(state);
-        let uri = format!("/komgav1/api/v1/books/{}", created_book.id);
+        let uri = format!("/komga/api/v1/books/{}", created_book.id);
         let request = get_request_with_auth(&uri, &token);
         let (status, response): (StatusCode, Option<KomgaBookDto>) =
             make_json_request(app, request).await;
@@ -1486,7 +1483,7 @@ async fn test_komga_get_current_user() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let request = get_request_with_auth("/komgav1/api/v1/users/me", &token);
+    let request = get_request_with_auth("/komga/api/v1/users/me", &token);
     let (status, response): (
         StatusCode,
         Option<codex::api::routes::komga::dto::user::KomgaUserDto>,
@@ -1509,7 +1506,7 @@ async fn test_komga_get_current_user_basic_auth() {
     let app = create_test_router_with_komga(state);
 
     // Use Basic Auth (what Komic uses)
-    let request = get_request_with_basic_auth("/komgav1/api/v1/users/me", "admin", "admin123");
+    let request = get_request_with_basic_auth("/komga/api/v1/users/me", "admin", "admin123");
     let (status, response): (
         StatusCode,
         Option<codex::api::routes::komga::dto::user::KomgaUserDto>,
@@ -1528,7 +1525,7 @@ async fn test_komga_get_current_user_without_auth() {
     let state = create_test_auth_state(db).await;
     let app = create_test_router_with_komga(state);
 
-    let request = get_request("/komgav1/api/v1/users/me");
+    let request = get_request("/komga/api/v1/users/me");
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
@@ -1542,7 +1539,7 @@ async fn test_komga_user_dto_format() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_komga(state);
 
-    let request = get_request_with_auth("/komgav1/api/v1/users/me", &token);
+    let request = get_request_with_auth("/komga/api/v1/users/me", &token);
     let (status, body) = make_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -1564,4 +1561,171 @@ async fn test_komga_user_dto_format() {
     assert!(json.get("shared_libraries_ids").is_none());
     assert!(json.get("shared_all_libraries").is_none());
     assert!(json.get("labels_allow").is_none());
+}
+
+/// Test that /api/v2/users/me works for Komic's connection test
+///
+/// Komic app uses /api/v2/users/me as its server connection test endpoint,
+/// even though it uses /api/v1/* for all actual data requests.
+#[tokio::test]
+async fn test_komga_v2_users_me_for_komic_connection_test() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    create_admin_user(&db).await;
+
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router_with_komga(state);
+
+    // Komic uses Basic Auth with /api/v2/users/me for connection testing
+    let request = get_request_with_basic_auth("/komga/api/v2/users/me", "admin", "admin123");
+    let (status, response): (
+        StatusCode,
+        Option<codex::api::routes::komga::dto::user::KomgaUserDto>,
+    ) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let user = response.unwrap();
+    assert_eq!(user.email, "admin");
+    assert!(user.roles.contains(&"ADMIN".to_string()));
+}
+
+// ============================================================================
+// POST /series/list Tests
+// ============================================================================
+
+/// Test that POST /series/list returns series (Komic uses this for filtering)
+#[tokio::test]
+async fn test_komga_search_series_post() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create a library with a series
+    let lib = LibraryRepository::create(&db, "Test", "/test", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, lib.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // POST /series/list with empty condition (how Komic calls it)
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=0&size=20",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 1);
+    assert_eq!(page.content[0].name, "Test Series");
+}
+
+// ============================================================================
+// Stub Endpoint Tests (Collections, Read Lists, Genres, Tags, Authors)
+// ============================================================================
+
+/// Test that /collections returns empty result (stub)
+#[tokio::test]
+async fn test_komga_collections_empty() {
+    let (db, temp_dir) = setup_test_db().await;
+    create_admin_user(&db).await;
+
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router_with_komga(state);
+
+    let request =
+        get_request_with_basic_auth("/komga/api/v1/collections?page=0", "admin", "admin123");
+    let (status, response): (
+        StatusCode,
+        Option<KomgaPage<codex::api::routes::komga::dto::stubs::KomgaCollectionDto>>,
+    ) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 0);
+    assert_eq!(page.total_elements, 0);
+}
+
+/// Test that /readlists returns empty result (stub)
+#[tokio::test]
+async fn test_komga_readlists_empty() {
+    let (db, temp_dir) = setup_test_db().await;
+    create_admin_user(&db).await;
+
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router_with_komga(state);
+
+    let request =
+        get_request_with_basic_auth("/komga/api/v1/readlists?page=0", "admin", "admin123");
+    let (status, response): (
+        StatusCode,
+        Option<KomgaPage<codex::api::routes::komga::dto::stubs::KomgaReadListDto>>,
+    ) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 0);
+    assert_eq!(page.total_elements, 0);
+}
+
+/// Test that /genres returns empty array (stub)
+#[tokio::test]
+async fn test_komga_genres_empty() {
+    let (db, temp_dir) = setup_test_db().await;
+    create_admin_user(&db).await;
+
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router_with_komga(state);
+
+    let request = get_request_with_basic_auth("/komga/api/v1/genres", "admin", "admin123");
+    let (status, response): (StatusCode, Option<Vec<String>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let genres = response.unwrap();
+    assert_eq!(genres.len(), 0);
+}
+
+/// Test that /tags returns empty array (stub)
+#[tokio::test]
+async fn test_komga_tags_empty() {
+    let (db, temp_dir) = setup_test_db().await;
+    create_admin_user(&db).await;
+
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router_with_komga(state);
+
+    let request = get_request_with_basic_auth("/komga/api/v1/tags", "admin", "admin123");
+    let (status, response): (StatusCode, Option<Vec<String>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let tags = response.unwrap();
+    assert_eq!(tags.len(), 0);
+}
+
+/// Test that /api/v2/authors returns empty array (stub for Komic)
+#[tokio::test]
+async fn test_komga_authors_v2_empty() {
+    let (db, temp_dir) = setup_test_db().await;
+    create_admin_user(&db).await;
+
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router_with_komga(state);
+
+    let request =
+        get_request_with_basic_auth("/komga/api/v2/authors?unpaged=true", "admin", "admin123");
+    let (status, response): (
+        StatusCode,
+        Option<Vec<codex::api::routes::komga::dto::series::KomgaAuthorDto>>,
+    ) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let authors = response.unwrap();
+    assert_eq!(authors.len(), 0);
 }

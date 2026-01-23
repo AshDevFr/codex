@@ -87,6 +87,6 @@ files:
 # Komga-Compatible API (disabled by default)
 # ==========================================
 # Enables third-party apps like Komic to connect using Komga API format
-# komga_api:
-#   enabled: false
-#   prefix: komgav1  # URL prefix: /{prefix}/api/v1/...
+komga_api:
+  enabled: true
+  prefix: komga  # URL prefix: /{prefix}/api/v1/...

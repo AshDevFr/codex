@@ -50,7 +50,7 @@ use uuid::Uuid;
         (status = 404, description = "Book not found"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         ("book_id" = Uuid, Path, description = "Book ID")
     ),
     security(
@@ -116,7 +116,7 @@ pub async fn update_progress(
         (status = 404, description = "Book not found"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         ("book_id" = Uuid, Path, description = "Book ID")
     ),
     security(

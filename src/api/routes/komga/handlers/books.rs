@@ -2,7 +2,10 @@
 //!
 //! Handlers for book-related endpoints in the Komga-compatible API.
 
-use super::super::dto::book::{KomgaBookDto, KomgaBooksSearchRequestDto};
+use super::super::dto::book::{
+    extract_read_status_from_condition, extract_series_id_from_condition, KomgaBookDto,
+    KomgaBooksSearchRequestDto,
+};
 use super::super::dto::pagination::KomgaPage;
 use super::libraries::{extract_page_image, generate_thumbnail};
 use crate::api::{
@@ -37,12 +40,94 @@ pub struct BooksPaginationQuery {
     #[serde(default = "default_page_size")]
     pub size: i32,
     /// Sort parameter (e.g., "createdDate,desc", "metadata.numberSort,asc")
-    #[allow(dead_code)]
     pub sort: Option<String>,
 }
 
 fn default_page_size() -> i32 {
     20
+}
+
+/// Parse sort parameter into field and direction
+/// Format: "field,direction" e.g., "metadata.numberSort,asc" or "createdDate,desc"
+fn parse_sort_param(sort: Option<&str>) -> (Option<&str>, bool) {
+    match sort {
+        Some(s) => {
+            let parts: Vec<&str> = s.split(',').collect();
+            let field = parts.first().copied();
+            let ascending = parts.get(1).is_none_or(|d| d.to_lowercase() != "desc");
+            (field, ascending)
+        }
+        None => (None, true),
+    }
+}
+
+/// Sort book DTOs based on sort parameter
+fn sort_book_dtos(dtos: &mut [KomgaBookDto], sort_field: Option<&str>, ascending: bool) {
+    match sort_field {
+        Some("metadata.numberSort") | Some("numberSort") => {
+            dtos.sort_by(|a, b| {
+                let cmp = a
+                    .metadata
+                    .number_sort
+                    .partial_cmp(&b.metadata.number_sort)
+                    .unwrap_or(std::cmp::Ordering::Equal);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        Some("metadata.number") | Some("number") => {
+            dtos.sort_by(|a, b| {
+                let cmp = a.number.cmp(&b.number);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        Some("createdDate") | Some("created") => {
+            dtos.sort_by(|a, b| {
+                let cmp = a.created.cmp(&b.created);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        Some("lastModifiedDate") | Some("lastModified") => {
+            dtos.sort_by(|a, b| {
+                let cmp = a.last_modified.cmp(&b.last_modified);
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        Some("name") | Some("metadata.title") => {
+            dtos.sort_by(|a, b| {
+                let cmp = a.name.to_lowercase().cmp(&b.name.to_lowercase());
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
+            });
+        }
+        _ => {
+            // Default sort by numberSort ascending
+            dtos.sort_by(|a, b| {
+                a.metadata
+                    .number_sort
+                    .partial_cmp(&b.metadata.number_sort)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+    }
 }
 
 /// Get a book by ID
@@ -65,7 +150,7 @@ fn default_page_size() -> i32 {
         (status = 404, description = "Book not found"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         ("book_id" = Uuid, Path, description = "Book ID")
     ),
     security(
@@ -128,7 +213,7 @@ pub async fn get_book(
         (status = 404, description = "Book not found or has no pages"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         ("book_id" = Uuid, Path, description = "Book ID")
     ),
     security(
@@ -198,7 +283,7 @@ pub async fn get_book_thumbnail(
         (status = 401, description = "Unauthorized"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         BooksPaginationQuery
     ),
     security(
@@ -284,7 +369,7 @@ pub async fn get_books_ondeck(
         (status = 401, description = "Unauthorized"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         BooksPaginationQuery
     ),
     security(
@@ -301,7 +386,7 @@ pub async fn search_books(
 ) -> Result<Json<KomgaPage<KomgaBookDto>>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    let user_id = Some(auth.user_id);
+    let user_id = auth.user_id;
     let page = query.page.max(0) as u64;
     let size = query.size.clamp(1, 500) as u64;
 
@@ -312,36 +397,86 @@ pub async fn search_books(
         .and_then(|ids| ids.first())
         .and_then(|id| Uuid::parse_str(id).ok());
 
+    // First try to get series_id from direct field, then from condition object
     let series_id = body
         .series_id
         .as_ref()
         .and_then(|ids| ids.first())
-        .and_then(|id| Uuid::parse_str(id).ok());
+        .and_then(|id| Uuid::parse_str(id).ok())
+        .or_else(|| {
+            body.condition
+                .as_ref()
+                .and_then(extract_series_id_from_condition)
+                .and_then(|id| Uuid::parse_str(id).ok())
+        });
+
+    // Extract readStatus from condition if present
+    let read_status = body
+        .condition
+        .as_ref()
+        .and_then(extract_read_status_from_condition);
 
     // Fetch books based on filters
-    let (books, total) = if let Some(series_id) = series_id {
-        // Filter by series
-        let all_books = BookRepository::list_by_series(&state.db, series_id, false)
+    let (books, total) = match read_status {
+        Some("IN_PROGRESS") => {
+            // In-progress: books with progress record where completed = false
+            BookRepository::list_with_progress(
+                &state.db,
+                user_id,
+                library_id,
+                Some(false),
+                page,
+                size,
+            )
             .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?;
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress books: {}", e)))?
+        }
+        Some("READ") => {
+            // Read: books with progress record where completed = true
+            BookRepository::list_with_progress(
+                &state.db,
+                user_id,
+                library_id,
+                Some(true),
+                page,
+                size,
+            )
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch read books: {}", e)))?
+        }
+        Some("UNREAD") => {
+            // Unread: books without a progress record for this user
+            BookRepository::list_unread(&state.db, user_id, library_id, page, size)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to fetch unread books: {}", e)))?
+        }
+        _ => {
+            // No readStatus filter - use original logic
+            if let Some(series_id) = series_id {
+                // Filter by series
+                let all_books = BookRepository::list_by_series(&state.db, series_id, false)
+                    .await
+                    .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?;
 
-        let total = all_books.len() as u64;
-        let paginated: Vec<_> = all_books
-            .into_iter()
-            .skip((page * size) as usize)
-            .take(size as usize)
-            .collect();
-        (paginated, total)
-    } else if let Some(library_id) = library_id {
-        // Filter by library
-        BookRepository::list_by_library(&state.db, library_id, false, page, size)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
-    } else {
-        // No filter - get all books
-        BookRepository::list_all(&state.db, false, page, size)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
+                let total = all_books.len() as u64;
+                let paginated: Vec<_> = all_books
+                    .into_iter()
+                    .skip((page * size) as usize)
+                    .take(size as usize)
+                    .collect();
+                (paginated, total)
+            } else if let Some(library_id) = library_id {
+                // Filter by library
+                BookRepository::list_by_library(&state.db, library_id, false, page, size)
+                    .await
+                    .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
+            } else {
+                // No filter - get all books
+                BookRepository::list_all(&state.db, false, page, size)
+                    .await
+                    .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
+            }
+        }
     };
 
     // Convert to DTOs
@@ -350,19 +485,20 @@ pub async fn search_books(
         let series_title = get_series_title(&state, book.series_id).await?;
         let book_number = get_book_number(&state, book.id).await.unwrap_or(1);
 
-        let read_progress = if let Some(uid) = user_id {
-            ReadProgressRepository::get_by_user_and_book(&state.db, uid, book.id)
+        let read_progress =
+            ReadProgressRepository::get_by_user_and_book(&state.db, user_id, book.id)
                 .await
                 .ok()
-                .flatten()
-        } else {
-            None
-        };
+                .flatten();
 
         let dto =
             KomgaBookDto::from_codex(&book, &series_title, book_number, read_progress.as_ref());
         dtos.push(dto);
     }
+
+    // Apply sorting
+    let (sort_field, ascending) = parse_sort_param(query.sort.as_deref());
+    sort_book_dtos(&mut dtos, sort_field, ascending);
 
     Ok(Json(KomgaPage::new(
         dtos,
@@ -396,7 +532,7 @@ pub async fn search_books(
         (status = 404, description = "No next book"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         ("book_id" = Uuid, Path, description = "Book ID")
     ),
     security(
@@ -473,7 +609,7 @@ pub async fn get_next_book(
         (status = 404, description = "No previous book"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         ("book_id" = Uuid, Path, description = "Book ID")
     ),
     security(
@@ -547,7 +683,7 @@ pub async fn get_previous_book(
         (status = 404, description = "Book not found or file missing"),
     ),
     params(
-        ("prefix" = String, Path, description = "Komga API prefix (default: komgav1)"),
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
         ("book_id" = Uuid, Path, description = "Book ID")
     ),
     security(

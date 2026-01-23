@@ -41,7 +41,7 @@ Codex provides OPDS catalog feeds for e-reader applications:
 Codex provides an optional Komga-compatible API for third-party apps like Komic:
 
 - **Disabled by default** - Enable via `komga_api.enabled: true` in config
-- **Configurable prefix** - Default path: `/{prefix}/api/v1/` where prefix defaults to `komgav1`
+- **Configurable prefix** - Default path: `/{prefix}/api/v1/` where prefix defaults to `komga`
 - **Same authentication** - Supports JWT, API keys, and Basic Auth
 
 Note: The `{prefix}` path parameter in Komga endpoints is configurable at runtime."#,
@@ -635,7 +635,7 @@ Note: The `{prefix}` path parameter in Komga endpoints is configurable at runtim
         (name = "events", description = "Server-Sent Events for real-time updates"),
         (name = "opds", description = "OPDS 1.2 catalog feed (Atom XML format)"),
         (name = "opds2", description = "OPDS 2.0 catalog feed (JSON format) - Modern JSON-based OPDS specification"),
-        (name = "komga", description = "Komga-compatible API for third-party apps (Komic, etc.). Enable via config. Default path: /{prefix}/api/v1/ where prefix defaults to 'komgav1'"),
+        (name = "komga", description = "Komga-compatible API for third-party apps (Komic, etc.). Enable via config. Default path: /{prefix}/api/v1/ where prefix defaults to 'komga'"),
     ),
     modifiers(&SecurityAddon, &OperationIdPrefixer),
 )]
