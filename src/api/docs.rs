@@ -44,7 +44,51 @@ Codex provides an optional Komga-compatible API for third-party apps like Komic:
 - **Configurable prefix** - Default path: `/{prefix}/api/v1/` where prefix defaults to `komga`
 - **Same authentication** - Supports JWT, API keys, and Basic Auth
 
-Note: The `{prefix}` path parameter in Komga endpoints is configurable at runtime."#,
+Note: The `{prefix}` path parameter in Komga endpoints is configurable at runtime.
+
+## Pagination
+
+List endpoints support pagination with the following conventions:
+
+### Query Parameters (GET requests)
+
+| Parameter | Default | Max | Description |
+|-----------|---------|-----|-------------|
+| `page` | `1` | - | Page number (1-indexed) |
+| `page_size` | `50` | `500` | Items per page |
+
+Example: `GET /api/v1/books?page=2&page_size=25`
+
+### Request Body (POST requests)
+
+POST endpoints like `/api/v1/books/list` accept pagination in camelCase:
+
+```json
+{
+  "page": 1,
+  "pageSize": 25
+}
+```
+
+### Response Format
+
+All paginated responses use camelCase and include HATEOAS navigation links:
+
+```json
+{
+  "data": [...],
+  "page": 1,
+  "pageSize": 25,
+  "total": 150,
+  "totalPages": 6,
+  "links": {
+    "self": "/api/v1/books?page=1&page_size=25",
+    "first": "/api/v1/books?page=1&page_size=25",
+    "next": "/api/v1/books?page=2&page_size=25",
+    "last": "/api/v1/books?page=6&page_size=25"
+  }
+}
+```"#,
         license(
             name = "MIT",
             url = "https://opensource.org/licenses/MIT"

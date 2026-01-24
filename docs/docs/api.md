@@ -485,31 +485,57 @@ SSE connections send a keep-alive comment every 15 seconds:
 
 ## Pagination
 
-List endpoints support pagination with query parameters:
+List endpoints support pagination with the following conventions:
+
+### Query Parameters (GET requests)
 
 | Parameter | Default | Max | Description |
 |-----------|---------|-----|-------------|
-| `page` | `0` | - | Page number (0-indexed) |
-| `page_size` | `20` | `100` | Items per page |
+| `page` | `1` | - | Page number (1-indexed) |
+| `page_size` | `50` | `500` | Items per page |
 
 Example:
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" \
-  "http://localhost:8080/api/v1/books?page=2&page_size=50"
+  "http://localhost:8080/api/v1/books?page=2&page_size=25"
 ```
 
-Response:
+### Request Body (POST requests)
+
+POST endpoints like `/api/v1/books/list` accept pagination in **camelCase**:
+
+```json
+{
+  "page": 1,
+  "pageSize": 25
+}
+```
+
+### Response Format
+
+All paginated responses use **camelCase** and include HATEOAS navigation links:
 
 ```json
 {
   "data": [...],
   "page": 2,
-  "page_size": 50,
-  "total": 500,
-  "total_pages": 10
+  "pageSize": 25,
+  "total": 150,
+  "totalPages": 6,
+  "links": {
+    "self": "/api/v1/books?page=2&page_size=25",
+    "first": "/api/v1/books?page=1&page_size=25",
+    "prev": "/api/v1/books?page=1&page_size=25",
+    "next": "/api/v1/books?page=3&page_size=25",
+    "last": "/api/v1/books?page=6&page_size=25"
+  }
 }
 ```
+
+:::note
+Query parameters use `page_size` (snake_case), while request/response bodies use `pageSize` (camelCase).
+:::
 
 ## Filtering & Sorting
 
@@ -552,7 +578,7 @@ Filters use a tree structure with `allOf` (AND) and `anyOf` (OR) combinators:
     ]
   },
   "fullTextSearch": "batman",
-  "page": 0,
+  "page": 1,
   "pageSize": 20,
   "sort": "name,asc"
 }
