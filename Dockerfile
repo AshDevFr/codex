@@ -19,9 +19,11 @@ RUN npm run build
 
 # Stage 2: Rust build dependencies
 FROM rust:1.92-alpine AS chef
+# clang is needed for some proc-macro build scripts (proc-macro2, quote, etc.)
 RUN apk add --no-cache \
     musl-dev \
-    build-base
+    build-base \
+    clang
 RUN cargo install cargo-chef
 WORKDIR /app
 
@@ -76,7 +78,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 # Ensure PDFium library can be found at runtime
 # Create symlink in /usr/lib for standard library search path
 RUN ln -sf /usr/local/lib/libpdfium.so /usr/lib/libpdfium.so
-ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/lib:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/lib
 
 # Create app user with default UID/GID (can be changed at runtime via PUID/PGID)
 RUN addgroup -g 1000 codex && \

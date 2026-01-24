@@ -34,12 +34,14 @@ RUN npm run build
 FROM --platform=linux/amd64 rust:1.92-bookworm AS chef
 
 # Install base build tools
+# clang is needed for proc-macro build scripts (proc-macro2, quote, etc.)
 RUN apt-get update && \
     apt-get install -y \
     build-essential \
     pkg-config \
     curl \
     xz-utils \
+    clang \
     && rm -rf /var/lib/apt/lists/*
 
 # Install musl cross-compilers from musl.cc (provides both gcc and g++)
@@ -153,7 +155,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 # Ensure PDFium library can be found at runtime
 # Create symlink in /usr/lib for standard library search path
 RUN ln -sf /usr/local/lib/libpdfium.so /usr/lib/libpdfium.so
-ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/lib:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/lib
 
 # Create app user with default UID/GID (can be changed at runtime via PUID/PGID)
 RUN addgroup -g 1000 codex && \
