@@ -263,7 +263,7 @@ jobs:
       - name: Install base dependencies
         run: |
           apt-get update
-          apt-get install -y git curl xz-utils build-essential pkg-config lsb-release clang
+          apt-get install -y git curl xz-utils build-essential pkg-config lsb-release clang mold
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
