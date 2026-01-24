@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	fetchPendingTaskCounts,
 	fetchTasksByStatus,
@@ -33,11 +33,23 @@ export function useTaskProgress() {
 		useState<ConnectionState>("disconnected");
 	const [pendingCounts, setPendingCounts] = useState<PendingTaskCounts>({});
 
+	// Track if we've already subscribed to prevent duplicate subscriptions
+	// when isAuthenticated briefly flips during Zustand hydration
+	const hasSubscribedRef = useRef(false);
+
 	useEffect(() => {
 		if (!isAuthenticated) {
 			console.debug("Not authenticated, skipping task progress subscription");
+			hasSubscribedRef.current = false;
 			return;
 		}
+
+		// Prevent duplicate subscriptions from rapid effect re-runs
+		if (hasSubscribedRef.current) {
+			console.debug("Already subscribed, skipping duplicate subscription");
+			return;
+		}
+		hasSubscribedRef.current = true;
 
 		// Convert API task response to TaskProgressEvent format
 		const convertTaskToEvent = (task: {
@@ -221,6 +233,7 @@ export function useTaskProgress() {
 
 		return () => {
 			console.debug("Unsubscribing from task progress events");
+			hasSubscribedRef.current = false;
 			clearInterval(pollInterval);
 			unsubscribe();
 		};

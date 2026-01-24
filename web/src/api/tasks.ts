@@ -308,21 +308,107 @@ function createTaskProgressReconnectionManager(
 	};
 }
 
+// Singleton SSE connection manager
+// This ensures only one SSE connection exists regardless of how many subscribers there are
+type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
+
+interface TaskProgressSubscriber {
+	onEvent: (event: TaskProgressEvent) => void;
+	onError?: (error: Error) => void;
+	onConnectionStateChange?: (state: ConnectionState) => void;
+}
+
+class TaskProgressSSEManager {
+	private subscribers = new Map<symbol, TaskProgressSubscriber>();
+	private manager: TaskProgressReconnectionManager | null = null;
+	private currentState: ConnectionState = "disconnected";
+	private isConnecting = false;
+
+	subscribe(subscriber: TaskProgressSubscriber): () => void {
+		const id = Symbol();
+		this.subscribers.set(id, subscriber);
+
+		// Notify new subscriber of current connection state
+		subscriber.onConnectionStateChange?.(this.currentState);
+
+		// Start connection if this is the first subscriber
+		if (this.subscribers.size === 1 && !this.isConnecting) {
+			this.connect();
+		}
+
+		// Return unsubscribe function
+		return () => {
+			this.subscribers.delete(id);
+
+			// Disconnect if no more subscribers
+			if (this.subscribers.size === 0) {
+				this.disconnect();
+			}
+		};
+	}
+
+	private connect() {
+		if (this.manager || this.isConnecting) return;
+
+		this.isConnecting = true;
+
+		this.manager = createTaskProgressReconnectionManager(
+			(event) => {
+				// Broadcast to all subscribers
+				for (const subscriber of this.subscribers.values()) {
+					subscriber.onEvent(event);
+				}
+			},
+			(error) => {
+				// Broadcast to all subscribers
+				for (const subscriber of this.subscribers.values()) {
+					subscriber.onError?.(error);
+				}
+			},
+			(state) => {
+				this.currentState = state;
+				// Broadcast to all subscribers
+				for (const subscriber of this.subscribers.values()) {
+					subscriber.onConnectionStateChange?.(state);
+				}
+			},
+		);
+
+		this.manager.connect().finally(() => {
+			this.isConnecting = false;
+		});
+	}
+
+	private disconnect() {
+		if (this.manager) {
+			this.manager.disconnect();
+			this.manager = null;
+		}
+		this.currentState = "disconnected";
+		this.isConnecting = false;
+	}
+}
+
+// Global singleton instance
+const taskProgressSSEManager = new TaskProgressSSEManager();
+
 /**
  * Subscribe to task progress events via SSE
  *
- * This creates a persistent connection to receive real-time updates about
- * background task execution (analyze_book, generate_thumbnails, etc.).
+ * This uses a singleton connection - only one SSE stream exists regardless of
+ * how many components subscribe. Events are broadcast to all subscribers.
  *
  * Features:
+ * - Singleton connection (prevents multiple streams)
  * - Automatic reconnection with exponential backoff
  * - Connection state tracking
  * - Authentication via JWT token
+ * - Reference counting (disconnects when last subscriber unsubscribes)
  *
  * @param onEvent - Callback for task progress events
  * @param onError - Optional callback for errors
  * @param onConnectionStateChange - Optional callback for connection state changes
- * @returns Cleanup function to close the connection
+ * @returns Cleanup function to unsubscribe
  */
 export const subscribeToTaskProgress = (
 	onEvent: (event: TaskProgressEvent) => void,
@@ -331,15 +417,9 @@ export const subscribeToTaskProgress = (
 		state: "connecting" | "connected" | "disconnected" | "failed",
 	) => void,
 ): (() => void) => {
-	const manager = createTaskProgressReconnectionManager(
+	return taskProgressSSEManager.subscribe({
 		onEvent,
 		onError,
 		onConnectionStateChange,
-	);
-
-	manager.connect();
-
-	return () => {
-		manager.disconnect();
-	};
+	});
 };
