@@ -761,3 +761,62 @@ pub async fn generate_book_thumbnail(
 
     Ok(Json(CreateTaskResponse { task_id }))
 }
+
+/// Generate thumbnail for a series
+///
+/// Queues a task to generate (or regenerate) the thumbnail for a specific series.
+/// The series thumbnail is derived from the first book's cover.
+///
+/// # Permission Required
+/// - `tasks:write`
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/{series_id}/thumbnail/generate",
+    params(
+        ("series_id" = Uuid, Path, description = "Series ID")
+    ),
+    request_body = ForceRequest,
+    responses(
+        (status = 200, description = "Thumbnail generation task queued", body = CreateTaskResponse),
+        (status = 403, description = "Permission denied"),
+        (status = 404, description = "Series not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Thumbnails"
+)]
+pub async fn generate_series_thumbnail(
+    State(state): State<Arc<AppState>>,
+    Path(series_id): Path<Uuid>,
+    auth: AuthContext,
+    Json(request): Json<ForceRequest>,
+) -> Result<Json<CreateTaskResponse>, ApiError> {
+    use crate::db::repositories::SeriesRepository;
+
+    // Check permission
+    auth.require_permission(&Permission::TasksWrite)?;
+
+    // Verify series exists
+    SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    let task_type = TaskType::GenerateSeriesThumbnail {
+        series_id,
+        force: request.force,
+    };
+
+    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+        .await
+        .map_err(|e| {
+            ApiError::Internal(format!(
+                "Failed to queue series thumbnail generation: {}",
+                e
+            ))
+        })?;
+
+    Ok(Json(CreateTaskResponse { task_id }))
+}

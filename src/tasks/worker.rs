@@ -24,8 +24,8 @@ use crate::services::{SettingsService, TaskMetricsService, ThumbnailService};
 use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, CleanupBookFilesHandler, CleanupOrphanedFilesHandler,
     CleanupPdfCacheHandler, CleanupSeriesFilesHandler, FindDuplicatesHandler,
-    GenerateThumbnailHandler, GenerateThumbnailsHandler, PurgeDeletedHandler, ScanLibraryHandler,
-    TaskHandler,
+    GenerateSeriesThumbnailHandler, GenerateThumbnailHandler, GenerateThumbnailsHandler,
+    PurgeDeletedHandler, ScanLibraryHandler, TaskHandler,
 };
 
 /// Task worker that processes tasks from the queue
@@ -123,6 +123,13 @@ impl TaskWorker {
             "generate_thumbnail".to_string(),
             Arc::new(GenerateThumbnailHandler::new(thumbnail_service.clone())),
         );
+        // Register the GenerateSeriesThumbnailHandler (single series) with thumbnail service
+        self.handlers.insert(
+            "generate_series_thumbnail".to_string(),
+            Arc::new(GenerateSeriesThumbnailHandler::new(
+                thumbnail_service.clone(),
+            )),
+        );
         self.thumbnail_service = Some(thumbnail_service);
         self
     }
@@ -140,12 +147,26 @@ impl TaskWorker {
     ///
     /// This registers the cleanup task handlers that need access to
     /// thumbnail and upload directories.
+    ///
+    /// **Note**: Call `with_thumbnail_service` before this method so that
+    /// `CleanupBookFilesHandler` can invalidate series thumbnails.
     pub fn with_files_config(mut self, files_config: FilesConfig) -> Self {
         // Register cleanup handlers
-        self.handlers.insert(
-            "cleanup_book_files".to_string(),
-            Arc::new(CleanupBookFilesHandler::new(files_config.clone())),
-        );
+        // CleanupBookFilesHandler needs ThumbnailService to invalidate series thumbnails
+        if let Some(ref thumbnail_service) = self.thumbnail_service {
+            self.handlers.insert(
+                "cleanup_book_files".to_string(),
+                Arc::new(CleanupBookFilesHandler::new(
+                    files_config.clone(),
+                    thumbnail_service.clone(),
+                )),
+            );
+        } else {
+            tracing::warn!(
+                "ThumbnailService not set - CleanupBookFilesHandler will not be registered. \
+                 Call with_thumbnail_service before with_files_config."
+            );
+        }
         self.handlers.insert(
             "cleanup_series_files".to_string(),
             Arc::new(CleanupSeriesFilesHandler::new(files_config.clone())),

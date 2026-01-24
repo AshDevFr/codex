@@ -5,6 +5,7 @@ import {
 	Image,
 	Menu,
 	Progress,
+	Skeleton,
 	Stack,
 	Text,
 	Tooltip,
@@ -19,7 +20,7 @@ import {
 	IconTrash,
 } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { booksApi } from "@/api/books";
 import { seriesApi } from "@/api/series";
@@ -58,14 +59,36 @@ export function MediaCard({
 	};
 
 	// Use API endpoint directly - browser will send auth cookie automatically
-	// Include updatedAt as cache-busting parameter so images refresh when thumbnails are generated
+	// No cache-busting parameter needed - backend uses ETag-based caching which handles
+	// cache invalidation properly. The browser will use HTTP conditional requests (If-None-Match)
+	// to validate cached thumbnails efficiently.
 	const coverUrl =
 		type === "book"
-			? `/api/v1/books/${(data as Book).id}/thumbnail?v=${encodeURIComponent(data.updatedAt)}`
-			: `/api/v1/series/${(data as Series).id}/thumbnail?v=${encodeURIComponent(data.updatedAt)}`;
+			? `/api/v1/books/${(data as Book).id}/thumbnail`
+			: `/api/v1/series/${(data as Series).id}/thumbnail`;
 
 	const book = type === "book" ? (data as Book) : null;
 	const series = type === "series" ? (data as Series) : null;
+
+	// Track image loading state for skeleton placeholder
+	const [imageLoaded, setImageLoaded] = useState(false);
+	const [_imageError, setImageError] = useState(false);
+
+	// Reset loading state when the item ID changes (e.g., different book/series)
+	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset on ID change
+	useEffect(() => {
+		setImageLoaded(false);
+		setImageError(false);
+	}, [data.id]);
+
+	const handleImageLoad = useCallback(() => {
+		setImageLoaded(true);
+	}, []);
+
+	const handleImageError = useCallback(() => {
+		setImageError(true);
+		setImageLoaded(true); // Stop showing skeleton on error
+	}, []);
 
 	// Track if item is newly created (for animation)
 	const [isNew, setIsNew] = useState(false);
@@ -360,13 +383,36 @@ export function MediaCard({
 							</Text>
 						</div>
 					) : (
-						<Image
-							src={coverUrl}
-							alt={altText}
-							fit="cover"
-							style={{ width: "100%", height: "100%", objectFit: "cover" }}
-							fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300'%3E%3Crect fill='%23ddd' width='200' height='300'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Cover%3C/text%3E%3C/svg%3E"
-						/>
+						<>
+							{/* Skeleton placeholder shown while image is loading */}
+							{!imageLoaded && (
+								<Skeleton
+									style={{
+										position: "absolute",
+										top: 0,
+										left: 0,
+										width: "100%",
+										height: "100%",
+									}}
+									animate
+								/>
+							)}
+							<Image
+								src={coverUrl}
+								alt={altText}
+								fit="cover"
+								style={{
+									width: "100%",
+									height: "100%",
+									objectFit: "cover",
+									opacity: imageLoaded ? 1 : 0,
+									transition: "opacity 0.2s ease-in-out",
+								}}
+								onLoad={handleImageLoad}
+								onError={handleImageError}
+								fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300'%3E%3Crect fill='%23ddd' width='200' height='300'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Cover%3C/text%3E%3C/svg%3E"
+							/>
+						</>
 					)}
 					{/* Unread indicator - Triangle for books, Square for series */}
 					{type === "book" && book && !book.readProgress && (

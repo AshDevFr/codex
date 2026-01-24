@@ -19,6 +19,10 @@ use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 use uuid::Uuid;
 
+/// Placeholder SVG for thumbnails that are being generated or don't exist
+/// This is a simple gray rectangle with a book icon, loaded from assets at compile time
+const PLACEHOLDER_SVG: &[u8] = include_bytes!("../../../../../assets/placeholder-cover.svg");
+
 /// Get page image from a book
 ///
 /// Extracts and serves the image for a specific page from CBZ/CBR/EPUB/PDF.
@@ -196,10 +200,14 @@ async fn serve_pdf_page_with_streaming(
         }
     }
 
-    // Cache miss - render the page
-    let path = std::path::Path::new(file_path);
-    let image_data = crate::parsers::pdf::extract_page_from_pdf_with_dpi(path, page_number, dpi)
-        .map_err(|e| ApiError::from_anyhow_with_context(e, "Failed to extract page image"))?;
+    // Cache miss - render the page using spawn_blocking to avoid blocking async runtime
+    let path = std::path::PathBuf::from(file_path);
+    let image_data = tokio::task::spawn_blocking(move || {
+        crate::parsers::pdf::extract_page_from_pdf_with_dpi(&path, page_number, dpi)
+    })
+    .await
+    .map_err(|e| ApiError::Internal(format!("Task join error: {}", e)))?
+    .map_err(|e| ApiError::from_anyhow_with_context(e, "Failed to extract page image"))?;
 
     // Store in cache asynchronously
     let cache_clone = cache.clone();
@@ -259,18 +267,9 @@ pub async fn get_book_thumbnail(
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    // Fetch book from database
-    let book = BookRepository::get_by_id(&state.db, book_id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
-        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
-
-    // Check if book has pages
-    if book.page_count == 0 {
-        return Err(ApiError::NotFound("Book has no pages".to_string()));
-    }
-
-    // Try to serve cached thumbnail with HTTP conditional caching
+    // OPTIMIZATION: Check disk cache FIRST before hitting the database.
+    // This avoids acquiring a DB connection for cached thumbnails, preventing
+    // connection pool exhaustion when many thumbnail requests come in at once.
     if let Some(meta) = state
         .thumbnail_service
         .get_thumbnail_metadata(book_id)
@@ -310,7 +309,7 @@ pub async fn get_book_thumbnail(
             }
         }
 
-        // Cache hit - stream the thumbnail directly
+        // Cache hit - stream the thumbnail directly (no DB query needed!)
         if let Some(stream) = state.thumbnail_service.get_thumbnail_stream(book_id).await {
             let last_modified = UNIX_EPOCH + Duration::from_secs(meta.modified_unix);
             let last_modified_str = fmt_http_date(last_modified);
@@ -327,7 +326,69 @@ pub async fn get_book_thumbnail(
         }
     }
 
-    // Cache miss - generate thumbnail on-demand
+    // Cache miss - now we need to hit the database to generate the thumbnail
+    // Fetch book from database
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Return placeholder for books with no pages (don't spam 404s)
+    if book.page_count == 0 {
+        return Ok(serve_placeholder_response());
+    }
+
+    // Use in-flight deduplication to prevent thundering herd
+    // If another request is already generating this thumbnail, wait for it
+    let thumbnail_data = match state.inflight_thumbnails.try_start(book_id) {
+        Ok(guard) => {
+            // We're the first request - generate the thumbnail
+            match generate_book_thumbnail(&state, &book).await {
+                Ok(data) => {
+                    guard.complete(data.clone());
+                    data
+                }
+                Err(e) => {
+                    guard.fail(format!("{:?}", e));
+                    // Return placeholder on generation failure instead of error
+                    tracing::warn!("Failed to generate thumbnail for book {}: {:?}", book_id, e);
+                    return Ok(serve_placeholder_response());
+                }
+            }
+        }
+        Err(handle) => {
+            // Another request is generating - wait for it
+            match handle.wait().await {
+                Ok(data) => data,
+                Err(e) => {
+                    tracing::warn!(
+                        "Waiting for thumbnail generation failed for book {}: {}",
+                        book_id,
+                        e
+                    );
+                    return Ok(serve_placeholder_response());
+                }
+            }
+        }
+    };
+
+    // Build response with caching headers
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "image/jpeg")
+        .header(header::CACHE_CONTROL, "public, max-age=31536000") // Cache for 1 year
+        .header(header::CONTENT_LENGTH, thumbnail_data.len())
+        .body(Body::from(thumbnail_data))
+        .unwrap())
+}
+
+/// Generate a thumbnail for a book (handles extraction, resizing, and caching)
+async fn generate_book_thumbnail(
+    state: &Arc<AuthState>,
+    book: &crate::db::entities::books::Model,
+) -> Result<Vec<u8>, ApiError> {
+    let book_id = book.id;
+
     // Extract first page (for PDFs, try cache first then render)
     let image_data = if book.format.eq_ignore_ascii_case("pdf") {
         let dpi = state.pdf_config.render_dpi;
@@ -335,12 +396,14 @@ pub async fn get_book_thumbnail(
         if let Some(cached) = state.pdf_page_cache.get(book_id, 1, dpi).await {
             cached
         } else {
-            // Render and cache
-            let path = std::path::Path::new(&book.file_path);
-            let data =
-                crate::parsers::pdf::extract_page_from_pdf_with_dpi(path, 1, dpi).map_err(|e| {
-                    ApiError::from_anyhow_with_context(e, "Failed to extract cover image")
-                })?;
+            // Render in blocking task to avoid blocking async runtime
+            let path = std::path::PathBuf::from(&book.file_path);
+            let data = tokio::task::spawn_blocking(move || {
+                crate::parsers::pdf::extract_page_from_pdf_with_dpi(&path, 1, dpi)
+            })
+            .await
+            .map_err(|e| ApiError::Internal(format!("Task join error: {}", e)))?
+            .map_err(|e| ApiError::from_anyhow_with_context(e, "Failed to extract cover image"))?;
 
             // Cache asynchronously
             let cache = state.pdf_page_cache.clone();
@@ -359,12 +422,12 @@ pub async fn get_book_thumbnail(
             .map_err(|e| ApiError::from_anyhow_with_context(e, "Failed to extract cover image"))?
     };
 
-    // Generate thumbnail (max 400px width or height)
-    let thumbnail_data = generate_thumbnail(&image_data, 400)
+    // Generate thumbnail (max 400px width or height) using spawn_blocking
+    let thumbnail_data = generate_thumbnail(image_data, 400)
+        .await
         .map_err(|e| ApiError::Internal(format!("Failed to generate thumbnail: {}", e)))?;
 
     // Save to cache for future requests (with configurable deadline to prevent blocking)
-    // Using inline await instead of fire-and-forget to manage connection pool usage
     let deadline_secs = state.database_config.operation_deadline_seconds();
     match with_deadline(
         deadline_secs,
@@ -389,20 +452,24 @@ pub async fn get_book_thumbnail(
         }
     }
 
-    // Build response with caching headers
-    Ok(Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "image/jpeg")
-        .header(header::CACHE_CONTROL, "public, max-age=31536000") // Cache for 1 year
-        .header(header::CONTENT_LENGTH, thumbnail_data.len())
-        .body(Body::from(thumbnail_data))
-        .unwrap())
+    Ok(thumbnail_data)
 }
 
-/// Generate a thumbnail from an image
+/// Serve a placeholder SVG image for missing/generating thumbnails
+fn serve_placeholder_response() -> Response {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "image/svg+xml")
+        .header(header::CACHE_CONTROL, "public, max-age=60") // Short cache for placeholders
+        .header(header::CONTENT_LENGTH, PLACEHOLDER_SVG.len())
+        .body(Body::from(PLACEHOLDER_SVG.to_vec()))
+        .unwrap()
+}
+
+/// Generate a thumbnail from an image (synchronous version for use in spawn_blocking)
 ///
 /// Resizes the image to fit within max_dimension x max_dimension while maintaining aspect ratio
-fn generate_thumbnail(image_data: &[u8], max_dimension: u32) -> anyhow::Result<Vec<u8>> {
+fn generate_thumbnail_sync(image_data: &[u8], max_dimension: u32) -> anyhow::Result<Vec<u8>> {
     // Load image from bytes
     let img = image::load_from_memory(image_data)?;
 
@@ -426,21 +493,37 @@ fn generate_thumbnail(image_data: &[u8], max_dimension: u32) -> anyhow::Result<V
     Ok(output.into_inner())
 }
 
+/// Generate a thumbnail from an image (async version using spawn_blocking)
+///
+/// Uses spawn_blocking to avoid blocking the async runtime during CPU-intensive
+/// image decoding, resizing (Lanczos3), and JPEG encoding operations
+async fn generate_thumbnail(image_data: Vec<u8>, max_dimension: u32) -> anyhow::Result<Vec<u8>> {
+    tokio::task::spawn_blocking(move || generate_thumbnail_sync(&image_data, max_dimension))
+        .await
+        .map_err(|e| anyhow::anyhow!("Task join error: {}", e))?
+}
+
 /// Extract page image from book file
+///
+/// Uses spawn_blocking to avoid blocking the async runtime during CPU-intensive
+/// image extraction operations (ZIP parsing, RAR extraction, EPUB parsing, PDF rendering)
 async fn extract_page_image(
     file_path: &str,
     file_format: &str,
     page_number: i32,
 ) -> anyhow::Result<Vec<u8>> {
-    let path = std::path::Path::new(file_path);
+    let path = std::path::PathBuf::from(file_path);
+    let format = file_format.to_uppercase();
 
-    // Call the appropriate parser extraction function
-    match file_format.to_uppercase().as_str() {
-        "CBZ" => crate::parsers::cbz::extract_page_from_cbz(path, page_number),
+    // Use spawn_blocking for CPU-intensive file parsing operations
+    tokio::task::spawn_blocking(move || match format.as_str() {
+        "CBZ" => crate::parsers::cbz::extract_page_from_cbz(&path, page_number),
         #[cfg(feature = "rar")]
-        "CBR" => crate::parsers::cbr::extract_page_from_cbr(path, page_number),
-        "EPUB" => crate::parsers::epub::extract_page_from_epub(path, page_number),
-        "PDF" => crate::parsers::pdf::extract_page_from_pdf(path, page_number),
-        _ => anyhow::bail!("Unsupported format: {}", file_format),
-    }
+        "CBR" => crate::parsers::cbr::extract_page_from_cbr(&path, page_number),
+        "EPUB" => crate::parsers::epub::extract_page_from_epub(&path, page_number),
+        "PDF" => crate::parsers::pdf::extract_page_from_pdf(&path, page_number),
+        _ => anyhow::bail!("Unsupported format: {}", format),
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("Task join error: {}", e))?
 }

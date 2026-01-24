@@ -93,6 +93,18 @@ export const seriesApi = {
 		return response.data;
 	},
 
+	// Regenerate the series cover thumbnail (from first book's cover)
+	regenerateSeriesThumbnail: async (
+		seriesId: string,
+		force = true,
+	): Promise<{ task_id: string }> => {
+		const response = await api.post<{ task_id: string }>(
+			`/series/${seriesId}/thumbnail/generate`,
+			{ force },
+		);
+		return response.data;
+	},
+
 	// Mark all books in a series as read
 	markAsRead: async (
 		seriesId: string,

@@ -71,10 +71,10 @@ impl CleanupEventSubscriber {
         match &event.event {
             EntityEvent::BookDeleted {
                 book_id,
-                series_id: _,
+                series_id,
                 library_id: _,
             } => {
-                self.handle_book_deleted(*book_id).await?;
+                self.handle_book_deleted(*book_id, *series_id).await?;
             }
             EntityEvent::SeriesDeleted {
                 series_id,
@@ -93,15 +93,21 @@ impl CleanupEventSubscriber {
     }
 
     /// Handle BookDeleted event - enqueue cleanup task for book's files
-    async fn handle_book_deleted(&self, book_id: uuid::Uuid) -> anyhow::Result<()> {
+    async fn handle_book_deleted(
+        &self,
+        book_id: uuid::Uuid,
+        series_id: uuid::Uuid,
+    ) -> anyhow::Result<()> {
         debug!("Handling BookDeleted event for book {}", book_id);
 
         // Enqueue cleanup task for this book's files
         // The thumbnail_path is not available here since the book is already deleted,
-        // so we'll derive it from the book_id in the handler
+        // so we'll derive it from the book_id in the handler.
+        // We include series_id so the handler can invalidate the series thumbnail cache.
         let task = TaskType::CleanupBookFiles {
             book_id,
             thumbnail_path: None,
+            series_id: Some(series_id),
         };
 
         // Use lowest priority so cleanup doesn't interfere with more important tasks
@@ -217,6 +223,7 @@ mod tests {
         let task = TaskType::CleanupBookFiles {
             book_id,
             thumbnail_path: None,
+            series_id: None,
         };
         let task_id = TaskRepository::enqueue(db.sea_orm_connection(), task, -100, None)
             .await

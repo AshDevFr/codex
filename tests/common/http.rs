@@ -1,5 +1,5 @@
 use axum::Router;
-use codex::api::extractors::{AppState, AuthState};
+use codex::api::extractors::{auth::UserAuthCache, AppState, AuthState};
 use codex::api::permissions::UserRole;
 use codex::api::routes::create_router;
 use codex::config::{AuthConfig, Config, DatabaseConfig, EmailConfig, FilesConfig, PdfConfig};
@@ -7,8 +7,8 @@ use codex::db::entities::users;
 use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
 use codex::services::{
-    AuthTrackingService, FileCleanupService, PdfPageCache, ReadProgressService, SettingsService,
-    ThumbnailService,
+    AuthTrackingService, FileCleanupService, InflightThumbnailTracker, PdfPageCache,
+    ReadProgressService, SettingsService, ThumbnailService,
 };
 use codex::utils::jwt::JwtService;
 use http_body_util::BodyExt;
@@ -58,6 +58,8 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
         read_progress_service,
         auth_tracking_service,
         pdf_page_cache,
+        inflight_thumbnails: Arc::new(InflightThumbnailTracker::new()),
+        user_auth_cache: Arc::new(UserAuthCache::new()),
     })
 }
 
@@ -101,6 +103,8 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
         read_progress_service,
         auth_tracking_service,
         pdf_page_cache,
+        inflight_thumbnails: Arc::new(InflightThumbnailTracker::new()),
+        user_auth_cache: Arc::new(UserAuthCache::new()),
     })
 }
 
@@ -169,6 +173,8 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
         read_progress_service,
         auth_tracking_service,
         pdf_page_cache,
+        inflight_thumbnails: Arc::new(InflightThumbnailTracker::new()),
+        user_auth_cache: Arc::new(UserAuthCache::new()),
     });
     let config = create_test_config();
     create_router(app_state, &config)

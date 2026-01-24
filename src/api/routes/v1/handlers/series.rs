@@ -39,7 +39,6 @@ use axum::{
 };
 use chrono::Utc;
 use httpdate::fmt_http_date;
-use image::{imageops::FilterType, ImageFormat};
 use sea_orm::DatabaseConnection;
 use serde::Deserialize;
 use std::io::{Cursor, Write};
@@ -50,6 +49,10 @@ use tokio::io::AsyncWriteExt;
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 use zip::write::SimpleFileOptions;
+
+/// Placeholder SVG for series thumbnails that are being generated or don't exist
+/// This is a simple gray rectangle with a book icon, loaded from assets at compile time
+const PLACEHOLDER_SVG: &[u8] = include_bytes!("../../../../../assets/placeholder-cover.svg");
 
 /// Query parameters for listing books in a series
 #[derive(Debug, Deserialize)]
@@ -1062,6 +1065,7 @@ pub async fn set_series_cover_source(
     ),
     responses(
         (status = 200, description = "Thumbnail image", content_type = "image/jpeg"),
+        (status = 304, description = "Not modified (client cache is valid)"),
         (status = 404, description = "Series not found"),
         (status = 403, description = "Forbidden"),
     ),
@@ -1074,44 +1078,175 @@ pub async fn set_series_cover_source(
 pub async fn get_series_thumbnail(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
+    headers: HeaderMap,
     Path(series_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    // Verify series exists
-    let _series = SeriesRepository::get_by_id(&state.db, series_id)
+    // OPTIMIZATION 1: Check disk cache FIRST before hitting the database.
+    // This avoids acquiring a DB connection for cached thumbnails.
+    if let Some(meta) = state
+        .thumbnail_service
+        .get_series_thumbnail_metadata(series_id)
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
-        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+    {
+        // Check If-None-Match header for ETag validation
+        if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
+            if let Ok(client_etag) = if_none_match.to_str() {
+                let client_etag = client_etag.trim().trim_start_matches("W/");
+                if client_etag == meta.etag
+                    || client_etag.trim_matches('"') == meta.etag.trim_matches('"')
+                {
+                    return Ok(Response::builder()
+                        .status(StatusCode::NOT_MODIFIED)
+                        .header(header::ETAG, &meta.etag)
+                        .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                        .body(Body::empty())
+                        .unwrap());
+                }
+            }
+        }
 
-    // Get the selected cover from series_covers table
+        // Check If-Modified-Since header
+        if let Some(if_modified_since) = headers.get(header::IF_MODIFIED_SINCE) {
+            if let Ok(date_str) = if_modified_since.to_str() {
+                if let Ok(client_time) = httpdate::parse_http_date(date_str) {
+                    let file_time = UNIX_EPOCH + Duration::from_secs(meta.modified_unix);
+                    if file_time <= client_time {
+                        return Ok(Response::builder()
+                            .status(StatusCode::NOT_MODIFIED)
+                            .header(header::ETAG, &meta.etag)
+                            .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                            .body(Body::empty())
+                            .unwrap());
+                    }
+                }
+            }
+        }
+
+        // Cache hit - stream the thumbnail directly (no DB query needed!)
+        if let Some(stream) = state
+            .thumbnail_service
+            .get_series_thumbnail_stream(series_id)
+            .await
+        {
+            let last_modified = UNIX_EPOCH + Duration::from_secs(meta.modified_unix);
+            let last_modified_str = fmt_http_date(last_modified);
+
+            return Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "image/jpeg")
+                .header(header::CONTENT_LENGTH, meta.size)
+                .header(header::ETAG, &meta.etag)
+                .header(header::LAST_MODIFIED, last_modified_str)
+                .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                .body(Body::from_stream(stream))
+                .unwrap());
+        }
+    }
+
+    // Cache miss - queue a background task to generate the thumbnail
+    // and return a placeholder immediately.
+    //
+    // Check if there's a selected custom cover first. If there is, we still
+    // need to wait for that since we can't generate it in background.
     let selected_cover = SeriesCoversRepository::get_selected(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch cover: {}", e)))?;
 
-    // Determine which cover to use based on the selected cover
-    let image_data = if let Some(cover) = selected_cover {
-        // Use the selected cover's path
-        fs::read(&cover.path).await.map_err(|e| {
-            ApiError::Internal(format!("Failed to read cover from {}: {}", cover.path, e))
-        })?
-    } else {
-        // No selected cover, use default (first book's cover)
-        get_default_series_cover(&state, series_id).await?
+    if let Some(cover) = selected_cover {
+        // Custom cover selected - read and resize synchronously since it's
+        // a direct file read (not extracting from a book archive)
+        match fs::read(&cover.path).await {
+            Ok(data) => {
+                // Use ThumbnailService for consistent settings (max_dimension, quality)
+                match state
+                    .thumbnail_service
+                    .generate_thumbnail_from_image(&state.db, data)
+                    .await
+                {
+                    Ok(thumbnail_data) => {
+                        // Save to cache for future requests
+                        if let Err(e) = state
+                            .thumbnail_service
+                            .save_series_thumbnail(series_id, &thumbnail_data)
+                            .await
+                        {
+                            tracing::warn!(
+                                "Failed to cache series thumbnail for {}: {}",
+                                series_id,
+                                e
+                            );
+                        }
+
+                        return Ok(Response::builder()
+                            .status(StatusCode::OK)
+                            .header(header::CONTENT_TYPE, "image/jpeg")
+                            .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                            .header(header::CONTENT_LENGTH, thumbnail_data.len())
+                            .body(Body::from(thumbnail_data))
+                            .unwrap());
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to generate thumbnail from cover {} for series {}: {:?}",
+                            cover.path,
+                            series_id,
+                            e
+                        );
+                        return Ok(serve_series_placeholder_response());
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to read cover from {} for series {}: {}",
+                    cover.path,
+                    series_id,
+                    e
+                );
+                return Ok(serve_series_placeholder_response());
+            }
+        }
+    }
+
+    // No custom cover - queue a background task to generate from first book
+    // and return placeholder immediately
+    tracing::debug!(
+        "Series {} thumbnail cache miss, queueing generation task",
+        series_id
+    );
+
+    // Queue the thumbnail generation task (fire and forget)
+    use crate::db::repositories::TaskRepository;
+    use crate::tasks::types::TaskType;
+
+    let task_type = TaskType::GenerateSeriesThumbnail {
+        series_id,
+        force: false, // Don't force if we somehow have a race condition
     };
 
-    // Generate thumbnail (max 400px width or height)
-    let thumbnail_data = generate_thumbnail(&image_data, 400)
-        .map_err(|e| ApiError::Internal(format!("Failed to generate thumbnail: {}", e)))?;
+    if let Err(e) = TaskRepository::enqueue(&state.db, task_type, 0, None).await {
+        tracing::warn!(
+            "Failed to queue series thumbnail generation task for {}: {}",
+            series_id,
+            e
+        );
+    }
 
-    // Build response with caching headers
-    Ok(Response::builder()
+    // Return placeholder - client will retry and get real thumbnail once task completes
+    Ok(serve_series_placeholder_response())
+}
+
+/// Serve a placeholder SVG image for missing/generating series thumbnails
+fn serve_series_placeholder_response() -> Response {
+    Response::builder()
         .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "image/jpeg")
-        .header(header::CACHE_CONTROL, "public, max-age=3600")
-        .header(header::CONTENT_LENGTH, thumbnail_data.len())
-        .body(Body::from(thumbnail_data))
-        .unwrap())
+        .header(header::CONTENT_TYPE, "image/svg+xml")
+        .header(header::CACHE_CONTROL, "public, max-age=60") // Short cache for placeholders
+        .header(header::CONTENT_LENGTH, PLACEHOLDER_SVG.len())
+        .body(Body::from(PLACEHOLDER_SVG.to_vec()))
+        .unwrap()
 }
 
 /// Query parameters for in-progress series
@@ -1560,75 +1695,6 @@ pub async fn list_library_in_progress_series(
     .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
     Ok(Json(dtos))
-}
-
-/// Helper function to get the default series cover (first book's first page)
-async fn get_default_series_cover(
-    state: &Arc<AuthState>,
-    series_id: Uuid,
-) -> Result<Vec<u8>, ApiError> {
-    // Get the first book in the series
-    let books = BookRepository::list_by_series(&state.db, series_id, false)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?;
-
-    let first_book = books
-        .first()
-        .ok_or_else(|| ApiError::NotFound("Series has no books".to_string()))?;
-
-    // Check if book has pages
-    if first_book.page_count == 0 {
-        return Err(ApiError::NotFound("First book has no pages".to_string()));
-    }
-
-    // Extract first page from the book
-    extract_page_image(&first_book.file_path, &first_book.format, 1)
-        .await
-        .map_err(|e| ApiError::from_anyhow_with_context(e, "Failed to extract cover image"))
-}
-
-/// Generate a thumbnail from an image
-fn generate_thumbnail(image_data: &[u8], max_dimension: u32) -> anyhow::Result<Vec<u8>> {
-    // Load image from bytes
-    let img = image::load_from_memory(image_data)?;
-
-    // Calculate new dimensions while maintaining aspect ratio
-    let (width, height) = (img.width(), img.height());
-    let (new_width, new_height) = if width > height {
-        let ratio = max_dimension as f32 / width as f32;
-        (max_dimension, (height as f32 * ratio) as u32)
-    } else {
-        let ratio = max_dimension as f32 / height as f32;
-        ((width as f32 * ratio) as u32, max_dimension)
-    };
-
-    // Resize using Lanczos3 filter for high quality
-    let thumbnail = img.resize(new_width, new_height, FilterType::Lanczos3);
-
-    // Encode as JPEG with 85% quality
-    let mut output = Cursor::new(Vec::new());
-    thumbnail.write_to(&mut output, ImageFormat::Jpeg)?;
-
-    Ok(output.into_inner())
-}
-
-/// Extract page image from book file
-async fn extract_page_image(
-    file_path: &str,
-    file_format: &str,
-    page_number: i32,
-) -> anyhow::Result<Vec<u8>> {
-    let path = std::path::Path::new(file_path);
-
-    // Call the appropriate parser extraction function
-    match file_format.to_uppercase().as_str() {
-        "CBZ" => crate::parsers::cbz::extract_page_from_cbz(path, page_number),
-        #[cfg(feature = "rar")]
-        "CBR" => crate::parsers::cbr::extract_page_from_cbr(path, page_number),
-        "EPUB" => crate::parsers::epub::extract_page_from_epub(path, page_number),
-        "PDF" => crate::parsers::pdf::extract_page_from_pdf(path, page_number),
-        _ => anyhow::bail!("Unsupported format: {}", file_format),
-    }
 }
 
 /// Request to select which cover source to use

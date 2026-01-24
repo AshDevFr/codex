@@ -9094,11 +9094,22 @@ export interface components {
             /** @enum {string} */
             type: "generate_thumbnail";
         } | {
+            force?: boolean;
+            /** Format: uuid */
+            series_id: string;
+            /** @enum {string} */
+            type: "generate_series_thumbnail";
+        } | {
             /** @enum {string} */
             type: "find_duplicates";
         } | {
             /** Format: uuid */
             book_id: string;
+            /**
+             * Format: uuid
+             * @description Optional series_id to invalidate series thumbnail cache
+             */
+            series_id?: string | null;
             /** @description Optional thumbnail path (if known at deletion time) */
             thumbnail_path?: string | null;
             /** @enum {string} */
@@ -15466,6 +15477,13 @@ export interface operations {
                 content: {
                     "image/jpeg": unknown;
                 };
+            };
+            /** @description Not modified (client cache is valid) */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Forbidden */
             403: {

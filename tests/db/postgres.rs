@@ -10,16 +10,13 @@ use codex::db::{
     Database,
 };
 use codex::models::ScanningStrategy;
-use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
-use std::sync::{Mutex, OnceLock};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, Statement};
 use uuid::Uuid;
 
-// Static lock to ensure migrations only run once for PostgreSQL tests
-// All tests share the same database, so we need to serialize migration execution
-static POSTGRES_MIGRATION_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-
 /// Helper to create a test database
-#[allow(clippy::await_holding_lock)] // Intentionally holding lock across await to serialize migrations
+///
+/// Uses PostgreSQL advisory locks to synchronize migration execution across
+/// processes (required for cargo-nextest which runs tests in separate processes).
 async fn create_test_postgres_db() -> Database {
     let config = DatabaseConfig {
         db_type: DatabaseType::Postgres,
@@ -41,16 +38,35 @@ async fn create_test_postgres_db() -> Database {
 
     let db = Database::new(&config).await.unwrap();
 
-    // Use a lock to ensure migrations only run once across all concurrent tests
-    // This prevents race conditions when multiple tests try to run migrations simultaneously.
-    // Migrator::up() is idempotent, but there can still be race conditions when creating
-    // database types/extensions, so we serialize migration execution with a mutex.
-    let lock = POSTGRES_MIGRATION_LOCK.get_or_init(|| Mutex::new(()));
-    let _guard = lock.lock().unwrap();
+    // Use PostgreSQL advisory lock to serialize migrations across processes
+    // This is necessary because cargo-nextest runs tests in separate processes,
+    // so an in-process mutex doesn't work. Advisory locks are database-level
+    // and work across all connections.
+    //
+    // Lock ID 12345 is arbitrary but must be consistent across all tests.
+    // pg_advisory_lock blocks until the lock is available.
+    let conn = db.sea_orm_connection();
+    conn.execute(Statement::from_string(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT pg_advisory_lock(12345)".to_string(),
+    ))
+    .await
+    .expect("Failed to acquire advisory lock");
 
-    // Run migrations - Migrator::up() is idempotent and will only apply pending migrations
-    // The mutex ensures only one test runs migrations at a time, preventing conflicts
-    db.run_migrations().await.unwrap();
+    // Run migrations while holding the lock
+    let migration_result = db.run_migrations().await;
+
+    // Release the advisory lock (this happens automatically when connection closes,
+    // but we release it explicitly to allow other tests to proceed sooner)
+    conn.execute(Statement::from_string(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT pg_advisory_unlock(12345)".to_string(),
+    ))
+    .await
+    .expect("Failed to release advisory lock");
+
+    // Now check migration result
+    migration_result.expect("Failed to run database migrations");
 
     db
 }

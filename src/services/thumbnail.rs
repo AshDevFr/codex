@@ -163,6 +163,146 @@ impl ThumbnailService {
         Some(ReaderStream::new(file))
     }
 
+    // ========== Series Thumbnail Methods ==========
+
+    /// Get the subdirectory path for a series thumbnail (based on first 2 chars of UUID)
+    fn get_series_thumbnail_subdir(&self, series_id: Uuid) -> PathBuf {
+        let id_str = series_id.to_string();
+        let prefix = &id_str[..2]; // First 2 characters for bucketing
+        self.get_cache_base_dir().join("series").join(prefix)
+    }
+
+    /// Get the full path where a series thumbnail would be stored
+    pub fn get_series_thumbnail_path(&self, series_id: Uuid) -> PathBuf {
+        self.get_series_thumbnail_subdir(series_id)
+            .join(format!("{}.jpg", series_id))
+    }
+
+    /// Check if a cached thumbnail exists for a series
+    pub async fn series_thumbnail_exists(&self, series_id: Uuid) -> bool {
+        let path = self.get_series_thumbnail_path(series_id);
+        fs::metadata(&path).await.is_ok()
+    }
+
+    /// Get metadata for a cached series thumbnail (for HTTP conditional requests)
+    pub async fn get_series_thumbnail_metadata(&self, series_id: Uuid) -> Option<ThumbnailMeta> {
+        let path = self.get_series_thumbnail_path(series_id);
+        let metadata = fs::metadata(&path).await.ok()?;
+
+        let size = metadata.len();
+        let modified_unix = metadata
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        // Generate ETag from series_id + size + modified time for uniqueness
+        let etag = format!(
+            "\"{:x}-{:x}-{:x}\"",
+            series_id.as_u128(),
+            size,
+            modified_unix
+        );
+
+        Some(ThumbnailMeta {
+            size,
+            modified_unix,
+            etag,
+        })
+    }
+
+    /// Open a cached series thumbnail for streaming
+    pub async fn get_series_thumbnail_stream(
+        &self,
+        series_id: Uuid,
+    ) -> Option<ReaderStream<tokio::fs::File>> {
+        let path = self.get_series_thumbnail_path(series_id);
+        let file = tokio::fs::File::open(&path).await.ok()?;
+        debug!("Streaming thumbnail for series {}", series_id);
+        Some(ReaderStream::new(file))
+    }
+
+    /// Save series thumbnail data to disk cache
+    pub async fn save_series_thumbnail(&self, series_id: Uuid, data: &[u8]) -> Result<PathBuf> {
+        let subdir = self.get_series_thumbnail_subdir(series_id);
+        let thumbnail_path = subdir.join(format!("{}.jpg", series_id));
+
+        // Create directory if it doesn't exist
+        fs::create_dir_all(&subdir).await.with_context(|| {
+            format!("Failed to create series thumbnail directory: {:?}", subdir)
+        })?;
+
+        // Write thumbnail file
+        fs::write(&thumbnail_path, data)
+            .await
+            .with_context(|| format!("Failed to write series thumbnail to {:?}", thumbnail_path))?;
+
+        debug!("Saved series thumbnail to {:?}", thumbnail_path);
+        Ok(thumbnail_path)
+    }
+
+    /// Delete a series thumbnail from cache
+    pub async fn delete_series_thumbnail(&self, series_id: Uuid) -> Result<()> {
+        let thumbnail_path = self.get_series_thumbnail_path(series_id);
+
+        if fs::metadata(&thumbnail_path).await.is_ok() {
+            fs::remove_file(&thumbnail_path).await.with_context(|| {
+                format!("Failed to delete series thumbnail: {:?}", thumbnail_path)
+            })?;
+            debug!("Deleted series thumbnail: {:?}", thumbnail_path);
+        }
+
+        Ok(())
+    }
+
+    /// Generate a thumbnail from raw image data using configured settings
+    ///
+    /// This is a public method that can be used by both book and series thumbnail
+    /// handlers to generate thumbnails with consistent settings from the database.
+    /// Uses spawn_blocking internally for CPU-intensive image processing.
+    pub async fn generate_thumbnail_from_image(
+        &self,
+        db: &DatabaseConnection,
+        image_data: Vec<u8>,
+    ) -> Result<Vec<u8>> {
+        let settings = self.get_settings(db).await?;
+        let max_dimension = settings.max_dimension;
+        let jpeg_quality = settings.jpeg_quality;
+
+        // Use spawn_blocking for CPU-intensive image processing
+        tokio::task::spawn_blocking(move || {
+            // Load image from bytes
+            let img =
+                image::load_from_memory(&image_data).context("Failed to load image from memory")?;
+
+            // Calculate new dimensions while maintaining aspect ratio
+            let (width, height) = (img.width(), img.height());
+            let (new_width, new_height) = if width > height {
+                let ratio = max_dimension as f32 / width as f32;
+                (max_dimension, (height as f32 * ratio) as u32)
+            } else {
+                let ratio = max_dimension as f32 / height as f32;
+                ((width as f32 * ratio) as u32, max_dimension)
+            };
+
+            // Resize using Lanczos3 filter for high quality
+            let thumbnail = img.resize(new_width, new_height, FilterType::Lanczos3);
+
+            // Encode as JPEG
+            let mut output = Cursor::new(Vec::new());
+            let mut encoder =
+                image::codecs::jpeg::JpegEncoder::new_with_quality(&mut output, jpeg_quality);
+            encoder
+                .encode_image(&thumbnail)
+                .context("Failed to encode thumbnail as JPEG")?;
+
+            Ok(output.into_inner())
+        })
+        .await
+        .context("Thumbnail generation task failed")?
+    }
+
     /// Generate and save a thumbnail for a book
     ///
     /// Returns the path where the thumbnail was saved

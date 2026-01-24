@@ -4,6 +4,7 @@
 mod common;
 
 use codex::api::error::ErrorResponse;
+use codex::api::extractors::auth::UserAuthCache;
 use codex::api::extractors::AppState;
 use codex::api::routes::v1::dto::{
     PdfCacheCleanupResultDto, PdfCacheStatsDto, TriggerPdfCacheCleanupResponse,
@@ -13,8 +14,8 @@ use codex::db::repositories::UserRepository;
 use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
 use codex::services::{
-    AuthTrackingService, FileCleanupService, PdfPageCache, ReadProgressService, SettingsService,
-    ThumbnailService,
+    AuthTrackingService, FileCleanupService, InflightThumbnailTracker, PdfPageCache,
+    ReadProgressService, SettingsService, ThumbnailService,
 };
 use codex::utils::jwt::JwtService;
 use codex::utils::password;
@@ -78,6 +79,8 @@ async fn create_test_app_state_with_pdf_cache(
         read_progress_service,
         auth_tracking_service,
         pdf_page_cache,
+        inflight_thumbnails: Arc::new(InflightThumbnailTracker::new()),
+        user_auth_cache: Arc::new(UserAuthCache::new()),
     })
 }
 

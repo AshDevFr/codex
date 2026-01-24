@@ -176,6 +176,46 @@ impl BookRepository {
             .context("Failed to count books in series")
     }
 
+    /// Get the first book in a series (for thumbnail generation)
+    ///
+    /// Returns only the first book (ordered by number, title, filename).
+    /// More efficient than list_by_series when you only need the first book.
+    pub async fn get_first_in_series(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+    ) -> Result<Option<books::Model>> {
+        use crate::db::entities::book_metadata;
+        use sea_orm::JoinType;
+
+        Books::find()
+            .filter(books::Column::SeriesId.eq(series_id))
+            .filter(books::Column::Deleted.eq(false))
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .order_by_asc(book_metadata::Column::Number)
+            .order_by_asc(book_metadata::Column::TitleSort)
+            .order_by_asc(book_metadata::Column::Title)
+            .order_by_asc(books::Column::FileName)
+            .one(db)
+            .await
+            .context("Failed to get first book in series")
+    }
+
+    /// Check if a book is the first (by sort order) in its series
+    ///
+    /// Used to determine if changing a book's thumbnail should invalidate
+    /// the cached series thumbnail.
+    pub async fn is_first_in_series(db: &DatabaseConnection, book_id: Uuid) -> Result<bool> {
+        // Get the book to find its series_id
+        let book = Self::get_by_id(db, book_id)
+            .await?
+            .context("Book not found")?;
+
+        // Get the first book in the series
+        let first_book = Self::get_first_in_series(db, book.series_id).await?;
+
+        Ok(first_book.map(|b| b.id == book_id).unwrap_or(false))
+    }
+
     /// Get the adjacent (previous and next) books in the same series
     ///
     /// Returns books ordered by number, then title, then filename.

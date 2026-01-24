@@ -7344,6 +7344,9 @@
               "image/jpeg": {}
             }
           },
+          "304": {
+            "description": "Not modified (client cache is valid)"
+          },
           "403": {
             "description": "Forbidden"
           },
@@ -20535,6 +20538,29 @@
           },
           {
             "type": "object",
+            "description": "Generate thumbnail for a series (from first book's cover)",
+            "required": [
+              "series_id",
+              "type"
+            ],
+            "properties": {
+              "force": {
+                "type": "boolean"
+              },
+              "series_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "generate_series_thumbnail"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Find and catalog duplicate books across all libraries",
             "required": [
               "type"
@@ -20559,6 +20585,14 @@
               "book_id": {
                 "type": "string",
                 "format": "uuid"
+              },
+              "series_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid",
+                "description": "Optional series_id to invalidate series thumbnail cache"
               },
               "thumbnail_path": {
                 "type": [

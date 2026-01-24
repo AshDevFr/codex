@@ -2,6 +2,7 @@
 //!
 //! Cleans up files associated with a deleted book:
 //! - Thumbnail file
+//! - Series thumbnail cache (if book was in a series)
 //! - Cover references in series_covers table (book:uuid sources)
 
 use anyhow::Result;
@@ -14,20 +15,22 @@ use tracing::{debug, info, warn};
 use crate::config::FilesConfig;
 use crate::db::entities::tasks;
 use crate::events::EventBroadcaster;
-use crate::services::FileCleanupService;
+use crate::services::{FileCleanupService, ThumbnailService};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
 
 /// Handler for cleaning up book files after deletion
 pub struct CleanupBookFilesHandler {
     file_cleanup: FileCleanupService,
+    thumbnail_service: Arc<ThumbnailService>,
 }
 
 impl CleanupBookFilesHandler {
-    /// Create a new handler with the given files config
-    pub fn new(config: FilesConfig) -> Self {
+    /// Create a new handler with the given files config and thumbnail service
+    pub fn new(config: FilesConfig, thumbnail_service: Arc<ThumbnailService>) -> Self {
         Self {
             file_cleanup: FileCleanupService::new(config),
+            thumbnail_service,
         }
     }
 }
@@ -52,12 +55,21 @@ impl TaskHandler for CleanupBookFilesHandler {
                     anyhow::anyhow!("Missing book_id in params for cleanup_book_files task")
                 })?;
 
+            // Get optional series_id for series thumbnail invalidation
+            let series_id: Option<uuid::Uuid> = task
+                .params
+                .as_ref()
+                .and_then(|p| p.get("series_id"))
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse().ok());
+
             info!(
                 "Task {}: Cleaning up files for deleted book {}",
                 task.id, book_id
             );
 
             let mut thumbnail_deleted = false;
+            let mut series_thumbnail_deleted = false;
             let cover_refs_deleted = 0u32;
             let bytes_freed = 0u64;
 
@@ -101,7 +113,25 @@ impl TaskHandler for CleanupBookFilesHandler {
                 }
             }
 
-            // 2. Delete cover references from series_covers table
+            // 2. Invalidate the series thumbnail cache
+            // When a book is deleted, the series thumbnail may need to be regenerated
+            // (e.g., if the deleted book was the first book in the series)
+            if let Some(sid) = series_id {
+                match self.thumbnail_service.delete_series_thumbnail(sid).await {
+                    Ok(()) => {
+                        series_thumbnail_deleted = true;
+                        debug!("Invalidated series thumbnail for series {}", sid);
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to invalidate series thumbnail for series {}: {}",
+                            sid, e
+                        );
+                    }
+                }
+            }
+
+            // 3. Delete cover references from series_covers table
             // Books can be used as cover sources with format "book:{book_id}"
             let source = format!("book:{}", book_id);
 
@@ -116,8 +146,8 @@ impl TaskHandler for CleanupBookFilesHandler {
             );
 
             info!(
-                "Task {}: Book {} cleanup complete - thumbnail_deleted: {}, cover_refs: {}",
-                task.id, book_id, thumbnail_deleted, cover_refs_deleted
+                "Task {}: Book {} cleanup complete - thumbnail_deleted: {}, series_thumbnail_deleted: {}, cover_refs: {}",
+                task.id, book_id, thumbnail_deleted, series_thumbnail_deleted, cover_refs_deleted
             );
 
             Ok(TaskResult::success_with_data(
@@ -125,6 +155,7 @@ impl TaskHandler for CleanupBookFilesHandler {
                 json!({
                     "book_id": book_id,
                     "thumbnail_deleted": thumbnail_deleted,
+                    "series_thumbnail_deleted": series_thumbnail_deleted,
                     "cover_refs_deleted": cover_refs_deleted,
                     "bytes_freed": bytes_freed,
                 }),
@@ -155,11 +186,16 @@ mod tests {
         }
     }
 
+    fn test_thumbnail_service(temp_dir: &TempDir) -> Arc<ThumbnailService> {
+        Arc::new(ThumbnailService::new(test_config(temp_dir)))
+    }
+
     #[tokio::test]
     async fn test_handler_deletes_thumbnail() {
         let temp_dir = TempDir::new().unwrap();
         let config = test_config(&temp_dir);
-        let _handler = CleanupBookFilesHandler::new(config.clone());
+        let thumbnail_service = test_thumbnail_service(&temp_dir);
+        let _handler = CleanupBookFilesHandler::new(config.clone(), thumbnail_service);
         let file_cleanup = FileCleanupService::new(config);
 
         let book_id = Uuid::new_v4();
@@ -206,7 +242,8 @@ mod tests {
     fn test_handler_creation() {
         let temp_dir = TempDir::new().unwrap();
         let config = test_config(&temp_dir);
-        let _handler = CleanupBookFilesHandler::new(config);
+        let thumbnail_service = test_thumbnail_service(&temp_dir);
+        let _handler = CleanupBookFilesHandler::new(config, thumbnail_service);
         // Just verify it can be created
     }
 }

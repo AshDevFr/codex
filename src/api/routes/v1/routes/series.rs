@@ -63,6 +63,10 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             get(handlers::get_series_thumbnail),
         )
         .route(
+            "/series/:series_id/thumbnail/generate",
+            post(handlers::generate_series_thumbnail),
+        )
+        .route(
             "/series/:series_id/cover",
             post(handlers::upload_series_cover),
         )

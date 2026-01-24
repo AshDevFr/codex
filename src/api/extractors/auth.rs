@@ -4,10 +4,88 @@ use crate::db::repositories::{ApiKeyRepository, UserRepository};
 use crate::utils::{jwt::JwtService, password};
 use axum::http::header::COOKIE;
 use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
+use chrono::{DateTime, Utc};
+use dashmap::DashMap;
 use sea_orm::DatabaseConnection;
 use std::collections::HashSet;
 use std::sync::Arc;
 use uuid::Uuid;
+
+/// Cache TTL for user authentication data (60 seconds)
+/// This reduces DB load for repeated requests from the same user
+const USER_CACHE_TTL_SECS: i64 = 60;
+
+/// Cached user data for authentication
+#[derive(Clone)]
+struct CachedUser {
+    username: String,
+    role: UserRole,
+    custom_permissions: Vec<Permission>,
+    is_active: bool,
+    cached_at: DateTime<Utc>,
+}
+
+/// User authentication cache to avoid hitting the database on every request
+/// Entries expire after USER_CACHE_TTL_SECS seconds
+#[derive(Default)]
+pub struct UserAuthCache {
+    cache: DashMap<Uuid, CachedUser>,
+}
+
+impl UserAuthCache {
+    pub fn new() -> Self {
+        Self {
+            cache: DashMap::new(),
+        }
+    }
+
+    /// Get a cached user if it exists and hasn't expired
+    fn get(&self, user_id: &Uuid) -> Option<CachedUser> {
+        if let Some(entry) = self.cache.get(user_id) {
+            let age = Utc::now().signed_duration_since(entry.cached_at);
+            if age.num_seconds() < USER_CACHE_TTL_SECS {
+                return Some(entry.clone());
+            }
+            // Entry expired, remove it
+            drop(entry);
+            self.cache.remove(user_id);
+        }
+        None
+    }
+
+    /// Cache a user's auth data
+    fn insert(
+        &self,
+        user_id: Uuid,
+        username: String,
+        role: UserRole,
+        permissions: Vec<Permission>,
+        is_active: bool,
+    ) {
+        self.cache.insert(
+            user_id,
+            CachedUser {
+                username,
+                role,
+                custom_permissions: permissions,
+                is_active,
+                cached_at: Utc::now(),
+            },
+        );
+    }
+
+    /// Invalidate a user's cached auth data (e.g., after permission changes)
+    #[allow(dead_code)]
+    pub fn invalidate(&self, user_id: &Uuid) {
+        self.cache.remove(user_id);
+    }
+
+    /// Clear all cached entries
+    #[allow(dead_code)]
+    pub fn clear(&self) {
+        self.cache.clear();
+    }
+}
 
 /// Authentication context extracted from JWT or API key
 #[derive(Debug, Clone)]
@@ -115,6 +193,13 @@ pub struct AppState {
     /// PDF page cache service for caching rendered PDF pages
     /// Reduces CPU load by caching expensive PDF page renders to disk
     pub pdf_page_cache: Arc<crate::services::PdfPageCache>,
+    /// In-flight thumbnail request tracker to prevent thundering herd
+    /// When multiple requests come in for the same uncached thumbnail,
+    /// only the first generates it while others wait for the result
+    pub inflight_thumbnails: Arc<crate::services::InflightThumbnailTracker>,
+    /// User authentication cache to avoid hitting the database on every request
+    /// Caches user permissions/role for 60 seconds to reduce DB load
+    pub user_auth_cache: Arc<UserAuthCache>,
 }
 
 // Legacy alias for backwards compatibility during transition
@@ -167,29 +252,58 @@ async fn extract_from_jwt(token: &str, state: &AppState) -> Result<AuthContext, 
     let user_id = Uuid::parse_str(&claims.sub)
         .map_err(|_| ApiError::Unauthorized("Invalid user ID in token".to_string()))?;
 
-    // Load user from database to get current permissions and role
+    // OPTIMIZATION: Check cache first to avoid DB query on every request
+    // This significantly reduces DB load when many requests come in from the same user
+    // (e.g., loading a page with 30+ thumbnail requests)
+    if let Some(cached) = state.user_auth_cache.get(&user_id) {
+        if !cached.is_active {
+            return Err(ApiError::Unauthorized(
+                "User account is inactive".to_string(),
+            ));
+        }
+
+        return Ok(AuthContext {
+            user_id,
+            username: cached.username,
+            role: cached.role,
+            custom_permissions: cached.custom_permissions,
+            auth_method: AuthMethod::Jwt,
+            token_permissions: None,
+        });
+    }
+
+    // Cache miss - load user from database
     let user = UserRepository::get_by_id(&state.db, user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load user: {}", e)))?
         .ok_or_else(|| ApiError::Unauthorized("User not found".to_string()))?;
 
-    // Check if user is active
+    // Parse custom permissions from JSON (clone the value before consuming)
+    let custom_permissions: Vec<Permission> = serde_json::from_value(user.permissions.clone())
+        .map_err(|e| ApiError::Internal(format!("Failed to parse permissions: {}", e)))?;
+
+    // Get role from user model
+    let role = user.get_role();
+
+    // Cache the user data for future requests
+    state.user_auth_cache.insert(
+        user_id,
+        user.username.clone(),
+        role,
+        custom_permissions.clone(),
+        user.is_active,
+    );
+
+    // Check if user is active (after caching, so we remember inactive users too)
     if !user.is_active {
         return Err(ApiError::Unauthorized(
             "User account is inactive".to_string(),
         ));
     }
 
-    // Parse custom permissions from JSON (clone the value before consuming)
-    let custom_permissions: Vec<Permission> = serde_json::from_value(user.permissions.clone())
-        .map_err(|e| ApiError::Internal(format!("Failed to parse permissions: {}", e)))?;
-
-    // Get role from user model (use role from JWT claims as fallback for backwards compatibility)
-    let role = user.get_role();
-
     Ok(AuthContext {
         user_id,
-        username: claims.username,
+        username: user.username,
         role,
         custom_permissions,
         auth_method: AuthMethod::Jwt,

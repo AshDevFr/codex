@@ -257,6 +257,8 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         read_progress_service,
         auth_tracking_service,
         pdf_page_cache,
+        inflight_thumbnails: Arc::new(crate::services::InflightThumbnailTracker::new()),
+        user_auth_cache: Arc::new(crate::api::extractors::auth::UserAuthCache::new()),
     });
 
     // Build router using API module

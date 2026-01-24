@@ -78,6 +78,27 @@ impl TaskHandler for GenerateThumbnailHandler {
                         task.id, book_id, path
                     );
 
+                    // If this book is the first in its series, invalidate the cached series thumbnail
+                    // so it gets regenerated with the new book thumbnail
+                    if let Ok(is_first) = BookRepository::is_first_in_series(db, book_id).await {
+                        if is_first {
+                            debug!(
+                                "Book {} is first in series {}, invalidating series thumbnail",
+                                book_id, book.series_id
+                            );
+                            if let Err(e) = self
+                                .thumbnail_service
+                                .delete_series_thumbnail(book.series_id)
+                                .await
+                            {
+                                warn!(
+                                    "Failed to invalidate series thumbnail for series {}: {}",
+                                    book.series_id, e
+                                );
+                            }
+                        }
+                    }
+
                     // Emit CoverUpdated event to notify UI
                     if let Some(broadcaster) = event_broadcaster {
                         if let Ok(Some(series)) =

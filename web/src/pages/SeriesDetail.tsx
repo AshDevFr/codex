@@ -213,7 +213,7 @@ export function SeriesDetail() {
 		},
 	});
 
-	// Generate thumbnails mutation
+	// Generate thumbnails mutation (for all books)
 	const generateThumbnailsMutation = useMutation({
 		mutationFn: () => seriesApi.generateThumbnails(seriesId!),
 		onSuccess: () => {
@@ -222,6 +222,27 @@ export function SeriesDetail() {
 				message: "All books queued for thumbnail generation",
 				color: "blue",
 			});
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Failed",
+				message: error.message,
+				color: "red",
+			});
+		},
+	});
+
+	// Regenerate series cover thumbnail mutation
+	const regenerateSeriesThumbnailMutation = useMutation({
+		mutationFn: () => seriesApi.regenerateSeriesThumbnail(seriesId!),
+		onSuccess: () => {
+			notifications.show({
+				title: "Series cover regeneration started",
+				message: "Series cover thumbnail will be regenerated",
+				color: "blue",
+			});
+			// Invalidate series queries to refresh the cover
+			queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
 		},
 		onError: (error: Error) => {
 			notifications.show({
@@ -399,7 +420,16 @@ export function SeriesDetail() {
 													onClick={() => generateThumbnailsMutation.mutate()}
 													disabled={generateThumbnailsMutation.isPending}
 												>
-													Generate Thumbnails
+													Generate Books Thumbnails
+												</Menu.Item>
+												<Menu.Item
+													leftSection={<IconPhoto size={14} />}
+													onClick={() =>
+														regenerateSeriesThumbnailMutation.mutate()
+													}
+													disabled={regenerateSeriesThumbnailMutation.isPending}
+												>
+													Generate Series Thumbnail
 												</Menu.Item>
 												<Menu.Divider />
 												<Menu.Item
