@@ -7,6 +7,19 @@ import type {
 } from "@/types";
 import { api } from "./client";
 
+// Book error types (from generated API types)
+export type BookErrorTypeDto = components["schemas"]["BookErrorTypeDto"];
+export type BookErrorDto = components["schemas"]["BookErrorDto"];
+export type BookWithErrorsDto = components["schemas"]["BookWithErrorsDto"];
+export type ErrorGroupDto = components["schemas"]["ErrorGroupDto"];
+export type BooksWithErrorsResponse =
+	components["schemas"]["BooksWithErrorsResponse"];
+export type RetryBookErrorsRequest =
+	components["schemas"]["RetryBookErrorsRequest"];
+export type RetryAllErrorsRequest =
+	components["schemas"]["RetryAllErrorsRequest"];
+export type RetryErrorsResponse = components["schemas"]["RetryErrorsResponse"];
+
 export type BookDetailResponse = components["schemas"]["BookDetailResponse"];
 export type BookMetadata = components["schemas"]["BookMetadataDto"];
 export type AdjacentBooksResponse =
@@ -310,6 +323,76 @@ export const booksApi = {
 			number: number | null;
 			updatedAt: string;
 		}>(`/books/${bookId}`, data);
+		return response.data;
+	},
+
+	// ==================== Book Errors API ====================
+
+	/**
+	 * Get books with errors, grouped by error type
+	 * @param options - Filter and pagination options
+	 */
+	getBooksWithErrors: async (options?: {
+		page?: number;
+		pageSize?: number;
+		errorType?: BookErrorTypeDto;
+		libraryId?: string;
+		seriesId?: string;
+	}): Promise<BooksWithErrorsResponse> => {
+		const params = new URLSearchParams();
+
+		if (options?.page !== undefined)
+			params.set("page", options.page.toString());
+		if (options?.pageSize !== undefined)
+			params.set("page_size", options.pageSize.toString());
+		if (options?.errorType) params.set("error_type", options.errorType);
+		if (options?.libraryId) params.set("library_id", options.libraryId);
+		if (options?.seriesId) params.set("series_id", options.seriesId);
+
+		const queryString = params.toString();
+		const url = `/books/errors${queryString ? `?${queryString}` : ""}`;
+
+		const response = await api.get<BooksWithErrorsResponse>(url);
+		return response.data;
+	},
+
+	/**
+	 * Retry analysis or thumbnail generation for a specific book
+	 * @param bookId - Book ID to retry
+	 * @param errorTypes - Optional specific error types to retry (if not provided, retries all error types)
+	 */
+	retryBookErrors: async (
+		bookId: string,
+		errorTypes?: BookErrorTypeDto[],
+	): Promise<RetryErrorsResponse> => {
+		const body: RetryBookErrorsRequest = {
+			errorTypes: errorTypes ?? null,
+		};
+
+		const response = await api.post<RetryErrorsResponse>(
+			`/books/${bookId}/retry`,
+			body,
+		);
+		return response.data;
+	},
+
+	/**
+	 * Retry all books with errors (bulk operation)
+	 * @param options - Optional filters for which errors to retry
+	 */
+	retryAllErrors: async (options?: {
+		errorType?: BookErrorTypeDto;
+		libraryId?: string;
+	}): Promise<RetryErrorsResponse> => {
+		const body: RetryAllErrorsRequest = {
+			errorType: options?.errorType ?? null,
+			libraryId: options?.libraryId ?? null,
+		};
+
+		const response = await api.post<RetryErrorsResponse>(
+			"/books/retry-all-errors",
+			body,
+		);
 		return response.data;
 	},
 };

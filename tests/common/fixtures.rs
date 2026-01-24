@@ -78,6 +78,7 @@ pub fn create_test_book(
         deleted: false,
         analyzed: false, // Default to not analyzed
         analysis_error: None,
+        analysis_errors: None,
         modified_at: now,
         created_at: now,
         updated_at: now,
@@ -198,6 +199,7 @@ pub async fn create_test_book_with_hash(
         deleted: false,
         analyzed: false,
         analysis_error: None,
+        analysis_errors: None,
         modified_at: Utc::now(),
         created_at: Utc::now(),
         thumbnail_path: None,

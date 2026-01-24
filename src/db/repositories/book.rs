@@ -42,6 +42,7 @@ impl BookRepository {
             deleted: Set(book_model.deleted),
             analyzed: Set(book_model.analyzed),
             analysis_error: Set(book_model.analysis_error.clone()),
+            analysis_errors: Set(book_model.analysis_errors.clone()),
             modified_at: Set(book_model.modified_at),
             created_at: Set(book_model.created_at),
             updated_at: Set(book_model.updated_at),
@@ -1032,6 +1033,7 @@ impl BookRepository {
             deleted: Set(book_model.deleted),
             analyzed: Set(book_model.analyzed),
             analysis_error: Set(book_model.analysis_error.clone()),
+            analysis_errors: Set(book_model.analysis_errors.clone()),
             modified_at: Set(book_model.modified_at),
             created_at: Set(book_model.created_at),
             updated_at: Set(Utc::now()),
@@ -1474,6 +1476,207 @@ impl BookRepository {
         Ok((books, total))
     }
 
+    /// Set a specific error type for a book
+    ///
+    /// This adds or updates a specific error type in the analysis_errors JSON map.
+    /// If the book already has other error types, they are preserved.
+    pub async fn set_error(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        error_type: BookErrorType,
+        error: BookError,
+    ) -> Result<()> {
+        use crate::db::entities::book_error::{parse_analysis_errors, serialize_analysis_errors};
+
+        let book = Books::find_by_id(book_id)
+            .one(db)
+            .await
+            .context("Failed to find book")?
+            .ok_or_else(|| anyhow::anyhow!("Book not found"))?;
+
+        // Parse existing errors
+        let mut errors = parse_analysis_errors(book.analysis_errors.as_deref());
+
+        // Add/update the specific error type
+        errors.insert(error_type, error);
+
+        // Update the book
+        let mut active: books::ActiveModel = book.into();
+        active.analysis_errors = Set(serialize_analysis_errors(&errors));
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to set book error")?;
+
+        Ok(())
+    }
+
+    /// Clear a specific error type from a book
+    ///
+    /// Removes the specified error type from the analysis_errors JSON map.
+    /// Other error types are preserved.
+    pub async fn clear_error(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        error_type: BookErrorType,
+    ) -> Result<()> {
+        use crate::db::entities::book_error::{parse_analysis_errors, serialize_analysis_errors};
+
+        let book = Books::find_by_id(book_id)
+            .one(db)
+            .await
+            .context("Failed to find book")?
+            .ok_or_else(|| anyhow::anyhow!("Book not found"))?;
+
+        // Parse existing errors
+        let mut errors = parse_analysis_errors(book.analysis_errors.as_deref());
+
+        // Remove the specific error type
+        errors.remove(&error_type);
+
+        // Update the book
+        let mut active: books::ActiveModel = book.into();
+        active.analysis_errors = Set(serialize_analysis_errors(&errors));
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to clear book error")?;
+
+        Ok(())
+    }
+
+    /// Clear all errors from a book
+    pub async fn clear_all_errors(db: &DatabaseConnection, book_id: Uuid) -> Result<()> {
+        let book = Books::find_by_id(book_id)
+            .one(db)
+            .await
+            .context("Failed to find book")?
+            .ok_or_else(|| anyhow::anyhow!("Book not found"))?;
+
+        let mut active: books::ActiveModel = book.into();
+        active.analysis_errors = Set(None);
+        active.updated_at = Set(Utc::now());
+
+        active
+            .update(db)
+            .await
+            .context("Failed to clear all book errors")?;
+
+        Ok(())
+    }
+
+    /// Get all errors for a book
+    pub async fn get_errors(db: &DatabaseConnection, book_id: Uuid) -> Result<BookErrors> {
+        use crate::db::entities::book_error::parse_analysis_errors;
+
+        let book = Books::find_by_id(book_id)
+            .one(db)
+            .await
+            .context("Failed to find book")?
+            .ok_or_else(|| anyhow::anyhow!("Book not found"))?;
+
+        Ok(parse_analysis_errors(book.analysis_errors.as_deref()))
+    }
+
+    /// List books with errors (using the new analysis_errors JSON field)
+    /// Returns books with their parsed errors, filtered optionally by library, series, or error type
+    pub async fn list_with_errors_v2(
+        db: &DatabaseConnection,
+        library_id: Option<Uuid>,
+        series_id: Option<Uuid>,
+        error_type: Option<BookErrorType>,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<(books::Model, BookErrors)>, u64)> {
+        use crate::db::entities::book_error::parse_analysis_errors;
+
+        let mut query = Books::find()
+            .filter(books::Column::AnalysisErrors.is_not_null())
+            .filter(books::Column::Deleted.eq(false));
+
+        if let Some(lib_id) = library_id {
+            query = query.filter(books::Column::LibraryId.eq(lib_id));
+        }
+
+        if let Some(ser_id) = series_id {
+            query = query.filter(books::Column::SeriesId.eq(ser_id));
+        }
+
+        // First, get all matching books
+        let all_books: Vec<books::Model> = query
+            .clone()
+            .order_by_desc(books::Column::UpdatedAt)
+            .all(db)
+            .await
+            .context("Failed to list books with errors")?;
+
+        // Parse and filter by error type if specified
+        let filtered_books: Vec<(books::Model, BookErrors)> = all_books
+            .into_iter()
+            .filter_map(|book| {
+                let errors = parse_analysis_errors(book.analysis_errors.as_deref());
+                if errors.is_empty() {
+                    return None;
+                }
+                if let Some(et) = &error_type {
+                    if !errors.contains_key(et) {
+                        return None;
+                    }
+                }
+                Some((book, errors))
+            })
+            .collect();
+
+        let total = filtered_books.len() as u64;
+
+        // Apply pagination
+        let paginated: Vec<(books::Model, BookErrors)> = filtered_books
+            .into_iter()
+            .skip((page * page_size) as usize)
+            .take(page_size as usize)
+            .collect();
+
+        Ok((paginated, total))
+    }
+
+    /// Count errors grouped by error type
+    /// Returns a map of error type to count of books with that error
+    pub async fn count_errors_by_type(
+        db: &DatabaseConnection,
+        library_id: Option<Uuid>,
+    ) -> Result<std::collections::HashMap<BookErrorType, u64>> {
+        use crate::db::entities::book_error::parse_analysis_errors;
+
+        let mut query = Books::find()
+            .filter(books::Column::AnalysisErrors.is_not_null())
+            .filter(books::Column::Deleted.eq(false));
+
+        if let Some(lib_id) = library_id {
+            query = query.filter(books::Column::LibraryId.eq(lib_id));
+        }
+
+        let books = query
+            .all(db)
+            .await
+            .context("Failed to count errors by type")?;
+
+        let mut counts: std::collections::HashMap<BookErrorType, u64> =
+            std::collections::HashMap::new();
+
+        for book in books {
+            let errors = parse_analysis_errors(book.analysis_errors.as_deref());
+            for error_type in errors.keys() {
+                *counts.entry(*error_type).or_insert(0) += 1;
+            }
+        }
+
+        Ok(counts)
+    }
+
     /// Create multiple books in a single batch insert operation
     ///
     /// This is significantly more efficient than calling `create()` for each book
@@ -1511,6 +1714,7 @@ impl BookRepository {
                 deleted: Set(book_model.deleted),
                 analyzed: Set(book_model.analyzed),
                 analysis_error: Set(book_model.analysis_error.clone()),
+                analysis_errors: Set(book_model.analysis_errors.clone()),
                 modified_at: Set(book_model.modified_at),
                 created_at: Set(book_model.created_at),
                 updated_at: Set(book_model.updated_at),
@@ -1571,6 +1775,7 @@ impl BookRepository {
                 deleted: Set(book_model.deleted),
                 analyzed: Set(book_model.analyzed),
                 analysis_error: Set(book_model.analysis_error.clone()),
+                analysis_errors: Set(book_model.analysis_errors.clone()),
                 modified_at: Set(book_model.modified_at),
                 created_at: Set(book_model.created_at),
                 updated_at: Set(book_model.updated_at),
@@ -1660,6 +1865,7 @@ mod tests {
             deleted: false,
             analyzed: false,
             analysis_error: None,
+            analysis_errors: None,
             modified_at: now,
             created_at: now,
             updated_at: now,
@@ -2733,5 +2939,398 @@ mod tests {
             .await
             .unwrap();
         assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_set_error() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
+        BookRepository::create(db.sea_orm_connection(), &book, None)
+            .await
+            .unwrap();
+
+        // Set a parser error
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book.id,
+            BookErrorType::Parser,
+            BookError::new("Failed to parse archive"),
+        )
+        .await
+        .unwrap();
+
+        // Verify the error was set
+        let errors = BookRepository::get_errors(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+        assert_eq!(errors.len(), 1);
+        assert!(errors.contains_key(&BookErrorType::Parser));
+        assert_eq!(
+            errors.get(&BookErrorType::Parser).unwrap().message,
+            "Failed to parse archive"
+        );
+
+        // Set another error type (thumbnail)
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book.id,
+            BookErrorType::Thumbnail,
+            BookError::new("Thumbnail generation failed"),
+        )
+        .await
+        .unwrap();
+
+        // Verify both errors exist
+        let errors = BookRepository::get_errors(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+        assert_eq!(errors.len(), 2);
+        assert!(errors.contains_key(&BookErrorType::Parser));
+        assert!(errors.contains_key(&BookErrorType::Thumbnail));
+
+        // Update an existing error
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book.id,
+            BookErrorType::Parser,
+            BookError::new("Updated parser error"),
+        )
+        .await
+        .unwrap();
+
+        let errors = BookRepository::get_errors(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+        assert_eq!(errors.len(), 2);
+        assert_eq!(
+            errors.get(&BookErrorType::Parser).unwrap().message,
+            "Updated parser error"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_clear_error() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
+        BookRepository::create(db.sea_orm_connection(), &book, None)
+            .await
+            .unwrap();
+
+        // Set multiple errors
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book.id,
+            BookErrorType::Parser,
+            BookError::new("Parser error"),
+        )
+        .await
+        .unwrap();
+
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book.id,
+            BookErrorType::Thumbnail,
+            BookError::new("Thumbnail error"),
+        )
+        .await
+        .unwrap();
+
+        // Clear one error
+        BookRepository::clear_error(db.sea_orm_connection(), book.id, BookErrorType::Parser)
+            .await
+            .unwrap();
+
+        // Verify only thumbnail error remains
+        let errors = BookRepository::get_errors(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+        assert_eq!(errors.len(), 1);
+        assert!(!errors.contains_key(&BookErrorType::Parser));
+        assert!(errors.contains_key(&BookErrorType::Thumbnail));
+    }
+
+    #[tokio::test]
+    async fn test_clear_all_errors() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book = create_book_model(series.id, library.id, "/test/book.cbz", "book.cbz");
+        BookRepository::create(db.sea_orm_connection(), &book, None)
+            .await
+            .unwrap();
+
+        // Set multiple errors
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book.id,
+            BookErrorType::Parser,
+            BookError::new("Parser error"),
+        )
+        .await
+        .unwrap();
+
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book.id,
+            BookErrorType::Thumbnail,
+            BookError::new("Thumbnail error"),
+        )
+        .await
+        .unwrap();
+
+        // Clear all errors
+        BookRepository::clear_all_errors(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+
+        // Verify no errors remain
+        let errors = BookRepository::get_errors(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+        assert!(errors.is_empty());
+
+        // Verify the book's analysis_errors is None
+        let retrieved = BookRepository::get_by_id(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(retrieved.analysis_errors.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_list_with_errors_v2() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create books
+        let book1 = create_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz");
+        let book2 = create_book_model(series.id, library.id, "/test/book2.cbz", "book2.cbz");
+        let book3 = create_book_model(series.id, library.id, "/test/book3.cbz", "book3.cbz");
+
+        BookRepository::create(db.sea_orm_connection(), &book1, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book2, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book3, None)
+            .await
+            .unwrap();
+
+        // Set errors on book1 and book2
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book1.id,
+            BookErrorType::Parser,
+            BookError::new("Parser error"),
+        )
+        .await
+        .unwrap();
+
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book2.id,
+            BookErrorType::Parser,
+            BookError::new("Another parser error"),
+        )
+        .await
+        .unwrap();
+
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book2.id,
+            BookErrorType::Thumbnail,
+            BookError::new("Thumbnail error"),
+        )
+        .await
+        .unwrap();
+
+        // List all books with errors
+        let (books, total) =
+            BookRepository::list_with_errors_v2(db.sea_orm_connection(), None, None, None, 0, 10)
+                .await
+                .unwrap();
+
+        assert_eq!(total, 2);
+        assert_eq!(books.len(), 2);
+
+        // Filter by error type - Parser
+        let (books, total) = BookRepository::list_with_errors_v2(
+            db.sea_orm_connection(),
+            None,
+            None,
+            Some(BookErrorType::Parser),
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(total, 2);
+        assert_eq!(books.len(), 2);
+
+        // Filter by error type - Thumbnail
+        let (books, total) = BookRepository::list_with_errors_v2(
+            db.sea_orm_connection(),
+            None,
+            None,
+            Some(BookErrorType::Thumbnail),
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(total, 1);
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].0.id, book2.id);
+
+        // Test pagination
+        let (books, total) =
+            BookRepository::list_with_errors_v2(db.sea_orm_connection(), None, None, None, 0, 1)
+                .await
+                .unwrap();
+
+        assert_eq!(total, 2);
+        assert_eq!(books.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_count_errors_by_type() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Create books and set errors
+        let book1 = create_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz");
+        let book2 = create_book_model(series.id, library.id, "/test/book2.cbz", "book2.cbz");
+        let book3 = create_book_model(series.id, library.id, "/test/book3.cbz", "book3.cbz");
+
+        BookRepository::create(db.sea_orm_connection(), &book1, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book2, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book3, None)
+            .await
+            .unwrap();
+
+        // Set errors:
+        // book1: Parser
+        // book2: Parser, Thumbnail
+        // book3: Thumbnail
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book1.id,
+            BookErrorType::Parser,
+            BookError::new("Parser error"),
+        )
+        .await
+        .unwrap();
+
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book2.id,
+            BookErrorType::Parser,
+            BookError::new("Parser error"),
+        )
+        .await
+        .unwrap();
+
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book2.id,
+            BookErrorType::Thumbnail,
+            BookError::new("Thumbnail error"),
+        )
+        .await
+        .unwrap();
+
+        BookRepository::set_error(
+            db.sea_orm_connection(),
+            book3.id,
+            BookErrorType::Thumbnail,
+            BookError::new("Thumbnail error"),
+        )
+        .await
+        .unwrap();
+
+        // Count errors by type
+        let counts = BookRepository::count_errors_by_type(db.sea_orm_connection(), None)
+            .await
+            .unwrap();
+
+        assert_eq!(counts.get(&BookErrorType::Parser), Some(&2));
+        assert_eq!(counts.get(&BookErrorType::Thumbnail), Some(&2));
+        assert_eq!(counts.get(&BookErrorType::Metadata), None);
     }
 }

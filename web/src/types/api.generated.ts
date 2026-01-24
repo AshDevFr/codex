@@ -520,6 +520,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List books with errors (v2 - grouped by error type)
+         * @description Returns books with errors grouped by error type, with counts and pagination.
+         *     This enhanced endpoint provides detailed error information including error
+         *     types, messages, and timestamps.
+         */
+        get: operations["list_books_with_errors_v2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/in-progress": {
         parameters: {
             query?: never;
@@ -603,6 +625,27 @@ export interface paths {
         get: operations["list_recently_read_books"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/retry-all-errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry all failed operations across all books
+         * @description Enqueues appropriate tasks for all books with errors.
+         *     Can be filtered by error type or library.
+         */
+        post: operations["retry_all_book_errors"];
         delete?: never;
         options?: never;
         head?: never;
@@ -815,6 +858,28 @@ export interface paths {
         put?: never;
         /** Mark a book as read (completed) */
         post: operations["mark_book_as_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry failed operations for a specific book
+         * @description Enqueues appropriate tasks based on the error types present or specified.
+         *     For parser/metadata/page_extraction errors, enqueues an AnalyzeBook task.
+         *     For thumbnail errors, enqueues a GenerateThumbnail task.
+         */
+        post: operations["retry_book_errors"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4297,6 +4362,29 @@ export interface components {
              */
             updatedAt: string;
         };
+        /** @description A single error for a book */
+        BookErrorDto: {
+            /** @description Additional error details (optional) */
+            details?: unknown;
+            /** @description Type of the error */
+            errorType: components["schemas"]["BookErrorTypeDto"];
+            /**
+             * @description Human-readable error message
+             * @example Failed to parse CBZ: invalid archive
+             */
+            message: string;
+            /**
+             * Format: date-time
+             * @description When the error occurred
+             * @example 2024-01-15T10:30:00Z
+             */
+            occurredAt: string;
+        };
+        /**
+         * @description Book error type
+         * @enum {string}
+         */
+        BookErrorTypeDto: "format_detection" | "parser" | "metadata" | "thumbnail" | "page_extraction" | "pdf_rendering" | "other";
         /** @description Request body for POST /books/list */
         BookListRequest: {
             /** @description Filter condition (optional - no condition returns all) */
@@ -4571,6 +4659,13 @@ export interface components {
          * @enum {string}
          */
         BookStrategy: "filename" | "metadata_first" | "smart" | "series_name" | "custom";
+        /** @description A book with its associated errors */
+        BookWithErrorsDto: {
+            /** @description The book data */
+            book: components["schemas"]["BookDto"];
+            /** @description All errors for this book */
+            errors: components["schemas"]["BookErrorDto"][];
+        };
         /** @description Query parameters for paginated book endpoints */
         BooksPaginationQuery: {
             /**
@@ -4585,6 +4680,45 @@ export interface components {
             size?: number;
             /** @description Sort parameter (e.g., "createdDate,desc", "metadata.numberSort,asc") */
             sort?: string | null;
+        };
+        /** @description Response for listing books with errors */
+        BooksWithErrorsResponse: {
+            /**
+             * @description Count of books by error type
+             * @example {
+             *       "parser": 5,
+             *       "thumbnail": 10
+             *     }
+             */
+            errorCounts: {
+                [key: string]: number;
+            };
+            /** @description Error groups with books */
+            groups: components["schemas"]["ErrorGroupDto"][];
+            /**
+             * Format: int64
+             * @description Current page (0-indexed)
+             * @example 0
+             */
+            page: number;
+            /**
+             * Format: int64
+             * @description Page size
+             * @example 20
+             */
+            pageSize: number;
+            /**
+             * Format: int64
+             * @description Total number of books with errors
+             * @example 15
+             */
+            totalBooksWithErrors: number;
+            /**
+             * Format: int64
+             * @description Total number of pages
+             * @example 1
+             */
+            totalPages: number;
         };
         /** @description Operators for boolean comparisons */
         BoolOperator: {
@@ -5164,6 +5298,24 @@ export interface components {
          * @enum {string}
          */
         EntityType: "book" | "series" | "library";
+        /** @description Summary of errors grouped by type */
+        ErrorGroupDto: {
+            /** @description Books with this error type (paginated) */
+            books: components["schemas"]["BookWithErrorsDto"][];
+            /**
+             * Format: int64
+             * @description Number of books with this error type
+             * @example 5
+             */
+            count: number;
+            /** @description Error type */
+            errorType: components["schemas"]["BookErrorTypeDto"];
+            /**
+             * @description Human-readable label for this error type
+             * @example Parser Error
+             */
+            label: string;
+        };
         ErrorResponse: {
             details?: unknown;
             error: string;
@@ -7908,6 +8060,41 @@ export interface components {
              * @example Verification email sent
              */
             message: string;
+        };
+        /** @description Request body for bulk retrying all book errors */
+        RetryAllErrorsRequest: {
+            errorType?: null | components["schemas"]["BookErrorTypeDto"];
+            /**
+             * Format: uuid
+             * @description Filter to only retry errors in a specific library
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            libraryId?: string | null;
+        };
+        /** @description Request body for retrying book errors */
+        RetryBookErrorsRequest: {
+            /**
+             * @description Specific error types to retry. If not provided, retry based on all current error types.
+             * @example [
+             *       "parser",
+             *       "thumbnail"
+             *     ]
+             */
+            errorTypes?: components["schemas"]["BookErrorTypeDto"][] | null;
+        };
+        /** @description Response for retry operations */
+        RetryErrorsResponse: {
+            /**
+             * @description Message describing what was done
+             * @example Enqueued 5 analysis tasks
+             */
+            message: string;
+            /**
+             * Format: int64
+             * @description Number of tasks enqueued
+             * @example 5
+             */
+            tasksEnqueued: number;
         };
         /** @description Scan status response */
         ScanStatusDto: {
@@ -11312,6 +11499,64 @@ export interface operations {
             };
         };
     };
+    list_books_with_errors_v2: {
+        parameters: {
+            query?: {
+                /** @description Optional library filter */
+                library_id?: string | null;
+                /** @description Optional series filter */
+                series_id?: string | null;
+                /** @description Filter by specific error type */
+                error_type?: null | components["schemas"]["BookErrorTypeDto"];
+                /** @description Page number (0-indexed) */
+                page?: number;
+                /** @description Number of items per page (max 100) */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Books with errors grouped by type */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "errorCounts": {
+                     *         "parser": 5,
+                     *         "thumbnail": 10
+                     *       },
+                     *       "groups": [
+                     *         {
+                     *           "books": [],
+                     *           "count": 5,
+                     *           "errorType": "parser",
+                     *           "label": "Parser Error"
+                     *         }
+                     *       ],
+                     *       "page": 0,
+                     *       "pageSize": 20,
+                     *       "totalBooksWithErrors": 15,
+                     *       "totalPages": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BooksWithErrorsResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_in_progress_books: {
         parameters: {
             query?: {
@@ -11469,6 +11714,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BookDto"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    retry_all_book_errors: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "errorType": "parser",
+                 *       "libraryId": null
+                 *     }
+                 */
+                "application/json": components["schemas"]["RetryAllErrorsRequest"];
+            };
+        };
+        responses: {
+            /** @description Retry tasks enqueued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "message": "Enqueued 10 analysis tasks and 5 thumbnail tasks",
+                     *       "tasksEnqueued": 15
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RetryErrorsResponse"];
                 };
             };
             /** @description Forbidden */
@@ -11968,6 +12256,68 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    retry_book_errors: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "errorTypes": [
+                 *         "parser",
+                 *         "thumbnail"
+                 *       ]
+                 *     }
+                 */
+                "application/json": components["schemas"]["RetryBookErrorsRequest"];
+            };
+        };
+        responses: {
+            /** @description Retry tasks enqueued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "message": "Enqueued 1 analysis task and 1 thumbnail task",
+                     *       "tasksEnqueued": 2
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RetryErrorsResponse"];
+                };
+            };
+            /** @description Book has no errors to retry */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

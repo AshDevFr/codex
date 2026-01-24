@@ -2368,3 +2368,437 @@ pub async fn upload_book_cover(
 
     Ok(StatusCode::OK)
 }
+
+// ============================================================================
+// Book Error Endpoints (v2 - Enhanced with grouping and retry)
+// ============================================================================
+
+use super::super::dto::{
+    BookErrorDto, BookErrorTypeDto, BookWithErrorsDto, BooksWithErrorsResponse, ErrorGroupDto,
+    RetryAllErrorsRequest, RetryBookErrorsRequest, RetryErrorsResponse,
+};
+use crate::db::entities::book_error::{parse_analysis_errors, BookErrorType};
+use crate::db::repositories::TaskRepository;
+use crate::tasks::types::TaskType;
+
+/// Query parameters for v2 books with errors endpoint
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct BooksWithErrorsQueryV2 {
+    /// Optional library filter
+    #[serde(default)]
+    pub library_id: Option<Uuid>,
+
+    /// Optional series filter
+    #[serde(default)]
+    pub series_id: Option<Uuid>,
+
+    /// Filter by specific error type
+    #[serde(default)]
+    pub error_type: Option<BookErrorTypeDto>,
+
+    /// Page number (0-indexed)
+    #[serde(default)]
+    pub page: u64,
+
+    /// Number of items per page (max 100)
+    #[serde(default = "default_page_size")]
+    pub page_size: u64,
+}
+
+/// List books with errors (v2 - grouped by error type)
+///
+/// Returns books with errors grouped by error type, with counts and pagination.
+/// This enhanced endpoint provides detailed error information including error
+/// types, messages, and timestamps.
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/errors",
+    params(BooksWithErrorsQueryV2),
+    responses(
+        (status = 200, description = "Books with errors grouped by type", body = BooksWithErrorsResponse,
+            example = json!({
+                "totalBooksWithErrors": 15,
+                "errorCounts": {"parser": 5, "thumbnail": 10},
+                "groups": [{
+                    "errorType": "parser",
+                    "label": "Parser Error",
+                    "count": 5,
+                    "books": []
+                }],
+                "page": 0,
+                "pageSize": 20,
+                "totalPages": 1
+            })
+        ),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn list_books_with_errors_v2(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Query(query): Query<BooksWithErrorsQueryV2>,
+) -> Result<Json<BooksWithErrorsResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Validate and normalize pagination params
+    let page_size = if query.page_size == 0 {
+        default_page_size()
+    } else {
+        query.page_size.min(100)
+    };
+
+    // Get error counts by type (for the summary)
+    let error_counts = BookRepository::count_errors_by_type(&state.db, query.library_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to count errors: {}", e)))?;
+
+    // Convert internal error type to DTO if provided
+    let error_type_filter = query.error_type.map(|t| t.into());
+
+    // Fetch books with errors
+    let (books_with_errors, total) = BookRepository::list_with_errors_v2(
+        &state.db,
+        query.library_id,
+        query.series_id,
+        error_type_filter,
+        query.page,
+        page_size,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch books with errors: {}", e)))?;
+
+    // Convert to DTOs
+    let books_models: Vec<_> = books_with_errors.iter().map(|(b, _)| b.clone()).collect();
+    let book_dtos = books_to_dtos(&state.db, auth.user_id, books_models).await?;
+
+    // Create a map from book_id to BookDto
+    let book_dto_map: HashMap<Uuid, BookDto> = book_dtos.into_iter().map(|b| (b.id, b)).collect();
+
+    // Build books with errors DTOs
+    let books_with_errors_dtos: Vec<BookWithErrorsDto> = books_with_errors
+        .into_iter()
+        .filter_map(|(book, errors)| {
+            let book_dto = book_dto_map.get(&book.id).cloned()?;
+            let error_dtos: Vec<BookErrorDto> = errors
+                .into_iter()
+                .map(|(error_type, error)| BookErrorDto {
+                    error_type: error_type.into(),
+                    message: error.message,
+                    details: error.details,
+                    occurred_at: error.occurred_at,
+                })
+                .collect();
+            Some(BookWithErrorsDto {
+                book: book_dto,
+                errors: error_dtos,
+            })
+        })
+        .collect();
+
+    // Group by error type
+    let mut groups_map: HashMap<BookErrorType, Vec<BookWithErrorsDto>> = HashMap::new();
+    for book_with_errors in &books_with_errors_dtos {
+        for error in &book_with_errors.errors {
+            groups_map
+                .entry(error.error_type.into())
+                .or_default()
+                .push(book_with_errors.clone());
+        }
+    }
+
+    // Build groups sorted by error type label
+    let mut groups: Vec<ErrorGroupDto> = groups_map
+        .into_iter()
+        .map(|(error_type, books)| {
+            let count = error_counts.get(&error_type).copied().unwrap_or(0);
+            ErrorGroupDto {
+                error_type: error_type.into(),
+                label: error_type.label().to_string(),
+                count,
+                books,
+            }
+        })
+        .collect();
+    groups.sort_by(|a, b| a.label.cmp(&b.label));
+
+    // Convert error counts map to string keys for JSON
+    let error_counts_str: HashMap<String, u64> = error_counts
+        .into_iter()
+        .map(|(k, v)| {
+            (
+                serde_json::to_string(&k)
+                    .unwrap_or_default()
+                    .trim_matches('"')
+                    .to_string(),
+                v,
+            )
+        })
+        .collect();
+
+    let total_pages = total.div_ceil(page_size);
+
+    Ok(Json(BooksWithErrorsResponse {
+        total_books_with_errors: total,
+        error_counts: error_counts_str,
+        groups,
+        page: query.page,
+        page_size,
+        total_pages,
+    }))
+}
+
+/// Retry failed operations for a specific book
+///
+/// Enqueues appropriate tasks based on the error types present or specified.
+/// For parser/metadata/page_extraction errors, enqueues an AnalyzeBook task.
+/// For thumbnail errors, enqueues a GenerateThumbnail task.
+#[utoipa::path(
+    post,
+    path = "/api/v1/books/{book_id}/retry",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    request_body(content = RetryBookErrorsRequest, content_type = "application/json",
+        example = json!({"errorTypes": ["parser", "thumbnail"]})
+    ),
+    responses(
+        (status = 200, description = "Retry tasks enqueued", body = RetryErrorsResponse,
+            example = json!({"tasksEnqueued": 2, "message": "Enqueued 1 analysis task and 1 thumbnail task"})
+        ),
+        (status = 404, description = "Book not found"),
+        (status = 400, description = "Book has no errors to retry"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn retry_book_errors(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+    Json(request): Json<RetryBookErrorsRequest>,
+) -> Result<Json<RetryErrorsResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Get current errors for the book
+    let errors = parse_analysis_errors(book.analysis_errors.as_deref());
+    if errors.is_empty() {
+        return Err(ApiError::BadRequest(
+            "Book has no errors to retry".to_string(),
+        ));
+    }
+
+    // Determine which error types to retry
+    let error_types_to_retry: Vec<BookErrorType> = if let Some(types) = request.error_types {
+        types.into_iter().map(|t| t.into()).collect()
+    } else {
+        errors.keys().cloned().collect()
+    };
+
+    // Determine which tasks to enqueue based on error types
+    let needs_analysis = error_types_to_retry.iter().any(|t| {
+        matches!(
+            t,
+            BookErrorType::Parser
+                | BookErrorType::Metadata
+                | BookErrorType::PageExtraction
+                | BookErrorType::FormatDetection
+                | BookErrorType::PdfRendering
+                | BookErrorType::Other
+        )
+    });
+    let needs_thumbnail = error_types_to_retry.contains(&BookErrorType::Thumbnail);
+
+    let mut tasks_enqueued = 0u64;
+    let mut messages = Vec::new();
+
+    // Enqueue analysis task if needed
+    if needs_analysis {
+        TaskRepository::enqueue(
+            &state.db,
+            TaskType::AnalyzeBook {
+                book_id,
+                force: true,
+            },
+            10,   // Normal priority
+            None, // No scheduled time - run immediately
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to enqueue analysis task: {}", e)))?;
+        tasks_enqueued += 1;
+        messages.push("1 analysis task");
+    }
+
+    // Enqueue thumbnail task if needed
+    if needs_thumbnail {
+        TaskRepository::enqueue(
+            &state.db,
+            TaskType::GenerateThumbnail {
+                book_id,
+                force: true,
+            },
+            10,   // Normal priority
+            None, // No scheduled time - run immediately
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to enqueue thumbnail task: {}", e)))?;
+        tasks_enqueued += 1;
+        messages.push("1 thumbnail task");
+    }
+
+    let message = if messages.is_empty() {
+        "No tasks enqueued".to_string()
+    } else {
+        format!("Enqueued {}", messages.join(" and "))
+    };
+
+    Ok(Json(RetryErrorsResponse {
+        tasks_enqueued,
+        message,
+    }))
+}
+
+/// Retry all failed operations across all books
+///
+/// Enqueues appropriate tasks for all books with errors.
+/// Can be filtered by error type or library.
+#[utoipa::path(
+    post,
+    path = "/api/v1/books/retry-all-errors",
+    request_body(content = RetryAllErrorsRequest, content_type = "application/json",
+        example = json!({"errorType": "parser", "libraryId": null})
+    ),
+    responses(
+        (status = 200, description = "Retry tasks enqueued", body = RetryErrorsResponse,
+            example = json!({"tasksEnqueued": 15, "message": "Enqueued 10 analysis tasks and 5 thumbnail tasks"})
+        ),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "books"
+)]
+pub async fn retry_all_book_errors(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Json(request): Json<RetryAllErrorsRequest>,
+) -> Result<Json<RetryErrorsResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Convert error type filter if provided
+    let error_type_filter: Option<BookErrorType> = request.error_type.map(|t| t.into());
+
+    // Fetch all books with errors (unpaginated - we need all for bulk retry)
+    // Use a large page size to get all results
+    let (books_with_errors, _) = BookRepository::list_with_errors_v2(
+        &state.db,
+        request.library_id,
+        None, // No series filter for bulk retry
+        error_type_filter,
+        0,
+        10000, // Large page size to get all
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to fetch books with errors: {}", e)))?;
+
+    if books_with_errors.is_empty() {
+        return Ok(Json(RetryErrorsResponse {
+            tasks_enqueued: 0,
+            message: "No books with errors found".to_string(),
+        }));
+    }
+
+    // Categorize books by what they need
+    let mut needs_analysis: Vec<Uuid> = Vec::new();
+    let mut needs_thumbnail: Vec<Uuid> = Vec::new();
+
+    for (book, errors) in &books_with_errors {
+        let error_types: Vec<BookErrorType> = if let Some(ref filter_type) = error_type_filter {
+            // Only consider the filtered error type
+            errors
+                .keys()
+                .filter(|t| *t == filter_type)
+                .cloned()
+                .collect()
+        } else {
+            errors.keys().cloned().collect()
+        };
+
+        let book_needs_analysis = error_types.iter().any(|t| {
+            matches!(
+                t,
+                BookErrorType::Parser
+                    | BookErrorType::Metadata
+                    | BookErrorType::PageExtraction
+                    | BookErrorType::FormatDetection
+                    | BookErrorType::PdfRendering
+                    | BookErrorType::Other
+            )
+        });
+        let book_needs_thumbnail = error_types.contains(&BookErrorType::Thumbnail);
+
+        if book_needs_analysis {
+            needs_analysis.push(book.id);
+        }
+        if book_needs_thumbnail {
+            needs_thumbnail.push(book.id);
+        }
+    }
+
+    let mut tasks_enqueued = 0u64;
+
+    // Batch enqueue analysis tasks
+    if !needs_analysis.is_empty() {
+        let analysis_tasks: Vec<TaskType> = needs_analysis
+            .into_iter()
+            .map(|book_id| TaskType::AnalyzeBook {
+                book_id,
+                force: true,
+            })
+            .collect();
+
+        let count = TaskRepository::enqueue_batch(&state.db, analysis_tasks, 10, None)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to enqueue analysis tasks: {}", e)))?;
+        tasks_enqueued += count;
+    }
+
+    // Batch enqueue thumbnail tasks
+    if !needs_thumbnail.is_empty() {
+        let thumbnail_tasks: Vec<TaskType> = needs_thumbnail
+            .into_iter()
+            .map(|book_id| TaskType::GenerateThumbnail {
+                book_id,
+                force: true,
+            })
+            .collect();
+
+        let count = TaskRepository::enqueue_batch(&state.db, thumbnail_tasks, 10, None)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to enqueue thumbnail tasks: {}", e)))?;
+        tasks_enqueued += count;
+    }
+
+    let message = format!("Enqueued {} tasks for books with errors", tasks_enqueued);
+
+    Ok(Json(RetryErrorsResponse {
+        tasks_enqueued,
+        message,
+    }))
+}

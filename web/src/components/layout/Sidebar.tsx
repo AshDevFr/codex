@@ -2,6 +2,7 @@ import {
 	ActionIcon,
 	AppShell,
 	Button,
+	Divider,
 	Group,
 	Menu,
 	Modal,
@@ -11,6 +12,7 @@ import {
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import {
+	IconAlertTriangle,
 	IconBooks,
 	IconBrush,
 	IconChartBar,
@@ -354,15 +356,43 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 							childrenOffset={32}
 							active={currentPath.startsWith("/settings")}
 						>
-							{/* Admin Section */}
 							{isAdmin && (
 								<>
+									{/* System Section */}
+									<Divider
+										label="System"
+										labelPosition="left"
+										my="xs"
+										styles={{ label: { fontSize: 11, fontWeight: 600 } }}
+									/>
 									<NavLink
 										component={Link}
 										to="/settings/server"
 										label="Server"
 										leftSection={<IconServer size={16} />}
 										active={currentPath.startsWith("/settings/server")}
+									/>
+									<NavLink
+										component={Link}
+										to="/settings/tasks"
+										label="Tasks"
+										leftSection={<IconClipboardList size={16} />}
+										active={currentPath.startsWith("/settings/tasks")}
+									/>
+									<NavLink
+										component={Link}
+										to="/settings/metrics"
+										label="Metrics"
+										leftSection={<IconChartBar size={16} />}
+										active={currentPath.startsWith("/settings/metrics")}
+									/>
+
+									{/* Access Section */}
+									<Divider
+										label="Access"
+										labelPosition="left"
+										my="xs"
+										styles={{ label: { fontSize: 11, fontWeight: 600 } }}
 									/>
 									<NavLink
 										component={Link}
@@ -378,12 +408,13 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 										leftSection={<IconShare size={16} />}
 										active={currentPath.startsWith("/settings/sharing-tags")}
 									/>
-									<NavLink
-										component={Link}
-										to="/settings/tasks"
-										label="Tasks"
-										leftSection={<IconClipboardList size={16} />}
-										active={currentPath.startsWith("/settings/tasks")}
+
+									{/* Library Health Section */}
+									<Divider
+										label="Library Health"
+										labelPosition="left"
+										my="xs"
+										styles={{ label: { fontSize: 11, fontWeight: 600 } }}
 									/>
 									<NavLink
 										component={Link}
@@ -394,29 +425,44 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 									/>
 									<NavLink
 										component={Link}
-										to="/settings/metrics"
-										label="Metrics"
-										leftSection={<IconChartBar size={16} />}
-										active={currentPath.startsWith("/settings/metrics")}
+										to="/settings/book-errors"
+										label="Book Errors"
+										leftSection={<IconAlertTriangle size={16} />}
+										active={currentPath.startsWith("/settings/book-errors")}
+									/>
+
+									{/* Storage Section */}
+									<Divider
+										label="Storage"
+										labelPosition="left"
+										my="xs"
+										styles={{ label: { fontSize: 11, fontWeight: 600 } }}
 									/>
 									<NavLink
 										component={Link}
 										to="/settings/cleanup"
-										label="Cleanup"
+										label="Thumbnails"
 										leftSection={<IconBrush size={16} />}
 										active={currentPath.startsWith("/settings/cleanup")}
 									/>
 									<NavLink
 										component={Link}
 										to="/settings/pdf-cache"
-										label="PDF Cache"
+										label="Page Cache"
 										leftSection={<IconFileTypePdf size={16} />}
 										active={currentPath.startsWith("/settings/pdf-cache")}
+									/>
+
+									{/* Account Section */}
+									<Divider
+										label="Account"
+										labelPosition="left"
+										my="xs"
+										styles={{ label: { fontSize: 11, fontWeight: 600 } }}
 									/>
 								</>
 							)}
 
-							{/* User Section */}
 							<NavLink
 								component={Link}
 								to="/settings/profile"

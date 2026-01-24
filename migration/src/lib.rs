@@ -57,6 +57,9 @@ mod m20260122_000032_add_sorting_indexes;
 // PDF cache cleanup settings
 mod m20260122_000033_seed_pdf_cache_settings;
 
+// Add analysis_errors column to books table
+mod m20260123_000034_add_analysis_errors_column;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -108,6 +111,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260122_000032_add_sorting_indexes::Migration),
             // PDF cache cleanup settings
             Box::new(m20260122_000033_seed_pdf_cache_settings::Migration),
+            // Add analysis_errors column to books table
+            Box::new(m20260123_000034_add_analysis_errors_column::Migration),
         ]
     }
 }

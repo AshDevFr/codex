@@ -8,6 +8,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
+use crate::db::entities::book_error::{BookError, BookErrorType};
 use crate::db::entities::{book_metadata, books, pages};
 use crate::db::repositories::{
     BookMetadataRepository, BookRepository, LibraryRepository, PageRepository,
@@ -55,9 +56,21 @@ pub async fn analyze_book(
     match analyze_single_book(db, book, None, force, event_broadcaster).await {
         Ok(_) => {
             result.books_analyzed = 1;
-            // Clear any previous analysis error on success
-            if let Err(e) = BookRepository::set_analysis_error(db, book_id, None).await {
-                warn!("Failed to clear analysis error for book {}: {}", book_id, e);
+            // Clear all analysis-related errors on success (parser, metadata, page_extraction, format_detection)
+            // Note: We don't clear thumbnail errors here - those are handled by thumbnail generation
+            for error_type in [
+                BookErrorType::Parser,
+                BookErrorType::Metadata,
+                BookErrorType::PageExtraction,
+                BookErrorType::FormatDetection,
+                BookErrorType::Other,
+            ] {
+                if let Err(e) = BookRepository::clear_error(db, book_id, error_type).await {
+                    warn!(
+                        "Failed to clear {:?} error for book {}: {}",
+                        error_type, book_id, e
+                    );
+                }
             }
             info!(
                 "Analysis completed for book {} in {:?}",
@@ -66,18 +79,22 @@ pub async fn analyze_book(
             );
         }
         Err(e) => {
-            let error_msg = format!("Failed to analyze book {}: {}", book_id, e);
-            error!("{}", error_msg);
-            // Store the analysis error for UI display
+            // Categorize the error based on its type
+            let (error_type, error_msg) = categorize_analysis_error(&e);
+            let full_error_msg = format!("Failed to analyze book {}: {}", book_id, e);
+            error!("{}", full_error_msg);
+
+            // Store the categorized error for UI display
+            let book_error = BookError::new(error_msg);
             if let Err(set_err) =
-                BookRepository::set_analysis_error(db, book_id, Some(error_msg.clone())).await
+                BookRepository::set_error(db, book_id, error_type, book_error).await
             {
                 warn!(
-                    "Failed to set analysis error for book {}: {}",
-                    book_id, set_err
+                    "Failed to set {:?} error for book {}: {}",
+                    error_type, book_id, set_err
                 );
             }
-            result.errors.push(error_msg);
+            result.errors.push(full_error_msg);
         }
     }
 
@@ -1036,6 +1053,75 @@ fn count_non_null_fields(metadata: &book_metadata::Model) -> usize {
     count
 }
 
+/// Categorize an analysis error into a specific BookErrorType
+/// Returns the error type and a user-friendly error message
+fn categorize_analysis_error(error: &anyhow::Error) -> (BookErrorType, String) {
+    let error_string = error.to_string().to_lowercase();
+    let root_cause = error.root_cause().to_string();
+
+    // Check for format detection errors (check first as it's very specific)
+    if error_string.contains("unsupported format")
+        || error_string.contains("unsupported file format")
+        || error_string.contains("unknown format")
+    {
+        return (
+            BookErrorType::FormatDetection,
+            format!("Unsupported or unrecognized file format: {}", root_cause),
+        );
+    }
+
+    // Check for PDF rendering errors (check before page extraction, as both may mention "page")
+    if error_string.contains("pdfium")
+        || (error_string.contains("pdf") && error_string.contains("render"))
+    {
+        return (
+            BookErrorType::PdfRendering,
+            format!("PDF rendering error: {}", root_cause),
+        );
+    }
+
+    // Check for metadata parsing errors
+    if error_string.contains("comicinfo")
+        || error_string.contains("invalid metadata")
+        || (error_string.contains("metadata") && !error_string.contains("no metadata"))
+    {
+        return (
+            BookErrorType::Metadata,
+            format!("Failed to extract metadata: {}", root_cause),
+        );
+    }
+
+    // Check for page extraction errors (check before parser errors)
+    if error_string.contains("no images")
+        || error_string.contains("empty archive")
+        || (error_string.contains("page") && error_string.contains("extract"))
+        || (error_string.contains("page") && error_string.contains("decode"))
+        || (error_string.contains("image") && error_string.contains("decode"))
+    {
+        return (
+            BookErrorType::PageExtraction,
+            format!("Failed to extract pages: {}", root_cause),
+        );
+    }
+
+    // Check for parser/archive errors
+    if error_string.contains("zip")
+        || error_string.contains("rar")
+        || error_string.contains("archive")
+        || error_string.contains("corrupted")
+        || (error_string.contains("failed to open") && !error_string.contains("page"))
+        || (error_string.contains("failed to extract") && !error_string.contains("page"))
+    {
+        return (
+            BookErrorType::Parser,
+            format!("Failed to parse archive: {}", root_cause),
+        );
+    }
+
+    // Default to "Other" for unrecognized errors
+    (BookErrorType::Other, root_cause)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1144,5 +1230,87 @@ mod tests {
 
         // Test filename with only extension
         assert_eq!(extract_title_from_filename(".cbz"), "");
+    }
+
+    #[test]
+    fn test_categorize_analysis_error_format_detection() {
+        let error = anyhow::anyhow!("Unsupported format: test.txt");
+        let (error_type, _msg) = categorize_analysis_error(&error);
+        assert_eq!(error_type, BookErrorType::FormatDetection);
+
+        let error = anyhow::anyhow!("Unknown format for file");
+        let (error_type, _msg) = categorize_analysis_error(&error);
+        assert_eq!(error_type, BookErrorType::FormatDetection);
+    }
+
+    #[test]
+    fn test_categorize_analysis_error_parser() {
+        let error = anyhow::anyhow!("Failed to open ZIP archive");
+        let (error_type, _msg) = categorize_analysis_error(&error);
+        assert_eq!(error_type, BookErrorType::Parser);
+
+        let error = anyhow::anyhow!("Invalid archive: corrupted header");
+        let (error_type, _msg) = categorize_analysis_error(&error);
+        assert_eq!(error_type, BookErrorType::Parser);
+
+        let error = anyhow::anyhow!("RAR extraction failed");
+        let (error_type, _msg) = categorize_analysis_error(&error);
+        assert_eq!(error_type, BookErrorType::Parser);
+    }
+
+    #[test]
+    fn test_categorize_analysis_error_metadata() {
+        let error = anyhow::anyhow!("Failed to parse ComicInfo.xml");
+        let (error_type, _msg) = categorize_analysis_error(&error);
+        assert_eq!(error_type, BookErrorType::Metadata);
+
+        let error = anyhow::anyhow!("Invalid metadata in book");
+        let (error_type, _msg) = categorize_analysis_error(&error);
+        assert_eq!(error_type, BookErrorType::Metadata);
+
+        let error = anyhow::anyhow!("Book metadata is corrupted");
+        let (error_type, _msg) = categorize_analysis_error(&error);
+        assert_eq!(error_type, BookErrorType::Metadata);
+    }
+
+    #[test]
+    fn test_categorize_analysis_error_page_extraction() {
+        let error = anyhow::anyhow!("No images found in archive");
+        let (error_type, _msg) = categorize_analysis_error(&error);
+        assert_eq!(error_type, BookErrorType::PageExtraction);
+
+        let error = anyhow::anyhow!("Empty archive with no content");
+        let (error_type, _msg) = categorize_analysis_error(&error);
+        assert_eq!(error_type, BookErrorType::PageExtraction);
+
+        let error = anyhow::anyhow!("Failed to extract page from book");
+        let (error_type, _msg) = categorize_analysis_error(&error);
+        assert_eq!(error_type, BookErrorType::PageExtraction);
+
+        let error = anyhow::anyhow!("Failed to decode image data");
+        let (error_type, _msg) = categorize_analysis_error(&error);
+        assert_eq!(error_type, BookErrorType::PageExtraction);
+    }
+
+    #[test]
+    fn test_categorize_analysis_error_pdf_rendering() {
+        let error = anyhow::anyhow!("PDFium library not available");
+        let (error_type, _msg) = categorize_analysis_error(&error);
+        assert_eq!(error_type, BookErrorType::PdfRendering);
+
+        let error = anyhow::anyhow!("Failed to render PDF page");
+        let (error_type, _msg) = categorize_analysis_error(&error);
+        assert_eq!(error_type, BookErrorType::PdfRendering);
+    }
+
+    #[test]
+    fn test_categorize_analysis_error_other() {
+        let error = anyhow::anyhow!("Unknown error occurred");
+        let (error_type, _msg) = categorize_analysis_error(&error);
+        assert_eq!(error_type, BookErrorType::Other);
+
+        let error = anyhow::anyhow!("Something unexpected happened");
+        let (error_type, _msg) = categorize_analysis_error(&error);
+        assert_eq!(error_type, BookErrorType::Other);
     }
 }

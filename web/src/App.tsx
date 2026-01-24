@@ -21,6 +21,7 @@ import { SearchResults } from "@/pages/SearchResults";
 import { SeriesDetail } from "@/pages/SeriesDetail";
 import { Setup } from "@/pages/Setup";
 import {
+	BooksInErrorSettings,
 	CleanupSettings,
 	DuplicatesSettings,
 	MetricsSettings,
@@ -283,6 +284,17 @@ function App() {
 						<ProtectedRoute>
 							<AppLayout currentPath="/settings/metrics">
 								<MetricsSettings />
+							</AppLayout>
+						</ProtectedRoute>
+					}
+				/>
+
+				<Route
+					path="/settings/book-errors"
+					element={
+						<ProtectedRoute>
+							<AppLayout currentPath="/settings/book-errors">
+								<BooksInErrorSettings />
 							</AppLayout>
 						</ProtectedRoute>
 					}

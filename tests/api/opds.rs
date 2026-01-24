@@ -528,6 +528,7 @@ fn create_test_book_model(
         deleted: false,
         analyzed: true, // For OPDS tests, assume books are analyzed
         analysis_error: None,
+        analysis_errors: None,
         modified_at: Utc::now(),
         created_at: Utc::now(),
         updated_at: Utc::now(),

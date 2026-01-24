@@ -1,5 +1,6 @@
 // Core entities
 pub use super::book_duplicates::Entity as BookDuplicates;
+pub use super::book_error::{BookError, BookErrorType, BookErrors};
 pub use super::book_metadata::Entity as BookMetadata;
 pub use super::books::Entity as Books;
 pub use super::libraries::Entity as Libraries;

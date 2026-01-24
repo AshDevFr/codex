@@ -212,9 +212,297 @@ const creativeTeams: Record<
 	},
 };
 
+// Mock books with errors for testing
+const mockBooksWithErrors: Array<{
+	book: (typeof mockBooks)[0];
+	errors: Array<{
+		errorType:
+			| "format_detection"
+			| "parser"
+			| "metadata"
+			| "thumbnail"
+			| "page_extraction"
+			| "pdf_rendering"
+			| "other";
+		message: string;
+		details?: unknown;
+		occurredAt: string;
+	}>;
+}> = [];
+
+// Initialize mock books with errors (first 5 books have various errors)
+function initMockBooksWithErrors() {
+	if (mockBooksWithErrors.length > 0) return;
+
+	const errorSamples: Array<{
+		errorType:
+			| "format_detection"
+			| "parser"
+			| "metadata"
+			| "thumbnail"
+			| "page_extraction"
+			| "pdf_rendering"
+			| "other";
+		message: string;
+		details?: unknown;
+	}> = [
+		{
+			errorType: "parser",
+			message: "Failed to parse CBZ: Invalid ZIP archive structure",
+			details: { zipError: "Central directory not found" },
+		},
+		{
+			errorType: "thumbnail",
+			message: "Failed to generate thumbnail: No valid image found on page 1",
+			details: { page: 1, reason: "Image extraction failed" },
+		},
+		{
+			errorType: "metadata",
+			message: "Failed to parse ComicInfo.xml: Invalid XML structure",
+			details: { line: 15, column: 23 },
+		},
+		{
+			errorType: "page_extraction",
+			message: "Failed to extract page 5: Corrupted image data",
+			details: { page: 5, format: "JPEG" },
+		},
+		{
+			errorType: "pdf_rendering",
+			message:
+				"Page could not be extracted from PDF: no embedded image found and PDFium renderer is not available",
+			details: { page: 1, pdfiumAvailable: false },
+		},
+		{
+			errorType: "format_detection",
+			message: "Unable to detect file format: Unsupported or corrupted file",
+			details: { detectedMime: "application/octet-stream" },
+		},
+	];
+
+	// Add errors to first few books
+	for (let i = 0; i < Math.min(5, mockBooks.length); i++) {
+		const book = mockBooks[i];
+		const errorIndex = i % errorSamples.length;
+		const error = errorSamples[errorIndex];
+
+		mockBooksWithErrors.push({
+			book,
+			errors: [
+				{
+					...error,
+					occurredAt: new Date(
+						Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000,
+					).toISOString(),
+				},
+			],
+		});
+
+		// Add a second error to some books
+		if (i % 2 === 0 && i + 1 < errorSamples.length) {
+			const secondError = errorSamples[(errorIndex + 1) % errorSamples.length];
+			mockBooksWithErrors[mockBooksWithErrors.length - 1].errors.push({
+				...secondError,
+				occurredAt: new Date(
+					Date.now() - Math.random() * 3 * 24 * 60 * 60 * 1000,
+				).toISOString(),
+			});
+		}
+	}
+}
+
 export const bookHandlers = [
 	// IMPORTANT: Specific routes MUST come before parameterized routes
 	// Otherwise /api/v1/books/:id will match "in-progress" as an ID
+
+	// ============================================
+	// Books with Errors endpoints (v2)
+	// ============================================
+
+	// List books with errors (grouped by error type)
+	http.get("/api/v1/books/errors", async ({ request }) => {
+		await delay(200);
+		initMockBooksWithErrors();
+
+		const url = new URL(request.url);
+		const page = Number.parseInt(url.searchParams.get("page") || "0", 10);
+		const pageSize = Number.parseInt(
+			url.searchParams.get("page_size") || "20",
+			10,
+		);
+		const errorTypeFilter = url.searchParams.get("error_type") as
+			| "format_detection"
+			| "parser"
+			| "metadata"
+			| "thumbnail"
+			| "page_extraction"
+			| "pdf_rendering"
+			| "other"
+			| null;
+		const libraryId = url.searchParams.get("library_id");
+
+		// Filter by library if specified
+		let filteredBooks = mockBooksWithErrors;
+		if (libraryId) {
+			filteredBooks = filteredBooks.filter(
+				(b) => b.book.libraryId === libraryId,
+			);
+		}
+
+		// Filter by error type if specified
+		if (errorTypeFilter) {
+			filteredBooks = filteredBooks.filter((b) =>
+				b.errors.some((e) => e.errorType === errorTypeFilter),
+			);
+		}
+
+		// Count errors by type
+		const errorCounts: Record<string, number> = {};
+		for (const bookWithError of filteredBooks) {
+			for (const error of bookWithError.errors) {
+				errorCounts[error.errorType] = (errorCounts[error.errorType] || 0) + 1;
+			}
+		}
+
+		// Group books by error type
+		const errorTypes = [
+			"parser",
+			"thumbnail",
+			"metadata",
+			"page_extraction",
+			"pdf_rendering",
+			"format_detection",
+			"other",
+		] as const;
+
+		const errorTypeLabels: Record<string, string> = {
+			parser: "Parser Error",
+			thumbnail: "Thumbnail Error",
+			metadata: "Metadata Error",
+			page_extraction: "Page Extraction Error",
+			pdf_rendering: "PDF Rendering Error",
+			format_detection: "Format Detection Error",
+			other: "Other Error",
+		};
+
+		const groups = errorTypes
+			.filter((type) => !errorTypeFilter || type === errorTypeFilter)
+			.map((errorType) => {
+				const booksWithThisError = filteredBooks.filter((b) =>
+					b.errors.some((e) => e.errorType === errorType),
+				);
+
+				return {
+					errorType,
+					label: errorTypeLabels[errorType] || errorType,
+					count: booksWithThisError.length,
+					books: booksWithThisError.map((b) => ({
+						book: b.book,
+						errors: b.errors.filter((e) => e.errorType === errorType),
+					})),
+				};
+			})
+			.filter((g) => g.count > 0);
+
+		// Paginate (for simplicity, pagination applies to total books)
+		const totalBooks = filteredBooks.length;
+
+		return HttpResponse.json({
+			totalBooksWithErrors: totalBooks,
+			totalPages: Math.ceil(totalBooks / pageSize),
+			page,
+			pageSize,
+			errorCounts,
+			groups,
+		});
+	}),
+
+	// Retry specific book errors
+	http.post("/api/v1/books/:bookId/retry", async ({ params, request }) => {
+		await delay(200);
+		initMockBooksWithErrors();
+
+		const bookId = params.bookId as string;
+		const bookWithErrors = mockBooksWithErrors.find(
+			(b) => b.book.id === bookId,
+		);
+
+		if (!bookWithErrors || bookWithErrors.errors.length === 0) {
+			return HttpResponse.json(
+				{ error: "Book has no errors", message: "Book has no errors to retry" },
+				{ status: 400 },
+			);
+		}
+
+		const body = (await request.json().catch(() => ({}))) as {
+			errorTypes?: string[];
+		};
+		const errorTypesToRetry = body.errorTypes || [];
+
+		// Determine how many tasks to enqueue
+		let tasksEnqueued = 0;
+		const errorsToRetry =
+			errorTypesToRetry.length > 0
+				? bookWithErrors.errors.filter((e) =>
+						errorTypesToRetry.includes(e.errorType),
+					)
+				: bookWithErrors.errors;
+
+		// Count unique task types needed
+		const needsAnalysis = errorsToRetry.some((e) =>
+			[
+				"parser",
+				"metadata",
+				"page_extraction",
+				"format_detection",
+				"other",
+			].includes(e.errorType),
+		);
+		const needsThumbnail = errorsToRetry.some(
+			(e) => e.errorType === "thumbnail" || e.errorType === "pdf_rendering",
+		);
+
+		if (needsAnalysis) tasksEnqueued++;
+		if (needsThumbnail) tasksEnqueued++;
+
+		return HttpResponse.json({
+			message: `Enqueued ${tasksEnqueued} task(s) for book retry`,
+			tasksEnqueued,
+		});
+	}),
+
+	// Retry all book errors (bulk)
+	http.post("/api/v1/books/retry-all-errors", async ({ request }) => {
+		await delay(300);
+		initMockBooksWithErrors();
+
+		const body = (await request.json().catch(() => ({}))) as {
+			errorType?: string;
+			libraryId?: string;
+		};
+
+		let booksToRetry = mockBooksWithErrors;
+
+		// Filter by library if specified
+		if (body.libraryId) {
+			booksToRetry = booksToRetry.filter(
+				(b) => b.book.libraryId === body.libraryId,
+			);
+		}
+
+		// Filter by error type if specified
+		if (body.errorType) {
+			booksToRetry = booksToRetry.filter((b) =>
+				b.errors.some((e) => e.errorType === body.errorType),
+			);
+		}
+
+		const tasksEnqueued = booksToRetry.length;
+
+		return HttpResponse.json({
+			message: `Enqueued ${tasksEnqueued} task(s) for bulk retry`,
+			tasksEnqueued,
+		});
+	}),
 
 	// List in-progress books
 	// Supports ?library_id= query param for library filtering

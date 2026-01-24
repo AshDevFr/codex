@@ -909,6 +909,7 @@ fn create_test_book_model(
         deleted: false,
         analyzed: true,
         analysis_error: None,
+        analysis_errors: None,
         modified_at: Utc::now(),
         created_at: Utc::now(),
         updated_at: Utc::now(),

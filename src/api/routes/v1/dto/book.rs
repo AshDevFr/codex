@@ -104,7 +104,7 @@ impl fmt::Display for BookSortParam {
 }
 
 /// Book data transfer object
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BookDto {
     /// Book unique identifier
@@ -822,4 +822,176 @@ pub struct BookUpdateResponse {
     /// Last update timestamp
     #[schema(example = "2024-01-15T10:30:00Z")]
     pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+// ============================================================================
+// Book Error DTOs
+// ============================================================================
+
+/// Book error type
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BookErrorTypeDto {
+    /// Error detecting the file format
+    FormatDetection,
+    /// Error parsing the book file (archive extraction, etc.)
+    Parser,
+    /// Error extracting or parsing metadata
+    Metadata,
+    /// Error generating thumbnail
+    Thumbnail,
+    /// Error extracting pages from the book
+    PageExtraction,
+    /// Error rendering PDF pages (e.g., PDFium not available)
+    PdfRendering,
+    /// Other uncategorized errors
+    Other,
+}
+
+impl From<crate::db::entities::book_error::BookErrorType> for BookErrorTypeDto {
+    fn from(t: crate::db::entities::book_error::BookErrorType) -> Self {
+        use crate::db::entities::book_error::BookErrorType;
+        match t {
+            BookErrorType::FormatDetection => BookErrorTypeDto::FormatDetection,
+            BookErrorType::Parser => BookErrorTypeDto::Parser,
+            BookErrorType::Metadata => BookErrorTypeDto::Metadata,
+            BookErrorType::Thumbnail => BookErrorTypeDto::Thumbnail,
+            BookErrorType::PageExtraction => BookErrorTypeDto::PageExtraction,
+            BookErrorType::PdfRendering => BookErrorTypeDto::PdfRendering,
+            BookErrorType::Other => BookErrorTypeDto::Other,
+        }
+    }
+}
+
+impl From<BookErrorTypeDto> for crate::db::entities::book_error::BookErrorType {
+    fn from(t: BookErrorTypeDto) -> Self {
+        use crate::db::entities::book_error::BookErrorType;
+        match t {
+            BookErrorTypeDto::FormatDetection => BookErrorType::FormatDetection,
+            BookErrorTypeDto::Parser => BookErrorType::Parser,
+            BookErrorTypeDto::Metadata => BookErrorType::Metadata,
+            BookErrorTypeDto::Thumbnail => BookErrorType::Thumbnail,
+            BookErrorTypeDto::PageExtraction => BookErrorType::PageExtraction,
+            BookErrorTypeDto::PdfRendering => BookErrorType::PdfRendering,
+            BookErrorTypeDto::Other => BookErrorType::Other,
+        }
+    }
+}
+
+/// A single error for a book
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BookErrorDto {
+    /// Type of the error
+    #[schema(example = "parser")]
+    pub error_type: BookErrorTypeDto,
+
+    /// Human-readable error message
+    #[schema(example = "Failed to parse CBZ: invalid archive")]
+    pub message: String,
+
+    /// Additional error details (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<serde_json::Value>,
+
+    /// When the error occurred
+    #[schema(example = "2024-01-15T10:30:00Z")]
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// A book with its associated errors
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BookWithErrorsDto {
+    /// The book data
+    pub book: BookDto,
+
+    /// All errors for this book
+    pub errors: Vec<BookErrorDto>,
+}
+
+/// Summary of errors grouped by type
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ErrorGroupDto {
+    /// Error type
+    #[schema(example = "parser")]
+    pub error_type: BookErrorTypeDto,
+
+    /// Human-readable label for this error type
+    #[schema(example = "Parser Error")]
+    pub label: String,
+
+    /// Number of books with this error type
+    #[schema(example = 5)]
+    pub count: u64,
+
+    /// Books with this error type (paginated)
+    pub books: Vec<BookWithErrorsDto>,
+}
+
+/// Response for listing books with errors
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BooksWithErrorsResponse {
+    /// Total number of books with errors
+    #[schema(example = 15)]
+    pub total_books_with_errors: u64,
+
+    /// Count of books by error type
+    #[schema(example = json!({"parser": 5, "thumbnail": 10}))]
+    pub error_counts: std::collections::HashMap<String, u64>,
+
+    /// Error groups with books
+    pub groups: Vec<ErrorGroupDto>,
+
+    /// Current page (0-indexed)
+    #[schema(example = 0)]
+    pub page: u64,
+
+    /// Page size
+    #[schema(example = 20)]
+    pub page_size: u64,
+
+    /// Total number of pages
+    #[schema(example = 1)]
+    pub total_pages: u64,
+}
+
+/// Request body for retrying book errors
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RetryBookErrorsRequest {
+    /// Specific error types to retry. If not provided, retry based on all current error types.
+    #[serde(default)]
+    #[schema(example = json!(["parser", "thumbnail"]))]
+    pub error_types: Option<Vec<BookErrorTypeDto>>,
+}
+
+/// Request body for bulk retrying all book errors
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RetryAllErrorsRequest {
+    /// Filter to only retry specific error type. If not provided, retry all error types.
+    #[serde(default)]
+    #[schema(example = "parser")]
+    pub error_type: Option<BookErrorTypeDto>,
+
+    /// Filter to only retry errors in a specific library
+    #[serde(default)]
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
+    pub library_id: Option<uuid::Uuid>,
+}
+
+/// Response for retry operations
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RetryErrorsResponse {
+    /// Number of tasks enqueued
+    #[schema(example = 5)]
+    pub tasks_enqueued: u64,
+
+    /// Message describing what was done
+    #[schema(example = "Enqueued 5 analysis tasks")]
+    pub message: String,
 }

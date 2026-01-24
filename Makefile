@@ -203,6 +203,9 @@ watch: ## Run with hot reload (requires cargo-watch)
 frontend: ## Start frontend dev server (requires backend)
 	cd web && npm run dev
 
+frontend-build: ## Build frontend
+	cd web && npm run build
+
 frontend-mock: ## Start frontend with mock API (no backend needed)
 	cd web && npm run dev:mock
 

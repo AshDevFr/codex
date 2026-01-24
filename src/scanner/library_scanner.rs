@@ -870,6 +870,7 @@ async fn process_series_batched(
                             deleted: false,
                             analyzed: false,
                             analysis_error: None,
+                            analysis_errors: None,
                             modified_at: file_hash.modified_at,
                             created_at: now,
                             updated_at: now,

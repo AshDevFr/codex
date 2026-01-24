@@ -1604,6 +1604,123 @@
         ]
       }
     },
+    "/api/v1/books/errors": {
+      "get": {
+        "tags": [
+          "books"
+        ],
+        "summary": "List books with errors (v2 - grouped by error type)",
+        "description": "Returns books with errors grouped by error type, with counts and pagination.\nThis enhanced endpoint provides detailed error information including error\ntypes, messages, and timestamps.",
+        "operationId": "list_books_with_errors_v2",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "query",
+            "description": "Optional library filter",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "series_id",
+            "in": "query",
+            "description": "Optional series filter",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "error_type",
+            "in": "query",
+            "description": "Filter by specific error type",
+            "required": false,
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/components/schemas/BookErrorTypeDto"
+                }
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-indexed)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Number of items per page (max 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Books with errors grouped by type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BooksWithErrorsResponse"
+                },
+                "example": {
+                  "errorCounts": {
+                    "parser": 5,
+                    "thumbnail": 10
+                  },
+                  "groups": [
+                    {
+                      "books": [],
+                      "count": 5,
+                      "errorType": "parser",
+                      "label": "Parser Error"
+                    }
+                  ],
+                  "page": 0,
+                  "pageSize": 20,
+                  "totalBooksWithErrors": 15,
+                  "totalPages": 1
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/in-progress": {
       "get": {
         "tags": [
@@ -1885,6 +2002,57 @@
                   "items": {
                     "$ref": "#/components/schemas/BookDto"
                   }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/retry-all-errors": {
+      "post": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Retry all failed operations across all books",
+        "description": "Enqueues appropriate tasks for all books with errors.\nCan be filtered by error type or library.",
+        "operationId": "retry_all_book_errors",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetryAllErrorsRequest"
+              },
+              "example": {
+                "errorType": "parser",
+                "libraryId": null
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Retry tasks enqueued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryErrorsResponse"
+                },
+                "example": {
+                  "message": "Enqueued 10 analysis tasks and 5 thumbnail tasks",
+                  "tasksEnqueued": 15
                 }
               }
             }
@@ -2567,6 +2735,77 @@
         "security": [
           {
             "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/{book_id}/retry": {
+      "post": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Retry failed operations for a specific book",
+        "description": "Enqueues appropriate tasks based on the error types present or specified.\nFor parser/metadata/page_extraction errors, enqueues an AnalyzeBook task.\nFor thumbnail errors, enqueues a GenerateThumbnail task.",
+        "operationId": "retry_book_errors",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetryBookErrorsRequest"
+              },
+              "example": {
+                "errorTypes": [
+                  "parser",
+                  "thumbnail"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Retry tasks enqueued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryErrorsResponse"
+                },
+                "example": {
+                  "message": "Enqueued 1 analysis task and 1 thumbnail task",
+                  "tasksEnqueued": 2
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Book has no errors to retry"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -11868,6 +12107,48 @@
           }
         }
       },
+      "BookErrorDto": {
+        "type": "object",
+        "description": "A single error for a book",
+        "required": [
+          "errorType",
+          "message",
+          "occurredAt"
+        ],
+        "properties": {
+          "details": {
+            "description": "Additional error details (optional)"
+          },
+          "errorType": {
+            "$ref": "#/components/schemas/BookErrorTypeDto",
+            "description": "Type of the error"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message",
+            "example": "Failed to parse CBZ: invalid archive"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the error occurred",
+            "example": "2024-01-15T10:30:00Z"
+          }
+        }
+      },
+      "BookErrorTypeDto": {
+        "type": "string",
+        "description": "Book error type",
+        "enum": [
+          "format_detection",
+          "parser",
+          "metadata",
+          "thumbnail",
+          "page_extraction",
+          "pdf_rendering",
+          "other"
+        ]
+      },
       "BookListRequest": {
         "type": "object",
         "description": "Request body for POST /books/list",
@@ -12306,6 +12587,27 @@
           "custom"
         ]
       },
+      "BookWithErrorsDto": {
+        "type": "object",
+        "description": "A book with its associated errors",
+        "required": [
+          "book",
+          "errors"
+        ],
+        "properties": {
+          "book": {
+            "$ref": "#/components/schemas/BookDto",
+            "description": "The book data"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookErrorDto"
+            },
+            "description": "All errors for this book"
+          }
+        }
+      },
       "BooksPaginationQuery": {
         "type": "object",
         "description": "Query parameters for paginated book endpoints",
@@ -12326,6 +12628,71 @@
               "null"
             ],
             "description": "Sort parameter (e.g., \"createdDate,desc\", \"metadata.numberSort,asc\")"
+          }
+        }
+      },
+      "BooksWithErrorsResponse": {
+        "type": "object",
+        "description": "Response for listing books with errors",
+        "required": [
+          "totalBooksWithErrors",
+          "errorCounts",
+          "groups",
+          "page",
+          "pageSize",
+          "totalPages"
+        ],
+        "properties": {
+          "errorCounts": {
+            "type": "object",
+            "description": "Count of books by error type",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "example": {
+              "parser": 5,
+              "thumbnail": 10
+            }
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ErrorGroupDto"
+            },
+            "description": "Error groups with books"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current page (0-indexed)",
+            "example": 0,
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Page size",
+            "example": 20,
+            "minimum": 0
+          },
+          "totalBooksWithErrors": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of books with errors",
+            "example": 15,
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of pages",
+            "example": 1,
+            "minimum": 0
           }
         }
       },
@@ -13557,6 +13924,41 @@
           "series",
           "library"
         ]
+      },
+      "ErrorGroupDto": {
+        "type": "object",
+        "description": "Summary of errors grouped by type",
+        "required": [
+          "errorType",
+          "label",
+          "count",
+          "books"
+        ],
+        "properties": {
+          "books": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookWithErrorsDto"
+            },
+            "description": "Books with this error type (paginated)"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of books with this error type",
+            "example": 5,
+            "minimum": 0
+          },
+          "errorType": {
+            "$ref": "#/components/schemas/BookErrorTypeDto",
+            "description": "Error type"
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable label for this error type",
+            "example": "Parser Error"
+          }
+        }
       },
       "ErrorResponse": {
         "type": "object",
@@ -18433,6 +18835,74 @@
             "type": "string",
             "description": "Success message",
             "example": "Verification email sent"
+          }
+        }
+      },
+      "RetryAllErrorsRequest": {
+        "type": "object",
+        "description": "Request body for bulk retrying all book errors",
+        "properties": {
+          "errorType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BookErrorTypeDto",
+                "description": "Filter to only retry specific error type. If not provided, retry all error types."
+              }
+            ]
+          },
+          "libraryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Filter to only retry errors in a specific library",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        }
+      },
+      "RetryBookErrorsRequest": {
+        "type": "object",
+        "description": "Request body for retrying book errors",
+        "properties": {
+          "errorTypes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BookErrorTypeDto"
+            },
+            "description": "Specific error types to retry. If not provided, retry based on all current error types.",
+            "example": [
+              "parser",
+              "thumbnail"
+            ]
+          }
+        }
+      },
+      "RetryErrorsResponse": {
+        "type": "object",
+        "description": "Response for retry operations",
+        "required": [
+          "tasksEnqueued",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message describing what was done",
+            "example": "Enqueued 5 analysis tasks"
+          },
+          "tasksEnqueued": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of tasks enqueued",
+            "example": 5,
+            "minimum": 0
           }
         }
       },

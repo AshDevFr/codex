@@ -1,8 +1,9 @@
 use anyhow::{anyhow, Result};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
+use crate::db::entities::book_error::{BookError, BookErrorType};
 use crate::db::entities::tasks;
 use crate::db::repositories::{BookRepository, SeriesRepository};
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
@@ -78,6 +79,16 @@ impl TaskHandler for GenerateThumbnailHandler {
                         task.id, book_id, path
                     );
 
+                    // Clear thumbnail error on success
+                    if let Err(e) =
+                        BookRepository::clear_error(db, book_id, BookErrorType::Thumbnail).await
+                    {
+                        warn!(
+                            "Failed to clear thumbnail error for book {}: {}",
+                            book_id, e
+                        );
+                    }
+
                     // If this book is the first in its series, invalidate the cached series thumbnail
                     // so it gets regenerated with the new book thumbnail
                     if let Ok(is_first) = BookRepository::is_first_in_series(db, book_id).await {
@@ -132,11 +143,31 @@ impl TaskHandler for GenerateThumbnailHandler {
                         }),
                     ))
                 }
-                Err(e) => Err(anyhow!(
-                    "Failed to generate thumbnail for book {}: {}",
-                    book_id,
-                    e
-                )),
+                Err(e) => {
+                    let error_msg = format!("Failed to generate thumbnail: {}", e);
+                    error!(
+                        "Task {}: Thumbnail generation failed for book {}: {}",
+                        task.id, book_id, e
+                    );
+
+                    // Store the thumbnail error for UI display
+                    let book_error = BookError::new(&error_msg);
+                    if let Err(set_err) =
+                        BookRepository::set_error(db, book_id, BookErrorType::Thumbnail, book_error)
+                            .await
+                    {
+                        warn!(
+                            "Failed to set thumbnail error for book {}: {}",
+                            book_id, set_err
+                        );
+                    }
+
+                    Err(anyhow!(
+                        "Failed to generate thumbnail for book {}: {}",
+                        book_id,
+                        e
+                    ))
+                }
             }
         })
     }

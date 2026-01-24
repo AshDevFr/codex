@@ -50,6 +50,7 @@ fn create_test_book_model(
         deleted: false,
         analyzed: false,
         analysis_error: None,
+        analysis_errors: None,
         modified_at: Utc::now(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
@@ -1083,6 +1084,7 @@ fn create_test_book_with_error(
         deleted: false,
         analyzed: false,
         analysis_error: Some(error.to_string()),
+        analysis_errors: None,
         modified_at: Utc::now(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
@@ -3077,4 +3079,996 @@ async fn test_list_books_filtered_by_read_status_read() {
     let book_list = response.unwrap();
     assert_eq!(book_list.data.len(), 1);
     assert_eq!(book_list.data[0].id, book3.id);
+}
+
+// ============================================================================
+// Book Errors V2 Tests
+// ============================================================================
+
+use codex::api::routes::v1::dto::book::{
+    BookErrorTypeDto, BooksWithErrorsResponse, RetryAllErrorsRequest, RetryBookErrorsRequest,
+    RetryErrorsResponse,
+};
+use codex::db::entities::book_error::{BookError, BookErrorType};
+
+/// Helper to create a book with structured errors (v2 - using analysis_errors JSON field)
+async fn create_test_book_with_error_v2(
+    db: &sea_orm::DatabaseConnection,
+    series_id: uuid::Uuid,
+    library_id: uuid::Uuid,
+    path: &str,
+    name: &str,
+    error_type: BookErrorType,
+    error_message: &str,
+) -> codex::db::entities::books::Model {
+    use codex::db::repositories::BookRepository;
+
+    let book = create_test_book_model(series_id, library_id, path, name, None);
+    let created = BookRepository::create(db, &book, None).await.unwrap();
+
+    // Add error to the book
+    let error = BookError::new(error_message);
+    BookRepository::set_error(db, created.id, error_type, error)
+        .await
+        .unwrap();
+
+    // Reload the book to get updated analysis_errors
+    BookRepository::get_by_id(db, created.id)
+        .await
+        .unwrap()
+        .unwrap()
+}
+
+#[tokio::test]
+async fn test_list_books_with_errors_v2() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create books with different error types
+    let book1 = create_test_book_with_error_v2(
+        &db,
+        series.id,
+        library.id,
+        "/test/book1.cbz",
+        "book1.cbz",
+        BookErrorType::Parser,
+        "Failed to parse archive",
+    )
+    .await;
+
+    let book2 = create_test_book_with_error_v2(
+        &db,
+        series.id,
+        library.id,
+        "/test/book2.cbz",
+        "book2.cbz",
+        BookErrorType::Thumbnail,
+        "Failed to generate thumbnail",
+    )
+    .await;
+
+    // Create a book without errors
+    let _book3 = create_test_book_with_metadata(
+        &db,
+        series.id,
+        library.id,
+        "/test/book3.cbz",
+        "book3.cbz",
+        Some("Good Book".to_string()),
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Test listing all books with errors
+    let request = get_request_with_auth("/api/v1/books/errors", &token);
+    let (status, response): (StatusCode, Option<BooksWithErrorsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let errors_response = response.unwrap();
+
+    // Should have 2 books with errors
+    assert_eq!(errors_response.total_books_with_errors, 2);
+
+    // Should have counts for parser and thumbnail
+    assert!(errors_response.error_counts.contains_key("parser"));
+    assert!(errors_response.error_counts.contains_key("thumbnail"));
+    assert_eq!(errors_response.error_counts.get("parser"), Some(&1));
+    assert_eq!(errors_response.error_counts.get("thumbnail"), Some(&1));
+
+    // Should have 2 groups
+    assert_eq!(errors_response.groups.len(), 2);
+
+    // Verify book IDs are present
+    let all_book_ids: Vec<uuid::Uuid> = errors_response
+        .groups
+        .iter()
+        .flat_map(|g| g.books.iter().map(|b| b.book.id))
+        .collect();
+    assert!(all_book_ids.contains(&book1.id));
+    assert!(all_book_ids.contains(&book2.id));
+}
+
+#[tokio::test]
+async fn test_list_books_with_errors_v2_filter_by_type() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create books with different error types
+    let _book1 = create_test_book_with_error_v2(
+        &db,
+        series.id,
+        library.id,
+        "/test/book1.cbz",
+        "book1.cbz",
+        BookErrorType::Parser,
+        "Failed to parse archive",
+    )
+    .await;
+
+    let book2 = create_test_book_with_error_v2(
+        &db,
+        series.id,
+        library.id,
+        "/test/book2.cbz",
+        "book2.cbz",
+        BookErrorType::Thumbnail,
+        "Failed to generate thumbnail",
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Test filtering by thumbnail error type
+    let request = get_request_with_auth("/api/v1/books/errors?error_type=thumbnail", &token);
+    let (status, response): (StatusCode, Option<BooksWithErrorsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let errors_response = response.unwrap();
+
+    // Should have 1 book with thumbnail error
+    assert_eq!(errors_response.total_books_with_errors, 1);
+
+    // Should only have thumbnail group
+    assert_eq!(errors_response.groups.len(), 1);
+    assert_eq!(
+        errors_response.groups[0].error_type,
+        BookErrorTypeDto::Thumbnail
+    );
+    assert_eq!(errors_response.groups[0].books.len(), 1);
+    assert_eq!(errors_response.groups[0].books[0].book.id, book2.id);
+}
+
+#[tokio::test]
+async fn test_retry_book_errors() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create a book with parser error
+    let book = create_test_book_with_error_v2(
+        &db,
+        series.id,
+        library.id,
+        "/test/book1.cbz",
+        "book1.cbz",
+        BookErrorType::Parser,
+        "Failed to parse archive",
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Retry the book errors
+    let request_body = RetryBookErrorsRequest { error_types: None };
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/books/{}/retry", book.id),
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<RetryErrorsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let retry_response = response.unwrap();
+
+    // Should have enqueued 1 analysis task (parser error -> analyze book)
+    assert_eq!(retry_response.tasks_enqueued, 1);
+    assert!(retry_response.message.contains("analysis"));
+}
+
+#[tokio::test]
+async fn test_retry_book_errors_specific_type() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create a book with both parser and thumbnail errors
+    let book = create_test_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz", None);
+    let created = BookRepository::create(&db, &book, None).await.unwrap();
+    BookRepository::set_error(
+        &db,
+        created.id,
+        BookErrorType::Parser,
+        BookError::new("Parse error"),
+    )
+    .await
+    .unwrap();
+    BookRepository::set_error(
+        &db,
+        created.id,
+        BookErrorType::Thumbnail,
+        BookError::new("Thumbnail error"),
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Retry only thumbnail error
+    let request_body = RetryBookErrorsRequest {
+        error_types: Some(vec![BookErrorTypeDto::Thumbnail]),
+    };
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/books/{}/retry", created.id),
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<RetryErrorsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let retry_response = response.unwrap();
+
+    // Should have enqueued only 1 thumbnail task
+    assert_eq!(retry_response.tasks_enqueued, 1);
+    assert!(retry_response.message.contains("thumbnail"));
+}
+
+#[tokio::test]
+async fn test_retry_book_errors_no_errors() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create a book without errors
+    let book = create_test_book_with_metadata(
+        &db,
+        series.id,
+        library.id,
+        "/test/book1.cbz",
+        "book1.cbz",
+        Some("Good Book".to_string()),
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Try to retry errors on a book with no errors
+    let request_body = RetryBookErrorsRequest { error_types: None };
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/books/{}/retry", book.id),
+        &request_body,
+        &token,
+    );
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    // Should return 400 Bad Request
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_retry_all_book_errors() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create multiple books with errors
+    let _book1 = create_test_book_with_error_v2(
+        &db,
+        series.id,
+        library.id,
+        "/test/book1.cbz",
+        "book1.cbz",
+        BookErrorType::Parser,
+        "Failed to parse archive",
+    )
+    .await;
+
+    let _book2 = create_test_book_with_error_v2(
+        &db,
+        series.id,
+        library.id,
+        "/test/book2.cbz",
+        "book2.cbz",
+        BookErrorType::Thumbnail,
+        "Failed to generate thumbnail",
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Retry all errors
+    let request_body = RetryAllErrorsRequest {
+        error_type: None,
+        library_id: None,
+    };
+    let request =
+        post_json_request_with_auth("/api/v1/books/retry-all-errors", &request_body, &token);
+    let (status, response): (StatusCode, Option<RetryErrorsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let retry_response = response.unwrap();
+
+    // Should have enqueued 2 tasks (1 analysis + 1 thumbnail)
+    assert_eq!(retry_response.tasks_enqueued, 2);
+}
+
+#[tokio::test]
+async fn test_retry_all_book_errors_filter_by_type() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create multiple books with errors
+    let _book1 = create_test_book_with_error_v2(
+        &db,
+        series.id,
+        library.id,
+        "/test/book1.cbz",
+        "book1.cbz",
+        BookErrorType::Parser,
+        "Failed to parse archive",
+    )
+    .await;
+
+    let _book2 = create_test_book_with_error_v2(
+        &db,
+        series.id,
+        library.id,
+        "/test/book2.cbz",
+        "book2.cbz",
+        BookErrorType::Thumbnail,
+        "Failed to generate thumbnail",
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Retry only parser errors
+    let request_body = RetryAllErrorsRequest {
+        error_type: Some(BookErrorTypeDto::Parser),
+        library_id: None,
+    };
+    let request =
+        post_json_request_with_auth("/api/v1/books/retry-all-errors", &request_body, &token);
+    let (status, response): (StatusCode, Option<RetryErrorsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let retry_response = response.unwrap();
+
+    // Should have enqueued 1 analysis task (only parser errors)
+    assert_eq!(retry_response.tasks_enqueued, 1);
+}
+
+// ============================================================================
+// Edge Case Tests for Books in Error Feature
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_books_with_errors_v2_single_error_type() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create multiple books with only parser errors (single error type)
+    let book1 = create_test_book_with_error_v2(
+        &db,
+        series.id,
+        library.id,
+        "/test/book1.cbz",
+        "book1.cbz",
+        BookErrorType::Parser,
+        "Failed to parse archive: invalid header",
+    )
+    .await;
+
+    let book2 = create_test_book_with_error_v2(
+        &db,
+        series.id,
+        library.id,
+        "/test/book2.cbz",
+        "book2.cbz",
+        BookErrorType::Parser,
+        "Failed to parse archive: truncated file",
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Test listing all books with errors
+    let request = get_request_with_auth("/api/v1/books/errors", &token);
+    let (status, response): (StatusCode, Option<BooksWithErrorsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let errors_response = response.unwrap();
+
+    // Should have 2 books with errors
+    assert_eq!(errors_response.total_books_with_errors, 2);
+
+    // Should only have parser in error_counts
+    assert_eq!(errors_response.error_counts.len(), 1);
+    assert!(errors_response.error_counts.contains_key("parser"));
+    assert_eq!(errors_response.error_counts.get("parser"), Some(&2));
+
+    // Should have only 1 group (parser)
+    assert_eq!(errors_response.groups.len(), 1);
+    assert_eq!(
+        errors_response.groups[0].error_type,
+        BookErrorTypeDto::Parser
+    );
+    assert_eq!(errors_response.groups[0].count, 2);
+    assert_eq!(errors_response.groups[0].books.len(), 2);
+
+    // Verify both books are in the group
+    let book_ids: Vec<uuid::Uuid> = errors_response.groups[0]
+        .books
+        .iter()
+        .map(|b| b.book.id)
+        .collect();
+    assert!(book_ids.contains(&book1.id));
+    assert!(book_ids.contains(&book2.id));
+}
+
+#[tokio::test]
+async fn test_list_books_with_errors_v2_long_error_message() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create a very long error message (simulating detailed stack traces or verbose errors)
+    let long_error_message = format!(
+        "Failed to parse archive: {}. Additional details: {}. Stack trace: {}",
+        "a".repeat(500),
+        "b".repeat(500),
+        "c".repeat(500)
+    );
+
+    // Create a book with a very long error message
+    let book = create_test_book_with_error_v2(
+        &db,
+        series.id,
+        library.id,
+        "/test/book1.cbz",
+        "book1.cbz",
+        BookErrorType::Parser,
+        &long_error_message,
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Test listing books with errors - should handle long messages without issue
+    let request = get_request_with_auth("/api/v1/books/errors", &token);
+    let (status, response): (StatusCode, Option<BooksWithErrorsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let errors_response = response.unwrap();
+
+    // Should have 1 book with error
+    assert_eq!(errors_response.total_books_with_errors, 1);
+    assert_eq!(errors_response.groups.len(), 1);
+    assert_eq!(errors_response.groups[0].books.len(), 1);
+
+    // Verify the long error message is preserved
+    let book_with_error = &errors_response.groups[0].books[0];
+    assert_eq!(book_with_error.book.id, book.id);
+    assert_eq!(book_with_error.errors.len(), 1);
+    assert_eq!(book_with_error.errors[0].message, long_error_message);
+}
+
+#[tokio::test]
+async fn test_list_books_with_errors_v2_multiple_errors_per_book() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create a book with multiple error types
+    let book = create_test_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz", None);
+    let created = BookRepository::create(&db, &book, None).await.unwrap();
+
+    // Add parser error
+    BookRepository::set_error(
+        &db,
+        created.id,
+        BookErrorType::Parser,
+        BookError::new("Failed to parse archive"),
+    )
+    .await
+    .unwrap();
+
+    // Add thumbnail error
+    BookRepository::set_error(
+        &db,
+        created.id,
+        BookErrorType::Thumbnail,
+        BookError::new("Failed to generate thumbnail"),
+    )
+    .await
+    .unwrap();
+
+    // Add metadata error
+    BookRepository::set_error(
+        &db,
+        created.id,
+        BookErrorType::Metadata,
+        BookError::new("Failed to extract metadata"),
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Test listing books with errors
+    let request = get_request_with_auth("/api/v1/books/errors", &token);
+    let (status, response): (StatusCode, Option<BooksWithErrorsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let errors_response = response.unwrap();
+
+    // Should have 1 book (not 3 - the same book counted once)
+    assert_eq!(errors_response.total_books_with_errors, 1);
+
+    // Should have 3 error types in counts
+    assert_eq!(errors_response.error_counts.len(), 3);
+    assert_eq!(errors_response.error_counts.get("parser"), Some(&1));
+    assert_eq!(errors_response.error_counts.get("thumbnail"), Some(&1));
+    assert_eq!(errors_response.error_counts.get("metadata"), Some(&1));
+
+    // Should have 3 groups (one per error type)
+    assert_eq!(errors_response.groups.len(), 3);
+
+    // Verify the book appears in each group
+    for group in &errors_response.groups {
+        assert_eq!(group.count, 1);
+        assert_eq!(group.books.len(), 1);
+        assert_eq!(group.books[0].book.id, created.id);
+    }
+}
+
+#[tokio::test]
+async fn test_retry_book_errors_multiple_error_types() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create a book with multiple error types
+    let book = create_test_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz", None);
+    let created = BookRepository::create(&db, &book, None).await.unwrap();
+
+    // Add parser and thumbnail errors
+    BookRepository::set_error(
+        &db,
+        created.id,
+        BookErrorType::Parser,
+        BookError::new("Parse error"),
+    )
+    .await
+    .unwrap();
+    BookRepository::set_error(
+        &db,
+        created.id,
+        BookErrorType::Thumbnail,
+        BookError::new("Thumbnail error"),
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Retry all errors for this book (should enqueue both analysis and thumbnail tasks)
+    let request_body = RetryBookErrorsRequest { error_types: None };
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/books/{}/retry", created.id),
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<RetryErrorsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let retry_response = response.unwrap();
+
+    // Should have enqueued 2 tasks (1 analysis + 1 thumbnail)
+    assert_eq!(retry_response.tasks_enqueued, 2);
+}
+
+#[tokio::test]
+async fn test_retry_all_book_errors_empty() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series with no errored books
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create a book without errors
+    let _book = create_test_book_with_metadata(
+        &db,
+        series.id,
+        library.id,
+        "/test/book1.cbz",
+        "book1.cbz",
+        Some("Good Book".to_string()),
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Try to retry all errors when there are none
+    let request_body = RetryAllErrorsRequest {
+        error_type: None,
+        library_id: None,
+    };
+    let request =
+        post_json_request_with_auth("/api/v1/books/retry-all-errors", &request_body, &token);
+    let (status, response): (StatusCode, Option<RetryErrorsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let retry_response = response.unwrap();
+
+    // Should have enqueued 0 tasks
+    assert_eq!(retry_response.tasks_enqueued, 0);
+}
+
+#[tokio::test]
+async fn test_retry_all_book_errors_filter_by_library() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create two libraries
+    let library1 = LibraryRepository::create(&db, "Library 1", "/lib1", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let library2 = LibraryRepository::create(&db, "Library 2", "/lib2", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(&db, library1.id, "Series 1", None)
+        .await
+        .unwrap();
+
+    let series2 = SeriesRepository::create(&db, library2.id, "Series 2", None)
+        .await
+        .unwrap();
+
+    // Create errored books in both libraries
+    let _book1 = create_test_book_with_error_v2(
+        &db,
+        series1.id,
+        library1.id,
+        "/lib1/book1.cbz",
+        "book1.cbz",
+        BookErrorType::Parser,
+        "Error in library 1",
+    )
+    .await;
+
+    let _book2 = create_test_book_with_error_v2(
+        &db,
+        series2.id,
+        library2.id,
+        "/lib2/book2.cbz",
+        "book2.cbz",
+        BookErrorType::Parser,
+        "Error in library 2",
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Retry only errors in library1
+    let request_body = RetryAllErrorsRequest {
+        error_type: None,
+        library_id: Some(library1.id),
+    };
+    let request =
+        post_json_request_with_auth("/api/v1/books/retry-all-errors", &request_body, &token);
+    let (status, response): (StatusCode, Option<RetryErrorsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let retry_response = response.unwrap();
+
+    // Should have enqueued 1 task (only from library1)
+    assert_eq!(retry_response.tasks_enqueued, 1);
+}
+
+#[tokio::test]
+async fn test_list_books_with_errors_v2_pagination() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create 25 books with errors to test pagination (default page size is usually 20-50)
+    for i in 0..25 {
+        let _book = create_test_book_with_error_v2(
+            &db,
+            series.id,
+            library.id,
+            &format!("/test/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            BookErrorType::Parser,
+            &format!("Error message for book {}", i),
+        )
+        .await;
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    // Test first page with small page size
+    let request = get_request_with_auth("/api/v1/books/errors?page=0&page_size=10", &token);
+    let (status, response): (StatusCode, Option<BooksWithErrorsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page1 = response.unwrap();
+
+    // Should have correct total but limited items per page
+    assert_eq!(page1.total_books_with_errors, 25);
+    assert_eq!(page1.page, 0);
+    assert_eq!(page1.page_size, 10);
+    assert_eq!(page1.total_pages, 3); // 25 books / 10 per page = 3 pages
+
+    // Each group should show paginated books
+    let page1_book_count: usize = page1.groups.iter().map(|g| g.books.len()).sum();
+    assert_eq!(page1_book_count, 10);
+
+    // Test second page
+    let app2 = create_test_router(state.clone()).await;
+    let request2 = get_request_with_auth("/api/v1/books/errors?page=1&page_size=10", &token);
+    let (status2, response2): (StatusCode, Option<BooksWithErrorsResponse>) =
+        make_json_request(app2, request2).await;
+
+    assert_eq!(status2, StatusCode::OK);
+    let page2 = response2.unwrap();
+
+    assert_eq!(page2.page, 1);
+    let page2_book_count: usize = page2.groups.iter().map(|g| g.books.len()).sum();
+    assert_eq!(page2_book_count, 10);
+
+    // Test third (last) page
+    let app3 = create_test_router(state).await;
+    let request3 = get_request_with_auth("/api/v1/books/errors?page=2&page_size=10", &token);
+    let (status3, response3): (StatusCode, Option<BooksWithErrorsResponse>) =
+        make_json_request(app3, request3).await;
+
+    assert_eq!(status3, StatusCode::OK);
+    let page3 = response3.unwrap();
+
+    assert_eq!(page3.page, 2);
+    let page3_book_count: usize = page3.groups.iter().map(|g| g.books.len()).sum();
+    assert_eq!(page3_book_count, 5); // Remaining 5 books
+}
+
+#[tokio::test]
+async fn test_list_books_with_errors_v2_all_error_types() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create books with all 7 error types to verify all are handled
+    let error_types = [
+        (BookErrorType::FormatDetection, "format detection error"),
+        (BookErrorType::Parser, "parser error"),
+        (BookErrorType::Metadata, "metadata error"),
+        (BookErrorType::Thumbnail, "thumbnail error"),
+        (BookErrorType::PageExtraction, "page extraction error"),
+        (BookErrorType::PdfRendering, "pdf rendering error"),
+        (BookErrorType::Other, "other error"),
+    ];
+
+    for (i, (error_type, message)) in error_types.iter().enumerate() {
+        let _book = create_test_book_with_error_v2(
+            &db,
+            series.id,
+            library.id,
+            &format!("/test/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            *error_type,
+            message,
+        )
+        .await;
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Test listing all error types
+    let request = get_request_with_auth("/api/v1/books/errors", &token);
+    let (status, response): (StatusCode, Option<BooksWithErrorsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let errors_response = response.unwrap();
+
+    // Should have 7 books (one per error type)
+    assert_eq!(errors_response.total_books_with_errors, 7);
+
+    // Should have 7 error types in counts
+    assert_eq!(errors_response.error_counts.len(), 7);
+    assert!(errors_response
+        .error_counts
+        .contains_key("format_detection"));
+    assert!(errors_response.error_counts.contains_key("parser"));
+    assert!(errors_response.error_counts.contains_key("metadata"));
+    assert!(errors_response.error_counts.contains_key("thumbnail"));
+    assert!(errors_response.error_counts.contains_key("page_extraction"));
+    assert!(errors_response.error_counts.contains_key("pdf_rendering"));
+    assert!(errors_response.error_counts.contains_key("other"));
+
+    // Should have 7 groups
+    assert_eq!(errors_response.groups.len(), 7);
+
+    // Verify each error type DTO is correctly mapped
+    let group_types: Vec<_> = errors_response
+        .groups
+        .iter()
+        .map(|g| g.error_type)
+        .collect();
+    assert!(group_types.contains(&BookErrorTypeDto::FormatDetection));
+    assert!(group_types.contains(&BookErrorTypeDto::Parser));
+    assert!(group_types.contains(&BookErrorTypeDto::Metadata));
+    assert!(group_types.contains(&BookErrorTypeDto::Thumbnail));
+    assert!(group_types.contains(&BookErrorTypeDto::PageExtraction));
+    assert!(group_types.contains(&BookErrorTypeDto::PdfRendering));
+    assert!(group_types.contains(&BookErrorTypeDto::Other));
 }

@@ -19,7 +19,11 @@ pub struct Model {
     pub page_count: i32,
     pub deleted: bool,
     pub analyzed: bool,
+    /// Legacy single error field (deprecated, use analysis_errors instead)
     pub analysis_error: Option<String>,
+    /// JSON map of error types to error details
+    /// Stored as TEXT containing JSON: {"error_type": {"message": "...", "details": {...}, "occurred_at": "..."}}
+    pub analysis_errors: Option<String>,
     pub modified_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
