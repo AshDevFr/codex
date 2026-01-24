@@ -951,6 +951,148 @@ pub struct FullSeriesMetadataResponse {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Nested metadata object for FullSeriesResponse
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesFullMetadata {
+    /// Series title
+    #[schema(example = "Batman: Year One")]
+    pub title: String,
+
+    /// Custom sort name for ordering
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Batman Year One")]
+    pub title_sort: Option<String>,
+
+    /// Series description/summary
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "The definitive origin story of Batman.")]
+    pub summary: Option<String>,
+
+    /// Publisher name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "DC Comics")]
+    pub publisher: Option<String>,
+
+    /// Imprint (sub-publisher)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Vertigo")]
+    pub imprint: Option<String>,
+
+    /// Series status (ongoing, ended, hiatus, abandoned, unknown)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "ended")]
+    pub status: Option<String>,
+
+    /// Age rating (e.g., 13, 16, 18)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 16)]
+    pub age_rating: Option<i32>,
+
+    /// Language (BCP47 format: "en", "ja", "ko")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "en")]
+    pub language: Option<String>,
+
+    /// Reading direction (ltr, rtl, ttb or webtoon)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "ltr")]
+    pub reading_direction: Option<String>,
+
+    /// Release year
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 1987)]
+    pub year: Option<i32>,
+
+    /// Expected total book count (for ongoing series)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 4)]
+    pub total_book_count: Option<i32>,
+
+    /// Custom JSON metadata
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>, example = json!({"myField": "value"}))]
+    pub custom_metadata: Option<serde_json::Value>,
+
+    /// Lock states for all metadata fields
+    pub locks: MetadataLocks,
+
+    /// When the metadata was created
+    #[schema(example = "2024-01-01T00:00:00Z")]
+    pub created_at: DateTime<Utc>,
+
+    /// When the metadata was last updated
+    #[schema(example = "2024-01-15T10:30:00Z")]
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Full series response including series data and complete metadata
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FullSeriesResponse {
+    /// Series unique identifier
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]
+    pub id: uuid::Uuid,
+
+    /// Library unique identifier
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
+    pub library_id: uuid::Uuid,
+
+    /// Name of the library this series belongs to
+    #[schema(example = "Comics")]
+    pub library_name: String,
+
+    /// Total number of books in this series
+    #[schema(example = 4)]
+    pub book_count: i64,
+
+    /// Number of unread books in this series (user-specific)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 2)]
+    pub unread_count: Option<i64>,
+
+    /// Filesystem path to the series directory
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "/media/comics/Batman - Year One")]
+    pub path: Option<String>,
+
+    /// Selected cover source (e.g., "first_book", "custom")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "first_book")]
+    pub selected_cover_source: Option<String>,
+
+    /// Whether the series has a custom cover uploaded
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = false)]
+    pub has_custom_cover: Option<bool>,
+
+    /// Complete series metadata
+    pub metadata: SeriesFullMetadata,
+
+    /// Genres assigned to this series
+    pub genres: Vec<GenreDto>,
+
+    /// Tags assigned to this series
+    pub tags: Vec<TagDto>,
+
+    /// Alternate titles for this series
+    pub alternate_titles: Vec<AlternateTitleDto>,
+
+    /// External ratings from various sources
+    pub external_ratings: Vec<ExternalRatingDto>,
+
+    /// External links to other sites
+    pub external_links: Vec<ExternalLinkDto>,
+
+    /// When the series was created
+    #[schema(example = "2024-01-01T00:00:00Z")]
+    pub created_at: DateTime<Utc>,
+
+    /// When the series was last updated
+    #[schema(example = "2024-01-15T10:30:00Z")]
+    pub updated_at: DateTime<Utc>,
+}
+
 /// Request to update metadata lock states
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

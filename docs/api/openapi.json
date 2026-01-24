@@ -6387,6 +6387,54 @@
         ]
       }
     },
+    "/api/v1/series/{series_id}/full": {
+      "get": {
+        "tags": [
+          "series"
+        ],
+        "summary": "Get full series data with complete metadata",
+        "description": "Returns series information combined with full metadata, genres, tags,\nalternate titles, external ratings, and external links in a single response.",
+        "operationId": "get_full_series",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full series data with metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FullSeriesResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/{series_id}/genres": {
       "get": {
         "tags": [
@@ -14559,6 +14607,133 @@
           }
         }
       },
+      "FullSeriesResponse": {
+        "type": "object",
+        "description": "Full series response including series data and complete metadata",
+        "required": [
+          "id",
+          "libraryId",
+          "libraryName",
+          "bookCount",
+          "metadata",
+          "genres",
+          "tags",
+          "alternateTitles",
+          "externalRatings",
+          "externalLinks",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "alternateTitles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlternateTitleDto"
+            },
+            "description": "Alternate titles for this series"
+          },
+          "bookCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of books in this series",
+            "example": 4
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the series was created",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "externalLinks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalLinkDto"
+            },
+            "description": "External links to other sites"
+          },
+          "externalRatings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalRatingDto"
+            },
+            "description": "External ratings from various sources"
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenreDto"
+            },
+            "description": "Genres assigned to this series"
+          },
+          "hasCustomCover": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the series has a custom cover uploaded",
+            "example": false
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Series unique identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "libraryId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Library unique identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "libraryName": {
+            "type": "string",
+            "description": "Name of the library this series belongs to",
+            "example": "Comics"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/SeriesFullMetadata",
+            "description": "Complete series metadata"
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Filesystem path to the series directory",
+            "example": "/media/comics/Batman - Year One"
+          },
+          "selectedCoverSource": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Selected cover source (e.g., \"first_book\", \"custom\")",
+            "example": "first_book"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TagDto"
+            },
+            "description": "Tags assigned to this series"
+          },
+          "unreadCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Number of unread books in this series (user-specific)",
+            "example": 2
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the series was last updated",
+            "example": "2024-01-15T10:30:00Z"
+          }
+        }
+      },
       "GenerateThumbnailsRequest": {
         "type": "object",
         "properties": {
@@ -19429,6 +19604,129 @@
             "type": "string",
             "format": "date-time",
             "description": "When the series was last updated",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Release year",
+            "example": 1987
+          }
+        }
+      },
+      "SeriesFullMetadata": {
+        "type": "object",
+        "description": "Nested metadata object for FullSeriesResponse",
+        "required": [
+          "title",
+          "locks",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "ageRating": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Age rating (e.g., 13, 16, 18)",
+            "example": 16
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the metadata was created",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "customMetadata": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Custom JSON metadata"
+          },
+          "imprint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Imprint (sub-publisher)",
+            "example": "Vertigo"
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Language (BCP47 format: \"en\", \"ja\", \"ko\")",
+            "example": "en"
+          },
+          "locks": {
+            "$ref": "#/components/schemas/MetadataLocks",
+            "description": "Lock states for all metadata fields"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Publisher name",
+            "example": "DC Comics"
+          },
+          "readingDirection": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reading direction (ltr, rtl, ttb or webtoon)",
+            "example": "ltr"
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Series status (ongoing, ended, hiatus, abandoned, unknown)",
+            "example": "ended"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Series description/summary",
+            "example": "The definitive origin story of Batman."
+          },
+          "title": {
+            "type": "string",
+            "description": "Series title",
+            "example": "Batman: Year One"
+          },
+          "titleSort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Custom sort name for ordering",
+            "example": "Batman Year One"
+          },
+          "totalBookCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Expected total book count (for ongoing series)",
+            "example": 4
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the metadata was last updated",
             "example": "2024-01-15T10:30:00Z"
           },
           "year": {

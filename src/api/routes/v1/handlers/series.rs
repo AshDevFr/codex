@@ -3,12 +3,12 @@ use super::super::dto::{
         AddSeriesGenreRequest, AddSeriesTagRequest, AlphabeticalGroupDto, AlternateTitleDto,
         AlternateTitleListResponse, CreateAlternateTitleRequest, CreateExternalLinkRequest,
         CreateExternalRatingRequest, ExternalLinkDto, ExternalLinkListResponse, ExternalRatingDto,
-        ExternalRatingListResponse, FullSeriesMetadataResponse, GenreDto, GenreListResponse,
-        MetadataLocks, PatchSeriesMetadataRequest, PatchSeriesRequest,
+        ExternalRatingListResponse, FullSeriesMetadataResponse, FullSeriesResponse, GenreDto,
+        GenreListResponse, MetadataLocks, PatchSeriesMetadataRequest, PatchSeriesRequest,
         ReplaceSeriesMetadataRequest, SeriesAverageRatingResponse, SeriesCoverDto,
-        SeriesCoverListResponse, SeriesMetadataResponse, SeriesSortParam, SeriesUpdateResponse,
-        SetSeriesGenresRequest, SetSeriesTagsRequest, SetUserRatingRequest, TagDto,
-        TagListResponse, TaxonomyCleanupResponse, UpdateAlternateTitleRequest,
+        SeriesCoverListResponse, SeriesFullMetadata, SeriesMetadataResponse, SeriesSortParam,
+        SeriesUpdateResponse, SetSeriesGenresRequest, SetSeriesTagsRequest, SetUserRatingRequest,
+        TagDto, TagListResponse, TaxonomyCleanupResponse, UpdateAlternateTitleRequest,
         UpdateMetadataLocksRequest, UserRatingsListResponse, UserSeriesRatingDto,
     },
     BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListRequest,
@@ -2375,6 +2375,220 @@ pub async fn get_full_series_metadata(
         external_links: ext_link_dtos,
         created_at: metadata.created_at,
         updated_at: metadata.updated_at,
+    }))
+}
+
+/// Get full series data with complete metadata
+///
+/// Returns series information combined with full metadata, genres, tags,
+/// alternate titles, external ratings, and external links in a single response.
+#[utoipa::path(
+    get,
+    path = "/api/v1/series/{series_id}/full",
+    params(
+        ("series_id" = Uuid, Path, description = "Series ID")
+    ),
+    responses(
+        (status = 200, description = "Full series data with metadata", body = FullSeriesResponse),
+        (status = 404, description = "Series not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "series"
+)]
+pub async fn get_full_series(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+) -> Result<Json<FullSeriesResponse>, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    // Fetch series and verify it exists
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Fetch all data in parallel
+    let (
+        metadata_result,
+        book_count_result,
+        unread_count_result,
+        cover_result,
+        has_custom_result,
+        library_result,
+        genres_result,
+        tags_result,
+        alt_titles_result,
+        ext_ratings_result,
+        ext_links_result,
+    ) = tokio::join!(
+        SeriesMetadataRepository::get_by_series_id(&state.db, series_id),
+        SeriesRepository::get_book_count(&state.db, series_id),
+        BookRepository::count_unread_in_series(&state.db, series_id, auth.user_id),
+        SeriesCoversRepository::get_selected(&state.db, series_id),
+        SeriesCoversRepository::has_custom_cover(&state.db, series_id),
+        LibraryRepository::get_by_id(&state.db, series.library_id),
+        GenreRepository::get_genres_for_series(&state.db, series_id),
+        TagRepository::get_tags_for_series(&state.db, series_id),
+        AlternateTitleRepository::get_for_series(&state.db, series_id),
+        ExternalRatingRepository::get_for_series(&state.db, series_id),
+        ExternalLinkRepository::get_for_series(&state.db, series_id),
+    );
+
+    // Handle errors and extract values
+    let metadata = metadata_result
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch metadata: {}", e)))?
+        .ok_or_else(|| ApiError::Internal("Series metadata not found".to_string()))?;
+
+    let book_count = book_count_result
+        .map_err(|e| ApiError::Internal(format!("Failed to get book count: {}", e)))?;
+
+    let unread_count = unread_count_result
+        .map_err(|e| ApiError::Internal(format!("Failed to count unread: {}", e)))?;
+
+    let selected_cover =
+        cover_result.map_err(|e| ApiError::Internal(format!("Failed to fetch cover: {}", e)))?;
+
+    let has_custom_cover = has_custom_result
+        .map_err(|e| ApiError::Internal(format!("Failed to check custom cover: {}", e)))?;
+
+    let library = library_result
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch library: {}", e)))?;
+
+    let genres =
+        genres_result.map_err(|e| ApiError::Internal(format!("Failed to fetch genres: {}", e)))?;
+
+    let tags =
+        tags_result.map_err(|e| ApiError::Internal(format!("Failed to fetch tags: {}", e)))?;
+
+    let alt_titles = alt_titles_result
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch alternate titles: {}", e)))?;
+
+    let ext_ratings = ext_ratings_result
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch external ratings: {}", e)))?;
+
+    let ext_links = ext_links_result
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch external links: {}", e)))?;
+
+    // Convert to DTOs
+    let genre_dtos: Vec<GenreDto> = genres
+        .into_iter()
+        .map(|g| GenreDto {
+            id: g.id,
+            name: g.name,
+            series_count: None,
+            created_at: g.created_at,
+        })
+        .collect();
+
+    let tag_dtos: Vec<TagDto> = tags
+        .into_iter()
+        .map(|t| TagDto {
+            id: t.id,
+            name: t.name,
+            series_count: None,
+            created_at: t.created_at,
+        })
+        .collect();
+
+    let alt_title_dtos: Vec<AlternateTitleDto> = alt_titles
+        .into_iter()
+        .map(|at| AlternateTitleDto {
+            id: at.id,
+            series_id: at.series_id,
+            label: at.label,
+            title: at.title,
+            created_at: at.created_at,
+            updated_at: at.updated_at,
+        })
+        .collect();
+
+    let ext_rating_dtos: Vec<ExternalRatingDto> = ext_ratings
+        .into_iter()
+        .map(|er| {
+            use sea_orm::prelude::Decimal;
+            ExternalRatingDto {
+                id: er.id,
+                series_id: er.series_id,
+                source_name: er.source_name,
+                rating: Decimal::to_string(&er.rating).parse::<f64>().unwrap_or(0.0),
+                vote_count: er.vote_count,
+                fetched_at: er.fetched_at,
+                created_at: er.created_at,
+                updated_at: er.updated_at,
+            }
+        })
+        .collect();
+
+    let ext_link_dtos: Vec<ExternalLinkDto> = ext_links
+        .into_iter()
+        .map(|el| ExternalLinkDto {
+            id: el.id,
+            series_id: el.series_id,
+            source_name: el.source_name,
+            url: el.url,
+            external_id: el.external_id,
+            created_at: el.created_at,
+            updated_at: el.updated_at,
+        })
+        .collect();
+
+    let library_name = library
+        .map(|l| l.name)
+        .unwrap_or_else(|| "Unknown Library".to_string());
+
+    Ok(Json(FullSeriesResponse {
+        id: series.id,
+        library_id: series.library_id,
+        library_name,
+        book_count,
+        unread_count: Some(unread_count),
+        path: Some(series.path),
+        selected_cover_source: selected_cover.map(|c| c.source),
+        has_custom_cover: Some(has_custom_cover),
+        metadata: SeriesFullMetadata {
+            title: metadata.title,
+            title_sort: metadata.title_sort,
+            summary: metadata.summary,
+            publisher: metadata.publisher,
+            imprint: metadata.imprint,
+            status: metadata.status,
+            age_rating: metadata.age_rating,
+            language: metadata.language,
+            reading_direction: metadata.reading_direction,
+            year: metadata.year,
+            total_book_count: metadata.total_book_count,
+            custom_metadata: parse_custom_metadata(metadata.custom_metadata.as_deref()),
+            locks: MetadataLocks {
+                title: metadata.title_lock,
+                title_sort: metadata.title_sort_lock,
+                summary: metadata.summary_lock,
+                publisher: metadata.publisher_lock,
+                imprint: metadata.imprint_lock,
+                status: metadata.status_lock,
+                age_rating: metadata.age_rating_lock,
+                language: metadata.language_lock,
+                reading_direction: metadata.reading_direction_lock,
+                year: metadata.year_lock,
+                total_book_count: metadata.total_book_count_lock,
+                genres: metadata.genres_lock,
+                tags: metadata.tags_lock,
+                custom_metadata: metadata.custom_metadata_lock,
+            },
+            created_at: metadata.created_at,
+            updated_at: metadata.updated_at,
+        },
+        genres: genre_dtos,
+        tags: tag_dtos,
+        alternate_titles: alt_title_dtos,
+        external_ratings: ext_rating_dtos,
+        external_links: ext_link_dtos,
+        created_at: series.created_at,
+        updated_at: series.updated_at,
     }))
 }
 

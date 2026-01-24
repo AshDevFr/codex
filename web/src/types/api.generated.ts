@@ -2154,6 +2154,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/{series_id}/full": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get full series data with complete metadata
+         * @description Returns series information combined with full metadata, genres, tags,
+         *     alternate titles, external ratings, and external links in a single response.
+         */
+        get: operations["get_full_series"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/{series_id}/genres": {
         parameters: {
             query?: never;
@@ -5613,6 +5634,77 @@ export interface components {
              */
             year?: number | null;
         };
+        /** @description Full series response including series data and complete metadata */
+        FullSeriesResponse: {
+            /** @description Alternate titles for this series */
+            alternateTitles: components["schemas"]["AlternateTitleDto"][];
+            /**
+             * Format: int64
+             * @description Total number of books in this series
+             * @example 4
+             */
+            bookCount: number;
+            /**
+             * Format: date-time
+             * @description When the series was created
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /** @description External links to other sites */
+            externalLinks: components["schemas"]["ExternalLinkDto"][];
+            /** @description External ratings from various sources */
+            externalRatings: components["schemas"]["ExternalRatingDto"][];
+            /** @description Genres assigned to this series */
+            genres: components["schemas"]["GenreDto"][];
+            /**
+             * @description Whether the series has a custom cover uploaded
+             * @example false
+             */
+            hasCustomCover?: boolean | null;
+            /**
+             * Format: uuid
+             * @description Series unique identifier
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Library unique identifier
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            libraryId: string;
+            /**
+             * @description Name of the library this series belongs to
+             * @example Comics
+             */
+            libraryName: string;
+            /** @description Complete series metadata */
+            metadata: components["schemas"]["SeriesFullMetadata"];
+            /**
+             * @description Filesystem path to the series directory
+             * @example /media/comics/Batman - Year One
+             */
+            path?: string | null;
+            /**
+             * @description Selected cover source (e.g., "first_book", "custom")
+             * @example first_book
+             */
+            selectedCoverSource?: string | null;
+            /** @description Tags assigned to this series */
+            tags: components["schemas"]["TagDto"][];
+            /**
+             * Format: int64
+             * @description Number of unread books in this series (user-specific)
+             * @example 2
+             */
+            unreadCount?: number | null;
+            /**
+             * Format: date-time
+             * @description When the series was last updated
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+        };
         GenerateThumbnailsRequest: {
             /**
              * @description If true, regenerate all thumbnails even if they exist. If false (default), only generate missing thumbnails.
@@ -8371,6 +8463,83 @@ export interface components {
             /**
              * Format: date-time
              * @description When the series was last updated
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+            /**
+             * Format: int32
+             * @description Release year
+             * @example 1987
+             */
+            year?: number | null;
+        };
+        /** @description Nested metadata object for FullSeriesResponse */
+        SeriesFullMetadata: {
+            /**
+             * Format: int32
+             * @description Age rating (e.g., 13, 16, 18)
+             * @example 16
+             */
+            ageRating?: number | null;
+            /**
+             * Format: date-time
+             * @description When the metadata was created
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /** @description Custom JSON metadata */
+            customMetadata?: Record<string, never> | null;
+            /**
+             * @description Imprint (sub-publisher)
+             * @example Vertigo
+             */
+            imprint?: string | null;
+            /**
+             * @description Language (BCP47 format: "en", "ja", "ko")
+             * @example en
+             */
+            language?: string | null;
+            /** @description Lock states for all metadata fields */
+            locks: components["schemas"]["MetadataLocks"];
+            /**
+             * @description Publisher name
+             * @example DC Comics
+             */
+            publisher?: string | null;
+            /**
+             * @description Reading direction (ltr, rtl, ttb or webtoon)
+             * @example ltr
+             */
+            readingDirection?: string | null;
+            /**
+             * @description Series status (ongoing, ended, hiatus, abandoned, unknown)
+             * @example ended
+             */
+            status?: string | null;
+            /**
+             * @description Series description/summary
+             * @example The definitive origin story of Batman.
+             */
+            summary?: string | null;
+            /**
+             * @description Series title
+             * @example Batman: Year One
+             */
+            title: string;
+            /**
+             * @description Custom sort name for ordering
+             * @example Batman Year One
+             */
+            titleSort?: string | null;
+            /**
+             * Format: int32
+             * @description Expected total book count (for ongoing series)
+             * @example 4
+             */
+            totalBookCount?: number | null;
+            /**
+             * Format: date-time
+             * @description When the metadata was last updated
              * @example 2024-01-15T10:30:00Z
              */
             updatedAt: string;
@@ -14913,6 +15082,43 @@ export interface operations {
                 content?: never;
             };
             /** @description Series or rating not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_full_series: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Full series data with metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FullSeriesResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
             404: {
                 headers: {
                     [name: string]: unknown;

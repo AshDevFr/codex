@@ -604,3 +604,179 @@ async fn test_update_locks_requires_write_permission() {
 
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
+
+// ============================================================================
+// GET /api/v1/series/{id}/full tests (Full Series Data with Metadata)
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_full_series_basic() {
+    use codex::api::routes::v1::dto::series::FullSeriesResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    // Create a library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Attack on Titan", None)
+        .await
+        .unwrap();
+
+    // Fetch full series
+    let request = get_request_with_auth(&format!("/api/v1/series/{}/full", series.id), &token);
+    let (status, response): (StatusCode, Option<FullSeriesResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.unwrap();
+
+    // Verify series data
+    assert_eq!(body.id, series.id);
+    assert_eq!(body.library_id, library.id);
+    assert_eq!(body.library_name, "Test Library");
+    assert_eq!(body.book_count, 0);
+    assert!(body.path.is_some());
+
+    // Verify metadata is present
+    assert_eq!(body.metadata.title, "Attack on Titan");
+    assert!(!body.metadata.locks.title);
+    assert!(!body.metadata.locks.summary);
+
+    // Check related data arrays are present and empty
+    assert!(body.genres.is_empty());
+    assert!(body.tags.is_empty());
+    assert!(body.alternate_titles.is_empty());
+    assert!(body.external_ratings.is_empty());
+    assert!(body.external_links.is_empty());
+}
+
+#[tokio::test]
+async fn test_get_full_series_with_related_data() {
+    use codex::api::routes::v1::dto::series::FullSeriesResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "One Piece", None)
+        .await
+        .unwrap();
+
+    // Set up related data
+    GenreRepository::add_genre_to_series(&db, series.id, "Action")
+        .await
+        .unwrap();
+    GenreRepository::add_genre_to_series(&db, series.id, "Adventure")
+        .await
+        .unwrap();
+    TagRepository::add_tag_to_series(&db, series.id, "Ongoing")
+        .await
+        .unwrap();
+    AlternateTitleRepository::create(&db, series.id, "Japanese", "ワンピース")
+        .await
+        .unwrap();
+    ExternalRatingRepository::upsert(
+        &db,
+        series.id,
+        "myanimelist",
+        Decimal::from_str("90.5").unwrap(),
+        Some(50000),
+    )
+    .await
+    .unwrap();
+    ExternalLinkRepository::upsert(
+        &db,
+        series.id,
+        "myanimelist",
+        "https://myanimelist.net/manga/13",
+        Some("13"),
+    )
+    .await
+    .unwrap();
+
+    let request = get_request_with_auth(&format!("/api/v1/series/{}/full", series.id), &token);
+    let (status, response): (StatusCode, Option<FullSeriesResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.unwrap();
+
+    // Verify series data
+    assert_eq!(body.id, series.id);
+    assert_eq!(body.metadata.title, "One Piece");
+
+    // Check genres
+    assert_eq!(body.genres.len(), 2);
+
+    // Check tags
+    assert_eq!(body.tags.len(), 1);
+    assert_eq!(body.tags[0].name, "Ongoing");
+
+    // Check alternate titles
+    assert_eq!(body.alternate_titles.len(), 1);
+    assert_eq!(body.alternate_titles[0].label, "Japanese");
+    assert_eq!(body.alternate_titles[0].title, "ワンピース");
+
+    // Check external ratings
+    assert_eq!(body.external_ratings.len(), 1);
+    assert_eq!(body.external_ratings[0].source_name, "myanimelist");
+
+    // Check external links
+    assert_eq!(body.external_links.len(), 1);
+    assert_eq!(body.external_links[0].source_name, "myanimelist");
+}
+
+#[tokio::test]
+async fn test_get_full_series_not_found() {
+    use codex::api::routes::v1::dto::series::FullSeriesResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let fake_id = uuid::Uuid::new_v4();
+    let request = get_request_with_auth(&format!("/api/v1/series/{}/full", fake_id), &token);
+    let (status, _): (StatusCode, Option<FullSeriesResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_get_full_series_requires_auth() {
+    use codex::api::routes::v1::dto::series::FullSeriesResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state.clone()).await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Request without auth token
+    let request = get_request(&format!("/api/v1/series/{}/full", series.id));
+    let (status, _): (StatusCode, Option<FullSeriesResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}

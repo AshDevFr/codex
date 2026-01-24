@@ -97,6 +97,7 @@ Note: The `{prefix}` path parameter in Komga endpoints is configurable at runtim
         v1::handlers::replace_series_metadata,
         v1::handlers::patch_series_metadata,
         v1::handlers::get_full_series_metadata,
+        v1::handlers::get_full_series,
         v1::handlers::get_metadata_locks,
         v1::handlers::update_metadata_locks,
 
@@ -401,6 +402,8 @@ Note: The `{prefix}` path parameter in Komga endpoints is configurable at runtim
             v1::dto::PatchSeriesMetadataRequest,
             v1::dto::SeriesMetadataResponse,
             v1::dto::FullSeriesMetadataResponse,
+            v1::dto::SeriesFullMetadata,
+            v1::dto::FullSeriesResponse,
             v1::dto::MetadataLocks,
             v1::dto::UpdateMetadataLocksRequest,
 
