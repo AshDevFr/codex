@@ -1,6 +1,7 @@
 import type {
 	CreateLibraryRequest,
 	Library,
+	PaginatedResponse,
 	PreviewScanRequest,
 	PreviewScanResponse,
 	ScanningConfig,
@@ -10,8 +11,8 @@ import { api } from "./client";
 export const librariesApi = {
 	// Get all libraries
 	getAll: async (): Promise<Library[]> => {
-		const response = await api.get<Library[]>("/libraries");
-		return response.data;
+		const response = await api.get<PaginatedResponse<Library>>("/libraries");
+		return response.data.data;
 	},
 
 	// Get a single library by ID

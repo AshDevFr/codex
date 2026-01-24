@@ -23,12 +23,22 @@ describe("tagsApi", () => {
 
 	describe("getAll", () => {
 		it("should fetch all tags", async () => {
+			const mockTags = [
+				{ id: "tag-1", name: "Completed", seriesCount: 15 },
+				{ id: "tag-2", name: "Favorite", seriesCount: 8 },
+				{ id: "tag-3", name: "To Read", seriesCount: 20 },
+			];
 			const mockResponse = {
-				tags: [
-					{ id: "tag-1", name: "Completed", seriesCount: 15 },
-					{ id: "tag-2", name: "Favorite", seriesCount: 8 },
-					{ id: "tag-3", name: "To Read", seriesCount: 20 },
-				],
+				data: mockTags,
+				page: 1,
+				pageSize: 50,
+				total: 3,
+				totalPages: 1,
+				links: {
+					self: "/api/v1/tags?page=1&page_size=50",
+					first: "/api/v1/tags?page=1&page_size=50",
+					last: "/api/v1/tags?page=1&page_size=50",
+				},
 			};
 
 			vi.mocked(api.get).mockResolvedValueOnce({ data: mockResponse });
@@ -36,11 +46,24 @@ describe("tagsApi", () => {
 			const result = await tagsApi.getAll();
 
 			expect(api.get).toHaveBeenCalledWith("/tags");
-			expect(result).toEqual(mockResponse.tags);
+			expect(result).toEqual(mockTags);
 		});
 
 		it("should return empty array when no tags exist", async () => {
-			vi.mocked(api.get).mockResolvedValueOnce({ data: { tags: [] } });
+			vi.mocked(api.get).mockResolvedValueOnce({
+				data: {
+					data: [],
+					page: 1,
+					pageSize: 50,
+					total: 0,
+					totalPages: 0,
+					links: {
+						self: "/api/v1/tags?page=1&page_size=50",
+						first: "/api/v1/tags?page=1&page_size=50",
+						last: "/api/v1/tags?page=1&page_size=50",
+					},
+				},
+			});
 
 			const result = await tagsApi.getAll();
 

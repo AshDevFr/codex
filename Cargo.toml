@@ -56,6 +56,9 @@ quick-xml = { version = "0.36", features = ["serialize"] }
 # Regular expressions (for ISBN extraction)
 regex = "1.10"
 
+# URL encoding
+urlencoding = "2.1"
+
 # File system utilities
 walkdir = "2.5"
 dirs = "5.0"

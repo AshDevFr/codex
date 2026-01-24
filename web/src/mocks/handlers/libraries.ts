@@ -3,14 +3,40 @@
  */
 
 import { delay, HttpResponse, http } from "msw";
-import { createLibrary, type MockLibrary } from "../data/factories";
+import {
+	createLibrary,
+	createPaginatedResponse,
+	type MockLibrary,
+} from "../data/factories";
 import { mockLibraries } from "../data/store";
 
 export const libraryHandlers = [
-	// List libraries
-	http.get("/api/v1/libraries", async () => {
+	// List libraries (paginated, 1-indexed)
+	http.get("/api/v1/libraries", async ({ request }) => {
 		await delay(200);
-		return HttpResponse.json(mockLibraries);
+		const url = new URL(request.url);
+		const page = Math.max(
+			1,
+			Number.parseInt(url.searchParams.get("page") || "1", 10),
+		);
+		const pageSize = Number.parseInt(
+			url.searchParams.get("page_size") || "50",
+			10,
+		);
+
+		// 1-indexed pagination
+		const start = (page - 1) * pageSize;
+		const end = start + pageSize;
+		const items = mockLibraries.slice(start, end);
+
+		return HttpResponse.json(
+			createPaginatedResponse(items, {
+				page,
+				pageSize,
+				total: mockLibraries.length,
+				basePath: "/api/v1/libraries",
+			}),
+		);
 	}),
 
 	// Get library by ID

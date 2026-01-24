@@ -1,6 +1,10 @@
 use super::super::dto::{
+    common::{
+        PaginatedResponse, PaginationLinkBuilder, DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
+    },
     ApiKeyDto, CreateApiKeyRequest, CreateApiKeyResponse, UpdateApiKeyRequest,
 };
+use super::paginated_response;
 use crate::api::{
     error::ApiError,
     extractors::{AuthContext, AuthState},
@@ -10,8 +14,9 @@ use crate::db::entities::api_keys;
 use crate::db::repositories::ApiKeyRepository;
 use crate::utils::password;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
+    response::Response,
     Json,
 };
 use chrono::Utc;
@@ -21,13 +26,35 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Query parameters for listing API keys
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiKeyListParams {
+    /// Page number (1-indexed, default 1)
+    #[serde(default = "default_page")]
+    pub page: u64,
+
+    /// Number of items per page (default 50, max 500)
+    #[serde(default = "default_page_size")]
+    pub page_size: u64,
+}
+
+fn default_page() -> u64 {
+    DEFAULT_PAGE
+}
+
+fn default_page_size() -> u64 {
+    DEFAULT_PAGE_SIZE
+}
+
 /// List API keys for the authenticated user
 /// Users can only see their own keys unless they are admin
 #[utoipa::path(
     get,
     path = "/api/v1/api-keys",
+    params(ApiKeyListParams),
     responses(
-        (status = 200, description = "List of API keys", body = Vec<ApiKeyDto>),
+        (status = 200, description = "List of API keys", body = PaginatedResponse<ApiKeyDto>),
         (status = 403, description = "Forbidden - Missing permission"),
     ),
     security(
@@ -39,8 +66,13 @@ use uuid::Uuid;
 pub async fn list_api_keys(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-) -> Result<Json<Vec<ApiKeyDto>>, ApiError> {
+    Query(params): Query<ApiKeyListParams>,
+) -> Result<Response, ApiError> {
     auth.require_permission(&Permission::ApiKeysRead)?;
+
+    // Validate and clamp pagination params
+    let page = params.page.max(1);
+    let page_size = params.page_size.clamp(1, MAX_PAGE_SIZE);
 
     // Users can only see their own keys
     // Admins with UsersRead permission could theoretically see all keys,
@@ -51,7 +83,22 @@ pub async fn list_api_keys(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch API keys: {}", e)))?;
 
-    let dtos: Vec<ApiKeyDto> = keys
+    let total = keys.len() as u64;
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+
+    // Apply in-memory pagination
+    let offset = (page - 1) * page_size;
+    let paginated_keys: Vec<_> = keys
+        .into_iter()
+        .skip(offset as usize)
+        .take(page_size as usize)
+        .collect();
+
+    let dtos: Vec<ApiKeyDto> = paginated_keys
         .into_iter()
         .map(|key| ApiKeyDto {
             id: key.id,
@@ -67,7 +114,12 @@ pub async fn list_api_keys(
         })
         .collect();
 
-    Ok(Json(dtos))
+    // Build pagination links
+    let link_builder = PaginationLinkBuilder::new("/api/v1/api-keys", page, page_size, total_pages);
+
+    let response = PaginatedResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// Get API key by ID

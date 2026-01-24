@@ -943,13 +943,37 @@
         ],
         "summary": "List all sharing tags (admin only)",
         "operationId": "list_sharing_tags",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-indexed, default 1)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Number of items per page (default 50, max 500)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "List of sharing tags",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SharingTagListResponse"
+                  "$ref": "#/components/schemas/PaginatedResponse_SharingTagDto"
                 }
               }
             }
@@ -1161,16 +1185,37 @@
         ],
         "summary": "List API keys for the authenticated user\nUsers can only see their own keys unless they are admin",
         "operationId": "list_api_keys",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-indexed, default 1)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Number of items per page (default 50, max 500)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "List of API keys",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ApiKeyDto"
-                  }
+                  "$ref": "#/components/schemas/PaginatedResponse_ApiKeyDto"
                 }
               }
             }
@@ -1549,7 +1594,7 @@
           {
             "name": "page",
             "in": "path",
-            "description": "Page number (0-indexed)",
+            "description": "Page number (1-indexed, minimum 1)",
             "required": true,
             "schema": {
               "type": "integer",
@@ -1560,7 +1605,7 @@
           {
             "name": "pageSize",
             "in": "path",
-            "description": "Number of items per page (max 100)",
+            "description": "Number of items per page (max 100, default 50)",
             "required": true,
             "schema": {
               "type": "integer",
@@ -1658,7 +1703,7 @@
           {
             "name": "page",
             "in": "query",
-            "description": "Page number (0-indexed)",
+            "description": "Page number (1-indexed, default 1)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -1669,7 +1714,7 @@
           {
             "name": "page_size",
             "in": "query",
-            "description": "Number of items per page (max 100)",
+            "description": "Number of items per page (max 100, default 50)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -1742,7 +1787,7 @@
           {
             "name": "page",
             "in": "path",
-            "description": "Page number (0-indexed)",
+            "description": "Page number (1-indexed, minimum 1)",
             "required": true,
             "schema": {
               "type": "integer",
@@ -1753,7 +1798,7 @@
           {
             "name": "pageSize",
             "in": "path",
-            "description": "Number of items per page (max 100)",
+            "description": "Number of items per page (max 100, default 50)",
             "required": true,
             "schema": {
               "type": "integer",
@@ -1851,7 +1896,7 @@
           {
             "name": "page",
             "in": "path",
-            "description": "Page number (0-indexed)",
+            "description": "Page number (1-indexed, minimum 1)",
             "required": true,
             "schema": {
               "type": "integer",
@@ -1862,7 +1907,7 @@
           {
             "name": "pageSize",
             "in": "path",
-            "description": "Number of items per page (max 100)",
+            "description": "Number of items per page (max 100, default 50)",
             "required": true,
             "schema": {
               "type": "integer",
@@ -1917,7 +1962,7 @@
           {
             "name": "page",
             "in": "path",
-            "description": "Page number (0-indexed)",
+            "description": "Page number (1-indexed, minimum 1)",
             "required": true,
             "schema": {
               "type": "integer",
@@ -1928,7 +1973,7 @@
           {
             "name": "pageSize",
             "in": "path",
-            "description": "Number of items per page (max 100)",
+            "description": "Number of items per page (max 100, default 50)",
             "required": true,
             "schema": {
               "type": "integer",
@@ -2102,7 +2147,7 @@
           {
             "name": "page",
             "in": "query",
-            "description": "Page number (0-indexed)",
+            "description": "Page number (1-indexed, default 1)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -3213,13 +3258,37 @@
         ],
         "summary": "List all genres",
         "operationId": "list_genres",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-indexed, default 1)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Number of items per page (default 50, max 500)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "List of all genres",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenreListResponse"
+                  "$ref": "#/components/schemas/PaginatedResponse_GenreDto"
                 }
               }
             }
@@ -3317,16 +3386,37 @@
         ],
         "summary": "List all libraries",
         "operationId": "list_libraries",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-indexed, default 1)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Number of items per page (default 50, max 500)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "List of libraries",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/LibraryDto"
-                  }
+                  "$ref": "#/components/schemas/PaginatedResponse_LibraryDto"
                 }
               }
             }
@@ -3688,7 +3778,7 @@
           {
             "name": "page",
             "in": "path",
-            "description": "Page number (0-indexed)",
+            "description": "Page number (1-indexed, minimum 1)",
             "required": true,
             "schema": {
               "type": "integer",
@@ -3699,7 +3789,7 @@
           {
             "name": "pageSize",
             "in": "path",
-            "description": "Number of items per page (max 100)",
+            "description": "Number of items per page (max 100, default 50)",
             "required": true,
             "schema": {
               "type": "integer",
@@ -3754,7 +3844,7 @@
           {
             "name": "page",
             "in": "path",
-            "description": "Page number (0-indexed)",
+            "description": "Page number (1-indexed, minimum 1)",
             "required": true,
             "schema": {
               "type": "integer",
@@ -3765,7 +3855,7 @@
           {
             "name": "pageSize",
             "in": "path",
-            "description": "Number of items per page (max 100)",
+            "description": "Number of items per page (max 100, default 50)",
             "required": true,
             "schema": {
               "type": "integer",
@@ -3820,7 +3910,7 @@
           {
             "name": "page",
             "in": "path",
-            "description": "Page number (0-indexed)",
+            "description": "Page number (1-indexed, minimum 1)",
             "required": true,
             "schema": {
               "type": "integer",
@@ -3831,7 +3921,7 @@
           {
             "name": "pageSize",
             "in": "path",
-            "description": "Number of items per page (max 100)",
+            "description": "Number of items per page (max 100, default 50)",
             "required": true,
             "schema": {
               "type": "integer",
@@ -3886,7 +3976,7 @@
           {
             "name": "page",
             "in": "path",
-            "description": "Page number (0-indexed)",
+            "description": "Page number (1-indexed, minimum 1)",
             "required": true,
             "schema": {
               "type": "integer",
@@ -3897,7 +3987,7 @@
           {
             "name": "pageSize",
             "in": "path",
-            "description": "Number of items per page (max 100)",
+            "description": "Number of items per page (max 100, default 50)",
             "required": true,
             "schema": {
               "type": "integer",
@@ -4010,7 +4100,7 @@
           {
             "name": "page",
             "in": "query",
-            "description": "Page number (0-indexed)",
+            "description": "Page number (1-indexed, default 1)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -4277,7 +4367,7 @@
           {
             "name": "page",
             "in": "query",
-            "description": "Page number (0-indexed)",
+            "description": "Page number (1-indexed, default 1)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -4878,7 +4968,7 @@
           {
             "name": "page",
             "in": "query",
-            "description": "Page number (0-indexed)",
+            "description": "Page number (1-indexed, default 1)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -5638,7 +5728,7 @@
           {
             "name": "page",
             "in": "query",
-            "description": "Page number (0-indexed)",
+            "description": "Page number (1-indexed, default 1)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -7933,13 +8023,37 @@
         ],
         "summary": "List all tags",
         "operationId": "list_tags",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-indexed, default 1)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Number of items per page (default 50, max 500)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "List of all tags",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TagListResponse"
+                  "$ref": "#/components/schemas/PaginatedResponse_TagDto"
                 }
               }
             }
@@ -9155,7 +9269,7 @@
           {
             "name": "page",
             "in": "query",
-            "description": "Page number (0-indexed)",
+            "description": "Page number (1-indexed, default 1)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -9166,7 +9280,7 @@
           {
             "name": "pageSize",
             "in": "query",
-            "description": "Number of items per page (max 100)",
+            "description": "Number of items per page (max 100, default 50)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -12208,6 +12322,13 @@
             ],
             "description": "Filter condition (optional - no condition returns all)"
           },
+          "cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Cursor for cursor-based pagination (alternative to page-based)"
+          },
           "fullTextSearch": {
             "type": [
               "string",
@@ -12222,13 +12343,13 @@
           "page": {
             "type": "integer",
             "format": "int64",
-            "description": "Page number (0-indexed)",
+            "description": "Page number (1-indexed, default 1)",
             "minimum": 0
           },
           "pageSize": {
             "type": "integer",
             "format": "int64",
-            "description": "Items per page (default 20, max 100)",
+            "description": "Items per page (default 50, max 100)",
             "minimum": 0
           },
           "sort": {
@@ -17296,13 +17417,14 @@
       },
       "PaginatedResponse": {
         "type": "object",
-        "description": "Generic paginated response wrapper",
+        "description": "Generic paginated response wrapper with HATEOAS links",
         "required": [
           "data",
           "page",
           "pageSize",
           "total",
-          "totalPages"
+          "totalPages",
+          "links"
         ],
         "properties": {
           "data": {
@@ -17312,18 +17434,22 @@
             },
             "description": "The data items for this page"
           },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinks",
+            "description": "HATEOAS navigation links"
+          },
           "page": {
             "type": "integer",
             "format": "int64",
-            "description": "Current page number (0-indexed)",
-            "example": 0,
+            "description": "Current page number (1-indexed)",
+            "example": 1,
             "minimum": 0
           },
           "pageSize": {
             "type": "integer",
             "format": "int64",
             "description": "Number of items per page",
-            "example": 20,
+            "example": 50,
             "minimum": 0
           },
           "total": {
@@ -17337,20 +17463,147 @@
             "type": "integer",
             "format": "int64",
             "description": "Total number of pages",
-            "example": 8,
+            "example": 3,
+            "minimum": 0
+          }
+        }
+      },
+      "PaginatedResponse_ApiKeyDto": {
+        "type": "object",
+        "description": "Generic paginated response wrapper with HATEOAS links",
+        "required": [
+          "data",
+          "page",
+          "pageSize",
+          "total",
+          "totalPages",
+          "links"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "API key data transfer object",
+              "required": [
+                "id",
+                "userId",
+                "name",
+                "keyPrefix",
+                "permissions",
+                "isActive",
+                "createdAt",
+                "updatedAt"
+              ],
+              "properties": {
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "When the key was created",
+                  "example": "2024-01-01T00:00:00Z"
+                },
+                "expiresAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "When the key expires (if set)",
+                  "example": "2025-12-31T23:59:59Z"
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Unique API key identifier",
+                  "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "isActive": {
+                  "type": "boolean",
+                  "description": "Whether the key is currently active",
+                  "example": true
+                },
+                "keyPrefix": {
+                  "type": "string",
+                  "description": "Prefix of the key for identification",
+                  "example": "cdx_a1b2c3"
+                },
+                "lastUsedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "When the key was last used",
+                  "example": "2024-01-15T10:30:00Z"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Human-readable name for the key",
+                  "example": "Mobile App Key"
+                },
+                "permissions": {
+                  "description": "Permissions granted to this key"
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "When the key was last updated",
+                  "example": "2024-01-15T10:30:00Z"
+                },
+                "userId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Owner user ID",
+                  "example": "550e8400-e29b-41d4-a716-446655440001"
+                }
+              }
+            },
+            "description": "The data items for this page"
+          },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinks",
+            "description": "HATEOAS navigation links"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current page number (1-indexed)",
+            "example": 1,
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of items per page",
+            "example": 50,
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of items across all pages",
+            "example": 150,
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of pages",
+            "example": 3,
             "minimum": 0
           }
         }
       },
       "PaginatedResponse_BookDto": {
         "type": "object",
-        "description": "Generic paginated response wrapper",
+        "description": "Generic paginated response wrapper with HATEOAS links",
         "required": [
           "data",
           "page",
           "pageSize",
           "total",
-          "totalPages"
+          "totalPages",
+          "links"
         ],
         "properties": {
           "data": {
@@ -17500,18 +17753,22 @@
             },
             "description": "The data items for this page"
           },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinks",
+            "description": "HATEOAS navigation links"
+          },
           "page": {
             "type": "integer",
             "format": "int64",
-            "description": "Current page number (0-indexed)",
-            "example": 0,
+            "description": "Current page number (1-indexed)",
+            "example": 1,
             "minimum": 0
           },
           "pageSize": {
             "type": "integer",
             "format": "int64",
             "description": "Number of items per page",
-            "example": 20,
+            "example": 50,
             "minimum": 0
           },
           "total": {
@@ -17525,20 +17782,305 @@
             "type": "integer",
             "format": "int64",
             "description": "Total number of pages",
-            "example": 8,
+            "example": 3,
+            "minimum": 0
+          }
+        }
+      },
+      "PaginatedResponse_GenreDto": {
+        "type": "object",
+        "description": "Generic paginated response wrapper with HATEOAS links",
+        "required": [
+          "data",
+          "page",
+          "pageSize",
+          "total",
+          "totalPages",
+          "links"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "Genre data transfer object",
+              "required": [
+                "id",
+                "name",
+                "createdAt"
+              ],
+              "properties": {
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "When the genre was created",
+                  "example": "2024-01-01T00:00:00Z"
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Genre ID",
+                  "example": "550e8400-e29b-41d4-a716-446655440010"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Genre name",
+                  "example": "Action"
+                },
+                "seriesCount": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int64",
+                  "description": "Number of series with this genre",
+                  "example": 42,
+                  "minimum": 0
+                }
+              }
+            },
+            "description": "The data items for this page"
+          },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinks",
+            "description": "HATEOAS navigation links"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current page number (1-indexed)",
+            "example": 1,
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of items per page",
+            "example": 50,
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of items across all pages",
+            "example": 150,
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of pages",
+            "example": 3,
+            "minimum": 0
+          }
+        }
+      },
+      "PaginatedResponse_LibraryDto": {
+        "type": "object",
+        "description": "Generic paginated response wrapper with HATEOAS links",
+        "required": [
+          "data",
+          "page",
+          "pageSize",
+          "total",
+          "totalPages",
+          "links"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "Library data transfer object",
+              "required": [
+                "id",
+                "name",
+                "path",
+                "isActive",
+                "seriesStrategy",
+                "bookStrategy",
+                "numberStrategy",
+                "createdAt",
+                "updatedAt",
+                "defaultReadingDirection"
+              ],
+              "properties": {
+                "allowedFormats": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Allowed file formats (e.g., [\"CBZ\", \"CBR\", \"EPUB\"])",
+                  "example": [
+                    "CBZ",
+                    "CBR",
+                    "PDF"
+                  ]
+                },
+                "bookConfig": {
+                  "description": "Book strategy-specific configuration (JSON)"
+                },
+                "bookCount": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int64",
+                  "description": "Total number of books in this library",
+                  "example": 1250
+                },
+                "bookStrategy": {
+                  "$ref": "#/components/schemas/BookStrategy",
+                  "description": "Book naming strategy (filename, metadata_first, smart, series_name)"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "When the library was created",
+                  "example": "2024-01-01T00:00:00Z"
+                },
+                "defaultReadingDirection": {
+                  "type": "string",
+                  "description": "Default reading direction for books in this library (ltr, rtl, ttb or webtoon)",
+                  "example": "ltr"
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Optional description",
+                  "example": "My comic book collection"
+                },
+                "excludedPatterns": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Excluded path patterns (newline-separated, e.g., \".DS_Store\\nThumbs.db\")",
+                  "example": ".DS_Store\nThumbs.db"
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Library unique identifier",
+                  "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "isActive": {
+                  "type": "boolean",
+                  "description": "Whether the library is active",
+                  "example": true
+                },
+                "lastScannedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "When the library was last scanned",
+                  "example": "2024-01-15T10:30:00Z"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Library name",
+                  "example": "Comics"
+                },
+                "numberConfig": {
+                  "description": "Number strategy-specific configuration (JSON)"
+                },
+                "numberStrategy": {
+                  "$ref": "#/components/schemas/NumberStrategy",
+                  "description": "Book number strategy (file_order, metadata, filename, smart)"
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Filesystem path to the library root",
+                  "example": "/media/comics"
+                },
+                "scanningConfig": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ScanningConfigDto",
+                      "description": "Scanning configuration for scheduled scans"
+                    }
+                  ]
+                },
+                "seriesConfig": {
+                  "description": "Strategy-specific configuration (JSON)"
+                },
+                "seriesCount": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int64",
+                  "description": "Total number of series in this library",
+                  "example": 85
+                },
+                "seriesStrategy": {
+                  "$ref": "#/components/schemas/SeriesStrategy",
+                  "description": "Series detection strategy (series_volume, series_volume_chapter, flat, etc.)"
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "When the library was last updated",
+                  "example": "2024-01-15T10:30:00Z"
+                }
+              }
+            },
+            "description": "The data items for this page"
+          },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinks",
+            "description": "HATEOAS navigation links"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current page number (1-indexed)",
+            "example": 1,
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of items per page",
+            "example": 50,
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of items across all pages",
+            "example": 150,
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of pages",
+            "example": 3,
             "minimum": 0
           }
         }
       },
       "PaginatedResponse_SeriesDto": {
         "type": "object",
-        "description": "Generic paginated response wrapper",
+        "description": "Generic paginated response wrapper with HATEOAS links",
         "required": [
           "data",
           "page",
           "pageSize",
           "total",
-          "totalPages"
+          "totalPages",
+          "links"
         ],
         "properties": {
           "data": {
@@ -17666,18 +18208,22 @@
             },
             "description": "The data items for this page"
           },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinks",
+            "description": "HATEOAS navigation links"
+          },
           "page": {
             "type": "integer",
             "format": "int64",
-            "description": "Current page number (0-indexed)",
-            "example": 0,
+            "description": "Current page number (1-indexed)",
+            "example": 1,
             "minimum": 0
           },
           "pageSize": {
             "type": "integer",
             "format": "int64",
             "description": "Number of items per page",
-            "example": 20,
+            "example": 50,
             "minimum": 0
           },
           "total": {
@@ -17691,20 +18237,218 @@
             "type": "integer",
             "format": "int64",
             "description": "Total number of pages",
-            "example": 8,
+            "example": 3,
+            "minimum": 0
+          }
+        }
+      },
+      "PaginatedResponse_SharingTagDto": {
+        "type": "object",
+        "description": "Generic paginated response wrapper with HATEOAS links",
+        "required": [
+          "data",
+          "page",
+          "pageSize",
+          "total",
+          "totalPages",
+          "links"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "Sharing tag data transfer object",
+              "required": [
+                "id",
+                "name",
+                "seriesCount",
+                "userCount",
+                "createdAt",
+                "updatedAt"
+              ],
+              "properties": {
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Creation timestamp",
+                  "example": "2024-01-01T00:00:00Z"
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Optional description",
+                  "example": "Content appropriate for children"
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Unique sharing tag identifier",
+                  "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Display name of the sharing tag",
+                  "example": "Kids Content"
+                },
+                "seriesCount": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "Number of series tagged with this sharing tag",
+                  "example": 42,
+                  "minimum": 0
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Last update timestamp",
+                  "example": "2024-01-15T10:30:00Z"
+                },
+                "userCount": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "Number of users with grants for this sharing tag",
+                  "example": 5,
+                  "minimum": 0
+                }
+              }
+            },
+            "description": "The data items for this page"
+          },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinks",
+            "description": "HATEOAS navigation links"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current page number (1-indexed)",
+            "example": 1,
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of items per page",
+            "example": 50,
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of items across all pages",
+            "example": 150,
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of pages",
+            "example": 3,
+            "minimum": 0
+          }
+        }
+      },
+      "PaginatedResponse_TagDto": {
+        "type": "object",
+        "description": "Generic paginated response wrapper with HATEOAS links",
+        "required": [
+          "data",
+          "page",
+          "pageSize",
+          "total",
+          "totalPages",
+          "links"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "Tag data transfer object",
+              "required": [
+                "id",
+                "name",
+                "createdAt"
+              ],
+              "properties": {
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "When the tag was created",
+                  "example": "2024-01-01T00:00:00Z"
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Tag ID",
+                  "example": "550e8400-e29b-41d4-a716-446655440020"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Tag name",
+                  "example": "Completed"
+                },
+                "seriesCount": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int64",
+                  "description": "Number of series with this tag",
+                  "example": 15,
+                  "minimum": 0
+                }
+              }
+            },
+            "description": "The data items for this page"
+          },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinks",
+            "description": "HATEOAS navigation links"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current page number (1-indexed)",
+            "example": 1,
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of items per page",
+            "example": 50,
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of items across all pages",
+            "example": 150,
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of pages",
+            "example": 3,
             "minimum": 0
           }
         }
       },
       "PaginatedResponse_UserDto": {
         "type": "object",
-        "description": "Generic paginated response wrapper",
+        "description": "Generic paginated response wrapper with HATEOAS links",
         "required": [
           "data",
           "page",
           "pageSize",
           "total",
-          "totalPages"
+          "totalPages",
+          "links"
         ],
         "properties": {
           "data": {
@@ -17780,18 +18524,22 @@
             },
             "description": "The data items for this page"
           },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinks",
+            "description": "HATEOAS navigation links"
+          },
           "page": {
             "type": "integer",
             "format": "int64",
-            "description": "Current page number (0-indexed)",
-            "example": 0,
+            "description": "Current page number (1-indexed)",
+            "example": 1,
             "minimum": 0
           },
           "pageSize": {
             "type": "integer",
             "format": "int64",
             "description": "Number of items per page",
-            "example": 20,
+            "example": 50,
             "minimum": 0
           },
           "total": {
@@ -17805,8 +18553,45 @@
             "type": "integer",
             "format": "int64",
             "description": "Total number of pages",
-            "example": 8,
+            "example": 3,
             "minimum": 0
+          }
+        }
+      },
+      "PaginationLinks": {
+        "type": "object",
+        "description": "HATEOAS navigation links for paginated responses (RFC 8288)",
+        "required": [
+          "self",
+          "first",
+          "last"
+        ],
+        "properties": {
+          "first": {
+            "type": "string",
+            "description": "Link to the first page"
+          },
+          "last": {
+            "type": "string",
+            "description": "Link to the last page"
+          },
+          "next": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Link to the next page (null if on last page)"
+          },
+          "prev": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Link to the previous page (null if on first page)"
+          },
+          "self": {
+            "type": "string",
+            "description": "Link to the current page"
           }
         }
       },
@@ -19772,6 +20557,13 @@
             ],
             "description": "Filter condition (optional - no condition returns all)"
           },
+          "cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Cursor for cursor-based pagination (alternative to page-based)"
+          },
           "fullTextSearch": {
             "type": [
               "string",
@@ -19782,13 +20574,13 @@
           "page": {
             "type": "integer",
             "format": "int64",
-            "description": "Page number (0-indexed)",
+            "description": "Page number (1-indexed, default 1)",
             "minimum": 0
           },
           "pageSize": {
             "type": "integer",
             "format": "int64",
-            "description": "Items per page (default 20, max 100)",
+            "description": "Items per page (default 50, max 100)",
             "minimum": 0
           },
           "sort": {

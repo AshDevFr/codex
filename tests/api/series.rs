@@ -58,7 +58,7 @@ async fn test_list_series_all() {
     let series_response = response.unwrap();
     assert_eq!(series_response.data.len(), 2);
     assert_eq!(series_response.total, 2);
-    assert_eq!(series_response.page, 0);
+    assert_eq!(series_response.page, 1); // 1-indexed pagination
 }
 
 #[tokio::test]
@@ -133,8 +133,8 @@ async fn test_list_series_pagination() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    // Test first page with page size of 2
-    let request = get_request_with_auth("/api/v1/series?page=0&page_size=2", &token);
+    // Test first page with page size of 2 (1-indexed)
+    let request = get_request_with_auth("/api/v1/series?page=1&page_size=2", &token);
     let (status, response): (StatusCode, Option<SeriesListResponse>) =
         make_json_request(app.clone(), request).await;
 
@@ -142,11 +142,11 @@ async fn test_list_series_pagination() {
     let page1 = response.unwrap();
     assert_eq!(page1.data.len(), 2);
     assert_eq!(page1.total, 5);
-    assert_eq!(page1.page, 0);
+    assert_eq!(page1.page, 1);
     assert_eq!(page1.page_size, 2);
 
     // Test second page
-    let request = get_request_with_auth("/api/v1/series?page=1&page_size=2", &token);
+    let request = get_request_with_auth("/api/v1/series?page=2&page_size=2", &token);
     let (status, response): (StatusCode, Option<SeriesListResponse>) =
         make_json_request(app, request).await;
 
@@ -154,7 +154,7 @@ async fn test_list_series_pagination() {
     let page2 = response.unwrap();
     assert_eq!(page2.data.len(), 2);
     assert_eq!(page2.total, 5);
-    assert_eq!(page2.page, 1);
+    assert_eq!(page2.page, 2);
 }
 
 // ============================================================================
@@ -352,10 +352,10 @@ async fn test_list_library_series_sort_with_pagination() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    // Get first page (2 items) sorted by name ascending
+    // Get first page (2 items) sorted by name ascending (1-indexed)
     let request = get_request_with_auth(
         &format!(
-            "/api/v1/libraries/{}/series?sort=name,asc&page=0&page_size=2",
+            "/api/v1/libraries/{}/series?sort=name,asc&page=1&page_size=2",
             library.id
         ),
         &token,
@@ -373,7 +373,7 @@ async fn test_list_library_series_sort_with_pagination() {
     // Get second page
     let request = get_request_with_auth(
         &format!(
-            "/api/v1/libraries/{}/series?sort=name,asc&page=1&page_size=2",
+            "/api/v1/libraries/{}/series?sort=name,asc&page=2&page_size=2",
             library.id
         ),
         &token,
@@ -905,10 +905,10 @@ async fn test_list_library_series_with_pagination() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state.clone()).await;
 
-    // Request first page (page_size=10, page=0)
+    // Request first page (page_size=10, page=1, 1-indexed)
     let request = get_request_with_auth(
         &format!(
-            "/api/v1/libraries/{}/series?page=0&page_size=10",
+            "/api/v1/libraries/{}/series?page=1&page_size=10",
             library.id
         ),
         &token,
@@ -922,13 +922,13 @@ async fn test_list_library_series_with_pagination() {
     let page1 = response.unwrap();
     assert_eq!(page1.data.len(), 10);
     assert_eq!(page1.total, 15);
-    assert_eq!(page1.page, 0);
+    assert_eq!(page1.page, 1);
 
-    // Request second page (page=1)
+    // Request second page (page=2)
     let app2 = create_test_router(state).await;
     let request = get_request_with_auth(
         &format!(
-            "/api/v1/libraries/{}/series?page=1&page_size=10",
+            "/api/v1/libraries/{}/series?page=2&page_size=10",
             library.id
         ),
         &token,
@@ -942,7 +942,7 @@ async fn test_list_library_series_with_pagination() {
     let page2 = response.unwrap();
     assert_eq!(page2.data.len(), 5);
     assert_eq!(page2.total, 15);
-    assert_eq!(page2.page, 1);
+    assert_eq!(page2.page, 2);
 
     // Verify different series on each page
     assert_ne!(page1.data[0].id, page2.data[0].id);
@@ -2606,8 +2606,8 @@ async fn test_list_series_filter_with_pagination() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    // Filter by Action with pagination
-    let request = get_request_with_auth("/api/v1/series?genres=Action&page=0&page_size=2", &token);
+    // Filter by Action with pagination (1-indexed)
+    let request = get_request_with_auth("/api/v1/series?genres=Action&page=1&page_size=2", &token);
     let (status, response): (StatusCode, Option<SeriesListResponse>) =
         make_json_request(app.clone(), request).await;
 
@@ -2615,10 +2615,10 @@ async fn test_list_series_filter_with_pagination() {
     let page1 = response.unwrap();
     assert_eq!(page1.data.len(), 2);
     assert_eq!(page1.total, 5);
-    assert_eq!(page1.page, 0);
+    assert_eq!(page1.page, 1);
 
     // Get second page
-    let request = get_request_with_auth("/api/v1/series?genres=Action&page=1&page_size=2", &token);
+    let request = get_request_with_auth("/api/v1/series?genres=Action&page=2&page_size=2", &token);
     let (status, response): (StatusCode, Option<SeriesListResponse>) =
         make_json_request(app, request).await;
 
@@ -2626,7 +2626,7 @@ async fn test_list_series_filter_with_pagination() {
     let page2 = response.unwrap();
     assert_eq!(page2.data.len(), 2);
     assert_eq!(page2.total, 5);
-    assert_eq!(page2.page, 1);
+    assert_eq!(page2.page, 2);
 }
 
 #[tokio::test]
@@ -2975,10 +2975,10 @@ async fn test_list_series_filtered_pagination() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    // Request page 0, page_size 2
+    // Request page 1, page_size 2 (1-indexed)
     let request_body = SeriesListRequest {
         condition: None,
-        page: 0,
+        page: 1,
         page_size: 2,
         ..Default::default()
     };
@@ -2990,12 +2990,12 @@ async fn test_list_series_filtered_pagination() {
     let page1 = response.unwrap();
     assert_eq!(page1.data.len(), 2);
     assert_eq!(page1.total, 5);
-    assert_eq!(page1.page, 0);
+    assert_eq!(page1.page, 1);
 
-    // Request page 1
+    // Request page 2
     let request_body = SeriesListRequest {
         condition: None,
-        page: 1,
+        page: 2,
         page_size: 2,
         ..Default::default()
     };
@@ -3006,7 +3006,7 @@ async fn test_list_series_filtered_pagination() {
     assert_eq!(status, StatusCode::OK);
     let page2 = response.unwrap();
     assert_eq!(page2.data.len(), 2);
-    assert_eq!(page2.page, 1);
+    assert_eq!(page2.page, 2);
 }
 
 #[tokio::test]
@@ -3998,9 +3998,9 @@ async fn test_list_series_sort_with_pagination() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state.clone()).await;
 
-    // Get page 0 with page_size=2, sorted by name ascending
+    // Get page 1 with page_size=2, sorted by name ascending (1-indexed)
     // Should get Alpha, Beta
-    let request = get_request_with_auth("/api/v1/series?sort=name,asc&page=0&page_size=2", &token);
+    let request = get_request_with_auth("/api/v1/series?sort=name,asc&page=1&page_size=2", &token);
     let (status, response): (StatusCode, Option<SeriesListResponse>) =
         make_json_request(app, request).await;
 
@@ -4008,14 +4008,14 @@ async fn test_list_series_sort_with_pagination() {
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 2);
     assert_eq!(series_list.total, 5);
-    assert_eq!(series_list.page, 0);
+    assert_eq!(series_list.page, 1);
     let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
     assert_eq!(titles, vec!["Alpha", "Beta"]);
 
-    // Get page 1 with page_size=2
+    // Get page 2 with page_size=2
     // Should get Delta, Epsilon (D and E after A, B)
     let app2 = create_test_router(state.clone()).await;
-    let request = get_request_with_auth("/api/v1/series?sort=name,asc&page=1&page_size=2", &token);
+    let request = get_request_with_auth("/api/v1/series?sort=name,asc&page=2&page_size=2", &token);
     let (status, response): (StatusCode, Option<SeriesListResponse>) =
         make_json_request(app2, request).await;
 
@@ -4025,10 +4025,10 @@ async fn test_list_series_sort_with_pagination() {
     let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
     assert_eq!(titles, vec!["Delta", "Epsilon"]);
 
-    // Get page 2 with page_size=2
+    // Get page 3 with page_size=2
     // Should get Gamma (only 1 remaining)
     let app3 = create_test_router(state).await;
-    let request = get_request_with_auth("/api/v1/series?sort=name,asc&page=2&page_size=2", &token);
+    let request = get_request_with_auth("/api/v1/series?sort=name,asc&page=3&page_size=2", &token);
     let (status, response): (StatusCode, Option<SeriesListResponse>) =
         make_json_request(app3, request).await;
 

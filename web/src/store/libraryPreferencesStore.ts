@@ -3,6 +3,12 @@ import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
 
+/** Default number of items per page for paginated views */
+export const DEFAULT_PAGE_SIZE = 50;
+
+/** Maximum number of items per page allowed by the API */
+export const MAX_PAGE_SIZE = 500;
+
 export interface TabPreferences {
 	pageSize?: number;
 	sort?: string;

@@ -28,28 +28,37 @@ describe("sharingTagsApi", () => {
 
 	describe("list", () => {
 		it("should fetch all sharing tags", async () => {
+			const mockTags = [
+				{
+					id: "tag-1",
+					name: "Kids Content",
+					description: "Content for children",
+					seriesCount: 15,
+					userCount: 3,
+					createdAt: "2024-01-01T00:00:00Z",
+					updatedAt: "2024-01-15T00:00:00Z",
+				},
+				{
+					id: "tag-2",
+					name: "Adult Content",
+					description: null,
+					seriesCount: 8,
+					userCount: 1,
+					createdAt: "2024-01-01T00:00:00Z",
+					updatedAt: "2024-01-15T00:00:00Z",
+				},
+			];
 			const mockResponse = {
-				items: [
-					{
-						id: "tag-1",
-						name: "Kids Content",
-						description: "Content for children",
-						seriesCount: 15,
-						userCount: 3,
-						createdAt: "2024-01-01T00:00:00Z",
-						updatedAt: "2024-01-15T00:00:00Z",
-					},
-					{
-						id: "tag-2",
-						name: "Adult Content",
-						description: null,
-						seriesCount: 8,
-						userCount: 1,
-						createdAt: "2024-01-01T00:00:00Z",
-						updatedAt: "2024-01-15T00:00:00Z",
-					},
-				],
+				data: mockTags,
+				page: 1,
+				pageSize: 50,
 				total: 2,
+				totalPages: 1,
+				links: {
+					self: "/api/v1/admin/sharing-tags?page=1&page_size=50",
+					first: "/api/v1/admin/sharing-tags?page=1&page_size=50",
+					last: "/api/v1/admin/sharing-tags?page=1&page_size=50",
+				},
 			};
 
 			vi.mocked(api.get).mockResolvedValueOnce({ data: mockResponse });
@@ -57,12 +66,23 @@ describe("sharingTagsApi", () => {
 			const result = await sharingTagsApi.list();
 
 			expect(api.get).toHaveBeenCalledWith("/admin/sharing-tags");
-			expect(result).toEqual(mockResponse.items);
+			expect(result).toEqual(mockTags);
 		});
 
 		it("should return empty array when no sharing tags exist", async () => {
 			vi.mocked(api.get).mockResolvedValueOnce({
-				data: { items: [], total: 0 },
+				data: {
+					data: [],
+					page: 1,
+					pageSize: 50,
+					total: 0,
+					totalPages: 0,
+					links: {
+						self: "/api/v1/admin/sharing-tags?page=1&page_size=50",
+						first: "/api/v1/admin/sharing-tags?page=1&page_size=50",
+						last: "/api/v1/admin/sharing-tags?page=1&page_size=50",
+					},
+				},
 			});
 
 			const result = await sharingTagsApi.list();

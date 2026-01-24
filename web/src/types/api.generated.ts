@@ -4410,18 +4410,20 @@ export interface components {
         BookListRequest: {
             /** @description Filter condition (optional - no condition returns all) */
             condition?: Record<string, never> | null;
+            /** @description Cursor for cursor-based pagination (alternative to page-based) */
+            cursor?: string | null;
             /** @description Full-text search query (case-insensitive search on book title) */
             fullTextSearch?: string | null;
             /** @description Include soft-deleted books in results (default: false) */
             includeDeleted?: boolean;
             /**
              * Format: int64
-             * @description Page number (0-indexed)
+             * @description Page number (1-indexed, default 1)
              */
             page?: number;
             /**
              * Format: int64
-             * @description Items per page (default 20, max 100)
+             * @description Items per page (default 50, max 100)
              */
             pageSize?: number;
             /** @description Sort field and direction (e.g., "title,asc" or "createdAt,desc") */
@@ -7070,20 +7072,22 @@ export interface components {
              */
             width?: number | null;
         };
-        /** @description Generic paginated response wrapper */
+        /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse: {
             /** @description The data items for this page */
             data: components["schemas"]["BookDto"][];
+            /** @description HATEOAS navigation links */
+            links: components["schemas"]["PaginationLinks"];
             /**
              * Format: int64
-             * @description Current page number (0-indexed)
-             * @example 0
+             * @description Current page number (1-indexed)
+             * @example 1
              */
             page: number;
             /**
              * Format: int64
              * @description Number of items per page
-             * @example 20
+             * @example 50
              */
             pageSize: number;
             /**
@@ -7095,11 +7099,96 @@ export interface components {
             /**
              * Format: int64
              * @description Total number of pages
-             * @example 8
+             * @example 3
              */
             totalPages: number;
         };
-        /** @description Generic paginated response wrapper */
+        /** @description Generic paginated response wrapper with HATEOAS links */
+        PaginatedResponse_ApiKeyDto: {
+            /** @description The data items for this page */
+            data: {
+                /**
+                 * Format: date-time
+                 * @description When the key was created
+                 * @example 2024-01-01T00:00:00Z
+                 */
+                createdAt: string;
+                /**
+                 * Format: date-time
+                 * @description When the key expires (if set)
+                 * @example 2025-12-31T23:59:59Z
+                 */
+                expiresAt?: string | null;
+                /**
+                 * Format: uuid
+                 * @description Unique API key identifier
+                 * @example 550e8400-e29b-41d4-a716-446655440000
+                 */
+                id: string;
+                /**
+                 * @description Whether the key is currently active
+                 * @example true
+                 */
+                isActive: boolean;
+                /**
+                 * @description Prefix of the key for identification
+                 * @example cdx_a1b2c3
+                 */
+                keyPrefix: string;
+                /**
+                 * Format: date-time
+                 * @description When the key was last used
+                 * @example 2024-01-15T10:30:00Z
+                 */
+                lastUsedAt?: string | null;
+                /**
+                 * @description Human-readable name for the key
+                 * @example Mobile App Key
+                 */
+                name: string;
+                /** @description Permissions granted to this key */
+                permissions: unknown;
+                /**
+                 * Format: date-time
+                 * @description When the key was last updated
+                 * @example 2024-01-15T10:30:00Z
+                 */
+                updatedAt: string;
+                /**
+                 * Format: uuid
+                 * @description Owner user ID
+                 * @example 550e8400-e29b-41d4-a716-446655440001
+                 */
+                userId: string;
+            }[];
+            /** @description HATEOAS navigation links */
+            links: components["schemas"]["PaginationLinks"];
+            /**
+             * Format: int64
+             * @description Current page number (1-indexed)
+             * @example 1
+             */
+            page: number;
+            /**
+             * Format: int64
+             * @description Number of items per page
+             * @example 50
+             */
+            pageSize: number;
+            /**
+             * Format: int64
+             * @description Total number of items across all pages
+             * @example 150
+             */
+            total: number;
+            /**
+             * Format: int64
+             * @description Total number of pages
+             * @example 3
+             */
+            totalPages: number;
+        };
+        /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse_BookDto: {
             /** @description The data items for this page */
             data: {
@@ -7204,16 +7293,18 @@ export interface components {
                  */
                 updatedAt: string;
             }[];
+            /** @description HATEOAS navigation links */
+            links: components["schemas"]["PaginationLinks"];
             /**
              * Format: int64
-             * @description Current page number (0-indexed)
-             * @example 0
+             * @description Current page number (1-indexed)
+             * @example 1
              */
             page: number;
             /**
              * Format: int64
              * @description Number of items per page
-             * @example 20
+             * @example 50
              */
             pageSize: number;
             /**
@@ -7225,11 +7316,187 @@ export interface components {
             /**
              * Format: int64
              * @description Total number of pages
-             * @example 8
+             * @example 3
              */
             totalPages: number;
         };
-        /** @description Generic paginated response wrapper */
+        /** @description Generic paginated response wrapper with HATEOAS links */
+        PaginatedResponse_GenreDto: {
+            /** @description The data items for this page */
+            data: {
+                /**
+                 * Format: date-time
+                 * @description When the genre was created
+                 * @example 2024-01-01T00:00:00Z
+                 */
+                createdAt: string;
+                /**
+                 * Format: uuid
+                 * @description Genre ID
+                 * @example 550e8400-e29b-41d4-a716-446655440010
+                 */
+                id: string;
+                /**
+                 * @description Genre name
+                 * @example Action
+                 */
+                name: string;
+                /**
+                 * Format: int64
+                 * @description Number of series with this genre
+                 * @example 42
+                 */
+                seriesCount?: number | null;
+            }[];
+            /** @description HATEOAS navigation links */
+            links: components["schemas"]["PaginationLinks"];
+            /**
+             * Format: int64
+             * @description Current page number (1-indexed)
+             * @example 1
+             */
+            page: number;
+            /**
+             * Format: int64
+             * @description Number of items per page
+             * @example 50
+             */
+            pageSize: number;
+            /**
+             * Format: int64
+             * @description Total number of items across all pages
+             * @example 150
+             */
+            total: number;
+            /**
+             * Format: int64
+             * @description Total number of pages
+             * @example 3
+             */
+            totalPages: number;
+        };
+        /** @description Generic paginated response wrapper with HATEOAS links */
+        PaginatedResponse_LibraryDto: {
+            /** @description The data items for this page */
+            data: {
+                /**
+                 * @description Allowed file formats (e.g., ["CBZ", "CBR", "EPUB"])
+                 * @example [
+                 *       "CBZ",
+                 *       "CBR",
+                 *       "PDF"
+                 *     ]
+                 */
+                allowedFormats?: string[] | null;
+                /** @description Book strategy-specific configuration (JSON) */
+                bookConfig?: unknown;
+                /**
+                 * Format: int64
+                 * @description Total number of books in this library
+                 * @example 1250
+                 */
+                bookCount?: number | null;
+                /** @description Book naming strategy (filename, metadata_first, smart, series_name) */
+                bookStrategy: components["schemas"]["BookStrategy"];
+                /**
+                 * Format: date-time
+                 * @description When the library was created
+                 * @example 2024-01-01T00:00:00Z
+                 */
+                createdAt: string;
+                /**
+                 * @description Default reading direction for books in this library (ltr, rtl, ttb or webtoon)
+                 * @example ltr
+                 */
+                defaultReadingDirection: string;
+                /**
+                 * @description Optional description
+                 * @example My comic book collection
+                 */
+                description?: string | null;
+                /**
+                 * @description Excluded path patterns (newline-separated, e.g., ".DS_Store\nThumbs.db")
+                 * @example .DS_Store
+                 *     Thumbs.db
+                 */
+                excludedPatterns?: string | null;
+                /**
+                 * Format: uuid
+                 * @description Library unique identifier
+                 * @example 550e8400-e29b-41d4-a716-446655440000
+                 */
+                id: string;
+                /**
+                 * @description Whether the library is active
+                 * @example true
+                 */
+                isActive: boolean;
+                /**
+                 * Format: date-time
+                 * @description When the library was last scanned
+                 * @example 2024-01-15T10:30:00Z
+                 */
+                lastScannedAt?: string | null;
+                /**
+                 * @description Library name
+                 * @example Comics
+                 */
+                name: string;
+                /** @description Number strategy-specific configuration (JSON) */
+                numberConfig?: unknown;
+                /** @description Book number strategy (file_order, metadata, filename, smart) */
+                numberStrategy: components["schemas"]["NumberStrategy"];
+                /**
+                 * @description Filesystem path to the library root
+                 * @example /media/comics
+                 */
+                path: string;
+                scanningConfig?: null | components["schemas"]["ScanningConfigDto"];
+                /** @description Strategy-specific configuration (JSON) */
+                seriesConfig?: unknown;
+                /**
+                 * Format: int64
+                 * @description Total number of series in this library
+                 * @example 85
+                 */
+                seriesCount?: number | null;
+                /** @description Series detection strategy (series_volume, series_volume_chapter, flat, etc.) */
+                seriesStrategy: components["schemas"]["SeriesStrategy"];
+                /**
+                 * Format: date-time
+                 * @description When the library was last updated
+                 * @example 2024-01-15T10:30:00Z
+                 */
+                updatedAt: string;
+            }[];
+            /** @description HATEOAS navigation links */
+            links: components["schemas"]["PaginationLinks"];
+            /**
+             * Format: int64
+             * @description Current page number (1-indexed)
+             * @example 1
+             */
+            page: number;
+            /**
+             * Format: int64
+             * @description Number of items per page
+             * @example 50
+             */
+            pageSize: number;
+            /**
+             * Format: int64
+             * @description Total number of items across all pages
+             * @example 150
+             */
+            total: number;
+            /**
+             * Format: int64
+             * @description Total number of pages
+             * @example 3
+             */
+            totalPages: number;
+        };
+        /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse_SeriesDto: {
             /** @description The data items for this page */
             data: {
@@ -7316,16 +7583,18 @@ export interface components {
                  */
                 year?: number | null;
             }[];
+            /** @description HATEOAS navigation links */
+            links: components["schemas"]["PaginationLinks"];
             /**
              * Format: int64
-             * @description Current page number (0-indexed)
-             * @example 0
+             * @description Current page number (1-indexed)
+             * @example 1
              */
             page: number;
             /**
              * Format: int64
              * @description Number of items per page
-             * @example 20
+             * @example 50
              */
             pageSize: number;
             /**
@@ -7337,11 +7606,138 @@ export interface components {
             /**
              * Format: int64
              * @description Total number of pages
-             * @example 8
+             * @example 3
              */
             totalPages: number;
         };
-        /** @description Generic paginated response wrapper */
+        /** @description Generic paginated response wrapper with HATEOAS links */
+        PaginatedResponse_SharingTagDto: {
+            /** @description The data items for this page */
+            data: {
+                /**
+                 * Format: date-time
+                 * @description Creation timestamp
+                 * @example 2024-01-01T00:00:00Z
+                 */
+                createdAt: string;
+                /**
+                 * @description Optional description
+                 * @example Content appropriate for children
+                 */
+                description?: string | null;
+                /**
+                 * Format: uuid
+                 * @description Unique sharing tag identifier
+                 * @example 550e8400-e29b-41d4-a716-446655440000
+                 */
+                id: string;
+                /**
+                 * @description Display name of the sharing tag
+                 * @example Kids Content
+                 */
+                name: string;
+                /**
+                 * Format: int64
+                 * @description Number of series tagged with this sharing tag
+                 * @example 42
+                 */
+                seriesCount: number;
+                /**
+                 * Format: date-time
+                 * @description Last update timestamp
+                 * @example 2024-01-15T10:30:00Z
+                 */
+                updatedAt: string;
+                /**
+                 * Format: int64
+                 * @description Number of users with grants for this sharing tag
+                 * @example 5
+                 */
+                userCount: number;
+            }[];
+            /** @description HATEOAS navigation links */
+            links: components["schemas"]["PaginationLinks"];
+            /**
+             * Format: int64
+             * @description Current page number (1-indexed)
+             * @example 1
+             */
+            page: number;
+            /**
+             * Format: int64
+             * @description Number of items per page
+             * @example 50
+             */
+            pageSize: number;
+            /**
+             * Format: int64
+             * @description Total number of items across all pages
+             * @example 150
+             */
+            total: number;
+            /**
+             * Format: int64
+             * @description Total number of pages
+             * @example 3
+             */
+            totalPages: number;
+        };
+        /** @description Generic paginated response wrapper with HATEOAS links */
+        PaginatedResponse_TagDto: {
+            /** @description The data items for this page */
+            data: {
+                /**
+                 * Format: date-time
+                 * @description When the tag was created
+                 * @example 2024-01-01T00:00:00Z
+                 */
+                createdAt: string;
+                /**
+                 * Format: uuid
+                 * @description Tag ID
+                 * @example 550e8400-e29b-41d4-a716-446655440020
+                 */
+                id: string;
+                /**
+                 * @description Tag name
+                 * @example Completed
+                 */
+                name: string;
+                /**
+                 * Format: int64
+                 * @description Number of series with this tag
+                 * @example 15
+                 */
+                seriesCount?: number | null;
+            }[];
+            /** @description HATEOAS navigation links */
+            links: components["schemas"]["PaginationLinks"];
+            /**
+             * Format: int64
+             * @description Current page number (1-indexed)
+             * @example 1
+             */
+            page: number;
+            /**
+             * Format: int64
+             * @description Number of items per page
+             * @example 50
+             */
+            pageSize: number;
+            /**
+             * Format: int64
+             * @description Total number of items across all pages
+             * @example 150
+             */
+            total: number;
+            /**
+             * Format: int64
+             * @description Total number of pages
+             * @example 3
+             */
+            totalPages: number;
+        };
+        /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse_UserDto: {
             /** @description The data items for this page */
             data: {
@@ -7389,16 +7785,18 @@ export interface components {
                  */
                 username: string;
             }[];
+            /** @description HATEOAS navigation links */
+            links: components["schemas"]["PaginationLinks"];
             /**
              * Format: int64
-             * @description Current page number (0-indexed)
-             * @example 0
+             * @description Current page number (1-indexed)
+             * @example 1
              */
             page: number;
             /**
              * Format: int64
              * @description Number of items per page
-             * @example 20
+             * @example 50
              */
             pageSize: number;
             /**
@@ -7410,9 +7808,22 @@ export interface components {
             /**
              * Format: int64
              * @description Total number of pages
-             * @example 8
+             * @example 3
              */
             totalPages: number;
+        };
+        /** @description HATEOAS navigation links for paginated responses (RFC 8288) */
+        PaginationLinks: {
+            /** @description Link to the first page */
+            first: string;
+            /** @description Link to the last page */
+            last: string;
+            /** @description Link to the next page (null if on last page) */
+            next?: string | null;
+            /** @description Link to the previous page (null if on first page) */
+            prev?: string | null;
+            /** @description Link to the current page */
+            self: string;
         };
         /**
          * @description PATCH request for partial update of book metadata
@@ -8564,16 +8975,18 @@ export interface components {
         SeriesListRequest: {
             /** @description Filter condition (optional - no condition returns all) */
             condition?: Record<string, never> | null;
+            /** @description Cursor for cursor-based pagination (alternative to page-based) */
+            cursor?: string | null;
             /** @description Full-text search query (case-insensitive search on series name) */
             fullTextSearch?: string | null;
             /**
              * Format: int64
-             * @description Page number (0-indexed)
+             * @description Page number (1-indexed, default 1)
              */
             page?: number;
             /**
              * Format: int64
-             * @description Items per page (default 20, max 100)
+             * @description Items per page (default 50, max 100)
              */
             pageSize?: number;
             /** @description Sort field and direction (e.g., "name,asc" or "createdAt,desc") */
@@ -11123,7 +11536,12 @@ export interface operations {
     };
     list_sharing_tags: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page number (1-indexed, default 1) */
+                page?: number;
+                /** @description Number of items per page (default 50, max 500) */
+                pageSize?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -11136,7 +11554,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SharingTagListResponse"];
+                    "application/json": components["schemas"]["PaginatedResponse_SharingTagDto"];
                 };
             };
             /** @description Forbidden - Missing permission */
@@ -11308,7 +11726,12 @@ export interface operations {
     };
     list_api_keys: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page number (1-indexed, default 1) */
+                page?: number;
+                /** @description Number of items per page (default 50, max 500) */
+                pageSize?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -11321,7 +11744,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiKeyDto"][];
+                    "application/json": components["schemas"]["PaginatedResponse_ApiKeyDto"];
                 };
             };
             /** @description Forbidden - Missing permission */
@@ -11641,9 +12064,9 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description Page number (0-indexed) */
+                /** @description Page number (1-indexed, minimum 1) */
                 page: number;
-                /** @description Number of items per page (max 100) */
+                /** @description Number of items per page (max 100, default 50) */
                 pageSize: number;
             };
             cookie?: never;
@@ -11677,9 +12100,9 @@ export interface operations {
                 series_id?: string | null;
                 /** @description Filter by specific error type */
                 error_type?: null | components["schemas"]["BookErrorTypeDto"];
-                /** @description Page number (0-indexed) */
+                /** @description Page number (1-indexed, default 1) */
                 page?: number;
-                /** @description Number of items per page (max 100) */
+                /** @description Number of items per page (max 100, default 50) */
                 page_size?: number;
             };
             header?: never;
@@ -11734,9 +12157,9 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description Page number (0-indexed) */
+                /** @description Page number (1-indexed, minimum 1) */
                 page: number;
-                /** @description Number of items per page (max 100) */
+                /** @description Number of items per page (max 100, default 50) */
                 pageSize: number;
             };
             cookie?: never;
@@ -11800,9 +12223,9 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description Page number (0-indexed) */
+                /** @description Page number (1-indexed, minimum 1) */
                 page: number;
-                /** @description Number of items per page (max 100) */
+                /** @description Number of items per page (max 100, default 50) */
                 pageSize: number;
             };
             cookie?: never;
@@ -11835,9 +12258,9 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description Page number (0-indexed) */
+                /** @description Page number (1-indexed, minimum 1) */
                 page: number;
-                /** @description Number of items per page (max 100) */
+                /** @description Number of items per page (max 100, default 50) */
                 pageSize: number;
             };
             cookie?: never;
@@ -11944,7 +12367,7 @@ export interface operations {
                 library_id?: string;
                 /** @description Filter by series ID */
                 series_id?: string;
-                /** @description Page number (0-indexed) */
+                /** @description Page number (1-indexed, default 1) */
                 page?: number;
                 /** @description Number of items per page (max 100) */
                 page_size?: number;
@@ -12829,7 +13252,12 @@ export interface operations {
     };
     list_genres: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page number (1-indexed, default 1) */
+                page?: number;
+                /** @description Number of items per page (default 50, max 500) */
+                pageSize?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -12842,7 +13270,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GenreListResponse"];
+                    "application/json": components["schemas"]["PaginatedResponse_GenreDto"];
                 };
             };
             /** @description Forbidden */
@@ -12918,7 +13346,12 @@ export interface operations {
     };
     list_libraries: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page number (1-indexed, default 1) */
+                page?: number;
+                /** @description Number of items per page (default 50, max 500) */
+                pageSize?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -12931,7 +13364,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LibraryDto"][];
+                    "application/json": components["schemas"]["PaginatedResponse_LibraryDto"];
                 };
             };
             /** @description Forbidden */
@@ -13206,9 +13639,9 @@ export interface operations {
             path: {
                 /** @description Library ID */
                 library_id: string;
-                /** @description Page number (0-indexed) */
+                /** @description Page number (1-indexed, minimum 1) */
                 page: number;
-                /** @description Number of items per page (max 100) */
+                /** @description Number of items per page (max 100, default 50) */
                 pageSize: number;
             };
             cookie?: never;
@@ -13240,9 +13673,9 @@ export interface operations {
             path: {
                 /** @description Library ID */
                 library_id: string;
-                /** @description Page number (0-indexed) */
+                /** @description Page number (1-indexed, minimum 1) */
                 page: number;
-                /** @description Number of items per page (max 100) */
+                /** @description Number of items per page (max 100, default 50) */
                 pageSize: number;
             };
             cookie?: never;
@@ -13274,9 +13707,9 @@ export interface operations {
             path: {
                 /** @description Library ID */
                 library_id: string;
-                /** @description Page number (0-indexed) */
+                /** @description Page number (1-indexed, minimum 1) */
                 page: number;
-                /** @description Number of items per page (max 100) */
+                /** @description Number of items per page (max 100, default 50) */
                 pageSize: number;
             };
             cookie?: never;
@@ -13308,9 +13741,9 @@ export interface operations {
             path: {
                 /** @description Library ID */
                 library_id: string;
-                /** @description Page number (0-indexed) */
+                /** @description Page number (1-indexed, minimum 1) */
                 page: number;
-                /** @description Number of items per page (max 100) */
+                /** @description Number of items per page (max 100, default 50) */
                 pageSize: number;
             };
             cookie?: never;
@@ -13371,7 +13804,7 @@ export interface operations {
     list_library_books_with_errors: {
         parameters: {
             query?: {
-                /** @description Page number (0-indexed) */
+                /** @description Page number (1-indexed, default 1) */
                 page?: number;
                 /** @description Number of items per page (max 100) */
                 page_size?: number;
@@ -13569,7 +14002,7 @@ export interface operations {
     list_library_series: {
         parameters: {
             query?: {
-                /** @description Page number (0-indexed) */
+                /** @description Page number (1-indexed, default 1) */
                 page?: number;
                 /** @description Number of items per page (max 100) */
                 page_size?: number;
@@ -14008,7 +14441,7 @@ export interface operations {
             query?: {
                 /** @description Filter by library ID */
                 library_id?: string;
-                /** @description Page number (0-indexed) */
+                /** @description Page number (1-indexed, default 1) */
                 page?: number;
                 /** @description Number of items per page (max 100) */
                 page_size?: number;
@@ -14504,7 +14937,7 @@ export interface operations {
     list_series_books_with_errors: {
         parameters: {
             query?: {
-                /** @description Page number (0-indexed) */
+                /** @description Page number (1-indexed, default 1) */
                 page?: number;
                 /** @description Number of items per page (max 100) */
                 page_size?: number;
@@ -16288,7 +16721,12 @@ export interface operations {
     };
     list_tags: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page number (1-indexed, default 1) */
+                page?: number;
+                /** @description Number of items per page (default 50, max 500) */
+                pageSize?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -16301,7 +16739,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TagListResponse"];
+                    "application/json": components["schemas"]["PaginatedResponse_TagDto"];
                 };
             };
             /** @description Forbidden */
@@ -17264,9 +17702,9 @@ export interface operations {
                 sharingTag?: string | null;
                 /** @description Filter by sharing tag access mode (allow/deny) - only used with sharing_tag */
                 sharingTagMode?: string | null;
-                /** @description Page number (0-indexed) */
+                /** @description Page number (1-indexed, default 1) */
                 page?: number;
-                /** @description Number of items per page (max 100) */
+                /** @description Number of items per page (max 100, default 50) */
                 pageSize?: number;
             };
             header?: never;

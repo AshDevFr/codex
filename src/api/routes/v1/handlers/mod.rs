@@ -2,6 +2,43 @@
 //!
 //! This module contains all request handlers for API v1.
 
+use axum::{
+    http::{header, HeaderValue, StatusCode},
+    response::{IntoResponse, Response},
+    Json,
+};
+use serde::Serialize;
+
+use super::dto::common::PaginationLinkBuilder;
+
+/// Create a paginated response with Link headers (RFC 8288)
+///
+/// This helper wraps a serializable response with the appropriate Link header
+/// for HATEOAS compliance.
+///
+/// # Example
+/// ```ignore
+/// let builder = PaginationLinkBuilder::new("/api/v1/books", page, page_size, total_pages);
+/// let response = PaginatedResponse::with_builder(data, page, page_size, total, &builder);
+/// Ok(paginated_response(response, &builder))
+/// ```
+pub fn paginated_response<T: Serialize>(data: T, link_builder: &PaginationLinkBuilder) -> Response {
+    let link_header = link_builder.build_link_header();
+
+    match serde_json::to_string(&data) {
+        Ok(_) => {
+            let mut response = (StatusCode::OK, Json(data)).into_response();
+
+            if let Ok(header_value) = HeaderValue::from_str(&link_header) {
+                response.headers_mut().insert(header::LINK, header_value);
+            }
+
+            response
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
 pub mod api_keys;
 pub mod auth;
 pub mod books;

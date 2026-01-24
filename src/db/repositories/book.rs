@@ -267,7 +267,7 @@ impl BookRepository {
     pub async fn list_all(
         db: &DatabaseConnection,
         include_deleted: bool,
-        page: u64,
+        offset: u64,
         page_size: u64,
     ) -> Result<(Vec<books::Model>, u64)> {
         let mut query = Books::find();
@@ -293,7 +293,7 @@ impl BookRepository {
             .order_by_asc(book_metadata::Column::TitleSort)
             .order_by_asc(book_metadata::Column::Title)
             .order_by_asc(books::Column::FileName)
-            .offset(page * page_size)
+            .offset(offset)
             .limit(page_size)
             .all(db)
             .await
@@ -307,7 +307,7 @@ impl BookRepository {
         db: &DatabaseConnection,
         ids: &[Uuid],
         include_deleted: bool,
-        page: u64,
+        offset: u64,
         page_size: u64,
     ) -> Result<(Vec<books::Model>, u64)> {
         if ids.is_empty() {
@@ -332,7 +332,7 @@ impl BookRepository {
             .order_by_asc(book_metadata::Column::TitleSort)
             .order_by_asc(book_metadata::Column::Title)
             .order_by_asc(books::Column::FileName)
-            .offset(page * page_size)
+            .offset(offset)
             .limit(page_size)
             .all(db)
             .await
@@ -1442,7 +1442,7 @@ impl BookRepository {
         db: &DatabaseConnection,
         library_id: Option<Uuid>,
         series_id: Option<Uuid>,
-        page: u64,
+        offset: u64,
         page_size: u64,
     ) -> Result<(Vec<books::Model>, u64)> {
         let mut query = Books::find()
@@ -1467,7 +1467,7 @@ impl BookRepository {
         // Get paginated results
         let books = query
             .order_by_desc(books::Column::UpdatedAt)
-            .offset(page * page_size)
+            .offset(offset)
             .limit(page_size)
             .all(db)
             .await
@@ -1832,6 +1832,143 @@ impl BookRepository {
         }
 
         Ok(map)
+    }
+
+    // =========================================================================
+    // Cursor-Based Pagination Methods
+    // =========================================================================
+
+    /// List books by library using cursor-based pagination
+    ///
+    /// This method is more efficient than offset-based pagination for large datasets.
+    /// It uses the `(title_sort, id)` tuple as the cursor position.
+    ///
+    /// # Arguments
+    /// * `db` - Database connection
+    /// * `library_id` - Library ID to filter by
+    /// * `cursor` - Optional cursor from a previous page (title_sort, book_id)
+    /// * `page_size` - Number of items to return
+    ///
+    /// # Returns
+    /// * `Vec<books::Model>` - Books for this page (may have page_size + 1 to detect has_more)
+    pub async fn list_by_library_cursor(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        cursor: Option<(&str, Uuid)>,
+        page_size: u64,
+    ) -> Result<Vec<books::Model>> {
+        use crate::db::entities::book_metadata;
+        use sea_orm::JoinType;
+
+        let mut query = Books::find()
+            .filter(books::Column::LibraryId.eq(library_id))
+            .filter(books::Column::Deleted.eq(false))
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def());
+
+        // Apply cursor condition if provided
+        // We use (title_sort, id) as the cursor tuple
+        // Rows after cursor: (title_sort > cursor_title) OR (title_sort = cursor_title AND id > cursor_id)
+        if let Some((cursor_title, cursor_id)) = cursor {
+            query = query.filter(
+                Condition::any()
+                    .add(
+                        book_metadata::Column::TitleSort.gt(cursor_title).or(
+                            book_metadata::Column::TitleSort
+                                .is_null()
+                                .and(Expr::val(cursor_title).ne("")),
+                        ),
+                    )
+                    .add(
+                        Condition::all()
+                            .add(
+                                book_metadata::Column::TitleSort.eq(cursor_title).or(
+                                    book_metadata::Column::TitleSort
+                                        .is_null()
+                                        .and(Expr::val(cursor_title).eq("")),
+                                ),
+                            )
+                            .add(books::Column::Id.gt(cursor_id)),
+                    ),
+            );
+        }
+
+        // Order by title_sort ASC, then id ASC for stability
+        query
+            .order_by_asc(book_metadata::Column::TitleSort)
+            .order_by_asc(books::Column::Id)
+            // Fetch one extra to determine if there are more pages
+            .limit(page_size + 1)
+            .all(db)
+            .await
+            .context("Failed to list books by library with cursor")
+    }
+
+    /// List recently added books using cursor-based pagination
+    ///
+    /// Uses `(created_at, id)` as the cursor for descending date order.
+    ///
+    /// # Arguments
+    /// * `db` - Database connection
+    /// * `library_id` - Optional library ID to filter by
+    /// * `cursor` - Optional cursor from a previous page (created_at timestamp, book_id)
+    /// * `page_size` - Number of items to return
+    ///
+    /// # Returns
+    /// * `Vec<books::Model>` - Books for this page (may have page_size + 1 to detect has_more)
+    pub async fn list_recently_added_cursor(
+        db: &DatabaseConnection,
+        library_id: Option<Uuid>,
+        cursor: Option<(i64, Uuid)>,
+        page_size: u64,
+    ) -> Result<Vec<books::Model>> {
+        let mut query = Books::find().filter(books::Column::Deleted.eq(false));
+
+        // Filter by library if specified
+        if let Some(lib_id) = library_id {
+            query = query.filter(books::Column::LibraryId.eq(lib_id));
+        }
+
+        // Apply cursor condition if provided
+        // For descending order: (created_at < cursor_timestamp) OR (created_at = cursor_timestamp AND id < cursor_id)
+        if let Some((cursor_timestamp, cursor_id)) = cursor {
+            use chrono::TimeZone;
+            let cursor_datetime = Utc.timestamp_millis_opt(cursor_timestamp).single();
+            if let Some(dt) = cursor_datetime {
+                query = query.filter(
+                    Condition::any().add(books::Column::CreatedAt.lt(dt)).add(
+                        Condition::all()
+                            .add(books::Column::CreatedAt.eq(dt))
+                            .add(books::Column::Id.lt(cursor_id)),
+                    ),
+                );
+            }
+        }
+
+        // Order by created_at DESC (most recent first), then id DESC for stability
+        query
+            .order_by_desc(books::Column::CreatedAt)
+            .order_by_desc(books::Column::Id)
+            // Fetch one extra to determine if there are more pages
+            .limit(page_size + 1)
+            .all(db)
+            .await
+            .context("Failed to list recently added books with cursor")
+    }
+
+    /// Get title_sort for a book (used for cursor construction)
+    pub async fn get_title_sort(db: &DatabaseConnection, book_id: Uuid) -> Result<Option<String>> {
+        use crate::db::entities::book_metadata;
+
+        let result: Option<String> = book_metadata::Entity::find()
+            .filter(book_metadata::Column::BookId.eq(book_id))
+            .select_only()
+            .column(book_metadata::Column::TitleSort)
+            .into_tuple()
+            .one(db)
+            .await
+            .context("Failed to get title_sort for book")?;
+
+        Ok(result)
     }
 }
 

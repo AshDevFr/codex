@@ -3,10 +3,40 @@
  */
 
 import { delay, HttpResponse, http } from "msw";
-import { createDuplicateGroup, createList } from "../data/factories";
+import type { DuplicateGroup } from "../data/factories";
+import { mockBooks } from "../data/store";
 
-// Generate mock duplicate groups
-const mockDuplicates = createList(() => createDuplicateGroup(), 10);
+// Generate mock duplicate groups using actual book IDs
+const createMockDuplicates = (): DuplicateGroup[] => {
+	const groups: DuplicateGroup[] = [];
+	// Create duplicate groups by pairing books from the store
+	// We'll create 5 groups, each with 2-3 "duplicate" books
+	for (let i = 0; i < 5; i++) {
+		const startIndex = i * 3;
+		if (startIndex + 1 < mockBooks.length) {
+			const bookIds = [mockBooks[startIndex].id, mockBooks[startIndex + 1].id];
+			// Add a third book to some groups
+			if (i % 2 === 0 && startIndex + 2 < mockBooks.length) {
+				bookIds.push(mockBooks[startIndex + 2].id);
+			}
+			groups.push({
+				id: `dup-group-${i + 1}`,
+				file_hash: `hash-${i + 1}-${"a".repeat(60)}`.slice(0, 64),
+				duplicate_count: bookIds.length,
+				book_ids: bookIds,
+				created_at: new Date(
+					Date.now() - i * 24 * 60 * 60 * 1000,
+				).toISOString(),
+				updated_at: new Date(
+					Date.now() - i * 12 * 60 * 60 * 1000,
+				).toISOString(),
+			});
+		}
+	}
+	return groups;
+};
+
+const mockDuplicates = createMockDuplicates();
 
 export const duplicatesHandlers = [
 	// List all duplicates

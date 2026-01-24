@@ -101,12 +101,12 @@ const mockUserIntegrations: Array<{
 ];
 
 export const usersHandlers = [
-	// List all users (paginated)
+	// List all users (paginated, 1-indexed)
 	http.get("/api/v1/users", async ({ request }) => {
 		await delay(100);
 		const url = new URL(request.url);
-		const page = parseInt(url.searchParams.get("page") || "0", 10);
-		const pageSize = parseInt(url.searchParams.get("pageSize") || "20", 10);
+		const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
+		const pageSize = parseInt(url.searchParams.get("pageSize") || "50", 10);
 		const role = url.searchParams.get("role");
 		// sharingTag filter available but not implemented in mock (would require mock sharing tag grants)
 		// const sharingTag = url.searchParams.get("sharingTag");
@@ -117,12 +117,26 @@ export const usersHandlers = [
 			filteredUsers = filteredUsers.filter((u) => u.role === role);
 		}
 
-		// Apply pagination
+		// Apply pagination (1-indexed)
 		const total = filteredUsers.length;
-		const totalPages = Math.ceil(total / pageSize);
-		const start = page * pageSize;
+		const totalPages = Math.ceil(total / pageSize) || 1;
+		const start = (page - 1) * pageSize;
 		const end = start + pageSize;
 		const paginatedUsers = filteredUsers.slice(start, end);
+
+		// Build HATEOAS links
+		const basePath = "/api/v1/users";
+		const links = {
+			self: `${basePath}?page=${page}&page_size=${pageSize}`,
+			first: `${basePath}?page=1&page_size=${pageSize}`,
+			prev:
+				page > 1 ? `${basePath}?page=${page - 1}&page_size=${pageSize}` : null,
+			next:
+				page < totalPages
+					? `${basePath}?page=${page + 1}&page_size=${pageSize}`
+					: null,
+			last: `${basePath}?page=${totalPages}&page_size=${pageSize}`,
+		};
 
 		return HttpResponse.json({
 			data: paginatedUsers,
@@ -130,6 +144,7 @@ export const usersHandlers = [
 			pageSize,
 			total,
 			totalPages,
+			links,
 		});
 	}),
 

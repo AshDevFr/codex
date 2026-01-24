@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use super::common::{DEFAULT_PAGE, DEFAULT_PAGE_SIZE};
+
 /// Operators for string and equality comparisons
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(tag = "operator", rename_all = "camelCase")]
@@ -154,17 +156,21 @@ pub struct SeriesListRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub full_text_search: Option<String>,
 
-    /// Page number (0-indexed)
-    #[serde(default)]
+    /// Page number (1-indexed, default 1)
+    #[serde(default = "default_page")]
     pub page: u64,
 
-    /// Items per page (default 20, max 100)
+    /// Items per page (default 50, max 100)
     #[serde(default = "default_page_size")]
     pub page_size: u64,
 
     /// Sort field and direction (e.g., "name,asc" or "createdAt,desc")
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sort: Option<String>,
+
+    /// Cursor for cursor-based pagination (alternative to page-based)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
 }
 
 /// Request body for POST /books/list
@@ -180,11 +186,11 @@ pub struct BookListRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub full_text_search: Option<String>,
 
-    /// Page number (0-indexed)
-    #[serde(default)]
+    /// Page number (1-indexed, default 1)
+    #[serde(default = "default_page")]
     pub page: u64,
 
-    /// Items per page (default 20, max 100)
+    /// Items per page (default 50, max 100)
     #[serde(default = "default_page_size")]
     pub page_size: u64,
 
@@ -192,13 +198,21 @@ pub struct BookListRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sort: Option<String>,
 
+    /// Cursor for cursor-based pagination (alternative to page-based)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+
     /// Include soft-deleted books in results (default: false)
     #[serde(default)]
     pub include_deleted: bool,
 }
 
 fn default_page_size() -> u64 {
-    20
+    DEFAULT_PAGE_SIZE
+}
+
+fn default_page() -> u64 {
+    DEFAULT_PAGE
 }
 
 impl Default for SeriesListRequest {
@@ -206,9 +220,10 @@ impl Default for SeriesListRequest {
         Self {
             condition: None,
             full_text_search: None,
-            page: 0,
-            page_size: default_page_size(),
+            page: DEFAULT_PAGE,
+            page_size: DEFAULT_PAGE_SIZE,
             sort: None,
+            cursor: None,
         }
     }
 }
@@ -218,9 +233,10 @@ impl Default for BookListRequest {
         Self {
             condition: None,
             full_text_search: None,
-            page: 0,
-            page_size: default_page_size(),
+            page: DEFAULT_PAGE,
+            page_size: DEFAULT_PAGE_SIZE,
             sort: None,
+            cursor: None,
             include_deleted: false,
         }
     }
@@ -402,15 +418,16 @@ mod tests {
                 },
             }),
             full_text_search: None,
-            page: 0,
-            page_size: 20,
+            page: 1,
+            page_size: 50,
             sort: Some("name,asc".to_string()),
+            cursor: None,
         };
 
         let json = serde_json::to_string(&request).unwrap();
         assert!(json.contains(r#""condition""#));
-        assert!(json.contains(r#""page":0"#));
-        assert!(json.contains(r#""pageSize":20"#));
+        assert!(json.contains(r#""page":1"#));
+        assert!(json.contains(r#""pageSize":50"#));
         assert!(json.contains(r#""sort":"name,asc""#));
     }
 
@@ -423,6 +440,67 @@ mod tests {
         assert!(!json.contains(r#""condition""#));
         assert!(!json.contains(r#""fullTextSearch""#));
         assert!(!json.contains(r#""sort""#));
+        assert!(!json.contains(r#""cursor""#));
+    }
+
+    #[test]
+    fn test_series_list_request_defaults() {
+        let request = SeriesListRequest::default();
+        assert_eq!(request.page, 1, "Default page should be 1 (1-indexed)");
+        assert_eq!(request.page_size, 50, "Default page_size should be 50");
+        assert!(request.cursor.is_none());
+    }
+
+    #[test]
+    fn test_book_list_request_defaults() {
+        let request = BookListRequest::default();
+        assert_eq!(request.page, 1, "Default page should be 1 (1-indexed)");
+        assert_eq!(request.page_size, 50, "Default page_size should be 50");
+        assert!(request.cursor.is_none());
+        assert!(!request.include_deleted);
+    }
+
+    #[test]
+    fn test_series_list_request_with_cursor() {
+        let request = SeriesListRequest {
+            cursor: Some("eyJpZCI6ICIxMjMifQ==".to_string()),
+            ..Default::default()
+        };
+
+        let json = serde_json::to_string(&request).unwrap();
+        assert!(json.contains(r#""cursor":"eyJpZCI6ICIxMjMifQ==""#));
+    }
+
+    #[test]
+    fn test_book_list_request_with_cursor() {
+        let request = BookListRequest {
+            cursor: Some("eyJpZCI6ICIxMjMifQ==".to_string()),
+            ..Default::default()
+        };
+
+        let json = serde_json::to_string(&request).unwrap();
+        assert!(json.contains(r#""cursor":"eyJpZCI6ICIxMjMifQ==""#));
+    }
+
+    #[test]
+    fn test_series_list_request_deserialization_with_defaults() {
+        // Test that deserialization uses correct defaults
+        let json = r#"{}"#;
+        let request: SeriesListRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.page, 1);
+        assert_eq!(request.page_size, 50);
+        assert!(request.cursor.is_none());
+    }
+
+    #[test]
+    fn test_book_list_request_deserialization_with_defaults() {
+        // Test that deserialization uses correct defaults
+        let json = r#"{}"#;
+        let request: BookListRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.page, 1);
+        assert_eq!(request.page_size, 50);
+        assert!(request.cursor.is_none());
+        assert!(!request.include_deleted);
     }
 
     #[test]

@@ -64,6 +64,10 @@ export type BrowseResponse = Schemas["BrowseResponse"];
 // =============================================================================
 // Pagination types
 // =============================================================================
+
+/** HATEOAS pagination links for navigating paginated responses (RFC 8288) */
+export type PaginationLinks = Schemas["PaginationLinks"];
+
 export type PaginatedResponse<T> = Omit<
 	Schemas["PaginatedResponse"],
 	"data"

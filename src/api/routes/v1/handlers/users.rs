@@ -1,7 +1,8 @@
 use super::super::dto::{
-    CreateUserRequest, PaginatedResponse, UpdateUserRequest, UserDetailDto, UserDto,
-    UserListParams, UserSharingTagGrantDto,
+    common::PaginationLinkBuilder, CreateUserRequest, PaginatedResponse, UpdateUserRequest,
+    UserDetailDto, UserDto, UserListParams, UserSharingTagGrantDto,
 };
+use super::paginated_response;
 use crate::api::{
     error::ApiError,
     extractors::{AuthContext, AuthState},
@@ -13,6 +14,7 @@ use crate::require_permission;
 use crate::utils::password;
 use axum::{
     extract::{Path, Query, State},
+    response::Response,
     Json,
 };
 use chrono::Utc;
@@ -49,15 +51,15 @@ pub async fn list_users(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Query(params): Query<UserListParams>,
-) -> Result<Json<PaginatedResponse<UserDto>>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::UsersRead)?;
 
-    // Validate and clamp pagination params
+    // Validate and clamp pagination params (1-indexed)
     let params = params.validate(100);
 
     // Build filter
     let filter = UserListFilter {
-        role: params.role.map(|r| r.to_string()),
+        role: params.role.as_ref().map(|r| r.to_string()),
         sharing_tag: params.sharing_tag.clone(),
         sharing_tag_mode: params.sharing_tag_mode.clone(),
     };
@@ -87,12 +89,33 @@ pub async fn list_users(
         })
         .collect();
 
-    Ok(Json(PaginatedResponse::new(
+    // Build pagination links
+    let total_pages = if params.page_size == 0 {
+        0
+    } else {
+        result.total.div_ceil(params.page_size)
+    };
+    let mut link_builder =
+        PaginationLinkBuilder::new("/api/v1/users", params.page, params.page_size, total_pages);
+    if let Some(ref role) = params.role {
+        link_builder = link_builder.with_param("role", &role.to_string());
+    }
+    if let Some(ref tag) = params.sharing_tag {
+        link_builder = link_builder.with_param("sharing_tag", tag);
+    }
+    if let Some(ref mode) = params.sharing_tag_mode {
+        link_builder = link_builder.with_param("sharing_tag_mode", mode);
+    }
+
+    let response = PaginatedResponse::with_builder(
         dtos,
         params.page,
         params.page_size,
         result.total,
-    )))
+        &link_builder,
+    );
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// Get user by ID (admin only)

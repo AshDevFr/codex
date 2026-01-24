@@ -1,7 +1,10 @@
 use super::super::dto::{
-    book::BookSortParam, AdjacentBooksResponse, BookDetailResponse, BookDto, BookListRequest,
-    BookListResponse, BookMetadataDto, PaginationParams,
+    book::BookSortParam,
+    common::{PaginationLinkBuilder, DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE},
+    AdjacentBooksResponse, BookDetailResponse, BookDto, BookListRequest, BookListResponse,
+    BookMetadataDto, PaginationParams,
 };
+use super::paginated_response;
 use crate::api::{
     error::ApiError,
     extractors::{AuthContext, AuthState, ContentFilter, FlexibleAuthContext},
@@ -26,6 +29,14 @@ use std::sync::Arc;
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
+fn default_page() -> u64 {
+    DEFAULT_PAGE
+}
+
+fn default_page_size() -> u64 {
+    DEFAULT_PAGE_SIZE
+}
+
 /// Query parameters for listing books
 #[derive(Debug, Deserialize)]
 pub struct BookListQuery {
@@ -37,11 +48,11 @@ pub struct BookListQuery {
     #[serde(default)]
     pub series_id: Option<Uuid>,
 
-    /// Page number (0-indexed)
-    #[serde(default)]
+    /// Page number (1-indexed, minimum 1)
+    #[serde(default = "default_page")]
     pub page: u64,
 
-    /// Number of items per page (max 100)
+    /// Number of items per page (max 100, default 50)
     #[serde(default = "default_page_size")]
     pub page_size: u64,
 
@@ -61,17 +72,13 @@ pub struct BooksWithErrorsQuery {
     #[serde(default)]
     pub series_id: Option<Uuid>,
 
-    /// Page number (0-indexed)
-    #[serde(default)]
+    /// Page number (1-indexed, minimum 1)
+    #[serde(default = "default_page")]
     pub page: u64,
 
-    /// Number of items per page (max 100)
+    /// Number of items per page (max 100, default 50)
     #[serde(default = "default_page_size")]
     pub page_size: u64,
-}
-
-fn default_page_size() -> u64 {
-    20
 }
 
 /// Helper function to convert books to DTOs with series information and read progress
@@ -230,14 +237,15 @@ pub async fn list_books(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Query(query): Query<BookListQuery>,
-) -> Result<Json<BookListResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    // Validate and normalize pagination params
+    // Validate and normalize pagination params (1-indexed)
+    let page = query.page.max(1); // Treat page 0 as page 1 for backward compatibility
     let page_size = if query.page_size == 0 {
         default_page_size()
     } else {
-        query.page_size.min(100)
+        query.page_size.min(MAX_PAGE_SIZE)
     };
 
     // Load content filter for sharing tags
@@ -249,12 +257,13 @@ pub async fn list_books(
     let (books_list, total) = if let Some(ser_id) = query.series_id {
         // Check if the series is visible to the user
         if !content_filter.is_series_visible(ser_id) {
-            return Ok(Json(BookListResponse::new(
-                vec![],
-                query.page,
-                page_size,
-                0,
-            )));
+            let total_pages = 0u64;
+            let link_builder =
+                PaginationLinkBuilder::new("/api/v1/books", page, page_size, total_pages)
+                    .with_param("series_id", &ser_id.to_string());
+            let response =
+                BookListResponse::with_builder(vec![], page, page_size, 0, &link_builder);
+            return Ok(paginated_response(response, &link_builder));
         }
 
         // By default, don't include deleted books in API responses
@@ -263,8 +272,8 @@ pub async fn list_books(
             .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?;
         let total = books.len() as u64;
 
-        // Apply pagination manually
-        let offset = query.page * page_size;
+        // Apply pagination manually (1-indexed: page 1 = offset 0)
+        let offset = (page - 1) * page_size;
         let start = offset as usize;
 
         // If start is beyond the list, return empty results
@@ -296,8 +305,8 @@ pub async fn list_books(
 
         let total = filtered.len() as u64;
 
-        // Apply pagination
-        let offset = query.page * page_size;
+        // Apply pagination (1-indexed: page 1 = offset 0)
+        let offset = (page - 1) * page_size;
         let start = offset as usize;
 
         let paginated = if start >= filtered.len() {
@@ -312,9 +321,24 @@ pub async fn list_books(
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
-    let response = BookListResponse::new(dtos, query.page, page_size, total);
+    // Build pagination links
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+    let mut link_builder =
+        PaginationLinkBuilder::new("/api/v1/books", page, page_size, total_pages);
+    if let Some(series_id) = query.series_id {
+        link_builder = link_builder.with_param("series_id", &series_id.to_string());
+    }
+    if let Some(library_id) = query.library_id {
+        link_builder = link_builder.with_param("library_id", &library_id.to_string());
+    }
 
-    Ok(Json(response))
+    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// List books with advanced filtering
@@ -339,15 +363,18 @@ pub async fn list_books_filtered(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Json(request): Json<BookListRequest>,
-) -> Result<Json<BookListResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    // Validate and normalize pagination params
+    // Validate and normalize pagination params (1-indexed)
+    let page = request.page.max(1); // Treat page 0 as page 1 for backward compatibility
     let page_size = if request.page_size == 0 {
         default_page_size()
     } else {
-        request.page_size.min(100)
+        request.page_size.min(MAX_PAGE_SIZE)
     };
+    // Convert to 0-indexed offset for repository methods
+    let offset = (page - 1) * page_size;
 
     // If there's a condition, evaluate it to get matching book IDs (with user context for ReadStatus filtering)
     let filtered_ids: Option<HashSet<Uuid>> = if let Some(ref condition) = request.condition {
@@ -377,7 +404,7 @@ pub async fn list_books_filtered(
                     search_query,
                     &id_vec,
                     request.include_deleted,
-                    request.page,
+                    offset,
                     page_size,
                 )
                 .await
@@ -390,7 +417,7 @@ pub async fn list_books_filtered(
                 &state.db,
                 search_query,
                 request.include_deleted,
-                request.page,
+                offset,
                 page_size,
             )
             .await
@@ -406,7 +433,7 @@ pub async fn list_books_filtered(
                     &state.db,
                     &id_vec,
                     request.include_deleted,
-                    request.page,
+                    offset,
                     page_size,
                 )
                 .await
@@ -415,7 +442,7 @@ pub async fn list_books_filtered(
         }
         // No filter and no full-text search
         (None, _) => {
-            BookRepository::list_all(&state.db, request.include_deleted, request.page, page_size)
+            BookRepository::list_all(&state.db, request.include_deleted, offset, page_size)
                 .await
                 .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?
         }
@@ -423,9 +450,18 @@ pub async fn list_books_filtered(
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
-    let response = BookListResponse::new(dtos, request.page, page_size, total);
+    // Build pagination links (POST endpoint doesn't include query params in links)
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+    let link_builder =
+        PaginationLinkBuilder::new("/api/v1/books/list", page, page_size, total_pages);
 
-    Ok(Json(response))
+    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// List books with analysis errors
@@ -435,7 +471,7 @@ pub async fn list_books_filtered(
     params(
         ("library_id" = Option<Uuid>, Query, description = "Filter by library ID"),
         ("series_id" = Option<Uuid>, Query, description = "Filter by series ID"),
-        ("page" = Option<u64>, Query, description = "Page number (0-indexed)"),
+        ("page" = Option<u64>, Query, description = "Page number (1-indexed, default 1)"),
         ("page_size" = Option<u64>, Query, description = "Number of items per page (max 100)")
     ),
     responses(
@@ -452,22 +488,24 @@ pub async fn list_books_with_errors(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Query(query): Query<BooksWithErrorsQuery>,
-) -> Result<Json<BookListResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    // Validate and normalize pagination params
+    // Validate and normalize pagination params (1-indexed)
+    let page = query.page.max(1);
     let page_size = if query.page_size == 0 {
         default_page_size()
     } else {
-        query.page_size.min(100)
+        query.page_size.min(MAX_PAGE_SIZE)
     };
+    let offset = (page - 1) * page_size;
 
     // Fetch books with errors
     let (books_list, total) = BookRepository::list_with_errors(
         &state.db,
         query.library_id,
         query.series_id,
-        query.page,
+        offset,
         page_size,
     )
     .await
@@ -475,9 +513,24 @@ pub async fn list_books_with_errors(
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
-    let response = BookListResponse::new(dtos, query.page, page_size, total);
+    // Build pagination links
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+    let mut link_builder =
+        PaginationLinkBuilder::new("/api/v1/books/with-errors", page, page_size, total_pages);
+    if let Some(library_id) = query.library_id {
+        link_builder = link_builder.with_param("library_id", &library_id.to_string());
+    }
+    if let Some(series_id) = query.series_id {
+        link_builder = link_builder.with_param("series_id", &series_id.to_string());
+    }
 
-    Ok(Json(response))
+    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// List books with analysis errors in a specific library
@@ -486,7 +539,7 @@ pub async fn list_books_with_errors(
     path = "/api/v1/libraries/{library_id}/books/with-errors",
     params(
         ("library_id" = Uuid, Path, description = "Library ID"),
-        ("page" = Option<u64>, Query, description = "Page number (0-indexed)"),
+        ("page" = Option<u64>, Query, description = "Page number (1-indexed, default 1)"),
         ("page_size" = Option<u64>, Query, description = "Number of items per page (max 100)")
     ),
     responses(
@@ -504,17 +557,20 @@ pub async fn list_library_books_with_errors(
     auth: AuthContext,
     Path(library_id): Path<Uuid>,
     Query(query): Query<BooksWithErrorsQuery>,
-) -> Result<Json<BookListResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
+    // Validate and normalize pagination params (1-indexed)
+    let page = query.page.max(1);
     let page_size = if query.page_size == 0 {
         default_page_size()
     } else {
-        query.page_size.min(100)
+        query.page_size.min(MAX_PAGE_SIZE)
     };
+    let offset = (page - 1) * page_size;
 
     let (books_list, total) =
-        BookRepository::list_with_errors(&state.db, Some(library_id), None, query.page, page_size)
+        BookRepository::list_with_errors(&state.db, Some(library_id), None, offset, page_size)
             .await
             .map_err(|e| {
                 ApiError::Internal(format!("Failed to fetch library books with errors: {}", e))
@@ -522,9 +578,22 @@ pub async fn list_library_books_with_errors(
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
-    let response = BookListResponse::new(dtos, query.page, page_size, total);
+    // Build pagination links
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+    let link_builder = PaginationLinkBuilder::new(
+        &format!("/api/v1/libraries/{}/books/with-errors", library_id),
+        page,
+        page_size,
+        total_pages,
+    );
 
-    Ok(Json(response))
+    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// List books with analysis errors in a specific series
@@ -533,7 +602,7 @@ pub async fn list_library_books_with_errors(
     path = "/api/v1/series/{series_id}/books/with-errors",
     params(
         ("series_id" = Uuid, Path, description = "Series ID"),
-        ("page" = Option<u64>, Query, description = "Page number (0-indexed)"),
+        ("page" = Option<u64>, Query, description = "Page number (1-indexed, default 1)"),
         ("page_size" = Option<u64>, Query, description = "Number of items per page (max 100)")
     ),
     responses(
@@ -551,17 +620,20 @@ pub async fn list_series_books_with_errors(
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
     Query(query): Query<BooksWithErrorsQuery>,
-) -> Result<Json<BookListResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
+    // Validate and normalize pagination params (1-indexed)
+    let page = query.page.max(1);
     let page_size = if query.page_size == 0 {
         default_page_size()
     } else {
-        query.page_size.min(100)
+        query.page_size.min(MAX_PAGE_SIZE)
     };
+    let offset = (page - 1) * page_size;
 
     let (books_list, total) =
-        BookRepository::list_with_errors(&state.db, None, Some(series_id), query.page, page_size)
+        BookRepository::list_with_errors(&state.db, None, Some(series_id), offset, page_size)
             .await
             .map_err(|e| {
                 ApiError::Internal(format!("Failed to fetch series books with errors: {}", e))
@@ -569,9 +641,22 @@ pub async fn list_series_books_with_errors(
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
-    let response = BookListResponse::new(dtos, query.page, page_size, total);
+    // Build pagination links
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+    let link_builder = PaginationLinkBuilder::new(
+        &format!("/api/v1/series/{}/books/with-errors", series_id),
+        page,
+        page_size,
+        total_pages,
+    );
 
-    Ok(Json(response))
+    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// Get book by ID
@@ -905,15 +990,17 @@ pub async fn list_library_books(
     auth: AuthContext,
     Path(library_id): Path<Uuid>,
     Query(query): Query<BookListQuery>,
-) -> Result<Json<BookListResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    // Validate and normalize pagination params
+    // Validate and normalize pagination params (1-indexed)
+    let page = query.page.max(1);
     let page_size = if query.page_size == 0 {
         default_page_size()
     } else {
-        query.page_size.min(100)
+        query.page_size.min(MAX_PAGE_SIZE)
     };
+    let offset = (page - 1) * page_size;
 
     // Parse sort parameter
     let sort = query
@@ -925,16 +1012,29 @@ pub async fn list_library_books(
     // Use database-level sorting for all sort types
     let (books_list, total) = BookRepository::list_by_library_sorted(
         &state.db, library_id, &sort, false, // exclude deleted
-        query.page, page_size,
+        offset, page_size,
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch library books: {}", e)))?;
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
-    let response = BookListResponse::new(dtos, query.page, page_size, total);
+    // Build pagination links
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+    let link_builder = PaginationLinkBuilder::new(
+        &format!("/api/v1/libraries/{}/books", library_id),
+        page,
+        page_size,
+        total_pages,
+    );
 
-    Ok(Json(response))
+    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// List books with reading progress (in-progress books)
@@ -959,15 +1059,17 @@ pub async fn list_in_progress_books(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Query(query): Query<BookListQuery>,
-) -> Result<Json<BookListResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    // Validate and normalize pagination params
+    // Validate and normalize pagination params (1-indexed)
+    let page = query.page.max(1);
     let page_size = if query.page_size == 0 {
         default_page_size()
     } else {
-        query.page_size.min(100)
+        query.page_size.min(MAX_PAGE_SIZE)
     };
+    let offset = (page - 1) * page_size;
 
     // Fetch books with reading progress (not completed)
     let (books_list, total) = BookRepository::list_with_progress(
@@ -975,7 +1077,7 @@ pub async fn list_in_progress_books(
         auth.user_id,
         query.library_id,
         Some(false), // only in-progress (not completed)
-        query.page,
+        offset,
         page_size,
     )
     .await
@@ -983,9 +1085,21 @@ pub async fn list_in_progress_books(
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
-    let response = BookListResponse::new(dtos, query.page, page_size, total);
+    // Build pagination links
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+    let mut link_builder =
+        PaginationLinkBuilder::new("/api/v1/books/in-progress", page, page_size, total_pages);
+    if let Some(library_id) = query.library_id {
+        link_builder = link_builder.with_param("library_id", &library_id.to_string());
+    }
 
-    Ok(Json(response))
+    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// List books with reading progress in a specific library (in-progress books)
@@ -1011,15 +1125,17 @@ pub async fn list_library_in_progress_books(
     auth: AuthContext,
     Path(library_id): Path<Uuid>,
     Query(query): Query<BookListQuery>,
-) -> Result<Json<BookListResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    // Validate and normalize pagination params
+    // Validate and normalize pagination params (1-indexed)
+    let page = query.page.max(1);
     let page_size = if query.page_size == 0 {
         default_page_size()
     } else {
-        query.page_size.min(100)
+        query.page_size.min(MAX_PAGE_SIZE)
     };
+    let offset = (page - 1) * page_size;
 
     // Fetch books with reading progress (not completed) in this library
     let (books_list, total) = BookRepository::list_with_progress(
@@ -1027,7 +1143,7 @@ pub async fn list_library_in_progress_books(
         auth.user_id,
         Some(library_id),
         Some(false), // only in-progress (not completed)
-        query.page,
+        offset,
         page_size,
     )
     .await
@@ -1035,9 +1151,22 @@ pub async fn list_library_in_progress_books(
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
-    let response = BookListResponse::new(dtos, query.page, page_size, total);
+    // Build pagination links
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+    let link_builder = PaginationLinkBuilder::new(
+        &format!("/api/v1/libraries/{}/books/in-progress", library_id),
+        page,
+        page_size,
+        total_pages,
+    );
 
-    Ok(Json(response))
+    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// List on-deck books (next unread book in series where user has completed at least one book)
@@ -1062,32 +1191,41 @@ pub async fn list_on_deck_books(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Query(query): Query<BookListQuery>,
-) -> Result<Json<BookListResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    // Validate and normalize pagination params
+    // Validate and normalize pagination params (1-indexed)
+    let page = query.page.max(1);
     let page_size = if query.page_size == 0 {
         default_page_size()
     } else {
-        query.page_size.min(100)
+        query.page_size.min(MAX_PAGE_SIZE)
     };
+    let offset = (page - 1) * page_size;
 
     // Fetch on-deck books
-    let (books_list, total) = BookRepository::list_on_deck(
-        &state.db,
-        auth.user_id,
-        query.library_id,
-        query.page,
-        page_size,
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to fetch on-deck books: {}", e)))?;
+    let (books_list, total) =
+        BookRepository::list_on_deck(&state.db, auth.user_id, query.library_id, offset, page_size)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch on-deck books: {}", e)))?;
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
-    let response = BookListResponse::new(dtos, query.page, page_size, total);
+    // Build pagination links
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+    let mut link_builder =
+        PaginationLinkBuilder::new("/api/v1/books/on-deck", page, page_size, total_pages);
+    if let Some(library_id) = query.library_id {
+        link_builder = link_builder.with_param("library_id", &library_id.to_string());
+    }
 
-    Ok(Json(response))
+    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// List on-deck books in a specific library
@@ -1113,32 +1251,42 @@ pub async fn list_library_on_deck_books(
     auth: AuthContext,
     Path(library_id): Path<Uuid>,
     Query(query): Query<BookListQuery>,
-) -> Result<Json<BookListResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    // Validate and normalize pagination params
+    // Validate and normalize pagination params (1-indexed)
+    let page = query.page.max(1);
     let page_size = if query.page_size == 0 {
         default_page_size()
     } else {
-        query.page_size.min(100)
+        query.page_size.min(MAX_PAGE_SIZE)
     };
+    let offset = (page - 1) * page_size;
 
     // Fetch on-deck books in this library
-    let (books_list, total) = BookRepository::list_on_deck(
-        &state.db,
-        auth.user_id,
-        Some(library_id),
-        query.page,
-        page_size,
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to fetch on-deck books: {}", e)))?;
+    let (books_list, total) =
+        BookRepository::list_on_deck(&state.db, auth.user_id, Some(library_id), offset, page_size)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch on-deck books: {}", e)))?;
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
-    let response = BookListResponse::new(dtos, query.page, page_size, total);
+    // Build pagination links
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+    let link_builder = PaginationLinkBuilder::new(
+        &format!("/api/v1/libraries/{}/books/on-deck", library_id),
+        page,
+        page_size,
+        total_pages,
+    );
 
-    Ok(Json(response))
+    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// List recently added books
@@ -1163,22 +1311,24 @@ pub async fn list_recently_added_books(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Query(query): Query<BookListQuery>,
-) -> Result<Json<BookListResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    // Validate and normalize pagination params
+    // Validate and normalize pagination params (1-indexed)
+    let page = query.page.max(1);
     let page_size = if query.page_size == 0 {
         default_page_size()
     } else {
-        query.page_size.min(100)
+        query.page_size.min(MAX_PAGE_SIZE)
     };
+    let offset = (page - 1) * page_size;
 
     // Fetch recently added books
     let (books_list, total) = BookRepository::list_recently_added(
         &state.db,
         query.library_id,
         false, // exclude deleted
-        query.page,
+        offset,
         page_size,
     )
     .await
@@ -1186,9 +1336,21 @@ pub async fn list_recently_added_books(
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
-    let response = BookListResponse::new(dtos, query.page, page_size, total);
+    // Build pagination links
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+    let mut link_builder =
+        PaginationLinkBuilder::new("/api/v1/books/recently-added", page, page_size, total_pages);
+    if let Some(library_id) = query.library_id {
+        link_builder = link_builder.with_param("library_id", &library_id.to_string());
+    }
 
-    Ok(Json(response))
+    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// List recently added books in a specific library
@@ -1214,22 +1376,24 @@ pub async fn list_library_recently_added_books(
     auth: AuthContext,
     Path(library_id): Path<Uuid>,
     Query(query): Query<BookListQuery>,
-) -> Result<Json<BookListResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    // Validate and normalize pagination params
+    // Validate and normalize pagination params (1-indexed)
+    let page = query.page.max(1);
     let page_size = if query.page_size == 0 {
         default_page_size()
     } else {
-        query.page_size.min(100)
+        query.page_size.min(MAX_PAGE_SIZE)
     };
+    let offset = (page - 1) * page_size;
 
     // Fetch recently added books in this library
     let (books_list, total) = BookRepository::list_recently_added(
         &state.db,
         Some(library_id),
         false, // exclude deleted
-        query.page,
+        offset,
         page_size,
     )
     .await
@@ -1237,9 +1401,22 @@ pub async fn list_library_recently_added_books(
 
     let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
 
-    let response = BookListResponse::new(dtos, query.page, page_size, total);
+    // Build pagination links
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+    let link_builder = PaginationLinkBuilder::new(
+        &format!("/api/v1/libraries/{}/books/recently-added", library_id),
+        page,
+        page_size,
+        total_pages,
+    );
 
-    Ok(Json(response))
+    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// Query parameters for recently read books
@@ -2396,11 +2573,11 @@ pub struct BooksWithErrorsQueryV2 {
     #[serde(default)]
     pub error_type: Option<BookErrorTypeDto>,
 
-    /// Page number (0-indexed)
-    #[serde(default)]
+    /// Page number (1-indexed, default 1)
+    #[serde(default = "default_page")]
     pub page: u64,
 
-    /// Number of items per page (max 100)
+    /// Number of items per page (max 100, default 50)
     #[serde(default = "default_page_size")]
     pub page_size: u64,
 }
@@ -2445,7 +2622,8 @@ pub async fn list_books_with_errors_v2(
 ) -> Result<Json<BooksWithErrorsResponse>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
-    // Validate and normalize pagination params
+    // Validate and normalize pagination params (1-indexed)
+    let page = query.page.max(1);
     let page_size = if query.page_size == 0 {
         default_page_size()
     } else {
@@ -2460,13 +2638,13 @@ pub async fn list_books_with_errors_v2(
     // Convert internal error type to DTO if provided
     let error_type_filter = query.error_type.map(|t| t.into());
 
-    // Fetch books with errors
+    // Fetch books with errors (convert to 0-indexed for repository)
     let (books_with_errors, total) = BookRepository::list_with_errors_v2(
         &state.db,
         query.library_id,
         query.series_id,
         error_type_filter,
-        query.page,
+        page - 1, // Convert 1-indexed to 0-indexed for repository
         page_size,
     )
     .await
@@ -2540,13 +2718,13 @@ pub async fn list_books_with_errors_v2(
         })
         .collect();
 
-    let total_pages = total.div_ceil(page_size);
+    let total_pages = total.div_ceil(page_size).max(1);
 
     Ok(Json(BooksWithErrorsResponse {
         total_books_with_errors: total,
         error_counts: error_counts_str,
         groups,
-        page: query.page,
+        page, // Return normalized 1-indexed page
         page_size,
         total_pages,
     }))

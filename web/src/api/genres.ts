@@ -1,3 +1,4 @@
+import type { PaginatedResponse } from "@/types";
 import type { components } from "@/types/api.generated";
 import { api } from "./client";
 
@@ -9,8 +10,8 @@ export const genresApi = {
 	 * Get all genres across all libraries
 	 */
 	getAll: async (): Promise<Genre[]> => {
-		const response = await api.get<GenreListResponse>("/genres");
-		return response.data.genres ?? [];
+		const response = await api.get<PaginatedResponse<Genre>>("/genres");
+		return response.data.data ?? [];
 	},
 
 	/**

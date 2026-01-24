@@ -6,6 +6,7 @@ mod common;
 
 use codex::api::error::ErrorResponse;
 use codex::api::permissions::{serialize_permissions, Permission};
+use codex::api::routes::v1::dto::common::PaginatedResponse;
 use codex::api::routes::v1::dto::library::{
     CreateLibraryRequest, LibraryDto, UpdateLibraryRequest,
 };
@@ -69,14 +70,15 @@ async fn test_list_libraries_with_auth() {
     let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/libraries", &token);
-    let (status, response): (StatusCode, Option<Vec<LibraryDto>>) =
+    let (status, response): (StatusCode, Option<PaginatedResponse<LibraryDto>>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
-    let libraries = response.unwrap();
-    assert_eq!(libraries.len(), 2);
-    assert_eq!(libraries[0].name, "Library 1");
-    assert_eq!(libraries[1].name, "Library 2");
+    let paginated = response.unwrap();
+    assert_eq!(paginated.data.len(), 2);
+    assert_eq!(paginated.data[0].name, "Library 1");
+    assert_eq!(paginated.data[1].name, "Library 2");
+    assert_eq!(paginated.page, 1); // 1-indexed
 }
 
 #[tokio::test]
@@ -134,12 +136,12 @@ async fn test_list_libraries_with_api_key() {
     let app = create_test_router(state).await;
 
     let request = get_request_with_api_key("/api/v1/libraries", plain_key);
-    let (status, response): (StatusCode, Option<Vec<LibraryDto>>) =
+    let (status, response): (StatusCode, Option<PaginatedResponse<LibraryDto>>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
-    let libraries = response.unwrap();
-    assert_eq!(libraries.len(), 1);
+    let paginated = response.unwrap();
+    assert_eq!(paginated.data.len(), 1);
 }
 
 // ============================================================================
@@ -544,16 +546,17 @@ async fn test_list_libraries_includes_counts() {
 
     // List libraries
     let request = get_request_with_auth("/api/v1/libraries", &token);
-    let (status, response): (StatusCode, Option<Vec<LibraryDto>>) =
+    let (status, response): (StatusCode, Option<PaginatedResponse<LibraryDto>>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
-    let libraries = response.unwrap();
+    let paginated = response.unwrap();
 
-    assert!(!libraries.is_empty());
+    assert!(!paginated.data.is_empty());
 
     // Find our library and verify counts
-    let library_dto = libraries
+    let library_dto = paginated
+        .data
         .iter()
         .find(|lib| lib.id == library.id)
         .expect("Library should be in list");

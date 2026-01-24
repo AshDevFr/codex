@@ -34,12 +34,21 @@ export type TaskStats = components["schemas"]["TaskStats"];
 export type SettingDto = components["schemas"]["SettingDto"];
 export type SettingHistoryDto = components["schemas"]["SettingHistoryDto"];
 export type DuplicateGroup = components["schemas"]["DuplicateGroup"];
+export type PaginationLinks = {
+	self: string;
+	first: string;
+	prev: string | null;
+	next: string | null;
+	last: string;
+};
+
 export type PaginatedResponse<T> = {
 	data: T[];
 	page: number;
 	pageSize: number;
 	total: number;
 	totalPages: number;
+	links: PaginationLinks;
 };
 
 /**
@@ -870,16 +879,35 @@ export const createDuplicateGroup = (
 
 /**
  * Paginated response factory
- * Matches the server's PaginatedResponse format
+ * Matches the server's PaginatedResponse format (1-indexed)
  */
 export const createPaginatedResponse = <T>(
 	data: T[],
-	options: { page?: number; pageSize?: number; total?: number } = {},
+	options: {
+		page?: number;
+		pageSize?: number;
+		total?: number;
+		basePath?: string;
+	} = {},
 ): PaginatedResponse<T> => {
-	const page = options.page ?? 0;
-	const pageSize = options.pageSize ?? 20;
+	const page = options.page ?? 1;
+	const pageSize = options.pageSize ?? 50;
 	const total = options.total ?? data.length;
-	const totalPages = Math.ceil(total / pageSize);
+	const totalPages = Math.ceil(total / pageSize) || 1;
+	const basePath = options.basePath ?? "/api/v1/items";
+
+	// Build HATEOAS links
+	const links: PaginationLinks = {
+		self: `${basePath}?page=${page}&page_size=${pageSize}`,
+		first: `${basePath}?page=1&page_size=${pageSize}`,
+		prev:
+			page > 1 ? `${basePath}?page=${page - 1}&page_size=${pageSize}` : null,
+		next:
+			page < totalPages
+				? `${basePath}?page=${page + 1}&page_size=${pageSize}`
+				: null,
+		last: `${basePath}?page=${totalPages}&page_size=${pageSize}`,
+	};
 
 	return {
 		data,
@@ -887,6 +915,7 @@ export const createPaginatedResponse = <T>(
 		pageSize,
 		total,
 		totalPages,
+		links,
 	};
 };
 

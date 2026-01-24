@@ -9,12 +9,12 @@ import { createList, createTask, createTaskStats } from "../data/factories";
 let mockTasks = createList(() => createTask(), 50);
 
 export const tasksHandlers = [
-	// List tasks (paginated)
+	// List tasks (paginated, 1-indexed)
 	http.get("/api/v1/tasks", async ({ request }) => {
 		await delay(100);
 		const url = new URL(request.url);
-		const page = parseInt(url.searchParams.get("page") || "0", 10);
-		const pageSize = parseInt(url.searchParams.get("pageSize") || "20", 10);
+		const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
+		const pageSize = parseInt(url.searchParams.get("pageSize") || "50", 10);
 		const status = url.searchParams.get("status");
 		const taskType = url.searchParams.get("task_type");
 
@@ -27,7 +27,8 @@ export const tasksHandlers = [
 			filteredTasks = filteredTasks.filter((t) => t.task_type === taskType);
 		}
 
-		const start = page * pageSize;
+		// 1-indexed pagination
+		const start = (page - 1) * pageSize;
 		const end = start + pageSize;
 		const paginatedTasks = filteredTasks.slice(start, end);
 

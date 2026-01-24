@@ -4,10 +4,14 @@
 //! and grant users access to content via these tags.
 
 use super::super::dto::{
+    common::{
+        PaginatedResponse, PaginationLinkBuilder, DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
+    },
     CreateSharingTagRequest, ModifySeriesSharingTagRequest, SetSeriesSharingTagsRequest,
-    SetUserSharingTagGrantRequest, SharingTagDto, SharingTagListResponse, SharingTagSummaryDto,
-    UpdateSharingTagRequest, UserSharingTagGrantDto, UserSharingTagGrantsResponse,
+    SetUserSharingTagGrantRequest, SharingTagDto, SharingTagSummaryDto, UpdateSharingTagRequest,
+    UserSharingTagGrantDto, UserSharingTagGrantsResponse,
 };
+use super::paginated_response;
 use crate::api::{
     error::ApiError,
     extractors::{AuthContext, AuthState},
@@ -15,8 +19,9 @@ use crate::api::{
 };
 use crate::db::repositories::SharingTagRepository;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
+    response::Response,
     Json,
 };
 use std::sync::Arc;
@@ -24,12 +29,34 @@ use uuid::Uuid;
 
 // ==================== Sharing Tag CRUD ====================
 
+/// Query parameters for listing sharing tags
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct SharingTagListParams {
+    /// Page number (1-indexed, default 1)
+    #[serde(default = "default_page")]
+    pub page: u64,
+
+    /// Number of items per page (default 50, max 500)
+    #[serde(default = "default_page_size")]
+    pub page_size: u64,
+}
+
+fn default_page() -> u64 {
+    DEFAULT_PAGE
+}
+
+fn default_page_size() -> u64 {
+    DEFAULT_PAGE_SIZE
+}
+
 /// List all sharing tags (admin only)
 #[utoipa::path(
     get,
     path = "/api/v1/admin/sharing-tags",
+    params(SharingTagListParams),
     responses(
-        (status = 200, description = "List of sharing tags", body = SharingTagListResponse),
+        (status = 200, description = "List of sharing tags", body = PaginatedResponse<SharingTagDto>),
         (status = 403, description = "Forbidden - Missing permission"),
     ),
     security(
@@ -41,15 +68,35 @@ use uuid::Uuid;
 pub async fn list_sharing_tags(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-) -> Result<Json<SharingTagListResponse>, ApiError> {
+    Query(params): Query<SharingTagListParams>,
+) -> Result<Response, ApiError> {
     auth.require_permission(&Permission::SystemAdmin)?;
+
+    // Validate and clamp pagination params
+    let page = params.page.max(1);
+    let page_size = params.page_size.clamp(1, MAX_PAGE_SIZE);
 
     let tags = SharingTagRepository::list_all(&state.db)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch sharing tags: {}", e)))?;
 
-    let mut items = Vec::with_capacity(tags.len());
-    for tag in tags {
+    let total = tags.len() as u64;
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+
+    // Apply in-memory pagination
+    let offset = (page - 1) * page_size;
+    let paginated_tags: Vec<_> = tags
+        .into_iter()
+        .skip(offset as usize)
+        .take(page_size as usize)
+        .collect();
+
+    let mut items = Vec::with_capacity(paginated_tags.len());
+    for tag in paginated_tags {
         let series_count = SharingTagRepository::count_series_with_tag(&state.db, tag.id)
             .await
             .unwrap_or(0);
@@ -63,8 +110,13 @@ pub async fn list_sharing_tags(
         ));
     }
 
-    let total = items.len();
-    Ok(Json(SharingTagListResponse { items, total }))
+    // Build pagination links
+    let link_builder =
+        PaginationLinkBuilder::new("/api/v1/admin/sharing-tags", page, page_size, total_pages);
+
+    let response = PaginatedResponse::with_builder(items, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// Get a sharing tag by ID (admin only)

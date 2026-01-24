@@ -4,6 +4,7 @@
 mod common;
 
 use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::common::PaginatedResponse;
 use codex::api::routes::v1::dto::series::{
     AddSeriesTagRequest, SetSeriesTagsRequest, TagDto, TagListResponse, TaxonomyCleanupResponse,
 };
@@ -40,12 +41,13 @@ async fn test_list_tags_empty() {
     let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/tags", &token);
-    let (status, response): (StatusCode, Option<TagListResponse>) =
+    let (status, response): (StatusCode, Option<PaginatedResponse<TagDto>>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let tag_response = response.unwrap();
-    assert_eq!(tag_response.tags.len(), 0);
+    assert_eq!(tag_response.data.len(), 0);
+    assert_eq!(tag_response.page, 1); // 1-indexed
 }
 
 #[tokio::test]
@@ -62,15 +64,15 @@ async fn test_list_tags_with_data() {
     let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/tags", &token);
-    let (status, response): (StatusCode, Option<TagListResponse>) =
+    let (status, response): (StatusCode, Option<PaginatedResponse<TagDto>>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let tag_response = response.unwrap();
-    assert_eq!(tag_response.tags.len(), 3);
+    assert_eq!(tag_response.data.len(), 3);
 
     // Verify sorted by name
-    let names: Vec<&str> = tag_response.tags.iter().map(|t| t.name.as_str()).collect();
+    let names: Vec<&str> = tag_response.data.iter().map(|t| t.name.as_str()).collect();
     assert_eq!(names, vec!["Completed", "Favorite", "Reading"]);
 }
 

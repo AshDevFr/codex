@@ -6,6 +6,7 @@ import { faker } from "@faker-js/faker";
 import { delay, HttpResponse, http } from "msw";
 import type { components } from "@/types/api.generated";
 import { ROLE_PERMISSIONS } from "@/types/permissions";
+import { createPaginatedResponse } from "../data/factories";
 
 type ApiKeyDto = components["schemas"]["ApiKeyDto"];
 
@@ -38,10 +39,32 @@ let mockApiKeys: ApiKeyDto[] = [
 ];
 
 export const apiKeysHandlers = [
-	// List API keys
-	http.get("/api/v1/api-keys", async () => {
+	// List API keys (paginated, 1-indexed)
+	http.get("/api/v1/api-keys", async ({ request }) => {
 		await delay(200);
-		return HttpResponse.json(mockApiKeys);
+		const url = new URL(request.url);
+		const page = Math.max(
+			1,
+			Number.parseInt(url.searchParams.get("page") || "1", 10),
+		);
+		const pageSize = Number.parseInt(
+			url.searchParams.get("page_size") || "50",
+			10,
+		);
+
+		// 1-indexed pagination
+		const start = (page - 1) * pageSize;
+		const end = start + pageSize;
+		const items = mockApiKeys.slice(start, end);
+
+		return HttpResponse.json(
+			createPaginatedResponse(items, {
+				page,
+				pageSize,
+				total: mockApiKeys.length,
+				basePath: "/api/v1/api-keys",
+			}),
+		);
 	}),
 
 	// Get single API key

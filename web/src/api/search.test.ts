@@ -67,7 +67,7 @@ describe("searchApi", () => {
 			const mockResponse = {
 				data: mockBooks,
 				total: 2,
-				page: 0,
+				page: 1,
 				pageSize: 10,
 			};
 
@@ -84,7 +84,7 @@ describe("searchApi", () => {
 
 		it("should include library filter when libraryId is specified", async () => {
 			vi.mocked(api.post).mockResolvedValueOnce({
-				data: { data: [], total: 0, page: 0, pageSize: 10 },
+				data: { data: [], total: 0, page: 1, pageSize: 10 },
 			});
 
 			await searchApi.searchBooks("batman", "library-123");
@@ -100,7 +100,7 @@ describe("searchApi", () => {
 
 		it("should not include library filter when 'all' is specified", async () => {
 			vi.mocked(api.post).mockResolvedValueOnce({
-				data: { data: [], total: 0, page: 0, pageSize: 10 },
+				data: { data: [], total: 0, page: 1, pageSize: 10 },
 			});
 
 			await searchApi.searchBooks("batman", "all");
@@ -113,7 +113,7 @@ describe("searchApi", () => {
 
 		it("should respect custom limit parameter", async () => {
 			vi.mocked(api.post).mockResolvedValueOnce({
-				data: { data: [], total: 0, page: 0, pageSize: 20 },
+				data: { data: [], total: 0, page: 1, pageSize: 20 },
 			});
 
 			await searchApi.searchBooks("batman", undefined, 20);
@@ -132,7 +132,7 @@ describe("searchApi", () => {
 			const mockBooksResponse = {
 				data: mockBooks,
 				total: 1,
-				page: 0,
+				page: 1,
 				pageSize: 10,
 			};
 
@@ -182,7 +182,7 @@ describe("searchApi", () => {
 			vi.mocked(api.post)
 				.mockResolvedValueOnce({ data: mockSeries })
 				.mockResolvedValueOnce({
-					data: { data: [], total: 0, page: 0, pageSize: 5 },
+					data: { data: [], total: 0, page: 1, pageSize: 5 },
 				});
 
 			const result = await searchApi.search({ query: "test", limit: 5 });
@@ -194,7 +194,7 @@ describe("searchApi", () => {
 			vi.mocked(api.post)
 				.mockResolvedValueOnce({ data: [] })
 				.mockResolvedValueOnce({
-					data: { data: [], total: 0, page: 0, pageSize: 10 },
+					data: { data: [], total: 0, page: 1, pageSize: 10 },
 				});
 
 			await searchApi.search({ query: "batman", libraryId: "library-123" });

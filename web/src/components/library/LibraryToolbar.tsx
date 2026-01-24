@@ -27,7 +27,7 @@ interface LibraryToolbarProps {
 }
 
 const PAGE_SIZE_OPTIONS = [
-	{ value: 20, label: "20" },
+	{ value: 25, label: "25" },
 	{ value: 50, label: "50" },
 	{ value: 100, label: "100" },
 	{ value: 200, label: "200" },
@@ -41,7 +41,7 @@ export function LibraryToolbar({
 	sort,
 	onSortChange,
 	sortOptions = [],
-	pageSize = 20,
+	pageSize = 50,
 	onPageSizeChange,
 }: LibraryToolbarProps) {
 	const showControls = currentTab !== "recommended" && sortOptions.length > 0;

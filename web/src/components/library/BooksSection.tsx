@@ -74,7 +74,7 @@ export function BooksSection({
 
 	// Read query parameters (URL uses 1-indexed pages for user-friendly URLs)
 	const page = parseInt(searchParams.get("page") || "1", 10);
-	const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
+	const pageSize = parseInt(searchParams.get("pageSize") || "50", 10);
 	const sort = searchParams.get("sort") || "title,asc";
 
 	// Serialize the condition for use as a query key (stable string representation)
@@ -99,7 +99,7 @@ export function BooksSection({
 		queryFn: () =>
 			booksApi.search(libraryId, {
 				condition: filterState.condition,
-				page: page - 1, // Convert to 0-indexed for backend
+				page, // Backend now uses 1-indexed pages
 				pageSize,
 				sort,
 				includeDeleted: showDeletedBooks,

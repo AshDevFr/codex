@@ -1,3 +1,4 @@
+use super::common::{DEFAULT_PAGE, DEFAULT_PAGE_SIZE};
 use super::sharing_tag::UserSharingTagGrantDto;
 use crate::api::permissions::UserRole;
 use chrono::{DateTime, Utc};
@@ -139,8 +140,12 @@ pub struct UpdateUserRequest {
     pub permissions: Option<Vec<String>>,
 }
 
+fn default_page() -> u64 {
+    DEFAULT_PAGE
+}
+
 fn default_page_size() -> u64 {
-    20
+    DEFAULT_PAGE_SIZE
 }
 
 /// Query parameters for listing users with filtering and pagination
@@ -159,11 +164,11 @@ pub struct UserListParams {
     #[serde(default)]
     pub sharing_tag_mode: Option<String>,
 
-    /// Page number (0-indexed)
-    #[serde(default)]
+    /// Page number (1-indexed, default 1)
+    #[serde(default = "default_page")]
     pub page: u64,
 
-    /// Number of items per page (max 100)
+    /// Number of items per page (max 100, default 50)
     #[serde(default = "default_page_size")]
     pub page_size: u64,
 }
@@ -174,17 +179,21 @@ impl Default for UserListParams {
             role: None,
             sharing_tag: None,
             sharing_tag_mode: None,
-            page: 0,
-            page_size: default_page_size(),
+            page: DEFAULT_PAGE,
+            page_size: DEFAULT_PAGE_SIZE,
         }
     }
 }
 
 impl UserListParams {
-    /// Validate and clamp pagination parameters
+    /// Validate and clamp pagination parameters (1-indexed)
     pub fn validate(mut self, max_page_size: u64) -> Self {
+        // Treat page 0 as page 1 for backward compatibility
+        if self.page == 0 {
+            self.page = 1;
+        }
         if self.page_size == 0 {
-            self.page_size = default_page_size();
+            self.page_size = DEFAULT_PAGE_SIZE;
         }
         if self.page_size > max_page_size {
             self.page_size = max_page_size;
@@ -192,9 +201,9 @@ impl UserListParams {
         self
     }
 
-    /// Calculate offset for database queries
+    /// Calculate offset for database queries (converts 1-indexed page to 0-indexed offset)
     pub fn offset(&self) -> u64 {
-        self.page * self.page_size
+        self.page.saturating_sub(1) * self.page_size
     }
 
     /// Get limit for database queries

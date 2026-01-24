@@ -4,6 +4,7 @@
 mod common;
 
 use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::common::PaginatedResponse;
 use codex::api::routes::v1::dto::series::{
     AddSeriesGenreRequest, GenreDto, GenreListResponse, SetSeriesGenresRequest,
     TaxonomyCleanupResponse,
@@ -43,12 +44,13 @@ async fn test_list_genres_empty() {
     let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/genres", &token);
-    let (status, response): (StatusCode, Option<GenreListResponse>) =
+    let (status, response): (StatusCode, Option<PaginatedResponse<GenreDto>>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let genre_response = response.unwrap();
-    assert_eq!(genre_response.genres.len(), 0);
+    assert_eq!(genre_response.data.len(), 0);
+    assert_eq!(genre_response.page, 1); // 1-indexed
 }
 
 #[tokio::test]
@@ -65,16 +67,16 @@ async fn test_list_genres_with_data() {
     let app = create_test_router(state).await;
 
     let request = get_request_with_auth("/api/v1/genres", &token);
-    let (status, response): (StatusCode, Option<GenreListResponse>) =
+    let (status, response): (StatusCode, Option<PaginatedResponse<GenreDto>>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let genre_response = response.unwrap();
-    assert_eq!(genre_response.genres.len(), 3);
+    assert_eq!(genre_response.data.len(), 3);
 
     // Verify sorted by name
     let names: Vec<&str> = genre_response
-        .genres
+        .data
         .iter()
         .map(|g| g.name.as_str())
         .collect();

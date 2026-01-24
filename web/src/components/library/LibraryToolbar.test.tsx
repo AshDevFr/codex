@@ -261,7 +261,7 @@ describe("LibraryToolbar", () => {
 				{...defaultProps}
 				currentTab="series"
 				sortOptions={sortOptions}
-				pageSize={20}
+				pageSize={50}
 				onPageSizeChange={vi.fn()}
 			/>,
 		);
@@ -270,7 +270,7 @@ describe("LibraryToolbar", () => {
 		await user.click(screen.getByLabelText("Page size options"));
 
 		// Check all page size options are present
-		expect(await screen.findByText("20")).toBeInTheDocument();
+		expect(await screen.findByText("25")).toBeInTheDocument();
 		expect(await screen.findByText("50")).toBeInTheDocument();
 		expect(await screen.findByText("100")).toBeInTheDocument();
 		expect(await screen.findByText("200")).toBeInTheDocument();

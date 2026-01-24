@@ -171,7 +171,7 @@ export function LibraryPage() {
 		} else if (hasUrlParams) {
 			// URL params exist - update store to match
 			const currentPrefs = {
-				pageSize: parseInt(searchParams.get("pageSize") || "20", 10),
+				pageSize: parseInt(searchParams.get("pageSize") || "50", 10),
 				sort: searchParams.get("sort") || undefined,
 				filters: {} as Record<string, string>,
 			};
@@ -306,7 +306,7 @@ export function LibraryPage() {
 	};
 
 	// Read sort and page size from URL
-	const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
+	const pageSize = parseInt(searchParams.get("pageSize") || "50", 10);
 	const sort =
 		searchParams.get("sort") ||
 		(currentTab === "books" ? "title,asc" : "name,asc");

@@ -241,7 +241,7 @@ export const seriesHandlers = [
 		return HttpResponse.json(results.slice(0, 20));
 	}),
 
-	// POST /series/list - Advanced filtering with condition tree
+	// POST /series/list - Advanced filtering with condition tree (1-indexed)
 	http.post("/api/v1/series/list", async ({ request }) => {
 		await delay(200);
 		const body = (await request.json()) as {
@@ -252,8 +252,8 @@ export const seriesHandlers = [
 			sort?: string;
 		};
 
-		const page = body.page ?? 0;
-		const pageSize = body.pageSize ?? 20;
+		const page = Math.max(1, body.page ?? 1);
+		const pageSize = body.pageSize ?? 50;
 
 		// For mock purposes, we'll do basic filtering
 		// In a real implementation, the backend evaluates the full condition tree
@@ -313,8 +313,8 @@ export const seriesHandlers = [
 			});
 		}
 
-		// Paginate
-		const start = page * pageSize;
+		// Paginate (1-indexed)
+		const start = (page - 1) * pageSize;
 		const end = start + pageSize;
 		const items = results.slice(start, end);
 
@@ -323,6 +323,7 @@ export const seriesHandlers = [
 				page,
 				pageSize,
 				total: results.length,
+				basePath: "/api/v1/series/list",
 			}),
 		);
 	}),
@@ -400,16 +401,19 @@ export const seriesHandlers = [
 		return HttpResponse.json(inProgressSeries);
 	}),
 
-	// List series with pagination
+	// List series with pagination (1-indexed)
 	// Supports both ?library_id= (new) and ?libraryId= (legacy) for library filtering
 	http.get("/api/v1/series", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
-		const page = Number.parseInt(url.searchParams.get("page") || "0", 10);
+		const page = Math.max(
+			1,
+			Number.parseInt(url.searchParams.get("page") || "1", 10),
+		);
 		const pageSize = Number.parseInt(
 			url.searchParams.get("page_size") ||
 				url.searchParams.get("pageSize") ||
-				"20",
+				"50",
 			10,
 		);
 		// Support both library_id (new) and libraryId (legacy)
@@ -420,7 +424,8 @@ export const seriesHandlers = [
 			? getSeriesByLibrary(libraryId)
 			: mockSeries;
 
-		const start = page * pageSize;
+		// 1-indexed pagination
+		const start = (page - 1) * pageSize;
 		const end = start + pageSize;
 		const items = filteredSeries.slice(start, end);
 
@@ -429,6 +434,7 @@ export const seriesHandlers = [
 				page,
 				pageSize,
 				total: filteredSeries.length,
+				basePath: "/api/v1/series",
 			}),
 		);
 	}),
@@ -1221,20 +1227,24 @@ export const seriesHandlers = [
 		});
 	}),
 
-	// List series by library
+	// List series by library (1-indexed)
 	http.get(
 		"/api/v1/libraries/:libraryId/series",
 		async ({ params, request }) => {
 			await delay(200);
 			const url = new URL(request.url);
-			const page = Number.parseInt(url.searchParams.get("page") || "0", 10);
+			const page = Math.max(
+				1,
+				Number.parseInt(url.searchParams.get("page") || "1", 10),
+			);
 			const pageSize = Number.parseInt(
-				url.searchParams.get("pageSize") || "20",
+				url.searchParams.get("pageSize") || "50",
 				10,
 			);
 
 			const filteredSeries = getSeriesByLibrary(params.libraryId as string);
-			const start = page * pageSize;
+			// 1-indexed pagination
+			const start = (page - 1) * pageSize;
 			const end = start + pageSize;
 			const items = filteredSeries.slice(start, end);
 
@@ -1243,6 +1253,7 @@ export const seriesHandlers = [
 					page,
 					pageSize,
 					total: filteredSeries.length,
+					basePath: `/api/v1/libraries/${params.libraryId}/series`,
 				}),
 			);
 		},

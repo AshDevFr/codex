@@ -5,6 +5,7 @@ use codex::api::permissions::{Permission, ADMIN_PERMISSIONS, READONLY_PERMISSION
 use codex::api::routes::v1::dto::api_key::{
     ApiKeyDto, CreateApiKeyRequest, CreateApiKeyResponse, UpdateApiKeyRequest,
 };
+use codex::api::routes::v1::dto::common::PaginatedResponse;
 use codex::db::repositories::{ApiKeyRepository, UserRepository};
 use codex::utils::password;
 use common::*;
@@ -93,14 +94,14 @@ async fn test_list_api_keys() {
     ApiKeyRepository::create(&db, &api_key2).await.unwrap();
 
     let request = get_request_with_auth("/api/v1/api-keys", &token);
-    let (status, response): (StatusCode, Option<Vec<ApiKeyDto>>) =
+    let (status, response): (StatusCode, Option<PaginatedResponse<ApiKeyDto>>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
-    let keys = response.expect("Expected API keys response");
-    assert_eq!(keys.len(), 2, "Should return 2 API keys");
-    assert!(keys.iter().any(|k| k.name == "Key 1"));
-    assert!(keys.iter().any(|k| k.name == "Key 2"));
+    let paginated = response.expect("Expected API keys response");
+    assert_eq!(paginated.data.len(), 2, "Should return 2 API keys");
+    assert!(paginated.data.iter().any(|k| k.name == "Key 1"));
+    assert!(paginated.data.iter().any(|k| k.name == "Key 2"));
 }
 
 #[tokio::test]
@@ -123,7 +124,8 @@ async fn test_list_api_keys_reader_has_permission() {
         .unwrap();
 
     let request = get_request_with_auth("/api/v1/api-keys", &token);
-    let (status, _): (StatusCode, Option<Vec<ApiKeyDto>>) = make_json_request(app, request).await;
+    let (status, _): (StatusCode, Option<PaginatedResponse<ApiKeyDto>>) =
+        make_json_request(app, request).await;
 
     assert_eq!(
         status,
@@ -161,13 +163,13 @@ async fn test_list_api_keys_only_shows_own() {
 
     // User1 should only see their own key
     let request = get_request_with_auth("/api/v1/api-keys", &token1);
-    let (status, response): (StatusCode, Option<Vec<ApiKeyDto>>) =
+    let (status, response): (StatusCode, Option<PaginatedResponse<ApiKeyDto>>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
-    let keys = response.expect("Expected API keys response");
-    assert_eq!(keys.len(), 1, "Should only return user1's key");
-    assert_eq!(keys[0].name, "User1 Key");
+    let paginated = response.expect("Expected API keys response");
+    assert_eq!(paginated.data.len(), 1, "Should only return user1's key");
+    assert_eq!(paginated.data[0].name, "User1 Key");
 }
 
 // ============================================================================
@@ -756,7 +758,7 @@ async fn test_created_api_key_can_authenticate() {
 
     // Use the API key to authenticate
     let auth_request = get_request_with_api_key("/api/v1/api-keys", &api_key);
-    let (auth_status, auth_response): (StatusCode, Option<Vec<ApiKeyDto>>) =
+    let (auth_status, auth_response): (StatusCode, Option<PaginatedResponse<ApiKeyDto>>) =
         make_json_request(app, auth_request).await;
 
     assert_eq!(
@@ -764,6 +766,9 @@ async fn test_created_api_key_can_authenticate() {
         StatusCode::OK,
         "API key should authenticate successfully"
     );
-    let keys = auth_response.expect("Expected API keys response");
-    assert!(keys.iter().any(|k| k.id == response_data.api_key.id));
+    let paginated = auth_response.expect("Expected API keys response");
+    assert!(paginated
+        .data
+        .iter()
+        .any(|k| k.id == response_data.api_key.id));
 }

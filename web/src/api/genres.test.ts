@@ -23,12 +23,22 @@ describe("genresApi", () => {
 
 	describe("getAll", () => {
 		it("should fetch all genres", async () => {
+			const mockGenres = [
+				{ id: "genre-1", name: "Action", seriesCount: 10 },
+				{ id: "genre-2", name: "Comedy", seriesCount: 5 },
+				{ id: "genre-3", name: "Drama", seriesCount: 8 },
+			];
 			const mockResponse = {
-				genres: [
-					{ id: "genre-1", name: "Action", seriesCount: 10 },
-					{ id: "genre-2", name: "Comedy", seriesCount: 5 },
-					{ id: "genre-3", name: "Drama", seriesCount: 8 },
-				],
+				data: mockGenres,
+				page: 1,
+				pageSize: 50,
+				total: 3,
+				totalPages: 1,
+				links: {
+					self: "/api/v1/genres?page=1&page_size=50",
+					first: "/api/v1/genres?page=1&page_size=50",
+					last: "/api/v1/genres?page=1&page_size=50",
+				},
 			};
 
 			vi.mocked(api.get).mockResolvedValueOnce({ data: mockResponse });
@@ -36,11 +46,24 @@ describe("genresApi", () => {
 			const result = await genresApi.getAll();
 
 			expect(api.get).toHaveBeenCalledWith("/genres");
-			expect(result).toEqual(mockResponse.genres);
+			expect(result).toEqual(mockGenres);
 		});
 
 		it("should return empty array when no genres exist", async () => {
-			vi.mocked(api.get).mockResolvedValueOnce({ data: { genres: [] } });
+			vi.mocked(api.get).mockResolvedValueOnce({
+				data: {
+					data: [],
+					page: 1,
+					pageSize: 50,
+					total: 0,
+					totalPages: 0,
+					links: {
+						self: "/api/v1/genres?page=1&page_size=50",
+						first: "/api/v1/genres?page=1&page_size=50",
+						last: "/api/v1/genres?page=1&page_size=50",
+					},
+				},
+			});
 
 			const result = await genresApi.getAll();
 

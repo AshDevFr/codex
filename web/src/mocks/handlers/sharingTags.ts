@@ -3,6 +3,7 @@
  */
 
 import { delay, HttpResponse, http } from "msw";
+import { createPaginatedResponse } from "../data/factories";
 
 // Mock sharing tags
 const mockSharingTags: Array<{
@@ -57,10 +58,32 @@ export const sharingTagsHandlers = [
 	// Admin Sharing Tags CRUD
 	// ============================================
 
-	// List all sharing tags
-	http.get("/api/v1/admin/sharing-tags", async () => {
+	// List all sharing tags (paginated, 1-indexed)
+	http.get("/api/v1/admin/sharing-tags", async ({ request }) => {
 		await delay(100);
-		return HttpResponse.json({ items: mockSharingTags });
+		const url = new URL(request.url);
+		const page = Math.max(
+			1,
+			Number.parseInt(url.searchParams.get("page") || "1", 10),
+		);
+		const pageSize = Number.parseInt(
+			url.searchParams.get("page_size") || "50",
+			10,
+		);
+
+		// 1-indexed pagination
+		const start = (page - 1) * pageSize;
+		const end = start + pageSize;
+		const items = mockSharingTags.slice(start, end);
+
+		return HttpResponse.json(
+			createPaginatedResponse(items, {
+				page,
+				pageSize,
+				total: mockSharingTags.length,
+				basePath: "/api/v1/admin/sharing-tags",
+			}),
+		);
 	}),
 
 	// Get single sharing tag

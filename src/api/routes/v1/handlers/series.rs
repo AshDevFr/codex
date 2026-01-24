@@ -1,4 +1,7 @@
 use super::super::dto::{
+    common::{
+        PaginatedResponse, PaginationLinkBuilder, DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
+    },
     series::{
         AddSeriesGenreRequest, AddSeriesTagRequest, AlphabeticalGroupDto, AlternateTitleDto,
         AlternateTitleListResponse, CreateAlternateTitleRequest, CreateExternalLinkRequest,
@@ -14,6 +17,7 @@ use super::super::dto::{
     BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListRequest,
     SeriesListResponse,
 };
+use super::paginated_response;
 use crate::api::{
     error::ApiError,
     extractors::{AuthContext, AuthState, ContentFilter, FlexibleAuthContext},
@@ -62,14 +66,22 @@ pub struct ListBooksQuery {
     pub include_deleted: bool,
 }
 
+fn default_page() -> u64 {
+    DEFAULT_PAGE
+}
+
+fn default_page_size() -> u64 {
+    DEFAULT_PAGE_SIZE
+}
+
 /// Query parameters for listing series
 #[derive(Debug, Deserialize)]
 pub struct SeriesListQuery {
-    /// Page number (0-indexed)
-    #[serde(default)]
+    /// Page number (1-indexed, default 1)
+    #[serde(default = "default_page")]
     pub page: u64,
 
-    /// Number of items per page (max 100)
+    /// Number of items per page (max 100, default 50)
     #[serde(default = "default_page_size")]
     pub page_size: u64,
 
@@ -88,10 +100,6 @@ pub struct SeriesListQuery {
     /// Filter by library ID
     #[serde(default)]
     pub library_id: Option<Uuid>,
-}
-
-fn default_page_size() -> u64 {
-    20
 }
 
 /// Helper function to convert series model to DTO with unread count
@@ -168,7 +176,7 @@ async fn series_to_dto(
     path = "/api/v1/series",
     params(
         ("library_id" = Option<Uuid>, Query, description = "Filter by library ID"),
-        ("page" = Option<u64>, Query, description = "Page number (0-indexed)"),
+        ("page" = Option<u64>, Query, description = "Page number (1-indexed, default 1)"),
         ("page_size" = Option<u64>, Query, description = "Number of items per page (max 100)"),
         ("sort" = Option<String>, Query, description = "Sort parameter (format: 'field,direction')"),
         ("genres" = Option<String>, Query, description = "Filter by genres (comma-separated, AND logic)"),
@@ -188,14 +196,15 @@ pub async fn list_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Query(query): Query<SeriesListQuery>,
-) -> Result<Json<SeriesListResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    // Validate and normalize pagination params
+    // Validate and normalize pagination params (1-indexed)
+    let page = query.page.max(1);
     let page_size = if query.page_size == 0 {
         default_page_size()
     } else {
-        query.page_size.min(100)
+        query.page_size.min(MAX_PAGE_SIZE)
     };
 
     // Fetch all series IDs first (for filtering)
@@ -266,8 +275,8 @@ pub async fn list_series(
         .map(|s| SeriesSortParam::parse(s))
         .unwrap_or_default();
 
-    // Use database-level sorting with the filtered IDs
-    let offset = query.page * page_size;
+    // Use database-level sorting with the filtered IDs (convert to 0-indexed offset)
+    let offset = (page - 1) * page_size;
     let (series_list, total) = SeriesRepository::list_by_ids_sorted(
         &state.db,
         &filtered_ids,
@@ -290,9 +299,30 @@ pub async fn list_series(
     .collect::<Result<Vec<_>, _>>()
     .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
-    let response = SeriesListResponse::new(dtos, query.page, page_size, total);
+    // Build pagination links
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+    let mut link_builder =
+        PaginationLinkBuilder::new("/api/v1/series", page, page_size, total_pages);
+    if let Some(library_id) = query.library_id {
+        link_builder = link_builder.with_param("library_id", &library_id.to_string());
+    }
+    if let Some(ref genres) = query.genres {
+        link_builder = link_builder.with_param("genres", genres);
+    }
+    if let Some(ref tags) = query.tags {
+        link_builder = link_builder.with_param("tags", tags);
+    }
+    if let Some(ref sort_str) = query.sort {
+        link_builder = link_builder.with_param("sort", sort_str);
+    }
 
-    Ok(Json(response))
+    let response = SeriesListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// Get series by ID
@@ -557,17 +587,18 @@ pub async fn list_series_filtered(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Json(request): Json<SeriesListRequest>,
-) -> Result<Json<SeriesListResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     use crate::services::FilterService;
     use std::collections::HashSet;
 
     require_permission!(auth, Permission::SeriesRead)?;
 
-    // Validate and normalize pagination params
+    // Validate and normalize pagination params (1-indexed)
+    let page = request.page.max(1);
     let page_size = if request.page_size == 0 {
         default_page_size()
     } else {
-        request.page_size.min(100)
+        request.page_size.min(MAX_PAGE_SIZE)
     };
 
     // Get all series IDs first (we'll filter from this)
@@ -630,8 +661,8 @@ pub async fn list_series_filtered(
         .map(|s| SeriesSortParam::parse(s))
         .unwrap_or_default();
 
-    // Use database-level sorting with the filtered IDs
-    let offset = request.page * page_size;
+    // Use database-level sorting with the filtered IDs (convert to 0-indexed offset)
+    let offset = (page - 1) * page_size;
     let (series_list, total) = SeriesRepository::list_by_ids_sorted(
         &state.db,
         &filtered_ids,
@@ -655,9 +686,18 @@ pub async fn list_series_filtered(
     .collect::<Result<Vec<_>, _>>()
     .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
-    let response = SeriesListResponse::new(dtos, request.page, page_size, total);
+    // Build pagination links (POST endpoint doesn't include query params in links)
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+    let link_builder =
+        PaginationLinkBuilder::new("/api/v1/series/list", page, page_size, total_pages);
 
-    Ok(Json(response))
+    let response = SeriesListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// Get alphabetical groups for series
@@ -1558,7 +1598,7 @@ pub async fn list_library_recently_updated_series(
     path = "/api/v1/libraries/{library_id}/series",
     params(
         ("library_id" = Uuid, Path, description = "Library ID"),
-        ("page" = Option<u64>, Query, description = "Page number (0-indexed)"),
+        ("page" = Option<u64>, Query, description = "Page number (1-indexed, default 1)"),
         ("page_size" = Option<u64>, Query, description = "Number of items per page (max 100)")
     ),
     responses(
@@ -1576,14 +1616,15 @@ pub async fn list_library_series(
     auth: AuthContext,
     Path(library_id): Path<Uuid>,
     Query(query): Query<SeriesListQuery>,
-) -> Result<Json<SeriesListResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    // Validate and normalize pagination params
+    // Validate and normalize pagination params (1-indexed)
+    let page = query.page.max(1);
     let page_size = if query.page_size == 0 {
         default_page_size()
     } else {
-        query.page_size.min(100)
+        query.page_size.min(MAX_PAGE_SIZE)
     };
 
     // Parse sort parameter
@@ -1614,8 +1655,8 @@ pub async fn list_library_series(
         all_series.iter().map(|s| s.id).collect()
     };
 
-    // Use database-level sorting with the filtered IDs
-    let offset = query.page * page_size;
+    // Use database-level sorting with the filtered IDs (convert to 0-indexed offset)
+    let offset = (page - 1) * page_size;
     let (series_list, total) = SeriesRepository::list_by_ids_sorted(
         &state.db,
         &filtered_ids,
@@ -1639,9 +1680,22 @@ pub async fn list_library_series(
     .collect::<Result<Vec<_>, _>>()
     .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
-    let response = SeriesListResponse::new(dtos, query.page, page_size, total);
+    // Build pagination links
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+    let link_builder = PaginationLinkBuilder::new(
+        &format!("/api/v1/libraries/{}/series", library_id),
+        page,
+        page_size,
+        total_pages,
+    );
 
-    Ok(Json(response))
+    let response = SeriesListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// List in-progress series in a specific library
@@ -2800,12 +2854,34 @@ fn sanitize_filename(name: &str) -> String {
 // Genre Handlers
 // ============================================================================
 
+/// Query parameters for listing genres
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct GenreListParams {
+    /// Page number (1-indexed, default 1)
+    #[serde(default = "genre_default_page")]
+    pub page: u64,
+
+    /// Number of items per page (default 50, max 500)
+    #[serde(default = "genre_default_page_size")]
+    pub page_size: u64,
+}
+
+fn genre_default_page() -> u64 {
+    DEFAULT_PAGE
+}
+
+fn genre_default_page_size() -> u64 {
+    DEFAULT_PAGE_SIZE
+}
+
 /// List all genres
 #[utoipa::path(
     get,
     path = "/api/v1/genres",
+    params(GenreListParams),
     responses(
-        (status = 200, description = "List of all genres", body = GenreListResponse),
+        (status = 200, description = "List of all genres", body = PaginatedResponse<GenreDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -2817,15 +2893,35 @@ fn sanitize_filename(name: &str) -> String {
 pub async fn list_genres(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-) -> Result<Json<GenreListResponse>, ApiError> {
+    Query(params): Query<GenreListParams>,
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+
+    // Validate and clamp pagination params
+    let page = params.page.max(1);
+    let page_size = params.page_size.clamp(1, MAX_PAGE_SIZE);
 
     let genres = GenreRepository::list_all(&state.db)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch genres: {}", e)))?;
 
-    let mut dtos: Vec<GenreDto> = Vec::with_capacity(genres.len());
-    for g in genres {
+    let total = genres.len() as u64;
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+
+    // Apply in-memory pagination
+    let offset = (page - 1) * page_size;
+    let paginated_genres: Vec<_> = genres
+        .into_iter()
+        .skip(offset as usize)
+        .take(page_size as usize)
+        .collect();
+
+    let mut dtos: Vec<GenreDto> = Vec::with_capacity(paginated_genres.len());
+    for g in paginated_genres {
         let count = GenreRepository::count_series_with_genre(&state.db, g.id)
             .await
             .ok();
@@ -2837,7 +2933,12 @@ pub async fn list_genres(
         });
     }
 
-    Ok(Json(GenreListResponse { genres: dtos }))
+    // Build pagination links
+    let link_builder = PaginationLinkBuilder::new("/api/v1/genres", page, page_size, total_pages);
+
+    let response = PaginatedResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// Get genres for a series
@@ -2954,12 +3055,34 @@ pub async fn set_series_genres(
 // Tag Handlers
 // ============================================================================
 
+/// Query parameters for listing tags
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct TagListParams {
+    /// Page number (1-indexed, default 1)
+    #[serde(default = "tag_default_page")]
+    pub page: u64,
+
+    /// Number of items per page (default 50, max 500)
+    #[serde(default = "tag_default_page_size")]
+    pub page_size: u64,
+}
+
+fn tag_default_page() -> u64 {
+    DEFAULT_PAGE
+}
+
+fn tag_default_page_size() -> u64 {
+    DEFAULT_PAGE_SIZE
+}
+
 /// List all tags
 #[utoipa::path(
     get,
     path = "/api/v1/tags",
+    params(TagListParams),
     responses(
-        (status = 200, description = "List of all tags", body = TagListResponse),
+        (status = 200, description = "List of all tags", body = PaginatedResponse<TagDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -2971,15 +3094,35 @@ pub async fn set_series_genres(
 pub async fn list_tags(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-) -> Result<Json<TagListResponse>, ApiError> {
+    Query(params): Query<TagListParams>,
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
+
+    // Validate and clamp pagination params
+    let page = params.page.max(1);
+    let page_size = params.page_size.clamp(1, MAX_PAGE_SIZE);
 
     let tags = TagRepository::list_all(&state.db)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch tags: {}", e)))?;
 
-    let mut dtos: Vec<TagDto> = Vec::with_capacity(tags.len());
-    for t in tags {
+    let total = tags.len() as u64;
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+
+    // Apply in-memory pagination
+    let offset = (page - 1) * page_size;
+    let paginated_tags: Vec<_> = tags
+        .into_iter()
+        .skip(offset as usize)
+        .take(page_size as usize)
+        .collect();
+
+    let mut dtos: Vec<TagDto> = Vec::with_capacity(paginated_tags.len());
+    for t in paginated_tags {
         let count = TagRepository::count_series_with_tag(&state.db, t.id)
             .await
             .ok();
@@ -2991,7 +3134,12 @@ pub async fn list_tags(
         });
     }
 
-    Ok(Json(TagListResponse { tags: dtos }))
+    // Build pagination links
+    let link_builder = PaginationLinkBuilder::new("/api/v1/tags", page, page_size, total_pages);
+
+    let response = PaginatedResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// Get tags for a series

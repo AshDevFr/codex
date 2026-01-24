@@ -1056,6 +1056,142 @@ impl SeriesRepository {
             Ok(false)
         }
     }
+
+    // =========================================================================
+    // Cursor-Based Pagination Methods
+    // =========================================================================
+
+    /// List series by library using cursor-based pagination
+    ///
+    /// This method is more efficient than offset-based pagination for large datasets.
+    /// It uses the `(title_sort, id)` tuple as the cursor position, where title_sort
+    /// comes from series_metadata.
+    ///
+    /// # Arguments
+    /// * `db` - Database connection
+    /// * `library_id` - Library ID to filter by
+    /// * `cursor` - Optional cursor from a previous page (title_sort, series_id)
+    /// * `page_size` - Number of items to return
+    ///
+    /// # Returns
+    /// * `Vec<series::Model>` - Series for this page (may have page_size + 1 to detect has_more)
+    pub async fn list_by_library_cursor(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        cursor: Option<(&str, Uuid)>,
+        page_size: u64,
+    ) -> Result<Vec<series::Model>> {
+        let mut query = Series::find()
+            .filter(series::Column::LibraryId.eq(library_id))
+            .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def());
+
+        // Apply cursor condition if provided
+        // We use (title_sort, id) as the cursor tuple
+        // Rows after cursor: (title_sort > cursor_title) OR (title_sort = cursor_title AND id > cursor_id)
+        if let Some((cursor_title, cursor_id)) = cursor {
+            query = query.filter(
+                Condition::any()
+                    .add(
+                        series_metadata::Column::TitleSort.gt(cursor_title).or(
+                            series_metadata::Column::TitleSort
+                                .is_null()
+                                .and(Expr::val(cursor_title).ne("")),
+                        ),
+                    )
+                    .add(
+                        Condition::all()
+                            .add(
+                                series_metadata::Column::TitleSort.eq(cursor_title).or(
+                                    series_metadata::Column::TitleSort
+                                        .is_null()
+                                        .and(Expr::val(cursor_title).eq("")),
+                                ),
+                            )
+                            .add(series::Column::Id.gt(cursor_id)),
+                    ),
+            );
+        }
+
+        // Order by title_sort ASC, then id ASC for stability
+        query
+            .order_by_asc(series_metadata::Column::TitleSort)
+            .order_by_asc(series::Column::Id)
+            // Fetch one extra to determine if there are more pages
+            .limit(page_size + 1)
+            .all(db)
+            .await
+            .context("Failed to list series by library with cursor")
+    }
+
+    /// List recently added series using cursor-based pagination
+    ///
+    /// Uses `(created_at, id)` as the cursor for descending date order.
+    ///
+    /// # Arguments
+    /// * `db` - Database connection
+    /// * `library_id` - Optional library ID to filter by
+    /// * `cursor` - Optional cursor from a previous page (created_at timestamp, series_id)
+    /// * `page_size` - Number of items to return
+    ///
+    /// # Returns
+    /// * `Vec<series::Model>` - Series for this page (may have page_size + 1 to detect has_more)
+    pub async fn list_recently_added_cursor(
+        db: &DatabaseConnection,
+        library_id: Option<Uuid>,
+        cursor: Option<(i64, Uuid)>,
+        page_size: u64,
+    ) -> Result<Vec<series::Model>> {
+        use chrono::TimeZone;
+
+        let mut query = Series::find();
+
+        // Filter by library if specified
+        if let Some(lib_id) = library_id {
+            query = query.filter(series::Column::LibraryId.eq(lib_id));
+        }
+
+        // Apply cursor condition if provided
+        // For descending order: (created_at < cursor_timestamp) OR (created_at = cursor_timestamp AND id < cursor_id)
+        if let Some((cursor_timestamp, cursor_id)) = cursor {
+            let cursor_datetime = Utc.timestamp_millis_opt(cursor_timestamp).single();
+            if let Some(dt) = cursor_datetime {
+                query = query.filter(
+                    Condition::any().add(series::Column::CreatedAt.lt(dt)).add(
+                        Condition::all()
+                            .add(series::Column::CreatedAt.eq(dt))
+                            .add(series::Column::Id.lt(cursor_id)),
+                    ),
+                );
+            }
+        }
+
+        // Order by created_at DESC (most recent first), then id DESC for stability
+        query
+            .order_by_desc(series::Column::CreatedAt)
+            .order_by_desc(series::Column::Id)
+            // Fetch one extra to determine if there are more pages
+            .limit(page_size + 1)
+            .all(db)
+            .await
+            .context("Failed to list recently added series with cursor")
+    }
+
+    /// Get title_sort for a series (used for cursor construction)
+    pub async fn get_title_sort(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+    ) -> Result<Option<String>> {
+        let result: Option<String> = series_metadata::Entity::find()
+            .filter(series_metadata::Column::SeriesId.eq(series_id))
+            .select_only()
+            .column(series_metadata::Column::TitleSort)
+            .into_tuple()
+            .one(db)
+            .await
+            .context("Failed to get title_sort for series")?;
+
+        Ok(result)
+    }
 }
 
 #[cfg(test)]

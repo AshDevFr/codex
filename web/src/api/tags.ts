@@ -1,3 +1,4 @@
+import type { PaginatedResponse } from "@/types";
 import type { components } from "@/types/api.generated";
 import { api } from "./client";
 
@@ -9,8 +10,8 @@ export const tagsApi = {
 	 * Get all tags across all libraries
 	 */
 	getAll: async (): Promise<Tag[]> => {
-		const response = await api.get<TagListResponse>("/tags");
-		return response.data.tags ?? [];
+		const response = await api.get<PaginatedResponse<Tag>>("/tags");
+		return response.data.data ?? [];
 	},
 
 	/**

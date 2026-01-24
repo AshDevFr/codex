@@ -1,3 +1,4 @@
+import type { PaginatedResponse } from "@/types";
 import type { components } from "@/types/api.generated";
 import { api } from "./client";
 
@@ -32,10 +33,10 @@ export const sharingTagsApi = {
 	 * List all sharing tags (admin only)
 	 */
 	list: async (): Promise<SharingTagDto[]> => {
-		const response = await api.get<SharingTagListResponse>(
+		const response = await api.get<PaginatedResponse<SharingTagDto>>(
 			"/admin/sharing-tags",
 		);
-		return response.data.items;
+		return response.data.data;
 	},
 
 	/**

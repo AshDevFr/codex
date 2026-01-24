@@ -318,15 +318,18 @@ export const bookHandlers = [
 	// Books with Errors endpoints (v2)
 	// ============================================
 
-	// List books with errors (grouped by error type)
+	// List books with errors (grouped by error type, 1-indexed)
 	http.get("/api/v1/books/errors", async ({ request }) => {
 		await delay(200);
 		initMockBooksWithErrors();
 
 		const url = new URL(request.url);
-		const page = Number.parseInt(url.searchParams.get("page") || "0", 10);
+		const page = Math.max(
+			1,
+			Number.parseInt(url.searchParams.get("page") || "1", 10),
+		);
 		const pageSize = Number.parseInt(
-			url.searchParams.get("page_size") || "20",
+			url.searchParams.get("page_size") || "50",
 			10,
 		);
 		const errorTypeFilter = url.searchParams.get("error_type") as
@@ -578,7 +581,7 @@ export const bookHandlers = [
 		return HttpResponse.json(readBooks);
 	}),
 
-	// POST /books/list - Advanced filtering with condition tree
+	// POST /books/list - Advanced filtering with condition tree (1-indexed)
 	http.post("/api/v1/books/list", async ({ request }) => {
 		await delay(200);
 		const body = (await request.json()) as {
@@ -590,8 +593,8 @@ export const bookHandlers = [
 			sort?: string;
 		};
 
-		const page = body.page ?? 0;
-		const pageSize = body.pageSize ?? 20;
+		const page = Math.max(1, body.page ?? 1);
+		const pageSize = body.pageSize ?? 50;
 
 		let results = [...mockBooks];
 
@@ -668,8 +671,8 @@ export const bookHandlers = [
 			);
 		}
 
-		// Paginate
-		const start = page * pageSize;
+		// Paginate (1-indexed)
+		const start = (page - 1) * pageSize;
 		const end = start + pageSize;
 		const items = results.slice(start, end);
 
@@ -678,20 +681,24 @@ export const bookHandlers = [
 				page,
 				pageSize,
 				total: results.length,
+				basePath: "/api/v1/books/list",
 			}),
 		);
 	}),
 
-	// List books with pagination
+	// List books with pagination (1-indexed)
 	// Supports ?library_id= and ?series_id= query params for filtering
 	http.get("/api/v1/books", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
-		const page = Number.parseInt(url.searchParams.get("page") || "0", 10);
+		const page = Math.max(
+			1,
+			Number.parseInt(url.searchParams.get("page") || "1", 10),
+		);
 		const pageSize = Number.parseInt(
 			url.searchParams.get("page_size") ||
 				url.searchParams.get("pageSize") ||
-				"20",
+				"50",
 			10,
 		);
 		const libraryId = url.searchParams.get("library_id");
@@ -703,7 +710,8 @@ export const bookHandlers = [
 			filteredBooks = filteredBooks.filter((b) => b.seriesId === seriesId);
 		}
 
-		const start = page * pageSize;
+		// 1-indexed pagination
+		const start = (page - 1) * pageSize;
 		const end = start + pageSize;
 		const items = filteredBooks.slice(start, end);
 
@@ -712,6 +720,7 @@ export const bookHandlers = [
 				page,
 				pageSize,
 				total: filteredBooks.length,
+				basePath: "/api/v1/books",
 			}),
 		);
 	}),
@@ -1120,20 +1129,24 @@ export const bookHandlers = [
 		return HttpResponse.json(filteredBooks);
 	}),
 
-	// List books by library
+	// List books by library (1-indexed)
 	http.get(
 		"/api/v1/libraries/:libraryId/books",
 		async ({ params, request }) => {
 			await delay(200);
 			const url = new URL(request.url);
-			const page = Number.parseInt(url.searchParams.get("page") || "0", 10);
+			const page = Math.max(
+				1,
+				Number.parseInt(url.searchParams.get("page") || "1", 10),
+			);
 			const pageSize = Number.parseInt(
-				url.searchParams.get("pageSize") || "20",
+				url.searchParams.get("pageSize") || "50",
 				10,
 			);
 
 			const libraryBooks = getBooksByLibrary(params.libraryId as string);
-			const start = page * pageSize;
+			// 1-indexed pagination
+			const start = (page - 1) * pageSize;
 			const end = start + pageSize;
 			const items = libraryBooks.slice(start, end);
 
@@ -1142,6 +1155,7 @@ export const bookHandlers = [
 					page,
 					pageSize,
 					total: libraryBooks.length,
+					basePath: `/api/v1/libraries/${params.libraryId}/books`,
 				}),
 			);
 		},

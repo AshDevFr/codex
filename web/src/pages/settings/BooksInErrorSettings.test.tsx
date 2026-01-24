@@ -46,7 +46,7 @@ const createMockBook = (overrides: {
 const mockErrorsData: BooksWithErrorsResponse = {
 	totalBooksWithErrors: 3,
 	totalPages: 1,
-	page: 0,
+	page: 1,
 	pageSize: 100,
 	errorCounts: {
 		parser: 2,
@@ -125,7 +125,7 @@ const mockErrorsData: BooksWithErrorsResponse = {
 const emptyErrorsData: BooksWithErrorsResponse = {
 	totalBooksWithErrors: 0,
 	totalPages: 0,
-	page: 0,
+	page: 1,
 	pageSize: 100,
 	errorCounts: {},
 	groups: [],
@@ -312,7 +312,7 @@ describe("BooksInErrorSettings", () => {
 		const singleTypeData: BooksWithErrorsResponse = {
 			totalBooksWithErrors: 2,
 			totalPages: 1,
-			page: 0,
+			page: 1,
 			pageSize: 100,
 			errorCounts: {
 				parser: 2,
@@ -389,7 +389,7 @@ describe("BooksInErrorSettings", () => {
 		const longMessageData: BooksWithErrorsResponse = {
 			totalBooksWithErrors: 1,
 			totalPages: 1,
-			page: 0,
+			page: 1,
 			pageSize: 100,
 			errorCounts: {
 				parser: 1,
@@ -444,7 +444,7 @@ describe("BooksInErrorSettings", () => {
 		const multipleErrorsData: BooksWithErrorsResponse = {
 			totalBooksWithErrors: 1,
 			totalPages: 1,
-			page: 0,
+			page: 1,
 			pageSize: 100,
 			errorCounts: {
 				parser: 1,

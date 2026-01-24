@@ -1,7 +1,11 @@
 use super::super::dto::{
+    common::{
+        PaginatedResponse, PaginationLinkBuilder, DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
+    },
     CreateLibraryRequest, DetectedSeriesDto, DetectedSeriesMetadataDto, LibraryDto,
     PreviewScanRequest, PreviewScanResponse, UpdateLibraryRequest,
 };
+use super::paginated_response;
 use crate::api::{
     error::ApiError,
     extractors::{AuthContext, AuthState},
@@ -13,7 +17,8 @@ use crate::models::{BookStrategy, NumberStrategy, SeriesStrategy};
 use crate::require_permission;
 use crate::scanner::strategies::create_strategy;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
+    response::Response,
     Json,
 };
 use chrono::Utc;
@@ -81,12 +86,34 @@ async fn library_to_dto(db: &DatabaseConnection, library: libraries::Model) -> L
     }
 }
 
+/// Query parameters for listing libraries
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryListParams {
+    /// Page number (1-indexed, default 1)
+    #[serde(default = "default_page")]
+    pub page: u64,
+
+    /// Number of items per page (default 50, max 500)
+    #[serde(default = "default_page_size")]
+    pub page_size: u64,
+}
+
+fn default_page() -> u64 {
+    DEFAULT_PAGE
+}
+
+fn default_page_size() -> u64 {
+    DEFAULT_PAGE_SIZE
+}
+
 /// List all libraries
 #[utoipa::path(
     get,
     path = "/api/v1/libraries",
+    params(LibraryListParams),
     responses(
-        (status = 200, description = "List of libraries", body = Vec<LibraryDto>),
+        (status = 200, description = "List of libraries", body = PaginatedResponse<LibraryDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -98,19 +125,45 @@ async fn library_to_dto(db: &DatabaseConnection, library: libraries::Model) -> L
 pub async fn list_libraries(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-) -> Result<Json<Vec<LibraryDto>>, ApiError> {
+    Query(params): Query<LibraryListParams>,
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::LibrariesRead)?;
+
+    // Validate and clamp pagination params
+    let page = params.page.max(1);
+    let page_size = params.page_size.clamp(1, MAX_PAGE_SIZE);
 
     let libraries = LibraryRepository::list_all(&state.db)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch libraries: {}", e)))?;
 
+    let total = libraries.len() as u64;
+    let total_pages = if page_size == 0 {
+        0
+    } else {
+        total.div_ceil(page_size)
+    };
+
+    // Apply in-memory pagination
+    let offset = (page - 1) * page_size;
+    let paginated_libraries: Vec<_> = libraries
+        .into_iter()
+        .skip(offset as usize)
+        .take(page_size as usize)
+        .collect();
+
     let mut dtos = Vec::new();
-    for library in libraries {
+    for library in paginated_libraries {
         dtos.push(library_to_dto(&state.db, library).await);
     }
 
-    Ok(Json(dtos))
+    // Build pagination links
+    let link_builder =
+        PaginationLinkBuilder::new("/api/v1/libraries", page, page_size, total_pages);
+
+    let response = PaginatedResponse::with_builder(dtos, page, page_size, total, &link_builder);
+
+    Ok(paginated_response(response, &link_builder))
 }
 
 /// Get library by ID

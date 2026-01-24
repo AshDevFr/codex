@@ -240,8 +240,8 @@ describe("seriesApi", () => {
 				{ id: "series-2", title: "Comedy Series", bookCount: 3 },
 			],
 			total: 2,
-			page: 0,
-			pageSize: 20,
+			page: 1,
+			pageSize: 50,
 		};
 
 		it("should search series without any condition for 'all' library", async () => {
@@ -250,15 +250,15 @@ describe("seriesApi", () => {
 			});
 
 			const result = await seriesApi.search("all", {
-				page: 0,
-				pageSize: 20,
+				page: 1,
+				pageSize: 50,
 			});
 
 			expect(api.post).toHaveBeenCalledWith("/series/list", {
 				condition: undefined,
 				search: undefined,
-				page: 0,
-				pageSize: 20,
+				page: 1,
+				pageSize: 50,
 				sort: undefined,
 			});
 			expect(result).toEqual(mockPaginatedResponse);
@@ -270,8 +270,8 @@ describe("seriesApi", () => {
 			});
 
 			await seriesApi.search("library-123", {
-				page: 0,
-				pageSize: 20,
+				page: 1,
+				pageSize: 50,
 			});
 
 			expect(api.post).toHaveBeenCalledWith("/series/list", {
@@ -279,8 +279,8 @@ describe("seriesApi", () => {
 					libraryId: { operator: "is", value: "library-123" },
 				},
 				search: undefined,
-				page: 0,
-				pageSize: 20,
+				page: 1,
+				pageSize: 50,
 				sort: undefined,
 			});
 		});
@@ -296,8 +296,8 @@ describe("seriesApi", () => {
 
 			await seriesApi.search("library-123", {
 				condition: genreCondition,
-				page: 0,
-				pageSize: 20,
+				page: 1,
+				pageSize: 50,
 			});
 
 			expect(api.post).toHaveBeenCalledWith("/series/list", {
@@ -308,8 +308,8 @@ describe("seriesApi", () => {
 					],
 				},
 				search: undefined,
-				page: 0,
-				pageSize: 20,
+				page: 1,
+				pageSize: 50,
 				sort: undefined,
 			});
 		});
@@ -354,15 +354,15 @@ describe("seriesApi", () => {
 
 			await seriesApi.search("all", {
 				condition: complexCondition,
-				page: 0,
-				pageSize: 20,
+				page: 1,
+				pageSize: 50,
 			});
 
 			expect(api.post).toHaveBeenCalledWith("/series/list", {
 				condition: complexCondition,
 				search: undefined,
-				page: 0,
-				pageSize: 20,
+				page: 1,
+				pageSize: 50,
 				sort: undefined,
 			});
 		});

@@ -126,7 +126,7 @@ async fn test_list_all_books() {
     let book_list = response.unwrap();
     assert_eq!(book_list.data.len(), 5);
     assert_eq!(book_list.total, 5);
-    assert_eq!(book_list.page, 0);
+    assert_eq!(book_list.page, 1); // 1-indexed pagination
 }
 
 #[tokio::test]
@@ -159,8 +159,8 @@ async fn test_list_all_books_with_pagination() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state.clone()).await;
 
-    // Request first page (page_size=10, page=0)
-    let request = get_request_with_auth("/api/v1/books?page=0&page_size=10", &token);
+    // Request first page (page_size=10, page=1, 1-indexed)
+    let request = get_request_with_auth("/api/v1/books?page=1&page_size=10", &token);
     let (status, response): (StatusCode, Option<BookListResponse>) =
         make_json_request(app, request).await;
 
@@ -168,11 +168,11 @@ async fn test_list_all_books_with_pagination() {
     let page1 = response.unwrap();
     assert_eq!(page1.data.len(), 10);
     assert_eq!(page1.total, 15);
-    assert_eq!(page1.page, 0);
+    assert_eq!(page1.page, 1);
 
-    // Request second page (page=1)
+    // Request second page (page=2)
     let app2 = create_test_router(state).await;
-    let request = get_request_with_auth("/api/v1/books?page=1&page_size=10", &token);
+    let request = get_request_with_auth("/api/v1/books?page=2&page_size=10", &token);
     let (status, response): (StatusCode, Option<BookListResponse>) =
         make_json_request(app2, request).await;
 
@@ -180,7 +180,7 @@ async fn test_list_all_books_with_pagination() {
     let page2 = response.unwrap();
     assert_eq!(page2.data.len(), 5);
     assert_eq!(page2.total, 15);
-    assert_eq!(page2.page, 1);
+    assert_eq!(page2.page, 2);
 
     // Verify different books on each page
     assert_ne!(page1.data[0].id, page2.data[0].id);
@@ -1427,8 +1427,8 @@ async fn test_list_books_with_errors_pagination() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    // Request first page (10 items) - pages are 0-indexed
-    let request = get_request_with_auth("/api/v1/books/with-errors?page=0&page_size=10", &token);
+    // Request first page (10 items) - pages are 1-indexed
+    let request = get_request_with_auth("/api/v1/books/with-errors?page=1&page_size=10", &token);
     let (status, response): (StatusCode, Option<BookListResponse>) =
         make_json_request(app, request).await;
 
@@ -1436,12 +1436,12 @@ async fn test_list_books_with_errors_pagination() {
     let book_list = response.unwrap();
     assert_eq!(book_list.data.len(), 10);
     assert_eq!(book_list.total, 15);
-    assert_eq!(book_list.page, 0);
+    assert_eq!(book_list.page, 1);
     assert_eq!(book_list.page_size, 10);
 
     // Request second page
     let app2 = create_test_router(create_test_auth_state(db.clone()).await).await;
-    let request = get_request_with_auth("/api/v1/books/with-errors?page=1&page_size=10", &token);
+    let request = get_request_with_auth("/api/v1/books/with-errors?page=2&page_size=10", &token);
     let (status, response): (StatusCode, Option<BookListResponse>) =
         make_json_request(app2, request).await;
 
@@ -1449,7 +1449,7 @@ async fn test_list_books_with_errors_pagination() {
     let book_list = response.unwrap();
     assert_eq!(book_list.data.len(), 5);
     assert_eq!(book_list.total, 15);
-    assert_eq!(book_list.page, 1);
+    assert_eq!(book_list.page, 2);
 }
 
 #[tokio::test]
@@ -2775,10 +2775,10 @@ async fn test_list_books_filtered_pagination() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    // Request page 0, page_size 2
+    // Request page 1, page_size 2 (1-indexed)
     let request_body = BookListRequest {
         condition: None,
-        page: 0,
+        page: 1,
         page_size: 2,
         ..Default::default()
     };
@@ -2790,12 +2790,12 @@ async fn test_list_books_filtered_pagination() {
     let page1 = response.unwrap();
     assert_eq!(page1.data.len(), 2);
     assert_eq!(page1.total, 5);
-    assert_eq!(page1.page, 0);
+    assert_eq!(page1.page, 1);
 
-    // Request page 1
+    // Request page 2
     let request_body = BookListRequest {
         condition: None,
-        page: 1,
+        page: 2,
         page_size: 2,
         ..Default::default()
     };
@@ -2806,7 +2806,7 @@ async fn test_list_books_filtered_pagination() {
     assert_eq!(status, StatusCode::OK);
     let page2 = response.unwrap();
     assert_eq!(page2.data.len(), 2);
-    assert_eq!(page2.page, 1);
+    assert_eq!(page2.page, 2);
 }
 
 // ============================================================================
@@ -3945,8 +3945,8 @@ async fn test_list_books_with_errors_v2_pagination() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state.clone()).await;
 
-    // Test first page with small page size
-    let request = get_request_with_auth("/api/v1/books/errors?page=0&page_size=10", &token);
+    // Test first page with small page size (1-indexed)
+    let request = get_request_with_auth("/api/v1/books/errors?page=1&page_size=10", &token);
     let (status, response): (StatusCode, Option<BooksWithErrorsResponse>) =
         make_json_request(app, request).await;
 
@@ -3955,7 +3955,7 @@ async fn test_list_books_with_errors_v2_pagination() {
 
     // Should have correct total but limited items per page
     assert_eq!(page1.total_books_with_errors, 25);
-    assert_eq!(page1.page, 0);
+    assert_eq!(page1.page, 1);
     assert_eq!(page1.page_size, 10);
     assert_eq!(page1.total_pages, 3); // 25 books / 10 per page = 3 pages
 
@@ -3965,27 +3965,27 @@ async fn test_list_books_with_errors_v2_pagination() {
 
     // Test second page
     let app2 = create_test_router(state.clone()).await;
-    let request2 = get_request_with_auth("/api/v1/books/errors?page=1&page_size=10", &token);
+    let request2 = get_request_with_auth("/api/v1/books/errors?page=2&page_size=10", &token);
     let (status2, response2): (StatusCode, Option<BooksWithErrorsResponse>) =
         make_json_request(app2, request2).await;
 
     assert_eq!(status2, StatusCode::OK);
     let page2 = response2.unwrap();
 
-    assert_eq!(page2.page, 1);
+    assert_eq!(page2.page, 2);
     let page2_book_count: usize = page2.groups.iter().map(|g| g.books.len()).sum();
     assert_eq!(page2_book_count, 10);
 
     // Test third (last) page
     let app3 = create_test_router(state).await;
-    let request3 = get_request_with_auth("/api/v1/books/errors?page=2&page_size=10", &token);
+    let request3 = get_request_with_auth("/api/v1/books/errors?page=3&page_size=10", &token);
     let (status3, response3): (StatusCode, Option<BooksWithErrorsResponse>) =
         make_json_request(app3, request3).await;
 
     assert_eq!(status3, StatusCode::OK);
     let page3 = response3.unwrap();
 
-    assert_eq!(page3.page, 2);
+    assert_eq!(page3.page, 3);
     let page3_book_count: usize = page3.groups.iter().map(|g| g.books.len()).sum();
     assert_eq!(page3_book_count, 5); // Remaining 5 books
 }
