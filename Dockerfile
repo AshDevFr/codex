@@ -59,7 +59,7 @@ FROM alpine:latest AS runtime
 # - ca-certificates for HTTPS
 # - su-exec for user switching
 # - libstdc++ and libgcc for PDFium
-RUN apk add --no-cache ca-certificates su-exec libstdc++ libgcc
+RUN apk add --no-cache ca-certificates su-exec libstdc++ libgcc curl wget
 
 # Install PDFium library for PDF page rendering
 # This enables rendering of text-only and vector PDF pages
