@@ -1243,7 +1243,7 @@ fn serve_series_placeholder_response() -> Response {
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "image/svg+xml")
-        .header(header::CACHE_CONTROL, "public, max-age=60") // Short cache for placeholders
+        .header(header::CACHE_CONTROL, "public, max-age=10") // Short cache for placeholders
         .header(header::CONTENT_LENGTH, PLACEHOLDER_SVG.len())
         .body(Body::from(PLACEHOLDER_SVG.to_vec()))
         .unwrap()

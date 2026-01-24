@@ -26,6 +26,7 @@ import { booksApi } from "@/api/books";
 import { seriesApi } from "@/api/series";
 import { AppLink } from "@/components/common";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import type { Book, Series } from "@/types";
 import { PERMISSIONS } from "@/types/permissions";
 
@@ -46,6 +47,11 @@ export function MediaCard({
 	const canWriteBooks = hasPermission(PERMISSIONS.BOOKS_WRITE);
 	const canWriteSeries = hasPermission(PERMISSIONS.SERIES_WRITE);
 
+	// Get cover update timestamp for cache-busting (forces image reload when cover is regenerated)
+	const coverTimestamp = useCoverUpdatesStore(
+		(state) => state.updates[data.id],
+	);
+
 	// Handle card click navigation
 	const handleCardClick = (e: React.MouseEvent) => {
 		// Don't navigate if clicking the menu button or dropdown
@@ -59,13 +65,15 @@ export function MediaCard({
 	};
 
 	// Use API endpoint directly - browser will send auth cookie automatically
-	// No cache-busting parameter needed - backend uses ETag-based caching which handles
-	// cache invalidation properly. The browser will use HTTP conditional requests (If-None-Match)
-	// to validate cached thumbnails efficiently.
-	const coverUrl =
+	// Add cache-busting timestamp when a cover_updated SSE event is received,
+	// to force the browser to reload the image instead of using a cached placeholder.
+	const baseCoverUrl =
 		type === "book"
 			? `/api/v1/books/${(data as Book).id}/thumbnail`
 			: `/api/v1/series/${(data as Series).id}/thumbnail`;
+	const coverUrl = coverTimestamp
+		? `${baseCoverUrl}?t=${coverTimestamp}`
+		: baseCoverUrl;
 
 	const book = type === "book" ? (data as Book) : null;
 	const series = type === "series" ? (data as Series) : null;
@@ -74,12 +82,13 @@ export function MediaCard({
 	const [imageLoaded, setImageLoaded] = useState(false);
 	const [_imageError, setImageError] = useState(false);
 
-	// Reset loading state when the item ID changes (e.g., different book/series)
-	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset on ID change
+	// Reset loading state when the item ID or cover timestamp changes
+	// (e.g., different book/series, or cover was regenerated via SSE event)
+	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset on ID/timestamp change
 	useEffect(() => {
 		setImageLoaded(false);
 		setImageError(false);
-	}, [data.id]);
+	}, [data.id, coverTimestamp]);
 
 	const handleImageLoad = useCallback(() => {
 		setImageLoaded(true);

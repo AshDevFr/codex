@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { eventsApi } from "@/api/events";
 import { useAuthStore } from "@/store/authStore";
+import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import type { EntityChangeEvent } from "@/types";
 
 type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
@@ -123,6 +124,11 @@ function handleEntityEvent(
 		}
 
 		case "cover_updated": {
+			// Record the cover update for cache-busting image URLs
+			// This is needed because query invalidation only refetches JSON data,
+			// not images. The timestamp is used as a query param to force image reload.
+			useCoverUpdatesStore.getState().recordCoverUpdate(event.entity_id);
+
 			if (event.entity_type === "book") {
 				// Invalidate book queries to refresh covers
 				queryClient.invalidateQueries({

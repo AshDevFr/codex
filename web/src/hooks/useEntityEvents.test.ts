@@ -5,6 +5,7 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as eventsApi from "@/api/events";
 import { useAuthStore } from "@/store/authStore";
+import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import type { EntityChangeEvent } from "@/types";
 import { useEntityEvents } from "./useEntityEvents";
 
@@ -90,7 +91,7 @@ describe("useEntityEvents", () => {
 		});
 	});
 
-	it("should invalidate book queries on CoverUpdated event", async () => {
+	it("should invalidate book queries and record cover update on CoverUpdated event", async () => {
 		let capturedCallback: ((event: EntityChangeEvent) => void) | undefined;
 
 		vi.spyOn(eventsApi.eventsApi, "subscribeToEntityEvents").mockImplementation(
@@ -101,6 +102,9 @@ describe("useEntityEvents", () => {
 		);
 
 		const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+		// Reset cover updates store before test
+		useCoverUpdatesStore.setState({ updates: {} });
 
 		renderHook(() => useEntityEvents(), { wrapper });
 
@@ -130,6 +134,13 @@ describe("useEntityEvents", () => {
 				refetchType: "all",
 			});
 		});
+
+		// Verify cover update was recorded in the store for cache-busting
+		const coverTimestamp = useCoverUpdatesStore
+			.getState()
+			.getCoverTimestamp("series-123");
+		expect(coverTimestamp).toBeDefined();
+		expect(typeof coverTimestamp).toBe("number");
 	});
 
 	it("should invalidate series queries on SeriesBulkPurged event", async () => {
