@@ -13,6 +13,43 @@ use crate::tasks::types::{TaskStats, TaskType};
 /// Repository for Task operations
 pub struct TaskRepository;
 
+/// Returns the ORDER BY clause for task priority ordering.
+/// Used by both PostgreSQL and SQLite query builders.
+fn task_priority_order_by(prioritize_scans: bool) -> &'static str {
+    if prioritize_scans {
+        // Task priority order (highest to lowest):
+        // 0. scan_library
+        // 1. purge_deleted
+        // 2. generate_thumbnail
+        // 3. generate_series_thumbnail
+        // 4. analyze_book
+        // 5. analyze_series
+        // 6. generate_thumbnails (batch)
+        // 7. find_duplicates
+        // 8. refresh_metadata
+        // 9-12. cleanup tasks (lowest priority - run after core operations)
+        "ORDER BY (CASE
+            WHEN task_type = 'scan_library' THEN 0
+            WHEN task_type = 'purge_deleted' THEN 1
+            WHEN task_type = 'generate_thumbnail' THEN 2
+            WHEN task_type = 'generate_series_thumbnail' THEN 3
+            WHEN task_type = 'analyze_book' THEN 4
+            WHEN task_type = 'analyze_series' THEN 5
+            WHEN task_type = 'generate_thumbnails' THEN 6
+            WHEN task_type = 'find_duplicates' THEN 7
+            WHEN task_type = 'refresh_metadata' THEN 8
+            WHEN task_type = 'cleanup_book_files' THEN 9
+            WHEN task_type = 'cleanup_series_files' THEN 10
+            WHEN task_type = 'cleanup_orphaned_files' THEN 11
+            WHEN task_type = 'cleanup_pdf_cache' THEN 12
+            ELSE 99
+        END), priority DESC, scheduled_for ASC"
+    } else {
+        // Standard priority-based ordering
+        "ORDER BY priority DESC, scheduled_for ASC"
+    }
+}
+
 impl TaskRepository {
     /// Enqueue a new task
     /// If a task with the same entity and type is already pending/processing, returns the existing task's ID
@@ -255,35 +292,7 @@ impl TaskRepository {
 
                     let task_option = if is_postgres {
                         // PostgreSQL: Use FOR UPDATE SKIP LOCKED for multi-worker safety
-                        let order_by = if prioritize_scans {
-                            // Task priority order (highest to lowest):
-                            // 1. scan_library (0)
-                            // 2. purge_deleted (1)
-                            // 3. analyze_book (2)
-                            // 4. analyze_series (3)
-                            // 5. generate_thumbnail (4) - per-book thumbnail
-                            // 6. generate_thumbnails (5) - batch thumbnail
-                            // 7. find_duplicates (6)
-                            // 8. refresh_metadata (7)
-                            // 9-11. cleanup tasks (lowest priority - run after core operations)
-                            "ORDER BY (CASE
-                                WHEN task_type = 'scan_library' THEN 0
-                                WHEN task_type = 'purge_deleted' THEN 1
-                                WHEN task_type = 'analyze_book' THEN 2
-                                WHEN task_type = 'analyze_series' THEN 3
-                                WHEN task_type = 'generate_thumbnail' THEN 4
-                                WHEN task_type = 'generate_thumbnails' THEN 5
-                                WHEN task_type = 'find_duplicates' THEN 6
-                                WHEN task_type = 'refresh_metadata' THEN 7
-                                WHEN task_type = 'cleanup_book_files' THEN 8
-                                WHEN task_type = 'cleanup_series_files' THEN 9
-                                WHEN task_type = 'cleanup_orphaned_files' THEN 10
-                                ELSE 99
-                            END), priority DESC, scheduled_for ASC"
-                        } else {
-                            // Standard priority-based ordering
-                            "ORDER BY priority DESC, scheduled_for ASC"
-                        };
+                        let order_by = task_priority_order_by(prioritize_scans);
 
                         let sql = format!(
                             r#"
@@ -333,35 +342,7 @@ impl TaskRepository {
                     } else {
                         // SQLite: Use raw SQL query (similar to PostgreSQL but without SKIP LOCKED)
                         // SQLite serializes transactions, so we don't need SKIP LOCKED
-                        let order_by = if prioritize_scans {
-                            // Task priority order (highest to lowest):
-                            // 1. scan_library (0)
-                            // 2. purge_deleted (1)
-                            // 3. analyze_book (2)
-                            // 4. analyze_series (3)
-                            // 5. generate_thumbnail (4) - per-book thumbnail
-                            // 6. generate_thumbnails (5) - batch thumbnail
-                            // 7. find_duplicates (6)
-                            // 8. refresh_metadata (7)
-                            // 9-11. cleanup tasks (lowest priority - run after core operations)
-                            "ORDER BY (CASE
-                                WHEN task_type = 'scan_library' THEN 0
-                                WHEN task_type = 'purge_deleted' THEN 1
-                                WHEN task_type = 'analyze_book' THEN 2
-                                WHEN task_type = 'analyze_series' THEN 3
-                                WHEN task_type = 'generate_thumbnail' THEN 4
-                                WHEN task_type = 'generate_thumbnails' THEN 5
-                                WHEN task_type = 'find_duplicates' THEN 6
-                                WHEN task_type = 'refresh_metadata' THEN 7
-                                WHEN task_type = 'cleanup_book_files' THEN 8
-                                WHEN task_type = 'cleanup_series_files' THEN 9
-                                WHEN task_type = 'cleanup_orphaned_files' THEN 10
-                                ELSE 99
-                            END), priority DESC, scheduled_for ASC"
-                        } else {
-                            // Standard priority-based ordering
-                            "ORDER BY priority DESC, scheduled_for ASC"
-                        };
+                        let order_by = task_priority_order_by(prioritize_scans);
 
                         let sql = format!(
                             r#"
