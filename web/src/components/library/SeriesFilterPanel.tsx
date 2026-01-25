@@ -18,8 +18,8 @@ import { useQuery } from "@tanstack/react-query";
 import { genresApi } from "@/api/genres";
 import { sharingTagsApi } from "@/api/sharingTags";
 import { tagsApi } from "@/api/tags";
-import { useDraftFilterState } from "@/hooks/useDraftFilterState";
-import { useFilterState } from "@/hooks/useFilterState";
+import { useDraftSeriesFilterState } from "@/hooks/useDraftSeriesFilterState";
+import { useSeriesFilterState } from "@/hooks/useSeriesFilterState";
 import { useAuthStore } from "@/store/authStore";
 import { FilterGroup } from "./FilterGroup";
 import classes from "./FilterPanel.module.css";
@@ -49,15 +49,15 @@ const SERIES_STATUS_OPTIONS = [
  * - Shows active filter count on the trigger button
  * - URL-synchronized filter state
  */
-export function FilterPanel() {
+export function SeriesFilterPanel() {
 	const [opened, { open, close }] = useDisclosure(false);
 	// Use committed state for the indicator badge (shows what's actually applied)
 	const {
 		activeFilterCount: committedFilterCount,
 		hasActiveFilters: hasCommittedFilters,
-	} = useFilterState();
+	} = useSeriesFilterState();
 	// Use draft state for editing within the drawer
-	const draftState = useDraftFilterState();
+	const draftState = useDraftSeriesFilterState();
 	const isMobile = useMediaQuery("(max-width: 768px)");
 	const user = useAuthStore((state) => state.user);
 	const isAdmin = user?.role === "admin";
@@ -71,6 +71,12 @@ export function FilterPanel() {
 	// Handle Close - discard draft changes and close
 	const handleClose = () => {
 		draftState.discardChanges();
+		close();
+	};
+
+	// Handle Clear All - clear filters, apply, and close
+	const handleClearAll = () => {
+		draftState.clearAllAndApply();
 		close();
 	};
 
@@ -280,7 +286,7 @@ export function FilterPanel() {
 								color="gray"
 								size="sm"
 								leftSection={<IconX size={16} />}
-								onClick={draftState.clearAllDraft}
+								onClick={handleClearAll}
 								disabled={!draftState.hasActiveFilters}
 							>
 								Clear all

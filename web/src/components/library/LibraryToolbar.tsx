@@ -7,7 +7,7 @@ import {
 	IconSortDescending,
 } from "@tabler/icons-react";
 import { BookFilterPanel } from "./BookFilterPanel";
-import { FilterPanel } from "./FilterPanel";
+import { SeriesFilterPanel } from "./SeriesFilterPanel";
 
 export interface SortOption {
 	field: string;
@@ -155,7 +155,7 @@ export function LibraryToolbar({
 					</Menu>
 
 					{/* Filter Panel - show appropriate panel based on current tab */}
-					{currentTab === "books" ? <BookFilterPanel /> : <FilterPanel />}
+					{currentTab === "books" ? <BookFilterPanel /> : <SeriesFilterPanel />}
 				</Group>
 			)}
 		</Group>

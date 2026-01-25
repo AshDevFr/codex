@@ -11,6 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { booksApi } from "@/api/books";
+import { ActiveBookFilters } from "@/components/library/ActiveBookFilters";
 import { MediaCard } from "@/components/library/MediaCard";
 import { useBookFilterState } from "@/hooks/useBookFilterState";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
@@ -147,6 +148,9 @@ export function BooksSection({
 
 	return (
 		<Stack gap="md">
+			{/* Active Filters Summary */}
+			{filterState.hasActiveFilters && <ActiveBookFilters />}
+
 			{/* Books Grid */}
 			{isLoading ? (
 				<BooksGridSkeleton count={pageSize > 12 ? 12 : pageSize} />

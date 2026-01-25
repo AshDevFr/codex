@@ -5,13 +5,30 @@ import { api } from "./client";
 export type Genre = components["schemas"]["GenreDto"];
 export type GenreListResponse = components["schemas"]["GenreListResponse"];
 
+const MAX_PAGE_SIZE = 500;
+
 export const genresApi = {
 	/**
-	 * Get all genres across all libraries
+	 * Get all genres across all libraries.
+	 * Fetches all pages if results are paginated.
 	 */
 	getAll: async (): Promise<Genre[]> => {
-		const response = await api.get<PaginatedResponse<Genre>>("/genres");
-		return response.data.data ?? [];
+		const allGenres: Genre[] = [];
+		let page = 1;
+		let hasMore = true;
+
+		while (hasMore) {
+			const response = await api.get<PaginatedResponse<Genre>>("/genres", {
+				params: { page, pageSize: MAX_PAGE_SIZE },
+			});
+			const data = response.data.data ?? [];
+			allGenres.push(...data);
+
+			hasMore = page < response.data.totalPages;
+			page++;
+		}
+
+		return allGenres;
 	},
 
 	/**

@@ -22,7 +22,7 @@ describe("genresApi", () => {
 	});
 
 	describe("getAll", () => {
-		it("should fetch all genres", async () => {
+		it("should fetch all genres from a single page", async () => {
 			const mockGenres = [
 				{ id: "genre-1", name: "Action", seriesCount: 10 },
 				{ id: "genre-2", name: "Comedy", seriesCount: 5 },
@@ -31,13 +31,11 @@ describe("genresApi", () => {
 			const mockResponse = {
 				data: mockGenres,
 				page: 1,
-				pageSize: 50,
+				pageSize: 500,
 				total: 3,
 				totalPages: 1,
 				links: {
-					self: "/api/v1/genres?page=1&pageSize=50",
-					first: "/api/v1/genres?page=1&pageSize=50",
-					last: "/api/v1/genres?page=1&pageSize=50",
+					self: "/api/v1/genres?page=1&pageSize=500",
 				},
 			};
 
@@ -45,8 +43,54 @@ describe("genresApi", () => {
 
 			const result = await genresApi.getAll();
 
-			expect(api.get).toHaveBeenCalledWith("/genres");
+			expect(api.get).toHaveBeenCalledWith("/genres", {
+				params: { page: 1, pageSize: 500 },
+			});
 			expect(result).toEqual(mockGenres);
+		});
+
+		it("should fetch all genres across multiple pages", async () => {
+			const page1Genres = [
+				{ id: "genre-1", name: "Action", seriesCount: 10 },
+				{ id: "genre-2", name: "Comedy", seriesCount: 5 },
+			];
+			const page2Genres = [
+				{ id: "genre-3", name: "Drama", seriesCount: 8 },
+				{ id: "genre-4", name: "Horror", seriesCount: 3 },
+			];
+
+			vi.mocked(api.get)
+				.mockResolvedValueOnce({
+					data: {
+						data: page1Genres,
+						page: 1,
+						pageSize: 500,
+						total: 4,
+						totalPages: 2,
+						links: { self: "/api/v1/genres?page=1&pageSize=500" },
+					},
+				})
+				.mockResolvedValueOnce({
+					data: {
+						data: page2Genres,
+						page: 2,
+						pageSize: 500,
+						total: 4,
+						totalPages: 2,
+						links: { self: "/api/v1/genres?page=2&pageSize=500" },
+					},
+				});
+
+			const result = await genresApi.getAll();
+
+			expect(api.get).toHaveBeenCalledTimes(2);
+			expect(api.get).toHaveBeenNthCalledWith(1, "/genres", {
+				params: { page: 1, pageSize: 500 },
+			});
+			expect(api.get).toHaveBeenNthCalledWith(2, "/genres", {
+				params: { page: 2, pageSize: 500 },
+			});
+			expect(result).toEqual([...page1Genres, ...page2Genres]);
 		});
 
 		it("should return empty array when no genres exist", async () => {
@@ -54,13 +98,11 @@ describe("genresApi", () => {
 				data: {
 					data: [],
 					page: 1,
-					pageSize: 50,
+					pageSize: 500,
 					total: 0,
 					totalPages: 0,
 					links: {
-						self: "/api/v1/genres?page=1&pageSize=50",
-						first: "/api/v1/genres?page=1&pageSize=50",
-						last: "/api/v1/genres?page=1&pageSize=50",
+						self: "/api/v1/genres?page=1&pageSize=500",
 					},
 				},
 			});

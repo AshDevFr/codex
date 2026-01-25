@@ -9,9 +9,9 @@ vi.mock("@/api/series", () => ({
 	},
 }));
 
-// Mock useFilterState hook
-vi.mock("@/hooks/useFilterState", () => ({
-	useFilterState: () => ({
+// Mock useSeriesFilterState hook
+vi.mock("@/hooks/useSeriesFilterState", () => ({
+	useSeriesFilterState: () => ({
 		condition: undefined,
 		hasActiveFilters: false,
 		activeFilterCount: 0,

@@ -5,6 +5,7 @@ import {
 	Divider,
 	Drawer,
 	Group,
+	Indicator,
 	Loader,
 	ScrollArea,
 	Stack,
@@ -18,6 +19,7 @@ import { useQuery } from "@tanstack/react-query";
 import { genresApi } from "@/api/genres";
 import { tagsApi } from "@/api/tags";
 import { useBookFilterState } from "@/hooks/useBookFilterState";
+import { useDraftBookFilterState } from "@/hooks/useDraftBookFilterState";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
 import { FilterGroup } from "./FilterGroup";
 import classes from "./FilterPanel.module.css";
@@ -41,7 +43,13 @@ const READ_STATUS_OPTIONS = [
  */
 export function BookFilterPanel() {
 	const [opened, { open, close }] = useDisclosure(false);
-	const filterState = useBookFilterState();
+	// Use committed state for the indicator badge (shows what's actually applied)
+	const {
+		activeFilterCount: committedFilterCount,
+		hasActiveFilters: hasCommittedFilters,
+	} = useBookFilterState();
+	// Use draft state for editing within the drawer
+	const draftState = useDraftBookFilterState();
 	const isMobile = useMediaQuery("(max-width: 768px)");
 
 	// Get show deleted preference from user preferences store
@@ -49,6 +57,24 @@ export function BookFilterPanel() {
 		state.getPreference("library.show_deleted_books"),
 	);
 	const setPreference = useUserPreferencesStore((state) => state.setPreference);
+
+	// Handle Apply - commit draft to URL and close
+	const handleApply = () => {
+		draftState.applyFilters();
+		close();
+	};
+
+	// Handle Close - discard draft changes and close
+	const handleClose = () => {
+		draftState.discardChanges();
+		close();
+	};
+
+	// Handle Clear All - clear filters, apply, and close
+	const handleClearAll = () => {
+		draftState.clearAllAndApply();
+		close();
+	};
 
 	// Fetch available genres (global, not library-specific)
 	const { data: genres = [], isLoading: genresLoading } = useQuery({
@@ -84,50 +110,46 @@ export function BookFilterPanel() {
 
 	// Handle hasError toggle - cycle through neutral -> include (show errors) -> exclude (hide errors)
 	const handleHasErrorToggle = () => {
-		if (filterState.filters.hasError === "neutral") {
-			filterState.setHasErrorState("include");
-		} else if (filterState.filters.hasError === "include") {
-			filterState.setHasErrorState("exclude");
+		if (draftState.draftFilters.hasError === "neutral") {
+			draftState.setHasErrorState("include");
+		} else if (draftState.draftFilters.hasError === "include") {
+			draftState.setHasErrorState("exclude");
 		} else {
-			filterState.setHasErrorState("neutral");
+			draftState.setHasErrorState("neutral");
 		}
 	};
 
 	return (
 		<>
-			{/* Trigger Button */}
-			<ActionIcon
-				variant={filterState.hasActiveFilters ? "filled" : "subtle"}
-				color={filterState.hasActiveFilters ? "blue" : undefined}
-				size="lg"
-				title="Filters"
-				aria-label="Filter options"
-				onClick={open}
-				className={classes.triggerButton}
+			{/* Trigger Button - shows committed filter count */}
+			<Indicator
+				label={committedFilterCount}
+				size={16}
+				disabled={!hasCommittedFilters}
+				color="red"
 			>
-				<IconAdjustments size={20} />
-				{filterState.hasActiveFilters && (
-					<Badge
-						size="xs"
-						variant="filled"
-						color="red"
-						className={classes.filterBadge}
-					>
-						{filterState.activeFilterCount}
-					</Badge>
-				)}
-			</ActionIcon>
+				<ActionIcon
+					variant={hasCommittedFilters ? "filled" : "subtle"}
+					color={hasCommittedFilters ? "blue" : undefined}
+					size="lg"
+					title="Filters"
+					aria-label="Filter options"
+					onClick={open}
+				>
+					<IconAdjustments size={20} />
+				</ActionIcon>
+			</Indicator>
 
-			{/* Filter Drawer */}
+			{/* Filter Drawer - uses draft state */}
 			<Drawer
 				opened={opened}
-				onClose={close}
+				onClose={handleClose}
 				title={
 					<Group gap="sm">
 						<Title order={4}>Filters</Title>
-						{filterState.hasActiveFilters && (
+						{draftState.hasActiveFilters && (
 							<Badge size="sm" variant="light">
-								{filterState.activeFilterCount} active
+								{draftState.activeFilterCount} active
 							</Badge>
 						)}
 					</Group>
@@ -159,10 +181,10 @@ export function BookFilterPanel() {
 								<FilterGroup
 									title="Read Status"
 									options={READ_STATUS_OPTIONS}
-									state={filterState.filters.readStatus}
-									onValueChange={filterState.setReadStatusState}
-									onModeChange={filterState.setReadStatusMode}
-									onClear={() => filterState.clearGroup("readStatus")}
+									state={draftState.draftFilters.readStatus}
+									onValueChange={draftState.setReadStatusState}
+									onModeChange={draftState.setReadStatusMode}
+									onClear={() => draftState.clearGroupDraft("readStatus")}
 									showModeToggle={false}
 								/>
 
@@ -177,17 +199,17 @@ export function BookFilterPanel() {
 								<Group justify="space-between" px="xs">
 									<Text size="sm">Show books with errors</Text>
 									<Switch
-										checked={filterState.filters.hasError === "include"}
+										checked={draftState.draftFilters.hasError === "include"}
 										onChange={handleHasErrorToggle}
 										color={
-											filterState.filters.hasError === "include"
+											draftState.draftFilters.hasError === "include"
 												? "red"
 												: "blue"
 										}
 										label={
-											filterState.filters.hasError === "neutral"
+											draftState.draftFilters.hasError === "neutral"
 												? "All"
-												: filterState.filters.hasError === "include"
+												: draftState.draftFilters.hasError === "include"
 													? "Only errors"
 													: "No errors"
 										}
@@ -222,10 +244,10 @@ export function BookFilterPanel() {
 											<FilterGroup
 												title="Genres"
 												options={genreOptions}
-												state={filterState.filters.genres}
-												onValueChange={filterState.setGenreState}
-												onModeChange={filterState.setGenreMode}
-												onClear={() => filterState.clearGroup("genres")}
+												state={draftState.draftFilters.genres}
+												onValueChange={draftState.setGenreState}
+												onModeChange={draftState.setGenreMode}
+												onClear={() => draftState.clearGroupDraft("genres")}
 											/>
 										)}
 
@@ -234,10 +256,10 @@ export function BookFilterPanel() {
 											<FilterGroup
 												title="Tags"
 												options={tagOptions}
-												state={filterState.filters.tags}
-												onValueChange={filterState.setTagState}
-												onModeChange={filterState.setTagMode}
-												onClear={() => filterState.clearGroup("tags")}
+												state={draftState.draftFilters.tags}
+												onValueChange={draftState.setTagState}
+												onModeChange={draftState.setTagMode}
+												onClear={() => draftState.clearGroupDraft("tags")}
 											/>
 										)}
 									</>
@@ -260,12 +282,12 @@ export function BookFilterPanel() {
 								color="gray"
 								size="sm"
 								leftSection={<IconX size={16} />}
-								onClick={filterState.clearAll}
-								disabled={!filterState.hasActiveFilters}
+								onClick={handleClearAll}
+								disabled={!draftState.hasActiveFilters}
 							>
 								Clear all
 							</Button>
-							<Button size="sm" onClick={close}>
+							<Button size="sm" onClick={handleApply}>
 								Apply
 							</Button>
 						</Group>

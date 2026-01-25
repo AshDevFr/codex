@@ -5,13 +5,30 @@ import { api } from "./client";
 export type Tag = components["schemas"]["TagDto"];
 export type TagListResponse = components["schemas"]["TagListResponse"];
 
+const MAX_PAGE_SIZE = 500;
+
 export const tagsApi = {
 	/**
-	 * Get all tags across all libraries
+	 * Get all tags across all libraries.
+	 * Fetches all pages if results are paginated.
 	 */
 	getAll: async (): Promise<Tag[]> => {
-		const response = await api.get<PaginatedResponse<Tag>>("/tags");
-		return response.data.data ?? [];
+		const allTags: Tag[] = [];
+		let page = 1;
+		let hasMore = true;
+
+		while (hasMore) {
+			const response = await api.get<PaginatedResponse<Tag>>("/tags", {
+				params: { page, pageSize: MAX_PAGE_SIZE },
+			});
+			const data = response.data.data ?? [];
+			allTags.push(...data);
+
+			hasMore = page < response.data.totalPages;
+			page++;
+		}
+
+		return allTags;
 	},
 
 	/**

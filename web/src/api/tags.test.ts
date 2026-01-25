@@ -22,7 +22,7 @@ describe("tagsApi", () => {
 	});
 
 	describe("getAll", () => {
-		it("should fetch all tags", async () => {
+		it("should fetch all tags from a single page", async () => {
 			const mockTags = [
 				{ id: "tag-1", name: "Completed", seriesCount: 15 },
 				{ id: "tag-2", name: "Favorite", seriesCount: 8 },
@@ -31,13 +31,11 @@ describe("tagsApi", () => {
 			const mockResponse = {
 				data: mockTags,
 				page: 1,
-				pageSize: 50,
+				pageSize: 500,
 				total: 3,
 				totalPages: 1,
 				links: {
-					self: "/api/v1/tags?page=1&pageSize=50",
-					first: "/api/v1/tags?page=1&pageSize=50",
-					last: "/api/v1/tags?page=1&pageSize=50",
+					self: "/api/v1/tags?page=1&pageSize=500",
 				},
 			};
 
@@ -45,8 +43,54 @@ describe("tagsApi", () => {
 
 			const result = await tagsApi.getAll();
 
-			expect(api.get).toHaveBeenCalledWith("/tags");
+			expect(api.get).toHaveBeenCalledWith("/tags", {
+				params: { page: 1, pageSize: 500 },
+			});
 			expect(result).toEqual(mockTags);
+		});
+
+		it("should fetch all tags across multiple pages", async () => {
+			const page1Tags = [
+				{ id: "tag-1", name: "Completed", seriesCount: 15 },
+				{ id: "tag-2", name: "Favorite", seriesCount: 8 },
+			];
+			const page2Tags = [
+				{ id: "tag-3", name: "To Read", seriesCount: 20 },
+				{ id: "tag-4", name: "Dropped", seriesCount: 5 },
+			];
+
+			vi.mocked(api.get)
+				.mockResolvedValueOnce({
+					data: {
+						data: page1Tags,
+						page: 1,
+						pageSize: 500,
+						total: 4,
+						totalPages: 2,
+						links: { self: "/api/v1/tags?page=1&pageSize=500" },
+					},
+				})
+				.mockResolvedValueOnce({
+					data: {
+						data: page2Tags,
+						page: 2,
+						pageSize: 500,
+						total: 4,
+						totalPages: 2,
+						links: { self: "/api/v1/tags?page=2&pageSize=500" },
+					},
+				});
+
+			const result = await tagsApi.getAll();
+
+			expect(api.get).toHaveBeenCalledTimes(2);
+			expect(api.get).toHaveBeenNthCalledWith(1, "/tags", {
+				params: { page: 1, pageSize: 500 },
+			});
+			expect(api.get).toHaveBeenNthCalledWith(2, "/tags", {
+				params: { page: 2, pageSize: 500 },
+			});
+			expect(result).toEqual([...page1Tags, ...page2Tags]);
 		});
 
 		it("should return empty array when no tags exist", async () => {
@@ -54,13 +98,11 @@ describe("tagsApi", () => {
 				data: {
 					data: [],
 					page: 1,
-					pageSize: 50,
+					pageSize: 500,
 					total: 0,
 					totalPages: 0,
 					links: {
-						self: "/api/v1/tags?page=1&pageSize=50",
-						first: "/api/v1/tags?page=1&pageSize=50",
-						last: "/api/v1/tags?page=1&pageSize=50",
+						self: "/api/v1/tags?page=1&pageSize=500",
 					},
 				},
 			});

@@ -18,7 +18,7 @@ import {
 	type AlphabetLetter,
 } from "@/components/library/AlphabetFilter";
 import { MediaCard } from "@/components/library/MediaCard";
-import { useFilterState } from "@/hooks/useFilterState";
+import { useSeriesFilterState } from "@/hooks/useSeriesFilterState";
 import type { SeriesCondition } from "@/types";
 
 /** Fixed skeleton IDs to avoid array index keys */
@@ -76,7 +76,7 @@ export function SeriesSection({
 	// Get filter state from URL (uses the advanced filtering system)
 	// Filters are only applied when user clicks "Apply" in FilterPanel,
 	// so no debouncing is needed here
-	const { condition, filters, hasActiveFilters } = useFilterState();
+	const { condition, filters, hasActiveFilters } = useSeriesFilterState();
 
 	// Read query parameters (URL uses 1-indexed pages for user-friendly URLs)
 	const page = parseInt(searchParams.get("page") || "1", 10);

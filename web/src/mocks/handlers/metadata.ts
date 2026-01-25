@@ -98,9 +98,40 @@ export const metadataHandlers = [
 	// ============================================
 
 	// Get all genres
-	http.get("/api/v1/genres", async () => {
+	http.get("/api/v1/genres", async ({ request }) => {
 		await delay(100);
-		return HttpResponse.json({ genres: mockGenres });
+		const url = new URL(request.url);
+		const page = Number(url.searchParams.get("page")) || 1;
+		const pageSize = Number(url.searchParams.get("pageSize")) || 50;
+
+		// Calculate pagination
+		const startIndex = (page - 1) * pageSize;
+		const endIndex = startIndex + pageSize;
+		const paginatedGenres = mockGenres.slice(startIndex, endIndex);
+		const totalPages = Math.ceil(mockGenres.length / pageSize);
+
+		// Return paginated response format expected by the API client
+		return HttpResponse.json({
+			data: paginatedGenres.map((g) => ({
+				id: g.id,
+				name: g.name,
+				seriesCount: g.series_count,
+				createdAt: "2024-01-01T00:00:00Z",
+			})),
+			page,
+			pageSize,
+			total: mockGenres.length,
+			totalPages,
+			links: {
+				self: `/api/v1/genres?page=${page}&pageSize=${pageSize}`,
+				...(page > 1 && {
+					prev: `/api/v1/genres?page=${page - 1}&pageSize=${pageSize}`,
+				}),
+				...(page < totalPages && {
+					next: `/api/v1/genres?page=${page + 1}&pageSize=${pageSize}`,
+				}),
+			},
+		});
 	}),
 
 	// Delete a genre globally
@@ -182,9 +213,40 @@ export const metadataHandlers = [
 	// ============================================
 
 	// Get all tags
-	http.get("/api/v1/tags", async () => {
+	http.get("/api/v1/tags", async ({ request }) => {
 		await delay(100);
-		return HttpResponse.json({ tags: mockTags });
+		const url = new URL(request.url);
+		const page = Number(url.searchParams.get("page")) || 1;
+		const pageSize = Number(url.searchParams.get("pageSize")) || 50;
+
+		// Calculate pagination
+		const startIndex = (page - 1) * pageSize;
+		const endIndex = startIndex + pageSize;
+		const paginatedTags = mockTags.slice(startIndex, endIndex);
+		const totalPages = Math.ceil(mockTags.length / pageSize);
+
+		// Return paginated response format expected by the API client
+		return HttpResponse.json({
+			data: paginatedTags.map((t) => ({
+				id: t.id,
+				name: t.name,
+				seriesCount: t.series_count,
+				createdAt: "2024-01-01T00:00:00Z",
+			})),
+			page,
+			pageSize,
+			total: mockTags.length,
+			totalPages,
+			links: {
+				self: `/api/v1/tags?page=${page}&pageSize=${pageSize}`,
+				...(page > 1 && {
+					prev: `/api/v1/tags?page=${page - 1}&pageSize=${pageSize}`,
+				}),
+				...(page < totalPages && {
+					next: `/api/v1/tags?page=${page + 1}&pageSize=${pageSize}`,
+				}),
+			},
+		});
 	}),
 
 	// Delete a tag globally

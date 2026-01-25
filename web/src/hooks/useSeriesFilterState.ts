@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
 	countActiveFilters,
@@ -6,14 +6,16 @@ import {
 	type FilterGroupState,
 	type FilterMode,
 	parseSeriesFilters,
+	type SeriesCondition,
 	type SeriesFilterState,
 	serializeSeriesFilters,
+	seriesFilterStateToCondition,
 	type TriState,
 } from "@/types";
 
-interface UseDraftFilterStateReturn {
-	// Draft filter state (local, not yet applied)
-	draftFilters: SeriesFilterState;
+interface UseSeriesFilterStateReturn {
+	// Current filter state (parsed from URL)
+	filters: SeriesFilterState;
 
 	// Actions for genre filters
 	setGenreState: (value: string, state: TriState) => void;
@@ -43,123 +45,81 @@ interface UseDraftFilterStateReturn {
 	setSharingTagState: (value: string, state: TriState) => void;
 	setSharingTagMode: (mode: FilterMode) => void;
 
-	// Bulk actions on draft
-	clearAllDraft: () => void;
-	clearGroupDraft: (group: keyof SeriesFilterState) => void;
+	// Bulk actions
+	clearAll: () => void;
+	clearGroup: (group: keyof SeriesFilterState) => void;
 
-	// Commit/discard actions
-	applyFilters: () => void;
-	discardChanges: () => void;
-
-	// Computed values (based on draft)
+	// Computed values
 	hasActiveFilters: boolean;
 	activeFilterCount: number;
 	activeFiltersByGroup: Record<keyof SeriesFilterState, number>;
 
-	// Track if there are uncommitted changes
-	hasChanges: boolean;
+	// API-ready condition
+	condition: SeriesCondition | undefined;
 }
 
 /**
- * Deep clone a SeriesFilterState (Maps need special handling)
- */
-function cloneFilterState(state: SeriesFilterState): SeriesFilterState {
-	return {
-		genres: { mode: state.genres.mode, values: new Map(state.genres.values) },
-		tags: { mode: state.tags.mode, values: new Map(state.tags.values) },
-		status: { mode: state.status.mode, values: new Map(state.status.values) },
-		readStatus: {
-			mode: state.readStatus.mode,
-			values: new Map(state.readStatus.values),
-		},
-		publisher: {
-			mode: state.publisher.mode,
-			values: new Map(state.publisher.values),
-		},
-		language: {
-			mode: state.language.mode,
-			values: new Map(state.language.values),
-		},
-		sharingTags: {
-			mode: state.sharingTags.mode,
-			values: new Map(state.sharingTags.values),
-		},
-	};
-}
-
-/**
- * Compare two filter states for equality
- */
-function filterStatesEqual(
-	a: SeriesFilterState,
-	b: SeriesFilterState,
-): boolean {
-	const groups: (keyof SeriesFilterState)[] = [
-		"genres",
-		"tags",
-		"status",
-		"readStatus",
-		"publisher",
-		"language",
-		"sharingTags",
-	];
-
-	for (const group of groups) {
-		if (a[group].mode !== b[group].mode) return false;
-		if (a[group].values.size !== b[group].values.size) return false;
-		for (const [key, value] of a[group].values) {
-			if (b[group].values.get(key) !== value) return false;
-		}
-	}
-	return true;
-}
-
-/**
- * Hook for managing draft filter state with explicit apply/discard.
+ * Hook for managing filter state with URL synchronization.
  *
- * Changes are kept in local state until explicitly applied to the URL.
- * Discarding reverts to the current URL state.
+ * Filter state is stored in URL search params for shareability and bookmarking.
+ * Changes to filters update the URL, which triggers a re-render with new state.
  */
-export function useDraftFilterState(): UseDraftFilterStateReturn {
+export function useSeriesFilterState(): UseSeriesFilterStateReturn {
 	const [searchParams, setSearchParams] = useSearchParams();
 
-	// Parse committed filter state from URL
-	const committedFilters = useMemo(
+	// Parse current filter state from URL
+	const filters = useMemo(
 		() => parseSeriesFilters(searchParams),
 		[searchParams],
 	);
 
-	// Local draft state - initialized from URL
-	const [draftFilters, setDraftFilters] = useState<SeriesFilterState>(() =>
-		cloneFilterState(committedFilters),
+	// Convert to API condition
+	const condition = useMemo(
+		() => seriesFilterStateToCondition(filters),
+		[filters],
 	);
 
-	// Check if draft differs from committed
-	const hasChanges = useMemo(
-		() => !filterStatesEqual(draftFilters, committedFilters),
-		[draftFilters, committedFilters],
-	);
+	// Helper to update URL with new filter state
+	const updateFilters = useCallback(
+		(newFilters: SeriesFilterState) => {
+			const filterParams = serializeSeriesFilters(newFilters);
 
-	// Helper to update draft state
-	const updateDraft = useCallback(
-		(updater: (current: SeriesFilterState) => SeriesFilterState) => {
-			setDraftFilters((current) => updater(current));
+			// Merge with existing non-filter params (page, sort, etc.)
+			const newParams = new URLSearchParams(searchParams);
+
+			// Remove old filter params
+			newParams.delete("gf");
+			newParams.delete("tf");
+			newParams.delete("sf");
+			newParams.delete("rf");
+			newParams.delete("pf");
+			newParams.delete("lf");
+			newParams.delete("stf");
+
+			// Add new filter params
+			for (const [key, value] of filterParams) {
+				newParams.set(key, value);
+			}
+
+			// Reset to page 1 when filters change
+			newParams.set("page", "1");
+
+			setSearchParams(newParams, { replace: true });
 		},
-		[],
+		[searchParams, setSearchParams],
 	);
 
-	// Helper to update a single group in draft
+	// Helper to update a single group
 	const updateGroup = useCallback(
 		(
 			group: keyof SeriesFilterState,
 			updater: (current: FilterGroupState) => FilterGroupState,
 		) => {
-			updateDraft((current) => ({
-				...current,
-				[group]: updater(current[group]),
-			}));
+			const newFilters = { ...filters };
+			newFilters[group] = updater(filters[group]);
+			updateFilters(newFilters);
 		},
-		[updateDraft],
+		[filters, updateFilters],
 	);
 
 	// Genre actions
@@ -323,63 +283,34 @@ export function useDraftFilterState(): UseDraftFilterStateReturn {
 		[updateGroup],
 	);
 
-	// Clear all draft filters
-	const clearAllDraft = useCallback(() => {
-		setDraftFilters(createEmptySeriesFilterState());
-	}, []);
+	// Clear all filters
+	const clearAll = useCallback(() => {
+		updateFilters(createEmptySeriesFilterState());
+	}, [updateFilters]);
 
-	// Clear a specific group in draft
-	const clearGroupDraft = useCallback((group: keyof SeriesFilterState) => {
-		setDraftFilters((current) => ({
-			...current,
-			[group]: { ...current[group], values: new Map() },
-		}));
-	}, []);
+	// Clear a specific group
+	const clearGroup = useCallback(
+		(group: keyof SeriesFilterState) => {
+			updateGroup(group, (current) => ({
+				...current,
+				values: new Map(),
+			}));
+		},
+		[updateGroup],
+	);
 
-	// Apply draft to URL
-	const applyFilters = useCallback(() => {
-		const filterParams = serializeSeriesFilters(draftFilters);
-
-		// Merge with existing non-filter params (page, sort, etc.)
-		const newParams = new URLSearchParams(searchParams);
-
-		// Remove old filter params
-		newParams.delete("gf");
-		newParams.delete("tf");
-		newParams.delete("sf");
-		newParams.delete("rf");
-		newParams.delete("pf");
-		newParams.delete("lf");
-		newParams.delete("stf");
-
-		// Add new filter params
-		for (const [key, value] of filterParams) {
-			newParams.set(key, value);
-		}
-
-		// Reset to page 1 when filters change
-		newParams.set("page", "1");
-
-		setSearchParams(newParams, { replace: true });
-	}, [draftFilters, searchParams, setSearchParams]);
-
-	// Discard draft and revert to URL state
-	const discardChanges = useCallback(() => {
-		setDraftFilters(cloneFilterState(committedFilters));
-	}, [committedFilters]);
-
-	// Computed values (based on draft)
+	// Computed values
 	const activeFiltersByGroup = useMemo(
 		() => ({
-			genres: countActiveFilters(draftFilters.genres),
-			tags: countActiveFilters(draftFilters.tags),
-			status: countActiveFilters(draftFilters.status),
-			readStatus: countActiveFilters(draftFilters.readStatus),
-			publisher: countActiveFilters(draftFilters.publisher),
-			language: countActiveFilters(draftFilters.language),
-			sharingTags: countActiveFilters(draftFilters.sharingTags),
+			genres: countActiveFilters(filters.genres),
+			tags: countActiveFilters(filters.tags),
+			status: countActiveFilters(filters.status),
+			readStatus: countActiveFilters(filters.readStatus),
+			publisher: countActiveFilters(filters.publisher),
+			language: countActiveFilters(filters.language),
+			sharingTags: countActiveFilters(filters.sharingTags),
 		}),
-		[draftFilters],
+		[filters],
 	);
 
 	const activeFilterCount = useMemo(
@@ -394,7 +325,7 @@ export function useDraftFilterState(): UseDraftFilterStateReturn {
 	const hasActiveFilters = activeFilterCount > 0;
 
 	return {
-		draftFilters,
+		filters,
 		setGenreState,
 		setGenreMode,
 		setTagState,
@@ -409,13 +340,11 @@ export function useDraftFilterState(): UseDraftFilterStateReturn {
 		setLanguageMode,
 		setSharingTagState,
 		setSharingTagMode,
-		clearAllDraft,
-		clearGroupDraft,
-		applyFilters,
-		discardChanges,
+		clearAll,
+		clearGroup,
 		hasActiveFilters,
 		activeFilterCount,
 		activeFiltersByGroup,
-		hasChanges,
+		condition,
 	};
 }
