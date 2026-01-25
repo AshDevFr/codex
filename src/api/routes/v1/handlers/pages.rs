@@ -66,19 +66,35 @@ pub async fn get_page_image(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
 
-    // Check page number is valid
-    if page_number > book.page_count {
+    // If book has been analyzed, validate page number against known page count
+    if book.analyzed && page_number > book.page_count {
         return Err(ApiError::NotFound(format!(
             "Page {} not found (book has {} pages)",
             page_number, book.page_count
         )));
     }
 
-    // Fetch page metadata
-    let page = PageRepository::get_by_book_and_number(&state.db, book_id, page_number)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch page: {}", e)))?
-        .ok_or_else(|| ApiError::NotFound("Page not found".to_string()))?;
+    // For PDFs, we can serve pages directly without requiring page metadata in the database.
+    // This handles cases where PDFs were scanned before page metadata population was implemented,
+    // or where page analysis failed. PDF pages are rendered on-demand by PDFium.
+    if book.format.eq_ignore_ascii_case("pdf") {
+        // Update reading progress
+        state
+            .read_progress_service
+            .record_progress(auth.user_id, book_id, page_number, book.page_count)
+            .await;
+
+        // PDFs render to JPEG
+        return serve_pdf_page_with_streaming(
+            &state,
+            &headers,
+            book_id,
+            page_number,
+            &book.file_path,
+            "image/jpeg",
+        )
+        .await;
+    }
 
     // Update reading progress via batching service (PSE-style tracking)
     // Progress updates are buffered in memory and flushed periodically
@@ -88,34 +104,45 @@ pub async fn get_page_image(
         .record_progress(auth.user_id, book_id, page_number, book.page_count)
         .await;
 
-    // Determine content type from file format
-    let content_type = match page.format.to_lowercase().as_str() {
-        "jpg" | "jpeg" => "image/jpeg",
-        "png" => "image/png",
-        "webp" => "image/webp",
-        "gif" => "image/gif",
-        "bmp" => "image/bmp",
-        "avif" => "image/avif",
-        _ => "application/octet-stream",
-    };
-
-    // For PDFs, try streaming from cache with HTTP conditional caching
-    if book.format.eq_ignore_ascii_case("pdf") {
-        return serve_pdf_page_with_streaming(
-            &state,
-            &headers,
-            book_id,
-            page_number,
-            &book.file_path,
-            content_type,
-        )
-        .await;
-    }
+    // Try to fetch page metadata for content type detection
+    let page = PageRepository::get_by_book_and_number(&state.db, book_id, page_number)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch page: {}", e)))?;
 
     // For non-PDF formats, extract and serve directly
-    let image_data = extract_page_image(&book.file_path, &book.format, page_number)
-        .await
-        .map_err(|e| ApiError::from_anyhow_with_context(e, "Failed to extract page image"))?;
+    // This works even if the book hasn't been analyzed - the parser will extract the page
+    let image_data = match extract_page_image(&book.file_path, &book.format, page_number).await {
+        Ok(data) => data,
+        Err(e) => {
+            // If extraction fails and book isn't analyzed, provide a helpful message
+            if !book.analyzed {
+                return Err(ApiError::NotFound(format!(
+                    "Page {} not found. Book has not been analyzed yet - pages may not be available until analysis completes.",
+                    page_number
+                )));
+            }
+            return Err(ApiError::NotFound(format!(
+                "Page {} not found: {}",
+                page_number, e
+            )));
+        }
+    };
+
+    // Determine content type: use page metadata if available, otherwise detect from image data
+    let content_type = if let Some(ref page) = page {
+        match page.format.to_lowercase().as_str() {
+            "jpg" | "jpeg" => "image/jpeg",
+            "png" => "image/png",
+            "webp" => "image/webp",
+            "gif" => "image/gif",
+            "bmp" => "image/bmp",
+            "avif" => "image/avif",
+            _ => detect_content_type(&image_data),
+        }
+    } else {
+        // No page metadata - detect content type from image data
+        detect_content_type(&image_data)
+    };
 
     // Build response with caching headers
     Ok(Response::builder()
@@ -501,6 +528,35 @@ async fn generate_thumbnail(image_data: Vec<u8>, max_dimension: u32) -> anyhow::
     tokio::task::spawn_blocking(move || generate_thumbnail_sync(&image_data, max_dimension))
         .await
         .map_err(|e| anyhow::anyhow!("Task join error: {}", e))?
+}
+
+/// Detect content type from image data using magic bytes
+///
+/// Falls back to "image/jpeg" if the format cannot be determined
+fn detect_content_type(data: &[u8]) -> &'static str {
+    if data.len() < 4 {
+        return "application/octet-stream";
+    }
+
+    // Check magic bytes for common image formats
+    if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        "image/jpeg"
+    } else if data.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+        // PNG: 89 50 4E 47 (‰PNG)
+        "image/png"
+    } else if data.starts_with(b"RIFF") && data.len() > 12 && &data[8..12] == b"WEBP" {
+        "image/webp"
+    } else if data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a") {
+        "image/gif"
+    } else if data.starts_with(&[0x42, 0x4D]) {
+        // BMP: 42 4D (BM)
+        "image/bmp"
+    } else if data.len() >= 12 && &data[4..12] == b"ftypavif" {
+        "image/avif"
+    } else {
+        // Default to JPEG as it's the most common format in comics
+        "image/jpeg"
+    }
 }
 
 /// Extract page image from book file

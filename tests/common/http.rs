@@ -259,6 +259,29 @@ pub async fn make_raw_request(app: Router, request: Request<String>) -> (StatusC
     (status, body.to_vec())
 }
 
+/// Helper to make a request and return full response including headers
+pub async fn make_full_request(
+    app: Router,
+    request: Request<String>,
+) -> (StatusCode, hyper::HeaderMap, Vec<u8>) {
+    let response = app
+        .oneshot(request)
+        .await
+        .expect("Failed to execute request");
+
+    let status = response.status();
+    let headers = response.headers().clone();
+    let body = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes()
+        .to_vec();
+
+    (status, headers, body)
+}
+
 /// Helper to create a GET request
 pub fn get_request(uri: &str) -> Request<String> {
     Request::builder()
