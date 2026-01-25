@@ -47,11 +47,12 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "rust-cache"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Configure Rust to use sccache
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
       - name: Run tests
         run: cargo nextest run --features rar
         env:
@@ -74,11 +75,12 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "rust-cache"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Configure Rust to use sccache
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
       - name: Format check
         run: cargo fmt -- --check
       - name: Clippy check
