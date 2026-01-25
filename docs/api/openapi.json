@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Codex API",
-    "description": "REST API for Codex, a digital library server for comics, manga, and ebooks.\n\n## Interactive API Documentation\n\nYou can explore and test this API interactively:\n\n- **Hosted Documentation**: Visit [codex.4sh.dev/docs/api](https://codex.4sh.dev/docs/api) for the full API reference\n- **Your Instance**: If you have Scalar UI enabled, access `/api/docs` on your Codex server\n\n## Authentication\n\nMost endpoints require authentication. Codex supports two authentication methods:\n\n1. **JWT Bearer Token**: Obtain a token via `POST /api/v1/auth/login`, then include it as `Authorization: Bearer <token>`\n2. **API Key**: Generate an API key in the web UI or via the API, then include it as `X-API-Key: <key>` header\n\n## OPDS Support\n\nCodex provides OPDS catalog feeds for e-reader applications:\n\n- **OPDS 1.2** (Atom XML): `/opds/v1/catalog` - Compatible with most e-readers\n- **OPDS 2.0** (JSON): `/opds/v2` - Modern JSON-based format with enhanced features\n\n## Komga-Compatible API\n\nCodex provides an optional Komga-compatible API for third-party apps like Komic:\n\n- **Disabled by default** - Enable via `komga_api.enabled: true` in config\n- **Configurable prefix** - Default path: `/{prefix}/api/v1/` where prefix defaults to `komga`\n- **Same authentication** - Supports JWT, API keys, and Basic Auth\n\nNote: The `{prefix}` path parameter in Komga endpoints is configurable at runtime.\n\n## Pagination\n\nList endpoints support pagination with the following conventions:\n\n### Query Parameters (GET requests)\n\n| Parameter | Default | Max | Description |\n|-----------|---------|-----|-------------|\n| `page` | `1` | - | Page number (1-indexed) |\n| `page_size` | `50` | `500` | Items per page |\n\nExample: `GET /api/v1/books?page=2&page_size=25`\n\n### Request Body (POST requests)\n\nPOST endpoints like `/api/v1/books/list` accept pagination in camelCase:\n\n```json\n{\n  \"page\": 1,\n  \"pageSize\": 25\n}\n```\n\n### Response Format\n\nAll paginated responses use camelCase and include HATEOAS navigation links:\n\n```json\n{\n  \"data\": [...],\n  \"page\": 1,\n  \"pageSize\": 25,\n  \"total\": 150,\n  \"totalPages\": 6,\n  \"links\": {\n    \"self\": \"/api/v1/books?page=1&page_size=25\",\n    \"first\": \"/api/v1/books?page=1&page_size=25\",\n    \"next\": \"/api/v1/books?page=2&page_size=25\",\n    \"last\": \"/api/v1/books?page=6&page_size=25\"\n  }\n}\n```",
+    "description": "REST API for Codex, a digital library server for comics, manga, and ebooks.\n\n## Interactive API Documentation\n\nYou can explore and test this API interactively:\n\n- **Hosted Documentation**: Visit [codex.4sh.dev/docs/api](https://codex.4sh.dev/docs/api) for the full API reference\n- **Your Instance**: If you have Scalar UI enabled, access `/api/docs` on your Codex server\n\n## Authentication\n\nMost endpoints require authentication. Codex supports two authentication methods:\n\n1. **JWT Bearer Token**: Obtain a token via `POST /api/v1/auth/login`, then include it as `Authorization: Bearer <token>`\n2. **API Key**: Generate an API key in the web UI or via the API, then include it as `X-API-Key: <key>` header\n\n## OPDS Support\n\nCodex provides OPDS catalog feeds for e-reader applications:\n\n- **OPDS 1.2** (Atom XML): `/opds/v1/catalog` - Compatible with most e-readers\n- **OPDS 2.0** (JSON): `/opds/v2` - Modern JSON-based format with enhanced features\n\n## Komga-Compatible API\n\nCodex provides an optional Komga-compatible API for third-party apps like Komic:\n\n- **Disabled by default** - Enable via `komga_api.enabled: true` in config\n- **Configurable prefix** - Default path: `/{prefix}/api/v1/` where prefix defaults to `komga`\n- **Same authentication** - Supports JWT, API keys, and Basic Auth\n\nNote: The `{prefix}` path parameter in Komga endpoints is configurable at runtime.\n\n## Pagination\n\nList endpoints support pagination with the following conventions:\n\n### Query Parameters\n\nAll endpoints (GET and POST) use query parameters for pagination:\n\n| Parameter | Default | Max | Description |\n|-----------|---------|-----|-------------|\n| `page` | `1` | - | Page number (1-indexed) |\n| `pageSize` | `50` | `500` | Items per page |\n\nExample GET: `GET /api/v1/books?page=2&pageSize=25`\n\nExample POST: `POST /api/v1/series/list?page=1&pageSize=25&sort=name,asc`\n\nFor POST endpoints like `/api/v1/books/list` and `/api/v1/series/list`:\n- Pagination parameters (`page`, `pageSize`, `sort`) go in the **query string**\n- Filter criteria (`condition`, `fullTextSearch`) go in the **request body**\n\n### Response Format\n\nAll paginated responses use camelCase and include HATEOAS navigation links:\n\n```json\n{\n  \"data\": [...],\n  \"page\": 1,\n  \"pageSize\": 25,\n  \"total\": 150,\n  \"totalPages\": 6,\n  \"links\": {\n    \"self\": \"/api/v1/series/list?page=1&pageSize=25\",\n    \"first\": \"/api/v1/series/list?page=1&pageSize=25\",\n    \"next\": \"/api/v1/series/list?page=2&pageSize=25\",\n    \"last\": \"/api/v1/series/list?page=6&pageSize=25\"\n  }\n}\n```",
     "license": {
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
@@ -1838,8 +1838,47 @@
           "books"
         ],
         "summary": "List books with advanced filtering",
-        "description": "Supports complex filter conditions including nested AllOf/AnyOf logic,\ngenre/tag filtering with include/exclude, and more.",
+        "description": "Supports complex filter conditions including nested AllOf/AnyOf logic,\ngenre/tag filtering with include/exclude, and more.\n\nPagination parameters (page, page_size, sort) are passed as query parameters.\nFilter conditions are passed in the request body.",
         "operationId": "list_books_filtered",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-indexed, minimum 1)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Number of items per page (max 500, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort field and direction (e.g., \"name,asc\" or \"createdAt,desc\")",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -5093,8 +5132,47 @@
           "series"
         ],
         "summary": "List series with advanced filtering",
-        "description": "Supports complex filter conditions including nested AllOf/AnyOf logic,\ngenre/tag filtering with include/exclude, and more.",
+        "description": "Supports complex filter conditions including nested AllOf/AnyOf logic,\ngenre/tag filtering with include/exclude, and more.\n\nPagination parameters (page, page_size, sort) are passed as query parameters.\nFilter conditions are passed in the request body.",
         "operationId": "list_series_filtered",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-indexed, minimum 1)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Number of items per page (max 500, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort field and direction (e.g., \"name,asc\" or \"createdAt,desc\")",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -12313,7 +12391,7 @@
       },
       "BookListRequest": {
         "type": "object",
-        "description": "Request body for POST /books/list",
+        "description": "Request body for POST /books/list\n\nPagination parameters (page, page_size, sort) are passed as query parameters,\nnot in the request body. This enables proper HATEOAS links.",
         "properties": {
           "condition": {
             "type": [
@@ -12321,13 +12399,6 @@
               "null"
             ],
             "description": "Filter condition (optional - no condition returns all)"
-          },
-          "cursor": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Cursor for cursor-based pagination (alternative to page-based)"
           },
           "fullTextSearch": {
             "type": [
@@ -12339,25 +12410,6 @@
           "includeDeleted": {
             "type": "boolean",
             "description": "Include soft-deleted books in results (default: false)"
-          },
-          "page": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Page number (1-indexed, default 1)",
-            "minimum": 0
-          },
-          "pageSize": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Items per page (default 50, max 100)",
-            "minimum": 0
-          },
-          "sort": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Sort field and direction (e.g., \"title,asc\" or \"createdAt,desc\")"
           }
         }
       },
@@ -20548,7 +20600,7 @@
       },
       "SeriesListRequest": {
         "type": "object",
-        "description": "Request body for POST /series/list",
+        "description": "Request body for POST /series/list\n\nPagination parameters (page, page_size, sort) are passed as query parameters,\nnot in the request body. This enables proper HATEOAS links.",
         "properties": {
           "condition": {
             "type": [
@@ -20557,38 +20609,12 @@
             ],
             "description": "Filter condition (optional - no condition returns all)"
           },
-          "cursor": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Cursor for cursor-based pagination (alternative to page-based)"
-          },
           "fullTextSearch": {
             "type": [
               "string",
               "null"
             ],
             "description": "Full-text search query (case-insensitive search on series name)"
-          },
-          "page": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Page number (1-indexed, default 1)",
-            "minimum": 0
-          },
-          "pageSize": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Items per page (default 50, max 100)",
-            "minimum": 0
-          },
-          "sort": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Sort field and direction (e.g., \"name,asc\" or \"createdAt,desc\")"
           }
         }
       },

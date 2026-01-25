@@ -487,29 +487,36 @@ SSE connections send a keep-alive comment every 15 seconds:
 
 List endpoints support pagination with the following conventions:
 
-### Query Parameters (GET requests)
+### Query Parameters
+
+All endpoints (GET and POST) use query parameters for pagination:
 
 | Parameter | Default | Max | Description |
 |-----------|---------|-----|-------------|
 | `page` | `1` | - | Page number (1-indexed) |
-| `page_size` | `50` | `500` | Items per page |
+| `pageSize` | `50` | `500` | Items per page |
 
-Example:
+#### GET Requests
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" \
-  "http://localhost:8080/api/v1/books?page=2&page_size=25"
+  "http://localhost:8080/api/v1/books?page=2&pageSize=25"
 ```
 
-### Request Body (POST requests)
+#### POST Requests (Filtering Endpoints)
 
-POST endpoints like `/api/v1/books/list` accept pagination in **camelCase**:
+POST endpoints like `/api/v1/books/list` and `/api/v1/series/list` use:
+- **Query parameters** for pagination (`page`, `pageSize`, `sort`)
+- **Request body** for filter criteria only
 
-```json
-{
-  "page": 1,
-  "pageSize": 25
-}
+```bash
+curl -X POST "http://localhost:8080/api/v1/series/list?page=1&pageSize=25&sort=name,asc" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "condition": { "genre": { "operator": "is", "value": "Action" } },
+    "fullTextSearch": "batman"
+  }'
 ```
 
 ### Response Format
@@ -524,17 +531,17 @@ All paginated responses use **camelCase** and include HATEOAS navigation links:
   "total": 150,
   "totalPages": 6,
   "links": {
-    "self": "/api/v1/books?page=2&page_size=25",
-    "first": "/api/v1/books?page=1&page_size=25",
-    "prev": "/api/v1/books?page=1&page_size=25",
-    "next": "/api/v1/books?page=3&page_size=25",
-    "last": "/api/v1/books?page=6&page_size=25"
+    "self": "/api/v1/series/list?page=2&pageSize=25",
+    "first": "/api/v1/series/list?page=1&pageSize=25",
+    "prev": "/api/v1/series/list?page=1&pageSize=25",
+    "next": "/api/v1/series/list?page=3&pageSize=25",
+    "last": "/api/v1/series/list?page=6&pageSize=25"
   }
 }
 ```
 
 :::note
-Query parameters use `page_size` (snake_case), while request/response bodies use `pageSize` (camelCase).
+GET endpoints also support `page_size` (snake_case) for backwards compatibility, but `pageSize` (camelCase) is preferred for consistency.
 :::
 
 ## Filtering & Sorting
@@ -567,8 +574,14 @@ Use `POST /series/list` or `POST /books/list` for condition-based filtering.
 
 #### Condition Structure
 
-Filters use a tree structure with `allOf` (AND) and `anyOf` (OR) combinators:
+Filters use a tree structure with `allOf` (AND) and `anyOf` (OR) combinators.
 
+**Request URL with pagination:**
+```
+POST /api/v1/series/list?page=1&pageSize=20&sort=name,asc
+```
+
+**Request body with filter criteria:**
 ```json
 {
   "condition": {
@@ -577,10 +590,7 @@ Filters use a tree structure with `allOf` (AND) and `anyOf` (OR) combinators:
       { "genre": { "operator": "isNot", "value": "Horror" } }
     ]
   },
-  "fullTextSearch": "batman",
-  "page": 1,
-  "pageSize": 20,
-  "sort": "name,asc"
+  "fullTextSearch": "batman"
 }
 ```
 
@@ -604,7 +614,7 @@ Filters use a tree structure with `allOf` (AND) and `anyOf` (OR) combinators:
 #### Example: Genre filter with exclusion
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/series/list \
+curl -X POST "http://localhost:8080/api/v1/series/list?page=1&pageSize=20" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

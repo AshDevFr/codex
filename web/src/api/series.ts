@@ -182,15 +182,19 @@ export const seriesApi = {
 	 * - Nested AllOf/AnyOf conditions
 	 * - Include/exclude filtering for genres, tags, status, etc.
 	 * - Full-text search (optional)
-	 * - Pagination and sorting
+	 * - Pagination and sorting (via query params)
 	 *
 	 * @param libraryId - Library to filter by, or "all" for all libraries
 	 * @param request - The search request with condition, pagination, and sort options
 	 */
 	search: async (
 		libraryId: string,
-		request: Omit<SeriesListRequest, "condition"> & {
+		request: {
 			condition?: SeriesCondition;
+			search?: string;
+			page?: number;
+			pageSize?: number;
+			sort?: string;
 		},
 	): Promise<PaginatedResponse<Series>> => {
 		// Build the full condition including library filter
@@ -212,18 +216,23 @@ export const seriesApi = {
 			}
 		}
 
+		// Build query params for pagination (moved from body)
+		const params = new URLSearchParams();
+		if (request.page !== undefined) params.set("page", String(request.page));
+		if (request.pageSize !== undefined)
+			params.set("pageSize", String(request.pageSize));
+		if (request.sort) params.set("sort", request.sort);
+
+		// Body only contains filter condition and search
 		const body: SeriesListRequest = {
 			condition: finalCondition,
-			search: request.search,
-			page: request.page,
-			pageSize: request.pageSize,
-			sort: request.sort,
+			fullTextSearch: request.search,
 		};
 
-		const response = await api.post<PaginatedResponse<Series>>(
-			"/series/list",
-			body,
-		);
+		const queryString = params.toString();
+		const url = queryString ? `/series/list?${queryString}` : "/series/list";
+
+		const response = await api.post<PaginatedResponse<Series>>(url, body);
 		return response.data;
 	},
 

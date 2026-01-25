@@ -43,14 +43,17 @@ export const searchApi = {
 			libraryId?: { operator: "is"; value: string };
 		}
 
-		// Build request with fullTextSearch for case-insensitive search
+		// Build query params for pagination
+		const params = new URLSearchParams();
+		params.set("page", "1");
+		params.set("pageSize", String(limit));
+
+		// Build request body with fullTextSearch for case-insensitive search
 		const body: {
 			fullTextSearch: string;
 			condition?: BookCondition;
-			pageSize: number;
 		} = {
 			fullTextSearch: query,
-			pageSize: limit,
 		};
 
 		// Add library filter if specified
@@ -61,7 +64,7 @@ export const searchApi = {
 		}
 
 		const response = await api.post<PaginatedResponse<Book>>(
-			"/books/list",
+			`/books/list?${params.toString()}`,
 			body,
 		);
 

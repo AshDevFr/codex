@@ -2975,14 +2975,13 @@ async fn test_list_series_filtered_pagination() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    // Request page 1, page_size 2 (1-indexed)
-    let request_body = SeriesListRequest {
-        condition: None,
-        page: 1,
-        page_size: 2,
-        ..Default::default()
-    };
-    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    // Request page 1, pageSize 2 (1-indexed) - pagination is now in query params (camelCase)
+    let request_body = SeriesListRequest::default();
+    let request = post_json_request_with_auth(
+        "/api/v1/series/list?page=1&pageSize=2",
+        &request_body,
+        &token,
+    );
     let (status, response): (StatusCode, Option<SeriesListResponse>) =
         make_json_request(app.clone(), request).await;
 
@@ -2993,13 +2992,11 @@ async fn test_list_series_filtered_pagination() {
     assert_eq!(page1.page, 1);
 
     // Request page 2
-    let request_body = SeriesListRequest {
-        condition: None,
-        page: 2,
-        page_size: 2,
-        ..Default::default()
-    };
-    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let request = post_json_request_with_auth(
+        "/api/v1/series/list?page=2&pageSize=2",
+        &request_body,
+        &token,
+    );
     let (status, response): (StatusCode, Option<SeriesListResponse>) =
         make_json_request(app, request).await;
 

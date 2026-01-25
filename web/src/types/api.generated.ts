@@ -572,6 +572,9 @@ export interface paths {
          * List books with advanced filtering
          * @description Supports complex filter conditions including nested AllOf/AnyOf logic,
          *     genre/tag filtering with include/exclude, and more.
+         *
+         *     Pagination parameters (page, page_size, sort) are passed as query parameters.
+         *     Filter conditions are passed in the request body.
          */
         post: operations["list_books_filtered"];
         delete?: never;
@@ -1742,6 +1745,9 @@ export interface paths {
          * List series with advanced filtering
          * @description Supports complex filter conditions including nested AllOf/AnyOf logic,
          *     genre/tag filtering with include/exclude, and more.
+         *
+         *     Pagination parameters (page, page_size, sort) are passed as query parameters.
+         *     Filter conditions are passed in the request body.
          */
         post: operations["list_series_filtered"];
         delete?: never;
@@ -4406,28 +4412,19 @@ export interface components {
          * @enum {string}
          */
         BookErrorTypeDto: "format_detection" | "parser" | "metadata" | "thumbnail" | "page_extraction" | "pdf_rendering" | "other";
-        /** @description Request body for POST /books/list */
+        /**
+         * @description Request body for POST /books/list
+         *
+         *     Pagination parameters (page, page_size, sort) are passed as query parameters,
+         *     not in the request body. This enables proper HATEOAS links.
+         */
         BookListRequest: {
             /** @description Filter condition (optional - no condition returns all) */
             condition?: Record<string, never> | null;
-            /** @description Cursor for cursor-based pagination (alternative to page-based) */
-            cursor?: string | null;
             /** @description Full-text search query (case-insensitive search on book title) */
             fullTextSearch?: string | null;
             /** @description Include soft-deleted books in results (default: false) */
             includeDeleted?: boolean;
-            /**
-             * Format: int64
-             * @description Page number (1-indexed, default 1)
-             */
-            page?: number;
-            /**
-             * Format: int64
-             * @description Items per page (default 50, max 100)
-             */
-            pageSize?: number;
-            /** @description Sort field and direction (e.g., "title,asc" or "createdAt,desc") */
-            sort?: string | null;
         };
         /** @description Book metadata DTO */
         BookMetadataDto: {
@@ -8971,26 +8968,17 @@ export interface components {
              */
             position?: number | null;
         };
-        /** @description Request body for POST /series/list */
+        /**
+         * @description Request body for POST /series/list
+         *
+         *     Pagination parameters (page, page_size, sort) are passed as query parameters,
+         *     not in the request body. This enables proper HATEOAS links.
+         */
         SeriesListRequest: {
             /** @description Filter condition (optional - no condition returns all) */
             condition?: Record<string, never> | null;
-            /** @description Cursor for cursor-based pagination (alternative to page-based) */
-            cursor?: string | null;
             /** @description Full-text search query (case-insensitive search on series name) */
             fullTextSearch?: string | null;
-            /**
-             * Format: int64
-             * @description Page number (1-indexed, default 1)
-             */
-            page?: number;
-            /**
-             * Format: int64
-             * @description Items per page (default 50, max 100)
-             */
-            pageSize?: number;
-            /** @description Sort field and direction (e.g., "name,asc" or "createdAt,desc") */
-            sort?: string | null;
         };
         /** @description Response containing series metadata */
         SeriesMetadataResponse: {
@@ -12186,7 +12174,14 @@ export interface operations {
     };
     list_books_filtered: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page number (1-indexed, minimum 1) */
+                page?: number;
+                /** @description Number of items per page (max 500, default 50) */
+                pageSize?: number;
+                /** @description Sort field and direction (e.g., "name,asc" or "createdAt,desc") */
+                sort?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -14508,7 +14503,14 @@ export interface operations {
     };
     list_series_filtered: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page number (1-indexed, minimum 1) */
+                page?: number;
+                /** @description Number of items per page (max 500, default 50) */
+                pageSize?: number;
+                /** @description Sort field and direction (e.g., "name,asc" or "createdAt,desc") */
+                sort?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;

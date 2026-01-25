@@ -254,12 +254,10 @@ describe("seriesApi", () => {
 				pageSize: 50,
 			});
 
-			expect(api.post).toHaveBeenCalledWith("/series/list", {
+			// Pagination params are now in URL, body contains only filter
+			expect(api.post).toHaveBeenCalledWith("/series/list?page=1&pageSize=50", {
 				condition: undefined,
-				search: undefined,
-				page: 1,
-				pageSize: 50,
-				sort: undefined,
+				fullTextSearch: undefined,
 			});
 			expect(result).toEqual(mockPaginatedResponse);
 		});
@@ -274,14 +272,11 @@ describe("seriesApi", () => {
 				pageSize: 50,
 			});
 
-			expect(api.post).toHaveBeenCalledWith("/series/list", {
+			expect(api.post).toHaveBeenCalledWith("/series/list?page=1&pageSize=50", {
 				condition: {
 					libraryId: { operator: "is", value: "library-123" },
 				},
-				search: undefined,
-				page: 1,
-				pageSize: 50,
-				sort: undefined,
+				fullTextSearch: undefined,
 			});
 		});
 
@@ -300,17 +295,14 @@ describe("seriesApi", () => {
 				pageSize: 50,
 			});
 
-			expect(api.post).toHaveBeenCalledWith("/series/list", {
+			expect(api.post).toHaveBeenCalledWith("/series/list?page=1&pageSize=50", {
 				condition: {
 					allOf: [
 						{ libraryId: { operator: "is", value: "library-123" } },
 						genreCondition,
 					],
 				},
-				search: undefined,
-				page: 1,
-				pageSize: 50,
-				sort: undefined,
+				fullTextSearch: undefined,
 			});
 		});
 
@@ -326,13 +318,13 @@ describe("seriesApi", () => {
 				sort: "name,asc",
 			});
 
-			expect(api.post).toHaveBeenCalledWith("/series/list", {
-				condition: undefined,
-				search: "naruto",
-				page: 1,
-				pageSize: 10,
-				sort: "name,asc",
-			});
+			expect(api.post).toHaveBeenCalledWith(
+				"/series/list?page=1&pageSize=10&sort=name%2Casc",
+				{
+					condition: undefined,
+					fullTextSearch: "naruto",
+				},
+			);
 		});
 
 		it("should handle complex nested conditions", async () => {
@@ -358,12 +350,9 @@ describe("seriesApi", () => {
 				pageSize: 50,
 			});
 
-			expect(api.post).toHaveBeenCalledWith("/series/list", {
+			expect(api.post).toHaveBeenCalledWith("/series/list?page=1&pageSize=50", {
 				condition: complexCondition,
-				search: undefined,
-				page: 1,
-				pageSize: 50,
-				sort: undefined,
+				fullTextSearch: undefined,
 			});
 		});
 	});

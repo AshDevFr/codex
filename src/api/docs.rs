@@ -50,25 +50,22 @@ Note: The `{prefix}` path parameter in Komga endpoints is configurable at runtim
 
 List endpoints support pagination with the following conventions:
 
-### Query Parameters (GET requests)
+### Query Parameters
+
+All endpoints (GET and POST) use query parameters for pagination:
 
 | Parameter | Default | Max | Description |
 |-----------|---------|-----|-------------|
 | `page` | `1` | - | Page number (1-indexed) |
-| `page_size` | `50` | `500` | Items per page |
+| `pageSize` | `50` | `500` | Items per page |
 
-Example: `GET /api/v1/books?page=2&page_size=25`
+Example GET: `GET /api/v1/books?page=2&pageSize=25`
 
-### Request Body (POST requests)
+Example POST: `POST /api/v1/series/list?page=1&pageSize=25&sort=name,asc`
 
-POST endpoints like `/api/v1/books/list` accept pagination in camelCase:
-
-```json
-{
-  "page": 1,
-  "pageSize": 25
-}
-```
+For POST endpoints like `/api/v1/books/list` and `/api/v1/series/list`:
+- Pagination parameters (`page`, `pageSize`, `sort`) go in the **query string**
+- Filter criteria (`condition`, `fullTextSearch`) go in the **request body**
 
 ### Response Format
 
@@ -82,10 +79,10 @@ All paginated responses use camelCase and include HATEOAS navigation links:
   "total": 150,
   "totalPages": 6,
   "links": {
-    "self": "/api/v1/books?page=1&page_size=25",
-    "first": "/api/v1/books?page=1&page_size=25",
-    "next": "/api/v1/books?page=2&page_size=25",
-    "last": "/api/v1/books?page=6&page_size=25"
+    "self": "/api/v1/series/list?page=1&pageSize=25",
+    "first": "/api/v1/series/list?page=1&pageSize=25",
+    "next": "/api/v1/series/list?page=2&pageSize=25",
+    "last": "/api/v1/series/list?page=6&pageSize=25"
   }
 }
 ```"#,

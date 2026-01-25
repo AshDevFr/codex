@@ -1,6 +1,7 @@
 use super::super::dto::{
     common::{
-        PaginatedResponse, PaginationLinkBuilder, DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
+        ListPaginationParams, PaginatedResponse, PaginationLinkBuilder, DEFAULT_PAGE,
+        DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
     },
     series::{
         AddSeriesGenreRequest, AddSeriesTagRequest, AlphabeticalGroupDto, AlternateTitleDto,
@@ -569,9 +570,13 @@ pub async fn search_series(
 ///
 /// Supports complex filter conditions including nested AllOf/AnyOf logic,
 /// genre/tag filtering with include/exclude, and more.
+///
+/// Pagination parameters (page, page_size, sort) are passed as query parameters.
+/// Filter conditions are passed in the request body.
 #[utoipa::path(
     post,
     path = "/api/v1/series/list",
+    params(ListPaginationParams),
     request_body = SeriesListRequest,
     responses(
         (status = 200, description = "Paginated list of filtered series", body = SeriesListResponse),
@@ -586,6 +591,7 @@ pub async fn search_series(
 pub async fn list_series_filtered(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
+    Query(pagination): Query<ListPaginationParams>,
     Json(request): Json<SeriesListRequest>,
 ) -> Result<Response, ApiError> {
     use crate::services::FilterService;
@@ -593,13 +599,8 @@ pub async fn list_series_filtered(
 
     require_permission!(auth, Permission::SeriesRead)?;
 
-    // Validate and normalize pagination params (1-indexed)
-    let page = request.page.max(1);
-    let page_size = if request.page_size == 0 {
-        default_page_size()
-    } else {
-        request.page_size.min(MAX_PAGE_SIZE)
-    };
+    // Validate and normalize pagination params (1-indexed, from query params)
+    let (page, page_size) = pagination.validated();
 
     // Get all series IDs first (we'll filter from this)
     let all_series = SeriesRepository::list_all(&state.db)
@@ -654,8 +655,8 @@ pub async fn list_series_filtered(
         matching_ids.into_iter().collect()
     };
 
-    // Parse sort parameter (default to name,asc)
-    let sort = request
+    // Parse sort parameter from query params (default to name,asc)
+    let sort = pagination
         .sort
         .as_ref()
         .map(|s| SeriesSortParam::parse(s))
@@ -686,14 +687,17 @@ pub async fn list_series_filtered(
     .collect::<Result<Vec<_>, _>>()
     .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
-    // Build pagination links (POST endpoint doesn't include query params in links)
+    // Build pagination links with query params
     let total_pages = if page_size == 0 {
         0
     } else {
         total.div_ceil(page_size)
     };
-    let link_builder =
+    let mut link_builder =
         PaginationLinkBuilder::new("/api/v1/series/list", page, page_size, total_pages);
+    if let Some(ref sort_str) = pagination.sort {
+        link_builder = link_builder.with_param("sort", sort_str);
+    }
 
     let response = SeriesListResponse::with_builder(dtos, page, page_size, total, &link_builder);
 

@@ -80,6 +80,65 @@ impl PaginationParams {
 }
 
 // =============================================================================
+// List Pagination Parameters (for POST endpoints with query params)
+// =============================================================================
+
+/// Pagination query parameters for POST list endpoints
+///
+/// Used for endpoints like POST /series/list and POST /books/list where
+/// the filter criteria is in the body but pagination is in query params.
+/// This enables proper HATEOAS links.
+#[derive(Debug, Clone, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct ListPaginationParams {
+    /// Page number (1-indexed, minimum 1)
+    #[serde(default = "default_page")]
+    #[param(default = 1, minimum = 1)]
+    pub page: u64,
+
+    /// Number of items per page (max 500, default 50)
+    #[serde(default = "default_page_size")]
+    #[param(default = 50, minimum = 1, maximum = 500)]
+    pub page_size: u64,
+
+    /// Sort field and direction (e.g., "name,asc" or "createdAt,desc")
+    #[serde(default)]
+    pub sort: Option<String>,
+}
+
+impl Default for ListPaginationParams {
+    fn default() -> Self {
+        Self {
+            page: DEFAULT_PAGE,
+            page_size: DEFAULT_PAGE_SIZE,
+            sort: None,
+        }
+    }
+}
+
+impl ListPaginationParams {
+    /// Validate and normalize pagination parameters
+    /// - If page is 0, treats it as page 1 (backward compatibility)
+    /// - Clamps page_size to MAX_PAGE_SIZE
+    pub fn validated(&self) -> (u64, u64) {
+        let page = if self.page == 0 { 1 } else { self.page };
+        let page_size = if self.page_size == 0 {
+            DEFAULT_PAGE_SIZE
+        } else {
+            self.page_size.min(MAX_PAGE_SIZE)
+        };
+        (page, page_size)
+    }
+
+    /// Calculate offset for database queries (converts 1-indexed page to 0-indexed offset)
+    #[allow(dead_code)]
+    pub fn offset(&self) -> u64 {
+        let (page, page_size) = self.validated();
+        (page - 1) * page_size
+    }
+}
+
+// =============================================================================
 // HATEOAS Pagination Links
 // =============================================================================
 

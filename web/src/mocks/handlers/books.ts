@@ -582,19 +582,24 @@ export const bookHandlers = [
 	}),
 
 	// POST /books/list - Advanced filtering with condition tree (1-indexed)
+	// Pagination params come from query string, filter criteria from body
 	http.post("/api/v1/books/list", async ({ request }) => {
 		await delay(200);
+		const url = new URL(request.url);
+		const page = Math.max(
+			1,
+			Number.parseInt(url.searchParams.get("page") || "1", 10),
+		);
+		const pageSize = Number.parseInt(
+			url.searchParams.get("pageSize") || "50",
+			10,
+		);
+
 		const body = (await request.json()) as {
 			condition?: unknown;
 			fullTextSearch?: string;
 			search?: string;
-			page?: number;
-			pageSize?: number;
-			sort?: string;
 		};
-
-		const page = Math.max(1, body.page ?? 1);
-		const pageSize = body.pageSize ?? 50;
 
 		let results = [...mockBooks];
 

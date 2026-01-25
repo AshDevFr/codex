@@ -212,7 +212,7 @@ export const booksApi = {
 	 * - Nested AllOf/AnyOf conditions
 	 * - Include/exclude filtering for genres, tags, read status, etc.
 	 * - Full-text search (optional)
-	 * - Pagination and sorting
+	 * - Pagination and sorting (via query params)
 	 * - Include deleted books (optional)
 	 *
 	 * @param libraryId - Library to filter by, or "all" for all libraries
@@ -220,7 +220,14 @@ export const booksApi = {
 	 */
 	search: async (
 		libraryId: string,
-		request: Omit<BookListRequest, "condition"> & { condition?: BookCondition },
+		request: {
+			condition?: BookCondition;
+			search?: string;
+			page?: number;
+			pageSize?: number;
+			sort?: string;
+			includeDeleted?: boolean;
+		},
 	): Promise<PaginatedResponse<Book>> => {
 		// Build the full condition including library filter
 		let finalCondition: BookCondition | undefined = request.condition;
@@ -241,19 +248,24 @@ export const booksApi = {
 			}
 		}
 
+		// Build query params for pagination (moved from body)
+		const params = new URLSearchParams();
+		if (request.page !== undefined) params.set("page", String(request.page));
+		if (request.pageSize !== undefined)
+			params.set("pageSize", String(request.pageSize));
+		if (request.sort) params.set("sort", request.sort);
+
+		// Body only contains filter condition, search, and includeDeleted
 		const body: BookListRequest = {
 			condition: finalCondition,
-			search: request.search,
-			page: request.page,
-			pageSize: request.pageSize,
-			sort: request.sort,
+			fullTextSearch: request.search,
 			includeDeleted: request.includeDeleted,
 		};
 
-		const response = await api.post<PaginatedResponse<Book>>(
-			"/books/list",
-			body,
-		);
+		const queryString = params.toString();
+		const url = queryString ? `/books/list?${queryString}` : "/books/list";
+
+		const response = await api.post<PaginatedResponse<Book>>(url, body);
 		return response.data;
 	},
 

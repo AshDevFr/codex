@@ -75,9 +75,8 @@ describe("searchApi", () => {
 
 			const result = await searchApi.searchBooks("batman");
 
-			expect(api.post).toHaveBeenCalledWith("/books/list", {
+			expect(api.post).toHaveBeenCalledWith("/books/list?page=1&pageSize=10", {
 				fullTextSearch: "batman",
-				pageSize: 10,
 			});
 			expect(result).toEqual(mockBooks);
 		});
@@ -89,12 +88,11 @@ describe("searchApi", () => {
 
 			await searchApi.searchBooks("batman", "library-123");
 
-			expect(api.post).toHaveBeenCalledWith("/books/list", {
+			expect(api.post).toHaveBeenCalledWith("/books/list?page=1&pageSize=10", {
 				fullTextSearch: "batman",
 				condition: {
 					libraryId: { operator: "is", value: "library-123" },
 				},
-				pageSize: 10,
 			});
 		});
 
@@ -105,9 +103,8 @@ describe("searchApi", () => {
 
 			await searchApi.searchBooks("batman", "all");
 
-			expect(api.post).toHaveBeenCalledWith("/books/list", {
+			expect(api.post).toHaveBeenCalledWith("/books/list?page=1&pageSize=10", {
 				fullTextSearch: "batman",
-				pageSize: 10,
 			});
 		});
 
@@ -118,9 +115,8 @@ describe("searchApi", () => {
 
 			await searchApi.searchBooks("batman", undefined, 20);
 
-			expect(api.post).toHaveBeenCalledWith("/books/list", {
+			expect(api.post).toHaveBeenCalledWith("/books/list?page=1&pageSize=20", {
 				fullTextSearch: "batman",
-				pageSize: 20,
 			});
 		});
 	});
@@ -206,13 +202,16 @@ describe("searchApi", () => {
 			});
 
 			// Check books search
-			expect(api.post).toHaveBeenNthCalledWith(2, "/books/list", {
-				fullTextSearch: "batman",
-				condition: {
-					libraryId: { operator: "is", value: "library-123" },
+			expect(api.post).toHaveBeenNthCalledWith(
+				2,
+				"/books/list?page=1&pageSize=10",
+				{
+					fullTextSearch: "batman",
+					condition: {
+						libraryId: { operator: "is", value: "library-123" },
+					},
 				},
-				pageSize: 10,
-			});
+			);
 		});
 	});
 });

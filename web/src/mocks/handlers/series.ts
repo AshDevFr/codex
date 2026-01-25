@@ -242,18 +242,24 @@ export const seriesHandlers = [
 	}),
 
 	// POST /series/list - Advanced filtering with condition tree (1-indexed)
+	// Pagination params come from query string, filter criteria from body
 	http.post("/api/v1/series/list", async ({ request }) => {
 		await delay(200);
+		const url = new URL(request.url);
+		const page = Math.max(
+			1,
+			Number.parseInt(url.searchParams.get("page") || "1", 10),
+		);
+		const pageSize = Number.parseInt(
+			url.searchParams.get("pageSize") || "50",
+			10,
+		);
+		const sort = url.searchParams.get("sort");
+
 		const body = (await request.json()) as {
 			condition?: unknown;
-			search?: string;
-			page?: number;
-			pageSize?: number;
-			sort?: string;
+			fullTextSearch?: string;
 		};
-
-		const page = Math.max(1, body.page ?? 1);
-		const pageSize = body.pageSize ?? 50;
 
 		// For mock purposes, we'll do basic filtering
 		// In a real implementation, the backend evaluates the full condition tree
@@ -290,17 +296,17 @@ export const seriesHandlers = [
 			}
 		}
 
-		// Apply text search
-		if (body.search) {
-			const searchLower = body.search.toLowerCase();
+		// Apply full-text search
+		if (body.fullTextSearch) {
+			const searchLower = body.fullTextSearch.toLowerCase();
 			results = results.filter((s) =>
 				s.title.toLowerCase().includes(searchLower),
 			);
 		}
 
-		// Apply sorting
-		if (body.sort) {
-			const [field, direction] = body.sort.split(",");
+		// Apply sorting (from query params)
+		if (sort) {
+			const [field, direction] = sort.split(",");
 			results.sort((a, b) => {
 				const aVal = (a as Record<string, unknown>)[field];
 				const bVal = (b as Record<string, unknown>)[field];

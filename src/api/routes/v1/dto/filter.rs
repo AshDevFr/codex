@@ -2,8 +2,6 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::common::{DEFAULT_PAGE, DEFAULT_PAGE_SIZE};
-
 /// Operators for string and equality comparisons
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(tag = "operator", rename_all = "camelCase")]
@@ -144,7 +142,10 @@ pub enum BookCondition {
 }
 
 /// Request body for POST /series/list
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+///
+/// Pagination parameters (page, page_size, sort) are passed as query parameters,
+/// not in the request body. This enables proper HATEOAS links.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SeriesListRequest {
     /// Filter condition (optional - no condition returns all)
@@ -155,26 +156,13 @@ pub struct SeriesListRequest {
     /// Full-text search query (case-insensitive search on series name)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub full_text_search: Option<String>,
-
-    /// Page number (1-indexed, default 1)
-    #[serde(default = "default_page")]
-    pub page: u64,
-
-    /// Items per page (default 50, max 100)
-    #[serde(default = "default_page_size")]
-    pub page_size: u64,
-
-    /// Sort field and direction (e.g., "name,asc" or "createdAt,desc")
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sort: Option<String>,
-
-    /// Cursor for cursor-based pagination (alternative to page-based)
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<String>,
 }
 
 /// Request body for POST /books/list
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+///
+/// Pagination parameters (page, page_size, sort) are passed as query parameters,
+/// not in the request body. This enables proper HATEOAS links.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BookListRequest {
     /// Filter condition (optional - no condition returns all)
@@ -186,60 +174,9 @@ pub struct BookListRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub full_text_search: Option<String>,
 
-    /// Page number (1-indexed, default 1)
-    #[serde(default = "default_page")]
-    pub page: u64,
-
-    /// Items per page (default 50, max 100)
-    #[serde(default = "default_page_size")]
-    pub page_size: u64,
-
-    /// Sort field and direction (e.g., "title,asc" or "createdAt,desc")
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sort: Option<String>,
-
-    /// Cursor for cursor-based pagination (alternative to page-based)
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<String>,
-
     /// Include soft-deleted books in results (default: false)
     #[serde(default)]
     pub include_deleted: bool,
-}
-
-fn default_page_size() -> u64 {
-    DEFAULT_PAGE_SIZE
-}
-
-fn default_page() -> u64 {
-    DEFAULT_PAGE
-}
-
-impl Default for SeriesListRequest {
-    fn default() -> Self {
-        Self {
-            condition: None,
-            full_text_search: None,
-            page: DEFAULT_PAGE,
-            page_size: DEFAULT_PAGE_SIZE,
-            sort: None,
-            cursor: None,
-        }
-    }
-}
-
-impl Default for BookListRequest {
-    fn default() -> Self {
-        Self {
-            condition: None,
-            full_text_search: None,
-            page: DEFAULT_PAGE,
-            page_size: DEFAULT_PAGE_SIZE,
-            sort: None,
-            cursor: None,
-            include_deleted: false,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -417,18 +354,16 @@ mod tests {
                     value: "Action".to_string(),
                 },
             }),
-            full_text_search: None,
-            page: 1,
-            page_size: 50,
-            sort: Some("name,asc".to_string()),
-            cursor: None,
+            full_text_search: Some("test".to_string()),
         };
 
         let json = serde_json::to_string(&request).unwrap();
         assert!(json.contains(r#""condition""#));
-        assert!(json.contains(r#""page":1"#));
-        assert!(json.contains(r#""pageSize":50"#));
-        assert!(json.contains(r#""sort":"name,asc""#));
+        assert!(json.contains(r#""fullTextSearch":"test""#));
+        // Pagination fields should NOT be in the body (they're query params now)
+        assert!(!json.contains(r#""page""#));
+        assert!(!json.contains(r#""pageSize""#));
+        assert!(!json.contains(r#""sort""#));
     }
 
     #[test]
@@ -439,47 +374,23 @@ mod tests {
         // Empty optional fields should be omitted
         assert!(!json.contains(r#""condition""#));
         assert!(!json.contains(r#""fullTextSearch""#));
-        assert!(!json.contains(r#""sort""#));
-        assert!(!json.contains(r#""cursor""#));
+        // Body should be empty JSON object
+        assert_eq!(json, "{}");
     }
 
     #[test]
     fn test_series_list_request_defaults() {
         let request = SeriesListRequest::default();
-        assert_eq!(request.page, 1, "Default page should be 1 (1-indexed)");
-        assert_eq!(request.page_size, 50, "Default page_size should be 50");
-        assert!(request.cursor.is_none());
+        assert!(request.condition.is_none());
+        assert!(request.full_text_search.is_none());
     }
 
     #[test]
     fn test_book_list_request_defaults() {
         let request = BookListRequest::default();
-        assert_eq!(request.page, 1, "Default page should be 1 (1-indexed)");
-        assert_eq!(request.page_size, 50, "Default page_size should be 50");
-        assert!(request.cursor.is_none());
+        assert!(request.condition.is_none());
+        assert!(request.full_text_search.is_none());
         assert!(!request.include_deleted);
-    }
-
-    #[test]
-    fn test_series_list_request_with_cursor() {
-        let request = SeriesListRequest {
-            cursor: Some("eyJpZCI6ICIxMjMifQ==".to_string()),
-            ..Default::default()
-        };
-
-        let json = serde_json::to_string(&request).unwrap();
-        assert!(json.contains(r#""cursor":"eyJpZCI6ICIxMjMifQ==""#));
-    }
-
-    #[test]
-    fn test_book_list_request_with_cursor() {
-        let request = BookListRequest {
-            cursor: Some("eyJpZCI6ICIxMjMifQ==".to_string()),
-            ..Default::default()
-        };
-
-        let json = serde_json::to_string(&request).unwrap();
-        assert!(json.contains(r#""cursor":"eyJpZCI6ICIxMjMifQ==""#));
     }
 
     #[test]
@@ -487,9 +398,8 @@ mod tests {
         // Test that deserialization uses correct defaults
         let json = r#"{}"#;
         let request: SeriesListRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(request.page, 1);
-        assert_eq!(request.page_size, 50);
-        assert!(request.cursor.is_none());
+        assert!(request.condition.is_none());
+        assert!(request.full_text_search.is_none());
     }
 
     #[test]
@@ -497,10 +407,20 @@ mod tests {
         // Test that deserialization uses correct defaults
         let json = r#"{}"#;
         let request: BookListRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(request.page, 1);
-        assert_eq!(request.page_size, 50);
-        assert!(request.cursor.is_none());
+        assert!(request.condition.is_none());
+        assert!(request.full_text_search.is_none());
         assert!(!request.include_deleted);
+    }
+
+    #[test]
+    fn test_book_list_request_with_include_deleted() {
+        let request = BookListRequest {
+            include_deleted: true,
+            ..Default::default()
+        };
+
+        let json = serde_json::to_string(&request).unwrap();
+        assert!(json.contains(r#""includeDeleted":true"#));
     }
 
     #[test]
