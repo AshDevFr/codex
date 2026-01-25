@@ -78,19 +78,12 @@ impl ScanningStrategyImpl for PublisherHierarchyStrategy {
                 s
             });
 
-            // Set series path if not already set (relative to library, after skipped levels)
+            // Set series path if not already set (use parent folder's relative path)
             if series.path.is_none() && series_name != "Unsorted" {
-                let relative = file_path.strip_prefix(library_path).unwrap_or(file_path);
-                let components: Vec<_> = relative.components().collect();
-                let skip = self.config.skip_depth as usize;
-
-                if components.len() > skip {
-                    let path_components: Vec<String> = components
-                        .iter()
-                        .take(skip + 1)
-                        .map(|c| c.as_os_str().to_string_lossy().to_string())
-                        .collect();
-                    series.path = Some(path_components.join("/"));
+                if let Some(parent) = file_path.parent() {
+                    if let Ok(rel_parent) = parent.strip_prefix(library_path) {
+                        series.path = Some(rel_parent.to_string_lossy().to_string());
+                    }
                 }
             }
 
@@ -101,22 +94,32 @@ impl ScanningStrategyImpl for PublisherHierarchyStrategy {
     }
 
     fn extract_series_name(&self, file_path: &Path, library_path: &Path) -> String {
-        let relative = file_path.strip_prefix(library_path).unwrap_or(file_path);
-        let components: Vec<_> = relative.components().collect();
+        // Use immediate parent folder as series name
+        if let Some(parent) = file_path.parent() {
+            // Check if parent is the library root
+            if parent == library_path {
+                return "Unsorted".to_string();
+            }
 
-        let skip = self.config.skip_depth as usize;
+            // Check if file is at a level that should be skipped
+            // (i.e., file is directly in one of the skipped levels)
+            let relative = file_path.strip_prefix(library_path).unwrap_or(file_path);
+            let depth = relative.components().count();
+            let skip = self.config.skip_depth as usize;
 
-        // After skipping N levels, the next folder is the series
-        if components.len() > skip + 1 {
-            // File is in a series folder (after skipped levels)
-            components[skip].as_os_str().to_string_lossy().to_string()
-        } else if components.len() == skip + 1 {
-            // File is directly in a skipped folder (no series subfolder)
-            "Unsorted".to_string()
-        } else {
-            // File is at a level above what we expect
-            "Unsorted".to_string()
+            // If file is at or below skip depth + 1 (for the file itself),
+            // it means there's no series folder
+            if depth <= skip + 1 {
+                return "Unsorted".to_string();
+            }
+
+            // Use the folder name (not the full path) as series name
+            if let Some(folder_name) = parent.file_name() {
+                return folder_name.to_string_lossy().to_string();
+            }
         }
+
+        "Unsorted".to_string()
     }
 }
 

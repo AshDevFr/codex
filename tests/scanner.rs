@@ -8,6 +8,7 @@ mod scanner {
     mod book_naming_strategy;
     mod core;
     mod force_analysis;
+    mod series_matching;
     mod soft_delete;
     mod task_queue_integration;
 }

@@ -1,8 +1,8 @@
 //! Series-Volume scanning strategy
 //!
-//! This is the default strategy, compatible with Komga behavior:
-//! - Direct child folders of library = series
-//! - Files in those folders = books in that series
+//! This is the default strategy:
+//! - Immediate parent folder of each file = series
+//! - Files in the same folder = books in that series
 //! - Files directly in library root = "Unsorted" series
 
 use anyhow::Result;
@@ -16,7 +16,7 @@ use super::ScanningStrategyImpl;
 
 /// Series-Volume strategy implementation
 ///
-/// Direct child folders of library = series (Komga-compatible default)
+/// Immediate parent folder = series (file's containing folder)
 pub struct SeriesVolumeStrategy;
 
 impl SeriesVolumeStrategy {
@@ -46,13 +46,19 @@ impl ScanningStrategyImpl for SeriesVolumeStrategy {
         for file_path in files {
             let series_name = self.extract_series_name(file_path, library_path);
 
+            // Get the relative path to the series folder (parent of the file)
+            let series_path = file_path
+                .parent()
+                .and_then(|p| p.strip_prefix(library_path).ok())
+                .map(|p| p.to_string_lossy().to_string());
+
             let series = series_map
                 .entry(series_name.clone())
                 .or_insert_with(|| DetectedSeries::new(&series_name));
 
             // Set series path if not already set
             if series.path.is_none() && series_name != "Unsorted" {
-                series.path = Some(series_name.clone());
+                series.path = series_path;
             }
 
             series.add_book(DetectedBook::new(file_path.clone()));
@@ -62,19 +68,20 @@ impl ScanningStrategyImpl for SeriesVolumeStrategy {
     }
 
     fn extract_series_name(&self, file_path: &Path, library_path: &Path) -> String {
-        // Get relative path from library root
-        let relative = file_path.strip_prefix(library_path).unwrap_or(file_path);
+        // Get the immediate parent folder (containing folder) as the series name
+        if let Some(parent) = file_path.parent() {
+            // Check if parent is the library root
+            if parent == library_path {
+                return "Unsorted".to_string();
+            }
 
-        // Get first component (direct child folder)
-        let components: Vec<_> = relative.components().collect();
-
-        if components.len() > 1 {
-            // Use first folder as series name
-            components[0].as_os_str().to_string_lossy().to_string()
-        } else {
-            // File is directly in library root
-            "Unsorted".to_string()
+            // Use the folder name (not the full path) as series name
+            if let Some(folder_name) = parent.file_name() {
+                return folder_name.to_string_lossy().to_string();
+            }
         }
+
+        "Unsorted".to_string()
     }
 }
 
@@ -100,9 +107,22 @@ mod tests {
         let library = Path::new("/library");
         let strategy = strategy();
 
-        // Nested folders should still use the first level as series
+        // Nested folders should use the immediate parent folder as series
         let path = PathBuf::from("/library/Batman/Year One/issue1.cbz");
-        assert_eq!(strategy.extract_series_name(&path, library), "Batman");
+        assert_eq!(strategy.extract_series_name(&path, library), "Year One");
+    }
+
+    #[test]
+    fn test_extract_series_name_deeply_nested() {
+        let library = Path::new("/library");
+        let strategy = strategy();
+
+        // Deeply nested: immediate parent folder is the series
+        let path = PathBuf::from("/library/_to_filter/Say Hello to Black Jack/book.cbz");
+        assert_eq!(
+            strategy.extract_series_name(&path, library),
+            "Say Hello to Black Jack"
+        );
     }
 
     #[test]
@@ -140,6 +160,28 @@ mod tests {
     }
 
     #[test]
+    fn test_organize_files_nested_creates_separate_series() {
+        let library = Path::new("/library");
+        let strategy = strategy();
+
+        // Files in different immediate parent folders = different series
+        let files = vec![
+            PathBuf::from("/library/Say Hello to Black Jack/book.cbz"),
+            PathBuf::from("/library/_to_filter/Say Hello to Black Jack Filter/book.cbz"),
+        ];
+
+        let result = strategy.organize_files(&files, library).unwrap();
+
+        // Should create 2 separate series based on immediate parent folder
+        assert_eq!(result.len(), 2);
+        assert!(result.contains_key("Say Hello to Black Jack"));
+        assert!(result.contains_key("Say Hello to Black Jack Filter"));
+
+        assert_eq!(result["Say Hello to Black Jack"].books.len(), 1);
+        assert_eq!(result["Say Hello to Black Jack Filter"].books.len(), 1);
+    }
+
+    #[test]
     fn test_organize_files_preserves_series_path() {
         let library = Path::new("/library");
         let strategy = strategy();
@@ -153,6 +195,24 @@ mod tests {
 
         assert_eq!(result["My Comics"].path, Some("My Comics".to_string()));
         assert_eq!(result["Unsorted"].path, None);
+    }
+
+    #[test]
+    fn test_organize_files_nested_preserves_full_path() {
+        let library = Path::new("/library");
+        let strategy = strategy();
+
+        let files = vec![PathBuf::from(
+            "/library/_to_filter/Say Hello to Black Jack/book.cbz",
+        )];
+
+        let result = strategy.organize_files(&files, library).unwrap();
+
+        // Series path should be the full relative path to the series folder
+        assert_eq!(
+            result["Say Hello to Black Jack"].path,
+            Some("_to_filter/Say Hello to Black Jack".to_string())
+        );
     }
 
     #[test]

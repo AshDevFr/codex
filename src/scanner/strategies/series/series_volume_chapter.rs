@@ -1,9 +1,9 @@
 //! Series-Volume-Chapter scanning strategy
 //!
 //! For chapter-based manga and web comics:
-//! - Level 1 folders = series
-//! - Level 2 folders = volumes/arcs (organizational containers)
-//! - All files at any depth under series folder = books in that series
+//! - Immediate parent folder = series (chapter folder)
+//! - Second-to-last folder = volume/arc (if present)
+//! - Files in the same folder = books in that series
 
 use anyhow::Result;
 use regex::Regex;
@@ -17,8 +17,7 @@ use super::ScanningStrategyImpl;
 
 /// Series-Volume-Chapter strategy implementation
 ///
-/// Parent folder = series, child folders = volumes/arcs
-/// All files at any depth under series folder = books in that series
+/// Immediate parent folder = series, second-to-last = volume/arc
 pub struct SeriesVolumeChapterStrategy {
     /// Pattern to extract volume number from folder name
     volume_pattern: Regex,
@@ -83,27 +82,37 @@ impl ScanningStrategyImpl for SeriesVolumeChapterStrategy {
         for file_path in files {
             let series_name = self.extract_series_name(file_path, library_path);
 
+            // Get the relative path to the series folder (parent of the file)
+            let series_path = file_path
+                .parent()
+                .and_then(|p| p.strip_prefix(library_path).ok())
+                .map(|p| p.to_string_lossy().to_string());
+
             let series = series_map
                 .entry(series_name.clone())
                 .or_insert_with(|| DetectedSeries::new(&series_name));
 
             // Set series path if not already set
             if series.path.is_none() && series_name != "Unsorted" {
-                series.path = Some(series_name.clone());
+                series.path = series_path;
             }
-
-            // Extract volume and chapter info
-            let relative = file_path.strip_prefix(library_path).unwrap_or(file_path);
-            let components: Vec<_> = relative.components().collect();
 
             let mut book = DetectedBook::new(file_path.clone());
 
-            // If there's a volume folder (depth >= 2), extract volume info
-            if components.len() > 2 {
-                // Second component is the volume folder
-                let volume_folder = components[1].as_os_str().to_string_lossy();
-                book.volume = self.extract_volume(&volume_folder);
-                book.relative_path = Some(volume_folder.to_string());
+            // Extract volume info from the second-to-last folder (grandparent of file)
+            // e.g., /library/part1/part2/volume_folder/series_folder/file.cbz
+            // -> volume_folder is grandparent, series_folder is parent
+            if let Some(parent) = file_path.parent() {
+                if let Some(grandparent) = parent.parent() {
+                    // Only extract volume if grandparent is not the library root
+                    if grandparent != library_path {
+                        if let Some(volume_folder_name) = grandparent.file_name() {
+                            let volume_str = volume_folder_name.to_string_lossy();
+                            book.volume = self.extract_volume(&volume_str);
+                            book.relative_path = Some(volume_str.to_string());
+                        }
+                    }
+                }
             }
 
             // Extract chapter number from filename
@@ -118,25 +127,20 @@ impl ScanningStrategyImpl for SeriesVolumeChapterStrategy {
     }
 
     fn extract_series_name(&self, file_path: &Path, library_path: &Path) -> String {
-        // Get relative path from library root
-        let relative = file_path.strip_prefix(library_path).unwrap_or(file_path);
-
-        // Get first component (series folder)
-        let components: Vec<_> = relative.components().collect();
-
-        if !components.is_empty() {
-            // First folder is always the series
-            let first = components[0].as_os_str().to_string_lossy().to_string();
-            // If file is directly in first folder or deeper, use first folder as series
-            if components.len() > 1 {
-                first
-            } else {
-                // File is directly in library root
-                "Unsorted".to_string()
+        // Get the immediate parent folder (containing folder) as the series name
+        if let Some(parent) = file_path.parent() {
+            // Check if parent is the library root
+            if parent == library_path {
+                return "Unsorted".to_string();
             }
-        } else {
-            "Unsorted".to_string()
+
+            // Use the folder name (not the full path) as series name
+            if let Some(folder_name) = parent.file_name() {
+                return folder_name.to_string_lossy().to_string();
+            }
         }
+
+        "Unsorted".to_string()
     }
 }
 
@@ -149,13 +153,14 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_series_name_from_volume_folder() {
+    fn test_extract_series_name_from_chapter_folder() {
         let library = Path::new("/library");
         let strategy = strategy();
 
-        // File in Volume subfolder should still use parent as series
-        let path = PathBuf::from("/library/One Piece/Volume 01/Chapter 001.cbz");
-        assert_eq!(strategy.extract_series_name(&path, library), "One Piece");
+        // Immediate parent folder is the series name
+        // /library/Volume 01/Chapter 001/file.cbz -> series = "Chapter 001"
+        let path = PathBuf::from("/library/Volume 01/Chapter 001/file.cbz");
+        assert_eq!(strategy.extract_series_name(&path, library), "Chapter 001");
     }
 
     #[test]
@@ -163,17 +168,17 @@ mod tests {
         let library = Path::new("/library");
         let strategy = strategy();
 
-        // Deeply nested files still use first folder as series
-        let path = PathBuf::from("/library/One Piece/Volume 01/Extras/Cover.cbz");
-        assert_eq!(strategy.extract_series_name(&path, library), "One Piece");
+        // Deeply nested: immediate parent folder is the series
+        let path = PathBuf::from("/library/Manga/One Piece/Volume 01/Extras/file.cbz");
+        assert_eq!(strategy.extract_series_name(&path, library), "Extras");
     }
 
     #[test]
-    fn test_extract_series_name_direct_in_series() {
+    fn test_extract_series_name_direct_in_folder() {
         let library = Path::new("/library");
         let strategy = strategy();
 
-        // File directly in series folder (no volume subfolder)
+        // File directly in a folder (one level deep)
         let path = PathBuf::from("/library/One Piece/Chapter 001.cbz");
         assert_eq!(strategy.extract_series_name(&path, library), "One Piece");
     }
@@ -227,49 +232,76 @@ mod tests {
         let library = Path::new("/library");
         let strategy = strategy();
 
+        // Structure: /library/Volume XX/Chapter YY/file.cbz
+        // - Immediate parent (Chapter YY) = series
+        // - Grandparent (Volume XX) = volume
         let files = vec![
-            PathBuf::from("/library/One Piece/Volume 01/Chapter 001.cbz"),
-            PathBuf::from("/library/One Piece/Volume 01/Chapter 002.cbz"),
-            PathBuf::from("/library/One Piece/Volume 02/Chapter 010.cbz"),
-            PathBuf::from("/library/Naruto/Volume 01/Chapter 001.cbz"),
+            PathBuf::from("/library/Volume 01/Chapter 001/file.cbz"),
+            PathBuf::from("/library/Volume 01/Chapter 002/file.cbz"),
+            PathBuf::from("/library/Volume 02/Chapter 010/file.cbz"),
         ];
 
         let result = strategy.organize_files(&files, library).unwrap();
 
-        assert_eq!(result.len(), 2);
-        assert!(result.contains_key("One Piece"));
-        assert!(result.contains_key("Naruto"));
+        // Each chapter folder is a separate series
+        assert_eq!(result.len(), 3);
+        assert!(result.contains_key("Chapter 001"));
+        assert!(result.contains_key("Chapter 002"));
+        assert!(result.contains_key("Chapter 010"));
 
-        let one_piece = &result["One Piece"];
-        assert_eq!(one_piece.books.len(), 3);
-        assert_eq!(one_piece.books[0].volume, Some("Vol. 01".to_string()));
-        assert_eq!(one_piece.books[0].number, Some(1.0));
-        assert_eq!(one_piece.books[2].volume, Some("Vol. 02".to_string()));
-        assert_eq!(one_piece.books[2].number, Some(10.0));
+        // Each series should have volume info from grandparent
+        assert_eq!(
+            result["Chapter 001"].books[0].volume,
+            Some("Vol. 01".to_string())
+        );
+        assert_eq!(
+            result["Chapter 010"].books[0].volume,
+            Some("Vol. 02".to_string())
+        );
     }
 
     #[test]
-    fn test_organize_files_mixed_structure() {
+    fn test_organize_files_preserves_full_series_path() {
         let library = Path::new("/library");
         let strategy = strategy();
 
-        let files = vec![
-            // With volume folder
-            PathBuf::from("/library/One Piece/Volume 01/Chapter 001.cbz"),
-            // Without volume folder (directly in series)
-            PathBuf::from("/library/One Piece/Oneshot.cbz"),
-        ];
+        let files = vec![PathBuf::from(
+            "/library/Manga/One Piece/Volume 01/Chapter 001/file.cbz",
+        )];
+
+        let result = strategy.organize_files(&files, library).unwrap();
+
+        // Series name is immediate parent
+        assert!(result.contains_key("Chapter 001"));
+        // Series path should be the full relative path to the series folder
+        assert_eq!(
+            result["Chapter 001"].path,
+            Some("Manga/One Piece/Volume 01/Chapter 001".to_string())
+        );
+        // Volume should be extracted from grandparent
+        assert_eq!(
+            result["Chapter 001"].books[0].volume,
+            Some("Vol. 01".to_string())
+        );
+    }
+
+    #[test]
+    fn test_organize_files_no_volume_when_shallow() {
+        let library = Path::new("/library");
+        let strategy = strategy();
+
+        // File directly in a folder (only one level deep)
+        // No grandparent above library root, so no volume
+        let files = vec![PathBuf::from("/library/One Piece/Oneshot.cbz")];
 
         let result = strategy.organize_files(&files, library).unwrap();
 
         assert_eq!(result.len(), 1);
         let one_piece = &result["One Piece"];
-        assert_eq!(one_piece.books.len(), 2);
+        assert_eq!(one_piece.books.len(), 1);
 
-        // First book has volume info
-        assert!(one_piece.books[0].volume.is_some());
-        // Second book doesn't have volume info (directly in series folder)
-        assert!(one_piece.books[1].volume.is_none());
+        // No volume info (grandparent is library root)
+        assert!(one_piece.books[0].volume.is_none());
     }
 
     #[test]

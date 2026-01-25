@@ -62,6 +62,7 @@ urlencoding = "2.1"
 # File system utilities
 walkdir = "2.5"
 dirs = "5.0"
+globset = "0.4"
 
 # Date/time
 chrono = { version = "0.4", features = ["serde"] }

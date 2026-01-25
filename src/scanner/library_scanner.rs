@@ -1,6 +1,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use futures::future::join_all;
+use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use sea_orm::DatabaseConnection;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -39,6 +40,84 @@ fn parse_allowed_formats(library: &crate::db::entities::libraries::Model) -> Opt
                     .collect::<Vec<String>>()
             })
     })
+}
+
+/// Parse excluded_patterns from library into a GlobSet for efficient matching
+///
+/// Patterns are newline-separated and matched case-insensitively.
+/// For simple patterns (no path separators), we also add a `**/pattern` variant
+/// to match at any directory depth.
+///
+/// # Examples
+/// - `.DS_Store` → matches any `.DS_Store` file at any depth
+/// - `_to_filter` → matches any directory/file named `_to_filter` at any depth
+/// - `*.tmp` → matches any `.tmp` file at any depth
+/// - `subdir/*` → matches everything inside `subdir/` relative to library root
+fn parse_excluded_patterns(library: &crate::db::entities::libraries::Model) -> Option<GlobSet> {
+    library.excluded_patterns.as_ref().and_then(|patterns| {
+        let mut builder = GlobSetBuilder::new();
+        let mut pattern_count = 0;
+
+        for line in patterns.lines() {
+            let pattern = line.trim();
+            if pattern.is_empty() {
+                continue;
+            }
+
+            // Add the exact pattern (case-insensitive)
+            if let Ok(glob) = GlobBuilder::new(pattern).case_insensitive(true).build() {
+                builder.add(glob);
+                pattern_count += 1;
+            }
+
+            // For patterns without path separators, also add **/{pattern}
+            // to match at any depth in the directory tree
+            if !pattern.contains('/') && !pattern.starts_with("**") {
+                let deep_pattern = format!("**/{}", pattern);
+                if let Ok(glob) = GlobBuilder::new(&deep_pattern)
+                    .case_insensitive(true)
+                    .build()
+                {
+                    builder.add(glob);
+                }
+            }
+        }
+
+        if pattern_count == 0 {
+            return None;
+        }
+
+        match builder.build() {
+            Ok(globset) => Some(globset),
+            Err(e) => {
+                warn!("Failed to build exclusion GlobSet: {}", e);
+                None
+            }
+        }
+    })
+}
+
+/// Check if a path should be excluded based on exclusion patterns
+///
+/// Matches both the filename and the relative path from the library root.
+/// This ensures patterns like `.DS_Store` match anywhere, while patterns
+/// like `subdir/*` only match relative paths.
+fn should_exclude(path: &Path, library_path: &Path, excluded: &GlobSet) -> bool {
+    // Check filename (for patterns like `.DS_Store`, `Thumbs.db`)
+    if let Some(name) = path.file_name() {
+        if excluded.is_match(name) {
+            return true;
+        }
+    }
+
+    // Check relative path from library root (for patterns like `subdir/*`)
+    if let Ok(relative) = path.strip_prefix(library_path) {
+        if excluded.is_match(relative) {
+            return true;
+        }
+    }
+
+    false
 }
 
 /// Result from processing a single series
@@ -441,16 +520,31 @@ async fn scan_batched(
         );
     }
 
+    // Parse excluded patterns
+    let excluded_patterns = parse_excluded_patterns(library);
+    if let Some(ref patterns) = excluded_patterns {
+        info!(
+            "Library '{}' has {} exclusion patterns configured",
+            library.name,
+            patterns.len()
+        );
+    }
+
     // Discover all files in library (blocking I/O operation)
     let discover_start = Instant::now();
     let library_path = library.path.clone();
     let allowed_extensions_clone = allowed_extensions.clone();
+    let excluded_patterns_clone = excluded_patterns.clone();
     info!(
         "Starting file discovery for {} scan in library path: {}",
         mode, library_path
     );
     let discovered_files = tokio::task::spawn_blocking(move || {
-        discover_files(&library_path, allowed_extensions_clone.as_deref())
+        discover_files(
+            &library_path,
+            allowed_extensions_clone.as_deref(),
+            excluded_patterns_clone.as_ref(),
+        )
     })
     .await
     .map_err(|e| anyhow::anyhow!("Failed to spawn file discovery task: {}", e))??;
@@ -500,6 +594,12 @@ async fn scan_batched(
         organize_start.elapsed()
     );
 
+    // Collect all series paths for duplicate detection during fingerprint matching
+    // This allows us to distinguish between a rename (old path not in scan) vs copy (both paths in scan)
+    let all_series_paths: HashSet<String> =
+        series_map.values().filter_map(|s| s.path.clone()).collect();
+    let all_series_paths = Arc::new(all_series_paths);
+
     // Process series in parallel with semaphore control
     let series_semaphore = Arc::new(Semaphore::new(config.parallel_series));
     let series_count = series_map.len();
@@ -512,6 +612,7 @@ async fn scan_batched(
             let db = db.clone();
             let library = library.clone();
             let existing_books_map = existing_books_map.clone();
+            let all_series_paths = Arc::clone(&all_series_paths);
             let config = config.clone();
             let event_broadcaster = event_broadcaster.cloned();
 
@@ -541,6 +642,7 @@ async fn scan_batched(
                     &library,
                     &detected_series,
                     &existing_books_map,
+                    &all_series_paths,
                     mode,
                     &config,
                     event_broadcaster.as_ref(),
@@ -735,6 +837,7 @@ async fn process_series_batched(
     library: &crate::db::entities::libraries::Model,
     detected_series: &DetectedSeries,
     existing_books_map: &HashMap<String, books::Model>,
+    all_series_paths: &HashSet<String>,
     mode: ScanMode,
     config: &ScannerConfig,
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
@@ -758,6 +861,14 @@ async fn process_series_batched(
         .as_deref()
         .unwrap_or(&detected_series.name);
 
+    debug!(
+        "Processing detected series: name='{}', path='{}', fingerprint='{}', file_count={}",
+        detected_series.name,
+        series_path,
+        &fingerprint[..16], // First 16 chars of fingerprint for brevity
+        file_paths.len()
+    );
+
     // Find or create series with fingerprint
     let series_model = find_or_create_series(
         db,
@@ -765,9 +876,15 @@ async fn process_series_batched(
         &detected_series.name,
         Some(&fingerprint),
         series_path,
+        all_series_paths,
         event_broadcaster,
     )
     .await?;
+
+    debug!(
+        "Series resolution: detected='{}' -> db_id={}, db_name='{}', db_path='{}'",
+        detected_series.name, series_model.id, series_model.name, series_model.path
+    );
 
     // Check if this is a new series
     let is_new_series = existing_books_map
@@ -822,10 +939,14 @@ async fn process_series_batched(
                         let size_changed = existing_book.file_size != file_hash.file_size as i64;
                         let format_changed = existing_book.format != file_hash.format;
                         let modified_changed = existing_book.modified_at != file_hash.modified_at;
+                        // Check if book needs to move to a different series (deep scan only)
+                        let series_changed =
+                            force_analysis && existing_book.series_id != series_model.id;
                         let anything_changed = partial_hash_changed
                             || size_changed
                             || format_changed
-                            || modified_changed;
+                            || modified_changed
+                            || series_changed;
 
                         if anything_changed {
                             let mut updated_book = existing_book.clone();
@@ -834,6 +955,15 @@ async fn process_series_batched(
                             updated_book.format = file_hash.format;
                             updated_book.modified_at = file_hash.modified_at;
                             updated_book.updated_at = now;
+
+                            // Update series_id if book moved to a different folder (deep scan only)
+                            if series_changed {
+                                debug!(
+                                    "Book '{}' moved from series {} to series {}",
+                                    file_hash.path_str, existing_book.series_id, series_model.id
+                                );
+                                updated_book.series_id = series_model.id;
+                            }
 
                             // Mark as unanalyzed if hash changed
                             let needs_analysis = if partial_hash_changed {
@@ -958,25 +1088,39 @@ fn calculate_series_fingerprint(file_paths: &[&PathBuf]) -> String {
 /// Matching strategy (in order of priority):
 /// 1. **Path match**: Same directory = same series (primary key)
 /// 2. **Fingerprint match**: Directory renamed but same files = same series
+///    - Only accepts match if old path is NOT in current scan (true rename vs copy)
 /// 3. **Normalized name match**: Last resort for moved+renamed directories
 /// 4. If no match, create a new series
 ///
 /// This approach ensures that:
 /// - Adding/removing files from a series directory keeps the same series (path match)
 /// - Renaming a series directory keeps the same series (fingerprint match)
+/// - Copying a series directory creates a NEW series (old path still in scan)
 /// - Moving AND renaming a series directory may still match (normalized name fallback)
+///
+/// The `all_series_paths` parameter contains paths of all series detected in the current scan.
+/// This is used to distinguish between a rename (old path not in scan) vs a copy (old path in scan).
 async fn find_or_create_series(
     db: &DatabaseConnection,
     library_id: Uuid,
     series_name: &str,
     fingerprint: Option<&str>,
     path: &str,
+    all_series_paths: &HashSet<String>,
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
 ) -> Result<series::Model> {
     use crate::db::repositories::SeriesMetadataRepository;
 
+    debug!(
+        "find_or_create_series: name='{}', path='{}', fingerprint={:?}",
+        series_name,
+        path,
+        fingerprint.map(|f| &f[..16.min(f.len())])
+    );
+
     // Step 1: Path match (same directory = same series)
     // This is the primary matching key - if the path matches, it's definitely the same series
+    debug!("Step 1: Searching by path='{}'", path);
     if let Some(existing) = SeriesRepository::find_by_path(db, library_id, path).await? {
         info!(
             "Matched series by path: {} -> series id {}",
@@ -1018,37 +1162,63 @@ async fn find_or_create_series(
 
     // Step 2: Fingerprint match (directory renamed, same files)
     // The directory was renamed but files stayed the same
+    // IMPORTANT: Only accept fingerprint match if the OLD path is NOT in the current scan.
+    // This distinguishes between a rename (old path not in scan) vs a copy/duplicate (both paths in scan).
+    debug!("Step 1 failed, trying Step 2: fingerprint match");
     if let Some(fp) = fingerprint {
+        debug!(
+            "Step 2: Searching by fingerprint='{}'",
+            &fp[..16.min(fp.len())]
+        );
         if let Some(existing) = SeriesRepository::find_by_fingerprint(db, library_id, fp).await? {
-            info!(
-                "Matched series by fingerprint: {} -> series id {} (path changed from {} to {})",
-                series_name, existing.id, existing.path, path
-            );
+            // Check if the old series path is also being scanned in this run
+            // If the old path is in all_series_paths, it means both directories exist (copy/duplicate)
+            // If the old path is NOT in all_series_paths, it means the directory was renamed
+            let old_path_in_scan = all_series_paths.contains(&existing.path);
 
-            // Update path and name (directory was renamed)
-            SeriesRepository::update_path_and_name(db, existing.id, path.to_string(), series_name)
+            if !old_path_in_scan {
+                info!(
+                    "Matched series by fingerprint: {} -> series id {} (path changed from {} to {})",
+                    series_name, existing.id, existing.path, path
+                );
+
+                // Update path and name (directory was renamed)
+                SeriesRepository::update_path_and_name(
+                    db,
+                    existing.id,
+                    path.to_string(),
+                    series_name,
+                )
                 .await?;
 
-            // Also update series_metadata title if not locked
-            if let Ok(Some(metadata)) =
-                SeriesMetadataRepository::get_by_series_id(db, existing.id).await
-            {
-                if metadata.title != series_name && !metadata.title_lock {
-                    info!(
-                        "Detected series rename: {} -> {}",
-                        metadata.title, series_name
-                    );
-                    SeriesRepository::update_name(db, existing.id, series_name).await?;
+                // Also update series_metadata title if not locked
+                if let Ok(Some(metadata)) =
+                    SeriesMetadataRepository::get_by_series_id(db, existing.id).await
+                {
+                    if metadata.title != series_name && !metadata.title_lock {
+                        info!(
+                            "Detected series rename: {} -> {}",
+                            metadata.title, series_name
+                        );
+                        SeriesRepository::update_name(db, existing.id, series_name).await?;
+                    }
                 }
-            }
 
-            return Ok(existing);
+                return Ok(existing);
+            } else {
+                debug!(
+                    "Step 2: Fingerprint matched series '{}' but old path '{}' is also in current scan (copy, not rename), skipping",
+                    existing.id, existing.path
+                );
+            }
         }
     }
 
     // Step 3: Normalized name match (last resort fallback)
     // The directory was moved AND renamed, but the name is similar
+    debug!("Step 2 failed, trying Step 3: normalized name match");
     let normalized_name = SeriesRepository::normalize_name(series_name);
+    debug!("Step 3: Searching by normalized_name='{}'", normalized_name);
     if let Some(existing) =
         SeriesRepository::find_by_normalized_name(db, library_id, &normalized_name).await?
     {
@@ -1089,6 +1259,7 @@ async fn find_or_create_series(
     }
 
     // Step 4: Create new series with fingerprint (title stored in series_metadata)
+    debug!("Step 3 failed, proceeding to Step 4: create new series");
     info!(
         "Creating new series: {} at path {} with fingerprint {:?}",
         series_name, path, fingerprint
@@ -1132,11 +1303,17 @@ async fn load_existing_books(
 }
 
 /// Discover all supported files in library path
-/// If allowed_extensions is Some, only files with those extensions will be included
-/// If allowed_extensions is None, all supported formats are allowed
+///
+/// # Arguments
+/// - `library_path`: Root path of the library to scan
+/// - `allowed_extensions`: If Some, only files with these extensions will be included.
+///   If None, all supported formats are allowed.
+/// - `excluded_patterns`: If Some, files/directories matching these patterns will be skipped.
+///   Uses WalkDir's `filter_entry` to prune entire directories, improving performance.
 fn discover_files(
     library_path: &str,
     allowed_extensions: Option<&[String]>,
+    excluded_patterns: Option<&GlobSet>,
 ) -> Result<Vec<PathBuf>> {
     let start = Instant::now();
     let mut files = Vec::new();
@@ -1152,11 +1329,35 @@ fn discover_files(
         SUPPORTED_EXTENSIONS.to_vec()
     };
 
-    for entry in WalkDir::new(library_path)
-        .follow_links(false)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
+    let library_path_buf = Path::new(library_path);
+
+    // Build WalkDir iterator with optional exclusion filter
+    // Using filter_entry prunes entire directories, avoiding traversal of excluded subtrees
+    let walker = WalkDir::new(library_path).follow_links(false);
+
+    let entries = if let Some(excluded) = excluded_patterns {
+        // With exclusion patterns: use filter_entry for directory pruning
+        walker
+            .into_iter()
+            .filter_entry(|entry| {
+                let path = entry.path();
+                // Don't exclude the root library path itself
+                if path == library_path_buf {
+                    return true;
+                }
+                !should_exclude(path, library_path_buf, excluded)
+            })
+            .filter_map(|e| e.ok())
+            .collect::<Vec<_>>()
+    } else {
+        // Without exclusion patterns: simple iteration
+        walker
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .collect::<Vec<_>>()
+    };
+
+    for entry in entries {
         let path = entry.path();
 
         // Skip if not a file
@@ -1178,13 +1379,23 @@ fn discover_files(
     }
 
     let duration = start.elapsed();
-    debug!(
-        "File discovery: found {} supported files from {} files checked in {} directories, took {:?}",
-        files.len(),
-        files_checked,
-        dirs_visited,
-        duration
-    );
+    if excluded_patterns.is_some() {
+        debug!(
+            "File discovery: found {} supported files from {} files checked in {} directories (with exclusion patterns), took {:?}",
+            files.len(),
+            files_checked,
+            dirs_visited,
+            duration
+        );
+    } else {
+        debug!(
+            "File discovery: found {} supported files from {} files checked in {} directories, took {:?}",
+            files.len(),
+            files_checked,
+            dirs_visited,
+            duration
+        );
+    }
 
     Ok(files)
 }
@@ -1336,5 +1547,435 @@ mod tests {
 
         assert!(!fp.is_empty(), "Fingerprint should not be empty");
         assert_eq!(fp.len(), 64, "SHA-256 hex should be 64 characters");
+    }
+
+    // Helper to create a minimal library model for testing
+    fn create_test_library(
+        excluded_patterns: Option<String>,
+    ) -> crate::db::entities::libraries::Model {
+        use chrono::Utc;
+        crate::db::entities::libraries::Model {
+            id: Uuid::new_v4(),
+            name: "Test Library".to_string(),
+            path: "/test/library".to_string(),
+            series_strategy: "series_volume".to_string(),
+            series_config: None,
+            book_strategy: "filename".to_string(),
+            book_config: None,
+            number_strategy: "file_order".to_string(),
+            number_config: None,
+            scanning_config: None,
+            default_reading_direction: "ltr".to_string(),
+            allowed_formats: None,
+            excluded_patterns,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_scanned_at: None,
+        }
+    }
+
+    // ==================== parse_excluded_patterns tests ====================
+
+    #[test]
+    fn test_parse_excluded_patterns_none() {
+        let library = create_test_library(None);
+        let result = parse_excluded_patterns(&library);
+        assert!(result.is_none(), "None patterns should return None");
+    }
+
+    #[test]
+    fn test_parse_excluded_patterns_empty_string() {
+        let library = create_test_library(Some("".to_string()));
+        let result = parse_excluded_patterns(&library);
+        assert!(result.is_none(), "Empty string should return None");
+    }
+
+    #[test]
+    fn test_parse_excluded_patterns_whitespace_only() {
+        let library = create_test_library(Some("   \n  \n   ".to_string()));
+        let result = parse_excluded_patterns(&library);
+        assert!(
+            result.is_none(),
+            "Whitespace-only patterns should return None"
+        );
+    }
+
+    #[test]
+    fn test_parse_excluded_patterns_single_pattern() {
+        let library = create_test_library(Some(".DS_Store".to_string()));
+        let result = parse_excluded_patterns(&library);
+        assert!(result.is_some(), "Single pattern should return Some");
+        let globset = result.unwrap();
+        assert!(!globset.is_empty(), "GlobSet should have patterns");
+    }
+
+    #[test]
+    fn test_parse_excluded_patterns_multiple_patterns() {
+        let library = create_test_library(Some(".DS_Store\nThumbs.db\n@eaDir".to_string()));
+        let result = parse_excluded_patterns(&library);
+        assert!(result.is_some(), "Multiple patterns should return Some");
+        let globset = result.unwrap();
+        // Each pattern adds 2 entries (exact + **/)
+        assert!(
+            globset.len() >= 3,
+            "GlobSet should have at least 3 patterns"
+        );
+    }
+
+    #[test]
+    fn test_parse_excluded_patterns_trims_whitespace() {
+        let library = create_test_library(Some("  .DS_Store  \n  Thumbs.db  ".to_string()));
+        let result = parse_excluded_patterns(&library);
+        assert!(
+            result.is_some(),
+            "Patterns with whitespace should still work"
+        );
+        let globset = result.unwrap();
+        // Should match trimmed patterns
+        assert!(globset.is_match(".DS_Store"));
+        assert!(globset.is_match("Thumbs.db"));
+    }
+
+    #[test]
+    fn test_parse_excluded_patterns_path_pattern() {
+        let library = create_test_library(Some("subdir/*".to_string()));
+        let result = parse_excluded_patterns(&library);
+        assert!(result.is_some(), "Path patterns should work");
+        let globset = result.unwrap();
+        // Path patterns with / should NOT get ** prefix added
+        assert!(globset.is_match(Path::new("subdir/file.cbz")));
+    }
+
+    #[test]
+    fn test_parse_excluded_patterns_glob_wildcards() {
+        let library = create_test_library(Some("*.tmp\n*.bak".to_string()));
+        let result = parse_excluded_patterns(&library);
+        assert!(result.is_some(), "Glob patterns should work");
+        let globset = result.unwrap();
+        assert!(globset.is_match("file.tmp"));
+        assert!(globset.is_match("backup.bak"));
+        assert!(!globset.is_match("file.cbz"));
+    }
+
+    // ==================== should_exclude tests ====================
+
+    #[test]
+    fn test_should_exclude_exact_filename() {
+        let library = create_test_library(Some(".DS_Store".to_string()));
+        let globset = parse_excluded_patterns(&library).unwrap();
+        let library_path = Path::new("/library");
+
+        assert!(should_exclude(
+            Path::new("/library/.DS_Store"),
+            library_path,
+            &globset
+        ));
+        assert!(should_exclude(
+            Path::new("/library/subdir/.DS_Store"),
+            library_path,
+            &globset
+        ));
+    }
+
+    #[test]
+    fn test_should_exclude_case_insensitive() {
+        let library = create_test_library(Some(".DS_Store".to_string()));
+        let globset = parse_excluded_patterns(&library).unwrap();
+        let library_path = Path::new("/library");
+
+        // Case variations should match
+        assert!(should_exclude(
+            Path::new("/library/.ds_store"),
+            library_path,
+            &globset
+        ));
+        assert!(should_exclude(
+            Path::new("/library/.DS_STORE"),
+            library_path,
+            &globset
+        ));
+    }
+
+    #[test]
+    fn test_should_exclude_directory_name() {
+        let library = create_test_library(Some("_to_filter".to_string()));
+        let globset = parse_excluded_patterns(&library).unwrap();
+        let library_path = Path::new("/library");
+
+        // Directory itself should be excluded
+        assert!(should_exclude(
+            Path::new("/library/_to_filter"),
+            library_path,
+            &globset
+        ));
+        // Nested directory should also be excluded
+        assert!(should_exclude(
+            Path::new("/library/series/_to_filter"),
+            library_path,
+            &globset
+        ));
+    }
+
+    #[test]
+    fn test_should_exclude_glob_pattern() {
+        let library = create_test_library(Some("*.tmp".to_string()));
+        let globset = parse_excluded_patterns(&library).unwrap();
+        let library_path = Path::new("/library");
+
+        assert!(should_exclude(
+            Path::new("/library/file.tmp"),
+            library_path,
+            &globset
+        ));
+        assert!(should_exclude(
+            Path::new("/library/subdir/another.tmp"),
+            library_path,
+            &globset
+        ));
+        assert!(!should_exclude(
+            Path::new("/library/file.cbz"),
+            library_path,
+            &globset
+        ));
+    }
+
+    #[test]
+    fn test_should_exclude_relative_path_pattern() {
+        let library = create_test_library(Some("subdir/*".to_string()));
+        let globset = parse_excluded_patterns(&library).unwrap();
+        let library_path = Path::new("/library");
+
+        // Files in subdir/ should be excluded
+        assert!(should_exclude(
+            Path::new("/library/subdir/file.cbz"),
+            library_path,
+            &globset
+        ));
+        // Files NOT in subdir/ should not be excluded
+        assert!(!should_exclude(
+            Path::new("/library/other/file.cbz"),
+            library_path,
+            &globset
+        ));
+    }
+
+    #[test]
+    fn test_should_exclude_non_matching() {
+        let library = create_test_library(Some(".DS_Store\nThumbs.db".to_string()));
+        let globset = parse_excluded_patterns(&library).unwrap();
+        let library_path = Path::new("/library");
+
+        // Regular files should not be excluded
+        assert!(!should_exclude(
+            Path::new("/library/Batman/issue1.cbz"),
+            library_path,
+            &globset
+        ));
+        assert!(!should_exclude(
+            Path::new("/library/series.epub"),
+            library_path,
+            &globset
+        ));
+    }
+
+    #[test]
+    fn test_should_exclude_common_patterns() {
+        // Test common macOS/Windows/NAS patterns
+        let library = create_test_library(Some(
+            ".DS_Store\nThumbs.db\n@eaDir\n__MACOSX\n.Spotlight-V100".to_string(),
+        ));
+        let globset = parse_excluded_patterns(&library).unwrap();
+        let library_path = Path::new("/library");
+
+        assert!(should_exclude(
+            Path::new("/library/.DS_Store"),
+            library_path,
+            &globset
+        ));
+        assert!(should_exclude(
+            Path::new("/library/comics/Thumbs.db"),
+            library_path,
+            &globset
+        ));
+        assert!(should_exclude(
+            Path::new("/library/@eaDir"),
+            library_path,
+            &globset
+        ));
+        assert!(should_exclude(
+            Path::new("/library/__MACOSX"),
+            library_path,
+            &globset
+        ));
+        assert!(should_exclude(
+            Path::new("/library/.Spotlight-V100"),
+            library_path,
+            &globset
+        ));
+    }
+
+    // ==================== discover_files with exclusion tests ====================
+
+    #[test]
+    fn test_discover_files_no_exclusions() {
+        use std::fs::File;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let library_path = temp_dir.path();
+
+        // Create test files
+        File::create(library_path.join("book1.cbz")).unwrap();
+        File::create(library_path.join("book2.epub")).unwrap();
+
+        let result = discover_files(library_path.to_str().unwrap(), None, None).unwrap();
+
+        assert_eq!(result.len(), 2, "Should find 2 files without exclusions");
+    }
+
+    #[test]
+    fn test_discover_files_with_file_exclusion() {
+        use std::fs::File;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let library_path = temp_dir.path();
+
+        // Create test files
+        File::create(library_path.join("book1.cbz")).unwrap();
+        File::create(library_path.join(".DS_Store")).unwrap();
+
+        let library = create_test_library(Some(".DS_Store".to_string()));
+        let excluded = parse_excluded_patterns(&library);
+
+        let result =
+            discover_files(library_path.to_str().unwrap(), None, excluded.as_ref()).unwrap();
+
+        assert_eq!(
+            result.len(),
+            1,
+            "Should find only 1 file (excluding .DS_Store)"
+        );
+        assert!(result[0].ends_with("book1.cbz"));
+    }
+
+    #[test]
+    fn test_discover_files_with_directory_exclusion() {
+        use std::fs::{self, File};
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let library_path = temp_dir.path();
+
+        // Create directory structure
+        fs::create_dir(library_path.join("series")).unwrap();
+        fs::create_dir(library_path.join("_to_filter")).unwrap();
+
+        // Create test files
+        File::create(library_path.join("series/book1.cbz")).unwrap();
+        File::create(library_path.join("_to_filter/book2.cbz")).unwrap();
+
+        let library = create_test_library(Some("_to_filter".to_string()));
+        let excluded = parse_excluded_patterns(&library);
+
+        let result =
+            discover_files(library_path.to_str().unwrap(), None, excluded.as_ref()).unwrap();
+
+        assert_eq!(
+            result.len(),
+            1,
+            "Should find only 1 file (excluding _to_filter directory)"
+        );
+        assert!(result[0].to_string_lossy().contains("series"));
+    }
+
+    #[test]
+    fn test_discover_files_with_glob_exclusion() {
+        use std::fs::File;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let library_path = temp_dir.path();
+
+        // Create test files
+        File::create(library_path.join("book1.cbz")).unwrap();
+        File::create(library_path.join("temp.tmp")).unwrap();
+        File::create(library_path.join("backup.bak")).unwrap();
+
+        let library = create_test_library(Some("*.tmp\n*.bak".to_string()));
+        let excluded = parse_excluded_patterns(&library);
+
+        let result =
+            discover_files(library_path.to_str().unwrap(), None, excluded.as_ref()).unwrap();
+
+        assert_eq!(
+            result.len(),
+            1,
+            "Should find only 1 file (excluding *.tmp and *.bak)"
+        );
+        assert!(result[0].ends_with("book1.cbz"));
+    }
+
+    #[test]
+    fn test_discover_files_nested_directory_exclusion() {
+        use std::fs::{self, File};
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let library_path = temp_dir.path();
+
+        // Create nested directory structure
+        fs::create_dir_all(library_path.join("series/good")).unwrap();
+        fs::create_dir_all(library_path.join("series/_to_filter/deep")).unwrap();
+
+        // Create test files
+        File::create(library_path.join("series/good/book1.cbz")).unwrap();
+        File::create(library_path.join("series/_to_filter/book2.cbz")).unwrap();
+        File::create(library_path.join("series/_to_filter/deep/book3.cbz")).unwrap();
+
+        let library = create_test_library(Some("_to_filter".to_string()));
+        let excluded = parse_excluded_patterns(&library);
+
+        let result =
+            discover_files(library_path.to_str().unwrap(), None, excluded.as_ref()).unwrap();
+
+        // Should only find book1.cbz - the _to_filter directory and all its contents should be excluded
+        assert_eq!(
+            result.len(),
+            1,
+            "Should find only 1 file (directory pruning should exclude nested files)"
+        );
+        assert!(result[0].to_string_lossy().contains("good"));
+    }
+
+    #[test]
+    fn test_discover_files_multiple_exclusions() {
+        use std::fs::{self, File};
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let library_path = temp_dir.path();
+
+        // Create directory structure
+        fs::create_dir(library_path.join("series")).unwrap();
+        fs::create_dir(library_path.join("@eaDir")).unwrap();
+
+        // Create test files
+        File::create(library_path.join("series/book1.cbz")).unwrap();
+        File::create(library_path.join("series/.DS_Store")).unwrap();
+        File::create(library_path.join("@eaDir/metadata.db")).unwrap();
+
+        let library = create_test_library(Some(".DS_Store\n@eaDir\nThumbs.db".to_string()));
+        let excluded = parse_excluded_patterns(&library);
+
+        let result =
+            discover_files(library_path.to_str().unwrap(), None, excluded.as_ref()).unwrap();
+
+        assert_eq!(
+            result.len(),
+            1,
+            "Should find only 1 file with multiple exclusions"
+        );
+        assert!(result[0].ends_with("book1.cbz"));
     }
 }

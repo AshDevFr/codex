@@ -40,33 +40,37 @@ impl CalibreStrategy {
         }
     }
 
-    /// Extract author from folder structure
+    /// Extract author from folder structure (grandparent folder - parent of book folder)
     fn extract_author(&self, file_path: &Path, library_path: &Path) -> Option<String> {
         if !self.config.author_from_folder {
             return None;
         }
 
-        let relative = file_path.strip_prefix(library_path).unwrap_or(file_path);
-        let components: Vec<_> = relative.components().collect();
-
-        if !components.is_empty() {
-            Some(components[0].as_os_str().to_string_lossy().to_string())
-        } else {
-            None
+        // Author is the grandparent folder (parent of the book folder)
+        // Structure: library/Author/Book Title/file.epub
+        if let Some(parent) = file_path.parent() {
+            if let Some(grandparent) = parent.parent() {
+                // Only if grandparent is not the library root
+                if grandparent != library_path {
+                    if let Some(author_name) = grandparent.file_name() {
+                        return Some(author_name.to_string_lossy().to_string());
+                    }
+                }
+            }
         }
+        None
     }
 
-    /// Extract book title from folder structure
-    fn extract_book_title(&self, file_path: &Path, library_path: &Path) -> Option<String> {
-        let relative = file_path.strip_prefix(library_path).unwrap_or(file_path);
-        let components: Vec<_> = relative.components().collect();
-
-        if components.len() >= 2 {
-            let folder_name = components[1].as_os_str().to_string_lossy().to_string();
-            Some(self.strip_id_suffix(&folder_name))
-        } else {
-            None
+    /// Extract book title from folder structure (immediate parent folder)
+    fn extract_book_title(&self, file_path: &Path, _library_path: &Path) -> Option<String> {
+        // Use immediate parent folder as book title
+        if let Some(parent) = file_path.parent() {
+            if let Some(folder_name) = parent.file_name() {
+                let name = folder_name.to_string_lossy().to_string();
+                return Some(self.strip_id_suffix(&name));
+            }
         }
+        None
     }
 
     /// Determine series name based on series_mode
@@ -135,18 +139,12 @@ impl ScanningStrategyImpl for CalibreStrategy {
                 s
             });
 
-            // Set series path if not already set
+            // Set series path if not already set (use parent folder's relative path)
             if series.path.is_none() {
-                let relative = file_path.strip_prefix(library_path).unwrap_or(file_path);
-                let components: Vec<_> = relative.components().collect();
-
-                if components.len() >= 2 {
-                    let path_components: Vec<String> = components
-                        .iter()
-                        .take(2)
-                        .map(|c| c.as_os_str().to_string_lossy().to_string())
-                        .collect();
-                    series.path = Some(path_components.join("/"));
+                if let Some(parent) = file_path.parent() {
+                    if let Ok(rel_parent) = parent.strip_prefix(library_path) {
+                        series.path = Some(rel_parent.to_string_lossy().to_string());
+                    }
                 }
             }
 
