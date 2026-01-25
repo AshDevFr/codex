@@ -77,6 +77,7 @@ async fn create_test_app_state_with_metrics(db: DatabaseConnection) -> Arc<AppSt
         pdf_page_cache,
         inflight_thumbnails: Arc::new(InflightThumbnailTracker::new()),
         user_auth_cache: Arc::new(UserAuthCache::new()),
+        rate_limiter_service: None,
     })
 }
 

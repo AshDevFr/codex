@@ -30,6 +30,57 @@ fn default_komga_prefix() -> String {
     "komga".to_string()
 }
 
+/// Configuration for API rate limiting
+/// Uses token bucket algorithm with per-client tracking
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct RateLimitConfig {
+    /// Enable rate limiting (default: true)
+    pub enabled: bool,
+
+    /// Requests per second for anonymous users (default: 10)
+    pub anonymous_rps: u32,
+
+    /// Burst size for anonymous users (default: 50)
+    pub anonymous_burst: u32,
+
+    /// Requests per second for authenticated users (default: 50)
+    pub authenticated_rps: u32,
+
+    /// Burst size for authenticated users (default: 200)
+    pub authenticated_burst: u32,
+
+    /// Paths to exempt from rate limiting (default: ["/health", "/api/v1/events"])
+    pub exempt_paths: Vec<String>,
+
+    /// Cleanup interval in seconds for stale buckets (default: 60)
+    pub cleanup_interval_secs: u64,
+
+    /// Time in seconds before a bucket is considered stale (default: 300)
+    pub bucket_ttl_secs: u64,
+}
+
+fn default_exempt_paths() -> Vec<String> {
+    vec!["/health".to_string(), "/api/v1/events".to_string()]
+}
+
+impl Default for RateLimitConfig {
+    fn default() -> Self {
+        Self {
+            enabled: env_bool_or("CODEX_RATE_LIMIT_ENABLED", true),
+            anonymous_rps: env_or("CODEX_RATE_LIMIT_ANONYMOUS_RPS", 10),
+            anonymous_burst: env_or("CODEX_RATE_LIMIT_ANONYMOUS_BURST", 50),
+            authenticated_rps: env_or("CODEX_RATE_LIMIT_AUTHENTICATED_RPS", 50),
+            authenticated_burst: env_or("CODEX_RATE_LIMIT_AUTHENTICATED_BURST", 200),
+            exempt_paths: env_string_opt("CODEX_RATE_LIMIT_EXEMPT_PATHS")
+                .map(|s| s.split(',').map(|p| p.trim().to_string()).collect())
+                .unwrap_or_else(default_exempt_paths),
+            cleanup_interval_secs: env_or("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS", 60),
+            bucket_ttl_secs: env_or("CODEX_RATE_LIMIT_BUCKET_TTL_SECS", 300),
+        }
+    }
+}
+
 impl Default for KomgaApiConfig {
     fn default() -> Self {
         Self {
@@ -71,6 +122,8 @@ pub struct Config {
     pub pdf: PdfConfig,
     #[serde(default)]
     pub komga_api: KomgaApiConfig,
+    #[serde(default)]
+    pub rate_limit: RateLimitConfig,
 }
 
 impl Default for Config {
@@ -127,6 +180,7 @@ impl Default for Config {
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
             komga_api: KomgaApiConfig::default(),
+            rate_limit: RateLimitConfig::default(),
         }
     }
 }
@@ -560,6 +614,7 @@ impl Default for EmailConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn test_database_type_serialization() {
@@ -741,6 +796,7 @@ mod tests {
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
             komga_api: KomgaApiConfig::default(),
+            rate_limit: RateLimitConfig::default(),
         };
 
         // Application name moved to database settings
@@ -1018,5 +1074,131 @@ database:
         let config: Config = serde_yaml::from_str(yaml_content).unwrap();
         assert!(!config.komga_api.enabled);
         assert_eq!(config.komga_api.prefix, "komga");
+    }
+
+    #[test]
+    #[serial]
+    fn test_rate_limit_config_default() {
+        let config = RateLimitConfig::default();
+        // Enabled by default for security
+        assert!(config.enabled);
+        // Default rate limits
+        assert_eq!(config.anonymous_rps, 10);
+        assert_eq!(config.anonymous_burst, 50);
+        assert_eq!(config.authenticated_rps, 50);
+        assert_eq!(config.authenticated_burst, 200);
+        // Default exempt paths
+        assert_eq!(
+            config.exempt_paths,
+            vec!["/health".to_string(), "/api/v1/events".to_string()]
+        );
+        // Default cleanup settings
+        assert_eq!(config.cleanup_interval_secs, 60);
+        assert_eq!(config.bucket_ttl_secs, 300);
+    }
+
+    #[test]
+    fn test_rate_limit_config_serialization() {
+        let config = RateLimitConfig {
+            enabled: false,
+            anonymous_rps: 20,
+            anonymous_burst: 100,
+            authenticated_rps: 100,
+            authenticated_burst: 500,
+            exempt_paths: vec!["/custom".to_string()],
+            cleanup_interval_secs: 120,
+            bucket_ttl_secs: 600,
+        };
+
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        assert!(yaml.contains("enabled"));
+        assert!(yaml.contains("false"));
+        assert!(yaml.contains("anonymous_rps"));
+        assert!(yaml.contains("20"));
+
+        let deserialized: RateLimitConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert!(!deserialized.enabled);
+        assert_eq!(deserialized.anonymous_rps, 20);
+        assert_eq!(deserialized.anonymous_burst, 100);
+        assert_eq!(deserialized.authenticated_rps, 100);
+        assert_eq!(deserialized.authenticated_burst, 500);
+        assert_eq!(deserialized.exempt_paths, vec!["/custom".to_string()]);
+        assert_eq!(deserialized.cleanup_interval_secs, 120);
+        assert_eq!(deserialized.bucket_ttl_secs, 600);
+    }
+
+    #[test]
+    fn test_rate_limit_config_from_yaml() {
+        let yaml_content = r#"
+enabled: true
+anonymous_rps: 5
+anonymous_burst: 25
+authenticated_rps: 25
+authenticated_burst: 100
+exempt_paths:
+  - /health
+  - /metrics
+cleanup_interval_secs: 30
+bucket_ttl_secs: 180
+"#;
+
+        let config: RateLimitConfig = serde_yaml::from_str(yaml_content).unwrap();
+        assert!(config.enabled);
+        assert_eq!(config.anonymous_rps, 5);
+        assert_eq!(config.anonymous_burst, 25);
+        assert_eq!(config.authenticated_rps, 25);
+        assert_eq!(config.authenticated_burst, 100);
+        assert_eq!(
+            config.exempt_paths,
+            vec!["/health".to_string(), "/metrics".to_string()]
+        );
+        assert_eq!(config.cleanup_interval_secs, 30);
+        assert_eq!(config.bucket_ttl_secs, 180);
+    }
+
+    #[test]
+    #[serial]
+    fn test_rate_limit_config_default_when_empty_yaml() {
+        let yaml_content = "{}";
+
+        let config: RateLimitConfig = serde_yaml::from_str(yaml_content).unwrap();
+        // Should use defaults when not specified
+        assert!(config.enabled);
+        assert_eq!(config.anonymous_rps, 10);
+        assert_eq!(config.anonymous_burst, 50);
+    }
+
+    #[test]
+    fn test_config_includes_rate_limit() {
+        let yaml_content = r#"
+database:
+  db_type: sqlite
+  sqlite:
+    path: ./test.db
+rate_limit:
+  enabled: false
+  anonymous_rps: 5
+"#;
+
+        let config: Config = serde_yaml::from_str(yaml_content).unwrap();
+        assert!(!config.rate_limit.enabled);
+        assert_eq!(config.rate_limit.anonymous_rps, 5);
+    }
+
+    #[test]
+    #[serial]
+    fn test_config_rate_limit_uses_defaults() {
+        // When rate_limit is not specified, it should use defaults
+        let yaml_content = r#"
+database:
+  db_type: sqlite
+  sqlite:
+    path: ./test.db
+"#;
+
+        let config: Config = serde_yaml::from_str(yaml_content).unwrap();
+        assert!(config.rate_limit.enabled);
+        assert_eq!(config.rate_limit.anonymous_rps, 10);
+        assert_eq!(config.rate_limit.authenticated_rps, 50);
     }
 }

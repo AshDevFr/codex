@@ -85,7 +85,46 @@ All paginated responses use camelCase and include HATEOAS navigation links:
     "last": "/api/v1/series/list?page=6&pageSize=25"
   }
 }
-```"#,
+```
+
+## Rate Limiting
+
+All API endpoints are protected by rate limiting (enabled by default). Rate limits use a token bucket algorithm with separate limits for anonymous and authenticated users.
+
+### Limits
+
+| Client Type | Requests/Second | Burst Size |
+|-------------|-----------------|------------|
+| Anonymous (by IP) | 10 | 50 |
+| Authenticated (by user) | 50 | 200 |
+
+### Response Headers
+
+All responses include rate limit information:
+
+| Header | Description |
+|--------|-------------|
+| `X-RateLimit-Limit` | Maximum requests allowed (burst size) |
+| `X-RateLimit-Remaining` | Requests remaining |
+| `X-RateLimit-Reset` | Seconds until a token is available |
+
+### 429 Too Many Requests
+
+When rate limited, the API returns HTTP 429 with a `Retry-After` header:
+
+```json
+{
+  "error": "rate_limit_exceeded",
+  "message": "Too many requests. Please retry after 30 seconds.",
+  "retry_after": 30
+}
+```
+
+### Exempt Paths
+
+The following paths are exempt from rate limiting:
+- `/health` - Health check endpoint
+- `/api/v1/events` - SSE event stream"#,
         license(
             name = "MIT",
             url = "https://opensource.org/licenses/MIT"

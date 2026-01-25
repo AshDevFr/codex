@@ -1,6 +1,7 @@
 use super::types::{
     ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, KomgaApiConfig,
-    LogLevel, LoggingConfig, PostgresConfig, SQLiteConfig, ScannerConfig, TaskConfig,
+    LogLevel, LoggingConfig, PostgresConfig, RateLimitConfig, SQLiteConfig, ScannerConfig,
+    TaskConfig,
 };
 use std::env;
 
@@ -44,6 +45,51 @@ impl EnvOverride for KomgaApiConfig {
     }
 }
 
+impl EnvOverride for RateLimitConfig {
+    fn apply_env_overrides(&mut self, prefix: &str) {
+        if let Ok(enabled) = env::var(format!("{}_ENABLED", prefix)) {
+            self.enabled = enabled.eq_ignore_ascii_case("true") || enabled == "1";
+        }
+        if let Ok(anonymous_rps) = env::var(format!("{}_ANONYMOUS_RPS", prefix)) {
+            if let Ok(rps) = anonymous_rps.parse::<u32>() {
+                self.anonymous_rps = rps;
+            }
+        }
+        if let Ok(anonymous_burst) = env::var(format!("{}_ANONYMOUS_BURST", prefix)) {
+            if let Ok(burst) = anonymous_burst.parse::<u32>() {
+                self.anonymous_burst = burst;
+            }
+        }
+        if let Ok(authenticated_rps) = env::var(format!("{}_AUTHENTICATED_RPS", prefix)) {
+            if let Ok(rps) = authenticated_rps.parse::<u32>() {
+                self.authenticated_rps = rps;
+            }
+        }
+        if let Ok(authenticated_burst) = env::var(format!("{}_AUTHENTICATED_BURST", prefix)) {
+            if let Ok(burst) = authenticated_burst.parse::<u32>() {
+                self.authenticated_burst = burst;
+            }
+        }
+        if let Ok(exempt_paths) = env::var(format!("{}_EXEMPT_PATHS", prefix)) {
+            self.exempt_paths = exempt_paths
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+        }
+        if let Ok(cleanup_interval) = env::var(format!("{}_CLEANUP_INTERVAL_SECS", prefix)) {
+            if let Ok(secs) = cleanup_interval.parse::<u64>() {
+                self.cleanup_interval_secs = secs;
+            }
+        }
+        if let Ok(bucket_ttl) = env::var(format!("{}_BUCKET_TTL_SECS", prefix)) {
+            if let Ok(secs) = bucket_ttl.parse::<u64>() {
+                self.bucket_ttl_secs = secs;
+            }
+        }
+    }
+}
+
 impl EnvOverride for Config {
     fn apply_env_overrides(&mut self, prefix: &str) {
         self.application
@@ -59,6 +105,8 @@ impl EnvOverride for Config {
             .apply_env_overrides(&format!("{}_SCANNER", prefix));
         self.komga_api
             .apply_env_overrides(&format!("{}_KOMGA_API", prefix));
+        self.rate_limit
+            .apply_env_overrides(&format!("{}_RATE_LIMIT", prefix));
     }
 }
 
@@ -403,7 +451,7 @@ mod tests {
         // We'll use a helper to create a minimal config
         use crate::config::{
             ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
-            FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, SQLiteConfig,
+            FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, RateLimitConfig, SQLiteConfig,
         };
         let mut config = Config {
             database: DatabaseConfig {
@@ -430,6 +478,7 @@ mod tests {
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
             komga_api: KomgaApiConfig::default(),
+            rate_limit: RateLimitConfig::default(),
         };
 
         // Set env vars BEFORE applying overrides
@@ -576,7 +625,7 @@ mod tests {
 
         use crate::config::{
             ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
-            FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, SQLiteConfig,
+            FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, RateLimitConfig, SQLiteConfig,
         };
         let mut config = Config {
             database: DatabaseConfig {
@@ -606,6 +655,7 @@ mod tests {
                 enabled: false,
                 prefix: "default".to_string(),
             },
+            rate_limit: RateLimitConfig::default(),
         };
 
         env::set_var("CODEX_KOMGA_API_ENABLED", "true");
@@ -617,5 +667,151 @@ mod tests {
 
         env::remove_var("CODEX_KOMGA_API_ENABLED");
         env::remove_var("CODEX_KOMGA_API_PREFIX");
+    }
+
+    #[test]
+    #[serial]
+    fn test_rate_limit_config_env_override() {
+        // Clear any existing env vars first
+        env::remove_var("CODEX_RATE_LIMIT_ENABLED");
+        env::remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
+        env::remove_var("CODEX_RATE_LIMIT_ANONYMOUS_BURST");
+        env::remove_var("CODEX_RATE_LIMIT_AUTHENTICATED_RPS");
+        env::remove_var("CODEX_RATE_LIMIT_AUTHENTICATED_BURST");
+        env::remove_var("CODEX_RATE_LIMIT_EXEMPT_PATHS");
+        env::remove_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS");
+        env::remove_var("CODEX_RATE_LIMIT_BUCKET_TTL_SECS");
+
+        // Create config with explicit values
+        let mut config = RateLimitConfig {
+            enabled: true,
+            anonymous_rps: 10,
+            anonymous_burst: 50,
+            authenticated_rps: 50,
+            authenticated_burst: 200,
+            exempt_paths: vec!["/health".to_string()],
+            cleanup_interval_secs: 60,
+            bucket_ttl_secs: 300,
+        };
+
+        // Set env vars and apply overrides
+        env::set_var("CODEX_RATE_LIMIT_ENABLED", "false");
+        env::set_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS", "20");
+        env::set_var("CODEX_RATE_LIMIT_ANONYMOUS_BURST", "100");
+        env::set_var("CODEX_RATE_LIMIT_AUTHENTICATED_RPS", "100");
+        env::set_var("CODEX_RATE_LIMIT_AUTHENTICATED_BURST", "400");
+        env::set_var("CODEX_RATE_LIMIT_EXEMPT_PATHS", "/health, /metrics");
+        env::set_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS", "120");
+        env::set_var("CODEX_RATE_LIMIT_BUCKET_TTL_SECS", "600");
+        config.apply_env_overrides("CODEX_RATE_LIMIT");
+
+        assert!(!config.enabled);
+        assert_eq!(config.anonymous_rps, 20);
+        assert_eq!(config.anonymous_burst, 100);
+        assert_eq!(config.authenticated_rps, 100);
+        assert_eq!(config.authenticated_burst, 400);
+        assert_eq!(
+            config.exempt_paths,
+            vec!["/health".to_string(), "/metrics".to_string()]
+        );
+        assert_eq!(config.cleanup_interval_secs, 120);
+        assert_eq!(config.bucket_ttl_secs, 600);
+
+        env::remove_var("CODEX_RATE_LIMIT_ENABLED");
+        env::remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
+        env::remove_var("CODEX_RATE_LIMIT_ANONYMOUS_BURST");
+        env::remove_var("CODEX_RATE_LIMIT_AUTHENTICATED_RPS");
+        env::remove_var("CODEX_RATE_LIMIT_AUTHENTICATED_BURST");
+        env::remove_var("CODEX_RATE_LIMIT_EXEMPT_PATHS");
+        env::remove_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS");
+        env::remove_var("CODEX_RATE_LIMIT_BUCKET_TTL_SECS");
+    }
+
+    #[test]
+    #[serial]
+    fn test_rate_limit_config_env_override_enabled_with_1() {
+        // Test that "1" is also accepted for enabled
+        env::remove_var("CODEX_RATE_LIMIT_ENABLED");
+
+        let mut config = RateLimitConfig {
+            enabled: false,
+            anonymous_rps: 10,
+            anonymous_burst: 50,
+            authenticated_rps: 50,
+            authenticated_burst: 200,
+            exempt_paths: vec![],
+            cleanup_interval_secs: 60,
+            bucket_ttl_secs: 300,
+        };
+
+        env::set_var("CODEX_RATE_LIMIT_ENABLED", "1");
+        config.apply_env_overrides("CODEX_RATE_LIMIT");
+
+        assert!(config.enabled);
+
+        env::remove_var("CODEX_RATE_LIMIT_ENABLED");
+    }
+
+    #[test]
+    #[serial]
+    fn test_rate_limit_config_env_override_partial() {
+        // Test that partial env vars work (only enabled and anonymous_rps)
+        env::remove_var("CODEX_RATE_LIMIT_ENABLED");
+        env::remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
+
+        let mut config = RateLimitConfig {
+            enabled: true,
+            anonymous_rps: 10,
+            anonymous_burst: 50,
+            authenticated_rps: 50,
+            authenticated_burst: 200,
+            exempt_paths: vec!["/original".to_string()],
+            cleanup_interval_secs: 60,
+            bucket_ttl_secs: 300,
+        };
+
+        env::set_var("CODEX_RATE_LIMIT_ENABLED", "false");
+        env::set_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS", "5");
+        config.apply_env_overrides("CODEX_RATE_LIMIT");
+
+        assert!(!config.enabled);
+        assert_eq!(config.anonymous_rps, 5);
+        // These should remain unchanged
+        assert_eq!(config.anonymous_burst, 50);
+        assert_eq!(config.authenticated_rps, 50);
+        assert_eq!(config.exempt_paths, vec!["/original".to_string()]);
+
+        env::remove_var("CODEX_RATE_LIMIT_ENABLED");
+        env::remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
+    }
+
+    #[test]
+    #[serial]
+    fn test_rate_limit_config_env_override_invalid_values_ignored() {
+        // Test that invalid env var values are ignored
+        env::remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
+        env::remove_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS");
+
+        let mut config = RateLimitConfig {
+            enabled: true,
+            anonymous_rps: 10,
+            anonymous_burst: 50,
+            authenticated_rps: 50,
+            authenticated_burst: 200,
+            exempt_paths: vec![],
+            cleanup_interval_secs: 60,
+            bucket_ttl_secs: 300,
+        };
+
+        env::set_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS", "invalid");
+        env::set_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS", "not_a_number");
+        config.apply_env_overrides("CODEX_RATE_LIMIT");
+
+        // Should keep original values when env vars are invalid
+        assert_eq!(config.anonymous_rps, 10);
+        assert_eq!(config.cleanup_interval_secs, 60);
+
+        env::remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
+        env::remove_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS");
     }
 }

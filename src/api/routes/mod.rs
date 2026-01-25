@@ -5,6 +5,7 @@ pub mod v1;
 
 use crate::api::docs::ApiDoc;
 use crate::api::extractors::AppState;
+use crate::api::middleware::RateLimitLayer;
 use crate::config::Config;
 use crate::web;
 use axum::{routing::get, Router};
@@ -78,6 +79,21 @@ pub fn create_router(state: Arc<AppState>, config: &Config) -> Router {
 
     // Add fallback route for frontend static files (must be last)
     router = router.fallback(get(web::serve_static));
+
+    // Apply rate limiting middleware if enabled
+    // Rate limiting is applied before CORS so that:
+    // 1. CORS preflight (OPTIONS) requests pass through CORS layer first
+    // 2. Rate limit responses get CORS headers added by the CORS layer
+    // Note: Static files are exempt via the exempt_paths configuration
+    if let Some(rate_limiter) = &state.rate_limiter_service {
+        let layer =
+            RateLimitLayer::new(rate_limiter.clone(), config.rate_limit.exempt_paths.clone());
+        router = router.layer(layer);
+        tracing::info!(
+            "Rate limiting enabled (exempt paths: {:?})",
+            config.rate_limit.exempt_paths
+        );
+    }
 
     // Add CORS middleware if enabled
     if config.api.cors_enabled {

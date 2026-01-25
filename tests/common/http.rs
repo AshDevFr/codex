@@ -60,6 +60,7 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
         pdf_page_cache,
         inflight_thumbnails: Arc::new(InflightThumbnailTracker::new()),
         user_auth_cache: Arc::new(UserAuthCache::new()),
+        rate_limiter_service: None, // Tests disable rate limiting by default
     })
 }
 
@@ -105,6 +106,7 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
         pdf_page_cache,
         inflight_thumbnails: Arc::new(InflightThumbnailTracker::new()),
         user_auth_cache: Arc::new(UserAuthCache::new()),
+        rate_limiter_service: None, // Tests disable rate limiting by default
     })
 }
 
@@ -175,6 +177,7 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
         pdf_page_cache,
         inflight_thumbnails: Arc::new(InflightThumbnailTracker::new()),
         user_auth_cache: Arc::new(UserAuthCache::new()),
+        rate_limiter_service: None, // Tests disable rate limiting by default
     });
     let config = create_test_config();
     create_router(app_state, &config)

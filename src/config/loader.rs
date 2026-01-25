@@ -22,8 +22,8 @@ mod tests {
     use super::*;
     use crate::config::{
         ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
-        FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, SQLiteConfig, ScannerConfig,
-        TaskConfig,
+        FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, RateLimitConfig, SQLiteConfig,
+        ScannerConfig, TaskConfig,
     };
     use tempfile::NamedTempFile;
 
@@ -75,6 +75,7 @@ application:
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
             komga_api: KomgaApiConfig::default(),
+            rate_limit: RateLimitConfig::default(),
         };
 
         let temp_file = NamedTempFile::new().unwrap();
@@ -156,6 +157,7 @@ scanner:
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
             komga_api: KomgaApiConfig::default(),
+            rate_limit: RateLimitConfig::default(),
         };
 
         let temp_file = NamedTempFile::new().unwrap();

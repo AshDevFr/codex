@@ -411,6 +411,93 @@ You can change the URL prefix to avoid conflicts or for preference. For example,
 
 For more details, see the [Third-Party Apps documentation](./third-party-apps).
 
+## Rate Limiting
+
+Codex includes built-in API rate limiting to protect against abuse. Rate limiting is **enabled by default** and uses a token bucket algorithm with per-client tracking.
+
+```yaml
+rate_limit:
+  enabled: true
+  anonymous_rps: 10           # Requests per second for anonymous users
+  anonymous_burst: 50         # Maximum burst size for anonymous users
+  authenticated_rps: 50       # Requests per second for authenticated users
+  authenticated_burst: 200    # Maximum burst size for authenticated users
+  exempt_paths:               # Paths exempt from rate limiting
+    - /health
+    - /api/v1/events
+  cleanup_interval_secs: 60   # How often to clean stale buckets
+  bucket_ttl_secs: 300        # Time before a bucket is considered stale
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `enabled` | `true` | Enable/disable rate limiting |
+| `anonymous_rps` | `10` | Requests per second for anonymous users |
+| `anonymous_burst` | `50` | Maximum burst size for anonymous users |
+| `authenticated_rps` | `50` | Requests per second for authenticated users |
+| `authenticated_burst` | `200` | Maximum burst size for authenticated users |
+| `exempt_paths` | `["/health", "/api/v1/events"]` | Paths exempt from rate limiting |
+| `cleanup_interval_secs` | `60` | How often to clean up stale client buckets |
+| `bucket_ttl_secs` | `300` | Time in seconds before a bucket is considered stale |
+
+### How It Works
+
+Rate limiting uses a **token bucket** algorithm:
+
+1. Each client (identified by IP address or user ID) has a bucket of tokens
+2. Tokens are added at the configured rate (e.g., 10/second for anonymous)
+3. Each request consumes one token
+4. If no tokens are available, the request is rejected with HTTP 429
+5. The bucket can hold up to the burst limit, allowing temporary spikes
+
+### Response Headers
+
+All API responses include rate limit information:
+
+| Header | Description |
+|--------|-------------|
+| `X-RateLimit-Limit` | Maximum requests allowed |
+| `X-RateLimit-Remaining` | Requests remaining in current window |
+| `X-RateLimit-Reset` | Unix timestamp when limit resets |
+
+### 429 Too Many Requests
+
+When rate limited, the API returns:
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 30
+X-RateLimit-Limit: 50
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1706140800
+Content-Type: application/json
+
+{
+  "error": "rate_limit_exceeded",
+  "message": "Too many requests. Please retry after 30 seconds.",
+  "retry_after": 30
+}
+```
+
+### Disabling Rate Limiting
+
+To disable rate limiting (not recommended for production):
+
+```yaml
+rate_limit:
+  enabled: false
+```
+
+Or via environment variable:
+
+```bash
+CODEX_RATE_LIMIT_ENABLED=false
+```
+
+:::caution
+Disabling rate limiting may expose your server to abuse. Only disable for trusted networks or development environments.
+:::
+
 ## Environment Variables
 
 All configuration options can be overridden with environment variables using the `CODEX_` prefix.
@@ -475,6 +562,16 @@ CODEX_PDF_CACHE_DIR=data/cache
 # Komga-Compatible API
 CODEX_KOMGA_API_ENABLED=true
 CODEX_KOMGA_API_PREFIX=komga
+
+# Rate Limiting
+CODEX_RATE_LIMIT_ENABLED=true
+CODEX_RATE_LIMIT_ANONYMOUS_RPS=10
+CODEX_RATE_LIMIT_ANONYMOUS_BURST=50
+CODEX_RATE_LIMIT_AUTHENTICATED_RPS=50
+CODEX_RATE_LIMIT_AUTHENTICATED_BURST=200
+CODEX_RATE_LIMIT_EXEMPT_PATHS=/health,/api/v1/events
+CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS=60
+CODEX_RATE_LIMIT_BUCKET_TTL_SECS=300
 ```
 
 ## Runtime vs Startup Settings
@@ -501,6 +598,7 @@ These settings are read from the config file at startup:
 - JWT secret
 - Server host/port
 - PDF rendering settings (DPI, cache directory, PDFium library path)
+- Rate limiting settings
 
 ## Example Configurations
 

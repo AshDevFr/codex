@@ -20,7 +20,21 @@ const queryClient = new QueryClient({
 			refetchOnWindowFocus: true, // Refetch when switching tabs
 			refetchOnMount: true, // Refetch when component mounts
 			refetchOnReconnect: true, // Refetch when network reconnects
-			retry: 1,
+			retry: (failureCount, error) => {
+				// Don't retry on client errors (4xx) - axios handles 429 retries internally
+				const apiError = error as { error?: string };
+				if (
+					apiError?.error === "rate_limit_exceeded" ||
+					apiError?.error?.startsWith("4")
+				) {
+					return false;
+				}
+				// Retry server errors (5xx) and network errors up to 1 time
+				return failureCount < 1;
+			},
+		},
+		mutations: {
+			retry: false, // Don't retry mutations by default
 		},
 	},
 });

@@ -39,6 +39,16 @@
 # Komga API (for third-party app compatibility):
 #   CODEX_KOMGA_API_ENABLED=false
 #   CODEX_KOMGA_API_PREFIX=komga
+#
+# Rate Limiting:
+#   CODEX_RATE_LIMIT_ENABLED=true
+#   CODEX_RATE_LIMIT_ANONYMOUS_RPS=10
+#   CODEX_RATE_LIMIT_ANONYMOUS_BURST=50
+#   CODEX_RATE_LIMIT_AUTHENTICATED_RPS=50
+#   CODEX_RATE_LIMIT_AUTHENTICATED_BURST=200
+#   CODEX_RATE_LIMIT_EXEMPT_PATHS=/health,/api/v1/events
+#   CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS=60
+#   CODEX_RATE_LIMIT_BUCKET_TTL_SECS=300
 
 task:
   worker_count: 2 # Number of parallel task workers per pod
@@ -80,3 +90,16 @@ files:
 # komga_api:
 #   enabled: false
 #   prefix: komga
+
+# Rate Limiting (enabled by default):
+# rate_limit:
+#   enabled: true
+#   anonymous_rps: 10
+#   anonymous_burst: 50
+#   authenticated_rps: 50
+#   authenticated_burst: 200
+#   exempt_paths:
+#     - /health
+#     - /api/v1/events
+#   cleanup_interval_secs: 60
+#   bucket_ttl_secs: 300

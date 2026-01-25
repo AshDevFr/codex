@@ -90,3 +90,18 @@ files:
 komga_api:
   enabled: true
   prefix: komga  # URL prefix: /{prefix}/api/v1/...
+
+# Rate Limiting (enabled by default)
+# ==================================
+# Protects API endpoints from abuse using token bucket algorithm
+# rate_limit:
+#   enabled: true
+#   anonymous_rps: 10          # Requests/second for anonymous users
+#   anonymous_burst: 50        # Burst size for anonymous users
+#   authenticated_rps: 50      # Requests/second for authenticated users
+#   authenticated_burst: 200   # Burst size for authenticated users
+#   exempt_paths:              # Paths exempt from rate limiting
+#     - /health
+#     - /api/v1/events
+#   cleanup_interval_secs: 60  # How often to clean up stale buckets
+#   bucket_ttl_secs: 300       # Time before a bucket is considered stale

@@ -200,6 +200,9 @@ pub struct AppState {
     /// User authentication cache to avoid hitting the database on every request
     /// Caches user permissions/role for 60 seconds to reduce DB load
     pub user_auth_cache: Arc<UserAuthCache>,
+    /// Rate limiter service for API rate limiting
+    /// None when rate limiting is disabled in config
+    pub rate_limiter_service: Option<Arc<crate::services::RateLimiterService>>,
 }
 
 // Legacy alias for backwards compatibility during transition

@@ -1,3 +1,4 @@
+import { notifications } from "@mantine/notifications";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import {
@@ -8,6 +9,7 @@ import {
 	useLocation,
 	useNavigate,
 } from "react-router-dom";
+import { onRateLimitNotification } from "@/api/client";
 import { setupApi } from "@/api/setup";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useEntityEvents } from "@/hooks/useEntityEvents";
@@ -57,6 +59,29 @@ function NavigationServiceInitializer() {
 	return null;
 }
 
+// Component to handle rate limit notifications
+function RateLimitNotificationHandler() {
+	useEffect(() => {
+		// Register handler for rate limit notifications
+		onRateLimitNotification((retryAfterSeconds) => {
+			notifications.show({
+				id: "rate-limit-warning",
+				title: "Slow down",
+				message: `Too many requests. Retrying in ${retryAfterSeconds} seconds...`,
+				color: "yellow",
+				autoClose: retryAfterSeconds * 1000,
+			});
+		});
+
+		// Cleanup handler on unmount
+		return () => {
+			onRateLimitNotification(null);
+		};
+	}, []);
+
+	return null;
+}
+
 // Setup redirect component - redirects to /setup if needed
 function SetupRedirect() {
 	const navigate = useNavigate();
@@ -95,6 +120,7 @@ function App() {
 	return (
 		<BrowserRouter>
 			<NavigationServiceInitializer />
+			<RateLimitNotificationHandler />
 			<SetupRedirect />
 			<Routes>
 				{/* Setup route - highest priority, no auth required */}

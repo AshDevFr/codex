@@ -185,6 +185,31 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         info!("PDF page cache disabled");
     }
 
+    // Initialize rate limiter service if enabled
+    let rate_limiter_service = if config.rate_limit.enabled {
+        let service = Arc::new(crate::services::RateLimiterService::new(Arc::new(
+            config.rate_limit.clone(),
+        )));
+        info!(
+            "Rate limiter initialized (anonymous: {} rps/{} burst, authenticated: {} rps/{} burst)",
+            config.rate_limit.anonymous_rps,
+            config.rate_limit.anonymous_burst,
+            config.rate_limit.authenticated_rps,
+            config.rate_limit.authenticated_burst
+        );
+        Some(service)
+    } else {
+        info!("Rate limiting disabled");
+        None
+    };
+
+    // Start rate limiter background cleanup if enabled
+    let rate_limiter_cleanup_handle = rate_limiter_service.as_ref().map(|service| {
+        service
+            .clone()
+            .start_background_cleanup(background_task_cancel.clone())
+    });
+
     // Initialize worker tracking variables
     let mut worker_handles = Vec::new();
     let mut worker_shutdown_channels = Vec::new();
@@ -259,6 +284,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         pdf_page_cache,
         inflight_thumbnails: Arc::new(crate::services::InflightThumbnailTracker::new()),
         user_auth_cache: Arc::new(crate::api::extractors::auth::UserAuthCache::new()),
+        rate_limiter_service,
     });
 
     // Build router using API module
@@ -344,6 +370,14 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Waiting for auth tracking flush task to complete...");
     if let Err(e) = auth_tracking_handle.await {
         tracing::warn!("Auth tracking flush task panicked: {}", e);
+    }
+
+    // Await rate limiter cleanup task completion if it was started
+    if let Some(handle) = rate_limiter_cleanup_handle {
+        info!("Waiting for rate limiter cleanup task to complete...");
+        if let Err(e) = handle.await {
+            tracing::warn!("Rate limiter cleanup task panicked: {}", e);
+        }
     }
     info!("Background tasks shutdown complete");
 
