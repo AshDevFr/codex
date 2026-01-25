@@ -85,7 +85,8 @@ impl Database {
                     .acquire_timeout(Duration::from_secs(sqlite_config.acquire_timeout_seconds))
                     .idle_timeout(Duration::from_secs(sqlite_config.idle_timeout_seconds))
                     .max_lifetime(Duration::from_secs(sqlite_config.max_lifetime_seconds))
-                    .sqlx_logging(false); // Disable sqlx query logging (we use tracing)
+                    .sqlx_logging(true)
+                    .sqlx_logging_level(log::LevelFilter::Trace); // SQL queries logged at trace level
 
                 info!(
                     "SQLite connection pool: max={}, min={}, acquire_timeout={}s",
@@ -154,7 +155,8 @@ impl Database {
                     .acquire_timeout(Duration::from_secs(postgres_config.acquire_timeout_seconds))
                     .idle_timeout(Duration::from_secs(postgres_config.idle_timeout_seconds))
                     .max_lifetime(Duration::from_secs(postgres_config.max_lifetime_seconds))
-                    .sqlx_logging(false); // Disable sqlx query logging (we use tracing)
+                    .sqlx_logging(true)
+                    .sqlx_logging_level(log::LevelFilter::Trace); // SQL queries logged at trace level
 
                 info!(
                     "PostgreSQL connection pool: max={}, min={}, acquire_timeout={}s",

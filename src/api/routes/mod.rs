@@ -5,7 +5,7 @@ pub mod v1;
 
 use crate::api::docs::ApiDoc;
 use crate::api::extractors::AppState;
-use crate::api::middleware::RateLimitLayer;
+use crate::api::middleware::{create_trace_layer, RateLimitLayer};
 use crate::config::Config;
 use crate::web;
 use axum::{routing::get, Router};
@@ -148,6 +148,11 @@ pub fn create_router(state: Arc<AppState>, config: &Config) -> Router {
 
         router = router.layer(cors);
     }
+
+    // Add request tracing middleware (outermost layer)
+    // This logs all HTTP requests/responses with method, path, status, and latency
+    // Logs at debug level for normal requests, error level for 5xx responses
+    router = router.layer(create_trace_layer());
 
     router
 }

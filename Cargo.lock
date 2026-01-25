@@ -709,6 +709,7 @@ dependencies = [
  "jsonwebtoken",
  "lazy_static",
  "lettre",
+ "log",
  "lopdf",
  "migration",
  "mime_guess",

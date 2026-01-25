@@ -96,6 +96,7 @@ tower-http = { version = "0.5", features = ["trace", "cors"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
+log = "0.4"  # For sqlx logging level configuration
 async-stream = "0.3"
 futures = "0.3"
 tokio-stream = "0.1"
