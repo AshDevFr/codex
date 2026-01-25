@@ -32,9 +32,9 @@ fn task_priority_order_by(prioritize_scans: bool) -> &'static str {
             WHEN task_type = 'scan_library' THEN 0
             WHEN task_type = 'purge_deleted' THEN 1
             WHEN task_type = 'generate_thumbnail' THEN 2
-            WHEN task_type = 'generate_series_thumbnail' THEN 3
-            WHEN task_type = 'analyze_book' THEN 4
-            WHEN task_type = 'analyze_series' THEN 5
+            WHEN task_type = 'analyze_book' THEN 3
+            WHEN task_type = 'analyze_series' THEN 4
+            WHEN task_type = 'generate_series_thumbnail' THEN 5
             WHEN task_type = 'generate_thumbnails' THEN 6
             WHEN task_type = 'find_duplicates' THEN 7
             WHEN task_type = 'refresh_metadata' THEN 8
