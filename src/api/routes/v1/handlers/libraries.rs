@@ -89,6 +89,7 @@ async fn library_to_dto(db: &DatabaseConnection, library: libraries::Model) -> L
 /// Query parameters for listing libraries
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct LibraryListParams {
     /// Page number (1-indexed, default 1)
     #[serde(default = "default_page")]
@@ -120,7 +121,7 @@ fn default_page_size() -> u64 {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "libraries"
+    tag = "Libraries"
 )]
 pub async fn list_libraries(
     State(state): State<Arc<AuthState>>,
@@ -181,7 +182,7 @@ pub async fn list_libraries(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "libraries"
+    tag = "Libraries"
 )]
 pub async fn get_library(
     State(state): State<Arc<AuthState>>,
@@ -212,7 +213,7 @@ pub async fn get_library(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "libraries"
+    tag = "Libraries"
 )]
 pub async fn create_library(
     State(state): State<Arc<AuthState>>,
@@ -320,7 +321,7 @@ pub async fn create_library(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "libraries"
+    tag = "Libraries"
 )]
 pub async fn update_library(
     State(state): State<Arc<AuthState>>,
@@ -448,7 +449,7 @@ pub async fn update_library(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "libraries"
+    tag = "Libraries"
 )]
 pub async fn delete_library(
     State(state): State<Arc<AuthState>>,
@@ -507,7 +508,7 @@ pub async fn delete_library(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "libraries"
+    tag = "Libraries"
 )]
 pub async fn purge_deleted_books(
     State(state): State<Arc<AuthState>>,
@@ -552,7 +553,7 @@ pub async fn purge_deleted_books(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "libraries"
+    tag = "Libraries"
 )]
 pub async fn preview_scan(
     State(_state): State<Arc<AuthState>>,

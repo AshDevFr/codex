@@ -60,7 +60,9 @@ use zip::write::SimpleFileOptions;
 const PLACEHOLDER_SVG: &[u8] = include_bytes!("../../../../../assets/placeholder-cover.svg");
 
 /// Query parameters for listing books in a series
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct ListBooksQuery {
     /// Include deleted books in the result
     #[serde(default)]
@@ -76,7 +78,9 @@ fn default_page_size() -> u64 {
 }
 
 /// Query parameters for listing series
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct SeriesListQuery {
     /// Page number (1-indexed, default 1)
     #[serde(default = "default_page")]
@@ -175,14 +179,7 @@ async fn series_to_dto(
 #[utoipa::path(
     get,
     path = "/api/v1/series",
-    params(
-        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID"),
-        ("page" = Option<u64>, Query, description = "Page number (1-indexed, default 1)"),
-        ("page_size" = Option<u64>, Query, description = "Number of items per page (max 100)"),
-        ("sort" = Option<String>, Query, description = "Sort parameter (format: 'field,direction')"),
-        ("genres" = Option<String>, Query, description = "Filter by genres (comma-separated, AND logic)"),
-        ("tags" = Option<String>, Query, description = "Filter by tags (comma-separated, AND logic)")
-    ),
+    params(SeriesListQuery),
     responses(
         (status = 200, description = "Paginated list of series", body = SeriesListResponse),
         (status = 403, description = "Forbidden"),
@@ -191,7 +188,7 @@ async fn series_to_dto(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn list_series(
     State(state): State<Arc<AuthState>>,
@@ -341,7 +338,7 @@ pub async fn list_series(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn get_series(
     State(state): State<Arc<AuthState>>,
@@ -390,7 +387,7 @@ pub async fn get_series(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn patch_series(
     State(state): State<Arc<AuthState>>,
@@ -519,7 +516,7 @@ pub async fn patch_series(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn search_series(
     State(state): State<Arc<AuthState>>,
@@ -571,7 +568,7 @@ pub async fn search_series(
 /// Supports complex filter conditions including nested AllOf/AnyOf logic,
 /// genre/tag filtering with include/exclude, and more.
 ///
-/// Pagination parameters (page, page_size, sort) are passed as query parameters.
+/// Pagination parameters (page, pageSize, sort) are passed as query parameters.
 /// Filter conditions are passed in the request body.
 #[utoipa::path(
     post,
@@ -586,7 +583,7 @@ pub async fn search_series(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn list_series_filtered(
     State(state): State<Arc<AuthState>>,
@@ -721,7 +718,7 @@ pub async fn list_series_filtered(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn list_series_alphabetical_groups(
     State(state): State<Arc<AuthState>>,
@@ -818,7 +815,7 @@ pub async fn list_series_alphabetical_groups(
     path = "/api/v1/series/{series_id}/books",
     params(
         ("series_id" = Uuid, Path, description = "Series ID"),
-        ("include_deleted" = Option<bool>, Query, description = "Include deleted books (default: false)")
+        ListBooksQuery
     ),
     responses(
         (status = 200, description = "List of books in the series", body = Vec<BookDto>),
@@ -829,7 +826,7 @@ pub async fn list_series_alphabetical_groups(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn get_series_books(
     State(state): State<Arc<AuthState>>,
@@ -872,7 +869,7 @@ pub async fn get_series_books(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn purge_series_deleted_books(
     State(state): State<Arc<AuthState>>,
@@ -931,7 +928,7 @@ pub async fn purge_series_deleted_books(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn upload_series_cover(
     State(state): State<Arc<AuthState>>,
@@ -1055,7 +1052,7 @@ pub async fn upload_series_cover(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn set_series_cover_source(
     State(state): State<Arc<AuthState>>,
@@ -1117,7 +1114,7 @@ pub async fn set_series_cover_source(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn get_series_thumbnail(
     State(state): State<Arc<AuthState>>,
@@ -1294,7 +1291,9 @@ fn serve_series_placeholder_response() -> Response {
 }
 
 /// Query parameters for in-progress series
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct InProgressSeriesQuery {
     /// Filter by library ID (optional)
     #[serde(default)]
@@ -1305,9 +1304,7 @@ pub struct InProgressSeriesQuery {
 #[utoipa::path(
     get,
     path = "/api/v1/series/in-progress",
-    params(
-        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID")
-    ),
+    params(InProgressSeriesQuery),
     responses(
         (status = 200, description = "List of in-progress series", body = Vec<SeriesDto>),
         (status = 403, description = "Forbidden"),
@@ -1316,7 +1313,7 @@ pub struct InProgressSeriesQuery {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn list_in_progress_series(
     State(state): State<Arc<AuthState>>,
@@ -1355,7 +1352,9 @@ pub async fn list_in_progress_series(
 }
 
 /// Query parameters for recently added/updated series
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct RecentSeriesQuery {
     /// Maximum number of series to return (default: 50)
     #[serde(default = "default_recent_limit")]
@@ -1374,10 +1373,7 @@ fn default_recent_limit() -> u64 {
 #[utoipa::path(
     get,
     path = "/api/v1/series/recently-added",
-    params(
-        ("limit" = Option<u64>, Query, description = "Maximum number of series to return (default: 50)"),
-        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID")
-    ),
+    params(RecentSeriesQuery),
     responses(
         (status = 200, description = "List of recently added series", body = Vec<SeriesDto>),
         (status = 403, description = "Forbidden"),
@@ -1386,7 +1382,7 @@ fn default_recent_limit() -> u64 {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn list_recently_added_series(
     State(state): State<Arc<AuthState>>,
@@ -1442,7 +1438,7 @@ pub async fn list_recently_added_series(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn list_library_recently_added_series(
     State(state): State<Arc<AuthState>>,
@@ -1487,10 +1483,7 @@ pub async fn list_library_recently_added_series(
 #[utoipa::path(
     get,
     path = "/api/v1/series/recently-updated",
-    params(
-        ("limit" = Option<u64>, Query, description = "Maximum number of series to return (default: 50)"),
-        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID")
-    ),
+    params(RecentSeriesQuery),
     responses(
         (status = 200, description = "List of recently updated series", body = Vec<SeriesDto>),
         (status = 403, description = "Forbidden"),
@@ -1499,7 +1492,7 @@ pub async fn list_library_recently_added_series(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn list_recently_updated_series(
     State(state): State<Arc<AuthState>>,
@@ -1555,7 +1548,7 @@ pub async fn list_recently_updated_series(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn list_library_recently_updated_series(
     State(state): State<Arc<AuthState>>,
@@ -1602,8 +1595,7 @@ pub async fn list_library_recently_updated_series(
     path = "/api/v1/libraries/{library_id}/series",
     params(
         ("library_id" = Uuid, Path, description = "Library ID"),
-        ("page" = Option<u64>, Query, description = "Page number (1-indexed, default 1)"),
-        ("page_size" = Option<u64>, Query, description = "Number of items per page (max 100)")
+        SeriesListQuery
     ),
     responses(
         (status = 200, description = "Paginated list of series in library", body = SeriesListResponse),
@@ -1613,7 +1605,7 @@ pub async fn list_library_recently_updated_series(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn list_library_series(
     State(state): State<Arc<AuthState>>,
@@ -1717,7 +1709,7 @@ pub async fn list_library_series(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn list_library_in_progress_series(
     State(state): State<Arc<AuthState>>,
@@ -1778,7 +1770,7 @@ pub struct SelectCoverSourceRequest {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn mark_series_as_read(
     State(state): State<Arc<AuthState>>,
@@ -1838,7 +1830,7 @@ pub async fn mark_series_as_read(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn mark_series_as_unread(
     State(state): State<Arc<AuthState>>,
@@ -1897,7 +1889,7 @@ pub async fn mark_series_as_unread(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn download_series(
     State(state): State<Arc<AuthState>>,
@@ -2030,7 +2022,7 @@ pub async fn download_series(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn replace_series_metadata(
     State(state): State<Arc<AuthState>>,
@@ -2147,7 +2139,7 @@ pub async fn replace_series_metadata(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn patch_series_metadata(
     State(state): State<Arc<AuthState>>,
@@ -2292,7 +2284,7 @@ pub async fn patch_series_metadata(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn get_full_series_metadata(
     State(state): State<Arc<AuthState>>,
@@ -2455,7 +2447,7 @@ pub async fn get_full_series_metadata(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn get_full_series(
     State(state): State<Arc<AuthState>>,
@@ -2670,7 +2662,7 @@ pub async fn get_full_series(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn update_metadata_locks(
     State(state): State<Arc<AuthState>>,
@@ -2802,7 +2794,7 @@ pub async fn update_metadata_locks(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn get_metadata_locks(
     State(state): State<Arc<AuthState>>,
@@ -2861,6 +2853,7 @@ fn sanitize_filename(name: &str) -> String {
 /// Query parameters for listing genres
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct GenreListParams {
     /// Page number (1-indexed, default 1)
     #[serde(default = "genre_default_page")]
@@ -2892,7 +2885,7 @@ fn genre_default_page_size() -> u64 {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "genres"
+    tag = "Genres"
 )]
 pub async fn list_genres(
     State(state): State<Arc<AuthState>>,
@@ -2961,7 +2954,7 @@ pub async fn list_genres(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "genres"
+    tag = "Genres"
 )]
 pub async fn get_series_genres(
     State(state): State<Arc<AuthState>>,
@@ -3010,7 +3003,7 @@ pub async fn get_series_genres(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "genres"
+    tag = "Genres"
 )]
 pub async fn set_series_genres(
     State(state): State<Arc<AuthState>>,
@@ -3062,6 +3055,7 @@ pub async fn set_series_genres(
 /// Query parameters for listing tags
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct TagListParams {
     /// Page number (1-indexed, default 1)
     #[serde(default = "tag_default_page")]
@@ -3093,7 +3087,7 @@ fn tag_default_page_size() -> u64 {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "tags"
+    tag = "Tags"
 )]
 pub async fn list_tags(
     State(state): State<Arc<AuthState>>,
@@ -3162,7 +3156,7 @@ pub async fn list_tags(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "tags"
+    tag = "Tags"
 )]
 pub async fn get_series_tags(
     State(state): State<Arc<AuthState>>,
@@ -3211,7 +3205,7 @@ pub async fn get_series_tags(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "tags"
+    tag = "Tags"
 )]
 pub async fn set_series_tags(
     State(state): State<Arc<AuthState>>,
@@ -3273,7 +3267,7 @@ pub async fn set_series_tags(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "genres"
+    tag = "Genres"
 )]
 pub async fn add_series_genre(
     State(state): State<Arc<AuthState>>,
@@ -3330,7 +3324,7 @@ pub async fn add_series_genre(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "genres"
+    tag = "Genres"
 )]
 pub async fn remove_series_genre(
     State(state): State<Arc<AuthState>>,
@@ -3386,7 +3380,7 @@ pub async fn remove_series_genre(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "genres"
+    tag = "Genres"
 )]
 pub async fn delete_genre(
     State(state): State<Arc<AuthState>>,
@@ -3418,7 +3412,7 @@ pub async fn delete_genre(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "genres"
+    tag = "Genres"
 )]
 pub async fn cleanup_genres(
     State(state): State<Arc<AuthState>>,
@@ -3453,7 +3447,7 @@ pub async fn cleanup_genres(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "tags"
+    tag = "Tags"
 )]
 pub async fn add_series_tag(
     State(state): State<Arc<AuthState>>,
@@ -3510,7 +3504,7 @@ pub async fn add_series_tag(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "tags"
+    tag = "Tags"
 )]
 pub async fn remove_series_tag(
     State(state): State<Arc<AuthState>>,
@@ -3566,7 +3560,7 @@ pub async fn remove_series_tag(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "tags"
+    tag = "Tags"
 )]
 pub async fn delete_tag(
     State(state): State<Arc<AuthState>>,
@@ -3598,7 +3592,7 @@ pub async fn delete_tag(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "tags"
+    tag = "Tags"
 )]
 pub async fn cleanup_tags(
     State(state): State<Arc<AuthState>>,
@@ -3636,7 +3630,7 @@ pub async fn cleanup_tags(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "ratings"
+    tag = "Ratings"
 )]
 pub async fn get_series_rating(
     State(state): State<Arc<AuthState>>,
@@ -3685,7 +3679,7 @@ pub async fn get_series_rating(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "ratings"
+    tag = "Ratings"
 )]
 pub async fn set_series_rating(
     State(state): State<Arc<AuthState>>,
@@ -3744,7 +3738,7 @@ pub async fn set_series_rating(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "ratings"
+    tag = "Ratings"
 )]
 pub async fn delete_series_rating(
     State(state): State<Arc<AuthState>>,
@@ -3785,7 +3779,7 @@ pub async fn delete_series_rating(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "ratings"
+    tag = "Ratings"
 )]
 pub async fn list_user_ratings(
     State(state): State<Arc<AuthState>>,
@@ -3832,7 +3826,7 @@ pub async fn list_user_ratings(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn get_series_alternate_titles(
     State(state): State<Arc<AuthState>>,
@@ -3883,7 +3877,7 @@ pub async fn get_series_alternate_titles(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn create_alternate_title(
     State(state): State<Arc<AuthState>>,
@@ -3947,7 +3941,7 @@ pub async fn create_alternate_title(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn update_alternate_title(
     State(state): State<Arc<AuthState>>,
@@ -4020,7 +4014,7 @@ pub async fn update_alternate_title(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn delete_alternate_title(
     State(state): State<Arc<AuthState>>,
@@ -4086,7 +4080,7 @@ pub async fn delete_alternate_title(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn get_series_external_ratings(
     State(state): State<Arc<AuthState>>,
@@ -4139,7 +4133,7 @@ pub async fn get_series_external_ratings(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn create_external_rating(
     State(state): State<Arc<AuthState>>,
@@ -4210,7 +4204,7 @@ pub async fn create_external_rating(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn delete_external_rating(
     State(state): State<Arc<AuthState>>,
@@ -4272,7 +4266,7 @@ pub async fn delete_external_rating(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn get_series_average_rating(
     State(state): State<Arc<AuthState>>,
@@ -4320,7 +4314,7 @@ pub async fn get_series_average_rating(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn get_series_external_links(
     State(state): State<Arc<AuthState>>,
@@ -4372,7 +4366,7 @@ pub async fn get_series_external_links(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn create_external_link(
     State(state): State<Arc<AuthState>>,
@@ -4438,7 +4432,7 @@ pub async fn create_external_link(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn delete_external_link(
     State(state): State<Arc<AuthState>>,
@@ -4496,7 +4490,7 @@ pub async fn delete_external_link(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn list_series_covers(
     State(state): State<Arc<AuthState>>,
@@ -4551,7 +4545,7 @@ pub async fn list_series_covers(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn select_series_cover(
     State(state): State<Arc<AuthState>>,
@@ -4623,7 +4617,7 @@ pub async fn select_series_cover(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn reset_series_cover(
     State(state): State<Arc<AuthState>>,
@@ -4681,7 +4675,7 @@ pub async fn reset_series_cover(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn delete_series_cover(
     State(state): State<Arc<AuthState>>,
@@ -4779,7 +4773,7 @@ pub async fn delete_series_cover(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "series"
+    tag = "Series"
 )]
 pub async fn get_series_cover_image(
     State(state): State<Arc<AuthState>>,

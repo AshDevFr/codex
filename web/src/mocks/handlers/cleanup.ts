@@ -17,7 +17,7 @@ export const cleanupHandlers = [
 		await delay(150);
 
 		const url = new URL(request.url);
-		const includeFiles = url.searchParams.get("include_files") === "true";
+		const includeFiles = url.searchParams.get("includeFiles") === "true";
 
 		const response: {
 			orphaned_thumbnails: number;

@@ -45,7 +45,7 @@ use std::sync::Arc;
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn list_collections(
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -81,7 +81,7 @@ pub async fn list_collections(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn list_readlists(
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -116,7 +116,7 @@ pub async fn list_readlists(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn list_genres(
     State(state): State<Arc<AuthState>>,
@@ -157,7 +157,7 @@ pub async fn list_genres(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn list_tags(
     State(state): State<Arc<AuthState>>,
@@ -199,7 +199,7 @@ pub async fn list_tags(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn list_authors_v2(
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -234,7 +234,7 @@ pub async fn list_authors_v2(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn list_languages(
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -269,7 +269,7 @@ pub async fn list_languages(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn list_publishers(
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -304,7 +304,7 @@ pub async fn list_publishers(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn list_age_ratings(
     FlexibleAuthContext(auth): FlexibleAuthContext,
@@ -339,7 +339,7 @@ pub async fn list_age_ratings(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn list_series_release_dates(
     FlexibleAuthContext(auth): FlexibleAuthContext,

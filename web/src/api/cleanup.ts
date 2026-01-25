@@ -25,7 +25,7 @@ export const cleanupApi = {
 	): Promise<OrphanStatsDto> => {
 		const params = new URLSearchParams();
 		if (options.includeFiles) {
-			params.set("include_files", "true");
+			params.set("includeFiles", "true");
 		}
 		const queryString = params.toString();
 		const url = queryString

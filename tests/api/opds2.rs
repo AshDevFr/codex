@@ -322,7 +322,7 @@ async fn test_opds2_library_series_pagination() {
     let request = hyper::Request::builder()
         .method("GET")
         .uri(format!(
-            "/opds/v2/libraries/{}?page=1&page_size=10",
+            "/opds/v2/libraries/{}?page=1&pageSize=10",
             library.id
         ))
         .header("Authorization", format!("Bearer {}", token))

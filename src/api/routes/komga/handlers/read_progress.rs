@@ -57,7 +57,7 @@ use uuid::Uuid;
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn update_progress(
     State(state): State<Arc<AuthState>>,
@@ -123,7 +123,7 @@ pub async fn update_progress(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn delete_progress(
     State(state): State<Arc<AuthState>>,

@@ -29,6 +29,7 @@ fn default_page() -> u64 {
 /// Pagination parameters for list endpoints
 #[derive(Debug, Deserialize, IntoParams)]
 #[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 #[allow(dead_code)] // Public API - fields read by serde deserialization
 pub struct PaginationParams {
     /// Page number (1-indexed, minimum 1)
@@ -90,6 +91,7 @@ impl PaginationParams {
 /// This enables proper HATEOAS links.
 #[derive(Debug, Clone, Deserialize, IntoParams)]
 #[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct ListPaginationParams {
     /// Page number (1-indexed, minimum 1)
     #[serde(default = "default_page")]
@@ -345,7 +347,7 @@ impl PaginationLinkBuilder {
     fn build_url(&self, page: u64) -> String {
         let mut params = vec![
             format!("page={}", page),
-            format!("page_size={}", self.page_size),
+            format!("pageSize={}", self.page_size),
         ];
 
         for (key, value) in &self.additional_params {
@@ -564,17 +566,17 @@ impl<T> CursorPaginatedResponse<T> {
 
         // Build self link
         let self_link = match current_cursor {
-            Some(cursor) => format!("{}?page_size={}&cursor={}", base_path, page_size, cursor),
-            None => format!("{}?page_size={}", base_path, page_size),
+            Some(cursor) => format!("{}?pageSize={}&cursor={}", base_path, page_size, cursor),
+            None => format!("{}?pageSize={}", base_path, page_size),
         };
 
         // Build first link (no cursor)
-        let first = format!("{}?page_size={}", base_path, page_size);
+        let first = format!("{}?pageSize={}", base_path, page_size);
 
         // Build next link
         let next = next_cursor
             .as_ref()
-            .map(|cursor| format!("{}?page_size={}&cursor={}", base_path, page_size, cursor));
+            .map(|cursor| format!("{}?pageSize={}&cursor={}", base_path, page_size, cursor));
 
         Self {
             data,
@@ -609,19 +611,19 @@ impl<T> CursorPaginatedResponse<T> {
         // Build self link
         let self_link = match current_cursor {
             Some(cursor) => format!(
-                "{}?page_size={}&cursor={}{}",
+                "{}?pageSize={}&cursor={}{}",
                 base_path, page_size, cursor, extra_params
             ),
-            None => format!("{}?page_size={}{}", base_path, page_size, extra_params),
+            None => format!("{}?pageSize={}{}", base_path, page_size, extra_params),
         };
 
         // Build first link (no cursor)
-        let first = format!("{}?page_size={}{}", base_path, page_size, extra_params);
+        let first = format!("{}?pageSize={}{}", base_path, page_size, extra_params);
 
         // Build next link
         let next = next_cursor.as_ref().map(|cursor| {
             format!(
-                "{}?page_size={}&cursor={}{}",
+                "{}?pageSize={}&cursor={}{}",
                 base_path, page_size, cursor, extra_params
             )
         });
@@ -715,14 +717,14 @@ mod tests {
         let builder = PaginationLinkBuilder::new("/api/v1/books", 1, 50, 10);
         let links = builder.build();
 
-        assert_eq!(links.self_link, "/api/v1/books?page=1&page_size=50");
-        assert_eq!(links.first, "/api/v1/books?page=1&page_size=50");
+        assert_eq!(links.self_link, "/api/v1/books?page=1&pageSize=50");
+        assert_eq!(links.first, "/api/v1/books?page=1&pageSize=50");
         assert!(links.prev.is_none());
         assert_eq!(
             links.next,
-            Some("/api/v1/books?page=2&page_size=50".to_string())
+            Some("/api/v1/books?page=2&pageSize=50".to_string())
         );
-        assert_eq!(links.last, "/api/v1/books?page=10&page_size=50");
+        assert_eq!(links.last, "/api/v1/books?page=10&pageSize=50");
     }
 
     #[test]
@@ -730,17 +732,17 @@ mod tests {
         let builder = PaginationLinkBuilder::new("/api/v1/series", 5, 20, 10);
         let links = builder.build();
 
-        assert_eq!(links.self_link, "/api/v1/series?page=5&page_size=20");
-        assert_eq!(links.first, "/api/v1/series?page=1&page_size=20");
+        assert_eq!(links.self_link, "/api/v1/series?page=5&pageSize=20");
+        assert_eq!(links.first, "/api/v1/series?page=1&pageSize=20");
         assert_eq!(
             links.prev,
-            Some("/api/v1/series?page=4&page_size=20".to_string())
+            Some("/api/v1/series?page=4&pageSize=20".to_string())
         );
         assert_eq!(
             links.next,
-            Some("/api/v1/series?page=6&page_size=20".to_string())
+            Some("/api/v1/series?page=6&pageSize=20".to_string())
         );
-        assert_eq!(links.last, "/api/v1/series?page=10&page_size=20");
+        assert_eq!(links.last, "/api/v1/series?page=10&pageSize=20");
     }
 
     #[test]
@@ -748,13 +750,13 @@ mod tests {
         let builder = PaginationLinkBuilder::new("/api/v1/books", 10, 50, 10);
         let links = builder.build();
 
-        assert_eq!(links.self_link, "/api/v1/books?page=10&page_size=50");
+        assert_eq!(links.self_link, "/api/v1/books?page=10&pageSize=50");
         assert_eq!(
             links.prev,
-            Some("/api/v1/books?page=9&page_size=50".to_string())
+            Some("/api/v1/books?page=9&pageSize=50".to_string())
         );
         assert!(links.next.is_none());
-        assert_eq!(links.last, "/api/v1/books?page=10&page_size=50");
+        assert_eq!(links.last, "/api/v1/books?page=10&pageSize=50");
     }
 
     #[test]
@@ -924,10 +926,10 @@ mod tests {
         assert_eq!(response.page_size, 50);
         assert!(response.has_more);
         assert_eq!(response.next_cursor, Some("abc123".to_string()));
-        assert_eq!(response.links.first, "/api/v1/books?page_size=50");
+        assert_eq!(response.links.first, "/api/v1/books?pageSize=50");
         assert_eq!(
             response.links.next,
-            Some("/api/v1/books?page_size=50&cursor=abc123".to_string())
+            Some("/api/v1/books?pageSize=50&cursor=abc123".to_string())
         );
     }
 

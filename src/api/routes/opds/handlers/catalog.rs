@@ -21,6 +21,8 @@ use uuid::Uuid;
 
 /// Pagination parameters for OPDS feeds
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct OpdsPaginationParams {
     #[serde(default = "default_page")]
     pub page: u32,
@@ -90,7 +92,7 @@ impl IntoResponse for OpdsResponse {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "opds"
+    tag = "OPDS"
 )]
 pub async fn root_catalog(
     State(state): State<Arc<AuthState>>,
@@ -152,7 +154,7 @@ pub async fn root_catalog(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "opds"
+    tag = "OPDS"
 )]
 pub async fn list_libraries(
     State(state): State<Arc<AuthState>>,
@@ -222,7 +224,7 @@ pub async fn list_libraries(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "opds"
+    tag = "OPDS"
 )]
 pub async fn library_series(
     State(state): State<Arc<AuthState>>,
@@ -263,7 +265,7 @@ pub async fn library_series(
         &app_name,
     )
     .add_link(OpdsLink::self_link(format!(
-        "{}/libraries/{}?page={}&page_size={}",
+        "{}/libraries/{}?page={}&pageSize={}",
         base_url, library_id, pagination.page, pagination.page_size
     )))
     .add_link(OpdsLink::start_link(base_url.to_string()))
@@ -276,7 +278,7 @@ pub async fn library_series(
     // Add pagination links
     if pagination.page > 1 {
         feed = feed.add_link(OpdsLink::prev_link(format!(
-            "{}/libraries/{}?page={}&page_size={}",
+            "{}/libraries/{}?page={}&pageSize={}",
             base_url,
             library_id,
             pagination.page - 1,
@@ -287,7 +289,7 @@ pub async fn library_series(
     let total_pages = (total as f64 / pagination.page_size as f64).ceil() as u32;
     if pagination.page < total_pages {
         feed = feed.add_link(OpdsLink::next_link(format!(
-            "{}/libraries/{}?page={}&page_size={}",
+            "{}/libraries/{}?page={}&pageSize={}",
             base_url,
             library_id,
             pagination.page + 1,
@@ -356,7 +358,7 @@ pub async fn library_series(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "opds"
+    tag = "OPDS"
 )]
 pub async fn series_books(
     State(state): State<Arc<AuthState>>,

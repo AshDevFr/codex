@@ -46,7 +46,7 @@ pub struct Opds2SearchParams {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "opds2"
+    tag = "OPDS 2.0"
 )]
 pub async fn search(
     State(state): State<Arc<AuthState>>,

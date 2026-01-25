@@ -159,8 +159,8 @@ async fn test_list_all_books_with_pagination() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state.clone()).await;
 
-    // Request first page (page_size=10, page=1, 1-indexed)
-    let request = get_request_with_auth("/api/v1/books?page=1&page_size=10", &token);
+    // Request first page (pageSize=10, page=1, 1-indexed)
+    let request = get_request_with_auth("/api/v1/books?page=1&pageSize=10", &token);
     let (status, response): (StatusCode, Option<BookListResponse>) =
         make_json_request(app, request).await;
 
@@ -172,7 +172,7 @@ async fn test_list_all_books_with_pagination() {
 
     // Request second page (page=2)
     let app2 = create_test_router(state).await;
-    let request = get_request_with_auth("/api/v1/books?page=2&page_size=10", &token);
+    let request = get_request_with_auth("/api/v1/books?page=2&pageSize=10", &token);
     let (status, response): (StatusCode, Option<BookListResponse>) =
         make_json_request(app2, request).await;
 
@@ -409,7 +409,7 @@ async fn test_list_books_by_series() {
     let app = create_test_router(state).await;
 
     // Request books for specific series
-    let request = get_request_with_auth(&format!("/api/v1/books?series_id={}", series.id), &token);
+    let request = get_request_with_auth(&format!("/api/v1/books?seriesId={}", series.id), &token);
     let (status, response): (StatusCode, Option<BookListResponse>) =
         make_json_request(app, request).await;
 
@@ -1428,7 +1428,7 @@ async fn test_list_books_with_errors_pagination() {
     let app = create_test_router(state).await;
 
     // Request first page (10 items) - pages are 1-indexed
-    let request = get_request_with_auth("/api/v1/books/with-errors?page=1&page_size=10", &token);
+    let request = get_request_with_auth("/api/v1/books/with-errors?page=1&pageSize=10", &token);
     let (status, response): (StatusCode, Option<BookListResponse>) =
         make_json_request(app, request).await;
 
@@ -1441,7 +1441,7 @@ async fn test_list_books_with_errors_pagination() {
 
     // Request second page
     let app2 = create_test_router(create_test_auth_state(db.clone()).await).await;
-    let request = get_request_with_auth("/api/v1/books/with-errors?page=2&page_size=10", &token);
+    let request = get_request_with_auth("/api/v1/books/with-errors?page=2&pageSize=10", &token);
     let (status, response): (StatusCode, Option<BookListResponse>) =
         make_json_request(app2, request).await;
 
@@ -3240,7 +3240,7 @@ async fn test_list_books_with_errors_v2_filter_by_type() {
     let app = create_test_router(state).await;
 
     // Test filtering by thumbnail error type
-    let request = get_request_with_auth("/api/v1/books/errors?error_type=thumbnail", &token);
+    let request = get_request_with_auth("/api/v1/books/errors?errorType=thumbnail", &token);
     let (status, response): (StatusCode, Option<BooksWithErrorsResponse>) =
         make_json_request(app, request).await;
 
@@ -3943,7 +3943,7 @@ async fn test_list_books_with_errors_v2_pagination() {
     let app = create_test_router(state.clone()).await;
 
     // Test first page with small page size (1-indexed)
-    let request = get_request_with_auth("/api/v1/books/errors?page=1&page_size=10", &token);
+    let request = get_request_with_auth("/api/v1/books/errors?page=1&pageSize=10", &token);
     let (status, response): (StatusCode, Option<BooksWithErrorsResponse>) =
         make_json_request(app, request).await;
 
@@ -3962,7 +3962,7 @@ async fn test_list_books_with_errors_v2_pagination() {
 
     // Test second page
     let app2 = create_test_router(state.clone()).await;
-    let request2 = get_request_with_auth("/api/v1/books/errors?page=2&page_size=10", &token);
+    let request2 = get_request_with_auth("/api/v1/books/errors?page=2&pageSize=10", &token);
     let (status2, response2): (StatusCode, Option<BooksWithErrorsResponse>) =
         make_json_request(app2, request2).await;
 
@@ -3975,7 +3975,7 @@ async fn test_list_books_with_errors_v2_pagination() {
 
     // Test third (last) page
     let app3 = create_test_router(state).await;
-    let request3 = get_request_with_auth("/api/v1/books/errors?page=3&page_size=10", &token);
+    let request3 = get_request_with_auth("/api/v1/books/errors?page=3&pageSize=10", &token);
     let (status3, response3): (StatusCode, Option<BooksWithErrorsResponse>) =
         make_json_request(app3, request3).await;
 

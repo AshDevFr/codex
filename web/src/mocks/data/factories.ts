@@ -898,15 +898,14 @@ export const createPaginatedResponse = <T>(
 
 	// Build HATEOAS links
 	const links: PaginationLinks = {
-		self: `${basePath}?page=${page}&page_size=${pageSize}`,
-		first: `${basePath}?page=1&page_size=${pageSize}`,
-		prev:
-			page > 1 ? `${basePath}?page=${page - 1}&page_size=${pageSize}` : null,
+		self: `${basePath}?page=${page}&pageSize=${pageSize}`,
+		first: `${basePath}?page=1&pageSize=${pageSize}`,
+		prev: page > 1 ? `${basePath}?page=${page - 1}&pageSize=${pageSize}` : null,
 		next:
 			page < totalPages
-				? `${basePath}?page=${page + 1}&page_size=${pageSize}`
+				? `${basePath}?page=${page + 1}&pageSize=${pageSize}`
 				: null,
-		last: `${basePath}?page=${totalPages}&page_size=${pageSize}`,
+		last: `${basePath}?page=${totalPages}&pageSize=${pageSize}`,
 	};
 
 	return {

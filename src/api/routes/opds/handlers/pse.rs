@@ -51,7 +51,7 @@ impl IntoResponse for OpdsPseResponse {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "opds"
+    tag = "OPDS"
 )]
 pub async fn book_pages(
     State(state): State<Arc<AuthState>>,

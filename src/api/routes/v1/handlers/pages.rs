@@ -45,7 +45,7 @@ const PLACEHOLDER_SVG: &[u8] = include_bytes!("../../../../../assets/placeholder
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "pages"
+    tag = "Pages"
 )]
 pub async fn get_page_image(
     State(state): State<Arc<AuthState>>,

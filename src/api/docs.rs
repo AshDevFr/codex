@@ -664,35 +664,56 @@ All paginated responses use camelCase and include HATEOAS navigation links:
         )
     ),
     tags(
-        (name = "health", description = "Health check endpoints"),
-        (name = "auth", description = "Authentication endpoints"),
-        (name = "libraries", description = "Library management endpoints"),
-        (name = "series", description = "Series browsing and search endpoints"),
-        (name = "genres", description = "Genre taxonomy endpoints for categorizing series"),
-        (name = "tags", description = "Tag taxonomy endpoints for labeling series"),
-        (name = "ratings", description = "User series rating endpoints"),
+        // Getting Started
+        (name = "Health", description = "Health check endpoints"),
+        (name = "Setup", description = "Initial server setup and configuration"),
+
+        // Authentication & Security
+        (name = "Auth", description = "Authentication endpoints (login, logout, registration)"),
+        (name = "API Keys", description = "API key management for programmatic access"),
+
+        // Library Content
+        (name = "Libraries", description = "Library management endpoints"),
+        (name = "Series", description = "Series browsing and search endpoints"),
+        (name = "Books", description = "Book details and metadata endpoints"),
+        (name = "Pages", description = "Page image serving endpoints"),
+
+        // Metadata & Taxonomy
+        (name = "Genres", description = "Genre taxonomy for categorizing series"),
+        (name = "Tags", description = "Tag taxonomy for labeling series"),
+        (name = "Ratings", description = "User series ratings"),
+
+        // User Features
+        (name = "Users", description = "User management (admin only)"),
         (name = "User Preferences", description = "Per-user settings and preferences"),
-        (name = "books", description = "Book details and metadata endpoints"),
-        (name = "pages", description = "Page image serving endpoints"),
-        (name = "Reading Progress", description = "Reading progress tracking endpoints"),
-        (name = "users", description = "User management endpoints (admin only)"),
-        (name = "api-keys", description = "API key management endpoints"),
-        (name = "Metrics", description = "Application metrics and statistics"),
-        (name = "Scans", description = "Library scanning and analysis endpoints"),
-        (name = "Task Queue", description = "Distributed task queue for background jobs (analysis, thumbnails, scans)"),
-        (name = "Thumbnails", description = "Thumbnail generation and management"),
-        (name = "filesystem", description = "Filesystem browsing for library path selection"),
-        (name = "settings", description = "Runtime configuration settings management (admin only)"),
-        (name = "System Integrations", description = "Admin-managed external service integrations"),
-        (name = "duplicates", description = "Duplicate book detection and management"),
+        (name = "Reading Progress", description = "Reading progress tracking"),
+        (name = "User Integrations", description = "User external service connections (AniList, etc.)"),
+
+        // Background Jobs
+        (name = "Task Queue", description = "Background job queue management"),
+        (name = "Scans", description = "Library scanning and analysis"),
+        (name = "Thumbnails", description = "Thumbnail generation"),
+
+        // System Administration
         (name = "Admin", description = "Administrative operations (cleanup, maintenance)"),
-        (name = "sharing-tags", description = "Sharing tags for content access control (admin only)"),
-        (name = "events", description = "Server-Sent Events for real-time updates"),
-        (name = "opds", description = "OPDS 1.2 catalog feed (Atom XML format)"),
-        (name = "opds2", description = "OPDS 2.0 catalog feed (JSON format) - Modern JSON-based OPDS specification"),
-        (name = "komga", description = "Komga-compatible API for third-party apps (Komic, etc.). Enable via config. Default path: /{prefix}/api/v1/ where prefix defaults to 'komga'"),
+        (name = "Settings", description = "Runtime configuration settings (admin only)"),
+        (name = "System Integrations", description = "Admin-managed external service integrations"),
+        (name = "Metrics", description = "Application metrics and statistics"),
+        (name = "Filesystem", description = "Filesystem browsing for library paths"),
+        (name = "Duplicates", description = "Duplicate book detection and management"),
+        (name = "Sharing Tags", description = "Content access control tags (admin only)"),
+
+        // Real-time Events
+        (name = "Events", description = "Server-Sent Events for real-time updates"),
+
+        // OPDS Catalog Feeds
+        (name = "OPDS", description = "OPDS 1.2 catalog (Atom XML) - Compatible with most e-readers"),
+        (name = "OPDS 2.0", description = "OPDS 2.0 catalog (JSON) - Modern JSON-based format"),
+
+        // Third-Party Compatibility
+        (name = "Komga", description = "Komga-compatible API for third-party apps (Komic, etc.)"),
     ),
-    modifiers(&SecurityAddon, &OperationIdPrefixer),
+    modifiers(&SecurityAddon, &OperationIdPrefixer, &TagGroupsModifier),
 )]
 pub struct ApiDoc;
 
@@ -767,6 +788,70 @@ impl utoipa::Modify for OperationIdPrefixer {
                     }
                 }
             }
+        }
+    }
+}
+
+/// Modifier that adds x-tagGroups extension for better API documentation organization.
+///
+/// This groups related tags together in the Scalar UI sidebar, making the API
+/// easier to navigate. Supported by Scalar, Redoc, and other OpenAPI viewers.
+struct TagGroupsModifier;
+
+impl utoipa::Modify for TagGroupsModifier {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        use serde_json::json;
+
+        // Define tag groups for organized navigation
+        let tag_groups = json!([
+            {
+                "name": "Getting Started",
+                "tags": ["Health", "Setup"]
+            },
+            {
+                "name": "Authentication",
+                "tags": ["Auth", "API Keys"]
+            },
+            {
+                "name": "Library Content",
+                "tags": ["Libraries", "Series", "Books", "Pages"]
+            },
+            {
+                "name": "Metadata & Taxonomy",
+                "tags": ["Genres", "Tags", "Ratings"]
+            },
+            {
+                "name": "User Features",
+                "tags": ["Users", "User Preferences", "Reading Progress", "User Integrations"]
+            },
+            {
+                "name": "Background Jobs",
+                "tags": ["Task Queue", "Scans", "Thumbnails"]
+            },
+            {
+                "name": "Administration",
+                "tags": ["Admin", "Settings", "System Integrations", "Metrics", "Filesystem", "Duplicates", "Sharing Tags"]
+            },
+            {
+                "name": "Real-time Events",
+                "tags": ["Events"]
+            },
+            {
+                "name": "OPDS Catalog",
+                "tags": ["OPDS", "OPDS 2.0"]
+            },
+            {
+                "name": "Third-Party Compatibility",
+                "tags": ["Komga"]
+            }
+        ]);
+
+        // Add x-tagGroups extension to the OpenAPI spec
+        if openapi.extensions.is_none() {
+            openapi.extensions = Some(Default::default());
+        }
+        if let Some(extensions) = openapi.extensions.as_mut() {
+            extensions.insert("x-tagGroups".to_string(), tag_groups);
         }
     }
 }

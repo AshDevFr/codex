@@ -84,7 +84,7 @@ export type BookCondition =
 
 export interface SeriesListRequest {
 	condition?: SeriesCondition;
-	search?: string;
+	fullTextSearch?: string;
 	page?: number;
 	pageSize?: number;
 	sort?: string;
@@ -92,7 +92,7 @@ export interface SeriesListRequest {
 
 export interface BookListRequest {
 	condition?: BookCondition;
-	search?: string;
+	fullTextSearch?: string;
 	page?: number;
 	pageSize?: number;
 	sort?: string;

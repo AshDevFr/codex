@@ -35,7 +35,7 @@ const PUBLIC_SETTING_KEYS: &[&str] = &["display.custom_metadata_template", "appl
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "settings"
+    tag = "Settings"
 )]
 pub async fn list_settings(
     State(state): State<Arc<AuthState>>,
@@ -92,7 +92,7 @@ pub async fn list_settings(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "settings"
+    tag = "Settings"
 )]
 pub async fn get_setting(
     State(state): State<Arc<AuthState>>,
@@ -143,7 +143,7 @@ pub async fn get_setting(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "settings"
+    tag = "Settings"
 )]
 pub async fn update_setting(
     State(state): State<Arc<AuthState>>,
@@ -224,7 +224,7 @@ pub async fn update_setting(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "settings"
+    tag = "Settings"
 )]
 pub async fn bulk_update_settings(
     State(state): State<Arc<AuthState>>,
@@ -301,7 +301,7 @@ pub async fn bulk_update_settings(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "settings"
+    tag = "Settings"
 )]
 pub async fn reset_setting(
     State(state): State<Arc<AuthState>>,
@@ -359,7 +359,7 @@ pub async fn reset_setting(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "settings"
+    tag = "Settings"
 )]
 pub async fn get_setting_history(
     State(state): State<Arc<AuthState>>,
@@ -413,7 +413,7 @@ pub async fn get_setting_history(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "settings"
+    tag = "Settings"
 )]
 pub async fn get_public_settings(
     State(state): State<Arc<AuthState>>,
@@ -456,7 +456,7 @@ const DEFAULT_APP_NAME: &str = "Codex";
          })
         ),
     ),
-    tag = "settings"
+    tag = "Settings"
 )]
 pub async fn get_branding_settings(
     State(state): State<Arc<AuthState>>,

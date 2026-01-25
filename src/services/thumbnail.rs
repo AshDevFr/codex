@@ -219,7 +219,6 @@ impl ThumbnailService {
     ) -> Option<ReaderStream<tokio::fs::File>> {
         let path = self.get_series_thumbnail_path(series_id);
         let file = tokio::fs::File::open(&path).await.ok()?;
-        debug!("Streaming thumbnail for series {}", series_id);
         Some(ReaderStream::new(file))
     }
 

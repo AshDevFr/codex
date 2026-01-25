@@ -28,11 +28,11 @@ export const seriesApi = {
 
 		// Add library filter if not "all"
 		if (libraryId !== "all") {
-			params.set("library_id", libraryId);
+			params.set("libraryId", libraryId);
 		}
 
 		if (filters?.page) params.set("page", filters.page.toString());
-		if (filters?.pageSize) params.set("page_size", filters.pageSize.toString());
+		if (filters?.pageSize) params.set("pageSize", filters.pageSize.toString());
 		if (filters?.sort) params.set("sort", filters.sort);
 		if (filters?.genres) params.set("genres", filters.genres);
 		if (filters?.tags) params.set("tags", filters.tags);
@@ -57,7 +57,7 @@ export const seriesApi = {
 	getInProgress: async (libraryId: string): Promise<Series[]> => {
 		const params = new URLSearchParams();
 		if (libraryId !== "all") {
-			params.set("library_id", libraryId);
+			params.set("libraryId", libraryId);
 		}
 		const queryString = params.toString();
 		const url = `/series/in-progress${queryString ? `?${queryString}` : ""}`;
@@ -132,7 +132,7 @@ export const seriesApi = {
 	): Promise<Series[]> => {
 		const params = new URLSearchParams();
 		if (libraryId !== "all") {
-			params.set("library_id", libraryId);
+			params.set("libraryId", libraryId);
 		}
 		params.set("limit", limit.toString());
 		const queryString = params.toString();
@@ -149,7 +149,7 @@ export const seriesApi = {
 	): Promise<Series[]> => {
 		const params = new URLSearchParams();
 		if (libraryId !== "all") {
-			params.set("library_id", libraryId);
+			params.set("libraryId", libraryId);
 		}
 		params.set("limit", limit.toString());
 		const queryString = params.toString();
@@ -166,7 +166,7 @@ export const seriesApi = {
 	): Promise<Book[]> => {
 		const params = new URLSearchParams();
 		if (includeDeleted) {
-			params.set("include_deleted", "true");
+			params.set("includeDeleted", "true");
 		}
 		const queryString = params.toString();
 		const url = `/series/${seriesId}/books${queryString ? `?${queryString}` : ""}`;

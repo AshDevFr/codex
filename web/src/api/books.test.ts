@@ -36,7 +36,7 @@ describe("booksApi", () => {
 
 			const result = await booksApi.getByLibrary("library-123");
 
-			expect(api.get).toHaveBeenCalledWith("/books?library_id=library-123");
+			expect(api.get).toHaveBeenCalledWith("/books?libraryId=library-123");
 			expect(result).toEqual(mockResponse);
 		});
 
@@ -72,13 +72,13 @@ describe("booksApi", () => {
 				page: 2,
 				pageSize: 10,
 				sort: "title",
-				series_id: "series-1",
+				seriesId: "series-1",
 				genre: "Action",
 				status: "unread",
 			});
 
 			expect(api.get).toHaveBeenCalledWith(
-				"/books?library_id=library-123&page=2&page_size=10&sort=title&series_id=series-1&genre=Action&status=unread",
+				"/books?libraryId=library-123&page=2&pageSize=10&sort=title&seriesId=series-1&genre=Action&status=unread",
 			);
 		});
 	});
@@ -226,7 +226,7 @@ describe("booksApi", () => {
 			const result = await booksApi.getInProgress("library-123");
 
 			expect(api.get).toHaveBeenCalledWith(
-				"/books/in-progress?library_id=library-123",
+				"/books/in-progress?libraryId=library-123",
 			);
 			expect(result).toEqual(mockResponse);
 		});
@@ -254,7 +254,7 @@ describe("booksApi", () => {
 			const result = await booksApi.getOnDeck("library-123");
 
 			expect(api.get).toHaveBeenCalledWith(
-				"/books/on-deck?library_id=library-123",
+				"/books/on-deck?libraryId=library-123",
 			);
 			expect(result).toEqual(mockResponse);
 		});
@@ -272,7 +272,7 @@ describe("booksApi", () => {
 			const result = await booksApi.getRecentlyAdded("library-123");
 
 			expect(api.get).toHaveBeenCalledWith(
-				"/books/recently-added?library_id=library-123&page_size=50",
+				"/books/recently-added?libraryId=library-123&pageSize=50",
 			);
 			expect(result).toEqual(mockResponse);
 		});
@@ -284,9 +284,7 @@ describe("booksApi", () => {
 
 			await booksApi.getRecentlyAdded("all", 10);
 
-			expect(api.get).toHaveBeenCalledWith(
-				"/books/recently-added?page_size=10",
-			);
+			expect(api.get).toHaveBeenCalledWith("/books/recently-added?pageSize=10");
 		});
 	});
 
@@ -299,7 +297,7 @@ describe("booksApi", () => {
 			const result = await booksApi.getRecentlyRead("library-123", 20);
 
 			expect(api.get).toHaveBeenCalledWith(
-				"/books/recently-read?library_id=library-123&limit=20",
+				"/books/recently-read?libraryId=library-123&limit=20",
 			);
 			expect(result).toEqual(mockBooks);
 		});

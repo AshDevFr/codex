@@ -49,7 +49,7 @@ use std::sync::Arc;
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn get_current_user(
     State(_state): State<Arc<AuthState>>,

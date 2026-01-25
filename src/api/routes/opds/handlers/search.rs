@@ -87,7 +87,7 @@ pub struct SearchParams {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "opds"
+    tag = "OPDS"
 )]
 pub async fn opensearch_descriptor(
     State(state): State<Arc<AuthState>>,
@@ -116,7 +116,7 @@ pub async fn opensearch_descriptor(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "opds"
+    tag = "OPDS"
 )]
 pub async fn search(
     State(state): State<Arc<AuthState>>,

@@ -16,7 +16,7 @@ export const tasksHandlers = [
 		const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
 		const pageSize = parseInt(url.searchParams.get("pageSize") || "50", 10);
 		const status = url.searchParams.get("status");
-		const taskType = url.searchParams.get("task_type");
+		const taskType = url.searchParams.get("taskType");
 
 		let filteredTasks = [...mockTasks];
 

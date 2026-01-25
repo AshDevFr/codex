@@ -57,7 +57,7 @@ export interface BookFilters {
 	page?: number;
 	pageSize?: number;
 	sort?: string;
-	series_id?: string;
+	seriesId?: string;
 	genre?: string;
 	status?: string;
 }
@@ -72,13 +72,13 @@ export const booksApi = {
 
 		// Add library filter if not "all"
 		if (libraryId !== "all") {
-			params.set("library_id", libraryId);
+			params.set("libraryId", libraryId);
 		}
 
 		if (filters?.page) params.set("page", filters.page.toString());
-		if (filters?.pageSize) params.set("page_size", filters.pageSize.toString());
+		if (filters?.pageSize) params.set("pageSize", filters.pageSize.toString());
 		if (filters?.sort) params.set("sort", filters.sort);
-		if (filters?.series_id) params.set("series_id", filters.series_id);
+		if (filters?.seriesId) params.set("seriesId", filters.seriesId);
 		if (filters?.genre) params.set("genre", filters.genre);
 		if (filters?.status) params.set("status", filters.status);
 
@@ -107,7 +107,7 @@ export const booksApi = {
 	): Promise<PaginatedResponse<Book>> => {
 		const params = new URLSearchParams();
 		if (libraryId !== "all") {
-			params.set("library_id", libraryId);
+			params.set("libraryId", libraryId);
 		}
 		const queryString = params.toString();
 		const url = `/books/in-progress${queryString ? `?${queryString}` : ""}`;
@@ -120,7 +120,7 @@ export const booksApi = {
 	getOnDeck: async (libraryId: string): Promise<PaginatedResponse<Book>> => {
 		const params = new URLSearchParams();
 		if (libraryId !== "all") {
-			params.set("library_id", libraryId);
+			params.set("libraryId", libraryId);
 		}
 		const queryString = params.toString();
 		const url = `/books/on-deck${queryString ? `?${queryString}` : ""}`;
@@ -136,9 +136,9 @@ export const booksApi = {
 	): Promise<PaginatedResponse<Book>> => {
 		const params = new URLSearchParams();
 		if (libraryId !== "all") {
-			params.set("library_id", libraryId);
+			params.set("libraryId", libraryId);
 		}
-		params.set("page_size", limit.toString());
+		params.set("pageSize", limit.toString());
 		const queryString = params.toString();
 		const url = `/books/recently-added?${queryString}`;
 
@@ -178,7 +178,7 @@ export const booksApi = {
 	getRecentlyRead: async (libraryId: string, limit = 50): Promise<Book[]> => {
 		const params = new URLSearchParams();
 		if (libraryId !== "all") {
-			params.set("library_id", libraryId);
+			params.set("libraryId", libraryId);
 		}
 		params.set("limit", limit.toString());
 		const queryString = params.toString();
@@ -356,10 +356,10 @@ export const booksApi = {
 		if (options?.page !== undefined)
 			params.set("page", options.page.toString());
 		if (options?.pageSize !== undefined)
-			params.set("page_size", options.pageSize.toString());
-		if (options?.errorType) params.set("error_type", options.errorType);
-		if (options?.libraryId) params.set("library_id", options.libraryId);
-		if (options?.seriesId) params.set("series_id", options.seriesId);
+			params.set("pageSize", options.pageSize.toString());
+		if (options?.errorType) params.set("errorType", options.errorType);
+		if (options?.libraryId) params.set("libraryId", options.libraryId);
+		if (options?.seriesId) params.set("seriesId", options.seriesId);
 
 		const queryString = params.toString();
 		const url = `/books/errors${queryString ? `?${queryString}` : ""}`;

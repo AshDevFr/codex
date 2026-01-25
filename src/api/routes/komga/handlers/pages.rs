@@ -54,7 +54,7 @@ use uuid::Uuid;
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn list_pages(
     State(state): State<Arc<AuthState>>,
@@ -142,7 +142,7 @@ pub async fn list_pages(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn get_page(
     State(state): State<Arc<AuthState>>,
@@ -230,7 +230,7 @@ pub async fn get_page(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn get_page_thumbnail(
     State(state): State<Arc<AuthState>>,

@@ -29,6 +29,7 @@ use uuid::Uuid;
 /// Query parameters for listing API keys
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct ApiKeyListParams {
     /// Page number (1-indexed, default 1)
     #[serde(default = "default_page")]
@@ -61,7 +62,7 @@ fn default_page_size() -> u64 {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "api-keys"
+    tag = "API Keys"
 )]
 pub async fn list_api_keys(
     State(state): State<Arc<AuthState>>,
@@ -139,7 +140,7 @@ pub async fn list_api_keys(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "api-keys"
+    tag = "API Keys"
 )]
 pub async fn get_api_key(
     State(state): State<Arc<AuthState>>,
@@ -192,7 +193,7 @@ pub async fn get_api_key(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "api-keys"
+    tag = "API Keys"
 )]
 pub async fn create_api_key(
     State(state): State<Arc<AuthState>>,
@@ -282,7 +283,7 @@ pub async fn create_api_key(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "api-keys"
+    tag = "API Keys"
 )]
 pub async fn update_api_key(
     State(state): State<Arc<AuthState>>,
@@ -389,7 +390,7 @@ pub async fn update_api_key(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "api-keys"
+    tag = "API Keys"
 )]
 pub async fn delete_api_key(
     State(state): State<Arc<AuthState>>,

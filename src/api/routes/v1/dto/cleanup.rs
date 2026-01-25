@@ -93,7 +93,9 @@ pub struct TriggerCleanupResponse {
 }
 
 /// Query parameters for orphan stats endpoint
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, ToSchema, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct OrphanStatsQuery {
     /// If true, include the full list of orphaned files in the response
     #[serde(default)]

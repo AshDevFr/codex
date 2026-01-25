@@ -67,7 +67,7 @@ export const sharingTagsHandlers = [
 			Number.parseInt(url.searchParams.get("page") || "1", 10),
 		);
 		const pageSize = Number.parseInt(
-			url.searchParams.get("page_size") || "50",
+			url.searchParams.get("pageSize") || "50",
 			10,
 		);
 

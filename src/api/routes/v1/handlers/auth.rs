@@ -73,7 +73,7 @@ pub(crate) fn build_auth_cookie(token: &str, max_age: u64) -> String {
         (status = 200, description = "Login successful", body = LoginResponse),
         (status = 401, description = "Invalid credentials"),
     ),
-    tag = "auth"
+    tag = "Auth"
 )]
 pub async fn login(
     State(state): State<Arc<AuthState>>,
@@ -162,7 +162,7 @@ pub async fn login(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "auth"
+    tag = "Auth"
 )]
 pub async fn logout(_auth: AuthContext) -> Result<Json<serde_json::Value>, ApiError> {
     // For stateless JWT, logout is handled client-side by discarding the token
@@ -184,7 +184,7 @@ pub async fn logout(_auth: AuthContext) -> Result<Json<serde_json::Value>, ApiEr
         (status = 400, description = "Invalid request or user already exists"),
         (status = 422, description = "Validation error"),
     ),
-    tag = "auth"
+    tag = "Auth"
 )]
 pub async fn register(
     State(state): State<Arc<AuthState>>,
@@ -365,7 +365,7 @@ pub async fn register(
         (status = 200, description = "Email verified successfully", body = VerifyEmailResponse),
         (status = 400, description = "Invalid or expired token"),
     ),
-    tag = "auth"
+    tag = "Auth"
 )]
 pub async fn verify_email(
     State(state): State<Arc<AuthState>>,
@@ -464,7 +464,7 @@ pub async fn verify_email(
         (status = 200, description = "Verification email sent", body = ResendVerificationResponse),
         (status = 400, description = "Invalid request or email already verified"),
     ),
-    tag = "auth"
+    tag = "Auth"
 )]
 pub async fn resend_verification(
     State(state): State<Arc<AuthState>>,

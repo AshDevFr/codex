@@ -143,7 +143,7 @@ pub enum BookCondition {
 
 /// Request body for POST /series/list
 ///
-/// Pagination parameters (page, page_size, sort) are passed as query parameters,
+/// Pagination parameters (page, pageSize, sort) are passed as query parameters,
 /// not in the request body. This enables proper HATEOAS links.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -160,7 +160,7 @@ pub struct SeriesListRequest {
 
 /// Request body for POST /books/list
 ///
-/// Pagination parameters (page, page_size, sort) are passed as query parameters,
+/// Pagination parameters (page, pageSize, sort) are passed as query parameters,
 /// not in the request body. This enables proper HATEOAS links.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

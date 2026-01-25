@@ -69,7 +69,7 @@ pub struct BrowseQuery {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "filesystem"
+    tag = "Filesystem"
 )]
 pub async fn browse_filesystem(
     State(_state): State<Arc<AppState>>,
@@ -169,7 +169,7 @@ pub async fn browse_filesystem(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "filesystem"
+    tag = "Filesystem"
 )]
 pub async fn list_drives(
     State(_state): State<Arc<AppState>>,

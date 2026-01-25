@@ -35,9 +35,9 @@ describe("genresApi", () => {
 				total: 3,
 				totalPages: 1,
 				links: {
-					self: "/api/v1/genres?page=1&page_size=50",
-					first: "/api/v1/genres?page=1&page_size=50",
-					last: "/api/v1/genres?page=1&page_size=50",
+					self: "/api/v1/genres?page=1&pageSize=50",
+					first: "/api/v1/genres?page=1&pageSize=50",
+					last: "/api/v1/genres?page=1&pageSize=50",
 				},
 			};
 
@@ -58,9 +58,9 @@ describe("genresApi", () => {
 					total: 0,
 					totalPages: 0,
 					links: {
-						self: "/api/v1/genres?page=1&page_size=50",
-						first: "/api/v1/genres?page=1&page_size=50",
-						last: "/api/v1/genres?page=1&page_size=50",
+						self: "/api/v1/genres?page=1&pageSize=50",
+						first: "/api/v1/genres?page=1&pageSize=50",
+						last: "/api/v1/genres?page=1&pageSize=50",
 					},
 				},
 			});

@@ -169,7 +169,7 @@ fn default_page_size() -> i32 {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn list_series(
     State(state): State<Arc<AuthState>>,
@@ -253,7 +253,7 @@ pub async fn list_series(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn search_series(
     State(state): State<Arc<AuthState>>,
@@ -435,7 +435,7 @@ pub async fn search_series(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn get_series_new(
     State(state): State<Arc<AuthState>>,
@@ -520,7 +520,7 @@ pub async fn get_series_new(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn get_series_updated(
     State(state): State<Arc<AuthState>>,
@@ -599,7 +599,7 @@ pub async fn get_series_updated(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn get_series(
     State(state): State<Arc<AuthState>>,
@@ -646,7 +646,7 @@ pub async fn get_series(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn get_series_thumbnail(
     State(state): State<Arc<AuthState>>,
@@ -720,7 +720,7 @@ pub async fn get_series_thumbnail(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn get_series_books(
     State(state): State<Arc<AuthState>>,

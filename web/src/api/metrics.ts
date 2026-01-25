@@ -47,7 +47,7 @@ export const metricsApi = {
 			{
 				params: {
 					days: params?.days,
-					task_type: params?.taskType,
+					taskType: params?.taskType,
 					granularity: params?.granularity,
 				},
 			},

@@ -35,9 +35,7 @@ use crate::tasks::types::TaskType;
 #[utoipa::path(
     get,
     path = "/api/v1/admin/cleanup-orphans/stats",
-    params(
-        ("include_files" = Option<bool>, Query, description = "Include list of orphaned files in response")
-    ),
+    params(OrphanStatsQuery),
     responses(
         (status = 200, description = "Orphan statistics retrieved successfully", body = OrphanStatsDto,
          example = json!({
@@ -283,7 +281,7 @@ mod tests {
 
     #[test]
     fn test_orphan_stats_query_with_files() {
-        let query: OrphanStatsQuery = serde_json::from_str(r#"{"include_files": true}"#).unwrap();
+        let query: OrphanStatsQuery = serde_json::from_str(r#"{"includeFiles": true}"#).unwrap();
         assert!(query.include_files);
     }
 }

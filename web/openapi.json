@@ -94,9 +94,9 @@
         "operationId": "get_orphan_stats",
         "parameters": [
           {
-            "name": "include_files",
+            "name": "includeFiles",
             "in": "query",
-            "description": "Include list of orphaned files in response",
+            "description": "If true, include the full list of orphaned files in the response",
             "required": false,
             "schema": {
               "type": "boolean"
@@ -637,7 +637,7 @@
     "/api/v1/admin/settings": {
       "get": {
         "tags": [
-          "settings"
+          "Settings"
         ],
         "summary": "List all settings (admin only)",
         "operationId": "list_settings",
@@ -683,7 +683,7 @@
     "/api/v1/admin/settings/bulk": {
       "post": {
         "tags": [
-          "settings"
+          "Settings"
         ],
         "summary": "Bulk update settings (admin only)",
         "operationId": "bulk_update_settings",
@@ -731,7 +731,7 @@
     "/api/v1/admin/settings/{setting_key}": {
       "get": {
         "tags": [
-          "settings"
+          "Settings"
         ],
         "summary": "Get single setting by key (admin only)",
         "operationId": "get_setting",
@@ -775,7 +775,7 @@
       },
       "put": {
         "tags": [
-          "settings"
+          "Settings"
         ],
         "summary": "Update setting (admin only)",
         "operationId": "update_setting",
@@ -834,7 +834,7 @@
     "/api/v1/admin/settings/{setting_key}/history": {
       "get": {
         "tags": [
-          "settings"
+          "Settings"
         ],
         "summary": "Get setting history (admin only)",
         "operationId": "get_setting_history",
@@ -893,7 +893,7 @@
     "/api/v1/admin/settings/{setting_key}/reset": {
       "post": {
         "tags": [
-          "settings"
+          "Settings"
         ],
         "summary": "Reset setting to default value (admin only)",
         "operationId": "reset_setting",
@@ -939,7 +939,7 @@
     "/api/v1/admin/sharing-tags": {
       "get": {
         "tags": [
-          "sharing-tags"
+          "Sharing Tags"
         ],
         "summary": "List all sharing tags (admin only)",
         "operationId": "list_sharing_tags",
@@ -993,7 +993,7 @@
       },
       "post": {
         "tags": [
-          "sharing-tags"
+          "Sharing Tags"
         ],
         "summary": "Create a new sharing tag (admin only)",
         "operationId": "create_sharing_tag",
@@ -1038,7 +1038,7 @@
     "/api/v1/admin/sharing-tags/{tag_id}": {
       "get": {
         "tags": [
-          "sharing-tags"
+          "Sharing Tags"
         ],
         "summary": "Get a sharing tag by ID (admin only)",
         "operationId": "get_sharing_tag",
@@ -1083,7 +1083,7 @@
       },
       "delete": {
         "tags": [
-          "sharing-tags"
+          "Sharing Tags"
         ],
         "summary": "Delete a sharing tag (admin only)",
         "operationId": "delete_sharing_tag",
@@ -1121,7 +1121,7 @@
       },
       "patch": {
         "tags": [
-          "sharing-tags"
+          "Sharing Tags"
         ],
         "summary": "Update a sharing tag (admin only)",
         "operationId": "update_sharing_tag",
@@ -1181,7 +1181,7 @@
     "/api/v1/api-keys": {
       "get": {
         "tags": [
-          "api-keys"
+          "API Keys"
         ],
         "summary": "List API keys for the authenticated user\nUsers can only see their own keys unless they are admin",
         "operationId": "list_api_keys",
@@ -1235,7 +1235,7 @@
       },
       "post": {
         "tags": [
-          "api-keys"
+          "API Keys"
         ],
         "summary": "Create a new API key\nAPI keys are always associated with the authenticated user",
         "operationId": "create_api_key",
@@ -1280,7 +1280,7 @@
     "/api/v1/api-keys/{api_key_id}": {
       "get": {
         "tags": [
-          "api-keys"
+          "API Keys"
         ],
         "summary": "Get API key by ID\nUsers can only get their own keys unless they are admin",
         "operationId": "get_api_key",
@@ -1325,7 +1325,7 @@
       },
       "delete": {
         "tags": [
-          "api-keys"
+          "API Keys"
         ],
         "summary": "Delete an API key\nUsers can only delete their own keys unless they are admin",
         "operationId": "delete_api_key",
@@ -1363,7 +1363,7 @@
       },
       "patch": {
         "tags": [
-          "api-keys"
+          "API Keys"
         ],
         "summary": "Update an API key (partial update)\nUsers can only update their own keys unless they are admin",
         "operationId": "update_api_key",
@@ -1420,7 +1420,7 @@
     "/api/v1/auth/login": {
       "post": {
         "tags": [
-          "auth"
+          "Auth"
         ],
         "summary": "Login handler",
         "description": "Authenticates a user with username/email and password, returns JWT token",
@@ -1455,7 +1455,7 @@
     "/api/v1/auth/logout": {
       "post": {
         "tags": [
-          "auth"
+          "Auth"
         ],
         "summary": "Logout handler",
         "description": "No-op for stateless JWT - client should discard token",
@@ -1478,7 +1478,7 @@
     "/api/v1/auth/register": {
       "post": {
         "tags": [
-          "auth"
+          "Auth"
         ],
         "summary": "Register handler",
         "description": "Creates a new user account with username, email, and password",
@@ -1516,7 +1516,7 @@
     "/api/v1/auth/resend-verification": {
       "post": {
         "tags": [
-          "auth"
+          "Auth"
         ],
         "summary": "Resend verification email handler",
         "description": "Resends the verification email to a user",
@@ -1551,7 +1551,7 @@
     "/api/v1/auth/verify-email": {
       "post": {
         "tags": [
-          "auth"
+          "Auth"
         ],
         "summary": "Verify email handler",
         "description": "Verifies a user's email address using the token sent via email",
@@ -1586,16 +1586,42 @@
     "/api/v1/books": {
       "get": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "List books with pagination",
         "operationId": "list_books",
         "parameters": [
           {
+            "name": "libraryId",
+            "in": "query",
+            "description": "Optional library filter",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "seriesId",
+            "in": "query",
+            "description": "Optional series filter",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
             "name": "page",
-            "in": "path",
+            "in": "query",
             "description": "Page number (1-indexed, minimum 1)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64",
@@ -1604,9 +1630,9 @@
           },
           {
             "name": "pageSize",
-            "in": "path",
+            "in": "query",
             "description": "Number of items per page (max 100, default 50)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64",
@@ -1614,13 +1640,15 @@
             }
           },
           {
-            "name": "series_id",
+            "name": "sort",
             "in": "query",
-            "description": "Filter by series ID",
+            "description": "Sort parameter (format: \"field,direction\" e.g. \"title,asc\")",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         ],
@@ -1652,14 +1680,14 @@
     "/api/v1/books/errors": {
       "get": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "List books with errors (v2 - grouped by error type)",
         "description": "Returns books with errors grouped by error type, with counts and pagination.\nThis enhanced endpoint provides detailed error information including error\ntypes, messages, and timestamps.",
         "operationId": "list_books_with_errors_v2",
         "parameters": [
           {
-            "name": "library_id",
+            "name": "libraryId",
             "in": "query",
             "description": "Optional library filter",
             "required": false,
@@ -1672,7 +1700,7 @@
             }
           },
           {
-            "name": "series_id",
+            "name": "seriesId",
             "in": "query",
             "description": "Optional series filter",
             "required": false,
@@ -1685,7 +1713,7 @@
             }
           },
           {
-            "name": "error_type",
+            "name": "errorType",
             "in": "query",
             "description": "Filter by specific error type",
             "required": false,
@@ -1712,7 +1740,7 @@
             }
           },
           {
-            "name": "page_size",
+            "name": "pageSize",
             "in": "query",
             "description": "Number of items per page (max 100, default 50)",
             "required": false,
@@ -1769,26 +1797,42 @@
     "/api/v1/books/in-progress": {
       "get": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "List books with reading progress (in-progress books)",
         "operationId": "list_in_progress_books",
         "parameters": [
           {
-            "name": "library_id",
+            "name": "libraryId",
             "in": "query",
-            "description": "Filter by library ID",
+            "description": "Optional library filter",
             "required": false,
             "schema": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "seriesId",
+            "in": "query",
+            "description": "Optional series filter",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
               "format": "uuid"
             }
           },
           {
             "name": "page",
-            "in": "path",
+            "in": "query",
             "description": "Page number (1-indexed, minimum 1)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64",
@@ -1797,13 +1841,25 @@
           },
           {
             "name": "pageSize",
-            "in": "path",
+            "in": "query",
             "description": "Number of items per page (max 100, default 50)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64",
               "minimum": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort parameter (format: \"field,direction\" e.g. \"title,asc\")",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         ],
@@ -1835,10 +1891,10 @@
     "/api/v1/books/list": {
       "post": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "List books with advanced filtering",
-        "description": "Supports complex filter conditions including nested AllOf/AnyOf logic,\ngenre/tag filtering with include/exclude, and more.\n\nPagination parameters (page, page_size, sort) are passed as query parameters.\nFilter conditions are passed in the request body.",
+        "description": "Supports complex filter conditions including nested AllOf/AnyOf logic,\ngenre/tag filtering with include/exclude, and more.\n\nPagination parameters (page, pageSize, sort) are passed as query parameters.\nFilter conditions are passed in the request body.",
         "operationId": "list_books_filtered",
         "parameters": [
           {
@@ -1917,26 +1973,42 @@
     "/api/v1/books/on-deck": {
       "get": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "List on-deck books (next unread book in series where user has completed at least one book)",
         "operationId": "list_on_deck_books",
         "parameters": [
           {
-            "name": "library_id",
+            "name": "libraryId",
             "in": "query",
-            "description": "Filter by library ID",
+            "description": "Optional library filter",
             "required": false,
             "schema": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "seriesId",
+            "in": "query",
+            "description": "Optional series filter",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
               "format": "uuid"
             }
           },
           {
             "name": "page",
-            "in": "path",
+            "in": "query",
             "description": "Page number (1-indexed, minimum 1)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64",
@@ -1945,13 +2017,25 @@
           },
           {
             "name": "pageSize",
-            "in": "path",
+            "in": "query",
             "description": "Number of items per page (max 100, default 50)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64",
               "minimum": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort parameter (format: \"field,direction\" e.g. \"title,asc\")",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         ],
@@ -1983,26 +2067,42 @@
     "/api/v1/books/recently-added": {
       "get": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "List recently added books",
         "operationId": "list_recently_added_books",
         "parameters": [
           {
-            "name": "library_id",
+            "name": "libraryId",
             "in": "query",
-            "description": "Filter by library ID",
+            "description": "Optional library filter",
             "required": false,
             "schema": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "seriesId",
+            "in": "query",
+            "description": "Optional series filter",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
               "format": "uuid"
             }
           },
           {
             "name": "page",
-            "in": "path",
+            "in": "query",
             "description": "Page number (1-indexed, minimum 1)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64",
@@ -2011,13 +2111,25 @@
           },
           {
             "name": "pageSize",
-            "in": "path",
+            "in": "query",
             "description": "Number of items per page (max 100, default 50)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64",
               "minimum": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort parameter (format: \"field,direction\" e.g. \"title,asc\")",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         ],
@@ -2049,7 +2161,7 @@
     "/api/v1/books/recently-read": {
       "get": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "List recently read books (ordered by last read activity)",
         "operationId": "list_recently_read_books",
@@ -2066,12 +2178,15 @@
             }
           },
           {
-            "name": "library_id",
+            "name": "libraryId",
             "in": "query",
-            "description": "Filter by library ID",
+            "description": "Filter by library ID (optional)",
             "required": false,
             "schema": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
               "format": "uuid"
             }
           }
@@ -2107,7 +2222,7 @@
     "/api/v1/books/retry-all-errors": {
       "post": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "Retry all failed operations across all books",
         "description": "Enqueues appropriate tasks for all books with errors.\nCan be filtered by error type or library.",
@@ -2158,35 +2273,41 @@
     "/api/v1/books/with-errors": {
       "get": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "List books with analysis errors",
         "operationId": "list_books_with_errors",
         "parameters": [
           {
-            "name": "library_id",
+            "name": "libraryId",
             "in": "query",
-            "description": "Filter by library ID",
+            "description": "Optional library filter",
             "required": false,
             "schema": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
               "format": "uuid"
             }
           },
           {
-            "name": "series_id",
+            "name": "seriesId",
             "in": "query",
-            "description": "Filter by series ID",
+            "description": "Optional series filter",
             "required": false,
             "schema": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
               "format": "uuid"
             }
           },
           {
             "name": "page",
             "in": "query",
-            "description": "Page number (1-indexed, default 1)",
+            "description": "Page number (1-indexed, minimum 1)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -2195,9 +2316,9 @@
             }
           },
           {
-            "name": "page_size",
+            "name": "pageSize",
             "in": "query",
-            "description": "Number of items per page (max 100)",
+            "description": "Number of items per page (max 100, default 50)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -2234,7 +2355,7 @@
     "/api/v1/books/{book_id}": {
       "get": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "Get book by ID",
         "operationId": "get_book",
@@ -2278,7 +2399,7 @@
     "/api/v1/books/{book_id}/adjacent": {
       "get": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "Get adjacent books in the same series",
         "description": "Returns the previous and next books relative to the requested book,\nordered by book number within the series.",
@@ -2422,7 +2543,7 @@
     "/api/v1/books/{book_id}/file": {
       "get": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "Download book file",
         "description": "Streams the original book file (CBZ, CBR, EPUB, PDF) for download.\nUsed by OPDS clients for acquisition links.",
@@ -2466,7 +2587,7 @@
     "/api/v1/books/{book_id}/metadata": {
       "put": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "Replace all book metadata (PUT)",
         "description": "Completely replaces all metadata fields. Omitted or null fields will be cleared.\nIf no metadata record exists, one will be created.",
@@ -2522,7 +2643,7 @@
       },
       "patch": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "Partially update book metadata (PATCH)",
         "description": "Only provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared.\nIf no metadata record exists, one will be created with the provided fields.",
@@ -2580,7 +2701,7 @@
     "/api/v1/books/{book_id}/pages/{page_number}": {
       "get": {
         "tags": [
-          "pages"
+          "Pages"
         ],
         "summary": "Get page image from a book",
         "description": "Extracts and serves the image for a specific page from CBZ/CBR/EPUB/PDF.\nFor PDF pages, supports HTTP conditional caching with ETag and Last-Modified\nheaders, returning 304 Not Modified when the client has a valid cached copy.",
@@ -2829,7 +2950,7 @@
     "/api/v1/books/{book_id}/retry": {
       "post": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "Retry failed operations for a specific book",
         "description": "Enqueues appropriate tasks based on the error types present or specified.\nFor parser/metadata/page_extraction errors, enqueues an AnalyzeBook task.\nFor thumbnail errors, enqueues a GenerateThumbnail task.",
@@ -3154,7 +3275,7 @@
     "/api/v1/events/stream": {
       "get": {
         "tags": [
-          "events"
+          "Events"
         ],
         "summary": "Subscribe to real-time entity change events via SSE",
         "description": "Clients can subscribe to this endpoint to receive real-time notifications\nabout entity changes (books, series, libraries) happening in the system.\n\n## Authentication\nRequires valid authentication with `LibrariesRead` permission.\n\n## Event Format\nEvents are sent as JSON-encoded `EntityChangeEvent` objects with the following structure:\n```json\n{\n  \"type\": \"book_created\",\n  \"book_id\": \"uuid\",\n  \"series_id\": \"uuid\",\n  \"library_id\": \"uuid\",\n  \"timestamp\": \"2024-01-06T12:00:00Z\",\n  \"user_id\": \"uuid\"\n}\n```\n\n## Keep-Alive\nA keep-alive message is sent every 15 seconds to prevent connection timeout.",
@@ -3186,7 +3307,7 @@
     "/api/v1/filesystem/browse": {
       "get": {
         "tags": [
-          "filesystem"
+          "Filesystem"
         ],
         "summary": "Browse filesystem directories",
         "description": "Returns a list of directories and files in the specified path",
@@ -3250,7 +3371,7 @@
     "/api/v1/filesystem/drives": {
       "get": {
         "tags": [
-          "filesystem"
+          "Filesystem"
         ],
         "summary": "Get system drives/volumes",
         "description": "Returns a list of available drives or mount points on the system",
@@ -3293,7 +3414,7 @@
     "/api/v1/genres": {
       "get": {
         "tags": [
-          "genres"
+          "Genres"
         ],
         "summary": "List all genres",
         "operationId": "list_genres",
@@ -3349,7 +3470,7 @@
     "/api/v1/genres/cleanup": {
       "post": {
         "tags": [
-          "genres"
+          "Genres"
         ],
         "summary": "Delete all unused genres (genres with no series linked)",
         "operationId": "cleanup_genres",
@@ -3381,7 +3502,7 @@
     "/api/v1/genres/{genre_id}": {
       "delete": {
         "tags": [
-          "genres"
+          "Genres"
         ],
         "summary": "Delete a genre from the taxonomy (admin only)",
         "operationId": "delete_genre",
@@ -3421,7 +3542,7 @@
     "/api/v1/libraries": {
       "get": {
         "tags": [
-          "libraries"
+          "Libraries"
         ],
         "summary": "List all libraries",
         "operationId": "list_libraries",
@@ -3475,7 +3596,7 @@
       },
       "post": {
         "tags": [
-          "libraries"
+          "Libraries"
         ],
         "summary": "Create a new library",
         "operationId": "create_library",
@@ -3520,7 +3641,7 @@
     "/api/v1/libraries/preview-scan": {
       "post": {
         "tags": [
-          "libraries"
+          "Libraries"
         ],
         "summary": "Preview scan a path with a given strategy",
         "description": "This endpoint allows users to preview how a scanning strategy would organize\nfiles without actually creating a library or importing anything. Useful for\ntesting strategy configurations before committing to them.",
@@ -3566,7 +3687,7 @@
     "/api/v1/libraries/{library_id}": {
       "get": {
         "tags": [
-          "libraries"
+          "Libraries"
         ],
         "summary": "Get library by ID",
         "operationId": "get_library",
@@ -3608,7 +3729,7 @@
       },
       "delete": {
         "tags": [
-          "libraries"
+          "Libraries"
         ],
         "summary": "Delete a library",
         "operationId": "delete_library",
@@ -3646,7 +3767,7 @@
       },
       "patch": {
         "tags": [
-          "libraries"
+          "Libraries"
         ],
         "summary": "Update a library (partial update)",
         "operationId": "update_library",
@@ -3799,7 +3920,7 @@
     "/api/v1/libraries/{library_id}/books": {
       "get": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "List books in a specific library",
         "operationId": "list_library_books",
@@ -3865,7 +3986,7 @@
     "/api/v1/libraries/{library_id}/books/in-progress": {
       "get": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "List books with reading progress in a specific library (in-progress books)",
         "operationId": "list_library_in_progress_books",
@@ -3931,7 +4052,7 @@
     "/api/v1/libraries/{library_id}/books/on-deck": {
       "get": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "List on-deck books in a specific library",
         "operationId": "list_library_on_deck_books",
@@ -3997,7 +4118,7 @@
     "/api/v1/libraries/{library_id}/books/recently-added": {
       "get": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "List recently added books in a specific library",
         "operationId": "list_library_recently_added_books",
@@ -4063,7 +4184,7 @@
     "/api/v1/libraries/{library_id}/books/recently-read": {
       "get": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "List recently read books in a specific library",
         "operationId": "list_library_recently_read_books",
@@ -4121,7 +4242,7 @@
     "/api/v1/libraries/{library_id}/books/with-errors": {
       "get": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "List books with analysis errors in a specific library",
         "operationId": "list_library_books_with_errors",
@@ -4137,9 +4258,35 @@
             }
           },
           {
+            "name": "libraryId",
+            "in": "query",
+            "description": "Optional library filter",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "seriesId",
+            "in": "query",
+            "description": "Optional series filter",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
             "name": "page",
             "in": "query",
-            "description": "Page number (1-indexed, default 1)",
+            "description": "Page number (1-indexed, minimum 1)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -4148,9 +4295,9 @@
             }
           },
           {
-            "name": "page_size",
+            "name": "pageSize",
             "in": "query",
-            "description": "Number of items per page (max 100)",
+            "description": "Number of items per page (max 100, default 50)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -4187,7 +4334,7 @@
     "/api/v1/libraries/{library_id}/purge-deleted": {
       "delete": {
         "tags": [
-          "libraries"
+          "Libraries"
         ],
         "summary": "Purge deleted books from a library",
         "operationId": "purge_deleted_books",
@@ -4388,7 +4535,7 @@
     "/api/v1/libraries/{library_id}/series": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "List series in a specific library with pagination",
         "operationId": "list_library_series",
@@ -4415,14 +4562,63 @@
             }
           },
           {
-            "name": "page_size",
+            "name": "pageSize",
             "in": "query",
-            "description": "Number of items per page (max 100)",
+            "description": "Number of items per page (max 100, default 50)",
             "required": false,
             "schema": {
               "type": "integer",
               "format": "int64",
               "minimum": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort parameter (format: \"field,direction\" e.g. \"name,asc\")",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "genres",
+            "in": "query",
+            "description": "Filter by genres (comma-separated, AND logic - series must have ALL specified genres)",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "description": "Filter by tags (comma-separated, AND logic - series must have ALL specified tags)",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "libraryId",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
             }
           }
         ],
@@ -4454,7 +4650,7 @@
     "/api/v1/libraries/{library_id}/series/in-progress": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "List in-progress series in a specific library",
         "operationId": "list_library_in_progress_series",
@@ -4501,7 +4697,7 @@
     "/api/v1/libraries/{library_id}/series/recently-added": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "List recently added series in a specific library",
         "operationId": "list_library_recently_added_series",
@@ -4559,7 +4755,7 @@
     "/api/v1/libraries/{library_id}/series/recently-updated": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "List recently updated series in a specific library",
         "operationId": "list_library_recently_updated_series",
@@ -4835,7 +5031,7 @@
             "example": 7
           },
           {
-            "name": "task_type",
+            "name": "taskType",
             "in": "query",
             "description": "Filter by task type",
             "required": false,
@@ -4989,21 +5185,11 @@
     "/api/v1/series": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "List series with optional library filter and pagination",
         "operationId": "list_series",
         "parameters": [
-          {
-            "name": "library_id",
-            "in": "query",
-            "description": "Filter by library ID",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
           {
             "name": "page",
             "in": "query",
@@ -5016,9 +5202,9 @@
             }
           },
           {
-            "name": "page_size",
+            "name": "pageSize",
             "in": "query",
-            "description": "Number of items per page (max 100)",
+            "description": "Number of items per page (max 100, default 50)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -5029,28 +5215,50 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Sort parameter (format: 'field,direction')",
+            "description": "Sort parameter (format: \"field,direction\" e.g. \"name,asc\")",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           {
             "name": "genres",
             "in": "query",
-            "description": "Filter by genres (comma-separated, AND logic)",
+            "description": "Filter by genres (comma-separated, AND logic - series must have ALL specified genres)",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           {
             "name": "tags",
             "in": "query",
-            "description": "Filter by tags (comma-separated, AND logic)",
+            "description": "Filter by tags (comma-separated, AND logic - series must have ALL specified tags)",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "libraryId",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
             }
           }
         ],
@@ -5082,18 +5290,21 @@
     "/api/v1/series/in-progress": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "List series with in-progress books (series that have at least one book with reading progress that is not completed)",
         "operationId": "list_in_progress_series",
         "parameters": [
           {
-            "name": "library_id",
+            "name": "libraryId",
             "in": "query",
-            "description": "Filter by library ID",
+            "description": "Filter by library ID (optional)",
             "required": false,
             "schema": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
               "format": "uuid"
             }
           }
@@ -5129,10 +5340,10 @@
     "/api/v1/series/list": {
       "post": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "List series with advanced filtering",
-        "description": "Supports complex filter conditions including nested AllOf/AnyOf logic,\ngenre/tag filtering with include/exclude, and more.\n\nPagination parameters (page, page_size, sort) are passed as query parameters.\nFilter conditions are passed in the request body.",
+        "description": "Supports complex filter conditions including nested AllOf/AnyOf logic,\ngenre/tag filtering with include/exclude, and more.\n\nPagination parameters (page, pageSize, sort) are passed as query parameters.\nFilter conditions are passed in the request body.",
         "operationId": "list_series_filtered",
         "parameters": [
           {
@@ -5211,7 +5422,7 @@
     "/api/v1/series/recently-added": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "List recently added series",
         "operationId": "list_recently_added_series",
@@ -5228,12 +5439,15 @@
             }
           },
           {
-            "name": "library_id",
+            "name": "libraryId",
             "in": "query",
-            "description": "Filter by library ID",
+            "description": "Filter by library ID (optional)",
             "required": false,
             "schema": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
               "format": "uuid"
             }
           }
@@ -5269,7 +5483,7 @@
     "/api/v1/series/recently-updated": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "List recently updated series",
         "operationId": "list_recently_updated_series",
@@ -5286,12 +5500,15 @@
             }
           },
           {
-            "name": "library_id",
+            "name": "libraryId",
             "in": "query",
-            "description": "Filter by library ID",
+            "description": "Filter by library ID (optional)",
             "required": false,
             "schema": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
               "format": "uuid"
             }
           }
@@ -5327,7 +5544,7 @@
     "/api/v1/series/search": {
       "post": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Search series by name",
         "operationId": "search_series",
@@ -5372,7 +5589,7 @@
     "/api/v1/series/{series_id}": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Get series by ID",
         "operationId": "get_series",
@@ -5416,7 +5633,7 @@
     "/api/v1/series/{series_id}/alternate-titles": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Get alternate titles for a series",
         "operationId": "get_series_alternate_titles",
@@ -5461,7 +5678,7 @@
       },
       "post": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Add an alternate title to a series",
         "operationId": "create_alternate_title",
@@ -5518,7 +5735,7 @@
     "/api/v1/series/{series_id}/alternate-titles/{title_id}": {
       "delete": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Delete an alternate title",
         "operationId": "delete_alternate_title",
@@ -5566,7 +5783,7 @@
       },
       "patch": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Update an alternate title",
         "operationId": "update_alternate_title",
@@ -5729,7 +5946,7 @@
     "/api/v1/series/{series_id}/books": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Get books in a series",
         "operationId": "get_series_books",
@@ -5745,9 +5962,9 @@
             }
           },
           {
-            "name": "include_deleted",
+            "name": "includeDeleted",
             "in": "query",
-            "description": "Include deleted books (default: false)",
+            "description": "Include deleted books in the result",
             "required": false,
             "schema": {
               "type": "boolean"
@@ -5788,7 +6005,7 @@
     "/api/v1/series/{series_id}/books/with-errors": {
       "get": {
         "tags": [
-          "books"
+          "Books"
         ],
         "summary": "List books with analysis errors in a specific series",
         "operationId": "list_series_books_with_errors",
@@ -5804,9 +6021,35 @@
             }
           },
           {
+            "name": "libraryId",
+            "in": "query",
+            "description": "Optional library filter",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "seriesId",
+            "in": "query",
+            "description": "Optional series filter",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
             "name": "page",
             "in": "query",
-            "description": "Page number (1-indexed, default 1)",
+            "description": "Page number (1-indexed, minimum 1)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -5815,9 +6058,9 @@
             }
           },
           {
-            "name": "page_size",
+            "name": "pageSize",
             "in": "query",
-            "description": "Number of items per page (max 100)",
+            "description": "Number of items per page (max 100, default 50)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -5854,7 +6097,7 @@
     "/api/v1/series/{series_id}/cover": {
       "post": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Upload a custom cover/poster for a series",
         "operationId": "upload_series_cover",
@@ -5908,7 +6151,7 @@
     "/api/v1/series/{series_id}/cover/source": {
       "patch": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Set which cover source to use for a series (partial update)",
         "operationId": "set_series_cover_source",
@@ -5958,7 +6201,7 @@
     "/api/v1/series/{series_id}/covers": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "List all covers for a series",
         "operationId": "list_series_covers",
@@ -6005,7 +6248,7 @@
     "/api/v1/series/{series_id}/covers/selected": {
       "delete": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Reset series cover to default (deselect all custom covers)",
         "operationId": "reset_series_cover",
@@ -6045,7 +6288,7 @@
     "/api/v1/series/{series_id}/covers/{cover_id}": {
       "delete": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Delete a cover from a series",
         "operationId": "delete_series_cover",
@@ -6098,7 +6341,7 @@
     "/api/v1/series/{series_id}/covers/{cover_id}/image": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Get a specific cover image for a series",
         "description": "Supports HTTP conditional caching with ETag and Last-Modified headers,\nreturning 304 Not Modified when the client has a valid cached copy.",
@@ -6155,7 +6398,7 @@
     "/api/v1/series/{series_id}/covers/{cover_id}/select": {
       "put": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Select a cover as the primary cover for a series",
         "operationId": "select_series_cover",
@@ -6212,7 +6455,7 @@
     "/api/v1/series/{series_id}/download": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Download all books in a series as a zip file",
         "description": "Creates a zip archive containing all detected books in the series.\nOnly includes books that were scanned and detected by the library scanner.",
@@ -6256,7 +6499,7 @@
     "/api/v1/series/{series_id}/external-links": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Get external links for a series",
         "operationId": "get_series_external_links",
@@ -6301,7 +6544,7 @@
       },
       "post": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Add or update an external link for a series",
         "operationId": "create_external_link",
@@ -6358,7 +6601,7 @@
     "/api/v1/series/{series_id}/external-links/{source}": {
       "delete": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Delete an external link by source name",
         "operationId": "delete_external_link",
@@ -6407,7 +6650,7 @@
     "/api/v1/series/{series_id}/external-ratings": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Get external ratings for a series",
         "operationId": "get_series_external_ratings",
@@ -6452,7 +6695,7 @@
       },
       "post": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Add or update an external rating for a series",
         "operationId": "create_external_rating",
@@ -6509,7 +6752,7 @@
     "/api/v1/series/{series_id}/external-ratings/{source}": {
       "delete": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Delete an external rating by source name",
         "operationId": "delete_external_rating",
@@ -6558,7 +6801,7 @@
     "/api/v1/series/{series_id}/full": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Get full series data with complete metadata",
         "description": "Returns series information combined with full metadata, genres, tags,\nalternate titles, external ratings, and external links in a single response.",
@@ -6606,7 +6849,7 @@
     "/api/v1/series/{series_id}/genres": {
       "get": {
         "tags": [
-          "genres"
+          "Genres"
         ],
         "summary": "Get genres for a series",
         "operationId": "get_series_genres",
@@ -6651,7 +6894,7 @@
       },
       "put": {
         "tags": [
-          "genres"
+          "Genres"
         ],
         "summary": "Set genres for a series (replaces existing)",
         "operationId": "set_series_genres",
@@ -6706,7 +6949,7 @@
       },
       "post": {
         "tags": [
-          "genres"
+          "Genres"
         ],
         "summary": "Add a single genre to a series",
         "operationId": "add_series_genre",
@@ -6763,7 +7006,7 @@
     "/api/v1/series/{series_id}/genres/{genre_id}": {
       "delete": {
         "tags": [
-          "genres"
+          "Genres"
         ],
         "summary": "Remove a genre from a series",
         "operationId": "remove_series_genre",
@@ -6813,7 +7056,7 @@
     "/api/v1/series/{series_id}/metadata": {
       "put": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Replace all series metadata (PUT)",
         "description": "Replaces all metadata fields with the values in the request.\nOmitting a field (or setting it to null) will clear that field.",
@@ -6869,7 +7112,7 @@
       },
       "patch": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Partially update series metadata (PATCH)",
         "description": "Only provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared.",
@@ -6927,7 +7170,7 @@
     "/api/v1/series/{series_id}/metadata/full": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Get full series metadata including all related data",
         "description": "Returns comprehensive metadata with lock states, genres, tags, alternate titles,\nexternal ratings, and external links.",
@@ -6975,7 +7218,7 @@
     "/api/v1/series/{series_id}/metadata/locks": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Get metadata lock states",
         "operationId": "get_metadata_locks",
@@ -7020,7 +7263,7 @@
       },
       "put": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Update metadata lock states",
         "description": "Sets which metadata fields are locked. Locked fields will not be overwritten\nby automatic metadata refresh from book analysis or external sources.",
@@ -7078,7 +7321,7 @@
     "/api/v1/series/{series_id}/purge-deleted": {
       "delete": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Purge deleted books from a series",
         "operationId": "purge_series_deleted_books",
@@ -7127,7 +7370,7 @@
     "/api/v1/series/{series_id}/rating": {
       "get": {
         "tags": [
-          "ratings"
+          "Ratings"
         ],
         "summary": "Get the current user's rating for a series",
         "operationId": "get_series_rating",
@@ -7172,7 +7415,7 @@
       },
       "put": {
         "tags": [
-          "ratings"
+          "Ratings"
         ],
         "summary": "Set (create or update) the current user's rating for a series",
         "operationId": "set_series_rating",
@@ -7230,7 +7473,7 @@
       },
       "delete": {
         "tags": [
-          "ratings"
+          "Ratings"
         ],
         "summary": "Delete the current user's rating for a series",
         "operationId": "delete_series_rating",
@@ -7270,7 +7513,7 @@
     "/api/v1/series/{series_id}/ratings/average": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Get the average community rating for a series",
         "description": "Returns the average rating from all users and the total count of ratings.\nRatings are stored on a 0-100 scale internally.",
@@ -7322,7 +7565,7 @@
     "/api/v1/series/{series_id}/read": {
       "post": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Mark all books in a series as read",
         "operationId": "mark_series_as_read",
@@ -7369,7 +7612,7 @@
     "/api/v1/series/{series_id}/sharing-tags": {
       "get": {
         "tags": [
-          "sharing-tags"
+          "Sharing Tags"
         ],
         "summary": "Get sharing tags for a series (admin only)",
         "operationId": "get_series_sharing_tags",
@@ -7414,7 +7657,7 @@
       },
       "put": {
         "tags": [
-          "sharing-tags"
+          "Sharing Tags"
         ],
         "summary": "Set sharing tags for a series (replaces existing) (admin only)",
         "operationId": "set_series_sharing_tags",
@@ -7469,7 +7712,7 @@
       },
       "post": {
         "tags": [
-          "sharing-tags"
+          "Sharing Tags"
         ],
         "summary": "Add a sharing tag to a series (admin only)",
         "operationId": "add_series_sharing_tag",
@@ -7519,7 +7762,7 @@
     "/api/v1/series/{series_id}/sharing-tags/{tag_id}": {
       "delete": {
         "tags": [
-          "sharing-tags"
+          "Sharing Tags"
         ],
         "summary": "Remove a sharing tag from a series (admin only)",
         "operationId": "remove_series_sharing_tag",
@@ -7569,7 +7812,7 @@
     "/api/v1/series/{series_id}/tags": {
       "get": {
         "tags": [
-          "tags"
+          "Tags"
         ],
         "summary": "Get tags for a series",
         "operationId": "get_series_tags",
@@ -7614,7 +7857,7 @@
       },
       "put": {
         "tags": [
-          "tags"
+          "Tags"
         ],
         "summary": "Set tags for a series (replaces existing)",
         "operationId": "set_series_tags",
@@ -7669,7 +7912,7 @@
       },
       "post": {
         "tags": [
-          "tags"
+          "Tags"
         ],
         "summary": "Add a single tag to a series",
         "operationId": "add_series_tag",
@@ -7726,7 +7969,7 @@
     "/api/v1/series/{series_id}/tags/{tag_id}": {
       "delete": {
         "tags": [
-          "tags"
+          "Tags"
         ],
         "summary": "Remove a tag from a series",
         "operationId": "remove_series_tag",
@@ -7776,7 +8019,7 @@
     "/api/v1/series/{series_id}/thumbnail": {
       "get": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Get thumbnail/cover image for a series",
         "operationId": "get_series_thumbnail",
@@ -7880,7 +8123,7 @@
     "/api/v1/series/{series_id}/unread": {
       "post": {
         "tags": [
-          "series"
+          "Series"
         ],
         "summary": "Mark all books in a series as unread",
         "operationId": "mark_series_as_unread",
@@ -7927,7 +8170,7 @@
     "/api/v1/settings/branding": {
       "get": {
         "tags": [
-          "settings"
+          "Settings"
         ],
         "summary": "Get branding settings (unauthenticated)",
         "description": "Returns branding-related settings that are needed on unauthenticated pages\nlike the login screen. This endpoint does not require authentication.",
@@ -7952,7 +8195,7 @@
     "/api/v1/settings/public": {
       "get": {
         "tags": [
-          "settings"
+          "Settings"
         ],
         "summary": "Get public display settings (authenticated users)",
         "description": "Returns non-sensitive settings that affect UI/display behavior.\nThis endpoint is available to all authenticated users, not just admins.",
@@ -7997,7 +8240,7 @@
     "/api/v1/setup/initialize": {
       "post": {
         "tags": [
-          "setup"
+          "Setup"
         ],
         "summary": "Initialize application setup by creating the first admin user",
         "description": "Creates the first admin user with email verification bypassed and returns a JWT token",
@@ -8035,7 +8278,7 @@
     "/api/v1/setup/settings": {
       "patch": {
         "tags": [
-          "setup"
+          "Setup"
         ],
         "summary": "Configure initial settings (optional step in setup wizard)",
         "description": "Allows the newly created admin to configure database settings",
@@ -8075,7 +8318,7 @@
     "/api/v1/setup/status": {
       "get": {
         "tags": [
-          "setup"
+          "Setup"
         ],
         "summary": "Check if initial setup is required",
         "description": "Returns whether the application needs initial setup (no users exist)",
@@ -8097,7 +8340,7 @@
     "/api/v1/tags": {
       "get": {
         "tags": [
-          "tags"
+          "Tags"
         ],
         "summary": "List all tags",
         "operationId": "list_tags",
@@ -8153,7 +8396,7 @@
     "/api/v1/tags/cleanup": {
       "post": {
         "tags": [
-          "tags"
+          "Tags"
         ],
         "summary": "Delete all unused tags (tags with no series linked)",
         "operationId": "cleanup_tags",
@@ -8185,7 +8428,7 @@
     "/api/v1/tags/{tag_id}": {
       "delete": {
         "tags": [
-          "tags"
+          "Tags"
         ],
         "summary": "Delete a tag from the taxonomy (admin only)",
         "operationId": "delete_tag",
@@ -8234,25 +8477,28 @@
           {
             "name": "status",
             "in": "query",
-            "description": "Filter by status (pending, processing, completed, failed)",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           {
-            "name": "task_type",
+            "name": "taskType",
             "in": "query",
-            "description": "Filter by task type",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           {
             "name": "limit",
             "in": "query",
-            "description": "Limit number of results (default: 50)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -8447,7 +8693,7 @@
     "/api/v1/tasks/stream": {
       "get": {
         "tags": [
-          "events"
+          "Events"
         ],
         "summary": "Subscribe to real-time task progress events via SSE",
         "description": "Clients can subscribe to this endpoint to receive real-time notifications\nabout background task progress (analyze_book, generate_thumbnails, etc.).\n\n## Authentication\nRequires valid authentication with `LibrariesRead` permission.\n\n## Event Format\nEvents are sent as JSON-encoded `TaskProgressEvent` objects with the following structure:\n```json\n{\n  \"task_id\": \"uuid\",\n  \"task_type\": \"analyze_book\",\n  \"status\": \"running\",\n  \"progress\": {\n    \"current\": 5,\n    \"total\": 10,\n    \"message\": \"Processing book 5 of 10\"\n  },\n  \"started_at\": \"2024-01-06T12:00:00Z\",\n  \"library_id\": \"uuid\"\n}\n```\n\n## Keep-Alive\nA keep-alive message is sent every 15 seconds to prevent connection timeout.",
@@ -9238,7 +9484,7 @@
     "/api/v1/user/ratings": {
       "get": {
         "tags": [
-          "ratings"
+          "Ratings"
         ],
         "summary": "List all of the current user's ratings",
         "operationId": "list_user_ratings",
@@ -9270,7 +9516,7 @@
     "/api/v1/user/sharing-tags": {
       "get": {
         "tags": [
-          "sharing-tags"
+          "Sharing Tags"
         ],
         "summary": "Get current user's sharing tag grants",
         "operationId": "get_my_sharing_tags",
@@ -9299,7 +9545,7 @@
     "/api/v1/users": {
       "get": {
         "tags": [
-          "users"
+          "Users"
         ],
         "summary": "List all users (admin only) with pagination and filtering",
         "operationId": "list_users",
@@ -9393,7 +9639,7 @@
       },
       "post": {
         "tags": [
-          "users"
+          "Users"
         ],
         "summary": "Create a new user (admin only)",
         "operationId": "create_user",
@@ -9438,7 +9684,7 @@
     "/api/v1/users/{user_id}": {
       "get": {
         "tags": [
-          "users"
+          "Users"
         ],
         "summary": "Get user by ID (admin only)",
         "operationId": "get_user",
@@ -9483,7 +9729,7 @@
       },
       "delete": {
         "tags": [
-          "users"
+          "Users"
         ],
         "summary": "Delete a user (admin only)",
         "operationId": "delete_user",
@@ -9521,7 +9767,7 @@
       },
       "patch": {
         "tags": [
-          "users"
+          "Users"
         ],
         "summary": "Update a user (admin only, partial update)",
         "operationId": "update_user",
@@ -9578,7 +9824,7 @@
     "/api/v1/users/{user_id}/sharing-tags": {
       "get": {
         "tags": [
-          "sharing-tags"
+          "Sharing Tags"
         ],
         "summary": "Get sharing tag grants for a user (admin only)",
         "operationId": "get_user_sharing_tags",
@@ -9620,7 +9866,7 @@
       },
       "put": {
         "tags": [
-          "sharing-tags"
+          "Sharing Tags"
         ],
         "summary": "Set a user's sharing tag grant (admin only)",
         "operationId": "set_user_sharing_tag",
@@ -9677,7 +9923,7 @@
     "/api/v1/users/{user_id}/sharing-tags/{tag_id}": {
       "delete": {
         "tags": [
-          "sharing-tags"
+          "Sharing Tags"
         ],
         "summary": "Remove a user's sharing tag grant (admin only)",
         "operationId": "remove_user_sharing_tag",
@@ -9727,7 +9973,7 @@
     "/health": {
       "get": {
         "tags": [
-          "health"
+          "Health"
         ],
         "summary": "Health check endpoint - checks database connectivity",
         "description": "Returns \"OK\" with 200 status if database is healthy,\nor \"Service Unavailable\" with 503 status if database check fails.",
@@ -9745,7 +9991,7 @@
     "/opds": {
       "get": {
         "tags": [
-          "opds"
+          "OPDS"
         ],
         "summary": "Root OPDS catalog",
         "description": "Returns the main navigation feed with links to:\n- All libraries\n- Search\n- Recent additions",
@@ -9774,7 +10020,7 @@
     "/opds/books/{book_id}/pages": {
       "get": {
         "tags": [
-          "opds"
+          "OPDS"
         ],
         "summary": "OPDS-PSE: List all pages in a book",
         "description": "Returns a PSE page feed with individual page links for streaming.\nThis allows OPDS clients to read books page-by-page without downloading the entire file.",
@@ -9818,7 +10064,7 @@
     "/opds/libraries": {
       "get": {
         "tags": [
-          "opds"
+          "OPDS"
         ],
         "summary": "List all libraries",
         "description": "Returns a navigation feed with all available libraries",
@@ -9847,7 +10093,7 @@
     "/opds/libraries/{library_id}": {
       "get": {
         "tags": [
-          "opds"
+          "OPDS"
         ],
         "summary": "List series in a library",
         "description": "Returns an acquisition feed with all series in the specified library",
@@ -9874,7 +10120,7 @@
             }
           },
           {
-            "name": "page_size",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -9911,7 +10157,7 @@
     "/opds/search": {
       "get": {
         "tags": [
-          "opds"
+          "OPDS"
         ],
         "summary": "OPDS search endpoint",
         "description": "Searches books and series by title and returns an OPDS acquisition feed",
@@ -9951,7 +10197,7 @@
     "/opds/search.xml": {
       "get": {
         "tags": [
-          "opds"
+          "OPDS"
         ],
         "summary": "OpenSearch descriptor endpoint",
         "description": "Returns the OpenSearch XML descriptor for OPDS clients",
@@ -9977,7 +10223,7 @@
     "/opds/series/{series_id}": {
       "get": {
         "tags": [
-          "opds"
+          "OPDS"
         ],
         "summary": "List books in a series",
         "description": "Returns an acquisition feed with all books in the specified series",
@@ -10021,7 +10267,7 @@
     "/opds/v2": {
       "get": {
         "tags": [
-          "opds2"
+          "OPDS 2.0"
         ],
         "summary": "Root OPDS 2.0 catalog",
         "description": "Returns the main navigation feed with links to:\n- All libraries\n- Search\n- Recent additions",
@@ -10054,7 +10300,7 @@
     "/opds/v2/libraries": {
       "get": {
         "tags": [
-          "opds2"
+          "OPDS 2.0"
         ],
         "summary": "List all libraries (OPDS 2.0)",
         "description": "Returns a navigation feed with all available libraries",
@@ -10087,7 +10333,7 @@
     "/opds/v2/libraries/{library_id}": {
       "get": {
         "tags": [
-          "opds2"
+          "OPDS 2.0"
         ],
         "summary": "List series in a library (OPDS 2.0)",
         "description": "Returns a navigation feed with all series in the specified library",
@@ -10114,7 +10360,7 @@
             }
           },
           {
-            "name": "page_size",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -10155,7 +10401,7 @@
     "/opds/v2/recent": {
       "get": {
         "tags": [
-          "opds2"
+          "OPDS 2.0"
         ],
         "summary": "List recent additions (OPDS 2.0)",
         "description": "Returns a publications feed with recently added books",
@@ -10172,7 +10418,7 @@
             }
           },
           {
-            "name": "page_size",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -10210,7 +10456,7 @@
     "/opds/v2/search": {
       "get": {
         "tags": [
-          "opds2"
+          "OPDS 2.0"
         ],
         "summary": "OPDS 2.0 search endpoint",
         "description": "Searches books and series by title and returns an OPDS 2.0 publications feed",
@@ -10257,7 +10503,7 @@
     "/opds/v2/series/{series_id}": {
       "get": {
         "tags": [
-          "opds2"
+          "OPDS 2.0"
         ],
         "summary": "List books in a series (OPDS 2.0)",
         "description": "Returns a publications feed with all books in the specified series",
@@ -10305,7 +10551,7 @@
     "/{prefix}/api/v1/books/list": {
       "post": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Search/filter books",
         "description": "Returns books matching the filter criteria.\nThis uses POST to support complex filter bodies.\n\n## Endpoint\n`POST /{prefix}/api/v1/books/list`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n- `sort` - Sort parameter (e.g., \"createdDate,desc\")\n\n## Request Body\nJSON object with filter criteria (library_id, series_id, search_term, etc.)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -10391,7 +10637,7 @@
     "/{prefix}/api/v1/books/ondeck": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Get \"on deck\" books",
         "description": "Returns books that are currently in-progress (started but not completed).\nThis is the \"continue reading\" shelf in Komic.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/ondeck`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -10467,7 +10713,7 @@
     "/{prefix}/api/v1/books/{book_id}": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Get a book by ID",
         "description": "Returns a single book in Komga-compatible format.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -10524,7 +10770,7 @@
     "/{prefix}/api/v1/books/{book_id}/file": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Download book file",
         "description": "Streams the original book file (CBZ, CBR, EPUB, PDF) for download.\nIncludes proper Content-Disposition header with UTF-8 encoding.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/file`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -10577,7 +10823,7 @@
     "/{prefix}/api/v1/books/{book_id}/next": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Get next book in series",
         "description": "Returns the next book in the same series by sort order.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/next`\n\n## Response\n- 200: Next book DTO\n- 404: No next book (this is the last book in series)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -10634,7 +10880,7 @@
     "/{prefix}/api/v1/books/{book_id}/pages": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "List all pages for a book",
         "description": "Returns an array of page metadata for all pages in a book.\nPages are ordered by page number (1-indexed).\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/pages`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key\n\n## Response\nReturns an array of `KomgaPageDto` objects with page metadata including\nfilename, MIME type, dimensions, and size.",
@@ -10694,7 +10940,7 @@
     "/{prefix}/api/v1/books/{book_id}/pages/{page_number}": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Get a specific page image",
         "description": "Streams the raw page image for the requested page number.\nPage numbers are 1-indexed.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/pages/{pageNumber}`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key (via cookie fallback for browser image tags)\n\n## Response\nReturns the raw image data with appropriate Content-Type header.\nResponse is cached for 1 year (immutable content).",
@@ -10757,7 +11003,7 @@
     "/{prefix}/api/v1/books/{book_id}/pages/{page_number}/thumbnail": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Get a page thumbnail",
         "description": "Returns a thumbnail version of the requested page.\nThumbnails are resized to max 300px width/height while maintaining aspect ratio.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/pages/{pageNumber}/thumbnail`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key (via cookie fallback for browser image tags)\n\n## Response\nReturns a JPEG thumbnail with appropriate caching headers.",
@@ -10820,7 +11066,7 @@
     "/{prefix}/api/v1/books/{book_id}/previous": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Get previous book in series",
         "description": "Returns the previous book in the same series by sort order.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/previous`\n\n## Response\n- 200: Previous book DTO\n- 404: No previous book (this is the first book in series)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -10877,7 +11123,7 @@
     "/{prefix}/api/v1/books/{book_id}/read-progress": {
       "delete": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Delete reading progress for a book (mark as unread)",
         "description": "Removes all reading progress for a book, effectively marking it as unread.\n\n## Endpoint\n`DELETE /{prefix}/api/v1/books/{bookId}/read-progress`\n\n## Response\n- 204 No Content on success\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -10925,7 +11171,7 @@
       },
       "patch": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Update reading progress for a book",
         "description": "Updates the user's reading progress for a specific book.\nKomic sends: `{ \"completed\": false, \"page\": 151 }`\n\n## Endpoint\n`PATCH /{prefix}/api/v1/books/{bookId}/read-progress`\n\n## Request Body\n- `page` - Current page number (1-indexed, optional)\n- `completed` - Whether book is completed (optional)\n- `device_id` - Device ID (optional, not used by Komic)\n- `device_name` - Device name (optional, not used by Komic)\n\n## Response\n- 204 No Content on success (Komga behavior)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -10985,7 +11231,7 @@
     "/{prefix}/api/v1/books/{book_id}/thumbnail": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Get book thumbnail",
         "description": "Returns a thumbnail image for the book's first page.\n\n## Endpoint\n`GET /{prefix}/api/v1/books/{bookId}/thumbnail`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -11038,7 +11284,7 @@
     "/{prefix}/api/v1/libraries": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "List all libraries",
         "description": "Returns all libraries in Komga-compatible format.\n\n## Endpoint\n`GET /{prefix}/api/v1/libraries`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -11085,7 +11331,7 @@
     "/{prefix}/api/v1/libraries/{library_id}": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Get library by ID",
         "description": "Returns a single library in Komga-compatible format.\n\n## Endpoint\n`GET /{prefix}/api/v1/libraries/{libraryId}`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -11142,7 +11388,7 @@
     "/{prefix}/api/v1/libraries/{library_id}/thumbnail": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Get library thumbnail",
         "description": "Returns a thumbnail image for the library. Uses the first series' cover\nas the library thumbnail, or returns a 404 if no series exist.\n\n## Endpoint\n`GET /{prefix}/api/v1/libraries/{libraryId}/thumbnail`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key (via cookie fallback for browser image tags)",
@@ -11195,7 +11441,7 @@
     "/{prefix}/api/v1/series": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "List all series (paginated)",
         "description": "Returns all series in Komga-compatible format with pagination.\n\n## Endpoint\n`GET /{prefix}/api/v1/series`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n- `library_id` - Optional filter by library UUID\n- `search` - Optional search query\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -11296,7 +11542,7 @@
     "/{prefix}/api/v1/series/new": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Get recently added series",
         "description": "Returns series sorted by created date descending (newest first).\n\n## Endpoint\n`GET /{prefix}/api/v1/series/new`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n- `library_id` - Optional filter by library UUID\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -11397,7 +11643,7 @@
     "/{prefix}/api/v1/series/updated": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Get recently updated series",
         "description": "Returns series sorted by last modified date descending (most recently updated first).\n\n## Endpoint\n`GET /{prefix}/api/v1/series/updated`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n- `library_id` - Optional filter by library UUID\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -11498,7 +11744,7 @@
     "/{prefix}/api/v1/series/{series_id}": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Get series by ID",
         "description": "Returns a single series in Komga-compatible format.\n\n## Endpoint\n`GET /{prefix}/api/v1/series/{seriesId}`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -11555,7 +11801,7 @@
     "/{prefix}/api/v1/series/{series_id}/books": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Get books in a series",
         "description": "Returns all books in a series with pagination.\n\n## Endpoint\n`GET /{prefix}/api/v1/series/{seriesId}/books`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -11669,7 +11915,7 @@
     "/{prefix}/api/v1/series/{series_id}/thumbnail": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Get series thumbnail",
         "description": "Returns a thumbnail image for the series.\n\n## Endpoint\n`GET /{prefix}/api/v1/series/{seriesId}/thumbnail`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -11722,7 +11968,7 @@
     "/{prefix}/api/v1/users/me": {
       "get": {
         "tags": [
-          "komga"
+          "Komga"
         ],
         "summary": "Get current user information",
         "description": "Returns information about the currently authenticated user in Komga format.\nThis endpoint is used by Komic and other apps to verify authentication\nand determine user capabilities.\n\n## Endpoint\n`GET /{prefix}/api/v1/users/me`\n\n## Response\nReturns a `KomgaUserDto` containing:\n- User ID (UUID as string)\n- Email address\n- Roles (ADMIN, USER, FILE_DOWNLOAD)\n- Library access settings\n- Content restrictions\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
@@ -12391,7 +12637,7 @@
       },
       "BookListRequest": {
         "type": "object",
-        "description": "Request body for POST /books/list\n\nPagination parameters (page, page_size, sort) are passed as query parameters,\nnot in the request body. This enables proper HATEOAS links.",
+        "description": "Request body for POST /books/list\n\nPagination parameters (page, pageSize, sort) are passed as query parameters,\nnot in the request body. This enables proper HATEOAS links.",
         "properties": {
           "condition": {
             "type": [
@@ -17358,7 +17604,7 @@
         "type": "object",
         "description": "Query parameters for orphan stats endpoint",
         "properties": {
-          "include_files": {
+          "includeFiles": {
             "type": "boolean",
             "description": "If true, include the full list of orphaned files in the response"
           }
@@ -20600,7 +20846,7 @@
       },
       "SeriesListRequest": {
         "type": "object",
-        "description": "Request body for POST /series/list\n\nPagination parameters (page, page_size, sort) are passed as query parameters,\nnot in the request body. This enables proper HATEOAS links.",
+        "description": "Request body for POST /series/list\n\nPagination parameters (page, pageSize, sort) are passed as query parameters,\nnot in the request body. This enables proper HATEOAS links.",
         "properties": {
           "condition": {
             "type": [
@@ -23656,112 +23902,201 @@
   },
   "tags": [
     {
-      "name": "health",
+      "name": "Health",
       "description": "Health check endpoints"
     },
     {
-      "name": "auth",
-      "description": "Authentication endpoints"
+      "name": "Setup",
+      "description": "Initial server setup and configuration"
     },
     {
-      "name": "libraries",
+      "name": "Auth",
+      "description": "Authentication endpoints (login, logout, registration)"
+    },
+    {
+      "name": "API Keys",
+      "description": "API key management for programmatic access"
+    },
+    {
+      "name": "Libraries",
       "description": "Library management endpoints"
     },
     {
-      "name": "series",
+      "name": "Series",
       "description": "Series browsing and search endpoints"
     },
     {
-      "name": "genres",
-      "description": "Genre taxonomy endpoints for categorizing series"
+      "name": "Books",
+      "description": "Book details and metadata endpoints"
     },
     {
-      "name": "tags",
-      "description": "Tag taxonomy endpoints for labeling series"
+      "name": "Pages",
+      "description": "Page image serving endpoints"
     },
     {
-      "name": "ratings",
-      "description": "User series rating endpoints"
+      "name": "Genres",
+      "description": "Genre taxonomy for categorizing series"
+    },
+    {
+      "name": "Tags",
+      "description": "Tag taxonomy for labeling series"
+    },
+    {
+      "name": "Ratings",
+      "description": "User series ratings"
+    },
+    {
+      "name": "Users",
+      "description": "User management (admin only)"
     },
     {
       "name": "User Preferences",
       "description": "Per-user settings and preferences"
     },
     {
-      "name": "books",
-      "description": "Book details and metadata endpoints"
-    },
-    {
-      "name": "pages",
-      "description": "Page image serving endpoints"
-    },
-    {
       "name": "Reading Progress",
-      "description": "Reading progress tracking endpoints"
+      "description": "Reading progress tracking"
     },
     {
-      "name": "users",
-      "description": "User management endpoints (admin only)"
-    },
-    {
-      "name": "api-keys",
-      "description": "API key management endpoints"
-    },
-    {
-      "name": "Metrics",
-      "description": "Application metrics and statistics"
-    },
-    {
-      "name": "Scans",
-      "description": "Library scanning and analysis endpoints"
+      "name": "User Integrations",
+      "description": "User external service connections (AniList, etc.)"
     },
     {
       "name": "Task Queue",
-      "description": "Distributed task queue for background jobs (analysis, thumbnails, scans)"
+      "description": "Background job queue management"
+    },
+    {
+      "name": "Scans",
+      "description": "Library scanning and analysis"
     },
     {
       "name": "Thumbnails",
-      "description": "Thumbnail generation and management"
-    },
-    {
-      "name": "filesystem",
-      "description": "Filesystem browsing for library path selection"
-    },
-    {
-      "name": "settings",
-      "description": "Runtime configuration settings management (admin only)"
-    },
-    {
-      "name": "System Integrations",
-      "description": "Admin-managed external service integrations"
-    },
-    {
-      "name": "duplicates",
-      "description": "Duplicate book detection and management"
+      "description": "Thumbnail generation"
     },
     {
       "name": "Admin",
       "description": "Administrative operations (cleanup, maintenance)"
     },
     {
-      "name": "sharing-tags",
-      "description": "Sharing tags for content access control (admin only)"
+      "name": "Settings",
+      "description": "Runtime configuration settings (admin only)"
     },
     {
-      "name": "events",
+      "name": "System Integrations",
+      "description": "Admin-managed external service integrations"
+    },
+    {
+      "name": "Metrics",
+      "description": "Application metrics and statistics"
+    },
+    {
+      "name": "Filesystem",
+      "description": "Filesystem browsing for library paths"
+    },
+    {
+      "name": "Duplicates",
+      "description": "Duplicate book detection and management"
+    },
+    {
+      "name": "Sharing Tags",
+      "description": "Content access control tags (admin only)"
+    },
+    {
+      "name": "Events",
       "description": "Server-Sent Events for real-time updates"
     },
     {
-      "name": "opds",
-      "description": "OPDS 1.2 catalog feed (Atom XML format)"
+      "name": "OPDS",
+      "description": "OPDS 1.2 catalog (Atom XML) - Compatible with most e-readers"
     },
     {
-      "name": "opds2",
-      "description": "OPDS 2.0 catalog feed (JSON format) - Modern JSON-based OPDS specification"
+      "name": "OPDS 2.0",
+      "description": "OPDS 2.0 catalog (JSON) - Modern JSON-based format"
     },
     {
-      "name": "komga",
-      "description": "Komga-compatible API for third-party apps (Komic, etc.). Enable via config. Default path: /{prefix}/api/v1/ where prefix defaults to 'komga'"
+      "name": "Komga",
+      "description": "Komga-compatible API for third-party apps (Komic, etc.)"
+    }
+  ],
+  "x-tagGroups": [
+    {
+      "name": "Getting Started",
+      "tags": [
+        "Health",
+        "Setup"
+      ]
+    },
+    {
+      "name": "Authentication",
+      "tags": [
+        "Auth",
+        "API Keys"
+      ]
+    },
+    {
+      "name": "Library Content",
+      "tags": [
+        "Libraries",
+        "Series",
+        "Books",
+        "Pages"
+      ]
+    },
+    {
+      "name": "Metadata & Taxonomy",
+      "tags": [
+        "Genres",
+        "Tags",
+        "Ratings"
+      ]
+    },
+    {
+      "name": "User Features",
+      "tags": [
+        "Users",
+        "User Preferences",
+        "Reading Progress",
+        "User Integrations"
+      ]
+    },
+    {
+      "name": "Background Jobs",
+      "tags": [
+        "Task Queue",
+        "Scans",
+        "Thumbnails"
+      ]
+    },
+    {
+      "name": "Administration",
+      "tags": [
+        "Admin",
+        "Settings",
+        "System Integrations",
+        "Metrics",
+        "Filesystem",
+        "Duplicates",
+        "Sharing Tags"
+      ]
+    },
+    {
+      "name": "Real-time Events",
+      "tags": [
+        "Events"
+      ]
+    },
+    {
+      "name": "OPDS Catalog",
+      "tags": [
+        "OPDS",
+        "OPDS 2.0"
+      ]
+    },
+    {
+      "name": "Third-Party Compatibility",
+      "tags": [
+        "Komga"
+      ]
     }
   ]
 }

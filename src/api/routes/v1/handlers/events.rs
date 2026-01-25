@@ -43,7 +43,7 @@ use tracing::{debug, warn};
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "events"
+    tag = "Events"
 )]
 pub async fn entity_events_stream(
     State(state): State<Arc<AppState>>,
@@ -164,7 +164,7 @@ pub async fn entity_events_stream(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "events"
+    tag = "Events"
 )]
 pub async fn task_progress_stream(
     State(state): State<Arc<AppState>>,

@@ -208,6 +208,8 @@ pub struct TaskMetricsDataPointDto {
 
 /// Query parameters for history endpoint
 #[derive(Debug, Clone, Serialize, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct TaskMetricsHistoryQuery {
     /// Number of days to retrieve (default: 7)
     #[param(example = 7)]

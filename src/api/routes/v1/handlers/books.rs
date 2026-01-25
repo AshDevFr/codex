@@ -40,7 +40,9 @@ fn default_page_size() -> u64 {
 }
 
 /// Query parameters for listing books
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct BookListQuery {
     /// Optional library filter
     #[serde(default)]
@@ -64,7 +66,9 @@ pub struct BookListQuery {
 }
 
 /// Query parameters for listing books with analysis errors
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct BooksWithErrorsQuery {
     /// Optional library filter
     #[serde(default)]
@@ -221,10 +225,7 @@ pub async fn books_to_dtos(
 #[utoipa::path(
     get,
     path = "/api/v1/books",
-    params(
-        PaginationParams,
-        ("series_id" = Option<Uuid>, Query, description = "Filter by series ID")
-    ),
+    params(BookListQuery),
     responses(
         (status = 200, description = "Paginated list of books", body = BookListResponse),
         (status = 403, description = "Forbidden"),
@@ -233,7 +234,7 @@ pub async fn books_to_dtos(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn list_books(
     State(state): State<Arc<AuthState>>,
@@ -348,7 +349,7 @@ pub async fn list_books(
 /// Supports complex filter conditions including nested AllOf/AnyOf logic,
 /// genre/tag filtering with include/exclude, and more.
 ///
-/// Pagination parameters (page, page_size, sort) are passed as query parameters.
+/// Pagination parameters (page, pageSize, sort) are passed as query parameters.
 /// Filter conditions are passed in the request body.
 #[utoipa::path(
     post,
@@ -363,7 +364,7 @@ pub async fn list_books(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn list_books_filtered(
     State(state): State<Arc<AuthState>>,
@@ -473,12 +474,7 @@ pub async fn list_books_filtered(
 #[utoipa::path(
     get,
     path = "/api/v1/books/with-errors",
-    params(
-        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID"),
-        ("series_id" = Option<Uuid>, Query, description = "Filter by series ID"),
-        ("page" = Option<u64>, Query, description = "Page number (1-indexed, default 1)"),
-        ("page_size" = Option<u64>, Query, description = "Number of items per page (max 100)")
-    ),
+    params(BooksWithErrorsQuery),
     responses(
         (status = 200, description = "Paginated list of books with analysis errors", body = BookListResponse),
         (status = 403, description = "Forbidden"),
@@ -487,7 +483,7 @@ pub async fn list_books_filtered(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn list_books_with_errors(
     State(state): State<Arc<AuthState>>,
@@ -544,8 +540,7 @@ pub async fn list_books_with_errors(
     path = "/api/v1/libraries/{library_id}/books/with-errors",
     params(
         ("library_id" = Uuid, Path, description = "Library ID"),
-        ("page" = Option<u64>, Query, description = "Page number (1-indexed, default 1)"),
-        ("page_size" = Option<u64>, Query, description = "Number of items per page (max 100)")
+        BooksWithErrorsQuery
     ),
     responses(
         (status = 200, description = "Paginated list of books with analysis errors in library", body = BookListResponse),
@@ -555,7 +550,7 @@ pub async fn list_books_with_errors(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn list_library_books_with_errors(
     State(state): State<Arc<AuthState>>,
@@ -607,8 +602,7 @@ pub async fn list_library_books_with_errors(
     path = "/api/v1/series/{series_id}/books/with-errors",
     params(
         ("series_id" = Uuid, Path, description = "Series ID"),
-        ("page" = Option<u64>, Query, description = "Page number (1-indexed, default 1)"),
-        ("page_size" = Option<u64>, Query, description = "Number of items per page (max 100)")
+        BooksWithErrorsQuery
     ),
     responses(
         (status = 200, description = "Paginated list of books with analysis errors in series", body = BookListResponse),
@@ -618,7 +612,7 @@ pub async fn list_library_books_with_errors(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn list_series_books_with_errors(
     State(state): State<Arc<AuthState>>,
@@ -679,7 +673,7 @@ pub async fn list_series_books_with_errors(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn get_book(
     State(state): State<Arc<AuthState>>,
@@ -761,7 +755,7 @@ pub async fn get_book(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn patch_book(
     State(state): State<Arc<AuthState>>,
@@ -932,7 +926,7 @@ pub async fn patch_book(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn get_adjacent_books(
     State(state): State<Arc<AuthState>>,
@@ -988,7 +982,7 @@ pub async fn get_adjacent_books(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn list_library_books(
     State(state): State<Arc<AuthState>>,
@@ -1046,10 +1040,7 @@ pub async fn list_library_books(
 #[utoipa::path(
     get,
     path = "/api/v1/books/in-progress",
-    params(
-        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID"),
-        PaginationParams,
-    ),
+    params(BookListQuery),
     responses(
         (status = 200, description = "Paginated list of in-progress books", body = BookListResponse),
         (status = 403, description = "Forbidden"),
@@ -1058,7 +1049,7 @@ pub async fn list_library_books(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn list_in_progress_books(
     State(state): State<Arc<AuthState>>,
@@ -1123,7 +1114,7 @@ pub async fn list_in_progress_books(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn list_library_in_progress_books(
     State(state): State<Arc<AuthState>>,
@@ -1178,10 +1169,7 @@ pub async fn list_library_in_progress_books(
 #[utoipa::path(
     get,
     path = "/api/v1/books/on-deck",
-    params(
-        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID"),
-        PaginationParams,
-    ),
+    params(BookListQuery),
     responses(
         (status = 200, description = "Paginated list of on-deck books", body = BookListResponse),
         (status = 403, description = "Forbidden"),
@@ -1190,7 +1178,7 @@ pub async fn list_library_in_progress_books(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn list_on_deck_books(
     State(state): State<Arc<AuthState>>,
@@ -1249,7 +1237,7 @@ pub async fn list_on_deck_books(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn list_library_on_deck_books(
     State(state): State<Arc<AuthState>>,
@@ -1298,10 +1286,7 @@ pub async fn list_library_on_deck_books(
 #[utoipa::path(
     get,
     path = "/api/v1/books/recently-added",
-    params(
-        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID"),
-        PaginationParams,
-    ),
+    params(BookListQuery),
     responses(
         (status = 200, description = "Paginated list of recently added books", body = BookListResponse),
         (status = 403, description = "Forbidden"),
@@ -1310,7 +1295,7 @@ pub async fn list_library_on_deck_books(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn list_recently_added_books(
     State(state): State<Arc<AuthState>>,
@@ -1374,7 +1359,7 @@ pub async fn list_recently_added_books(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn list_library_recently_added_books(
     State(state): State<Arc<AuthState>>,
@@ -1425,7 +1410,9 @@ pub async fn list_library_recently_added_books(
 }
 
 /// Query parameters for recently read books
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct RecentBooksQuery {
     /// Maximum number of books to return (default: 50)
     #[serde(default = "default_recent_limit")]
@@ -1444,10 +1431,7 @@ fn default_recent_limit() -> u64 {
 #[utoipa::path(
     get,
     path = "/api/v1/books/recently-read",
-    params(
-        ("limit" = Option<u64>, Query, description = "Maximum number of books to return (default: 50)"),
-        ("library_id" = Option<Uuid>, Query, description = "Filter by library ID")
-    ),
+    params(RecentBooksQuery),
     responses(
         (status = 200, description = "List of recently read books", body = Vec<BookDto>),
         (status = 403, description = "Forbidden"),
@@ -1456,7 +1440,7 @@ fn default_recent_limit() -> u64 {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn list_recently_read_books(
     State(state): State<Arc<AuthState>>,
@@ -1493,7 +1477,7 @@ pub async fn list_recently_read_books(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn list_library_recently_read_books(
     State(state): State<Arc<AuthState>>,
@@ -1534,7 +1518,7 @@ pub async fn list_library_recently_read_books(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn get_book_file(
     State(state): State<Arc<AuthState>>,
@@ -1634,7 +1618,7 @@ use sea_orm::{ActiveModelTrait, Set};
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn replace_book_metadata(
     State(state): State<Arc<AuthState>>,
@@ -1886,7 +1870,7 @@ pub async fn replace_book_metadata(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn patch_book_metadata(
     State(state): State<Arc<AuthState>>,
@@ -2236,7 +2220,7 @@ use crate::api::routes::v1::dto::{
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn get_book_metadata_locks(
     State(state): State<Arc<AuthState>>,
@@ -2302,7 +2286,7 @@ pub async fn get_book_metadata_locks(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn update_book_metadata_locks(
     State(state): State<Arc<AuthState>>,
@@ -2471,7 +2455,7 @@ use tokio::io::AsyncWriteExt;
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn upload_book_cover(
     State(state): State<Arc<AuthState>>,
@@ -2565,6 +2549,8 @@ use crate::tasks::types::TaskType;
 
 /// Query parameters for v2 books with errors endpoint
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct BooksWithErrorsQueryV2 {
     /// Optional library filter
     #[serde(default)]
@@ -2618,7 +2604,7 @@ pub struct BooksWithErrorsQueryV2 {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn list_books_with_errors_v2(
     State(state): State<Arc<AuthState>>,
@@ -2761,7 +2747,7 @@ pub async fn list_books_with_errors_v2(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn retry_book_errors(
     State(state): State<Arc<AuthState>>,
@@ -2875,7 +2861,7 @@ pub async fn retry_book_errors(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "books"
+    tag = "Books"
 )]
 pub async fn retry_all_book_errors(
     State(state): State<Arc<AuthState>>,

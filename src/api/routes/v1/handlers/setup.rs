@@ -44,7 +44,7 @@ fn parse_permissions_json(json: &serde_json::Value) -> Vec<String> {
     responses(
         (status = 200, description = "Setup status", body = SetupStatusResponse),
     ),
-    tag = "setup"
+    tag = "Setup"
 )]
 pub async fn setup_status(
     State(state): State<Arc<AuthState>>,
@@ -79,7 +79,7 @@ pub async fn setup_status(
         (status = 400, description = "Invalid request or setup already completed"),
         (status = 422, description = "Validation error"),
     ),
-    tag = "setup"
+    tag = "Setup"
 )]
 pub async fn initialize_setup(
     State(state): State<Arc<AuthState>>,
@@ -244,7 +244,7 @@ pub async fn initialize_setup(
     security(
         ("jwt_bearer" = [])
     ),
-    tag = "setup"
+    tag = "Setup"
 )]
 pub async fn configure_initial_settings(
     State(state): State<Arc<AuthState>>,

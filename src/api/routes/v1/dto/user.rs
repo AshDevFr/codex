@@ -151,6 +151,7 @@ fn default_page_size() -> u64 {
 /// Query parameters for listing users with filtering and pagination
 #[derive(Debug, Deserialize, IntoParams)]
 #[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct UserListParams {
     /// Filter by role
     #[serde(default)]

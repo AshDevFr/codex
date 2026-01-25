@@ -393,12 +393,12 @@ export const seriesHandlers = [
 	}),
 
 	// List in-progress series
-	// Supports ?library_id= query param for library filtering
+	// Supports ?libraryId= query param for library filtering
 	// Returns plain array (not paginated) - matches API expectation
 	http.get("/api/v1/series/in-progress", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
-		const libraryId = url.searchParams.get("library_id");
+		const libraryId = url.searchParams.get("libraryId");
 
 		// Return a subset as "in-progress" series (those with reading progress)
 		const baseSeries = libraryId ? getSeriesByLibrary(libraryId) : mockSeries;
@@ -408,7 +408,7 @@ export const seriesHandlers = [
 	}),
 
 	// List series with pagination (1-indexed)
-	// Supports both ?library_id= (new) and ?libraryId= (legacy) for library filtering
+	// Supports ?libraryId= query param for library filtering
 	http.get("/api/v1/series", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
@@ -417,14 +417,10 @@ export const seriesHandlers = [
 			Number.parseInt(url.searchParams.get("page") || "1", 10),
 		);
 		const pageSize = Number.parseInt(
-			url.searchParams.get("page_size") ||
-				url.searchParams.get("pageSize") ||
-				"50",
+			url.searchParams.get("pageSize") || "50",
 			10,
 		);
-		// Support both library_id (new) and libraryId (legacy)
-		const libraryId =
-			url.searchParams.get("library_id") || url.searchParams.get("libraryId");
+		const libraryId = url.searchParams.get("libraryId");
 
 		const filteredSeries = libraryId
 			? getSeriesByLibrary(libraryId)
@@ -446,11 +442,11 @@ export const seriesHandlers = [
 	}),
 
 	// List recently added series
-	// Supports ?library_id= query param for library filtering
+	// Supports ?libraryId= query param for library filtering
 	http.get("/api/v1/series/recently-added", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
-		const libraryId = url.searchParams.get("library_id");
+		const libraryId = url.searchParams.get("libraryId");
 		const limit = Number.parseInt(url.searchParams.get("limit") || "50", 10);
 
 		const baseSeries = libraryId ? getSeriesByLibrary(libraryId) : mockSeries;
@@ -466,11 +462,11 @@ export const seriesHandlers = [
 	}),
 
 	// List recently updated series
-	// Supports ?library_id= query param for library filtering
+	// Supports ?libraryId= query param for library filtering
 	http.get("/api/v1/series/recently-updated", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
-		const libraryId = url.searchParams.get("library_id");
+		const libraryId = url.searchParams.get("libraryId");
 		const limit = Number.parseInt(url.searchParams.get("limit") || "50", 10);
 
 		const baseSeries = libraryId ? getSeriesByLibrary(libraryId) : mockSeries;

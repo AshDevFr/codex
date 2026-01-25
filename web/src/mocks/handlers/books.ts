@@ -329,10 +329,10 @@ export const bookHandlers = [
 			Number.parseInt(url.searchParams.get("page") || "1", 10),
 		);
 		const pageSize = Number.parseInt(
-			url.searchParams.get("page_size") || "50",
+			url.searchParams.get("pageSize") || "50",
 			10,
 		);
-		const errorTypeFilter = url.searchParams.get("error_type") as
+		const errorTypeFilter = url.searchParams.get("errorType") as
 			| "format_detection"
 			| "parser"
 			| "metadata"
@@ -341,7 +341,7 @@ export const bookHandlers = [
 			| "pdf_rendering"
 			| "other"
 			| null;
-		const libraryId = url.searchParams.get("library_id");
+		const libraryId = url.searchParams.get("libraryId");
 
 		// Filter by library if specified
 		let filteredBooks = mockBooksWithErrors;
@@ -508,12 +508,12 @@ export const bookHandlers = [
 	}),
 
 	// List in-progress books
-	// Supports ?library_id= query param for library filtering
+	// Supports ?libraryId= query param for library filtering
 	// Returns plain array (not paginated) - matches API expectation
 	http.get("/api/v1/books/in-progress", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
-		const libraryId = url.searchParams.get("library_id");
+		const libraryId = url.searchParams.get("libraryId");
 
 		// Return books that have read progress
 		const baseBooks = libraryId ? getBooksByLibrary(libraryId) : mockBooks;
@@ -523,12 +523,12 @@ export const bookHandlers = [
 	}),
 
 	// List on-deck books
-	// Supports ?library_id= query param for library filtering
+	// Supports ?libraryId= query param for library filtering
 	// Returns paginated response with next book in series where user has completed books
 	http.get("/api/v1/books/on-deck", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
-		const libraryId = url.searchParams.get("library_id");
+		const libraryId = url.searchParams.get("libraryId");
 
 		// Return books that don't have progress (simulating "next to read")
 		// In reality this would be first unread book from series with completed books
@@ -545,12 +545,12 @@ export const bookHandlers = [
 	}),
 
 	// List recently added books
-	// Supports ?library_id= query param for library filtering
+	// Supports ?libraryId= query param for library filtering
 	// Returns plain array (not paginated) - matches API expectation
 	http.get("/api/v1/books/recently-added", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
-		const libraryId = url.searchParams.get("library_id");
+		const libraryId = url.searchParams.get("libraryId");
 		const limit = Number.parseInt(url.searchParams.get("limit") || "50", 10);
 
 		// Sort by created date (newest first)
@@ -564,12 +564,12 @@ export const bookHandlers = [
 	}),
 
 	// List recently read books
-	// Supports ?library_id= query param for library filtering
+	// Supports ?libraryId= query param for library filtering
 	// Returns plain array (not paginated) - matches API expectation
 	http.get("/api/v1/books/recently-read", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
-		const libraryId = url.searchParams.get("library_id");
+		const libraryId = url.searchParams.get("libraryId");
 		const limit = Number.parseInt(url.searchParams.get("limit") || "50", 10);
 
 		// Return books that have been read (have read progress), sorted by last read
@@ -701,14 +701,11 @@ export const bookHandlers = [
 			Number.parseInt(url.searchParams.get("page") || "1", 10),
 		);
 		const pageSize = Number.parseInt(
-			url.searchParams.get("page_size") ||
-				url.searchParams.get("pageSize") ||
-				"50",
+			url.searchParams.get("pageSize") || "50",
 			10,
 		);
-		const libraryId = url.searchParams.get("library_id");
-		const seriesId =
-			url.searchParams.get("series_id") || url.searchParams.get("seriesId");
+		const libraryId = url.searchParams.get("libraryId");
+		const seriesId = url.searchParams.get("seriesId");
 
 		let filteredBooks = libraryId ? getBooksByLibrary(libraryId) : mockBooks;
 		if (seriesId) {

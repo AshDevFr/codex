@@ -17,7 +17,9 @@ use crate::api::AppState;
 
 // DTOs
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct ListTasksParams {
     pub status: Option<String>,
     pub task_type: Option<String>,
@@ -175,11 +177,7 @@ pub struct MessageResponse {
 #[utoipa::path(
     get,
     path = "/api/v1/tasks",
-    params(
-        ("status" = Option<String>, Query, description = "Filter by status (pending, processing, completed, failed)"),
-        ("task_type" = Option<String>, Query, description = "Filter by task type"),
-        ("limit" = Option<u64>, Query, description = "Limit number of results (default: 50)")
-    ),
+    params(ListTasksParams),
     responses(
         (status = 200, description = "Tasks retrieved successfully", body = Vec<TaskResponse>),
         (status = 403, description = "Permission denied"),

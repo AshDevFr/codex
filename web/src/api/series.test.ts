@@ -36,7 +36,7 @@ describe("seriesApi", () => {
 
 			const result = await seriesApi.getByLibrary("library-123");
 
-			expect(api.get).toHaveBeenCalledWith("/series?library_id=library-123");
+			expect(api.get).toHaveBeenCalledWith("/series?libraryId=library-123");
 			expect(result).toEqual(mockResponse);
 		});
 
@@ -80,7 +80,7 @@ describe("seriesApi", () => {
 			});
 
 			expect(api.get).toHaveBeenCalledWith(
-				"/series?library_id=library-123&page=2&page_size=10&sort=name&genres=Action%2CComedy&tags=Favorite&status=ongoing&publisher=Marvel&year=2024",
+				"/series?libraryId=library-123&page=2&pageSize=10&sort=name&genres=Action%2CComedy&tags=Favorite&status=ongoing&publisher=Marvel&year=2024",
 			);
 		});
 	});
@@ -114,7 +114,7 @@ describe("seriesApi", () => {
 			const result = await seriesApi.getInProgress("library-123");
 
 			expect(api.get).toHaveBeenCalledWith(
-				"/series/in-progress?library_id=library-123",
+				"/series/in-progress?libraryId=library-123",
 			);
 			expect(result).toEqual(mockSeries);
 		});
@@ -196,7 +196,7 @@ describe("seriesApi", () => {
 			const result = await seriesApi.getRecentlyAdded("library-123");
 
 			expect(api.get).toHaveBeenCalledWith(
-				"/series/recently-added?library_id=library-123&limit=50",
+				"/series/recently-added?libraryId=library-123&limit=50",
 			);
 			expect(result).toEqual(mockSeries);
 		});
@@ -219,7 +219,7 @@ describe("seriesApi", () => {
 			const result = await seriesApi.getRecentlyUpdated("library-123");
 
 			expect(api.get).toHaveBeenCalledWith(
-				"/series/recently-updated?library_id=library-123&limit=50",
+				"/series/recently-updated?libraryId=library-123&limit=50",
 			);
 			expect(result).toEqual(mockSeries);
 		});

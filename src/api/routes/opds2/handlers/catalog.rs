@@ -57,7 +57,7 @@ impl IntoResponse for Opds2Response {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "opds2"
+    tag = "OPDS 2.0"
 )]
 pub async fn root(
     State(state): State<Arc<AuthState>>,
@@ -99,7 +99,7 @@ pub async fn root(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "opds2"
+    tag = "OPDS 2.0"
 )]
 pub async fn libraries(
     State(state): State<Arc<AuthState>>,
@@ -156,7 +156,7 @@ pub async fn libraries(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "opds2"
+    tag = "OPDS 2.0"
 )]
 pub async fn library_series(
     State(state): State<Arc<AuthState>>,
@@ -206,7 +206,7 @@ pub async fn library_series(
 
     let mut links = vec![
         Opds2Link::self_link(format!(
-            "{}/libraries/{}?page={}&page_size={}",
+            "{}/libraries/{}?page={}&pageSize={}",
             base_url, library_id, pagination.page, pagination.page_size
         )),
         Opds2Link::start_link(base_url),
@@ -216,11 +216,11 @@ pub async fn library_series(
     // Add pagination links
     if pagination.page > 1 {
         links.push(Opds2Link::first_link(format!(
-            "{}/libraries/{}?page=1&page_size={}",
+            "{}/libraries/{}?page=1&pageSize={}",
             base_url, library_id, pagination.page_size
         )));
         links.push(Opds2Link::prev_link(format!(
-            "{}/libraries/{}?page={}&page_size={}",
+            "{}/libraries/{}?page={}&pageSize={}",
             base_url,
             library_id,
             pagination.page - 1,
@@ -231,14 +231,14 @@ pub async fn library_series(
     let total_pages = ((total as f64) / (pagination.page_size as f64)).ceil() as u32;
     if pagination.page < total_pages {
         links.push(Opds2Link::next_link(format!(
-            "{}/libraries/{}?page={}&page_size={}",
+            "{}/libraries/{}?page={}&pageSize={}",
             base_url,
             library_id,
             pagination.page + 1,
             pagination.page_size
         )));
         links.push(Opds2Link::last_link(format!(
-            "{}/libraries/{}?page={}&page_size={}",
+            "{}/libraries/{}?page={}&pageSize={}",
             base_url, library_id, total_pages, pagination.page_size
         )));
     }
@@ -267,7 +267,7 @@ pub async fn library_series(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "opds2"
+    tag = "OPDS 2.0"
 )]
 pub async fn series_books(
     State(state): State<Arc<AuthState>>,
@@ -393,7 +393,7 @@ pub async fn series_books(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "opds2"
+    tag = "OPDS 2.0"
 )]
 pub async fn recent(
     State(state): State<Arc<AuthState>>,

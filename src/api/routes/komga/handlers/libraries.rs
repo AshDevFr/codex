@@ -50,7 +50,7 @@ use uuid::Uuid;
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn list_libraries(
     State(state): State<Arc<AuthState>>,
@@ -105,7 +105,7 @@ pub async fn list_libraries(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn get_library(
     State(state): State<Arc<AuthState>>,
@@ -158,7 +158,7 @@ pub async fn get_library(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn get_library_thumbnail(
     State(state): State<Arc<AuthState>>,

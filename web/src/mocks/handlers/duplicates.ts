@@ -43,9 +43,9 @@ export const duplicatesHandlers = [
 	http.get("/api/v1/duplicates", async ({ request }) => {
 		await delay(100);
 		const url = new URL(request.url);
-		const libraryId = url.searchParams.get("library_id");
+		const libraryId = url.searchParams.get("libraryId");
 
-		// In a real implementation, we'd filter by library_id
+		// In a real implementation, we'd filter by libraryId
 		// For now, just return all duplicates (libraryId filtering not implemented yet)
 		void libraryId;
 		const filteredDuplicates = mockDuplicates;
@@ -80,7 +80,7 @@ export const duplicatesHandlers = [
 		await delay(150);
 		const { groupId } = params;
 		const url = new URL(request.url);
-		const keepBookId = url.searchParams.get("keep_book_id");
+		const keepBookId = url.searchParams.get("keepBookId");
 
 		const groupIndex = mockDuplicates.findIndex((d) => d.id === groupId);
 

@@ -45,7 +45,7 @@ fn parse_permissions_json(json: &serde_json::Value) -> Vec<String> {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "users"
+    tag = "Users"
 )]
 pub async fn list_users(
     State(state): State<Arc<AuthState>>,
@@ -134,7 +134,7 @@ pub async fn list_users(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "users"
+    tag = "Users"
 )]
 pub async fn get_user(
     State(state): State<Arc<AuthState>>,
@@ -190,7 +190,7 @@ pub async fn get_user(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "users"
+    tag = "Users"
 )]
 pub async fn create_user(
     State(state): State<Arc<AuthState>>,
@@ -269,7 +269,7 @@ pub async fn create_user(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "users"
+    tag = "Users"
 )]
 pub async fn update_user(
     State(state): State<Arc<AuthState>>,
@@ -374,7 +374,7 @@ pub async fn update_user(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "users"
+    tag = "Users"
 )]
 pub async fn delete_user(
     State(state): State<Arc<AuthState>>,

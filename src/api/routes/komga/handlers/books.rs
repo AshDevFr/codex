@@ -157,7 +157,7 @@ fn sort_book_dtos(dtos: &mut [KomgaBookDto], sort_field: Option<&str>, ascending
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn get_book(
     State(state): State<Arc<AuthState>>,
@@ -220,7 +220,7 @@ pub async fn get_book(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn get_book_thumbnail(
     State(state): State<Arc<AuthState>>,
@@ -290,7 +290,7 @@ pub async fn get_book_thumbnail(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn get_books_ondeck(
     State(state): State<Arc<AuthState>>,
@@ -376,7 +376,7 @@ pub async fn get_books_ondeck(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn search_books(
     State(state): State<Arc<AuthState>>,
@@ -539,7 +539,7 @@ pub async fn search_books(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn get_next_book(
     State(state): State<Arc<AuthState>>,
@@ -616,7 +616,7 @@ pub async fn get_next_book(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn get_previous_book(
     State(state): State<Arc<AuthState>>,
@@ -690,7 +690,7 @@ pub async fn get_previous_book(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "komga"
+    tag = "Komga"
 )]
 pub async fn download_book_file(
     State(state): State<Arc<AuthState>>,

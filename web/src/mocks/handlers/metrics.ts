@@ -205,7 +205,7 @@ export const metricsHandlers = [
 		await delay(150);
 		const url = new URL(request.url);
 		const days = parseInt(url.searchParams.get("days") || "7", 10);
-		const taskType = url.searchParams.get("task_type");
+		const taskType = url.searchParams.get("taskType");
 		const granularity = url.searchParams.get("granularity") || "hour";
 
 		// Generate historical data points

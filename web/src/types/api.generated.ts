@@ -573,7 +573,7 @@ export interface paths {
          * @description Supports complex filter conditions including nested AllOf/AnyOf logic,
          *     genre/tag filtering with include/exclude, and more.
          *
-         *     Pagination parameters (page, page_size, sort) are passed as query parameters.
+         *     Pagination parameters (page, pageSize, sort) are passed as query parameters.
          *     Filter conditions are passed in the request body.
          */
         post: operations["list_books_filtered"];
@@ -1746,7 +1746,7 @@ export interface paths {
          * @description Supports complex filter conditions including nested AllOf/AnyOf logic,
          *     genre/tag filtering with include/exclude, and more.
          *
-         *     Pagination parameters (page, page_size, sort) are passed as query parameters.
+         *     Pagination parameters (page, pageSize, sort) are passed as query parameters.
          *     Filter conditions are passed in the request body.
          */
         post: operations["list_series_filtered"];
@@ -4415,7 +4415,7 @@ export interface components {
         /**
          * @description Request body for POST /books/list
          *
-         *     Pagination parameters (page, page_size, sort) are passed as query parameters,
+         *     Pagination parameters (page, pageSize, sort) are passed as query parameters,
          *     not in the request body. This enables proper HATEOAS links.
          */
         BookListRequest: {
@@ -6993,7 +6993,7 @@ export interface components {
         /** @description Query parameters for orphan stats endpoint */
         OrphanStatsQuery: {
             /** @description If true, include the full list of orphaned files in the response */
-            include_files?: boolean;
+            includeFiles?: boolean;
         };
         /** @description Information about a single orphaned file */
         OrphanedFileDto: {
@@ -8971,7 +8971,7 @@ export interface components {
         /**
          * @description Request body for POST /series/list
          *
-         *     Pagination parameters (page, page_size, sort) are passed as query parameters,
+         *     Pagination parameters (page, pageSize, sort) are passed as query parameters,
          *     not in the request body. This enables proper HATEOAS links.
          */
         SeriesListRequest: {
@@ -10800,8 +10800,8 @@ export interface operations {
     get_orphan_stats: {
         parameters: {
             query?: {
-                /** @description Include list of orphaned files in response */
-                include_files?: boolean;
+                /** @description If true, include the full list of orphaned files in the response */
+                includeFiles?: boolean;
             };
             header?: never;
             path?: never;
@@ -12047,16 +12047,19 @@ export interface operations {
     list_books: {
         parameters: {
             query?: {
-                /** @description Filter by series ID */
-                series_id?: string;
+                /** @description Optional library filter */
+                libraryId?: string | null;
+                /** @description Optional series filter */
+                seriesId?: string | null;
+                /** @description Page number (1-indexed, minimum 1) */
+                page?: number;
+                /** @description Number of items per page (max 100, default 50) */
+                pageSize?: number;
+                /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
+                sort?: string | null;
             };
             header?: never;
-            path: {
-                /** @description Page number (1-indexed, minimum 1) */
-                page: number;
-                /** @description Number of items per page (max 100, default 50) */
-                pageSize: number;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -12083,15 +12086,15 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Optional library filter */
-                library_id?: string | null;
+                libraryId?: string | null;
                 /** @description Optional series filter */
-                series_id?: string | null;
+                seriesId?: string | null;
                 /** @description Filter by specific error type */
-                error_type?: null | components["schemas"]["BookErrorTypeDto"];
+                errorType?: null | components["schemas"]["BookErrorTypeDto"];
                 /** @description Page number (1-indexed, default 1) */
                 page?: number;
                 /** @description Number of items per page (max 100, default 50) */
-                page_size?: number;
+                pageSize?: number;
             };
             header?: never;
             path?: never;
@@ -12140,16 +12143,19 @@ export interface operations {
     list_in_progress_books: {
         parameters: {
             query?: {
-                /** @description Filter by library ID */
-                library_id?: string;
+                /** @description Optional library filter */
+                libraryId?: string | null;
+                /** @description Optional series filter */
+                seriesId?: string | null;
+                /** @description Page number (1-indexed, minimum 1) */
+                page?: number;
+                /** @description Number of items per page (max 100, default 50) */
+                pageSize?: number;
+                /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
+                sort?: string | null;
             };
             header?: never;
-            path: {
-                /** @description Page number (1-indexed, minimum 1) */
-                page: number;
-                /** @description Number of items per page (max 100, default 50) */
-                pageSize: number;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -12213,16 +12219,19 @@ export interface operations {
     list_on_deck_books: {
         parameters: {
             query?: {
-                /** @description Filter by library ID */
-                library_id?: string;
+                /** @description Optional library filter */
+                libraryId?: string | null;
+                /** @description Optional series filter */
+                seriesId?: string | null;
+                /** @description Page number (1-indexed, minimum 1) */
+                page?: number;
+                /** @description Number of items per page (max 100, default 50) */
+                pageSize?: number;
+                /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
+                sort?: string | null;
             };
             header?: never;
-            path: {
-                /** @description Page number (1-indexed, minimum 1) */
-                page: number;
-                /** @description Number of items per page (max 100, default 50) */
-                pageSize: number;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -12248,16 +12257,19 @@ export interface operations {
     list_recently_added_books: {
         parameters: {
             query?: {
-                /** @description Filter by library ID */
-                library_id?: string;
+                /** @description Optional library filter */
+                libraryId?: string | null;
+                /** @description Optional series filter */
+                seriesId?: string | null;
+                /** @description Page number (1-indexed, minimum 1) */
+                page?: number;
+                /** @description Number of items per page (max 100, default 50) */
+                pageSize?: number;
+                /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
+                sort?: string | null;
             };
             header?: never;
-            path: {
-                /** @description Page number (1-indexed, minimum 1) */
-                page: number;
-                /** @description Number of items per page (max 100, default 50) */
-                pageSize: number;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -12285,8 +12297,8 @@ export interface operations {
             query?: {
                 /** @description Maximum number of books to return (default: 50) */
                 limit?: number;
-                /** @description Filter by library ID */
-                library_id?: string;
+                /** @description Filter by library ID (optional) */
+                libraryId?: string | null;
             };
             header?: never;
             path?: never;
@@ -12358,14 +12370,14 @@ export interface operations {
     list_books_with_errors: {
         parameters: {
             query?: {
-                /** @description Filter by library ID */
-                library_id?: string;
-                /** @description Filter by series ID */
-                series_id?: string;
-                /** @description Page number (1-indexed, default 1) */
+                /** @description Optional library filter */
+                libraryId?: string | null;
+                /** @description Optional series filter */
+                seriesId?: string | null;
+                /** @description Page number (1-indexed, minimum 1) */
                 page?: number;
-                /** @description Number of items per page (max 100) */
-                page_size?: number;
+                /** @description Number of items per page (max 100, default 50) */
+                pageSize?: number;
             };
             header?: never;
             path?: never;
@@ -13799,10 +13811,14 @@ export interface operations {
     list_library_books_with_errors: {
         parameters: {
             query?: {
-                /** @description Page number (1-indexed, default 1) */
+                /** @description Optional library filter */
+                libraryId?: string | null;
+                /** @description Optional series filter */
+                seriesId?: string | null;
+                /** @description Page number (1-indexed, minimum 1) */
                 page?: number;
-                /** @description Number of items per page (max 100) */
-                page_size?: number;
+                /** @description Number of items per page (max 100, default 50) */
+                pageSize?: number;
             };
             header?: never;
             path: {
@@ -13999,8 +14015,16 @@ export interface operations {
             query?: {
                 /** @description Page number (1-indexed, default 1) */
                 page?: number;
-                /** @description Number of items per page (max 100) */
-                page_size?: number;
+                /** @description Number of items per page (max 100, default 50) */
+                pageSize?: number;
+                /** @description Sort parameter (format: "field,direction" e.g. "name,asc") */
+                sort?: string | null;
+                /** @description Filter by genres (comma-separated, AND logic - series must have ALL specified genres) */
+                genres?: string | null;
+                /** @description Filter by tags (comma-separated, AND logic - series must have ALL specified tags) */
+                tags?: string | null;
+                /** @description Filter by library ID */
+                libraryId?: string | null;
             };
             header?: never;
             path: {
@@ -14307,7 +14331,7 @@ export interface operations {
                  * @description Filter by task type
                  * @example scan_library
                  */
-                task_type?: string | null;
+                taskType?: string | null;
                 /**
                  * @description Granularity: "hour" or "day" (default: hour)
                  * @example hour
@@ -14434,18 +14458,18 @@ export interface operations {
     list_series: {
         parameters: {
             query?: {
-                /** @description Filter by library ID */
-                library_id?: string;
                 /** @description Page number (1-indexed, default 1) */
                 page?: number;
-                /** @description Number of items per page (max 100) */
-                page_size?: number;
-                /** @description Sort parameter (format: 'field,direction') */
-                sort?: string;
-                /** @description Filter by genres (comma-separated, AND logic) */
-                genres?: string;
-                /** @description Filter by tags (comma-separated, AND logic) */
-                tags?: string;
+                /** @description Number of items per page (max 100, default 50) */
+                pageSize?: number;
+                /** @description Sort parameter (format: "field,direction" e.g. "name,asc") */
+                sort?: string | null;
+                /** @description Filter by genres (comma-separated, AND logic - series must have ALL specified genres) */
+                genres?: string | null;
+                /** @description Filter by tags (comma-separated, AND logic - series must have ALL specified tags) */
+                tags?: string | null;
+                /** @description Filter by library ID */
+                libraryId?: string | null;
             };
             header?: never;
             path?: never;
@@ -14474,8 +14498,8 @@ export interface operations {
     list_in_progress_series: {
         parameters: {
             query?: {
-                /** @description Filter by library ID */
-                library_id?: string;
+                /** @description Filter by library ID (optional) */
+                libraryId?: string | null;
             };
             header?: never;
             path?: never;
@@ -14544,8 +14568,8 @@ export interface operations {
             query?: {
                 /** @description Maximum number of series to return (default: 50) */
                 limit?: number;
-                /** @description Filter by library ID */
-                library_id?: string;
+                /** @description Filter by library ID (optional) */
+                libraryId?: string | null;
             };
             header?: never;
             path?: never;
@@ -14576,8 +14600,8 @@ export interface operations {
             query?: {
                 /** @description Maximum number of series to return (default: 50) */
                 limit?: number;
-                /** @description Filter by library ID */
-                library_id?: string;
+                /** @description Filter by library ID (optional) */
+                libraryId?: string | null;
             };
             header?: never;
             path?: never;
@@ -14899,8 +14923,8 @@ export interface operations {
     get_series_books: {
         parameters: {
             query?: {
-                /** @description Include deleted books (default: false) */
-                include_deleted?: boolean;
+                /** @description Include deleted books in the result */
+                includeDeleted?: boolean;
             };
             header?: never;
             path: {
@@ -14939,10 +14963,14 @@ export interface operations {
     list_series_books_with_errors: {
         parameters: {
             query?: {
-                /** @description Page number (1-indexed, default 1) */
+                /** @description Optional library filter */
+                libraryId?: string | null;
+                /** @description Optional series filter */
+                seriesId?: string | null;
+                /** @description Page number (1-indexed, minimum 1) */
                 page?: number;
-                /** @description Number of items per page (max 100) */
-                page_size?: number;
+                /** @description Number of items per page (max 100, default 50) */
+                pageSize?: number;
             };
             header?: never;
             path: {
@@ -16818,11 +16846,8 @@ export interface operations {
     list_tasks: {
         parameters: {
             query?: {
-                /** @description Filter by status (pending, processing, completed, failed) */
-                status?: string;
-                /** @description Filter by task type */
-                task_type?: string;
-                /** @description Limit number of results (default: 50) */
+                status?: string | null;
+                taskType?: string | null;
                 limit?: number;
             };
             header?: never;
@@ -18112,7 +18137,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
-                page_size?: number;
+                pageSize?: number;
             };
             header?: never;
             path: {
@@ -18293,7 +18318,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
-                page_size?: number;
+                pageSize?: number;
             };
             header?: never;
             path: {
@@ -18333,7 +18358,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
-                page_size?: number;
+                pageSize?: number;
             };
             header?: never;
             path?: never;

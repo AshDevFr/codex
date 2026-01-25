@@ -32,6 +32,7 @@ use uuid::Uuid;
 /// Query parameters for listing sharing tags
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
 pub struct SharingTagListParams {
     /// Page number (1-indexed, default 1)
     #[serde(default = "default_page")]
@@ -63,7 +64,7 @@ fn default_page_size() -> u64 {
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "sharing-tags"
+    tag = "Sharing Tags"
 )]
 pub async fn list_sharing_tags(
     State(state): State<Arc<AuthState>>,
@@ -135,7 +136,7 @@ pub async fn list_sharing_tags(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "sharing-tags"
+    tag = "Sharing Tags"
 )]
 pub async fn get_sharing_tag(
     State(state): State<Arc<AuthState>>,
@@ -177,7 +178,7 @@ pub async fn get_sharing_tag(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "sharing-tags"
+    tag = "Sharing Tags"
 )]
 pub async fn create_sharing_tag(
     State(state): State<Arc<AuthState>>,
@@ -226,7 +227,7 @@ pub async fn create_sharing_tag(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "sharing-tags"
+    tag = "Sharing Tags"
 )]
 pub async fn update_sharing_tag(
     State(state): State<Arc<AuthState>>,
@@ -286,7 +287,7 @@ pub async fn update_sharing_tag(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "sharing-tags"
+    tag = "Sharing Tags"
 )]
 pub async fn delete_sharing_tag(
     State(state): State<Arc<AuthState>>,
@@ -323,7 +324,7 @@ pub async fn delete_sharing_tag(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "sharing-tags"
+    tag = "Sharing Tags"
 )]
 pub async fn get_series_sharing_tags(
     State(state): State<Arc<AuthState>>,
@@ -358,7 +359,7 @@ pub async fn get_series_sharing_tags(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "sharing-tags"
+    tag = "Sharing Tags"
 )]
 pub async fn set_series_sharing_tags(
     State(state): State<Arc<AuthState>>,
@@ -396,7 +397,7 @@ pub async fn set_series_sharing_tags(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "sharing-tags"
+    tag = "Sharing Tags"
 )]
 pub async fn add_series_sharing_tag(
     State(state): State<Arc<AuthState>>,
@@ -439,7 +440,7 @@ pub async fn add_series_sharing_tag(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "sharing-tags"
+    tag = "Sharing Tags"
 )]
 pub async fn remove_series_sharing_tag(
     State(state): State<Arc<AuthState>>,
@@ -480,7 +481,7 @@ pub async fn remove_series_sharing_tag(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "sharing-tags"
+    tag = "Sharing Tags"
 )]
 pub async fn get_user_sharing_tags(
     State(state): State<Arc<AuthState>>,
@@ -518,7 +519,7 @@ pub async fn get_user_sharing_tags(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "sharing-tags"
+    tag = "Sharing Tags"
 )]
 pub async fn set_user_sharing_tag(
     State(state): State<Arc<AuthState>>,
@@ -563,7 +564,7 @@ pub async fn set_user_sharing_tag(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "sharing-tags"
+    tag = "Sharing Tags"
 )]
 pub async fn remove_user_sharing_tag(
     State(state): State<Arc<AuthState>>,
@@ -600,7 +601,7 @@ pub async fn remove_user_sharing_tag(
         ("jwt_bearer" = []),
         ("api_key" = [])
     ),
-    tag = "sharing-tags"
+    tag = "Sharing Tags"
 )]
 pub async fn get_my_sharing_tags(
     State(state): State<Arc<AuthState>>,

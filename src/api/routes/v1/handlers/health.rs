@@ -13,7 +13,7 @@ use tracing::{info, warn};
         (status = 200, description = "Service is healthy"),
         (status = 503, description = "Service is unavailable"),
     ),
-    tag = "health"
+    tag = "Health"
 )]
 pub async fn health_check(State(db): State<DatabaseConnection>) -> impl IntoResponse {
     // Check database health with a simple query
