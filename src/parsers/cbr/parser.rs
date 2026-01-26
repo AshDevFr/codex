@@ -1,3 +1,4 @@
+use crate::parsers::image_utils::{get_jxl_dimensions, get_verified_image_format, is_image_file};
 use crate::parsers::traits::FormatParser;
 use crate::parsers::{parse_comic_info, BookMetadata, FileFormat, ImageFormat, PageInfo};
 use crate::utils::{hash_file, CodexError, Result};
@@ -11,35 +12,6 @@ pub struct CbrParser;
 impl CbrParser {
     pub fn new() -> Self {
         Self
-    }
-
-    /// Check if a file name is an image
-    fn is_image_file(name: &str) -> bool {
-        let lower = name.to_lowercase();
-        lower.ends_with(".jpg")
-            || lower.ends_with(".jpeg")
-            || lower.ends_with(".png")
-            || lower.ends_with(".webp")
-            || lower.ends_with(".gif")
-            || lower.ends_with(".bmp")
-    }
-
-    /// Determine image format from file extension
-    fn get_image_format(name: &str) -> Option<ImageFormat> {
-        let lower = name.to_lowercase();
-        if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
-            Some(ImageFormat::JPEG)
-        } else if lower.ends_with(".png") {
-            Some(ImageFormat::PNG)
-        } else if lower.ends_with(".webp") {
-            Some(ImageFormat::WEBP)
-        } else if lower.ends_with(".gif") {
-            Some(ImageFormat::GIF)
-        } else if lower.ends_with(".bmp") {
-            Some(ImageFormat::BMP)
-        } else {
-            None
-        }
     }
 }
 
@@ -109,7 +81,7 @@ impl FormatParser for CbrParser {
                     comic_info = Some(info);
                 }
                 archive = next;
-            } else if Self::is_image_file(&filename) {
+            } else if is_image_file(&filename) {
                 // Read image data
                 let (data, next) = header
                     .read()
@@ -131,12 +103,27 @@ impl FormatParser for CbrParser {
         // Process images to extract dimensions
         let mut pages = Vec::new();
         for (page_num, (filename, data, unpacked_size)) in image_data_entries.iter().enumerate() {
-            // Get image dimensions
-            let img = image::load_from_memory(data)?;
-            let (width, height) = img.dimensions();
-
-            let format = Self::get_image_format(filename)
+            // Detect format using both extension and magic bytes (with logging)
+            let format = get_verified_image_format(filename, data)
                 .ok_or_else(|| CodexError::UnsupportedFormat(filename.clone()))?;
+
+            // Get image dimensions (with special handling for JXL)
+            let (width, height) = match format {
+                ImageFormat::JXL => {
+                    // Use jxl-oxide to get JXL dimensions
+                    get_jxl_dimensions(data).ok_or_else(|| {
+                        CodexError::ParseError(format!(
+                            "Failed to parse JXL dimensions: {}",
+                            filename
+                        ))
+                    })?
+                }
+                _ => {
+                    // Use image crate for raster formats
+                    let img = image::load_from_memory(data)?;
+                    img.dimensions()
+                }
+            };
 
             pages.push(PageInfo {
                 page_number: page_num + 1,
@@ -224,7 +211,7 @@ pub fn extract_page_from_cbr<P: AsRef<Path>>(path: P, page_number: i32) -> anyho
     {
         let entry_name = header.entry().filename.to_string_lossy().to_string();
 
-        if CbrParser::is_image_file(&entry_name) {
+        if is_image_file(&entry_name) {
             let (data, next_archive) = header
                 .read()
                 .map_err(|e| anyhow::anyhow!("Failed to read RAR entry: {}", e))?;
@@ -253,180 +240,8 @@ pub fn extract_page_from_cbr<P: AsRef<Path>>(path: P, page_number: i32) -> anyho
 mod tests {
     use super::*;
 
-    mod is_image_file {
-        use super::*;
-
-        #[test]
-        fn test_jpg_lowercase() {
-            assert!(CbrParser::is_image_file("image.jpg"));
-        }
-
-        #[test]
-        fn test_jpg_uppercase() {
-            assert!(CbrParser::is_image_file("image.JPG"));
-        }
-
-        #[test]
-        fn test_jpeg_lowercase() {
-            assert!(CbrParser::is_image_file("photo.jpeg"));
-        }
-
-        #[test]
-        fn test_jpeg_uppercase() {
-            assert!(CbrParser::is_image_file("photo.JPEG"));
-        }
-
-        #[test]
-        fn test_png() {
-            assert!(CbrParser::is_image_file("graphic.png"));
-            assert!(CbrParser::is_image_file("graphic.PNG"));
-        }
-
-        #[test]
-        fn test_webp() {
-            assert!(CbrParser::is_image_file("modern.webp"));
-            assert!(CbrParser::is_image_file("modern.WEBP"));
-        }
-
-        #[test]
-        fn test_gif() {
-            assert!(CbrParser::is_image_file("animation.gif"));
-            assert!(CbrParser::is_image_file("animation.GIF"));
-        }
-
-        #[test]
-        fn test_bmp() {
-            assert!(CbrParser::is_image_file("bitmap.bmp"));
-            assert!(CbrParser::is_image_file("bitmap.BMP"));
-        }
-
-        #[test]
-        fn test_mixed_case() {
-            assert!(CbrParser::is_image_file("Image.JpG"));
-            assert!(CbrParser::is_image_file("Photo.PnG"));
-        }
-
-        #[test]
-        fn test_with_path() {
-            assert!(CbrParser::is_image_file("path/to/image.jpg"));
-            assert!(CbrParser::is_image_file("/absolute/path/image.png"));
-        }
-
-        #[test]
-        fn test_non_image_files() {
-            assert!(!CbrParser::is_image_file("document.txt"));
-            assert!(!CbrParser::is_image_file("archive.rar"));
-            assert!(!CbrParser::is_image_file("data.json"));
-            assert!(!CbrParser::is_image_file("ComicInfo.xml"));
-        }
-
-        #[test]
-        fn test_no_extension() {
-            assert!(!CbrParser::is_image_file("noextension"));
-        }
-
-        #[test]
-        fn test_empty_string() {
-            assert!(!CbrParser::is_image_file(""));
-        }
-    }
-
-    mod get_image_format {
-        use super::*;
-
-        #[test]
-        fn test_jpg_format() {
-            assert_eq!(
-                CbrParser::get_image_format("image.jpg"),
-                Some(ImageFormat::JPEG)
-            );
-            assert_eq!(
-                CbrParser::get_image_format("image.JPG"),
-                Some(ImageFormat::JPEG)
-            );
-        }
-
-        #[test]
-        fn test_jpeg_format() {
-            assert_eq!(
-                CbrParser::get_image_format("photo.jpeg"),
-                Some(ImageFormat::JPEG)
-            );
-            assert_eq!(
-                CbrParser::get_image_format("photo.JPEG"),
-                Some(ImageFormat::JPEG)
-            );
-        }
-
-        #[test]
-        fn test_png_format() {
-            assert_eq!(
-                CbrParser::get_image_format("graphic.png"),
-                Some(ImageFormat::PNG)
-            );
-            assert_eq!(
-                CbrParser::get_image_format("graphic.PNG"),
-                Some(ImageFormat::PNG)
-            );
-        }
-
-        #[test]
-        fn test_webp_format() {
-            assert_eq!(
-                CbrParser::get_image_format("modern.webp"),
-                Some(ImageFormat::WEBP)
-            );
-        }
-
-        #[test]
-        fn test_gif_format() {
-            assert_eq!(
-                CbrParser::get_image_format("animation.gif"),
-                Some(ImageFormat::GIF)
-            );
-        }
-
-        #[test]
-        fn test_bmp_format() {
-            assert_eq!(
-                CbrParser::get_image_format("bitmap.bmp"),
-                Some(ImageFormat::BMP)
-            );
-        }
-
-        #[test]
-        fn test_mixed_case() {
-            assert_eq!(
-                CbrParser::get_image_format("Image.JpG"),
-                Some(ImageFormat::JPEG)
-            );
-        }
-
-        #[test]
-        fn test_with_path() {
-            assert_eq!(
-                CbrParser::get_image_format("path/to/image.jpg"),
-                Some(ImageFormat::JPEG)
-            );
-        }
-
-        #[test]
-        fn test_unsupported_format() {
-            assert_eq!(CbrParser::get_image_format("document.txt"), None);
-            assert_eq!(CbrParser::get_image_format("archive.rar"), None);
-            assert_eq!(CbrParser::get_image_format("video.mp4"), None);
-        }
-
-        #[test]
-        fn test_no_extension() {
-            assert_eq!(CbrParser::get_image_format("noextension"), None);
-        }
-
-        #[test]
-        fn test_empty_string() {
-            assert_eq!(CbrParser::get_image_format(""), None);
-        }
-    }
+    // Note: is_image_file and get_image_format tests are in image_utils.rs
+    // since those functions are now shared across parsers
 
     #[test]
     fn test_cbr_parser_new() {

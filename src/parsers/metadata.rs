@@ -6,6 +6,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use std::str::FromStr;
 
 /// File format type
@@ -19,6 +20,17 @@ pub enum FileFormat {
     PDF,
 }
 
+/// Result of detecting file format from bytes
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FileFormatDetection {
+    /// A supported file format was detected
+    Supported(FileFormat),
+    /// An unsupported file format was detected (includes MIME type for logging)
+    Unsupported(String),
+    /// Could not determine the format from the bytes
+    Unknown,
+}
+
 impl FileFormat {
     pub fn from_extension(ext: &str) -> Option<Self> {
         match ext.to_lowercase().as_str() {
@@ -28,6 +40,97 @@ impl FileFormat {
             "pdf" => Some(FileFormat::PDF),
             _ => None,
         }
+    }
+
+    /// Detect file format from a file path by reading its magic bytes
+    ///
+    /// This reads the first few bytes of the file to detect the format.
+    /// Falls back to extension-based detection if magic bytes are inconclusive.
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Option<Self> {
+        let path = path.as_ref();
+
+        // Try to read magic bytes first
+        if let Ok(data) = std::fs::read(path) {
+            if let FileFormatDetection::Supported(format) = Self::detect_from_bytes(&data) {
+                return Some(format);
+            }
+        }
+
+        // Fall back to extension
+        path.extension()
+            .and_then(|e| e.to_str())
+            .and_then(Self::from_extension)
+    }
+
+    /// Detect file format from raw bytes using magic byte detection
+    ///
+    /// Uses the `infer` crate to detect the format from file signatures.
+    /// Note: CBZ and EPUB are both ZIP-based formats and require additional
+    /// heuristics or extension hints to distinguish.
+    pub fn detect_from_bytes(data: &[u8]) -> FileFormatDetection {
+        match infer::get(data) {
+            Some(kind) => match kind.mime_type() {
+                "application/pdf" => FileFormatDetection::Supported(FileFormat::PDF),
+                "application/x-rar-compressed" | "application/vnd.rar" => {
+                    FileFormatDetection::Supported(FileFormat::CBR)
+                }
+                "application/zip" => {
+                    // ZIP-based formats need additional checks
+                    // EPUB has specific structure, CBZ is generic ZIP with images
+                    if Self::is_epub_zip(data) {
+                        FileFormatDetection::Supported(FileFormat::EPUB)
+                    } else {
+                        // Default to CBZ for other ZIP files
+                        FileFormatDetection::Supported(FileFormat::CBZ)
+                    }
+                }
+                "application/epub+zip" => FileFormatDetection::Supported(FileFormat::EPUB),
+                // Any other format is unsupported
+                mime => {
+                    tracing::debug!(
+                        detected_mime = %mime,
+                        "Unsupported file format detected"
+                    );
+                    FileFormatDetection::Unsupported(mime.to_string())
+                }
+            },
+            None => FileFormatDetection::Unknown,
+        }
+    }
+
+    /// Check if a ZIP file is an EPUB by looking for the mimetype file
+    ///
+    /// EPUB files must have a "mimetype" file as the first entry containing
+    /// "application/epub+zip".
+    fn is_epub_zip(data: &[u8]) -> bool {
+        // EPUB spec requires mimetype file to be uncompressed and first in archive
+        // The mimetype content starts at byte 38 in a valid EPUB
+        // We look for "mimetypeapplication/epub+zip" pattern
+
+        // Quick check: look for "mimetype" followed by "application/epub+zip"
+        // This is a heuristic that works for most EPUBs without full ZIP parsing
+        if data.len() < 60 {
+            return false;
+        }
+
+        // Search for the pattern in the first 100 bytes
+        let search_range = std::cmp::min(data.len(), 100);
+        let search_data = &data[..search_range];
+
+        // Look for "mimetype" marker
+        if let Some(pos) = search_data.windows(8).position(|w| w == b"mimetype") {
+            // Check if "application/epub+zip" follows within reasonable distance
+            let start = pos + 8;
+            let end = std::cmp::min(data.len(), start + 50);
+            if end > start {
+                let content_area = &data[start..end];
+                return content_area
+                    .windows(20)
+                    .any(|w| w == b"application/epub+zip");
+            }
+        }
+
+        false
     }
 }
 
@@ -81,6 +184,8 @@ pub enum ImageFormat {
     BMP,
     /// SVG images - note that dimensions cannot be easily determined without rendering
     SVG,
+    /// JPEG XL images - decoded using jxl-oxide
+    JXL,
 }
 
 /// Page information
@@ -346,5 +451,114 @@ mod tests {
         assert_eq!(ReadingDirection::LeftToRight, ReadingDirection::LeftToRight);
         assert_ne!(ReadingDirection::LeftToRight, ReadingDirection::RightToLeft);
         assert_ne!(ReadingDirection::RightToLeft, ReadingDirection::TopToBottom);
+    }
+
+    mod detect_from_bytes {
+        use super::*;
+
+        #[test]
+        fn test_pdf_magic_bytes() {
+            // PDF starts with %PDF-
+            let pdf_data = b"%PDF-1.4\n...";
+            assert_eq!(
+                FileFormat::detect_from_bytes(pdf_data),
+                FileFormatDetection::Supported(FileFormat::PDF)
+            );
+        }
+
+        #[test]
+        fn test_zip_detected_as_cbz() {
+            // ZIP magic bytes: PK\x03\x04
+            // Generic ZIP (no EPUB mimetype) should be detected as CBZ
+            let zip_data = [
+                0x50, 0x4B, 0x03, 0x04, // PK signature
+                0x14, 0x00, 0x00, 0x00, // version, flags
+                0x00, 0x00, // compression method
+                0x00, 0x00, 0x00, 0x00, // file time/date
+                0x00, 0x00, 0x00, 0x00, // CRC-32
+                0x00, 0x00, 0x00, 0x00, // compressed size
+                0x00, 0x00, 0x00, 0x00, // uncompressed size
+                0x08, 0x00, // filename length (8)
+                0x00, 0x00, // extra field length
+                b't', b'e', b's', b't', b'.', b'j', b'p', b'g', // filename: "test.jpg"
+            ];
+            assert_eq!(
+                FileFormat::detect_from_bytes(&zip_data),
+                FileFormatDetection::Supported(FileFormat::CBZ)
+            );
+        }
+
+        #[test]
+        fn test_epub_zip_detected() {
+            // EPUB is a ZIP with "mimetype" as first file containing "application/epub+zip"
+            // This is a simplified EPUB header
+            let epub_data = [
+                0x50, 0x4B, 0x03, 0x04, // PK signature
+                0x14, 0x00, 0x00, 0x00, // version, flags
+                0x00, 0x00, // compression method (stored, no compression)
+                0x00, 0x00, 0x00, 0x00, // file time/date
+                0x00, 0x00, 0x00, 0x00, // CRC-32
+                0x14, 0x00, 0x00, 0x00, // compressed size (20)
+                0x14, 0x00, 0x00, 0x00, // uncompressed size (20)
+                0x08, 0x00, // filename length (8)
+                0x00, 0x00, // extra field length
+                b'm', b'i', b'm', b'e', b't', b'y', b'p', b'e', // filename: "mimetype"
+                b'a', b'p', b'p', b'l', b'i', b'c', b'a', b't', b'i', b'o', b'n', b'/', b'e', b'p',
+                b'u', b'b', b'+', b'z', b'i', b'p', // content: "application/epub+zip"
+            ];
+            assert_eq!(
+                FileFormat::detect_from_bytes(&epub_data),
+                FileFormatDetection::Supported(FileFormat::EPUB)
+            );
+        }
+
+        #[test]
+        fn test_rar_magic_bytes() {
+            // RAR5 magic bytes: Rar!\x1a\x07\x01\x00
+            let rar_data = [0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01, 0x00];
+            assert_eq!(
+                FileFormat::detect_from_bytes(&rar_data),
+                FileFormatDetection::Supported(FileFormat::CBR)
+            );
+        }
+
+        #[test]
+        fn test_rar4_magic_bytes() {
+            // RAR4 magic bytes: Rar!\x1a\x07\x00
+            let rar_data = [0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00];
+            assert_eq!(
+                FileFormat::detect_from_bytes(&rar_data),
+                FileFormatDetection::Supported(FileFormat::CBR)
+            );
+        }
+
+        #[test]
+        fn test_unsupported_format() {
+            // JPEG magic bytes - image format, not a document format
+            let jpeg_data = [0xFF, 0xD8, 0xFF, 0xE0];
+            let result = FileFormat::detect_from_bytes(&jpeg_data);
+            assert!(matches!(result, FileFormatDetection::Unsupported(_)));
+            if let FileFormatDetection::Unsupported(mime) = result {
+                assert_eq!(mime, "image/jpeg");
+            }
+        }
+
+        #[test]
+        fn test_unknown_format() {
+            // Random bytes that don't match any known format
+            let unknown_data = [0x12, 0x34, 0x56, 0x78];
+            assert_eq!(
+                FileFormat::detect_from_bytes(&unknown_data),
+                FileFormatDetection::Unknown
+            );
+        }
+
+        #[test]
+        fn test_empty_data() {
+            assert_eq!(
+                FileFormat::detect_from_bytes(&[]),
+                FileFormatDetection::Unknown
+            );
+        }
     }
 }

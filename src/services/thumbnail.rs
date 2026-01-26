@@ -8,6 +8,7 @@ use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use image::imageops::FilterType;
 use image::{DynamicImage, RgbaImage};
+use jxl_oxide::JxlImage;
 use sea_orm::{ActiveModelTrait, DatabaseConnection, Set};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -27,6 +28,19 @@ use crate::events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster
 fn detect_image_format(data: &[u8]) -> &'static str {
     if data.len() < 4 {
         return "unknown (too short)";
+    }
+
+    // Check JPEG XL first (both codestream and container formats)
+    // JXL codestream: FF 0A (2 bytes)
+    // JXL container: 00 00 00 0C 4A 58 4C 20 0D 0A 87 0A (12 bytes)
+    if data.len() >= 2 && data[0] == 0xFF && data[1] == 0x0A {
+        return "JXL (JPEG XL codestream)";
+    }
+    if data.len() >= 12
+        && data[0..4] == [0x00, 0x00, 0x00, 0x0C]
+        && data[4..8] == [0x4A, 0x58, 0x4C, 0x20]
+    {
+        return "JXL (JPEG XL container)";
     }
 
     // Check magic bytes for common image formats
@@ -86,6 +100,99 @@ fn is_svg_data(data: &[u8]) -> bool {
     data.starts_with(b"<svg") || data.starts_with(b"<?xml")
 }
 
+/// Check if data appears to be JXL (JPEG XL) based on magic bytes
+fn is_jxl_data(data: &[u8]) -> bool {
+    if data.len() < 2 {
+        return false;
+    }
+    // JXL codestream: FF 0A
+    if data[0] == 0xFF && data[1] == 0x0A {
+        return true;
+    }
+    // JXL container: 00 00 00 0C 4A 58 4C 20
+    if data.len() >= 12
+        && data[0..4] == [0x00, 0x00, 0x00, 0x0C]
+        && data[4..8] == [0x4A, 0x58, 0x4C, 0x20]
+    {
+        return true;
+    }
+    false
+}
+
+/// Decode JXL (JPEG XL) data to a raster image using jxl-oxide
+fn decode_jxl_to_image(jxl_data: &[u8]) -> Result<DynamicImage> {
+    // Create JXL decoder
+    let image = JxlImage::builder()
+        .read(Cursor::new(jxl_data))
+        .map_err(|e| anyhow!("Failed to parse JXL image: {}", e))?;
+
+    let width = image.width();
+    let height = image.height();
+
+    if width == 0 || height == 0 {
+        return Err(anyhow!(
+            "JXL image has invalid dimensions: {}x{}",
+            width,
+            height
+        ));
+    }
+
+    // Render the image to get pixel data
+    let render = image
+        .render_frame(0)
+        .map_err(|e| anyhow!("Failed to render JXL frame: {}", e))?;
+
+    // Get pixel stream from the render result
+    let mut stream = render.stream();
+    let channels = stream.channels() as usize;
+
+    // Read pixel data into buffer (values are f32 in range [0.0, 1.0])
+    let mut pixels_f32 = vec![0.0f32; (width as usize) * (height as usize) * channels];
+    stream.write_to_buffer(&mut pixels_f32);
+
+    // Convert f32 pixels to u8
+    let pixels: Vec<u8> = pixels_f32
+        .iter()
+        .map(|&f| (f.clamp(0.0, 1.0) * 255.0) as u8)
+        .collect();
+
+    let rgba_data = match channels {
+        1 => {
+            // Grayscale - expand to RGBA
+            pixels.iter().flat_map(|&g| [g, g, g, 255]).collect()
+        }
+        2 => {
+            // Grayscale + Alpha - expand to RGBA
+            pixels
+                .chunks(2)
+                .flat_map(|ga| [ga[0], ga[0], ga[0], ga[1]])
+                .collect()
+        }
+        3 => {
+            // RGB - add alpha channel
+            pixels
+                .chunks(3)
+                .flat_map(|rgb| [rgb[0], rgb[1], rgb[2], 255])
+                .collect()
+        }
+        4 => {
+            // Already RGBA
+            pixels
+        }
+        _ => {
+            return Err(anyhow!(
+                "Unexpected number of channels in JXL image: {}",
+                channels
+            ));
+        }
+    };
+
+    let img = RgbaImage::from_raw(width, height, rgba_data)
+        .ok_or_else(|| anyhow!("Failed to create image from JXL data"))?;
+
+    Ok(DynamicImage::ImageRgba8(img))
+}
+
 /// Render SVG data to a raster image using resvg
 ///
 /// Returns a DynamicImage that can be used with the image crate for further processing.
@@ -126,14 +233,16 @@ fn render_svg_to_image(svg_data: &[u8]) -> Result<DynamicImage> {
     Ok(DynamicImage::ImageRgba8(img))
 }
 
-/// Load image from bytes, with special handling for SVG
+/// Load image from bytes, with special handling for SVG and JXL
 ///
 /// This function attempts to load an image from raw bytes. It first checks if the data
 /// is SVG format (which the image crate doesn't support natively) and renders it using
-/// resvg. For other formats, it uses the image crate directly.
+/// resvg. For JXL format, it uses jxl-oxide. For other formats, it uses the image crate directly.
 fn load_image_with_svg_support(data: &[u8]) -> Result<DynamicImage> {
     if is_svg_data(data) {
         render_svg_to_image(data)
+    } else if is_jxl_data(data) {
+        decode_jxl_to_image(data)
     } else {
         image::load_from_memory(data).map_err(|e| {
             let detected_format = detect_image_format(data);

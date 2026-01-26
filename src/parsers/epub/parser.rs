@@ -1,29 +1,15 @@
-use crate::parsers::image_utils::{get_image_format, is_image_file};
+use crate::parsers::image_utils::{get_image_format, get_svg_dimensions, is_image_file};
 use crate::parsers::isbn_utils::extract_isbns;
 use crate::parsers::traits::FormatParser;
 use crate::parsers::{BookMetadata, FileFormat, ImageFormat, PageInfo};
 use crate::utils::{hash_file, CodexError, Result};
 use chrono::{DateTime, Utc};
 use image::GenericImageView;
-use resvg::usvg::{Options, Tree};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use zip::ZipArchive;
-
-/// Get dimensions from SVG data using resvg
-fn get_svg_dimensions(svg_data: &[u8]) -> Option<(u32, u32)> {
-    let tree = Tree::from_data(svg_data, &Options::default()).ok()?;
-    let size = tree.size();
-    let width = size.width() as u32;
-    let height = size.height() as u32;
-    if width > 0 && height > 0 {
-        Some((width, height))
-    } else {
-        None
-    }
-}
 
 pub struct EpubParser;
 

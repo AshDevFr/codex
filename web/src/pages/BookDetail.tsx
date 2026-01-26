@@ -16,7 +16,7 @@ import {
 	Title,
 	Tooltip,
 } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
+import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
 	IconAnalyze,
@@ -75,6 +75,7 @@ export function BookDetail() {
 	const [summaryOpened, { toggle: toggleSummary }] = useDisclosure(false);
 	const [editModalOpened, { open: openEditModal, close: closeEditModal }] =
 		useDisclosure(false);
+	const isWideScreen = useMediaQuery("(min-width: 768px)");
 
 	// Permission checks
 	const { hasPermission } = usePermissions();
@@ -654,11 +655,15 @@ export function BookDetail() {
 						<Text size="sm" c="dimmed" w={100}>
 							HASH
 						</Text>
-						<Tooltip label={book.fileHash} position="top">
-							<Text size="sm" style={{ cursor: "help" }}>
-								{book.fileHash.substring(0, 16)}...
-							</Text>
-						</Tooltip>
+						{isWideScreen ? (
+							<Text size="sm">{book.fileHash}</Text>
+						) : (
+							<Tooltip label={book.fileHash} position="top">
+								<Text size="sm" style={{ cursor: "help" }}>
+									{book.fileHash.substring(0, 16)}...
+								</Text>
+							</Tooltip>
+						)}
 					</Group>
 				</Stack>
 

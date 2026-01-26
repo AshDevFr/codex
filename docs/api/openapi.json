@@ -7502,6 +7502,7 @@
           "Ratings"
         ],
         "summary": "Get the current user's rating for a series",
+        "description": "Returns null if no rating exists (not a 404, since the series exists but has no rating)",
         "operationId": "get_series_rating",
         "parameters": [
           {
@@ -7517,11 +7518,18 @@
         ],
         "responses": {
           "200": {
-            "description": "User's rating for the series",
+            "description": "User's rating for the series (null if not rated)",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UserSeriesRatingDto"
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UserSeriesRatingDto"
+                    }
+                  ]
                 }
               }
             }
@@ -7530,7 +7538,7 @@
             "description": "Forbidden"
           },
           "404": {
-            "description": "Series or rating not found"
+            "description": "Series not found"
           }
         },
         "security": [

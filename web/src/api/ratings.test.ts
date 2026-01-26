@@ -101,24 +101,23 @@ describe("ratingsApi", () => {
 
 			const result = await ratingsApi.getUserRating("series-123");
 
-			expect(api.get).toHaveBeenCalledWith("/series/series-123/rating", {
-				validateStatus: expect.any(Function),
-			});
+			expect(api.get).toHaveBeenCalledWith("/series/series-123/rating");
 			expect(result).toEqual(mockRating);
 		});
 
-		it("should return null when no rating exists (404)", async () => {
+		it("should return null when no rating exists", async () => {
 			vi.mocked(api.get).mockResolvedValueOnce({
-				data: { error: "Not found" },
-				status: 404,
+				data: null,
+				status: 200,
 			});
 
 			const result = await ratingsApi.getUserRating("series-123");
 
+			expect(api.get).toHaveBeenCalledWith("/series/series-123/rating");
 			expect(result).toBeNull();
 		});
 
-		it("should throw error for non-404 errors", async () => {
+		it("should throw error for server errors", async () => {
 			const error = { response: { status: 500 } };
 			vi.mocked(api.get).mockRejectedValueOnce(error);
 

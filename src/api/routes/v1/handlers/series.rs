@@ -3779,6 +3779,8 @@ pub async fn cleanup_tags(
 // ============================================================================
 
 /// Get the current user's rating for a series
+///
+/// Returns null if no rating exists (not a 404, since the series exists but has no rating)
 #[utoipa::path(
     get,
     path = "/api/v1/series/{series_id}/rating",
@@ -3786,8 +3788,8 @@ pub async fn cleanup_tags(
         ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
-        (status = 200, description = "User's rating for the series", body = UserSeriesRatingDto),
-        (status = 404, description = "Series or rating not found"),
+        (status = 200, description = "User's rating for the series (null if not rated)", body = Option<UserSeriesRatingDto>),
+        (status = 404, description = "Series not found"),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -3800,7 +3802,7 @@ pub async fn get_series_rating(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
-) -> Result<Json<UserSeriesRatingDto>, ApiError> {
+) -> Result<Json<Option<UserSeriesRatingDto>>, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
     // Verify series exists
@@ -3812,17 +3814,16 @@ pub async fn get_series_rating(
     let rating =
         UserSeriesRatingRepository::get_by_user_and_series(&state.db, auth.user_id, series_id)
             .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch rating: {}", e)))?
-            .ok_or_else(|| ApiError::NotFound("No rating found for this series".to_string()))?;
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch rating: {}", e)))?;
 
-    Ok(Json(UserSeriesRatingDto {
-        id: rating.id,
-        series_id: rating.series_id,
-        rating: rating.rating,
-        notes: rating.notes,
-        created_at: rating.created_at,
-        updated_at: rating.updated_at,
-    }))
+    Ok(Json(rating.map(|r| UserSeriesRatingDto {
+        id: r.id,
+        series_id: r.series_id,
+        rating: r.rating,
+        notes: r.notes,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+    })))
 }
 
 /// Set (create or update) the current user's rating for a series

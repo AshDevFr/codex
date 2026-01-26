@@ -38,6 +38,9 @@ impl PageRepository {
 
     /// Create multiple pages in a batch using bulk insert
     /// This is much more efficient than creating pages one by one
+    ///
+    /// Pages are inserted in chunks to avoid SQLite's 999 variable limit.
+    /// With 9 columns per page, we use chunks of 100 pages (900 variables).
     pub async fn create_batch(
         db: &DatabaseConnection,
         pages_models: &[pages::Model],
@@ -46,27 +49,31 @@ impl PageRepository {
             return Ok(());
         }
 
-        // Convert models to active models for batch insert
-        let active_models: Vec<pages::ActiveModel> = pages_models
-            .iter()
-            .map(|page_model| pages::ActiveModel {
-                id: Set(page_model.id),
-                book_id: Set(page_model.book_id),
-                page_number: Set(page_model.page_number),
-                file_name: Set(page_model.file_name.clone()),
-                format: Set(page_model.format.clone()),
-                width: Set(page_model.width),
-                height: Set(page_model.height),
-                file_size: Set(page_model.file_size),
-                created_at: Set(page_model.created_at),
-            })
-            .collect();
+        // SQLite has a limit of 999 bound parameters per query.
+        // Each page has 9 columns, so we can safely insert 100 pages per batch (900 params).
+        const BATCH_SIZE: usize = 100;
 
-        // Bulk insert all pages in a single query
-        Pages::insert_many(active_models)
-            .exec(db)
-            .await
-            .context("Failed to batch create pages")?;
+        for chunk in pages_models.chunks(BATCH_SIZE) {
+            let active_models: Vec<pages::ActiveModel> = chunk
+                .iter()
+                .map(|page_model| pages::ActiveModel {
+                    id: Set(page_model.id),
+                    book_id: Set(page_model.book_id),
+                    page_number: Set(page_model.page_number),
+                    file_name: Set(page_model.file_name.clone()),
+                    format: Set(page_model.format.clone()),
+                    width: Set(page_model.width),
+                    height: Set(page_model.height),
+                    file_size: Set(page_model.file_size),
+                    created_at: Set(page_model.created_at),
+                })
+                .collect();
+
+            Pages::insert_many(active_models)
+                .exec(db)
+                .await
+                .context("Failed to batch create pages")?;
+        }
 
         Ok(())
     }
@@ -481,5 +488,69 @@ mod tests {
             .unwrap();
 
         assert_eq!(pages.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_create_batch_large_page_count() {
+        // Test that batch insert works with page counts exceeding SQLite's 999 variable limit
+        // 250 pages * 9 columns = 2250 variables, which would fail without chunking
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book = crate::db::entities::books::Model {
+            id: Uuid::new_v4(),
+            series_id: series.id,
+            library_id: library.id,
+            file_path: "/test/large_book.pdf".to_string(),
+            file_name: "large_book.pdf".to_string(),
+            file_size: 1024,
+            file_hash: "hash123".to_string(),
+            partial_hash: String::new(),
+            format: "pdf".to_string(),
+            page_count: 250,
+            deleted: false,
+            analyzed: false,
+            analysis_error: None,
+            analysis_errors: None,
+            modified_at: Utc::now(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
+        };
+        BookRepository::create(db.sea_orm_connection(), &book, None)
+            .await
+            .unwrap();
+
+        // Create 250 pages - this would exceed SQLite's limit without chunking
+        let pages: Vec<_> = (1..=250)
+            .map(|i| create_page_model(book.id, i, &format!("page{:04}.jpg", i)))
+            .collect();
+
+        // This should succeed with chunked inserts
+        PageRepository::create_batch(db.sea_orm_connection(), &pages)
+            .await
+            .unwrap();
+
+        let retrieved = PageRepository::list_by_book(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+
+        assert_eq!(retrieved.len(), 250);
+        assert_eq!(retrieved[0].page_number, 1);
+        assert_eq!(retrieved[249].page_number, 250);
     }
 }

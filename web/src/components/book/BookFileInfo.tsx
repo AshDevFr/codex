@@ -1,4 +1,5 @@
 import { Grid, Paper, Stack, Text, Title, Tooltip } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import type { Book } from "@/types";
 
 interface BookFileInfoProps {
@@ -68,14 +69,18 @@ function InfoItem({ label, value, tooltip }: InfoItemProps) {
 }
 
 export function BookFileInfo({ book }: BookFileInfoProps) {
+	const isWideScreen = useMediaQuery("(min-width: 768px)");
+
 	const items = [
 		{ label: "Format", value: book.fileFormat.toUpperCase() },
 		{ label: "Size", value: formatFileSize(book.fileSize) },
 		{ label: "Pages", value: book.pageCount },
 		{
 			label: "Hash",
-			value: `${book.fileHash.substring(0, 12)}...`,
-			tooltip: book.fileHash,
+			value: isWideScreen
+				? book.fileHash
+				: `${book.fileHash.substring(0, 12)}...`,
+			tooltip: isWideScreen ? undefined : book.fileHash,
 		},
 		{ label: "Added", value: formatDate(book.createdAt) },
 		{

@@ -1,27 +1,15 @@
-use crate::parsers::image_utils::{get_image_format, is_image_file};
+use crate::parsers::image_utils::{
+    get_jxl_dimensions, get_svg_dimensions, get_verified_image_format, is_image_file,
+};
 use crate::parsers::traits::FormatParser;
 use crate::parsers::{parse_comic_info, BookMetadata, FileFormat, ImageFormat, PageInfo};
 use crate::utils::{hash_file, CodexError, Result};
 use chrono::{DateTime, Utc};
 use image::GenericImageView;
-use resvg::usvg::{Options, Tree};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use zip::ZipArchive;
-
-/// Get dimensions from SVG data using resvg
-fn get_svg_dimensions(svg_data: &[u8]) -> Option<(u32, u32)> {
-    let tree = Tree::from_data(svg_data, &Options::default()).ok()?;
-    let size = tree.size();
-    let width = size.width() as u32;
-    let height = size.height() as u32;
-    if width > 0 && height > 0 {
-        Some((width, height))
-    } else {
-        None
-    }
-}
 
 pub struct CbzParser;
 
@@ -88,23 +76,33 @@ impl FormatParser for CbzParser {
             let mut file = archive.by_index(*idx)?;
             let file_size = file.size();
 
-            let format = get_image_format(name)
-                .ok_or_else(|| CodexError::UnsupportedFormat(name.clone()))?;
-
-            // Read image data
+            // Read image data first for magic byte detection
             let mut image_data = Vec::new();
             file.read_to_end(&mut image_data)?;
 
-            // Get image dimensions (with special handling for SVG)
-            let (width, height) = if format == ImageFormat::SVG {
-                // Use resvg to get SVG dimensions
-                get_svg_dimensions(&image_data).ok_or_else(|| {
-                    CodexError::ParseError(format!("Failed to parse SVG dimensions: {}", name))
-                })?
-            } else {
-                // Use image crate for raster formats
-                let img = image::load_from_memory(&image_data)?;
-                img.dimensions()
+            // Detect format using both extension and magic bytes (with logging)
+            let format = get_verified_image_format(name, &image_data)
+                .ok_or_else(|| CodexError::UnsupportedFormat(name.clone()))?;
+
+            // Get image dimensions (with special handling for SVG and JXL)
+            let (width, height) = match format {
+                ImageFormat::SVG => {
+                    // Use resvg to get SVG dimensions
+                    get_svg_dimensions(&image_data).ok_or_else(|| {
+                        CodexError::ParseError(format!("Failed to parse SVG dimensions: {}", name))
+                    })?
+                }
+                ImageFormat::JXL => {
+                    // Use jxl-oxide to get JXL dimensions
+                    get_jxl_dimensions(&image_data).ok_or_else(|| {
+                        CodexError::ParseError(format!("Failed to parse JXL dimensions: {}", name))
+                    })?
+                }
+                _ => {
+                    // Use image crate for raster formats
+                    let img = image::load_from_memory(&image_data)?;
+                    img.dimensions()
+                }
             };
 
             pages.push(PageInfo {

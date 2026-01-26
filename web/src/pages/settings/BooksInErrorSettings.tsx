@@ -1,5 +1,6 @@
 import {
 	Accordion,
+	ActionIcon,
 	Alert,
 	Badge,
 	Box,
@@ -19,7 +20,9 @@ import { notifications } from "@mantine/notifications";
 import {
 	IconAlertCircle,
 	IconAlertTriangle,
+	IconCopy,
 	IconDatabase,
+	IconDownload,
 	IconFileAlert,
 	IconFileBroken,
 	IconFileUnknown,
@@ -44,6 +47,138 @@ import {
 	getErrorTypeDescription,
 	getErrorTypeLabel,
 } from "@/utils/bookErrors";
+
+/**
+ * Copy text to clipboard and show a notification
+ */
+function copyToClipboard(text: string, label: string) {
+	navigator.clipboard.writeText(text).then(
+		() => {
+			notifications.show({
+				title: "Copied",
+				message: `${label} copied to clipboard`,
+				color: "green",
+			});
+		},
+		() => {
+			notifications.show({
+				title: "Error",
+				message: "Failed to copy to clipboard",
+				color: "red",
+			});
+		},
+	);
+}
+
+/**
+ * Format a date string for CSV export
+ */
+function formatDateForCsv(dateStr: string): string {
+	try {
+		return new Date(dateStr).toISOString();
+	} catch {
+		return dateStr;
+	}
+}
+
+/**
+ * Escape a value for CSV (handles quotes and commas)
+ */
+function escapeCsvValue(value: string): string {
+	if (value.includes('"') || value.includes(",") || value.includes("\n")) {
+		return `"${value.replace(/"/g, '""')}"`;
+	}
+	return value;
+}
+
+/**
+ * Export errors to CSV format
+ */
+function exportErrorsToCsv(groups: ErrorGroupDto[]) {
+	const headers = [
+		"Book Title",
+		"Series Name",
+		"File Path",
+		"File Format",
+		"Page Count",
+		"Error Type",
+		"Error Message",
+		"Error Occurred At",
+		"Book Created At",
+	];
+
+	const rows: string[][] = [];
+
+	// Sort groups by predefined order
+	const sortedGroups = [...groups].sort((a, b) => {
+		const aIndex = ERROR_TYPES_ORDER.indexOf(a.errorType);
+		const bIndex = ERROR_TYPES_ORDER.indexOf(b.errorType);
+		return aIndex - bIndex;
+	});
+
+	for (const group of sortedGroups) {
+		// Sort books within group by title, then by file path
+		const sortedBooks = [...group.books].sort((a, b) => {
+			const titleCompare = a.book.title.localeCompare(b.book.title);
+			if (titleCompare !== 0) return titleCompare;
+			return a.book.filePath.localeCompare(b.book.filePath);
+		});
+
+		for (const bookWithErrors of sortedBooks) {
+			const { book, errors } = bookWithErrors;
+
+			// Sort errors by type order, then by occurred date
+			const sortedErrors = [...errors].sort((a, b) => {
+				const aIndex = ERROR_TYPES_ORDER.indexOf(a.errorType);
+				const bIndex = ERROR_TYPES_ORDER.indexOf(b.errorType);
+				if (aIndex !== bIndex) return aIndex - bIndex;
+				return (
+					new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime()
+				);
+			});
+
+			for (const error of sortedErrors) {
+				rows.push([
+					escapeCsvValue(book.title),
+					escapeCsvValue(book.seriesName || ""),
+					escapeCsvValue(book.filePath),
+					book.fileFormat.toUpperCase(),
+					book.pageCount?.toString() || "",
+					getErrorTypeLabel(error.errorType),
+					escapeCsvValue(error.message),
+					formatDateForCsv(error.occurredAt),
+					formatDateForCsv(book.createdAt),
+				]);
+			}
+		}
+	}
+
+	const csvContent = [
+		headers.join(","),
+		...rows.map((row) => row.join(",")),
+	].join("\n");
+
+	// Create and download the file
+	const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+	const link = document.createElement("a");
+	const url = URL.createObjectURL(blob);
+	link.setAttribute("href", url);
+	link.setAttribute(
+		"download",
+		`book-errors-${new Date().toISOString().split("T")[0]}.csv`,
+	);
+	link.style.visibility = "hidden";
+	document.body.appendChild(link);
+	link.click();
+	document.body.removeChild(link);
+	URL.revokeObjectURL(url);
+
+	notifications.show({
+		title: "Export Complete",
+		message: `Exported ${rows.length} error(s) to CSV`,
+		color: "green",
+	});
+}
 
 // Task types that indicate book error changes
 const BOOK_ERROR_TASK_TYPES = ["analyze_book", "generate_thumbnail"];
@@ -222,30 +357,51 @@ function BookErrorCard({
 
 					{/* Error messages */}
 					<Stack gap={4}>
-						{errors.map((error) => (
-							<Group key={error.errorType} gap="xs" wrap="nowrap">
-								<Badge
-									size="xs"
-									color={getErrorTypeColor(error.errorType)}
-									variant="light"
-									leftSection={
-										<ErrorTypeIcon errorType={error.errorType} size={12} />
-									}
-								>
-									{getErrorTypeLabel(error.errorType)}
-								</Badge>
-								<Tooltip
-									label={error.message}
-									multiline
-									maw={400}
-									openDelay={300}
-								>
-									<Text size="xs" c="red" lineClamp={1} style={{ flex: 1 }}>
-										{error.message}
-									</Text>
-								</Tooltip>
-							</Group>
-						))}
+						{[...errors]
+							.sort((a, b) => {
+								// Sort by error type order first, then by occurred date
+								const aIndex = ERROR_TYPES_ORDER.indexOf(a.errorType);
+								const bIndex = ERROR_TYPES_ORDER.indexOf(b.errorType);
+								if (aIndex !== bIndex) return aIndex - bIndex;
+								return (
+									new Date(a.occurredAt).getTime() -
+									new Date(b.occurredAt).getTime()
+								);
+							})
+							.map((error) => (
+								<Group key={error.errorType} gap="xs" wrap="nowrap">
+									<Badge
+										size="xs"
+										color={getErrorTypeColor(error.errorType)}
+										variant="light"
+										leftSection={
+											<ErrorTypeIcon errorType={error.errorType} size={12} />
+										}
+									>
+										{getErrorTypeLabel(error.errorType)}
+									</Badge>
+									<Tooltip
+										label={error.message}
+										multiline
+										maw={400}
+										openDelay={300}
+									>
+										<Text size="xs" c="red" lineClamp={1} style={{ flex: 1 }}>
+											{error.message}
+										</Text>
+									</Tooltip>
+									<Tooltip label="Copy error to clipboard">
+										<ActionIcon
+											size="xs"
+											variant="subtle"
+											color="gray"
+											onClick={() => copyToClipboard(error.message, "Error")}
+										>
+											<IconCopy size={14} />
+										</ActionIcon>
+									</Tooltip>
+								</Group>
+							))}
 					</Stack>
 
 					<Text size="xs" c="dimmed">
@@ -308,14 +464,21 @@ function ErrorGroupAccordion({
 					</Group>
 
 					<Stack gap="sm">
-						{group.books.map((bookWithErrors) => (
-							<BookErrorCard
-								key={bookWithErrors.book.id}
-								bookWithErrors={bookWithErrors}
-								onRetry={onRetry}
-								isRetrying={retryingBookIds.has(bookWithErrors.book.id)}
-							/>
-						))}
+						{[...group.books]
+							.sort((a, b) => {
+								// Sort by title first, then by file path for consistency
+								const titleCompare = a.book.title.localeCompare(b.book.title);
+								if (titleCompare !== 0) return titleCompare;
+								return a.book.filePath.localeCompare(b.book.filePath);
+							})
+							.map((bookWithErrors) => (
+								<BookErrorCard
+									key={bookWithErrors.book.id}
+									bookWithErrors={bookWithErrors}
+									onRetry={onRetry}
+									isRetrying={retryingBookIds.has(bookWithErrors.book.id)}
+								/>
+							))}
 					</Stack>
 				</Stack>
 			</Accordion.Panel>
@@ -496,6 +659,15 @@ export function BooksInErrorSettings() {
 						</Text>
 					</div>
 					<Group gap="xs">
+						{hasErrors && (
+							<Button
+								variant="light"
+								leftSection={<IconDownload size={16} />}
+								onClick={() => exportErrorsToCsv(errorsData?.groups || [])}
+							>
+								Export CSV
+							</Button>
+						)}
 						<Button
 							variant="light"
 							leftSection={<IconRefresh size={16} />}

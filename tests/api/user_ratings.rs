@@ -32,7 +32,7 @@ async fn create_admin_and_token(
 // ============================================================================
 
 #[tokio::test]
-async fn test_get_series_rating_not_found() {
+async fn test_get_series_rating_returns_null_when_not_rated() {
     let (db, _temp_dir) = setup_test_db().await;
 
     let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
@@ -48,10 +48,57 @@ async fn test_get_series_rating_not_found() {
     let app = create_test_router(state).await;
 
     let request = get_request_with_auth(&format!("/api/v1/series/{}/rating", series.id), &token);
-    let (status, _response): (StatusCode, Option<ErrorResponse>) =
+    let (status, response): (StatusCode, Option<Option<UserSeriesRatingDto>>) =
         make_json_request(app, request).await;
 
-    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(status, StatusCode::OK);
+    // Response body should be null (None)
+    assert!(response.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn test_get_series_rating_returns_rating_when_exists() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Create a rating first
+    {
+        let app = create_test_router(state.clone()).await;
+        let body = SetUserRatingRequest {
+            rating: 85,
+            notes: Some("Great series!".to_string()),
+        };
+        let request = put_json_request_with_auth(
+            &format!("/api/v1/series/{}/rating", series.id),
+            &body,
+            &token,
+        );
+        let (status, _): (StatusCode, Option<UserSeriesRatingDto>) =
+            make_json_request(app, request).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    // Now get the rating
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(&format!("/api/v1/series/{}/rating", series.id), &token);
+    let (status, response): (StatusCode, Option<Option<UserSeriesRatingDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let rating = response.unwrap().expect("Rating should exist");
+    assert_eq!(rating.rating, 85);
+    assert_eq!(rating.notes, Some("Great series!".to_string()));
+    assert_eq!(rating.series_id, series.id);
 }
 
 #[tokio::test]
@@ -271,14 +318,15 @@ async fn test_delete_series_rating() {
         assert_eq!(status, StatusCode::NO_CONTENT);
     }
 
-    // Verify rating is gone
+    // Verify rating is gone (returns null, not 404)
     {
         let app = create_test_router(state.clone()).await;
         let request =
             get_request_with_auth(&format!("/api/v1/series/{}/rating", series.id), &token);
-        let (status, _response): (StatusCode, Option<ErrorResponse>) =
+        let (status, response): (StatusCode, Option<Option<UserSeriesRatingDto>>) =
             make_json_request(app, request).await;
-        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(status, StatusCode::OK);
+        assert!(response.unwrap().is_none());
     }
 }
 

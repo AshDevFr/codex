@@ -1,3 +1,4 @@
+use crate::parsers::image_utils::{detect_image_format_from_bytes, ImageFormatDetection};
 use crate::parsers::isbn_utils::extract_isbns;
 use crate::parsers::pdf::renderer;
 use crate::parsers::traits::FormatParser;
@@ -168,38 +169,35 @@ impl PdfParser {
         let file_size = content.len() as u64;
 
         // Try to determine the image format
-        // Check for DCTDecode (JPEG) filter
-        let format = if let Ok(filter) = stream.dict.get(b"Filter") {
-            if let Ok(filter_name) = filter.as_name_str() {
-                match filter_name {
-                    "DCTDecode" => Some(ImageFormat::JPEG),
-                    "FlateDecode" => Some(ImageFormat::PNG), // Usually PNG-like compression
-                    _ => None,
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        // If we couldn't determine format from filter, try to detect from content
-        let format = format.or_else(|| {
-            // Check magic bytes
-            if content.len() >= 4 {
-                if &content[0..2] == b"\xFF\xD8" {
-                    Some(ImageFormat::JPEG)
-                } else if &content[0..4] == b"\x89PNG" {
-                    Some(ImageFormat::PNG)
-                } else {
+        // First check the PDF filter hint, then fall back to magic byte detection
+        let format = Self::detect_format_from_filter(stream).or_else(|| {
+            // Use infer crate for magic byte detection
+            match detect_image_format_from_bytes(&content) {
+                ImageFormatDetection::Supported(fmt) => Some(fmt),
+                ImageFormatDetection::Unsupported(mime) => {
+                    tracing::debug!(
+                        mime_type = %mime,
+                        "Unsupported image format detected in PDF stream"
+                    );
                     None
                 }
-            } else {
-                None
+                ImageFormatDetection::Unknown => None,
             }
         })?;
 
         Some((content, format, width, height, file_size))
+    }
+
+    /// Try to determine image format from PDF filter
+    fn detect_format_from_filter(stream: &lopdf::Stream) -> Option<ImageFormat> {
+        let filter = stream.dict.get(b"Filter").ok()?;
+        let filter_name = filter.as_name_str().ok()?;
+        match filter_name {
+            "DCTDecode" => Some(ImageFormat::JPEG),
+            "FlateDecode" => Some(ImageFormat::PNG), // Usually PNG-like compression
+            "JPXDecode" => Some(ImageFormat::JPEG),  // JPEG2000
+            _ => None,
+        }
     }
 }
 
@@ -291,6 +289,7 @@ impl PdfParser {
                                 ImageFormat::BMP => "bmp",
                                 ImageFormat::AVIF => "avif",
                                 ImageFormat::SVG => "svg",
+                                ImageFormat::JXL => "jxl",
                             }
                         ),
                         format,

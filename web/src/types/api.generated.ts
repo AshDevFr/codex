@@ -2273,7 +2273,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get the current user's rating for a series */
+        /**
+         * Get the current user's rating for a series
+         * @description Returns null if no rating exists (not a 404, since the series exists but has no rating)
+         */
         get: operations["get_series_rating"];
         /** Set (create or update) the current user's rating for a series */
         put: operations["set_series_rating"];
@@ -16360,13 +16363,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description User's rating for the series */
+            /** @description User's rating for the series (null if not rated) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserSeriesRatingDto"];
+                    "application/json": null | components["schemas"]["UserSeriesRatingDto"];
                 };
             };
             /** @description Forbidden */
@@ -16376,7 +16379,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Series or rating not found */
+            /** @description Series not found */
             404: {
                 headers: {
                     [name: string]: unknown;
