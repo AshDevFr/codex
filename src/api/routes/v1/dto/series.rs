@@ -211,6 +211,9 @@ pub struct SeriesDto {
 /// Series list response
 pub type SeriesListResponse = PaginatedResponse<SeriesDto>;
 
+/// Full series list response (with metadata, locks, genres, tags, etc.)
+pub type FullSeriesListResponse = PaginatedResponse<FullSeriesResponse>;
+
 /// Alphabetical group with count
 ///
 /// Represents a group of series starting with a specific letter/character
@@ -237,6 +240,10 @@ pub struct SearchSeriesRequest {
     /// Optional library filter
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub library_id: Option<uuid::Uuid>,
+
+    /// Return full series data including metadata, locks, genres, tags, etc.
+    #[serde(default)]
+    pub full: bool,
 }
 
 /// PUT request for full replacement of series metadata

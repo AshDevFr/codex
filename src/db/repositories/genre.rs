@@ -377,6 +377,68 @@ impl GenreRepository {
         Ok(unique.into_iter().collect())
     }
 
+    /// Get genres for multiple series by their IDs
+    ///
+    /// Returns a HashMap keyed by series_id for efficient lookups
+    pub async fn get_genres_for_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Vec<genres::Model>>> {
+        use crate::db::entities::series_genres::Entity as SeriesGenres;
+
+        if series_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        // Get all series_genres mappings for the given series
+        let series_genre_links: Vec<series_genres::Model> = SeriesGenres::find()
+            .filter(series_genres::Column::SeriesId.is_in(series_ids.to_vec()))
+            .all(db)
+            .await?;
+
+        if series_genre_links.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        // Collect unique genre IDs
+        let genre_ids: Vec<Uuid> = series_genre_links
+            .iter()
+            .map(|sg| sg.genre_id)
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        // Fetch all genres at once
+        let all_genres: Vec<genres::Model> = Genres::find()
+            .filter(genres::Column::Id.is_in(genre_ids))
+            .all(db)
+            .await?;
+
+        // Create genre lookup map
+        let genre_map: std::collections::HashMap<Uuid, genres::Model> =
+            all_genres.into_iter().map(|g| (g.id, g)).collect();
+
+        // Build result map
+        let mut result: std::collections::HashMap<Uuid, Vec<genres::Model>> =
+            std::collections::HashMap::new();
+
+        for link in series_genre_links {
+            if let Some(genre) = genre_map.get(&link.genre_id) {
+                result
+                    .entry(link.series_id)
+                    .or_default()
+                    .push(genre.clone());
+            }
+        }
+
+        // Sort genres by name within each series
+        for genres in result.values_mut() {
+            genres.sort_by(|a, b| a.name.cmp(&b.name));
+        }
+
+        Ok(result)
+    }
+
     /// Delete all unused genres (genres with no series linked)
     /// Returns the names of deleted genres
     pub async fn delete_unused(db: &DatabaseConnection) -> Result<Vec<String>> {

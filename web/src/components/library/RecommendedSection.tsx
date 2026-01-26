@@ -36,7 +36,7 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 		useQuery({
 			queryKey: ["series", "recently-added", libraryId],
 			queryFn: () =>
-				seriesApi.getRecentlyAdded(libraryId, MAX_ITEMS_PER_SECTION),
+				seriesApi.getRecentlyAdded(libraryId, { limit: MAX_ITEMS_PER_SECTION }),
 		});
 
 	// Fetch recently updated series
@@ -44,7 +44,9 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 		useQuery({
 			queryKey: ["series", "recently-updated", libraryId],
 			queryFn: () =>
-				seriesApi.getRecentlyUpdated(libraryId, MAX_ITEMS_PER_SECTION),
+				seriesApi.getRecentlyUpdated(libraryId, {
+					limit: MAX_ITEMS_PER_SECTION,
+				}),
 		});
 
 	// Fetch recently read books

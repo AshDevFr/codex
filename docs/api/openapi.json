@@ -1650,11 +1650,20 @@
                 "null"
               ]
             }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Paginated list of books",
+            "description": "Paginated list of books (returns FullBookListResponse when full=true)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1861,6 +1870,15 @@
                 "null"
               ]
             }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -1894,7 +1912,7 @@
           "Books"
         ],
         "summary": "List books with advanced filtering",
-        "description": "Supports complex filter conditions including nested AllOf/AnyOf logic,\ngenre/tag filtering with include/exclude, and more.\n\nPagination parameters (page, pageSize, sort) are passed as query parameters.\nFilter conditions are passed in the request body.",
+        "description": "Supports complex filter conditions including nested AllOf/AnyOf logic,\ngenre/tag filtering with include/exclude, and more.\n\nPagination parameters (page, pageSize, sort, full) are passed as query parameters.\nFilter conditions are passed in the request body.",
         "operationId": "list_books_filtered",
         "parameters": [
           {
@@ -1933,6 +1951,15 @@
                 "null"
               ]
             }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full data including metadata, locks, and related entities.\nDefault is false for backward compatibility.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "requestBody": {
@@ -1947,7 +1974,7 @@
         },
         "responses": {
           "200": {
-            "description": "Paginated list of filtered books",
+            "description": "Paginated list of filtered books (returns FullBookListResponse when full=true)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2036,6 +2063,15 @@
                 "string",
                 "null"
               ]
+            }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -2130,6 +2166,15 @@
                 "string",
                 "null"
               ]
+            }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -2369,11 +2414,20 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Book details",
+            "description": "Book details (returns FullBookResponse when full=true)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4620,11 +4674,20 @@
               ],
               "format": "uuid"
             }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full series data including metadata, locks, genres, tags, alternate titles,\nexternal ratings, and external links. Default is false for backward compatibility.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Paginated list of series in library",
+            "description": "Paginated list of series in library (returns FullSeriesListResponse when full=true)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4664,11 +4727,20 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full series data including metadata, locks, genres, tags, etc.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "List of in-progress series in library",
+            "description": "List of in-progress series in library (returns Vec<FullSeriesResponse> when full=true)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4722,11 +4794,33 @@
               "format": "int64",
               "minimum": 0
             }
+          },
+          {
+            "name": "libraryId",
+            "in": "query",
+            "description": "Filter by library ID (optional)",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full series data including metadata, locks, genres, tags, etc.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "List of recently added series in library",
+            "description": "List of recently added series in library (returns Vec<FullSeriesResponse> when full=true)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4780,11 +4874,33 @@
               "format": "int64",
               "minimum": 0
             }
+          },
+          {
+            "name": "libraryId",
+            "in": "query",
+            "description": "Filter by library ID (optional)",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full series data including metadata, locks, genres, tags, etc.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "List of recently updated series in library",
+            "description": "List of recently updated series in library (returns Vec<FullSeriesResponse> when full=true)",
             "content": {
               "application/json": {
                 "schema": {
@@ -5260,11 +5376,20 @@
               ],
               "format": "uuid"
             }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full series data including metadata, locks, genres, tags, alternate titles,\nexternal ratings, and external links. Default is false for backward compatibility.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Paginated list of series",
+            "description": "Paginated list of series (returns FullSeriesListResponse when full=true)",
             "content": {
               "application/json": {
                 "schema": {
@@ -5307,11 +5432,20 @@
               ],
               "format": "uuid"
             }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full series data including metadata, locks, genres, tags, etc.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "List of in-progress series",
+            "description": "List of in-progress series (returns Vec<FullSeriesResponse> when full=true)",
             "content": {
               "application/json": {
                 "schema": {
@@ -5382,6 +5516,15 @@
                 "null"
               ]
             }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full data including metadata, locks, and related entities.\nDefault is false for backward compatibility.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "requestBody": {
@@ -5396,7 +5539,7 @@
         },
         "responses": {
           "200": {
-            "description": "Paginated list of filtered series",
+            "description": "Paginated list of filtered series (returns FullSeriesListResponse when full=true)",
             "content": {
               "application/json": {
                 "schema": {
@@ -5450,11 +5593,20 @@
               ],
               "format": "uuid"
             }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full series data including metadata, locks, genres, tags, etc.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "List of recently added series",
+            "description": "List of recently added series (returns Vec<FullSeriesResponse> when full=true)",
             "content": {
               "application/json": {
                 "schema": {
@@ -5511,11 +5663,20 @@
               ],
               "format": "uuid"
             }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full series data including metadata, locks, genres, tags, etc.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "List of recently updated series",
+            "description": "List of recently updated series (returns Vec<FullSeriesResponse> when full=true)",
             "content": {
               "application/json": {
                 "schema": {
@@ -5560,7 +5721,7 @@
         },
         "responses": {
           "200": {
-            "description": "Search results",
+            "description": "Search results (returns Vec<FullSeriesResponse> when full=true)",
             "content": {
               "application/json": {
                 "schema": {
@@ -5603,11 +5764,20 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full series data including metadata, locks, genres, tags, etc.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Series details",
+            "description": "Series details (returns FullSeriesResponse when full=true)",
             "content": {
               "application/json": {
                 "schema": {
@@ -5969,11 +6139,20 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "description": "Return full data including metadata and locks.\nDefault is false for backward compatibility.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "List of books in the series",
+            "description": "List of books in the series (returns Vec<FullBookResponse> when full=true)",
             "content": {
               "application/json": {
                 "schema": {
@@ -6798,54 +6977,6 @@
         ]
       }
     },
-    "/api/v1/series/{series_id}/full": {
-      "get": {
-        "tags": [
-          "Series"
-        ],
-        "summary": "Get full series data with complete metadata",
-        "description": "Returns series information combined with full metadata, genres, tags,\nalternate titles, external ratings, and external links in a single response.",
-        "operationId": "get_full_series",
-        "parameters": [
-          {
-            "name": "series_id",
-            "in": "path",
-            "description": "Series ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Full series data with metadata",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FullSeriesResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Series not found"
-          }
-        },
-        "security": [
-          {
-            "jwt_bearer": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      }
-    },
     "/api/v1/series/{series_id}/genres": {
       "get": {
         "tags": [
@@ -7054,6 +7185,52 @@
       }
     },
     "/api/v1/series/{series_id}/metadata": {
+      "get": {
+        "tags": [
+          "Series"
+        ],
+        "summary": "Get series metadata including all related data",
+        "description": "Returns comprehensive metadata with lock states, genres, tags, alternate titles,\nexternal ratings, and external links.",
+        "operationId": "get_series_metadata",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Series metadata with all related data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FullSeriesMetadataResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
       "put": {
         "tags": [
           "Series"
@@ -7146,54 +7323,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SeriesMetadataResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Series not found"
-          }
-        },
-        "security": [
-          {
-            "jwt_bearer": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      }
-    },
-    "/api/v1/series/{series_id}/metadata/full": {
-      "get": {
-        "tags": [
-          "Series"
-        ],
-        "summary": "Get full series metadata including all related data",
-        "description": "Returns comprehensive metadata with lock states, genres, tags, alternate titles,\nexternal ratings, and external links.",
-        "operationId": "get_full_series_metadata",
-        "parameters": [
-          {
-            "name": "series_id",
-            "in": "path",
-            "description": "Series ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Full series metadata with all related data",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FullSeriesMetadataResponse"
                 }
               }
             }
@@ -12635,6 +12764,238 @@
           "other"
         ]
       },
+      "BookFullMetadata": {
+        "type": "object",
+        "description": "Full book metadata including all fields and their lock states",
+        "required": [
+          "locks",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "blackAndWhite": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the book is black and white",
+            "example": false
+          },
+          "colorist": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Colorist(s)",
+            "example": "Richmond Lewis"
+          },
+          "count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Total count in series",
+            "example": 4
+          },
+          "coverArtist": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Cover artist(s)",
+            "example": "David Mazzucchelli"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the metadata was created",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "day": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Publication day (1-31)",
+            "example": 1
+          },
+          "editor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Editor(s)",
+            "example": "Dennis O'Neil"
+          },
+          "formatDetail": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Format details",
+            "example": "Trade Paperback"
+          },
+          "genre": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Genre",
+            "example": "Superhero"
+          },
+          "imprint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Imprint name",
+            "example": "DC Black Label"
+          },
+          "inker": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Inker(s)",
+            "example": "David Mazzucchelli"
+          },
+          "isbns": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISBN(s)",
+            "example": "978-1401207526"
+          },
+          "languageIso": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISO language code",
+            "example": "en"
+          },
+          "letterer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Letterer(s)",
+            "example": "Todd Klein"
+          },
+          "locks": {
+            "$ref": "#/components/schemas/BookMetadataLocks",
+            "description": "Lock states for all metadata fields"
+          },
+          "manga": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the book is manga format",
+            "example": false
+          },
+          "month": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Publication month (1-12)",
+            "example": 2
+          },
+          "number": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Chapter/book number",
+            "example": "1"
+          },
+          "penciller": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Penciller(s)",
+            "example": "David Mazzucchelli"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Publisher name",
+            "example": "DC Comics"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Book summary/description",
+            "example": "Bruce Wayne returns to Gotham City after years abroad."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Book title from metadata",
+            "example": "Batman: Year One #1"
+          },
+          "titleSort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Sort title for ordering",
+            "example": "batman year one 001"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the metadata was last updated",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "volume": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Volume number",
+            "example": 1
+          },
+          "web": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Web URL",
+            "example": "https://dc.com/batman-year-one"
+          },
+          "writer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Writer(s)",
+            "example": "Frank Miller"
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Publication year",
+            "example": 1987
+          }
+        }
+      },
       "BookListRequest": {
         "type": "object",
         "description": "Request body for POST /books/list\n\nPagination parameters (page, pageSize, sort) are passed as query parameters,\nnot in the request body. This enables proper HATEOAS links.",
@@ -12837,6 +13198,146 @@
             "example": [
               "Frank Miller"
             ]
+          }
+        }
+      },
+      "BookMetadataLocks": {
+        "type": "object",
+        "description": "Book metadata lock states\n\nIndicates which metadata fields are locked (protected from automatic updates).\nWhen a field is locked, the scanner will not overwrite user-edited values.",
+        "required": [
+          "summaryLock",
+          "writerLock",
+          "pencillerLock",
+          "inkerLock",
+          "coloristLock",
+          "lettererLock",
+          "coverArtistLock",
+          "editorLock",
+          "publisherLock",
+          "imprintLock",
+          "genreLock",
+          "webLock",
+          "languageIsoLock",
+          "formatDetailLock",
+          "blackAndWhiteLock",
+          "mangaLock",
+          "yearLock",
+          "monthLock",
+          "dayLock",
+          "volumeLock",
+          "countLock",
+          "isbnsLock"
+        ],
+        "properties": {
+          "blackAndWhiteLock": {
+            "type": "boolean",
+            "description": "Whether black_and_white is locked",
+            "example": false
+          },
+          "coloristLock": {
+            "type": "boolean",
+            "description": "Whether colorist is locked",
+            "example": false
+          },
+          "countLock": {
+            "type": "boolean",
+            "description": "Whether count is locked",
+            "example": false
+          },
+          "coverArtistLock": {
+            "type": "boolean",
+            "description": "Whether cover artist is locked",
+            "example": false
+          },
+          "dayLock": {
+            "type": "boolean",
+            "description": "Whether day is locked",
+            "example": false
+          },
+          "editorLock": {
+            "type": "boolean",
+            "description": "Whether editor is locked",
+            "example": false
+          },
+          "formatDetailLock": {
+            "type": "boolean",
+            "description": "Whether format_detail is locked",
+            "example": false
+          },
+          "genreLock": {
+            "type": "boolean",
+            "description": "Whether genre is locked",
+            "example": false
+          },
+          "imprintLock": {
+            "type": "boolean",
+            "description": "Whether imprint is locked",
+            "example": false
+          },
+          "inkerLock": {
+            "type": "boolean",
+            "description": "Whether inker is locked",
+            "example": false
+          },
+          "isbnsLock": {
+            "type": "boolean",
+            "description": "Whether isbns is locked",
+            "example": false
+          },
+          "languageIsoLock": {
+            "type": "boolean",
+            "description": "Whether language_iso is locked",
+            "example": false
+          },
+          "lettererLock": {
+            "type": "boolean",
+            "description": "Whether letterer is locked",
+            "example": false
+          },
+          "mangaLock": {
+            "type": "boolean",
+            "description": "Whether manga is locked",
+            "example": false
+          },
+          "monthLock": {
+            "type": "boolean",
+            "description": "Whether month is locked",
+            "example": false
+          },
+          "pencillerLock": {
+            "type": "boolean",
+            "description": "Whether penciller is locked",
+            "example": false
+          },
+          "publisherLock": {
+            "type": "boolean",
+            "description": "Whether publisher is locked",
+            "example": true
+          },
+          "summaryLock": {
+            "type": "boolean",
+            "description": "Whether summary is locked",
+            "example": false
+          },
+          "volumeLock": {
+            "type": "boolean",
+            "description": "Whether volume is locked",
+            "example": false
+          },
+          "webLock": {
+            "type": "boolean",
+            "description": "Whether web URL is locked",
+            "example": false
+          },
+          "writerLock": {
+            "type": "boolean",
+            "description": "Whether writer is locked",
+            "example": false
+          },
+          "yearLock": {
+            "type": "boolean",
+            "description": "Whether year is locked",
+            "example": true
           }
         }
       },
@@ -14854,6 +15355,154 @@
             "type": "boolean",
             "description": "If true, regenerate thumbnails even if they exist. If false (default), only generate missing thumbnails.",
             "example": false
+          }
+        }
+      },
+      "FullBookResponse": {
+        "type": "object",
+        "description": "Full book response including book data and complete metadata with locks",
+        "required": [
+          "id",
+          "libraryId",
+          "libraryName",
+          "seriesId",
+          "seriesName",
+          "title",
+          "filePath",
+          "fileFormat",
+          "fileSize",
+          "fileHash",
+          "pageCount",
+          "deleted",
+          "metadata",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "analysisError": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Error message if book analysis failed",
+            "example": "Failed to parse CBZ: invalid archive"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the book was added to the library",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "deleted": {
+            "type": "boolean",
+            "description": "Whether the book has been soft-deleted",
+            "example": false
+          },
+          "fileFormat": {
+            "type": "string",
+            "description": "File format (cbz, cbr, epub, pdf)",
+            "example": "cbz"
+          },
+          "fileHash": {
+            "type": "string",
+            "description": "File hash for deduplication",
+            "example": "a1b2c3d4e5f6g7h8i9j0"
+          },
+          "filePath": {
+            "type": "string",
+            "description": "Filesystem path to the book file",
+            "example": "/media/comics/Batman/Batman - Year One 001.cbz"
+          },
+          "fileSize": {
+            "type": "integer",
+            "format": "int64",
+            "description": "File size in bytes",
+            "example": 52428800
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Book unique identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440001"
+          },
+          "libraryId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Library this book belongs to",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "libraryName": {
+            "type": "string",
+            "description": "Name of the library",
+            "example": "Comics"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/BookFullMetadata",
+            "description": "Complete book metadata with lock states"
+          },
+          "number": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Book number within the series",
+            "example": 1
+          },
+          "pageCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of pages in the book",
+            "example": 32
+          },
+          "readProgress": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReadProgressResponse",
+                "description": "User's read progress for this book"
+              }
+            ]
+          },
+          "readingDirection": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Effective reading direction (from series metadata, or library default)",
+            "example": "ltr"
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Series this book belongs to",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "seriesName": {
+            "type": "string",
+            "description": "Name of the series",
+            "example": "Batman: Year One"
+          },
+          "title": {
+            "type": "string",
+            "description": "Book title (display name)",
+            "example": "Batman: Year One #1"
+          },
+          "titleSort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Title used for sorting",
+            "example": "batman year one 001"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the book was last updated",
+            "example": "2024-01-15T10:30:00Z"
           }
         }
       },
@@ -20282,6 +20931,10 @@
           "query"
         ],
         "properties": {
+          "full": {
+            "type": "boolean",
+            "description": "Return full series data including metadata, locks, genres, tags, etc."
+          },
           "libraryId": {
             "type": [
               "string",

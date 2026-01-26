@@ -140,6 +140,28 @@ impl LibraryRepository {
             .context("Failed to get library by ID")
     }
 
+    /// Get libraries by multiple IDs
+    ///
+    /// Returns a HashMap keyed by library ID for efficient lookups
+    pub async fn get_by_ids(
+        db: &DatabaseConnection,
+        ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, libraries::Model>> {
+        use sea_orm::ColumnTrait;
+
+        if ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let results = Libraries::find()
+            .filter(libraries::Column::Id.is_in(ids.to_vec()))
+            .all(db)
+            .await
+            .context("Failed to get libraries by IDs")?;
+
+        Ok(results.into_iter().map(|lib| (lib.id, lib)).collect())
+    }
+
     /// Get all libraries
     pub async fn list_all(db: &DatabaseConnection) -> Result<Vec<libraries::Model>> {
         Libraries::find()

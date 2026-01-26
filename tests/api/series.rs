@@ -501,6 +501,7 @@ async fn test_search_series_by_name() {
     let search_request = SearchSeriesRequest {
         query: "Batman".to_string(),
         library_id: None,
+        full: false,
     };
 
     let request = post_json_request_with_auth("/api/v1/series/search", &search_request, &token);
@@ -532,6 +533,7 @@ async fn test_search_series_no_results() {
     let search_request = SearchSeriesRequest {
         query: "NonExistent".to_string(),
         library_id: None,
+        full: false,
     };
 
     let request = post_json_request_with_auth("/api/v1/series/search", &search_request, &token);
@@ -552,6 +554,7 @@ async fn test_search_series_without_auth() {
     let search_request = SearchSeriesRequest {
         query: "Test".to_string(),
         library_id: None,
+        full: false,
     };
 
     let request = post_json_request("/api/v1/series/search", &search_request);
@@ -4028,4 +4031,392 @@ async fn test_list_series_sort_with_pagination() {
     assert_eq!(series_list.data.len(), 1);
     let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
     assert_eq!(titles, vec!["Gamma"]);
+}
+
+// ============================================================================
+// Full Parameter Tests (full=true)
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_series_with_full_parameter() {
+    use codex::api::routes::v1::dto::series::FullSeriesListResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with metadata
+    let series1 = SeriesRepository::create(&db, library.id, "Series 1", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "Series 2", None)
+        .await
+        .unwrap();
+
+    // Add some metadata
+    SeriesMetadataRepository::update_publisher(
+        &db,
+        series1.id,
+        Some("Publisher A".to_string()),
+        None,
+    )
+    .await
+    .unwrap();
+    SeriesMetadataRepository::update_summary(&db, series2.id, Some("A great series".to_string()))
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request with full=true
+    let request = get_request_with_auth("/api/v1/series?full=true", &token);
+    let (status, response): (StatusCode, Option<FullSeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let full_response = response.unwrap();
+    assert_eq!(full_response.data.len(), 2);
+    assert_eq!(full_response.total, 2);
+
+    // Verify full responses contain metadata
+    let s1 = full_response
+        .data
+        .iter()
+        .find(|s| s.id == series1.id)
+        .unwrap();
+    assert_eq!(s1.metadata.publisher.as_deref(), Some("Publisher A"));
+
+    let s2 = full_response
+        .data
+        .iter()
+        .find(|s| s.id == series2.id)
+        .unwrap();
+    assert_eq!(s2.metadata.summary.as_deref(), Some("A great series"));
+}
+
+#[tokio::test]
+async fn test_list_series_full_with_pagination() {
+    use codex::api::routes::v1::dto::series::FullSeriesListResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create 5 series
+    for i in 1..=5 {
+        SeriesRepository::create(&db, library.id, &format!("Series {}", i), None)
+            .await
+            .unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    // Request first page with full=true
+    let request = get_request_with_auth("/api/v1/series?full=true&page=1&pageSize=2", &token);
+    let (status, response): (StatusCode, Option<FullSeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page1 = response.unwrap();
+    assert_eq!(page1.data.len(), 2);
+    assert_eq!(page1.total, 5);
+    assert_eq!(page1.page, 1);
+
+    // Request second page
+    let app2 = create_test_router(state).await;
+    let request = get_request_with_auth("/api/v1/series?full=true&page=2&pageSize=2", &token);
+    let (status, response): (StatusCode, Option<FullSeriesListResponse>) =
+        make_json_request(app2, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page2 = response.unwrap();
+    assert_eq!(page2.data.len(), 2);
+    assert_eq!(page2.page, 2);
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_with_full() {
+    use codex::api::routes::v1::dto::series::FullSeriesListResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create two libraries
+    let library1 = LibraryRepository::create(&db, "Library 1", "/lib1", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let library2 = LibraryRepository::create(&db, "Library 2", "/lib2", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series in each library
+    SeriesRepository::create(&db, library1.id, "Lib1 Series", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library2.id, "Lib2 Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request from library1 with full=true using POST /series/list
+    let request = post_json_request_with_auth(
+        "/api/v1/series/list?full=true",
+        &serde_json::json!({
+            "condition": {
+                "libraryId": {
+                    "operator": "is",
+                    "value": library1.id.to_string()
+                }
+            }
+        }),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<FullSeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let full_response = response.unwrap();
+    assert_eq!(full_response.data.len(), 1);
+    assert_eq!(full_response.data[0].library_id, library1.id);
+}
+
+#[tokio::test]
+async fn test_search_series_with_full() {
+    use codex::api::routes::v1::dto::series::FullSeriesResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    SeriesRepository::create(&db, library.id, "Batman Year One", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Superman Red Son", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Search with full=true
+    let search_request = SearchSeriesRequest {
+        query: "Batman".to_string(),
+        library_id: None,
+        full: true,
+    };
+
+    let request = post_json_request_with_auth(
+        "/api/v1/series/search",
+        &serde_json::to_value(&search_request).unwrap(),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<Vec<FullSeriesResponse>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let results = response.unwrap();
+    assert_eq!(results.len(), 1);
+    assert!(!results[0].metadata.title.is_empty()); // Full response has metadata with title
+}
+
+#[tokio::test]
+async fn test_recently_added_series_with_full() {
+    use codex::api::routes::v1::dto::series::FullSeriesResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    SeriesRepository::create(&db, library.id, "Series 1", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Series 2", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request with full=true
+    let request = get_request_with_auth("/api/v1/series/recently-added?full=true&limit=10", &token);
+    let (status, response): (StatusCode, Option<Vec<FullSeriesResponse>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let results = response.unwrap();
+    assert_eq!(results.len(), 2);
+    // Verify it's a full response (has metadata struct with title)
+    assert!(results.iter().all(|s| !s.metadata.title.is_empty()));
+}
+
+#[tokio::test]
+async fn test_recently_updated_series_with_full() {
+    use codex::api::routes::v1::dto::series::FullSeriesResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    SeriesRepository::create(&db, library.id, "Series 1", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request =
+        get_request_with_auth("/api/v1/series/recently-updated?full=true&limit=10", &token);
+    let (status, response): (StatusCode, Option<Vec<FullSeriesResponse>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let results = response.unwrap();
+    assert_eq!(results.len(), 1);
+    assert!(!results[0].metadata.title.is_empty());
+}
+
+#[tokio::test]
+async fn test_in_progress_series_with_full() {
+    use codex::api::routes::v1::dto::series::FullSeriesResponse;
+    use codex::db::repositories::ReadProgressRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "In Progress Series", None)
+        .await
+        .unwrap();
+
+    // Create a book with reading progress
+    let book = create_test_book(series.id, library.id, "/lib/book1.cbz", "book1.cbz", None);
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let password_hash = password::hash_password("admin123").unwrap();
+    let admin = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let admin_user = UserRepository::create(&db, &admin).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(
+            admin_user.id,
+            admin_user.username.clone(),
+            admin_user.get_role(),
+        )
+        .unwrap();
+
+    // Add reading progress
+    ReadProgressRepository::upsert(&db, admin_user.id, book.id, 5, false)
+        .await
+        .unwrap();
+
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth("/api/v1/series/in-progress?full=true", &token);
+    let (status, response): (StatusCode, Option<Vec<FullSeriesResponse>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let results = response.unwrap();
+    assert_eq!(results.len(), 1);
+    assert!(!results[0].metadata.title.is_empty());
+}
+
+#[tokio::test]
+async fn test_library_series_with_full() {
+    use codex::api::routes::v1::dto::series::FullSeriesListResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    SeriesRepository::create(&db, library.id, "Series 1", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Series 2", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(
+        &format!("/api/v1/libraries/{}/series?full=true", library.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<FullSeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let full_response = response.unwrap();
+    assert_eq!(full_response.data.len(), 2);
+    // Verify metadata is included
+    assert!(full_response
+        .data
+        .iter()
+        .all(|s| !s.metadata.title.is_empty()));
+}
+
+#[tokio::test]
+async fn test_get_series_books_with_full() {
+    use codex::api::routes::v1::dto::book::FullBookResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create books
+    let book1 = create_test_book(series.id, library.id, "/lib/book1.cbz", "book1.cbz", None);
+    BookRepository::create(&db, &book1, None).await.unwrap();
+    let book2 = create_test_book(series.id, library.id, "/lib/book2.cbz", "book2.cbz", None);
+    BookRepository::create(&db, &book2, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(
+        &format!("/api/v1/series/{}/books?full=true", series.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<Vec<FullBookResponse>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let books = response.unwrap();
+    assert_eq!(books.len(), 2);
+    // Verify full book responses have metadata (field exists)
+    for book in &books {
+        let _ = book.metadata.locks.summary_lock;
+    }
 }

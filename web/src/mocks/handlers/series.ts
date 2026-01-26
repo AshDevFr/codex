@@ -243,6 +243,7 @@ export const seriesHandlers = [
 
 	// POST /series/list - Advanced filtering with condition tree (1-indexed)
 	// Pagination params come from query string, filter criteria from body
+	// Supports ?full=true for full series response with metadata
 	http.post("/api/v1/series/list", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
@@ -255,6 +256,7 @@ export const seriesHandlers = [
 			10,
 		);
 		const sort = url.searchParams.get("sort");
+		const full = url.searchParams.get("full") === "true";
 
 		const body = (await request.json()) as {
 			condition?: unknown;
@@ -323,6 +325,18 @@ export const seriesHandlers = [
 		const start = (page - 1) * pageSize;
 		const end = start + pageSize;
 		const items = results.slice(start, end);
+
+		if (full) {
+			const fullItems = items.map(toFullSeriesResponse);
+			return HttpResponse.json(
+				createPaginatedResponse(fullItems, {
+					page,
+					pageSize,
+					total: results.length,
+					basePath: "/api/v1/series/list",
+				}),
+			);
+		}
 
 		return HttpResponse.json(
 			createPaginatedResponse(items, {
@@ -394,21 +408,27 @@ export const seriesHandlers = [
 
 	// List in-progress series
 	// Supports ?libraryId= query param for library filtering
+	// Supports ?full=true for full series response with metadata
 	// Returns plain array (not paginated) - matches API expectation
 	http.get("/api/v1/series/in-progress", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
 		const libraryId = url.searchParams.get("libraryId");
+		const full = url.searchParams.get("full") === "true";
 
 		// Return a subset as "in-progress" series (those with reading progress)
 		const baseSeries = libraryId ? getSeriesByLibrary(libraryId) : mockSeries;
 		const inProgressSeries = baseSeries.slice(0, 5);
 
+		if (full) {
+			return HttpResponse.json(inProgressSeries.map(toFullSeriesResponse));
+		}
 		return HttpResponse.json(inProgressSeries);
 	}),
 
 	// List series with pagination (1-indexed)
 	// Supports ?libraryId= query param for library filtering
+	// Supports ?full=true for full series response with metadata
 	http.get("/api/v1/series", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
@@ -421,6 +441,7 @@ export const seriesHandlers = [
 			10,
 		);
 		const libraryId = url.searchParams.get("libraryId");
+		const full = url.searchParams.get("full") === "true";
 
 		const filteredSeries = libraryId
 			? getSeriesByLibrary(libraryId)
@@ -430,6 +451,18 @@ export const seriesHandlers = [
 		const start = (page - 1) * pageSize;
 		const end = start + pageSize;
 		const items = filteredSeries.slice(start, end);
+
+		if (full) {
+			const fullItems = items.map(toFullSeriesResponse);
+			return HttpResponse.json(
+				createPaginatedResponse(fullItems, {
+					page,
+					pageSize,
+					total: filteredSeries.length,
+					basePath: "/api/v1/series",
+				}),
+			);
+		}
 
 		return HttpResponse.json(
 			createPaginatedResponse(items, {
@@ -443,11 +476,13 @@ export const seriesHandlers = [
 
 	// List recently added series
 	// Supports ?libraryId= query param for library filtering
+	// Supports ?full=true for full series response with metadata
 	http.get("/api/v1/series/recently-added", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
 		const libraryId = url.searchParams.get("libraryId");
 		const limit = Number.parseInt(url.searchParams.get("limit") || "50", 10);
+		const full = url.searchParams.get("full") === "true";
 
 		const baseSeries = libraryId ? getSeriesByLibrary(libraryId) : mockSeries;
 		// Sort by createdAt desc and limit
@@ -458,16 +493,21 @@ export const seriesHandlers = [
 			)
 			.slice(0, limit);
 
+		if (full) {
+			return HttpResponse.json(recentSeries.map(toFullSeriesResponse));
+		}
 		return HttpResponse.json(recentSeries);
 	}),
 
 	// List recently updated series
 	// Supports ?libraryId= query param for library filtering
+	// Supports ?full=true for full series response with metadata
 	http.get("/api/v1/series/recently-updated", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
 		const libraryId = url.searchParams.get("libraryId");
 		const limit = Number.parseInt(url.searchParams.get("limit") || "50", 10);
+		const full = url.searchParams.get("full") === "true";
 
 		const baseSeries = libraryId ? getSeriesByLibrary(libraryId) : mockSeries;
 		// Sort by updatedAt desc and limit
@@ -478,11 +518,14 @@ export const seriesHandlers = [
 			)
 			.slice(0, limit);
 
+		if (full) {
+			return HttpResponse.json(recentSeries.map(toFullSeriesResponse));
+		}
 		return HttpResponse.json(recentSeries);
 	}),
 
 	// Get full series metadata (must come BEFORE generic /series/:id route)
-	http.get("/api/v1/series/:id/metadata/full", async ({ params }) => {
+	http.get("/api/v1/series/:id/metadata", async ({ params }) => {
 		await delay(100);
 		const seriesItem = mockSeries.find((s) => s.id === params.id);
 
@@ -1207,14 +1250,20 @@ export const seriesHandlers = [
 	}),
 
 	// Get series by ID (must come AFTER specific routes like /in-progress, /recently-added, etc.)
-	http.get("/api/v1/series/:id", async ({ params }) => {
+	// Supports ?full=true for full series response with metadata
+	http.get("/api/v1/series/:id", async ({ params, request }) => {
 		await delay(100);
+		const url = new URL(request.url);
+		const full = url.searchParams.get("full") === "true";
 		const seriesItem = mockSeries.find((s) => s.id === params.id);
 
 		if (!seriesItem) {
 			return HttpResponse.json({ error: "Series not found" }, { status: 404 });
 		}
 
+		if (full) {
+			return HttpResponse.json(toFullSeriesResponse(seriesItem));
+		}
 		return HttpResponse.json(seriesItem);
 	}),
 
@@ -1230,6 +1279,7 @@ export const seriesHandlers = [
 	}),
 
 	// List series by library (1-indexed)
+	// Supports ?full=true for full series response with metadata
 	http.get(
 		"/api/v1/libraries/:libraryId/series",
 		async ({ params, request }) => {
@@ -1243,12 +1293,25 @@ export const seriesHandlers = [
 				url.searchParams.get("pageSize") || "50",
 				10,
 			);
+			const full = url.searchParams.get("full") === "true";
 
 			const filteredSeries = getSeriesByLibrary(params.libraryId as string);
 			// 1-indexed pagination
 			const start = (page - 1) * pageSize;
 			const end = start + pageSize;
 			const items = filteredSeries.slice(start, end);
+
+			if (full) {
+				const fullItems = items.map(toFullSeriesResponse);
+				return HttpResponse.json(
+					createPaginatedResponse(fullItems, {
+						page,
+						pageSize,
+						total: filteredSeries.length,
+						basePath: `/api/v1/libraries/${params.libraryId}/series`,
+					}),
+				);
+			}
 
 			return HttpResponse.json(
 				createPaginatedResponse(items, {
@@ -1262,19 +1325,137 @@ export const seriesHandlers = [
 	),
 
 	// Library-scoped: List in-progress series
+	// Supports ?full=true for full series response with metadata
 	http.get(
 		"/api/v1/libraries/:libraryId/series/in-progress",
-		async ({ params }) => {
+		async ({ params, request }) => {
 			await delay(200);
+			const url = new URL(request.url);
+			const full = url.searchParams.get("full") === "true";
 
 			// Return a subset of in-progress series for this library
 			const librarySeries = getSeriesByLibrary(params.libraryId as string);
 			const inProgressSeries = librarySeries.slice(0, 5);
 
+			if (full) {
+				return HttpResponse.json(inProgressSeries.map(toFullSeriesResponse));
+			}
 			return HttpResponse.json(inProgressSeries);
 		},
 	),
 ];
+
+/**
+ * Convert a SeriesDto to FullSeriesResponse format
+ * Used when ?full=true query parameter is specified
+ */
+function toFullSeriesResponse(seriesItem: (typeof mockSeries)[number]) {
+	const publisher =
+		seriesPublishers[seriesItem.title] ||
+		seriesItem.publisher ||
+		"Unknown Publisher";
+	const genreNames = seriesGenres[seriesItem.title] || [];
+	const tagNames = seriesTags[seriesItem.title] || [];
+	const customMetadata = getCustomMetadataForSeries(seriesItem.title);
+
+	// Convert genre names to GenreDto objects
+	const genres = genreNames.map((name, index) => ({
+		id: `genre-${seriesItem.id}-${index}`,
+		name,
+		seriesCount: null,
+		createdAt: seriesItem.createdAt,
+	}));
+
+	// Convert tag names to TagDto objects
+	const tags = tagNames.map((name, index) => ({
+		id: `tag-${seriesItem.id}-${index}`,
+		name,
+		seriesCount: null,
+		createdAt: seriesItem.createdAt,
+	}));
+
+	// Determine language and reading direction based on publisher
+	const isJapanese =
+		publisher.includes("Viz") ||
+		publisher.includes("Kodansha") ||
+		publisher.includes("Shueisha");
+	const language = isJapanese ? "ja" : "en";
+	const readingDirection = isJapanese ? "rtl" : "ltr";
+
+	// Determine age rating based on content
+	const matureContent = [
+		"The Walking Dead",
+		"Attack on Titan",
+		"Saga",
+		"Preacher",
+		"Watchmen",
+	];
+	const ageRating = matureContent.includes(seriesItem.title) ? 17 : 13;
+
+	// Determine status
+	const completedSeries = [
+		"Batman: Year One",
+		"Watchmen",
+		"Attack on Titan",
+		"Death Note",
+		"Fullmetal Alchemist",
+	];
+	const status = completedSeries.includes(seriesItem.title)
+		? "completed"
+		: "ongoing";
+
+	// Build FullSeriesResponse
+	return {
+		id: seriesItem.id,
+		libraryId: seriesItem.libraryId,
+		libraryName: seriesItem.libraryName || "Unknown Library",
+		bookCount: seriesItem.bookCount,
+		unreadCount: seriesItem.unreadCount,
+		path: `/media/comics/${seriesItem.title.replace(/[^a-zA-Z0-9]/g, "-")}`,
+		selectedCoverSource: "first_book",
+		hasCustomCover: false,
+		createdAt: seriesItem.createdAt,
+		updatedAt: seriesItem.updatedAt,
+		metadata: {
+			title: seriesItem.title,
+			titleSort: seriesItem.title.toLowerCase().replace(/^the\s+/, ""),
+			summary: getSeriesSummary(seriesItem.title),
+			publisher,
+			imprint: publisher.includes("Vertigo") ? "Vertigo" : null,
+			ageRating,
+			language,
+			status,
+			readingDirection,
+			totalBookCount: seriesItem.bookCount,
+			year: seriesItem.year,
+			customMetadata,
+			locks: {
+				titleLock: false,
+				summaryLock: false,
+				publisherLock: false,
+				imprintLock: false,
+				ageRatingLock: false,
+				languageLock: false,
+				statusLock: false,
+				readingDirectionLock: false,
+				titleSortLock: false,
+				totalBookCountLock: false,
+				yearLock: false,
+				genresLock: false,
+				tagsLock: false,
+				customMetadataLock: false,
+			},
+		},
+		genres,
+		tags,
+		alternateTitles: [],
+		externalRatings: getExternalRatingsForSeries(
+			seriesItem.id,
+			seriesItem.title,
+		),
+		externalLinks: [],
+	};
+}
 
 // Helper to get current mock series (for testing)
 export const getMockSeries = () => [...mockSeries];

@@ -1,5 +1,7 @@
 import type {
 	Book,
+	FullBook,
+	FullSeries,
 	PaginatedResponse,
 	Series,
 	SeriesCondition,
@@ -16,14 +18,16 @@ export interface SeriesFilters {
 	status?: string;
 	publisher?: string;
 	year?: number;
+	/** When true, returns FullSeriesResponse with complete metadata, genres, tags, etc. */
+	full?: boolean;
 }
 
 export const seriesApi = {
 	// Get series by library ID with filters
-	getByLibrary: async (
+	getByLibrary: async <T extends boolean = false>(
 		libraryId: string,
-		filters?: SeriesFilters,
-	): Promise<PaginatedResponse<Series>> => {
+		filters?: SeriesFilters & { full?: T },
+	): Promise<PaginatedResponse<T extends true ? FullSeries : Series>> => {
 		const params = new URLSearchParams();
 
 		// Add library filter if not "all"
@@ -39,30 +43,47 @@ export const seriesApi = {
 		if (filters?.status) params.set("status", filters.status);
 		if (filters?.publisher) params.set("publisher", filters.publisher);
 		if (filters?.year) params.set("year", filters.year.toString());
+		if (filters?.full) params.set("full", "true");
 
 		const queryString = params.toString();
 		const url = `/series${queryString ? `?${queryString}` : ""}`;
 
-		const response = await api.get<PaginatedResponse<Series>>(url);
+		const response =
+			await api.get<PaginatedResponse<T extends true ? FullSeries : Series>>(
+				url,
+			);
 		return response.data;
 	},
 
 	// Get a single series by ID
-	getById: async (id: string): Promise<Series> => {
-		const response = await api.get<Series>(`/series/${id}`);
+	getById: async <T extends boolean = false>(
+		id: string,
+		options?: { full?: T },
+	): Promise<T extends true ? FullSeries : Series> => {
+		const params = new URLSearchParams();
+		if (options?.full) params.set("full", "true");
+		const queryString = params.toString();
+		const url = `/series/${id}${queryString ? `?${queryString}` : ""}`;
+
+		const response = await api.get<T extends true ? FullSeries : Series>(url);
 		return response.data;
 	},
 
 	// Get series with in-progress books
-	getInProgress: async (libraryId: string): Promise<Series[]> => {
+	getInProgress: async <T extends boolean = false>(
+		libraryId: string,
+		options?: { full?: T },
+	): Promise<(T extends true ? FullSeries : Series)[]> => {
 		const params = new URLSearchParams();
 		if (libraryId !== "all") {
 			params.set("libraryId", libraryId);
 		}
+		if (options?.full) params.set("full", "true");
 		const queryString = params.toString();
 		const url = `/series/in-progress${queryString ? `?${queryString}` : ""}`;
 
-		const response = await api.get<Series[]>(url);
+		const response =
+			await api.get<(T extends true ? FullSeries : Series)[]>(url);
 		return response.data;
 	},
 
@@ -126,52 +147,57 @@ export const seriesApi = {
 	},
 
 	// Get recently added series
-	getRecentlyAdded: async (
+	getRecentlyAdded: async <T extends boolean = false>(
 		libraryId: string,
-		limit = 50,
-	): Promise<Series[]> => {
+		options?: { limit?: number; full?: T },
+	): Promise<(T extends true ? FullSeries : Series)[]> => {
 		const params = new URLSearchParams();
 		if (libraryId !== "all") {
 			params.set("libraryId", libraryId);
 		}
-		params.set("limit", limit.toString());
+		params.set("limit", (options?.limit ?? 50).toString());
+		if (options?.full) params.set("full", "true");
 		const queryString = params.toString();
 		const url = `/series/recently-added?${queryString}`;
 
-		const response = await api.get<Series[]>(url);
+		const response =
+			await api.get<(T extends true ? FullSeries : Series)[]>(url);
 		return response.data;
 	},
 
 	// Get recently updated series
-	getRecentlyUpdated: async (
+	getRecentlyUpdated: async <T extends boolean = false>(
 		libraryId: string,
-		limit = 50,
-	): Promise<Series[]> => {
+		options?: { limit?: number; full?: T },
+	): Promise<(T extends true ? FullSeries : Series)[]> => {
 		const params = new URLSearchParams();
 		if (libraryId !== "all") {
 			params.set("libraryId", libraryId);
 		}
-		params.set("limit", limit.toString());
+		params.set("limit", (options?.limit ?? 50).toString());
+		if (options?.full) params.set("full", "true");
 		const queryString = params.toString();
 		const url = `/series/recently-updated?${queryString}`;
 
-		const response = await api.get<Series[]>(url);
+		const response =
+			await api.get<(T extends true ? FullSeries : Series)[]>(url);
 		return response.data;
 	},
 
 	// Get books in a series
-	getBooks: async (
+	getBooks: async <T extends boolean = false>(
 		seriesId: string,
-		includeDeleted = false,
-	): Promise<Book[]> => {
+		options?: { includeDeleted?: boolean; full?: T },
+	): Promise<(T extends true ? FullBook : Book)[]> => {
 		const params = new URLSearchParams();
-		if (includeDeleted) {
+		if (options?.includeDeleted) {
 			params.set("includeDeleted", "true");
 		}
+		if (options?.full) params.set("full", "true");
 		const queryString = params.toString();
 		const url = `/series/${seriesId}/books${queryString ? `?${queryString}` : ""}`;
 
-		const response = await api.get<Book[]>(url);
+		const response = await api.get<(T extends true ? FullBook : Book)[]>(url);
 		return response.data;
 	},
 
@@ -187,7 +213,7 @@ export const seriesApi = {
 	 * @param libraryId - Library to filter by, or "all" for all libraries
 	 * @param request - The search request with condition, pagination, and sort options
 	 */
-	search: async (
+	search: async <T extends boolean = false>(
 		libraryId: string,
 		request: {
 			condition?: SeriesCondition;
@@ -195,8 +221,9 @@ export const seriesApi = {
 			page?: number;
 			pageSize?: number;
 			sort?: string;
+			full?: T;
 		},
-	): Promise<PaginatedResponse<Series>> => {
+	): Promise<PaginatedResponse<T extends true ? FullSeries : Series>> => {
 		// Build the full condition including library filter
 		let finalCondition: SeriesCondition | undefined = request.condition;
 
@@ -222,6 +249,7 @@ export const seriesApi = {
 		if (request.pageSize !== undefined)
 			params.set("pageSize", String(request.pageSize));
 		if (request.sort) params.set("sort", request.sort);
+		if (request.full) params.set("full", "true");
 
 		// Body only contains filter condition and search
 		const body: SeriesListRequest = {
@@ -232,7 +260,9 @@ export const seriesApi = {
 		const queryString = params.toString();
 		const url = queryString ? `/series/list?${queryString}` : "/series/list";
 
-		const response = await api.post<PaginatedResponse<Series>>(url, body);
+		const response = await api.post<
+			PaginatedResponse<T extends true ? FullSeries : Series>
+		>(url, body);
 		return response.data;
 	},
 

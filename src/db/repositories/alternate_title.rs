@@ -111,6 +111,32 @@ impl AlternateTitleRepository {
             .await?;
         Ok(result.is_some())
     }
+
+    /// Get alternate titles for multiple series by their IDs
+    ///
+    /// Returns a HashMap keyed by series_id for efficient lookups
+    pub async fn get_for_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Vec<AlternateTitle>>> {
+        if series_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let results = AlternateTitles::find()
+            .filter(series_alternate_titles::Column::SeriesId.is_in(series_ids.to_vec()))
+            .all(db)
+            .await?;
+
+        let mut map: std::collections::HashMap<Uuid, Vec<AlternateTitle>> =
+            std::collections::HashMap::new();
+
+        for alt_title in results {
+            map.entry(alt_title.series_id).or_default().push(alt_title);
+        }
+
+        Ok(map)
+    }
 }
 
 #[cfg(test)]

@@ -509,16 +509,21 @@ export const bookHandlers = [
 
 	// List in-progress books
 	// Supports ?libraryId= query param for library filtering
+	// Supports ?full=true for full book response with metadata
 	// Returns plain array (not paginated) - matches API expectation
 	http.get("/api/v1/books/in-progress", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
 		const libraryId = url.searchParams.get("libraryId");
+		const full = url.searchParams.get("full") === "true";
 
 		// Return books that have read progress
 		const baseBooks = libraryId ? getBooksByLibrary(libraryId) : mockBooks;
 		const inProgressBooks = baseBooks.filter((b) => b.readProgress !== null);
 
+		if (full) {
+			return HttpResponse.json(inProgressBooks.map(toFullBookResponse));
+		}
 		return HttpResponse.json(inProgressBooks);
 	}),
 
@@ -546,12 +551,14 @@ export const bookHandlers = [
 
 	// List recently added books
 	// Supports ?libraryId= query param for library filtering
+	// Supports ?full=true for full book response with metadata
 	// Returns plain array (not paginated) - matches API expectation
 	http.get("/api/v1/books/recently-added", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
 		const libraryId = url.searchParams.get("libraryId");
 		const limit = Number.parseInt(url.searchParams.get("limit") || "50", 10);
+		const full = url.searchParams.get("full") === "true";
 
 		// Sort by created date (newest first)
 		const baseBooks = libraryId ? getBooksByLibrary(libraryId) : mockBooks;
@@ -560,7 +567,11 @@ export const bookHandlers = [
 				new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
 		);
 
-		return HttpResponse.json(sortedBooks.slice(0, limit));
+		const result = sortedBooks.slice(0, limit);
+		if (full) {
+			return HttpResponse.json(result.map(toFullBookResponse));
+		}
+		return HttpResponse.json(result);
 	}),
 
 	// List recently read books
@@ -583,6 +594,7 @@ export const bookHandlers = [
 
 	// POST /books/list - Advanced filtering with condition tree (1-indexed)
 	// Pagination params come from query string, filter criteria from body
+	// Supports ?full=true for full book response with metadata
 	http.post("/api/v1/books/list", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
@@ -594,6 +606,7 @@ export const bookHandlers = [
 			url.searchParams.get("pageSize") || "50",
 			10,
 		);
+		const full = url.searchParams.get("full") === "true";
 
 		const body = (await request.json()) as {
 			condition?: unknown;
@@ -681,6 +694,18 @@ export const bookHandlers = [
 		const end = start + pageSize;
 		const items = results.slice(start, end);
 
+		if (full) {
+			const fullItems = items.map(toFullBookResponse);
+			return HttpResponse.json(
+				createPaginatedResponse(fullItems, {
+					page,
+					pageSize,
+					total: results.length,
+					basePath: "/api/v1/books/list",
+				}),
+			);
+		}
+
 		return HttpResponse.json(
 			createPaginatedResponse(items, {
 				page,
@@ -693,6 +718,7 @@ export const bookHandlers = [
 
 	// List books with pagination (1-indexed)
 	// Supports ?library_id= and ?series_id= query params for filtering
+	// Supports ?full=true for full book response with metadata
 	http.get("/api/v1/books", async ({ request }) => {
 		await delay(200);
 		const url = new URL(request.url);
@@ -706,6 +732,7 @@ export const bookHandlers = [
 		);
 		const libraryId = url.searchParams.get("libraryId");
 		const seriesId = url.searchParams.get("seriesId");
+		const full = url.searchParams.get("full") === "true";
 
 		let filteredBooks = libraryId ? getBooksByLibrary(libraryId) : mockBooks;
 		if (seriesId) {
@@ -716,6 +743,18 @@ export const bookHandlers = [
 		const start = (page - 1) * pageSize;
 		const end = start + pageSize;
 		const items = filteredBooks.slice(start, end);
+
+		if (full) {
+			const fullItems = items.map(toFullBookResponse);
+			return HttpResponse.json(
+				createPaginatedResponse(fullItems, {
+					page,
+					pageSize,
+					total: filteredBooks.length,
+					basePath: "/api/v1/books",
+				}),
+			);
+		}
 
 		return HttpResponse.json(
 			createPaginatedResponse(items, {
@@ -728,14 +767,23 @@ export const bookHandlers = [
 	}),
 
 	// Get book by ID (must come AFTER specific routes like /in-progress, /recently-added)
-	http.get("/api/v1/books/:id", async ({ params }) => {
+	// Supports ?full=true for full book response with metadata
+	http.get("/api/v1/books/:id", async ({ params, request }) => {
 		await delay(100);
+		const url = new URL(request.url);
+		const full = url.searchParams.get("full") === "true";
 		const book = mockBooks.find((b) => b.id === params.id);
 
 		if (!book) {
 			return HttpResponse.json({ error: "Book not found" }, { status: 404 });
 		}
 
+		// If full=true, return FullBookResponse
+		if (full) {
+			return HttpResponse.json(toFullBookResponse(book));
+		}
+
+		// Otherwise, return BookDetailResponse (book + metadata)
 		// Determine publisher based on series
 		const publisherMap: Record<string, string> = {
 			"Batman: Year One": "DC Comics",
@@ -1122,16 +1170,23 @@ export const bookHandlers = [
 	}),
 
 	// List books by series
+	// Supports ?full=true for full book response with metadata
 	// Returns plain array (not paginated) - matches API expectation
-	http.get("/api/v1/series/:seriesId/books", async ({ params }) => {
+	http.get("/api/v1/series/:seriesId/books", async ({ params, request }) => {
 		await delay(200);
+		const url = new URL(request.url);
+		const full = url.searchParams.get("full") === "true";
 
 		const filteredBooks = getBooksBySeries(params.seriesId as string);
 
+		if (full) {
+			return HttpResponse.json(filteredBooks.map(toFullBookResponse));
+		}
 		return HttpResponse.json(filteredBooks);
 	}),
 
 	// List books by library (1-indexed)
+	// Supports ?full=true for full book response with metadata
 	http.get(
 		"/api/v1/libraries/:libraryId/books",
 		async ({ params, request }) => {
@@ -1145,12 +1200,25 @@ export const bookHandlers = [
 				url.searchParams.get("pageSize") || "50",
 				10,
 			);
+			const full = url.searchParams.get("full") === "true";
 
 			const libraryBooks = getBooksByLibrary(params.libraryId as string);
 			// 1-indexed pagination
 			const start = (page - 1) * pageSize;
 			const end = start + pageSize;
 			const items = libraryBooks.slice(start, end);
+
+			if (full) {
+				const fullItems = items.map(toFullBookResponse);
+				return HttpResponse.json(
+					createPaginatedResponse(fullItems, {
+						page,
+						pageSize,
+						total: libraryBooks.length,
+						basePath: `/api/v1/libraries/${params.libraryId}/books`,
+					}),
+				);
+			}
 
 			return HttpResponse.json(
 				createPaginatedResponse(items, {
@@ -1164,11 +1232,14 @@ export const bookHandlers = [
 	),
 
 	// Library-scoped: List in-progress books
+	// Supports ?full=true for full book response with metadata
 	// Returns plain array (not paginated) - matches API expectation
 	http.get(
 		"/api/v1/libraries/:libraryId/books/in-progress",
-		async ({ params }) => {
+		async ({ params, request }) => {
 			await delay(200);
+			const url = new URL(request.url);
+			const full = url.searchParams.get("full") === "true";
 
 			// Get books for this library that have read progress
 			const libraryBooks = getBooksByLibrary(params.libraryId as string);
@@ -1176,11 +1247,15 @@ export const bookHandlers = [
 				(b) => b.readProgress !== null,
 			);
 
+			if (full) {
+				return HttpResponse.json(inProgressBooks.map(toFullBookResponse));
+			}
 			return HttpResponse.json(inProgressBooks);
 		},
 	),
 
 	// Library-scoped: List recently added books
+	// Supports ?full=true for full book response with metadata
 	// Returns plain array (not paginated) - matches API expectation
 	http.get(
 		"/api/v1/libraries/:libraryId/books/recently-added",
@@ -1188,6 +1263,7 @@ export const bookHandlers = [
 			await delay(200);
 			const url = new URL(request.url);
 			const limit = Number.parseInt(url.searchParams.get("limit") || "50", 10);
+			const full = url.searchParams.get("full") === "true";
 
 			// Get books for this library, sorted by created date
 			const libraryBooks = getBooksByLibrary(params.libraryId as string);
@@ -1196,7 +1272,11 @@ export const bookHandlers = [
 					new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
 			);
 
-			return HttpResponse.json(sortedBooks.slice(0, limit));
+			const result = sortedBooks.slice(0, limit);
+			if (full) {
+				return HttpResponse.json(result.map(toFullBookResponse));
+			}
+			return HttpResponse.json(result);
 		},
 	),
 
@@ -1218,6 +1298,99 @@ export const bookHandlers = [
 		);
 	}),
 ];
+
+/**
+ * Convert a BookDto to FullBookResponse format
+ * Used when ?full=true query parameter is specified
+ */
+function toFullBookResponse(book: (typeof mockBooks)[0]) {
+	// Determine publisher based on series
+	const publisherMap: Record<string, string> = {
+		"Batman: Year One": "DC Comics",
+		"Batman: The Dark Knight Returns": "DC Comics",
+		"Spider-Man: Blue": "Marvel Comics",
+		"One Piece": "Shueisha / Viz Media",
+		Naruto: "Shueisha / Viz Media",
+		"Attack on Titan": "Kodansha",
+		Saga: "Image Comics",
+		"The Walking Dead": "Image Comics",
+		Sandman: "DC Comics",
+	};
+	const publisher = publisherMap[book.seriesName] || "DC Comics";
+
+	// Get creative team based on publisher
+	const team = creativeTeams[publisher] || creativeTeams["DC Comics"];
+	const writerIndex = (book.number ?? 1) % team.writers.length;
+	const artistIndex = (book.number ?? 1) % team.artists.length;
+
+	// Determine language based on publisher
+	const isJapanese =
+		publisher.includes("Viz") || publisher.includes("Kodansha");
+	const language = isJapanese ? "ja" : "en";
+
+	return {
+		id: book.id,
+		seriesId: book.seriesId,
+		seriesName: book.seriesName,
+		libraryId: book.libraryId,
+		libraryName: book.libraryName || "Unknown Library",
+		number: book.number,
+		pageCount: book.pageCount,
+		filePath: `/media/comics/${book.seriesName}/${book.title}.${book.fileFormat}`,
+		fileSize: book.fileSize || 52428800,
+		fileFormat: book.fileFormat,
+		fileHash: book.fileHash || `hash-${book.id}`,
+		deleted: book.deleted || false,
+		analysisError: null,
+		readingDirection: isJapanese ? "rtl" : "ltr",
+		readProgress: book.readProgress,
+		createdAt: book.createdAt,
+		updatedAt: book.updatedAt,
+		metadata: {
+			title: book.title,
+			series: book.seriesName,
+			number: book.number?.toString() ?? null,
+			summary: getBookSummary(book.seriesName, book.number ?? null),
+			publisher,
+			imprint: publisher.includes("Vertigo") ? "Vertigo" : null,
+			genre: null,
+			releaseDate: null,
+			pageCount: book.pageCount,
+			languageIso: language,
+			writers: [team.writers[writerIndex]],
+			pencillers: [team.artists[artistIndex]],
+			inkers: [team.artists[artistIndex]],
+			colorists:
+				team.colorists.length > 0
+					? [team.colorists[writerIndex % team.colorists.length]]
+					: [],
+			letterers: [team.letterers[writerIndex % team.letterers.length]],
+			coverArtists: [team.artists[artistIndex]],
+			editors: [team.editors[writerIndex % team.editors.length]],
+			customMetadata: null,
+			locks: {
+				summaryLock: false,
+				writerLock: false,
+				pencillerLock: false,
+				inkerLock: false,
+				coloristLock: false,
+				lettererLock: false,
+				coverArtistLock: false,
+				editorLock: false,
+				publisherLock: false,
+				imprintLock: false,
+				genreLock: false,
+				pageCountLock: false,
+				languageIsoLock: false,
+				releaseDateLock: false,
+				seriesLock: false,
+				numberLock: false,
+				titleLock: false,
+				customMetadataLock: false,
+			},
+		},
+	};
+}
 
 // Helper to get current mock books (for testing)
 export const getMockBooks = () => [...mockBooks];

@@ -117,6 +117,29 @@ impl BookMetadataRepository {
             .context("Failed to get metadata by book ID")
     }
 
+    /// Get metadata for multiple books in a single query (batched)
+    pub async fn get_by_book_ids(
+        db: &DatabaseConnection,
+        book_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, book_metadata::Model>> {
+        use std::collections::HashMap;
+
+        if book_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let metadata_list = BookMetadata::find()
+            .filter(book_metadata::Column::BookId.is_in(book_ids.to_vec()))
+            .all(db)
+            .await
+            .context("Failed to get metadata by book IDs")?;
+
+        let map: HashMap<Uuid, book_metadata::Model> =
+            metadata_list.into_iter().map(|m| (m.book_id, m)).collect();
+
+        Ok(map)
+    }
+
     /// Update metadata
     pub async fn update(
         db: &DatabaseConnection,

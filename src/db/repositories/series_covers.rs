@@ -248,6 +248,52 @@ impl SeriesCoversRepository {
         let selected = Self::get_selected(db, series_id).await?;
         Ok(selected.map(|c| c.source))
     }
+
+    /// Get selected covers for multiple series by their IDs
+    ///
+    /// Returns a HashMap keyed by series_id for efficient lookups
+    pub async fn get_selected_for_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, series_covers::Model>> {
+        if series_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let results = SeriesCovers::find()
+            .filter(series_covers::Column::SeriesId.is_in(series_ids.to_vec()))
+            .filter(series_covers::Column::IsSelected.eq(true))
+            .all(db)
+            .await?;
+
+        Ok(results.into_iter().map(|c| (c.series_id, c)).collect())
+    }
+
+    /// Check if multiple series have custom covers
+    ///
+    /// Returns a HashMap keyed by series_id with boolean values
+    pub async fn has_custom_cover_for_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, bool>> {
+        if series_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let results = SeriesCovers::find()
+            .filter(series_covers::Column::SeriesId.is_in(series_ids.to_vec()))
+            .filter(series_covers::Column::Source.eq("custom"))
+            .all(db)
+            .await?;
+
+        let custom_cover_set: std::collections::HashSet<Uuid> =
+            results.into_iter().map(|c| c.series_id).collect();
+
+        Ok(series_ids
+            .iter()
+            .map(|id| (*id, custom_cover_set.contains(id)))
+            .collect())
+    }
 }
 
 #[cfg(test)]

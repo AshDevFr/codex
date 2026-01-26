@@ -573,7 +573,7 @@ export interface paths {
          * @description Supports complex filter conditions including nested AllOf/AnyOf logic,
          *     genre/tag filtering with include/exclude, and more.
          *
-         *     Pagination parameters (page, pageSize, sort) are passed as query parameters.
+         *     Pagination parameters (page, pageSize, sort, full) are passed as query parameters.
          *     Filter conditions are passed in the request body.
          */
         post: operations["list_books_filtered"];
@@ -2160,27 +2160,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{series_id}/full": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get full series data with complete metadata
-         * @description Returns series information combined with full metadata, genres, tags,
-         *     alternate titles, external ratings, and external links in a single response.
-         */
-        get: operations["get_full_series"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/series/{series_id}/genres": {
         parameters: {
             query?: never;
@@ -2224,7 +2203,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get series metadata including all related data
+         * @description Returns comprehensive metadata with lock states, genres, tags, alternate titles,
+         *     external ratings, and external links.
+         */
+        get: operations["get_series_metadata"];
         /**
          * Replace all series metadata (PUT)
          * @description Replaces all metadata fields with the values in the request.
@@ -2241,27 +2225,6 @@ export interface paths {
          *     Explicitly null fields will be cleared.
          */
         patch: operations["patch_series_metadata"];
-        trace?: never;
-    };
-    "/api/v1/series/{series_id}/metadata/full": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get full series metadata including all related data
-         * @description Returns comprehensive metadata with lock states, genres, tags, alternate titles,
-         *     external ratings, and external links.
-         */
-        get: operations["get_full_series_metadata"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/api/v1/series/{series_id}/metadata/locks": {
@@ -4412,6 +4375,153 @@ export interface components {
          * @enum {string}
          */
         BookErrorTypeDto: "format_detection" | "parser" | "metadata" | "thumbnail" | "page_extraction" | "pdf_rendering" | "other";
+        /** @description Full book metadata including all fields and their lock states */
+        BookFullMetadata: {
+            /**
+             * @description Whether the book is black and white
+             * @example false
+             */
+            blackAndWhite?: boolean | null;
+            /**
+             * @description Colorist(s)
+             * @example Richmond Lewis
+             */
+            colorist?: string | null;
+            /**
+             * Format: int32
+             * @description Total count in series
+             * @example 4
+             */
+            count?: number | null;
+            /**
+             * @description Cover artist(s)
+             * @example David Mazzucchelli
+             */
+            coverArtist?: string | null;
+            /**
+             * Format: date-time
+             * @description When the metadata was created
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * Format: int32
+             * @description Publication day (1-31)
+             * @example 1
+             */
+            day?: number | null;
+            /**
+             * @description Editor(s)
+             * @example Dennis O'Neil
+             */
+            editor?: string | null;
+            /**
+             * @description Format details
+             * @example Trade Paperback
+             */
+            formatDetail?: string | null;
+            /**
+             * @description Genre
+             * @example Superhero
+             */
+            genre?: string | null;
+            /**
+             * @description Imprint name
+             * @example DC Black Label
+             */
+            imprint?: string | null;
+            /**
+             * @description Inker(s)
+             * @example David Mazzucchelli
+             */
+            inker?: string | null;
+            /**
+             * @description ISBN(s)
+             * @example 978-1401207526
+             */
+            isbns?: string | null;
+            /**
+             * @description ISO language code
+             * @example en
+             */
+            languageIso?: string | null;
+            /**
+             * @description Letterer(s)
+             * @example Todd Klein
+             */
+            letterer?: string | null;
+            /** @description Lock states for all metadata fields */
+            locks: components["schemas"]["BookMetadataLocks"];
+            /**
+             * @description Whether the book is manga format
+             * @example false
+             */
+            manga?: boolean | null;
+            /**
+             * Format: int32
+             * @description Publication month (1-12)
+             * @example 2
+             */
+            month?: number | null;
+            /**
+             * @description Chapter/book number
+             * @example 1
+             */
+            number?: string | null;
+            /**
+             * @description Penciller(s)
+             * @example David Mazzucchelli
+             */
+            penciller?: string | null;
+            /**
+             * @description Publisher name
+             * @example DC Comics
+             */
+            publisher?: string | null;
+            /**
+             * @description Book summary/description
+             * @example Bruce Wayne returns to Gotham City after years abroad.
+             */
+            summary?: string | null;
+            /**
+             * @description Book title from metadata
+             * @example Batman: Year One #1
+             */
+            title?: string | null;
+            /**
+             * @description Sort title for ordering
+             * @example batman year one 001
+             */
+            titleSort?: string | null;
+            /**
+             * Format: date-time
+             * @description When the metadata was last updated
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+            /**
+             * Format: int32
+             * @description Volume number
+             * @example 1
+             */
+            volume?: number | null;
+            /**
+             * @description Web URL
+             * @example https://dc.com/batman-year-one
+             */
+            web?: string | null;
+            /**
+             * @description Writer(s)
+             * @example Frank Miller
+             */
+            writer?: string | null;
+            /**
+             * Format: int32
+             * @description Publication year
+             * @example 1987
+             */
+            year?: number | null;
+        };
         /**
          * @description Request body for POST /books/list
          *
@@ -4541,6 +4651,124 @@ export interface components {
              *     ]
              */
             writers: string[];
+        };
+        /**
+         * @description Book metadata lock states
+         *
+         *     Indicates which metadata fields are locked (protected from automatic updates).
+         *     When a field is locked, the scanner will not overwrite user-edited values.
+         */
+        BookMetadataLocks: {
+            /**
+             * @description Whether black_and_white is locked
+             * @example false
+             */
+            blackAndWhiteLock: boolean;
+            /**
+             * @description Whether colorist is locked
+             * @example false
+             */
+            coloristLock: boolean;
+            /**
+             * @description Whether count is locked
+             * @example false
+             */
+            countLock: boolean;
+            /**
+             * @description Whether cover artist is locked
+             * @example false
+             */
+            coverArtistLock: boolean;
+            /**
+             * @description Whether day is locked
+             * @example false
+             */
+            dayLock: boolean;
+            /**
+             * @description Whether editor is locked
+             * @example false
+             */
+            editorLock: boolean;
+            /**
+             * @description Whether format_detail is locked
+             * @example false
+             */
+            formatDetailLock: boolean;
+            /**
+             * @description Whether genre is locked
+             * @example false
+             */
+            genreLock: boolean;
+            /**
+             * @description Whether imprint is locked
+             * @example false
+             */
+            imprintLock: boolean;
+            /**
+             * @description Whether inker is locked
+             * @example false
+             */
+            inkerLock: boolean;
+            /**
+             * @description Whether isbns is locked
+             * @example false
+             */
+            isbnsLock: boolean;
+            /**
+             * @description Whether language_iso is locked
+             * @example false
+             */
+            languageIsoLock: boolean;
+            /**
+             * @description Whether letterer is locked
+             * @example false
+             */
+            lettererLock: boolean;
+            /**
+             * @description Whether manga is locked
+             * @example false
+             */
+            mangaLock: boolean;
+            /**
+             * @description Whether month is locked
+             * @example false
+             */
+            monthLock: boolean;
+            /**
+             * @description Whether penciller is locked
+             * @example false
+             */
+            pencillerLock: boolean;
+            /**
+             * @description Whether publisher is locked
+             * @example true
+             */
+            publisherLock: boolean;
+            /**
+             * @description Whether summary is locked
+             * @example false
+             */
+            summaryLock: boolean;
+            /**
+             * @description Whether volume is locked
+             * @example false
+             */
+            volumeLock: boolean;
+            /**
+             * @description Whether web URL is locked
+             * @example false
+             */
+            webLock: boolean;
+            /**
+             * @description Whether writer is locked
+             * @example false
+             */
+            writerLock: boolean;
+            /**
+             * @description Whether year is locked
+             * @example true
+             */
+            yearLock: boolean;
         };
         /** @description Response containing book metadata */
         BookMetadataResponse: {
@@ -5540,6 +5768,110 @@ export interface components {
              * @example false
              */
             force?: boolean;
+        };
+        /** @description Full book response including book data and complete metadata with locks */
+        FullBookResponse: {
+            /**
+             * @description Error message if book analysis failed
+             * @example Failed to parse CBZ: invalid archive
+             */
+            analysisError?: string | null;
+            /**
+             * Format: date-time
+             * @description When the book was added to the library
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * @description Whether the book has been soft-deleted
+             * @example false
+             */
+            deleted: boolean;
+            /**
+             * @description File format (cbz, cbr, epub, pdf)
+             * @example cbz
+             */
+            fileFormat: string;
+            /**
+             * @description File hash for deduplication
+             * @example a1b2c3d4e5f6g7h8i9j0
+             */
+            fileHash: string;
+            /**
+             * @description Filesystem path to the book file
+             * @example /media/comics/Batman/Batman - Year One 001.cbz
+             */
+            filePath: string;
+            /**
+             * Format: int64
+             * @description File size in bytes
+             * @example 52428800
+             */
+            fileSize: number;
+            /**
+             * Format: uuid
+             * @description Book unique identifier
+             * @example 550e8400-e29b-41d4-a716-446655440001
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Library this book belongs to
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            libraryId: string;
+            /**
+             * @description Name of the library
+             * @example Comics
+             */
+            libraryName: string;
+            /** @description Complete book metadata with lock states */
+            metadata: components["schemas"]["BookFullMetadata"];
+            /**
+             * Format: int32
+             * @description Book number within the series
+             * @example 1
+             */
+            number?: number | null;
+            /**
+             * Format: int32
+             * @description Number of pages in the book
+             * @example 32
+             */
+            pageCount: number;
+            readProgress?: null | components["schemas"]["ReadProgressResponse"];
+            /**
+             * @description Effective reading direction (from series metadata, or library default)
+             * @example ltr
+             */
+            readingDirection?: string | null;
+            /**
+             * Format: uuid
+             * @description Series this book belongs to
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            seriesId: string;
+            /**
+             * @description Name of the series
+             * @example Batman: Year One
+             */
+            seriesName: string;
+            /**
+             * @description Book title (display name)
+             * @example Batman: Year One #1
+             */
+            title: string;
+            /**
+             * @description Title used for sorting
+             * @example batman year one 001
+             */
+            titleSort?: string | null;
+            /**
+             * Format: date-time
+             * @description When the book was last updated
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
         };
         /** @description Full series metadata response including all related data */
         FullSeriesMetadataResponse: {
@@ -8674,6 +9006,8 @@ export interface components {
         };
         /** @description Search series request */
         SearchSeriesRequest: {
+            /** @description Return full series data including metadata, locks, genres, tags, etc. */
+            full?: boolean;
             /**
              * Format: uuid
              * @description Optional library filter
@@ -12057,6 +12391,11 @@ export interface operations {
                 pageSize?: number;
                 /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
                 sort?: string | null;
+                /**
+                 * @description Return full data including metadata and locks.
+                 *     Default is false for backward compatibility.
+                 */
+                full?: boolean;
             };
             header?: never;
             path?: never;
@@ -12064,7 +12403,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Paginated list of books */
+            /** @description Paginated list of books (returns FullBookListResponse when full=true) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -12153,6 +12492,11 @@ export interface operations {
                 pageSize?: number;
                 /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
                 sort?: string | null;
+                /**
+                 * @description Return full data including metadata and locks.
+                 *     Default is false for backward compatibility.
+                 */
+                full?: boolean;
             };
             header?: never;
             path?: never;
@@ -12187,6 +12531,11 @@ export interface operations {
                 pageSize?: number;
                 /** @description Sort field and direction (e.g., "name,asc" or "createdAt,desc") */
                 sort?: string | null;
+                /**
+                 * @description Return full data including metadata, locks, and related entities.
+                 *     Default is false for backward compatibility.
+                 */
+                full?: boolean;
             };
             header?: never;
             path?: never;
@@ -12198,7 +12547,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Paginated list of filtered books */
+            /** @description Paginated list of filtered books (returns FullBookListResponse when full=true) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -12229,6 +12578,11 @@ export interface operations {
                 pageSize?: number;
                 /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
                 sort?: string | null;
+                /**
+                 * @description Return full data including metadata and locks.
+                 *     Default is false for backward compatibility.
+                 */
+                full?: boolean;
             };
             header?: never;
             path?: never;
@@ -12267,6 +12621,11 @@ export interface operations {
                 pageSize?: number;
                 /** @description Sort parameter (format: "field,direction" e.g. "title,asc") */
                 sort?: string | null;
+                /**
+                 * @description Return full data including metadata and locks.
+                 *     Default is false for backward compatibility.
+                 */
+                full?: boolean;
             };
             header?: never;
             path?: never;
@@ -12405,7 +12764,13 @@ export interface operations {
     };
     get_book: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Return full data including metadata and locks.
+                 *     Default is false for backward compatibility.
+                 */
+                full?: boolean;
+            };
             header?: never;
             path: {
                 /** @description Book ID */
@@ -12415,7 +12780,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Book details */
+            /** @description Book details (returns FullBookResponse when full=true) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14025,6 +14390,11 @@ export interface operations {
                 tags?: string | null;
                 /** @description Filter by library ID */
                 libraryId?: string | null;
+                /**
+                 * @description Return full series data including metadata, locks, genres, tags, alternate titles,
+                 *     external ratings, and external links. Default is false for backward compatibility.
+                 */
+                full?: boolean;
             };
             header?: never;
             path: {
@@ -14035,7 +14405,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Paginated list of series in library */
+            /** @description Paginated list of series in library (returns FullSeriesListResponse when full=true) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14055,7 +14425,10 @@ export interface operations {
     };
     list_library_in_progress_series: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Return full series data including metadata, locks, genres, tags, etc. */
+                full?: boolean;
+            };
             header?: never;
             path: {
                 /** @description Library ID */
@@ -14065,7 +14438,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description List of in-progress series in library */
+            /** @description List of in-progress series in library (returns Vec<FullSeriesResponse> when full=true) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14088,6 +14461,10 @@ export interface operations {
             query?: {
                 /** @description Maximum number of series to return (default: 50) */
                 limit?: number;
+                /** @description Filter by library ID (optional) */
+                libraryId?: string | null;
+                /** @description Return full series data including metadata, locks, genres, tags, etc. */
+                full?: boolean;
             };
             header?: never;
             path: {
@@ -14098,7 +14475,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description List of recently added series in library */
+            /** @description List of recently added series in library (returns Vec<FullSeriesResponse> when full=true) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14121,6 +14498,10 @@ export interface operations {
             query?: {
                 /** @description Maximum number of series to return (default: 50) */
                 limit?: number;
+                /** @description Filter by library ID (optional) */
+                libraryId?: string | null;
+                /** @description Return full series data including metadata, locks, genres, tags, etc. */
+                full?: boolean;
             };
             header?: never;
             path: {
@@ -14131,7 +14512,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description List of recently updated series in library */
+            /** @description List of recently updated series in library (returns Vec<FullSeriesResponse> when full=true) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14470,6 +14851,11 @@ export interface operations {
                 tags?: string | null;
                 /** @description Filter by library ID */
                 libraryId?: string | null;
+                /**
+                 * @description Return full series data including metadata, locks, genres, tags, alternate titles,
+                 *     external ratings, and external links. Default is false for backward compatibility.
+                 */
+                full?: boolean;
             };
             header?: never;
             path?: never;
@@ -14477,7 +14863,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Paginated list of series */
+            /** @description Paginated list of series (returns FullSeriesListResponse when full=true) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14500,6 +14886,8 @@ export interface operations {
             query?: {
                 /** @description Filter by library ID (optional) */
                 libraryId?: string | null;
+                /** @description Return full series data including metadata, locks, genres, tags, etc. */
+                full?: boolean;
             };
             header?: never;
             path?: never;
@@ -14507,7 +14895,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description List of in-progress series */
+            /** @description List of in-progress series (returns Vec<FullSeriesResponse> when full=true) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14534,6 +14922,11 @@ export interface operations {
                 pageSize?: number;
                 /** @description Sort field and direction (e.g., "name,asc" or "createdAt,desc") */
                 sort?: string | null;
+                /**
+                 * @description Return full data including metadata, locks, and related entities.
+                 *     Default is false for backward compatibility.
+                 */
+                full?: boolean;
             };
             header?: never;
             path?: never;
@@ -14545,7 +14938,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Paginated list of filtered series */
+            /** @description Paginated list of filtered series (returns FullSeriesListResponse when full=true) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14570,6 +14963,8 @@ export interface operations {
                 limit?: number;
                 /** @description Filter by library ID (optional) */
                 libraryId?: string | null;
+                /** @description Return full series data including metadata, locks, genres, tags, etc. */
+                full?: boolean;
             };
             header?: never;
             path?: never;
@@ -14577,7 +14972,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description List of recently added series */
+            /** @description List of recently added series (returns Vec<FullSeriesResponse> when full=true) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14602,6 +14997,8 @@ export interface operations {
                 limit?: number;
                 /** @description Filter by library ID (optional) */
                 libraryId?: string | null;
+                /** @description Return full series data including metadata, locks, genres, tags, etc. */
+                full?: boolean;
             };
             header?: never;
             path?: never;
@@ -14609,7 +15006,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description List of recently updated series */
+            /** @description List of recently updated series (returns Vec<FullSeriesResponse> when full=true) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14640,7 +15037,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Search results */
+            /** @description Search results (returns Vec<FullSeriesResponse> when full=true) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14660,7 +15057,10 @@ export interface operations {
     };
     get_series: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Return full series data including metadata, locks, genres, tags, etc. */
+                full?: boolean;
+            };
             header?: never;
             path: {
                 /** @description Series ID */
@@ -14670,7 +15070,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Series details */
+            /** @description Series details (returns FullSeriesResponse when full=true) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14925,6 +15325,11 @@ export interface operations {
             query?: {
                 /** @description Include deleted books in the result */
                 includeDeleted?: boolean;
+                /**
+                 * @description Return full data including metadata and locks.
+                 *     Default is false for backward compatibility.
+                 */
+                full?: boolean;
             };
             header?: never;
             path: {
@@ -14935,7 +15340,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description List of books in the series */
+            /** @description List of books in the series (returns Vec<FullBookResponse> when full=true) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -15553,43 +15958,6 @@ export interface operations {
             };
         };
     };
-    get_full_series: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Series ID */
-                series_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Full series data with metadata */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FullSeriesResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Series not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     get_series_genres: {
         parameters: {
             query?: never;
@@ -15746,6 +16114,43 @@ export interface operations {
             };
         };
     };
+    get_series_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Series metadata with all related data */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FullSeriesMetadataResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     replace_series_metadata: {
         parameters: {
             query?: never;
@@ -15810,43 +16215,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SeriesMetadataResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Series not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_full_series_metadata: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Series ID */
-                series_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Full series metadata with all related data */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FullSeriesMetadataResponse"];
                 };
             };
             /** @description Forbidden */

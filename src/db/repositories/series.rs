@@ -931,6 +931,50 @@ impl SeriesRepository {
         Ok(count as i64)
     }
 
+    /// Get book counts for multiple series by their IDs
+    ///
+    /// Returns a HashMap keyed by series_id for efficient lookups
+    pub async fn get_book_counts_for_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, i64>> {
+        use sea_orm::{sea_query::Expr, FromQueryResult, QuerySelect};
+
+        if series_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        #[derive(Debug, FromQueryResult)]
+        struct BookCountResult {
+            series_id: Uuid,
+            count: i64,
+        }
+
+        let results: Vec<BookCountResult> = books::Entity::find()
+            .select_only()
+            .column(books::Column::SeriesId)
+            .column_as(Expr::col(books::Column::Id).count(), "count")
+            .filter(books::Column::SeriesId.is_in(series_ids.to_vec()))
+            .filter(books::Column::Deleted.eq(false))
+            .group_by(books::Column::SeriesId)
+            .into_model::<BookCountResult>()
+            .all(db)
+            .await
+            .context("Failed to count books for series")?;
+
+        let mut map: std::collections::HashMap<Uuid, i64> = results
+            .into_iter()
+            .map(|r| (r.series_id, r.count))
+            .collect();
+
+        // Fill in zeros for series with no books
+        for id in series_ids {
+            map.entry(*id).or_insert(0);
+        }
+
+        Ok(map)
+    }
+
     /// Delete a series
     pub async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<()> {
         Series::delete_by_id(id)

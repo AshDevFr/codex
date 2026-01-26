@@ -4069,3 +4069,323 @@ async fn test_list_books_with_errors_v2_all_error_types() {
     assert!(group_types.contains(&BookErrorTypeDto::PdfRendering));
     assert!(group_types.contains(&BookErrorTypeDto::Other));
 }
+
+// ============================================================================
+// Full Parameter Tests (full=true)
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_book_with_full_parameter() {
+    use codex::api::routes::v1::dto::book::FullBookResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create a book
+    let book = create_test_book_model(series.id, library.id, "/lib/book1.cbz", "book1.cbz", None);
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request with full=true
+    let request = get_request_with_auth(&format!("/api/v1/books/{}?full=true", book.id), &token);
+    let (status, response): (StatusCode, Option<FullBookResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let full_response = response.unwrap();
+    assert_eq!(full_response.id, book.id);
+    // Verify full response has metadata with locks (field exists and is accessible)
+    let _ = full_response.metadata.locks.summary_lock;
+}
+
+#[tokio::test]
+async fn test_list_books_with_full_parameter() {
+    use codex::api::routes::v1::dto::book::FullBookListResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create books
+    let book1 = create_test_book_model(series.id, library.id, "/lib/book1.cbz", "book1.cbz", None);
+    BookRepository::create(&db, &book1, None).await.unwrap();
+    let book2 = create_test_book_model(series.id, library.id, "/lib/book2.cbz", "book2.cbz", None);
+    BookRepository::create(&db, &book2, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request with full=true
+    let request = get_request_with_auth("/api/v1/books?full=true", &token);
+    let (status, response): (StatusCode, Option<FullBookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let full_response = response.unwrap();
+    assert_eq!(full_response.data.len(), 2);
+    // Verify full responses have metadata with locks (field exists)
+    for book in &full_response.data {
+        let _ = book.metadata.locks.summary_lock;
+    }
+}
+
+#[tokio::test]
+async fn test_list_books_full_with_pagination() {
+    use codex::api::routes::v1::dto::book::FullBookListResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create 5 books
+    for i in 1..=5 {
+        let book = create_test_book_model(
+            series.id,
+            library.id,
+            &format!("/lib/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            None,
+        );
+        BookRepository::create(&db, &book, None).await.unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    // Request first page with full=true
+    let request = get_request_with_auth("/api/v1/books?full=true&page=1&pageSize=2", &token);
+    let (status, response): (StatusCode, Option<FullBookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page1 = response.unwrap();
+    assert_eq!(page1.data.len(), 2);
+    assert_eq!(page1.total, 5);
+    assert_eq!(page1.page, 1);
+
+    // Request second page
+    let app2 = create_test_router(state).await;
+    let request = get_request_with_auth("/api/v1/books?full=true&page=2&pageSize=2", &token);
+    let (status, response): (StatusCode, Option<FullBookListResponse>) =
+        make_json_request(app2, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page2 = response.unwrap();
+    assert_eq!(page2.data.len(), 2);
+    assert_eq!(page2.page, 2);
+}
+
+#[tokio::test]
+async fn test_library_books_with_full() {
+    use codex::api::routes::v1::dto::book::FullBookListResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create books
+    let book = create_test_book_model(series.id, library.id, "/lib/book1.cbz", "book1.cbz", None);
+    BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(
+        &format!("/api/v1/libraries/{}/books?full=true", library.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<FullBookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let full_response = response.unwrap();
+    assert_eq!(full_response.data.len(), 1);
+    // Verify metadata is included (field exists)
+    for book in &full_response.data {
+        let _ = book.metadata.locks.summary_lock;
+    }
+}
+
+#[tokio::test]
+async fn test_recently_added_books_with_full() {
+    use codex::api::routes::v1::dto::book::FullBookListResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create books
+    let book1 = create_test_book_model(series.id, library.id, "/lib/book1.cbz", "book1.cbz", None);
+    BookRepository::create(&db, &book1, None).await.unwrap();
+    let book2 = create_test_book_model(series.id, library.id, "/lib/book2.cbz", "book2.cbz", None);
+    BookRepository::create(&db, &book2, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request =
+        get_request_with_auth("/api/v1/books/recently-added?full=true&pageSize=10", &token);
+    let (status, response): (StatusCode, Option<FullBookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let full_response = response.unwrap();
+    assert_eq!(full_response.data.len(), 2);
+    // Verify full responses have metadata (field exists)
+    for book in &full_response.data {
+        let _ = book.metadata.locks.summary_lock;
+    }
+}
+
+#[tokio::test]
+async fn test_in_progress_books_with_full() {
+    use codex::api::routes::v1::dto::book::FullBookListResponse;
+    use codex::db::repositories::ReadProgressRepository;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create books
+    let book = create_test_book_model(series.id, library.id, "/lib/book1.cbz", "book1.cbz", None);
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let password_hash = password::hash_password("admin123").unwrap();
+    let admin = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let admin_user = UserRepository::create(&db, &admin).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(
+            admin_user.id,
+            admin_user.username.clone(),
+            admin_user.get_role(),
+        )
+        .unwrap();
+
+    // Add reading progress
+    ReadProgressRepository::upsert(&db, admin_user.id, book.id, 5, false)
+        .await
+        .unwrap();
+
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth("/api/v1/books/in-progress?full=true", &token);
+    let (status, response): (StatusCode, Option<FullBookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let full_response = response.unwrap();
+    assert_eq!(full_response.data.len(), 1);
+    // Verify full response has metadata (field exists)
+    let _ = full_response.data[0].metadata.locks.summary_lock;
+}
+
+#[tokio::test]
+async fn test_filter_books_with_full() {
+    use codex::api::routes::v1::dto::book::FullBookListResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create two libraries
+    let library1 = LibraryRepository::create(&db, "Library 1", "/lib1", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let library2 = LibraryRepository::create(&db, "Library 2", "/lib2", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(&db, library1.id, "Series 1", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library2.id, "Series 2", None)
+        .await
+        .unwrap();
+
+    // Create books in each library
+    let book1 = create_test_book_model(
+        series1.id,
+        library1.id,
+        "/lib1/book1.cbz",
+        "book1.cbz",
+        None,
+    );
+    BookRepository::create(&db, &book1, None).await.unwrap();
+    let book2 = create_test_book_model(
+        series2.id,
+        library2.id,
+        "/lib2/book1.cbz",
+        "book1.cbz",
+        None,
+    );
+    BookRepository::create(&db, &book2, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Request with filter and full=true
+    let request = post_json_request_with_auth(
+        "/api/v1/books/list?full=true",
+        &serde_json::json!({
+            "condition": {
+                "libraryId": {
+                    "operator": "is",
+                    "value": library1.id.to_string()
+                }
+            }
+        }),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<FullBookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let full_response = response.unwrap();
+    assert_eq!(full_response.data.len(), 1);
+    assert_eq!(full_response.data[0].library_id, library1.id);
+}

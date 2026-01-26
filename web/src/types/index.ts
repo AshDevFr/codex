@@ -48,11 +48,21 @@ export type DetectedSeriesMetadata = Schemas["DetectedSeriesMetadataDto"];
 // Series types
 // =============================================================================
 export type Series = Schemas["SeriesDto"];
+/** Full series response including complete metadata, genres, tags, etc. */
+export type FullSeries = Schemas["FullSeriesResponse"];
+/** Full series metadata response with locks */
+export type FullSeriesMetadata = Schemas["FullSeriesMetadataResponse"];
+/** Series metadata with nested metadata and locks */
+export type SeriesFullMetadata = Schemas["SeriesFullMetadata"];
 
 // =============================================================================
 // Book types
 // =============================================================================
 export type Book = Schemas["BookDto"];
+/** Full book response including complete metadata with locks */
+export type FullBook = Schemas["FullBookResponse"];
+/** Book metadata with all fields and lock states */
+export type BookFullMetadata = Schemas["BookFullMetadata"];
 export type ReadProgress = Schemas["ReadProgressResponse"];
 
 // =============================================================================

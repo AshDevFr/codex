@@ -7,13 +7,14 @@ use super::super::dto::{
         AddSeriesGenreRequest, AddSeriesTagRequest, AlphabeticalGroupDto, AlternateTitleDto,
         AlternateTitleListResponse, CreateAlternateTitleRequest, CreateExternalLinkRequest,
         CreateExternalRatingRequest, ExternalLinkDto, ExternalLinkListResponse, ExternalRatingDto,
-        ExternalRatingListResponse, FullSeriesMetadataResponse, FullSeriesResponse, GenreDto,
-        GenreListResponse, MetadataLocks, PatchSeriesMetadataRequest, PatchSeriesRequest,
-        ReplaceSeriesMetadataRequest, SeriesAverageRatingResponse, SeriesCoverDto,
-        SeriesCoverListResponse, SeriesFullMetadata, SeriesMetadataResponse, SeriesSortParam,
-        SeriesUpdateResponse, SetSeriesGenresRequest, SetSeriesTagsRequest, SetUserRatingRequest,
-        TagDto, TagListResponse, TaxonomyCleanupResponse, UpdateAlternateTitleRequest,
-        UpdateMetadataLocksRequest, UserRatingsListResponse, UserSeriesRatingDto,
+        ExternalRatingListResponse, FullSeriesListResponse, FullSeriesMetadataResponse,
+        FullSeriesResponse, GenreDto, GenreListResponse, MetadataLocks, PatchSeriesMetadataRequest,
+        PatchSeriesRequest, ReplaceSeriesMetadataRequest, SeriesAverageRatingResponse,
+        SeriesCoverDto, SeriesCoverListResponse, SeriesFullMetadata, SeriesMetadataResponse,
+        SeriesSortParam, SeriesUpdateResponse, SetSeriesGenresRequest, SetSeriesTagsRequest,
+        SetUserRatingRequest, TagDto, TagListResponse, TaxonomyCleanupResponse,
+        UpdateAlternateTitleRequest, UpdateMetadataLocksRequest, UserRatingsListResponse,
+        UserSeriesRatingDto,
     },
     BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListRequest,
     SeriesListResponse,
@@ -39,7 +40,7 @@ use axum::{
     body::Body,
     extract::{Multipart, Path, Query, State},
     http::{header, HeaderMap, StatusCode},
-    response::Response,
+    response::{IntoResponse, Response},
     Json,
 };
 use chrono::Utc;
@@ -67,6 +68,11 @@ pub struct ListBooksQuery {
     /// Include deleted books in the result
     #[serde(default)]
     pub include_deleted: bool,
+
+    /// Return full data including metadata and locks.
+    /// Default is false for backward compatibility.
+    #[serde(default)]
+    pub full: bool,
 }
 
 fn default_page() -> u64 {
@@ -105,6 +111,11 @@ pub struct SeriesListQuery {
     /// Filter by library ID
     #[serde(default)]
     pub library_id: Option<Uuid>,
+
+    /// Return full series data including metadata, locks, genres, tags, alternate titles,
+    /// external ratings, and external links. Default is false for backward compatibility.
+    #[serde(default)]
+    pub full: bool,
 }
 
 /// Helper function to convert series model to DTO with unread count
@@ -175,13 +186,258 @@ async fn series_to_dto(
     })
 }
 
+/// Convert multiple series models to FullSeriesResponse DTOs using batched queries
+///
+/// This is much more efficient than calling series_to_dto + full data fetching N times
+/// because it uses IN clauses to batch all related data fetches.
+async fn series_to_full_dtos_batched(
+    db: &DatabaseConnection,
+    series_list: Vec<series::Model>,
+    user_id: Option<Uuid>,
+) -> Result<Vec<FullSeriesResponse>, ApiError> {
+    use std::collections::HashMap;
+
+    if series_list.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Collect all series IDs and unique library IDs
+    let series_ids: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
+    let library_ids: Vec<Uuid> = series_list
+        .iter()
+        .map(|s| s.library_id)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    // Fetch all related data in parallel using batched queries
+    let (
+        metadata_map,
+        book_counts_map,
+        unread_counts_map,
+        selected_covers_map,
+        custom_covers_map,
+        libraries_map,
+        genres_map,
+        tags_map,
+        alt_titles_map,
+        ext_ratings_map,
+        ext_links_map,
+    ) = tokio::join!(
+        SeriesMetadataRepository::get_by_series_ids(db, &series_ids),
+        SeriesRepository::get_book_counts_for_series_ids(db, &series_ids),
+        async {
+            if let Some(uid) = user_id {
+                BookRepository::count_unread_in_series_ids(db, &series_ids, uid).await
+            } else {
+                Ok(HashMap::new())
+            }
+        },
+        SeriesCoversRepository::get_selected_for_series_ids(db, &series_ids),
+        SeriesCoversRepository::has_custom_cover_for_series_ids(db, &series_ids),
+        LibraryRepository::get_by_ids(db, &library_ids),
+        GenreRepository::get_genres_for_series_ids(db, &series_ids),
+        TagRepository::get_tags_for_series_ids(db, &series_ids),
+        AlternateTitleRepository::get_for_series_ids(db, &series_ids),
+        ExternalRatingRepository::get_for_series_ids(db, &series_ids),
+        ExternalLinkRepository::get_for_series_ids(db, &series_ids),
+    );
+
+    // Handle errors
+    let metadata_map =
+        metadata_map.map_err(|e| ApiError::Internal(format!("Failed to fetch metadata: {}", e)))?;
+    let book_counts_map = book_counts_map
+        .map_err(|e| ApiError::Internal(format!("Failed to get book counts: {}", e)))?;
+    let unread_counts_map = unread_counts_map
+        .map_err(|e| ApiError::Internal(format!("Failed to count unread: {}", e)))?;
+    let selected_covers_map = selected_covers_map
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch covers: {}", e)))?;
+    let custom_covers_map = custom_covers_map
+        .map_err(|e| ApiError::Internal(format!("Failed to check custom covers: {}", e)))?;
+    let libraries_map = libraries_map
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch libraries: {}", e)))?;
+    let genres_map =
+        genres_map.map_err(|e| ApiError::Internal(format!("Failed to fetch genres: {}", e)))?;
+    let tags_map =
+        tags_map.map_err(|e| ApiError::Internal(format!("Failed to fetch tags: {}", e)))?;
+    let alt_titles_map = alt_titles_map
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch alternate titles: {}", e)))?;
+    let ext_ratings_map = ext_ratings_map
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch external ratings: {}", e)))?;
+    let ext_links_map = ext_links_map
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch external links: {}", e)))?;
+
+    // Build full responses
+    let mut results = Vec::with_capacity(series_list.len());
+
+    for series in series_list {
+        let series_id = series.id;
+
+        // Get metadata (required)
+        let metadata = metadata_map.get(&series_id).ok_or_else(|| {
+            ApiError::Internal(format!("Series metadata not found for {}", series_id))
+        })?;
+
+        // Get other data (with defaults)
+        let book_count = book_counts_map.get(&series_id).copied().unwrap_or(0);
+        let unread_count = unread_counts_map.get(&series_id).copied();
+        let selected_cover = selected_covers_map.get(&series_id);
+        let has_custom_cover = custom_covers_map.get(&series_id).copied().unwrap_or(false);
+        let library_name = libraries_map
+            .get(&series.library_id)
+            .map(|l| l.name.clone())
+            .unwrap_or_else(|| "Unknown Library".to_string());
+
+        // Convert genres to DTOs
+        let genre_dtos: Vec<GenreDto> = genres_map
+            .get(&series_id)
+            .map(|genres| {
+                genres
+                    .iter()
+                    .map(|g| GenreDto {
+                        id: g.id,
+                        name: g.name.clone(),
+                        series_count: None,
+                        created_at: g.created_at,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Convert tags to DTOs
+        let tag_dtos: Vec<TagDto> = tags_map
+            .get(&series_id)
+            .map(|tags| {
+                tags.iter()
+                    .map(|t| TagDto {
+                        id: t.id,
+                        name: t.name.clone(),
+                        series_count: None,
+                        created_at: t.created_at,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Convert alternate titles to DTOs
+        let alt_title_dtos: Vec<AlternateTitleDto> = alt_titles_map
+            .get(&series_id)
+            .map(|titles| {
+                titles
+                    .iter()
+                    .map(|at| AlternateTitleDto {
+                        id: at.id,
+                        series_id: at.series_id,
+                        label: at.label.clone(),
+                        title: at.title.clone(),
+                        created_at: at.created_at,
+                        updated_at: at.updated_at,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Convert external ratings to DTOs
+        let ext_rating_dtos: Vec<ExternalRatingDto> = ext_ratings_map
+            .get(&series_id)
+            .map(|ratings| {
+                use sea_orm::prelude::Decimal;
+                ratings
+                    .iter()
+                    .map(|er| ExternalRatingDto {
+                        id: er.id,
+                        series_id: er.series_id,
+                        source_name: er.source_name.clone(),
+                        rating: Decimal::to_string(&er.rating).parse::<f64>().unwrap_or(0.0),
+                        vote_count: er.vote_count,
+                        fetched_at: er.fetched_at,
+                        created_at: er.created_at,
+                        updated_at: er.updated_at,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Convert external links to DTOs
+        let ext_link_dtos: Vec<ExternalLinkDto> = ext_links_map
+            .get(&series_id)
+            .map(|links| {
+                links
+                    .iter()
+                    .map(|el| ExternalLinkDto {
+                        id: el.id,
+                        series_id: el.series_id,
+                        source_name: el.source_name.clone(),
+                        url: el.url.clone(),
+                        external_id: el.external_id.clone(),
+                        created_at: el.created_at,
+                        updated_at: el.updated_at,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        results.push(FullSeriesResponse {
+            id: series.id,
+            library_id: series.library_id,
+            library_name,
+            book_count,
+            unread_count,
+            path: Some(series.path),
+            selected_cover_source: selected_cover.map(|c| c.source.clone()),
+            has_custom_cover: Some(has_custom_cover),
+            metadata: SeriesFullMetadata {
+                title: metadata.title.clone(),
+                title_sort: metadata.title_sort.clone(),
+                summary: metadata.summary.clone(),
+                publisher: metadata.publisher.clone(),
+                imprint: metadata.imprint.clone(),
+                status: metadata.status.clone(),
+                age_rating: metadata.age_rating,
+                language: metadata.language.clone(),
+                reading_direction: metadata.reading_direction.clone(),
+                year: metadata.year,
+                total_book_count: metadata.total_book_count,
+                custom_metadata: parse_custom_metadata(metadata.custom_metadata.as_deref()),
+                locks: MetadataLocks {
+                    title: metadata.title_lock,
+                    title_sort: metadata.title_sort_lock,
+                    summary: metadata.summary_lock,
+                    publisher: metadata.publisher_lock,
+                    imprint: metadata.imprint_lock,
+                    status: metadata.status_lock,
+                    age_rating: metadata.age_rating_lock,
+                    language: metadata.language_lock,
+                    reading_direction: metadata.reading_direction_lock,
+                    year: metadata.year_lock,
+                    total_book_count: metadata.total_book_count_lock,
+                    genres: metadata.genres_lock,
+                    tags: metadata.tags_lock,
+                    custom_metadata: metadata.custom_metadata_lock,
+                },
+                created_at: metadata.created_at,
+                updated_at: metadata.updated_at,
+            },
+            genres: genre_dtos,
+            tags: tag_dtos,
+            alternate_titles: alt_title_dtos,
+            external_ratings: ext_rating_dtos,
+            external_links: ext_link_dtos,
+            created_at: series.created_at,
+            updated_at: series.updated_at,
+        });
+    }
+
+    Ok(results)
+}
+
 /// List series with optional library filter and pagination
 #[utoipa::path(
     get,
     path = "/api/v1/series",
     params(SeriesListQuery),
     responses(
-        (status = 200, description = "Paginated list of series", body = SeriesListResponse),
+        (status = 200, description = "Paginated list of series (returns FullSeriesListResponse when full=true)", body = SeriesListResponse),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -286,17 +542,6 @@ pub async fn list_series(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch sorted series: {}", e)))?;
 
-    let user_id = Some(auth.user_id);
-    let dtos: Vec<SeriesDto> = futures::future::join_all(
-        series_list
-            .into_iter()
-            .map(|series| series_to_dto(&state.db, series, user_id)),
-    )
-    .await
-    .into_iter()
-    .collect::<Result<Vec<_>, _>>()
-    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
-
     // Build pagination links
     let total_pages = if page_size == 0 {
         0
@@ -317,10 +562,43 @@ pub async fn list_series(
     if let Some(ref sort_str) = query.sort {
         link_builder = link_builder.with_param("sort", sort_str);
     }
+    if query.full {
+        link_builder = link_builder.with_param("full", "true");
+    }
 
-    let response = SeriesListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+    // Build response based on full parameter
+    if query.full {
+        let full_dtos =
+            series_to_full_dtos_batched(&state.db, series_list, Some(auth.user_id)).await?;
+        let response =
+            FullSeriesListResponse::with_builder(full_dtos, page, page_size, total, &link_builder);
+        Ok(paginated_response(response, &link_builder))
+    } else {
+        let user_id = Some(auth.user_id);
+        let dtos: Vec<SeriesDto> = futures::future::join_all(
+            series_list
+                .into_iter()
+                .map(|series| series_to_dto(&state.db, series, user_id)),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
-    Ok(paginated_response(response, &link_builder))
+        let response =
+            SeriesListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+        Ok(paginated_response(response, &link_builder))
+    }
+}
+
+/// Query parameters for getting a single series
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
+pub struct SeriesGetQuery {
+    /// Return full series data including metadata, locks, genres, tags, etc.
+    #[serde(default)]
+    pub full: bool,
 }
 
 /// Get series by ID
@@ -328,10 +606,11 @@ pub async fn list_series(
     get,
     path = "/api/v1/series/{series_id}",
     params(
-        ("series_id" = Uuid, Path, description = "Series ID")
+        ("series_id" = Uuid, Path, description = "Series ID"),
+        SeriesGetQuery,
     ),
     responses(
-        (status = 200, description = "Series details", body = SeriesDto),
+        (status = 200, description = "Series details (returns FullSeriesResponse when full=true)", body = SeriesDto),
         (status = 404, description = "Series not found"),
     ),
     security(
@@ -344,7 +623,8 @@ pub async fn get_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
-) -> Result<Json<SeriesDto>, ApiError> {
+    Query(query): Query<SeriesGetQuery>,
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -361,10 +641,19 @@ pub async fn get_series(
         return Err(ApiError::NotFound("Series not found".to_string()));
     }
 
-    let user_id = Some(auth.user_id);
-    let dto = series_to_dto(&state.db, series, user_id).await?;
-
-    Ok(Json(dto))
+    if query.full {
+        let full_dtos =
+            series_to_full_dtos_batched(&state.db, vec![series], Some(auth.user_id)).await?;
+        let full_dto = full_dtos
+            .into_iter()
+            .next()
+            .ok_or_else(|| ApiError::Internal("Failed to build full series DTO".to_string()))?;
+        Ok(Json(full_dto).into_response())
+    } else {
+        let user_id = Some(auth.user_id);
+        let dto = series_to_dto(&state.db, series, user_id).await?;
+        Ok(Json(dto).into_response())
+    }
 }
 
 /// Update series core fields (name/title)
@@ -509,7 +798,7 @@ pub async fn patch_series(
     path = "/api/v1/series/search",
     request_body = SearchSeriesRequest,
     responses(
-        (status = 200, description = "Search results", body = Vec<SeriesDto>),
+        (status = 200, description = "Search results (returns Vec<FullSeriesResponse> when full=true)", body = Vec<SeriesDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -522,7 +811,7 @@ pub async fn search_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Json(request): Json<SearchSeriesRequest>,
-) -> Result<Json<Vec<SeriesDto>>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
     let series_list = SeriesRepository::search_by_name(&state.db, &request.query)
@@ -549,18 +838,25 @@ pub async fn search_series(
         })
         .collect();
 
-    let user_id = Some(auth.user_id);
-    let dtos: Vec<SeriesDto> = futures::future::join_all(
-        filtered
-            .into_iter()
-            .map(|series| series_to_dto(&state.db, series, user_id)),
-    )
-    .await
-    .into_iter()
-    .collect::<Result<Vec<_>, _>>()
-    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+    // Build response based on full parameter
+    if request.full {
+        let full_dtos =
+            series_to_full_dtos_batched(&state.db, filtered, Some(auth.user_id)).await?;
+        Ok(Json(full_dtos).into_response())
+    } else {
+        let user_id = Some(auth.user_id);
+        let dtos: Vec<SeriesDto> = futures::future::join_all(
+            filtered
+                .into_iter()
+                .map(|series| series_to_dto(&state.db, series, user_id)),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
-    Ok(Json(dtos))
+        Ok(Json(dtos).into_response())
+    }
 }
 
 /// List series with advanced filtering
@@ -576,7 +872,7 @@ pub async fn search_series(
     params(ListPaginationParams),
     request_body = SeriesListRequest,
     responses(
-        (status = 200, description = "Paginated list of filtered series", body = SeriesListResponse),
+        (status = 200, description = "Paginated list of filtered series (returns FullSeriesListResponse when full=true)", body = SeriesListResponse),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -672,18 +968,6 @@ pub async fn list_series_filtered(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch sorted series: {}", e)))?;
 
-    // Convert to DTOs
-    let user_id = Some(auth.user_id);
-    let dtos: Vec<SeriesDto> = futures::future::join_all(
-        series_list
-            .into_iter()
-            .map(|series| series_to_dto(&state.db, series, user_id)),
-    )
-    .await
-    .into_iter()
-    .collect::<Result<Vec<_>, _>>()
-    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
-
     // Build pagination links with query params
     let total_pages = if page_size == 0 {
         0
@@ -695,10 +979,33 @@ pub async fn list_series_filtered(
     if let Some(ref sort_str) = pagination.sort {
         link_builder = link_builder.with_param("sort", sort_str);
     }
+    if pagination.full {
+        link_builder = link_builder.with_param("full", "true");
+    }
 
-    let response = SeriesListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+    // Build response based on full parameter
+    if pagination.full {
+        let full_dtos =
+            series_to_full_dtos_batched(&state.db, series_list, Some(auth.user_id)).await?;
+        let response =
+            FullSeriesListResponse::with_builder(full_dtos, page, page_size, total, &link_builder);
+        Ok(paginated_response(response, &link_builder))
+    } else {
+        let user_id = Some(auth.user_id);
+        let dtos: Vec<SeriesDto> = futures::future::join_all(
+            series_list
+                .into_iter()
+                .map(|series| series_to_dto(&state.db, series, user_id)),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
-    Ok(paginated_response(response, &link_builder))
+        let response =
+            SeriesListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+        Ok(paginated_response(response, &link_builder))
+    }
 }
 
 /// Get alphabetical groups for series
@@ -818,7 +1125,7 @@ pub async fn list_series_alphabetical_groups(
         ListBooksQuery
     ),
     responses(
-        (status = 200, description = "List of books in the series", body = Vec<BookDto>),
+        (status = 200, description = "List of books in the series (returns Vec<FullBookResponse> when full=true)", body = Vec<BookDto>),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Series not found"),
     ),
@@ -833,7 +1140,7 @@ pub async fn get_series_books(
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
     Query(query): Query<ListBooksQuery>,
-) -> Result<Json<Vec<BookDto>>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
     // Verify series exists
@@ -847,10 +1154,15 @@ pub async fn get_series_books(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?;
 
-    // Convert to DTOs using helper function
-    let dtos = super::books::books_to_dtos(&state.db, auth.user_id, books).await?;
-
-    Ok(Json(dtos))
+    // Return full or basic response based on the full parameter
+    if query.full {
+        let full_dtos =
+            super::books::books_to_full_dtos_batched(&state.db, auth.user_id, books).await?;
+        Ok(Json(full_dtos).into_response())
+    } else {
+        let dtos = super::books::books_to_dtos(&state.db, auth.user_id, books).await?;
+        Ok(Json(dtos).into_response())
+    }
 }
 
 /// Purge deleted books from a series
@@ -1298,6 +1610,10 @@ pub struct InProgressSeriesQuery {
     /// Filter by library ID (optional)
     #[serde(default)]
     pub library_id: Option<Uuid>,
+
+    /// Return full series data including metadata, locks, genres, tags, etc.
+    #[serde(default)]
+    pub full: bool,
 }
 
 /// List series with in-progress books (series that have at least one book with reading progress that is not completed)
@@ -1306,7 +1622,7 @@ pub struct InProgressSeriesQuery {
     path = "/api/v1/series/in-progress",
     params(InProgressSeriesQuery),
     responses(
-        (status = 200, description = "List of in-progress series", body = Vec<SeriesDto>),
+        (status = 200, description = "List of in-progress series (returns Vec<FullSeriesResponse> when full=true)", body = Vec<SeriesDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -1319,7 +1635,7 @@ pub async fn list_in_progress_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Query(query): Query<InProgressSeriesQuery>,
-) -> Result<Json<Vec<SeriesDto>>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
     // Fetch in-progress series for the current user
@@ -1337,18 +1653,25 @@ pub async fn list_in_progress_series(
         .filter(|s| content_filter.is_series_visible(s.id))
         .collect();
 
-    let user_id = Some(auth.user_id);
-    let dtos: Vec<SeriesDto> = futures::future::join_all(
-        series_list
-            .into_iter()
-            .map(|series| series_to_dto(&state.db, series, user_id)),
-    )
-    .await
-    .into_iter()
-    .collect::<Result<Vec<_>, _>>()
-    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+    // Build response based on full parameter
+    if query.full {
+        let full_dtos =
+            series_to_full_dtos_batched(&state.db, series_list, Some(auth.user_id)).await?;
+        Ok(Json(full_dtos).into_response())
+    } else {
+        let user_id = Some(auth.user_id);
+        let dtos: Vec<SeriesDto> = futures::future::join_all(
+            series_list
+                .into_iter()
+                .map(|series| series_to_dto(&state.db, series, user_id)),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
-    Ok(Json(dtos))
+        Ok(Json(dtos).into_response())
+    }
 }
 
 /// Query parameters for recently added/updated series
@@ -1363,6 +1686,10 @@ pub struct RecentSeriesQuery {
     /// Filter by library ID (optional)
     #[serde(default)]
     pub library_id: Option<Uuid>,
+
+    /// Return full series data including metadata, locks, genres, tags, etc.
+    #[serde(default)]
+    pub full: bool,
 }
 
 fn default_recent_limit() -> u64 {
@@ -1375,7 +1702,7 @@ fn default_recent_limit() -> u64 {
     path = "/api/v1/series/recently-added",
     params(RecentSeriesQuery),
     responses(
-        (status = 200, description = "List of recently added series", body = Vec<SeriesDto>),
+        (status = 200, description = "List of recently added series (returns Vec<FullSeriesResponse> when full=true)", body = Vec<SeriesDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -1388,7 +1715,7 @@ pub async fn list_recently_added_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Query(query): Query<RecentSeriesQuery>,
-) -> Result<Json<Vec<SeriesDto>>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
     let series_list =
@@ -1408,18 +1735,25 @@ pub async fn list_recently_added_series(
         .filter(|s| content_filter.is_series_visible(s.id))
         .collect();
 
-    let user_id = Some(auth.user_id);
-    let dtos: Vec<SeriesDto> = futures::future::join_all(
-        series_list
-            .into_iter()
-            .map(|series| series_to_dto(&state.db, series, user_id)),
-    )
-    .await
-    .into_iter()
-    .collect::<Result<Vec<_>, _>>()
-    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+    // Build response based on full parameter
+    if query.full {
+        let full_dtos =
+            series_to_full_dtos_batched(&state.db, series_list, Some(auth.user_id)).await?;
+        Ok(Json(full_dtos).into_response())
+    } else {
+        let user_id = Some(auth.user_id);
+        let dtos: Vec<SeriesDto> = futures::future::join_all(
+            series_list
+                .into_iter()
+                .map(|series| series_to_dto(&state.db, series, user_id)),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
-    Ok(Json(dtos))
+        Ok(Json(dtos).into_response())
+    }
 }
 
 /// List recently added series in a specific library
@@ -1428,10 +1762,10 @@ pub async fn list_recently_added_series(
     path = "/api/v1/libraries/{library_id}/series/recently-added",
     params(
         ("library_id" = Uuid, Path, description = "Library ID"),
-        ("limit" = Option<u64>, Query, description = "Maximum number of series to return (default: 50)")
+        RecentSeriesQuery,
     ),
     responses(
-        (status = 200, description = "List of recently added series in library", body = Vec<SeriesDto>),
+        (status = 200, description = "List of recently added series in library (returns Vec<FullSeriesResponse> when full=true)", body = Vec<SeriesDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -1445,7 +1779,7 @@ pub async fn list_library_recently_added_series(
     auth: AuthContext,
     Path(library_id): Path<Uuid>,
     Query(query): Query<RecentSeriesQuery>,
-) -> Result<Json<Vec<SeriesDto>>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
     let series_list =
@@ -1465,18 +1799,25 @@ pub async fn list_library_recently_added_series(
         .filter(|s| content_filter.is_series_visible(s.id))
         .collect();
 
-    let user_id = Some(auth.user_id);
-    let dtos: Vec<SeriesDto> = futures::future::join_all(
-        series_list
-            .into_iter()
-            .map(|series| series_to_dto(&state.db, series, user_id)),
-    )
-    .await
-    .into_iter()
-    .collect::<Result<Vec<_>, _>>()
-    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+    // Build response based on full parameter
+    if query.full {
+        let full_dtos =
+            series_to_full_dtos_batched(&state.db, series_list, Some(auth.user_id)).await?;
+        Ok(Json(full_dtos).into_response())
+    } else {
+        let user_id = Some(auth.user_id);
+        let dtos: Vec<SeriesDto> = futures::future::join_all(
+            series_list
+                .into_iter()
+                .map(|series| series_to_dto(&state.db, series, user_id)),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
-    Ok(Json(dtos))
+        Ok(Json(dtos).into_response())
+    }
 }
 
 /// List recently updated series
@@ -1485,7 +1826,7 @@ pub async fn list_library_recently_added_series(
     path = "/api/v1/series/recently-updated",
     params(RecentSeriesQuery),
     responses(
-        (status = 200, description = "List of recently updated series", body = Vec<SeriesDto>),
+        (status = 200, description = "List of recently updated series (returns Vec<FullSeriesResponse> when full=true)", body = Vec<SeriesDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -1498,7 +1839,7 @@ pub async fn list_recently_updated_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Query(query): Query<RecentSeriesQuery>,
-) -> Result<Json<Vec<SeriesDto>>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
     let series_list =
@@ -1518,18 +1859,24 @@ pub async fn list_recently_updated_series(
         .filter(|s| content_filter.is_series_visible(s.id))
         .collect();
 
-    let user_id = Some(auth.user_id);
-    let dtos: Vec<SeriesDto> = futures::future::join_all(
-        series_list
-            .into_iter()
-            .map(|series| series_to_dto(&state.db, series, user_id)),
-    )
-    .await
-    .into_iter()
-    .collect::<Result<Vec<_>, _>>()
-    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+    if query.full {
+        let full_dtos =
+            series_to_full_dtos_batched(&state.db, series_list, Some(auth.user_id)).await?;
+        Ok(Json(full_dtos).into_response())
+    } else {
+        let user_id = Some(auth.user_id);
+        let dtos: Vec<SeriesDto> = futures::future::join_all(
+            series_list
+                .into_iter()
+                .map(|series| series_to_dto(&state.db, series, user_id)),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
-    Ok(Json(dtos))
+        Ok(Json(dtos).into_response())
+    }
 }
 
 /// List recently updated series in a specific library
@@ -1538,10 +1885,10 @@ pub async fn list_recently_updated_series(
     path = "/api/v1/libraries/{library_id}/series/recently-updated",
     params(
         ("library_id" = Uuid, Path, description = "Library ID"),
-        ("limit" = Option<u64>, Query, description = "Maximum number of series to return (default: 50)")
+        RecentSeriesQuery
     ),
     responses(
-        (status = 200, description = "List of recently updated series in library", body = Vec<SeriesDto>),
+        (status = 200, description = "List of recently updated series in library (returns Vec<FullSeriesResponse> when full=true)", body = Vec<SeriesDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -1555,7 +1902,7 @@ pub async fn list_library_recently_updated_series(
     auth: AuthContext,
     Path(library_id): Path<Uuid>,
     Query(query): Query<RecentSeriesQuery>,
-) -> Result<Json<Vec<SeriesDto>>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
     let series_list =
@@ -1575,18 +1922,24 @@ pub async fn list_library_recently_updated_series(
         .filter(|s| content_filter.is_series_visible(s.id))
         .collect();
 
-    let user_id = Some(auth.user_id);
-    let dtos: Vec<SeriesDto> = futures::future::join_all(
-        series_list
-            .into_iter()
-            .map(|series| series_to_dto(&state.db, series, user_id)),
-    )
-    .await
-    .into_iter()
-    .collect::<Result<Vec<_>, _>>()
-    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+    if query.full {
+        let full_dtos =
+            series_to_full_dtos_batched(&state.db, series_list, Some(auth.user_id)).await?;
+        Ok(Json(full_dtos).into_response())
+    } else {
+        let user_id = Some(auth.user_id);
+        let dtos: Vec<SeriesDto> = futures::future::join_all(
+            series_list
+                .into_iter()
+                .map(|series| series_to_dto(&state.db, series, user_id)),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
-    Ok(Json(dtos))
+        Ok(Json(dtos).into_response())
+    }
 }
 
 /// List series in a specific library with pagination
@@ -1598,7 +1951,7 @@ pub async fn list_library_recently_updated_series(
         SeriesListQuery
     ),
     responses(
-        (status = 200, description = "Paginated list of series in library", body = SeriesListResponse),
+        (status = 200, description = "Paginated list of series in library (returns FullSeriesListResponse when full=true)", body = SeriesListResponse),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -1664,18 +2017,6 @@ pub async fn list_library_series(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch sorted series: {}", e)))?;
 
-    // Convert to DTOs
-    let user_id = Some(auth.user_id);
-    let dtos: Vec<SeriesDto> = futures::future::join_all(
-        series_list
-            .into_iter()
-            .map(|series| series_to_dto(&state.db, series, user_id)),
-    )
-    .await
-    .into_iter()
-    .collect::<Result<Vec<_>, _>>()
-    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
-
     // Build pagination links
     let total_pages = if page_size == 0 {
         0
@@ -1689,9 +2030,38 @@ pub async fn list_library_series(
         total_pages,
     );
 
-    let response = SeriesListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+    if query.full {
+        let full_dtos =
+            series_to_full_dtos_batched(&state.db, series_list, Some(auth.user_id)).await?;
+        let response =
+            FullSeriesListResponse::with_builder(full_dtos, page, page_size, total, &link_builder);
+        Ok(paginated_response(response, &link_builder))
+    } else {
+        let user_id = Some(auth.user_id);
+        let dtos: Vec<SeriesDto> = futures::future::join_all(
+            series_list
+                .into_iter()
+                .map(|series| series_to_dto(&state.db, series, user_id)),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
-    Ok(paginated_response(response, &link_builder))
+        let response =
+            SeriesListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+        Ok(paginated_response(response, &link_builder))
+    }
+}
+
+/// Query parameters for library-scoped in-progress series
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
+pub struct LibraryInProgressSeriesQuery {
+    /// Return full series data including metadata, locks, genres, tags, etc.
+    #[serde(default)]
+    pub full: bool,
 }
 
 /// List in-progress series in a specific library
@@ -1699,10 +2069,11 @@ pub async fn list_library_series(
     get,
     path = "/api/v1/libraries/{library_id}/series/in-progress",
     params(
-        ("library_id" = Uuid, Path, description = "Library ID")
+        ("library_id" = Uuid, Path, description = "Library ID"),
+        LibraryInProgressSeriesQuery
     ),
     responses(
-        (status = 200, description = "List of in-progress series in library", body = Vec<SeriesDto>),
+        (status = 200, description = "List of in-progress series in library (returns Vec<FullSeriesResponse> when full=true)", body = Vec<SeriesDto>),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -1715,7 +2086,8 @@ pub async fn list_library_in_progress_series(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Path(library_id): Path<Uuid>,
-) -> Result<Json<Vec<SeriesDto>>, ApiError> {
+    Query(query): Query<LibraryInProgressSeriesQuery>,
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
     // Fetch in-progress series for the current user in this library
@@ -1733,18 +2105,24 @@ pub async fn list_library_in_progress_series(
         .filter(|s| content_filter.is_series_visible(s.id))
         .collect();
 
-    let user_id = Some(auth.user_id);
-    let dtos: Vec<SeriesDto> = futures::future::join_all(
-        series_list
-            .into_iter()
-            .map(|series| series_to_dto(&state.db, series, user_id)),
-    )
-    .await
-    .into_iter()
-    .collect::<Result<Vec<_>, _>>()
-    .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
+    if query.full {
+        let full_dtos =
+            series_to_full_dtos_batched(&state.db, series_list, Some(auth.user_id)).await?;
+        Ok(Json(full_dtos).into_response())
+    } else {
+        let user_id = Some(auth.user_id);
+        let dtos: Vec<SeriesDto> = futures::future::join_all(
+            series_list
+                .into_iter()
+                .map(|series| series_to_dto(&state.db, series, user_id)),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
 
-    Ok(Json(dtos))
+        Ok(Json(dtos).into_response())
+    }
 }
 
 /// Request to select which cover source to use
@@ -2265,18 +2643,18 @@ pub async fn patch_series_metadata(
     }))
 }
 
-/// Get full series metadata including all related data
+/// Get series metadata including all related data
 ///
 /// Returns comprehensive metadata with lock states, genres, tags, alternate titles,
 /// external ratings, and external links.
 #[utoipa::path(
     get,
-    path = "/api/v1/series/{series_id}/metadata/full",
+    path = "/api/v1/series/{series_id}/metadata",
     params(
         ("series_id" = Uuid, Path, description = "Series ID")
     ),
     responses(
-        (status = 200, description = "Full series metadata with all related data", body = FullSeriesMetadataResponse),
+        (status = 200, description = "Series metadata with all related data", body = FullSeriesMetadataResponse),
         (status = 404, description = "Series not found"),
         (status = 403, description = "Forbidden"),
     ),
@@ -2286,7 +2664,7 @@ pub async fn patch_series_metadata(
     ),
     tag = "Series"
 )]
-pub async fn get_full_series_metadata(
+pub async fn get_series_metadata(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Path(series_id): Path<Uuid>,
@@ -2425,220 +2803,6 @@ pub async fn get_full_series_metadata(
         external_links: ext_link_dtos,
         created_at: metadata.created_at,
         updated_at: metadata.updated_at,
-    }))
-}
-
-/// Get full series data with complete metadata
-///
-/// Returns series information combined with full metadata, genres, tags,
-/// alternate titles, external ratings, and external links in a single response.
-#[utoipa::path(
-    get,
-    path = "/api/v1/series/{series_id}/full",
-    params(
-        ("series_id" = Uuid, Path, description = "Series ID")
-    ),
-    responses(
-        (status = 200, description = "Full series data with metadata", body = FullSeriesResponse),
-        (status = 404, description = "Series not found"),
-        (status = 403, description = "Forbidden"),
-    ),
-    security(
-        ("jwt_bearer" = []),
-        ("api_key" = [])
-    ),
-    tag = "Series"
-)]
-pub async fn get_full_series(
-    State(state): State<Arc<AuthState>>,
-    auth: AuthContext,
-    Path(series_id): Path<Uuid>,
-) -> Result<Json<FullSeriesResponse>, ApiError> {
-    require_permission!(auth, Permission::SeriesRead)?;
-
-    // Fetch series and verify it exists
-    let series = SeriesRepository::get_by_id(&state.db, series_id)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
-        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
-
-    // Fetch all data in parallel
-    let (
-        metadata_result,
-        book_count_result,
-        unread_count_result,
-        cover_result,
-        has_custom_result,
-        library_result,
-        genres_result,
-        tags_result,
-        alt_titles_result,
-        ext_ratings_result,
-        ext_links_result,
-    ) = tokio::join!(
-        SeriesMetadataRepository::get_by_series_id(&state.db, series_id),
-        SeriesRepository::get_book_count(&state.db, series_id),
-        BookRepository::count_unread_in_series(&state.db, series_id, auth.user_id),
-        SeriesCoversRepository::get_selected(&state.db, series_id),
-        SeriesCoversRepository::has_custom_cover(&state.db, series_id),
-        LibraryRepository::get_by_id(&state.db, series.library_id),
-        GenreRepository::get_genres_for_series(&state.db, series_id),
-        TagRepository::get_tags_for_series(&state.db, series_id),
-        AlternateTitleRepository::get_for_series(&state.db, series_id),
-        ExternalRatingRepository::get_for_series(&state.db, series_id),
-        ExternalLinkRepository::get_for_series(&state.db, series_id),
-    );
-
-    // Handle errors and extract values
-    let metadata = metadata_result
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch metadata: {}", e)))?
-        .ok_or_else(|| ApiError::Internal("Series metadata not found".to_string()))?;
-
-    let book_count = book_count_result
-        .map_err(|e| ApiError::Internal(format!("Failed to get book count: {}", e)))?;
-
-    let unread_count = unread_count_result
-        .map_err(|e| ApiError::Internal(format!("Failed to count unread: {}", e)))?;
-
-    let selected_cover =
-        cover_result.map_err(|e| ApiError::Internal(format!("Failed to fetch cover: {}", e)))?;
-
-    let has_custom_cover = has_custom_result
-        .map_err(|e| ApiError::Internal(format!("Failed to check custom cover: {}", e)))?;
-
-    let library = library_result
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch library: {}", e)))?;
-
-    let genres =
-        genres_result.map_err(|e| ApiError::Internal(format!("Failed to fetch genres: {}", e)))?;
-
-    let tags =
-        tags_result.map_err(|e| ApiError::Internal(format!("Failed to fetch tags: {}", e)))?;
-
-    let alt_titles = alt_titles_result
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch alternate titles: {}", e)))?;
-
-    let ext_ratings = ext_ratings_result
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch external ratings: {}", e)))?;
-
-    let ext_links = ext_links_result
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch external links: {}", e)))?;
-
-    // Convert to DTOs
-    let genre_dtos: Vec<GenreDto> = genres
-        .into_iter()
-        .map(|g| GenreDto {
-            id: g.id,
-            name: g.name,
-            series_count: None,
-            created_at: g.created_at,
-        })
-        .collect();
-
-    let tag_dtos: Vec<TagDto> = tags
-        .into_iter()
-        .map(|t| TagDto {
-            id: t.id,
-            name: t.name,
-            series_count: None,
-            created_at: t.created_at,
-        })
-        .collect();
-
-    let alt_title_dtos: Vec<AlternateTitleDto> = alt_titles
-        .into_iter()
-        .map(|at| AlternateTitleDto {
-            id: at.id,
-            series_id: at.series_id,
-            label: at.label,
-            title: at.title,
-            created_at: at.created_at,
-            updated_at: at.updated_at,
-        })
-        .collect();
-
-    let ext_rating_dtos: Vec<ExternalRatingDto> = ext_ratings
-        .into_iter()
-        .map(|er| {
-            use sea_orm::prelude::Decimal;
-            ExternalRatingDto {
-                id: er.id,
-                series_id: er.series_id,
-                source_name: er.source_name,
-                rating: Decimal::to_string(&er.rating).parse::<f64>().unwrap_or(0.0),
-                vote_count: er.vote_count,
-                fetched_at: er.fetched_at,
-                created_at: er.created_at,
-                updated_at: er.updated_at,
-            }
-        })
-        .collect();
-
-    let ext_link_dtos: Vec<ExternalLinkDto> = ext_links
-        .into_iter()
-        .map(|el| ExternalLinkDto {
-            id: el.id,
-            series_id: el.series_id,
-            source_name: el.source_name,
-            url: el.url,
-            external_id: el.external_id,
-            created_at: el.created_at,
-            updated_at: el.updated_at,
-        })
-        .collect();
-
-    let library_name = library
-        .map(|l| l.name)
-        .unwrap_or_else(|| "Unknown Library".to_string());
-
-    Ok(Json(FullSeriesResponse {
-        id: series.id,
-        library_id: series.library_id,
-        library_name,
-        book_count,
-        unread_count: Some(unread_count),
-        path: Some(series.path),
-        selected_cover_source: selected_cover.map(|c| c.source),
-        has_custom_cover: Some(has_custom_cover),
-        metadata: SeriesFullMetadata {
-            title: metadata.title,
-            title_sort: metadata.title_sort,
-            summary: metadata.summary,
-            publisher: metadata.publisher,
-            imprint: metadata.imprint,
-            status: metadata.status,
-            age_rating: metadata.age_rating,
-            language: metadata.language,
-            reading_direction: metadata.reading_direction,
-            year: metadata.year,
-            total_book_count: metadata.total_book_count,
-            custom_metadata: parse_custom_metadata(metadata.custom_metadata.as_deref()),
-            locks: MetadataLocks {
-                title: metadata.title_lock,
-                title_sort: metadata.title_sort_lock,
-                summary: metadata.summary_lock,
-                publisher: metadata.publisher_lock,
-                imprint: metadata.imprint_lock,
-                status: metadata.status_lock,
-                age_rating: metadata.age_rating_lock,
-                language: metadata.language_lock,
-                reading_direction: metadata.reading_direction_lock,
-                year: metadata.year_lock,
-                total_book_count: metadata.total_book_count_lock,
-                genres: metadata.genres_lock,
-                tags: metadata.tags_lock,
-                custom_metadata: metadata.custom_metadata_lock,
-            },
-            created_at: metadata.created_at,
-            updated_at: metadata.updated_at,
-        },
-        genres: genre_dtos,
-        tags: tag_dtos,
-        alternate_titles: alt_title_dtos,
-        external_ratings: ext_rating_dtos,
-        external_links: ext_link_dtos,
-        created_at: series.created_at,
-        updated_at: series.updated_at,
     }))
 }
 

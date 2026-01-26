@@ -204,7 +204,7 @@ describe("seriesApi", () => {
 		it("should fetch recently added series with custom limit", async () => {
 			vi.mocked(api.get).mockResolvedValueOnce({ data: [] });
 
-			await seriesApi.getRecentlyAdded("all", 10);
+			await seriesApi.getRecentlyAdded("all", { limit: 10 });
 
 			expect(api.get).toHaveBeenCalledWith("/series/recently-added?limit=10");
 		});
@@ -227,7 +227,7 @@ describe("seriesApi", () => {
 		it("should fetch recently updated series with custom limit", async () => {
 			vi.mocked(api.get).mockResolvedValueOnce({ data: [] });
 
-			await seriesApi.getRecentlyUpdated("all", 25);
+			await seriesApi.getRecentlyUpdated("all", { limit: 25 });
 
 			expect(api.get).toHaveBeenCalledWith("/series/recently-updated?limit=25");
 		});

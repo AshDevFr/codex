@@ -603,7 +603,7 @@ pub struct BookMetadataResponse {
 ///
 /// Indicates which metadata fields are locked (protected from automatic updates).
 /// When a field is locked, the scanner will not overwrite user-edited values.
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BookMetadataLocks {
     /// Whether summary is locked
@@ -994,4 +994,240 @@ pub struct RetryErrorsResponse {
     /// Message describing what was done
     #[schema(example = "Enqueued 5 analysis tasks")]
     pub message: String,
+}
+
+// ============================================================================
+// Full Book Response (with metadata and locks)
+// ============================================================================
+
+/// Book full list response (with metadata and locks)
+pub type FullBookListResponse = PaginatedResponse<FullBookResponse>;
+
+/// Full book metadata including all fields and their lock states
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BookFullMetadata {
+    /// Book title from metadata
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Batman: Year One #1")]
+    pub title: Option<String>,
+
+    /// Sort title for ordering
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "batman year one 001")]
+    pub title_sort: Option<String>,
+
+    /// Chapter/book number
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "1")]
+    pub number: Option<String>,
+
+    /// Book summary/description
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Bruce Wayne returns to Gotham City after years abroad.")]
+    pub summary: Option<String>,
+
+    /// Writer(s)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Frank Miller")]
+    pub writer: Option<String>,
+
+    /// Penciller(s)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "David Mazzucchelli")]
+    pub penciller: Option<String>,
+
+    /// Inker(s)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "David Mazzucchelli")]
+    pub inker: Option<String>,
+
+    /// Colorist(s)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Richmond Lewis")]
+    pub colorist: Option<String>,
+
+    /// Letterer(s)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Todd Klein")]
+    pub letterer: Option<String>,
+
+    /// Cover artist(s)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "David Mazzucchelli")]
+    pub cover_artist: Option<String>,
+
+    /// Editor(s)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Dennis O'Neil")]
+    pub editor: Option<String>,
+
+    /// Publisher name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "DC Comics")]
+    pub publisher: Option<String>,
+
+    /// Imprint name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "DC Black Label")]
+    pub imprint: Option<String>,
+
+    /// Genre
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Superhero")]
+    pub genre: Option<String>,
+
+    /// Web URL
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "https://dc.com/batman-year-one")]
+    pub web: Option<String>,
+
+    /// ISO language code
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "en")]
+    pub language_iso: Option<String>,
+
+    /// Format details
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Trade Paperback")]
+    pub format_detail: Option<String>,
+
+    /// Whether the book is black and white
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = false)]
+    pub black_and_white: Option<bool>,
+
+    /// Whether the book is manga format
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = false)]
+    pub manga: Option<bool>,
+
+    /// Publication year
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 1987)]
+    pub year: Option<i32>,
+
+    /// Publication month (1-12)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 2)]
+    pub month: Option<i32>,
+
+    /// Publication day (1-31)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 1)]
+    pub day: Option<i32>,
+
+    /// Volume number
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 1)]
+    pub volume: Option<i32>,
+
+    /// Total count in series
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 4)]
+    pub count: Option<i32>,
+
+    /// ISBN(s)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "978-1401207526")]
+    pub isbns: Option<String>,
+
+    /// Lock states for all metadata fields
+    pub locks: BookMetadataLocks,
+
+    /// When the metadata was created
+    #[schema(example = "2024-01-01T00:00:00Z")]
+    pub created_at: DateTime<Utc>,
+
+    /// When the metadata was last updated
+    #[schema(example = "2024-01-15T10:30:00Z")]
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Full book response including book data and complete metadata with locks
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FullBookResponse {
+    /// Book unique identifier
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440001")]
+    pub id: uuid::Uuid,
+
+    /// Library this book belongs to
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
+    pub library_id: uuid::Uuid,
+
+    /// Name of the library
+    #[schema(example = "Comics")]
+    pub library_name: String,
+
+    /// Series this book belongs to
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]
+    pub series_id: uuid::Uuid,
+
+    /// Name of the series
+    #[schema(example = "Batman: Year One")]
+    pub series_name: String,
+
+    /// Book title (display name)
+    #[schema(example = "Batman: Year One #1")]
+    pub title: String,
+
+    /// Title used for sorting
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "batman year one 001")]
+    pub title_sort: Option<String>,
+
+    /// Filesystem path to the book file
+    #[schema(example = "/media/comics/Batman/Batman - Year One 001.cbz")]
+    pub file_path: String,
+
+    /// File format (cbz, cbr, epub, pdf)
+    #[schema(example = "cbz")]
+    pub file_format: String,
+
+    /// File size in bytes
+    #[schema(example = 52428800)]
+    pub file_size: i64,
+
+    /// File hash for deduplication
+    #[schema(example = "a1b2c3d4e5f6g7h8i9j0")]
+    pub file_hash: String,
+
+    /// Number of pages in the book
+    #[schema(example = 32)]
+    pub page_count: i32,
+
+    /// Book number within the series
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 1)]
+    pub number: Option<i32>,
+
+    /// Whether the book has been soft-deleted
+    #[schema(example = false)]
+    pub deleted: bool,
+
+    /// Error message if book analysis failed
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Failed to parse CBZ: invalid archive")]
+    pub analysis_error: Option<String>,
+
+    /// Effective reading direction (from series metadata, or library default)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "ltr")]
+    pub reading_direction: Option<String>,
+
+    /// User's read progress for this book
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub read_progress: Option<ReadProgressResponse>,
+
+    /// Complete book metadata with lock states
+    pub metadata: BookFullMetadata,
+
+    /// When the book was added to the library
+    #[schema(example = "2024-01-01T00:00:00Z")]
+    pub created_at: DateTime<Utc>,
+
+    /// When the book was last updated
+    #[schema(example = "2024-01-15T10:30:00Z")]
+    pub updated_at: DateTime<Utc>,
 }

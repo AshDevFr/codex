@@ -64,7 +64,8 @@ export function SeriesBookList({
 		error,
 	} = useQuery({
 		queryKey: ["series-books", seriesId, showDeletedBooks],
-		queryFn: () => seriesApi.getBooks(seriesId, showDeletedBooks),
+		queryFn: () =>
+			seriesApi.getBooks(seriesId, { includeDeleted: showDeletedBooks }),
 	});
 
 	// Sort and paginate client-side since the API returns all books

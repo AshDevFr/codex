@@ -32,7 +32,6 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { seriesApi } from "@/api/series";
-import { seriesMetadataApi } from "@/api/seriesMetadata";
 import { settingsApi } from "@/api/settings";
 import { sharingTagsApi } from "@/api/sharingTags";
 import {
@@ -77,25 +76,14 @@ export function SeriesDetail() {
 	const [editModalOpened, { open: openEditModal, close: closeEditModal }] =
 		useDisclosure(false);
 
-	// Fetch series basic info
+	// Fetch full series data (includes metadata, genres, tags, etc.)
 	const {
 		data: series,
 		isLoading: seriesLoading,
 		error: seriesError,
 	} = useQuery({
-		queryKey: ["series", seriesId],
-		queryFn: () => seriesApi.getById(seriesId!),
-		enabled: !!seriesId,
-	});
-
-	// Fetch full metadata
-	const {
-		data: metadata,
-		isLoading: metadataLoading,
-		error: metadataError,
-	} = useQuery({
-		queryKey: ["series-metadata", seriesId],
-		queryFn: () => seriesMetadataApi.getFullMetadata(seriesId!),
+		queryKey: ["series", seriesId, "full"],
+		queryFn: () => seriesApi.getById(seriesId!, { full: true }),
 		enabled: !!seriesId,
 	});
 
@@ -253,8 +241,8 @@ export function SeriesDetail() {
 		},
 	});
 
-	const isLoading = seriesLoading || metadataLoading;
-	const error = seriesError || metadataError;
+	const isLoading = seriesLoading;
+	const error = seriesError;
 
 	if (isLoading) {
 		return (
@@ -281,8 +269,12 @@ export function SeriesDetail() {
 	const coverUrl = `/api/v1/series/${series.id}/thumbnail?v=${encodeURIComponent(series.updatedAt)}`;
 	const hasUnread = (series.unreadCount ?? 0) > 0;
 	const hasRead = (series.bookCount ?? 0) > (series.unreadCount ?? 0);
+	// Access metadata fields from the nested metadata object
+	const metadata = series.metadata;
 	const readingDirection = formatReadingDirection(metadata?.readingDirection);
 	const status = formatStatus(metadata?.status);
+	// Access genres, tags, etc. from top-level of FullSeriesResponse
+	const seriesTitle = metadata?.title ?? "Unknown Series";
 
 	// Build breadcrumbs
 	const breadcrumbItems: { title: string; href: string }[] = [
@@ -297,7 +289,7 @@ export function SeriesDetail() {
 	}
 
 	breadcrumbItems.push({
-		title: series.title,
+		title: seriesTitle,
 		href: `/series/${series.id}`,
 	});
 
@@ -332,7 +324,7 @@ export function SeriesDetail() {
 					<Grid.Col span={{ base: 4, xs: 3, sm: 2 }}>
 						<Image
 							src={coverUrl}
-							alt={series.title}
+							alt={seriesTitle}
 							radius="sm"
 							fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='212'%3E%3Crect fill='%23333' width='150' height='212'/%3E%3Ctext fill='%23666' font-family='sans-serif' font-size='12' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Cover%3C/text%3E%3C/svg%3E"
 							style={{ aspectRatio: "150/212.125" }}
@@ -347,7 +339,7 @@ export function SeriesDetail() {
 								<Box style={{ flex: 1, minWidth: 0 }}>
 									<Group gap="sm" align="center" wrap="wrap">
 										<Title order={2} style={{ wordBreak: "break-word" }}>
-											{series.title}
+											{seriesTitle}
 										</Title>
 										{metadata?.publisher && (
 											<Text size="sm" c="dimmed">
@@ -450,10 +442,9 @@ export function SeriesDetail() {
 							</Text>
 
 							{/* Alternate titles inline */}
-							{metadata?.alternateTitles &&
-								metadata.alternateTitles.length > 0 && (
-									<AlternateTitles titles={metadata.alternateTitles} compact />
-								)}
+							{series.alternateTitles && series.alternateTitles.length > 0 && (
+								<AlternateTitles titles={series.alternateTitles} compact />
+							)}
 
 							{/* Download button */}
 							<Group gap="sm" mt="xs">
@@ -522,28 +513,25 @@ export function SeriesDetail() {
 					)}
 
 					{/* Genres */}
-					{metadata && (metadata.genres?.length ?? 0) > 0 && (
+					{series.genres && series.genres.length > 0 && (
 						<Group gap="md" align="flex-start">
 							<Text size="sm" c="dimmed" w={100}>
 								GENRE
 							</Text>
 							<GenreTagChips
-								genres={metadata.genres}
+								genres={series.genres}
 								libraryId={series.libraryId}
 							/>
 						</Group>
 					)}
 
 					{/* Tags */}
-					{metadata && (metadata.tags?.length ?? 0) > 0 && (
+					{series.tags && series.tags.length > 0 && (
 						<Group gap="md" align="flex-start">
 							<Text size="sm" c="dimmed" w={100}>
 								TAGS
 							</Text>
-							<GenreTagChips
-								tags={metadata.tags}
-								libraryId={series.libraryId}
-							/>
+							<GenreTagChips tags={series.tags} libraryId={series.libraryId} />
 						</Group>
 					)}
 
@@ -569,12 +557,12 @@ export function SeriesDetail() {
 					)}
 
 					{/* External Links */}
-					{metadata?.externalLinks && metadata.externalLinks.length > 0 && (
+					{series.externalLinks && series.externalLinks.length > 0 && (
 						<Group gap="md" align="flex-start">
 							<Text size="sm" c="dimmed" w={100}>
 								LINKS
 							</Text>
-							<ExternalLinks links={metadata.externalLinks} />
+							<ExternalLinks links={series.externalLinks} />
 						</Group>
 					)}
 
@@ -589,10 +577,9 @@ export function SeriesDetail() {
 							{/* Community average */}
 							<CommunityRating seriesId={series.id} />
 							{/* External ratings (MAL, AniList, etc.) */}
-							{metadata?.externalRatings &&
-								metadata.externalRatings.length > 0 && (
-									<ExternalRatings ratings={metadata.externalRatings} />
-								)}
+							{series.externalRatings && series.externalRatings.length > 0 && (
+								<ExternalRatings ratings={series.externalRatings} />
+							)}
 						</Group>
 					</Group>
 
@@ -612,7 +599,7 @@ export function SeriesDetail() {
 				{/* Books list */}
 				<SeriesBookList
 					seriesId={series.id}
-					seriesName={series.title}
+					seriesName={seriesTitle}
 					bookCount={series.bookCount ?? 0}
 				/>
 			</Stack>
@@ -622,7 +609,7 @@ export function SeriesDetail() {
 				opened={editModalOpened}
 				onClose={closeEditModal}
 				seriesId={series.id}
-				seriesTitle={series.title}
+				seriesTitle={seriesTitle}
 			/>
 		</Box>
 	);

@@ -48,7 +48,7 @@ describe("seriesMetadataApi", () => {
 
 			const result = await seriesMetadataApi.getFullMetadata("series-123");
 
-			expect(api.get).toHaveBeenCalledWith("/series/series-123/metadata/full");
+			expect(api.get).toHaveBeenCalledWith("/series/series-123/metadata");
 			expect(result).toEqual(mockMetadata);
 		});
 	});

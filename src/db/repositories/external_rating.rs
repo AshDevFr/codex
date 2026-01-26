@@ -177,6 +177,32 @@ impl ExternalRatingRepository {
             .await?;
         Ok(result.is_some())
     }
+
+    /// Get external ratings for multiple series by their IDs
+    ///
+    /// Returns a HashMap keyed by series_id for efficient lookups
+    pub async fn get_for_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Vec<ExternalRating>>> {
+        if series_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let results = ExternalRatings::find()
+            .filter(series_external_ratings::Column::SeriesId.is_in(series_ids.to_vec()))
+            .all(db)
+            .await?;
+
+        let mut map: std::collections::HashMap<Uuid, Vec<ExternalRating>> =
+            std::collections::HashMap::new();
+
+        for rating in results {
+            map.entry(rating.series_id).or_default().push(rating);
+        }
+
+        Ok(map)
+    }
 }
 
 #[cfg(test)]

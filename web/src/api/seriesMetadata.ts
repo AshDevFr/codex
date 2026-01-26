@@ -20,7 +20,7 @@ export const seriesMetadataApi = {
 	 */
 	getFullMetadata: async (seriesId: string): Promise<FullSeriesMetadata> => {
 		const response = await api.get<FullSeriesMetadata>(
-			`/series/${seriesId}/metadata/full`,
+			`/series/${seriesId}/metadata`,
 		);
 		return response.data;
 	},

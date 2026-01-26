@@ -1377,6 +1377,81 @@ impl BookRepository {
         Ok((total_books - completed_count) as i64)
     }
 
+    /// Count unread books in multiple series for a specific user
+    ///
+    /// Returns a HashMap keyed by series_id with unread counts
+    pub async fn count_unread_in_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+        user_id: Uuid,
+    ) -> Result<std::collections::HashMap<Uuid, i64>> {
+        use crate::db::entities::read_progress;
+        use sea_orm::{sea_query::Expr, FromQueryResult, JoinType, QuerySelect};
+
+        if series_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        #[derive(Debug, FromQueryResult)]
+        struct CountResult {
+            series_id: Uuid,
+            count: i64,
+        }
+
+        // Count all non-deleted books per series
+        let total_counts: Vec<CountResult> = Books::find()
+            .select_only()
+            .column(books::Column::SeriesId)
+            .column_as(Expr::col(books::Column::Id).count(), "count")
+            .filter(books::Column::SeriesId.is_in(series_ids.to_vec()))
+            .filter(books::Column::Deleted.eq(false))
+            .group_by(books::Column::SeriesId)
+            .into_model::<CountResult>()
+            .all(db)
+            .await
+            .context("Failed to count books in series")?;
+
+        let total_map: std::collections::HashMap<Uuid, i64> = total_counts
+            .into_iter()
+            .map(|r| (r.series_id, r.count))
+            .collect();
+
+        // Count completed books per series for this user
+        // Use qualified column name to avoid ambiguity when joining with read_progress
+        let completed_counts: Vec<CountResult> = Books::find()
+            .select_only()
+            .column(books::Column::SeriesId)
+            .column_as(
+                Expr::col((books::Entity, books::Column::Id)).count(),
+                "count",
+            )
+            .filter(books::Column::SeriesId.is_in(series_ids.to_vec()))
+            .filter(books::Column::Deleted.eq(false))
+            .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .filter(read_progress::Column::Completed.eq(true))
+            .group_by(books::Column::SeriesId)
+            .into_model::<CountResult>()
+            .all(db)
+            .await
+            .context("Failed to count completed books in series")?;
+
+        let completed_map: std::collections::HashMap<Uuid, i64> = completed_counts
+            .into_iter()
+            .map(|r| (r.series_id, r.count))
+            .collect();
+
+        // Compute unread = total - completed
+        let mut result: std::collections::HashMap<Uuid, i64> = std::collections::HashMap::new();
+        for id in series_ids {
+            let total = total_map.get(id).copied().unwrap_or(0);
+            let completed = completed_map.get(id).copied().unwrap_or(0);
+            result.insert(*id, total - completed);
+        }
+
+        Ok(result)
+    }
+
     /// Check if a book is analyzed
     pub async fn is_analyzed(db: &DatabaseConnection, book_id: Uuid) -> Result<bool> {
         let book = Books::find_by_id(book_id)

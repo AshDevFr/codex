@@ -370,6 +370,65 @@ impl TagRepository {
         Ok(unique.into_iter().collect())
     }
 
+    /// Get tags for multiple series by their IDs
+    ///
+    /// Returns a HashMap keyed by series_id for efficient lookups
+    pub async fn get_tags_for_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Vec<tags::Model>>> {
+        use crate::db::entities::series_tags::Entity as SeriesTags;
+
+        if series_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        // Get all series_tags mappings for the given series
+        let series_tag_links: Vec<series_tags::Model> = SeriesTags::find()
+            .filter(series_tags::Column::SeriesId.is_in(series_ids.to_vec()))
+            .all(db)
+            .await?;
+
+        if series_tag_links.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        // Collect unique tag IDs
+        let tag_ids: Vec<Uuid> = series_tag_links
+            .iter()
+            .map(|st| st.tag_id)
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        // Fetch all tags at once
+        let all_tags: Vec<tags::Model> = Tags::find()
+            .filter(tags::Column::Id.is_in(tag_ids))
+            .all(db)
+            .await?;
+
+        // Create tag lookup map
+        let tag_map: std::collections::HashMap<Uuid, tags::Model> =
+            all_tags.into_iter().map(|t| (t.id, t)).collect();
+
+        // Build result map
+        let mut result: std::collections::HashMap<Uuid, Vec<tags::Model>> =
+            std::collections::HashMap::new();
+
+        for link in series_tag_links {
+            if let Some(tag) = tag_map.get(&link.tag_id) {
+                result.entry(link.series_id).or_default().push(tag.clone());
+            }
+        }
+
+        // Sort tags by name within each series
+        for tags in result.values_mut() {
+            tags.sort_by(|a, b| a.name.cmp(&b.name));
+        }
+
+        Ok(result)
+    }
+
     /// Delete all unused tags (tags with no series linked)
     /// Returns the names of deleted tags
     pub async fn delete_unused(db: &DatabaseConnection) -> Result<Vec<String>> {

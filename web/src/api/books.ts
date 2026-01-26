@@ -3,6 +3,7 @@ import type {
 	BookCondition,
 	BookListRequest,
 	components,
+	FullBook,
 	PaginatedResponse,
 } from "@/types";
 import { api } from "./client";
@@ -60,14 +61,16 @@ export interface BookFilters {
 	seriesId?: string;
 	genre?: string;
 	status?: string;
+	/** When true, returns FullBookResponse with complete metadata and locks */
+	full?: boolean;
 }
 
 export const booksApi = {
 	// Get books by library ID with filters
-	getByLibrary: async (
+	getByLibrary: async <T extends boolean = false>(
 		libraryId: string,
-		filters?: BookFilters,
-	): Promise<PaginatedResponse<Book>> => {
+		filters?: BookFilters & { full?: T },
+	): Promise<PaginatedResponse<T extends true ? FullBook : Book>> => {
 		const params = new URLSearchParams();
 
 		// Add library filter if not "all"
@@ -81,11 +84,13 @@ export const booksApi = {
 		if (filters?.seriesId) params.set("seriesId", filters.seriesId);
 		if (filters?.genre) params.set("genre", filters.genre);
 		if (filters?.status) params.set("status", filters.status);
+		if (filters?.full) params.set("full", "true");
 
 		const queryString = params.toString();
 		const url = `/books${queryString ? `?${queryString}` : ""}`;
 
-		const response = await api.get<PaginatedResponse<Book>>(url);
+		const response =
+			await api.get<PaginatedResponse<T extends true ? FullBook : Book>>(url);
 		return response.data;
 	},
 
@@ -96,8 +101,17 @@ export const booksApi = {
 	},
 
 	// Get a single book with full details including metadata
-	getDetail: async (id: string): Promise<BookDetailResponse> => {
-		const response = await api.get<BookDetailResponse>(`/books/${id}`);
+	getDetail: async <T extends boolean = false>(
+		id: string,
+		options?: { full?: T },
+	): Promise<T extends true ? FullBook : BookDetailResponse> => {
+		const params = new URLSearchParams();
+		if (options?.full) params.set("full", "true");
+		const queryString = params.toString();
+		const url = `/books/${id}${queryString ? `?${queryString}` : ""}`;
+
+		const response =
+			await api.get<T extends true ? FullBook : BookDetailResponse>(url);
 		return response.data;
 	},
 
@@ -218,7 +232,7 @@ export const booksApi = {
 	 * @param libraryId - Library to filter by, or "all" for all libraries
 	 * @param request - The search request with condition, pagination, and sort options
 	 */
-	search: async (
+	search: async <T extends boolean = false>(
 		libraryId: string,
 		request: {
 			condition?: BookCondition;
@@ -227,8 +241,9 @@ export const booksApi = {
 			pageSize?: number;
 			sort?: string;
 			includeDeleted?: boolean;
+			full?: T;
 		},
-	): Promise<PaginatedResponse<Book>> => {
+	): Promise<PaginatedResponse<T extends true ? FullBook : Book>> => {
 		// Build the full condition including library filter
 		let finalCondition: BookCondition | undefined = request.condition;
 
@@ -254,6 +269,7 @@ export const booksApi = {
 		if (request.pageSize !== undefined)
 			params.set("pageSize", String(request.pageSize));
 		if (request.sort) params.set("sort", request.sort);
+		if (request.full) params.set("full", "true");
 
 		// Body only contains filter condition, search, and includeDeleted
 		const body: BookListRequest = {
@@ -265,7 +281,9 @@ export const booksApi = {
 		const queryString = params.toString();
 		const url = queryString ? `/books/list?${queryString}` : "/books/list";
 
-		const response = await api.post<PaginatedResponse<Book>>(url, body);
+		const response = await api.post<
+			PaginatedResponse<T extends true ? FullBook : Book>
+		>(url, body);
 		return response.data;
 	},
 

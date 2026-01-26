@@ -3,8 +3,9 @@ use super::super::dto::{
     common::{
         ListPaginationParams, PaginationLinkBuilder, DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
     },
-    AdjacentBooksResponse, BookDetailResponse, BookDto, BookListRequest, BookListResponse,
-    BookMetadataDto, PaginationParams,
+    AdjacentBooksResponse, BookDetailResponse, BookDto, BookFullMetadata, BookListRequest,
+    BookListResponse, BookMetadataDto, BookMetadataLocks, FullBookListResponse, FullBookResponse,
+    PaginationParams,
 };
 use super::paginated_response;
 use crate::api::{
@@ -22,7 +23,7 @@ use axum::{
     body::Body,
     extract::{Path, Query, State},
     http::{header, StatusCode},
-    response::Response,
+    response::{IntoResponse, Response},
     Json,
 };
 use serde::Deserialize;
@@ -63,6 +64,11 @@ pub struct BookListQuery {
     /// Sort parameter (format: "field,direction" e.g. "title,asc")
     #[serde(default)]
     pub sort: Option<String>,
+
+    /// Return full data including metadata and locks.
+    /// Default is false for backward compatibility.
+    #[serde(default)]
+    pub full: bool,
 }
 
 /// Query parameters for listing books with analysis errors
@@ -85,6 +91,17 @@ pub struct BooksWithErrorsQuery {
     /// Number of items per page (max 100, default 50)
     #[serde(default = "default_page_size")]
     pub page_size: u64,
+}
+
+/// Query parameters for getting a single book
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(rename_all = "camelCase")]
+pub struct BookGetQuery {
+    /// Return full data including metadata and locks.
+    /// Default is false for backward compatibility.
+    #[serde(default)]
+    pub full: bool,
 }
 
 /// Helper function to convert books to DTOs with series information and read progress
@@ -221,13 +238,258 @@ pub async fn books_to_dtos(
     Ok(dtos)
 }
 
+/// Helper function to convert books to FullBookResponse DTOs with batched queries
+///
+/// This function efficiently fetches all related data for multiple books in parallel
+/// batched queries, avoiding N+1 query problems.
+pub async fn books_to_full_dtos_batched(
+    db: &sea_orm::DatabaseConnection,
+    user_id: Uuid,
+    books: Vec<crate::db::entities::books::Model>,
+) -> Result<Vec<FullBookResponse>, ApiError> {
+    use chrono::Utc;
+
+    if books.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Collect IDs
+    let book_ids: Vec<Uuid> = books.iter().map(|b| b.id).collect();
+    let series_ids: Vec<Uuid> = books
+        .iter()
+        .map(|b| b.series_id)
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    let library_ids: Vec<Uuid> = books
+        .iter()
+        .map(|b| b.library_id)
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    // Fetch all related data in parallel
+    let (metadata_map, series_metadata_map, library_map, progress_map) = tokio::join!(
+        BookMetadataRepository::get_by_book_ids(db, &book_ids),
+        SeriesMetadataRepository::get_by_series_ids(db, &series_ids),
+        LibraryRepository::get_by_ids(db, &library_ids),
+        async {
+            // Fetch read progress for all books
+            let mut map = HashMap::new();
+            for book_id in &book_ids {
+                if let Ok(Some(progress)) =
+                    ReadProgressRepository::get_by_user_and_book(db, user_id, *book_id).await
+                {
+                    map.insert(*book_id, progress.into());
+                }
+            }
+            Ok::<_, anyhow::Error>(map)
+        }
+    );
+
+    // Handle errors
+    let metadata_map = metadata_map
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book metadata: {}", e)))?;
+    let series_metadata_map = series_metadata_map
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series metadata: {}", e)))?;
+    let library_map =
+        library_map.map_err(|e| ApiError::Internal(format!("Failed to fetch libraries: {}", e)))?;
+    let progress_map = progress_map
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch read progress: {}", e)))?;
+
+    // Convert to DTOs
+    let mut results = Vec::with_capacity(books.len());
+
+    for book in books {
+        let book_id = book.id;
+
+        // Get library info
+        let library = library_map.get(&book.library_id);
+        let library_name = library
+            .map(|l| l.name.clone())
+            .unwrap_or_else(|| "Unknown Library".to_string());
+
+        // Get series name from series_metadata.title
+        let series_metadata = series_metadata_map.get(&book.series_id);
+        let series_name = series_metadata
+            .map(|m| m.title.clone())
+            .unwrap_or_else(|| "Unknown Series".to_string());
+
+        // Get book metadata (may not exist)
+        let book_meta = metadata_map.get(&book_id);
+
+        // Use title from book_metadata if available, otherwise use file_name (without extension)
+        let title = book_meta.and_then(|m| m.title.clone()).unwrap_or_else(|| {
+            let file_name = &book.file_name;
+            if let Some(pos) = file_name.rfind('.') {
+                file_name[..pos].to_string()
+            } else {
+                file_name.clone()
+            }
+        });
+
+        // Get title_sort from book_metadata
+        let title_sort = book_meta.and_then(|m| m.title_sort.clone());
+
+        // Get number from book_metadata
+        let number = book_meta
+            .and_then(|m| m.number)
+            .map(|d| d.to_string().parse::<i32>().unwrap_or(0));
+
+        // Determine effective reading direction: series metadata > library default
+        let reading_direction = series_metadata
+            .and_then(|m| m.reading_direction.clone())
+            .or_else(|| library.map(|l| l.default_reading_direction.clone()));
+
+        let read_progress = progress_map.get(&book_id).cloned();
+
+        // Build full metadata (even if no metadata record exists)
+        let now = Utc::now();
+        let full_metadata = if let Some(meta) = book_meta {
+            BookFullMetadata {
+                title: meta.title.clone(),
+                title_sort: meta.title_sort.clone(),
+                number: meta.number.map(|d| d.to_string()),
+                summary: meta.summary.clone(),
+                writer: meta.writer.clone(),
+                penciller: meta.penciller.clone(),
+                inker: meta.inker.clone(),
+                colorist: meta.colorist.clone(),
+                letterer: meta.letterer.clone(),
+                cover_artist: meta.cover_artist.clone(),
+                editor: meta.editor.clone(),
+                publisher: meta.publisher.clone(),
+                imprint: meta.imprint.clone(),
+                genre: meta.genre.clone(),
+                web: meta.web.clone(),
+                language_iso: meta.language_iso.clone(),
+                format_detail: meta.format_detail.clone(),
+                black_and_white: meta.black_and_white,
+                manga: meta.manga,
+                year: meta.year,
+                month: meta.month,
+                day: meta.day,
+                volume: meta.volume,
+                count: meta.count,
+                isbns: meta.isbns.clone(),
+                locks: BookMetadataLocks {
+                    summary_lock: meta.summary_lock,
+                    writer_lock: meta.writer_lock,
+                    penciller_lock: meta.penciller_lock,
+                    inker_lock: meta.inker_lock,
+                    colorist_lock: meta.colorist_lock,
+                    letterer_lock: meta.letterer_lock,
+                    cover_artist_lock: meta.cover_artist_lock,
+                    editor_lock: meta.editor_lock,
+                    publisher_lock: meta.publisher_lock,
+                    imprint_lock: meta.imprint_lock,
+                    genre_lock: meta.genre_lock,
+                    web_lock: meta.web_lock,
+                    language_iso_lock: meta.language_iso_lock,
+                    format_detail_lock: meta.format_detail_lock,
+                    black_and_white_lock: meta.black_and_white_lock,
+                    manga_lock: meta.manga_lock,
+                    year_lock: meta.year_lock,
+                    month_lock: meta.month_lock,
+                    day_lock: meta.day_lock,
+                    volume_lock: meta.volume_lock,
+                    count_lock: meta.count_lock,
+                    isbns_lock: meta.isbns_lock,
+                },
+                created_at: meta.created_at,
+                updated_at: meta.updated_at,
+            }
+        } else {
+            // No metadata record - create empty metadata with all locks false
+            BookFullMetadata {
+                title: None,
+                title_sort: None,
+                number: None,
+                summary: None,
+                writer: None,
+                penciller: None,
+                inker: None,
+                colorist: None,
+                letterer: None,
+                cover_artist: None,
+                editor: None,
+                publisher: None,
+                imprint: None,
+                genre: None,
+                web: None,
+                language_iso: None,
+                format_detail: None,
+                black_and_white: None,
+                manga: None,
+                year: None,
+                month: None,
+                day: None,
+                volume: None,
+                count: None,
+                isbns: None,
+                locks: BookMetadataLocks {
+                    summary_lock: false,
+                    writer_lock: false,
+                    penciller_lock: false,
+                    inker_lock: false,
+                    colorist_lock: false,
+                    letterer_lock: false,
+                    cover_artist_lock: false,
+                    editor_lock: false,
+                    publisher_lock: false,
+                    imprint_lock: false,
+                    genre_lock: false,
+                    web_lock: false,
+                    language_iso_lock: false,
+                    format_detail_lock: false,
+                    black_and_white_lock: false,
+                    manga_lock: false,
+                    year_lock: false,
+                    month_lock: false,
+                    day_lock: false,
+                    volume_lock: false,
+                    count_lock: false,
+                    isbns_lock: false,
+                },
+                created_at: now,
+                updated_at: now,
+            }
+        };
+
+        results.push(FullBookResponse {
+            id: book.id,
+            library_id: book.library_id,
+            library_name,
+            series_id: book.series_id,
+            series_name,
+            title,
+            title_sort,
+            file_path: book.file_path,
+            file_format: book.format,
+            file_size: book.file_size,
+            file_hash: book.file_hash,
+            page_count: book.page_count,
+            number,
+            deleted: book.deleted,
+            analysis_error: book.analysis_error,
+            reading_direction,
+            read_progress,
+            metadata: full_metadata,
+            created_at: book.created_at,
+            updated_at: book.updated_at,
+        });
+    }
+
+    Ok(results)
+}
+
 /// List books with pagination
 #[utoipa::path(
     get,
     path = "/api/v1/books",
     params(BookListQuery),
     responses(
-        (status = 200, description = "Paginated list of books", body = BookListResponse),
+        (status = 200, description = "Paginated list of books (returns FullBookListResponse when full=true)", body = BookListResponse),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -322,8 +584,6 @@ pub async fn list_books(
         (paginated, total)
     };
 
-    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
-
     // Build pagination links
     let total_pages = if page_size == 0 {
         0
@@ -338,10 +598,21 @@ pub async fn list_books(
     if let Some(library_id) = query.library_id {
         link_builder = link_builder.with_param("library_id", &library_id.to_string());
     }
+    if query.full {
+        link_builder = link_builder.with_param("full", "true");
+    }
 
-    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
-
-    Ok(paginated_response(response, &link_builder))
+    // Return full or basic response based on the full parameter
+    if query.full {
+        let full_dtos = books_to_full_dtos_batched(&state.db, auth.user_id, books_list).await?;
+        let response =
+            FullBookListResponse::with_builder(full_dtos, page, page_size, total, &link_builder);
+        Ok(paginated_response(response, &link_builder))
+    } else {
+        let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
+        let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+        Ok(paginated_response(response, &link_builder))
+    }
 }
 
 /// List books with advanced filtering
@@ -349,7 +620,7 @@ pub async fn list_books(
 /// Supports complex filter conditions including nested AllOf/AnyOf logic,
 /// genre/tag filtering with include/exclude, and more.
 ///
-/// Pagination parameters (page, pageSize, sort) are passed as query parameters.
+/// Pagination parameters (page, pageSize, sort, full) are passed as query parameters.
 /// Filter conditions are passed in the request body.
 #[utoipa::path(
     post,
@@ -357,7 +628,7 @@ pub async fn list_books(
     params(ListPaginationParams),
     request_body = BookListRequest,
     responses(
-        (status = 200, description = "Paginated list of filtered books", body = BookListResponse),
+        (status = 200, description = "Paginated list of filtered books (returns FullBookListResponse when full=true)", body = BookListResponse),
         (status = 403, description = "Forbidden"),
     ),
     security(
@@ -451,8 +722,6 @@ pub async fn list_books_filtered(
         }
     };
 
-    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
-
     // Build pagination links with query params
     let total_pages = if page_size == 0 {
         0
@@ -464,10 +733,21 @@ pub async fn list_books_filtered(
     if let Some(ref sort_str) = pagination.sort {
         link_builder = link_builder.with_param("sort", sort_str);
     }
+    if pagination.full {
+        link_builder = link_builder.with_param("full", "true");
+    }
 
-    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
-
-    Ok(paginated_response(response, &link_builder))
+    // Return full or basic response based on the full parameter
+    if pagination.full {
+        let full_dtos = books_to_full_dtos_batched(&state.db, auth.user_id, books_list).await?;
+        let response =
+            FullBookListResponse::with_builder(full_dtos, page, page_size, total, &link_builder);
+        Ok(paginated_response(response, &link_builder))
+    } else {
+        let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
+        let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+        Ok(paginated_response(response, &link_builder))
+    }
 }
 
 /// List books with analysis errors
@@ -663,10 +943,11 @@ pub async fn list_series_books_with_errors(
     get,
     path = "/api/v1/books/{book_id}",
     params(
-        ("book_id" = Uuid, Path, description = "Book ID")
+        ("book_id" = Uuid, Path, description = "Book ID"),
+        BookGetQuery
     ),
     responses(
-        (status = 200, description = "Book details", body = BookDetailResponse),
+        (status = 200, description = "Book details (returns FullBookResponse when full=true)", body = BookDetailResponse),
         (status = 404, description = "Book not found"),
     ),
     security(
@@ -679,7 +960,8 @@ pub async fn get_book(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
     Path(book_id): Path<Uuid>,
-) -> Result<Json<BookDetailResponse>, ApiError> {
+    Query(query): Query<BookGetQuery>,
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -696,42 +978,49 @@ pub async fn get_book(
         return Err(ApiError::NotFound("Book not found".to_string()));
     }
 
-    // Try to fetch metadata - now contains title, title_sort, number
-    let metadata = BookMetadataRepository::get_by_book_id(&state.db, book_id)
-        .await
-        .ok()
-        .flatten()
-        .map(|meta| BookMetadataDto {
-            id: meta.id,
-            book_id: meta.book_id,
-            title: meta.title,
-            series: None, // Series name is fetched separately via series_metadata
-            number: meta.number.map(|d| d.to_string()),
-            summary: meta.summary,
-            publisher: meta.publisher,
-            imprint: meta.imprint,
-            genre: meta.genre,
-            page_count: None, // Page count is in books table, not metadata
-            language_iso: meta.language_iso,
-            release_date: None, // Release date is computed from year/month/day
-            writers: meta.writer.map(|s| vec![s]).unwrap_or_default(),
-            pencillers: meta.penciller.map(|s| vec![s]).unwrap_or_default(),
-            inkers: meta.inker.map(|s| vec![s]).unwrap_or_default(),
-            colorists: meta.colorist.map(|s| vec![s]).unwrap_or_default(),
-            letterers: meta.letterer.map(|s| vec![s]).unwrap_or_default(),
-            cover_artists: meta.cover_artist.map(|s| vec![s]).unwrap_or_default(),
-            editors: meta.editor.map(|s| vec![s]).unwrap_or_default(),
-        });
+    // Return full or basic response based on the full parameter
+    if query.full {
+        let mut full_dtos = books_to_full_dtos_batched(&state.db, auth.user_id, vec![book]).await?;
+        let full_book = full_dtos.pop().unwrap(); // Safe because we just passed a single book
+        Ok(Json(full_book).into_response())
+    } else {
+        // Try to fetch metadata - now contains title, title_sort, number
+        let metadata = BookMetadataRepository::get_by_book_id(&state.db, book_id)
+            .await
+            .ok()
+            .flatten()
+            .map(|meta| BookMetadataDto {
+                id: meta.id,
+                book_id: meta.book_id,
+                title: meta.title,
+                series: None, // Series name is fetched separately via series_metadata
+                number: meta.number.map(|d| d.to_string()),
+                summary: meta.summary,
+                publisher: meta.publisher,
+                imprint: meta.imprint,
+                genre: meta.genre,
+                page_count: None, // Page count is in books table, not metadata
+                language_iso: meta.language_iso,
+                release_date: None, // Release date is computed from year/month/day
+                writers: meta.writer.map(|s| vec![s]).unwrap_or_default(),
+                pencillers: meta.penciller.map(|s| vec![s]).unwrap_or_default(),
+                inkers: meta.inker.map(|s| vec![s]).unwrap_or_default(),
+                colorists: meta.colorist.map(|s| vec![s]).unwrap_or_default(),
+                letterers: meta.letterer.map(|s| vec![s]).unwrap_or_default(),
+                cover_artists: meta.cover_artist.map(|s| vec![s]).unwrap_or_default(),
+                editors: meta.editor.map(|s| vec![s]).unwrap_or_default(),
+            });
 
-    let mut dtos = books_to_dtos(&state.db, auth.user_id, vec![book]).await?;
-    let book_dto = dtos.pop().unwrap(); // Safe because we just passed a single book
+        let mut dtos = books_to_dtos(&state.db, auth.user_id, vec![book]).await?;
+        let book_dto = dtos.pop().unwrap(); // Safe because we just passed a single book
 
-    let response = BookDetailResponse {
-        book: book_dto,
-        metadata,
-    };
+        let response = BookDetailResponse {
+            book: book_dto,
+            metadata,
+        };
 
-    Ok(Json(response))
+        Ok(Json(response).into_response())
+    }
 }
 
 /// Update book core fields (title, number)
@@ -1016,24 +1305,33 @@ pub async fn list_library_books(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch library books: {}", e)))?;
 
-    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
-
     // Build pagination links
     let total_pages = if page_size == 0 {
         0
     } else {
         total.div_ceil(page_size)
     };
-    let link_builder = PaginationLinkBuilder::new(
+    let mut link_builder = PaginationLinkBuilder::new(
         &format!("/api/v1/libraries/{}/books", library_id),
         page,
         page_size,
         total_pages,
     );
+    if query.full {
+        link_builder = link_builder.with_param("full", "true");
+    }
 
-    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
-
-    Ok(paginated_response(response, &link_builder))
+    // Return full or basic response based on the full parameter
+    if query.full {
+        let full_dtos = books_to_full_dtos_batched(&state.db, auth.user_id, books_list).await?;
+        let response =
+            FullBookListResponse::with_builder(full_dtos, page, page_size, total, &link_builder);
+        Ok(paginated_response(response, &link_builder))
+    } else {
+        let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
+        let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+        Ok(paginated_response(response, &link_builder))
+    }
 }
 
 /// List books with reading progress (in-progress books)
@@ -1079,8 +1377,6 @@ pub async fn list_in_progress_books(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch in-progress books: {}", e)))?;
 
-    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
-
     // Build pagination links
     let total_pages = if page_size == 0 {
         0
@@ -1092,10 +1388,21 @@ pub async fn list_in_progress_books(
     if let Some(library_id) = query.library_id {
         link_builder = link_builder.with_param("library_id", &library_id.to_string());
     }
+    if query.full {
+        link_builder = link_builder.with_param("full", "true");
+    }
 
-    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
-
-    Ok(paginated_response(response, &link_builder))
+    // Return full or basic response based on the full parameter
+    if query.full {
+        let full_dtos = books_to_full_dtos_batched(&state.db, auth.user_id, books_list).await?;
+        let response =
+            FullBookListResponse::with_builder(full_dtos, page, page_size, total, &link_builder);
+        Ok(paginated_response(response, &link_builder))
+    } else {
+        let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
+        let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+        Ok(paginated_response(response, &link_builder))
+    }
 }
 
 /// List books with reading progress in a specific library (in-progress books)
@@ -1324,8 +1631,6 @@ pub async fn list_recently_added_books(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to fetch recently added books: {}", e)))?;
 
-    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
-
     // Build pagination links
     let total_pages = if page_size == 0 {
         0
@@ -1337,10 +1642,21 @@ pub async fn list_recently_added_books(
     if let Some(library_id) = query.library_id {
         link_builder = link_builder.with_param("library_id", &library_id.to_string());
     }
+    if query.full {
+        link_builder = link_builder.with_param("full", "true");
+    }
 
-    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
-
-    Ok(paginated_response(response, &link_builder))
+    // Return full or basic response based on the full parameter
+    if query.full {
+        let full_dtos = books_to_full_dtos_batched(&state.db, auth.user_id, books_list).await?;
+        let response =
+            FullBookListResponse::with_builder(full_dtos, page, page_size, total, &link_builder);
+        Ok(paginated_response(response, &link_builder))
+    } else {
+        let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
+        let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
+        Ok(paginated_response(response, &link_builder))
+    }
 }
 
 /// List recently added books in a specific library
@@ -2199,7 +2515,7 @@ pub async fn patch_book_metadata(
 // ============================================================================
 
 use crate::api::routes::v1::dto::{
-    BookMetadataLocks, BookUpdateResponse, PatchBookRequest, UpdateBookMetadataLocksRequest,
+    BookUpdateResponse, PatchBookRequest, UpdateBookMetadataLocksRequest,
 };
 
 /// Get book metadata lock states

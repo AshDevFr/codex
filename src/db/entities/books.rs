@@ -37,7 +37,11 @@ pub enum Relation {
     BookMetadata,
     #[sea_orm(has_many = "super::pages::Entity")]
     Pages,
-    #[sea_orm(has_many = "super::read_progress::Entity")]
+    #[sea_orm(
+        has_many = "super::read_progress::Entity",
+        from = "Column::Id",
+        to = "super::read_progress::Column::BookId"
+    )]
     ReadProgress,
     #[sea_orm(
         belongs_to = "super::series::Entity",

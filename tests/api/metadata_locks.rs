@@ -33,7 +33,7 @@ async fn create_admin_and_token(
 }
 
 // ============================================================================
-// GET /api/v1/series/{id}/metadata/full tests
+// GET /api/v1/series/{id}/metadata tests
 // ============================================================================
 
 #[tokio::test]
@@ -54,10 +54,7 @@ async fn test_get_full_series_metadata() {
         .unwrap();
 
     // Fetch full metadata
-    let request = get_request_with_auth(
-        &format!("/api/v1/series/{}/metadata/full", series.id),
-        &token,
-    );
+    let request = get_request_with_auth(&format!("/api/v1/series/{}/metadata", series.id), &token);
     let (status, response): (StatusCode, Option<FullSeriesMetadataResponse>) =
         make_json_request(app, request).await;
 
@@ -129,10 +126,7 @@ async fn test_get_full_series_metadata_with_related_data() {
     .await
     .unwrap();
 
-    let request = get_request_with_auth(
-        &format!("/api/v1/series/{}/metadata/full", series.id),
-        &token,
-    );
+    let request = get_request_with_auth(&format!("/api/v1/series/{}/metadata", series.id), &token);
     let (status, response): (StatusCode, Option<FullSeriesMetadataResponse>) =
         make_json_request(app, request).await;
 
@@ -169,8 +163,7 @@ async fn test_get_full_series_metadata_not_found() {
     let app = create_test_router(state).await;
 
     let fake_id = uuid::Uuid::new_v4();
-    let request =
-        get_request_with_auth(&format!("/api/v1/series/{}/metadata/full", fake_id), &token);
+    let request = get_request_with_auth(&format!("/api/v1/series/{}/metadata", fake_id), &token);
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::NOT_FOUND);
@@ -191,7 +184,7 @@ async fn test_get_full_metadata_requires_auth() {
         .await
         .unwrap();
 
-    let request = get_request(&format!("/api/v1/series/{}/metadata/full", series.id));
+    let request = get_request(&format!("/api/v1/series/{}/metadata", series.id));
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
@@ -606,7 +599,7 @@ async fn test_update_locks_requires_write_permission() {
 }
 
 // ============================================================================
-// GET /api/v1/series/{id}/full tests (Full Series Data with Metadata)
+// GET /api/v1/series/{id}?full=true tests (Full Series Data with Metadata)
 // ============================================================================
 
 #[tokio::test]
@@ -629,7 +622,7 @@ async fn test_get_full_series_basic() {
         .unwrap();
 
     // Fetch full series
-    let request = get_request_with_auth(&format!("/api/v1/series/{}/full", series.id), &token);
+    let request = get_request_with_auth(&format!("/api/v1/series/{}?full=true", series.id), &token);
     let (status, response): (StatusCode, Option<FullSeriesResponse>) =
         make_json_request(app, request).await;
 
@@ -706,7 +699,7 @@ async fn test_get_full_series_with_related_data() {
     .await
     .unwrap();
 
-    let request = get_request_with_auth(&format!("/api/v1/series/{}/full", series.id), &token);
+    let request = get_request_with_auth(&format!("/api/v1/series/{}?full=true", series.id), &token);
     let (status, response): (StatusCode, Option<FullSeriesResponse>) =
         make_json_request(app, request).await;
 
@@ -749,7 +742,7 @@ async fn test_get_full_series_not_found() {
     let app = create_test_router(state).await;
 
     let fake_id = uuid::Uuid::new_v4();
-    let request = get_request_with_auth(&format!("/api/v1/series/{}/full", fake_id), &token);
+    let request = get_request_with_auth(&format!("/api/v1/series/{}?full=true", fake_id), &token);
     let (status, _): (StatusCode, Option<FullSeriesResponse>) =
         make_json_request(app, request).await;
 
@@ -774,7 +767,7 @@ async fn test_get_full_series_requires_auth() {
         .unwrap();
 
     // Request without auth token
-    let request = get_request(&format!("/api/v1/series/{}/full", series.id));
+    let request = get_request(&format!("/api/v1/series/{}?full=true", series.id));
     let (status, _): (StatusCode, Option<FullSeriesResponse>) =
         make_json_request(app, request).await;
 

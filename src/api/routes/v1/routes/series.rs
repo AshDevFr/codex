@@ -34,7 +34,6 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             post(handlers::list_series_alphabetical_groups),
         )
         .route("/series/:series_id", get(handlers::get_series))
-        .route("/series/:series_id/full", get(handlers::get_full_series))
         .route("/series/:series_id", patch(handlers::patch_series))
         .route("/series/:series_id/books", get(handlers::get_series_books))
         .route(
@@ -113,15 +112,15 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         // Series metadata routes
         .route(
             "/series/:series_id/metadata",
+            get(handlers::get_series_metadata),
+        )
+        .route(
+            "/series/:series_id/metadata",
             put(handlers::replace_series_metadata),
         )
         .route(
             "/series/:series_id/metadata",
             patch(handlers::patch_series_metadata),
-        )
-        .route(
-            "/series/:series_id/metadata/full",
-            get(handlers::get_full_series_metadata),
         )
         .route(
             "/series/:series_id/metadata/locks",

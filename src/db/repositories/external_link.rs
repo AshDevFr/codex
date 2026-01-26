@@ -169,6 +169,32 @@ impl ExternalLinkRepository {
             .await?;
         Ok(result.is_some())
     }
+
+    /// Get external links for multiple series by their IDs
+    ///
+    /// Returns a HashMap keyed by series_id for efficient lookups
+    pub async fn get_for_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Vec<ExternalLink>>> {
+        if series_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let results = ExternalLinks::find()
+            .filter(series_external_links::Column::SeriesId.is_in(series_ids.to_vec()))
+            .all(db)
+            .await?;
+
+        let mut map: std::collections::HashMap<Uuid, Vec<ExternalLink>> =
+            std::collections::HashMap::new();
+
+        for link in results {
+            map.entry(link.series_id).or_default().push(link);
+        }
+
+        Ok(map)
+    }
 }
 
 #[cfg(test)]

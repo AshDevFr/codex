@@ -106,6 +106,11 @@ pub struct ListPaginationParams {
     /// Sort field and direction (e.g., "name,asc" or "createdAt,desc")
     #[serde(default)]
     pub sort: Option<String>,
+
+    /// Return full data including metadata, locks, and related entities.
+    /// Default is false for backward compatibility.
+    #[serde(default)]
+    pub full: bool,
 }
 
 impl Default for ListPaginationParams {
@@ -114,6 +119,7 @@ impl Default for ListPaginationParams {
             page: DEFAULT_PAGE,
             page_size: DEFAULT_PAGE_SIZE,
             sort: None,
+            full: false,
         }
     }
 }
