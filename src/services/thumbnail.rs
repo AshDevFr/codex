@@ -22,6 +22,51 @@ use crate::db::entities::books;
 use crate::db::repositories::{BookRepository, SeriesRepository, SettingsRepository};
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
 
+/// Detect image format from magic bytes for diagnostic purposes
+fn detect_image_format(data: &[u8]) -> &'static str {
+    if data.len() < 4 {
+        return "unknown (too short)";
+    }
+
+    // Check magic bytes for common image formats
+    match &data[..4] {
+        // JPEG: FF D8 FF
+        [0xFF, 0xD8, 0xFF, _] => "JPEG",
+        // PNG: 89 50 4E 47
+        [0x89, 0x50, 0x4E, 0x47] => "PNG",
+        // GIF: 47 49 46 38
+        [0x47, 0x49, 0x46, 0x38] => "GIF",
+        // WebP: RIFF....WEBP
+        [0x52, 0x49, 0x46, 0x46] if data.len() >= 12 && &data[8..12] == b"WEBP" => "WebP",
+        // BMP: 42 4D
+        [0x42, 0x4D, _, _] => "BMP",
+        // TIFF: 49 49 2A 00 (little-endian) or 4D 4D 00 2A (big-endian)
+        [0x49, 0x49, 0x2A, 0x00] | [0x4D, 0x4D, 0x00, 0x2A] => "TIFF",
+        // AVIF/HEIF: ....ftyp
+        _ if data.len() >= 12 && &data[4..8] == b"ftyp" => {
+            // Check specific brand
+            match &data[8..12] {
+                b"avif" => "AVIF",
+                b"heic" | b"heix" | b"mif1" => "HEIF",
+                _ => "AVIF/HEIF (unknown brand)",
+            }
+        }
+        // ICO: 00 00 01 00
+        [0x00, 0x00, 0x01, 0x00] => "ICO",
+        _ => "unknown",
+    }
+}
+
+/// Format magic bytes as hex string for logging
+fn format_magic_bytes(data: &[u8]) -> String {
+    let len = data.len().min(16);
+    data[..len]
+        .iter()
+        .map(|b| format!("{:02X}", b))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Metadata for a cached thumbnail file (for HTTP conditional caching)
 #[derive(Debug, Clone)]
 pub struct ThumbnailMeta {
@@ -271,9 +316,18 @@ impl ThumbnailService {
 
         // Use spawn_blocking for CPU-intensive image processing
         tokio::task::spawn_blocking(move || {
-            // Load image from bytes
-            let img =
-                image::load_from_memory(&image_data).context("Failed to load image from memory")?;
+            // Load image from bytes with detailed error context
+            let img = image::load_from_memory(&image_data).map_err(|e| {
+                let detected_format = detect_image_format(&image_data);
+                let magic_bytes = format_magic_bytes(&image_data);
+                anyhow!(
+                    "Failed to load image: {} (size: {} bytes, detected format: {}, magic bytes: [{}])",
+                    e,
+                    image_data.len(),
+                    detected_format,
+                    magic_bytes
+                )
+            })?;
 
             // Calculate new dimensions while maintaining aspect ratio
             let (width, height) = (img.width(), img.height());
@@ -540,9 +594,18 @@ impl ThumbnailService {
         max_dimension: u32,
         jpeg_quality: u8,
     ) -> Result<Vec<u8>> {
-        // Load image from bytes
-        let img =
-            image::load_from_memory(image_data).context("Failed to load image from memory")?;
+        // Load image from bytes with detailed error context
+        let img = image::load_from_memory(image_data).map_err(|e| {
+            let detected_format = detect_image_format(image_data);
+            let magic_bytes = format_magic_bytes(image_data);
+            anyhow!(
+                "Failed to load image: {} (size: {} bytes, detected format: {}, magic bytes: [{}])",
+                e,
+                image_data.len(),
+                detected_format,
+                magic_bytes
+            )
+        })?;
 
         // Calculate new dimensions while maintaining aspect ratio
         let (width, height) = (img.width(), img.height());
@@ -715,5 +778,81 @@ mod tests {
             collected.extend_from_slice(&chunk.unwrap());
         }
         assert_eq!(collected, test_data);
+    }
+
+    #[test]
+    fn test_detect_image_format_jpeg() {
+        let data = [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10];
+        assert_eq!(detect_image_format(&data), "JPEG");
+    }
+
+    #[test]
+    fn test_detect_image_format_png() {
+        let data = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        assert_eq!(detect_image_format(&data), "PNG");
+    }
+
+    #[test]
+    fn test_detect_image_format_gif() {
+        let data = [0x47, 0x49, 0x46, 0x38, 0x39, 0x61];
+        assert_eq!(detect_image_format(&data), "GIF");
+    }
+
+    #[test]
+    fn test_detect_image_format_webp() {
+        let data = [
+            0x52, 0x49, 0x46, 0x46, // RIFF
+            0x00, 0x00, 0x00, 0x00, // size
+            0x57, 0x45, 0x42, 0x50, // WEBP
+        ];
+        assert_eq!(detect_image_format(&data), "WebP");
+    }
+
+    #[test]
+    fn test_detect_image_format_bmp() {
+        let data = [0x42, 0x4D, 0x00, 0x00];
+        assert_eq!(detect_image_format(&data), "BMP");
+    }
+
+    #[test]
+    fn test_detect_image_format_avif() {
+        let data = [
+            0x00, 0x00, 0x00, 0x00, // size
+            0x66, 0x74, 0x79, 0x70, // ftyp
+            0x61, 0x76, 0x69, 0x66, // avif
+        ];
+        assert_eq!(detect_image_format(&data), "AVIF");
+    }
+
+    #[test]
+    fn test_detect_image_format_unknown() {
+        let data = [0x00, 0x01, 0x02, 0x03];
+        assert_eq!(detect_image_format(&data), "unknown");
+    }
+
+    #[test]
+    fn test_detect_image_format_too_short() {
+        let data = [0xFF, 0xD8];
+        assert_eq!(detect_image_format(&data), "unknown (too short)");
+    }
+
+    #[test]
+    fn test_format_magic_bytes() {
+        let data = [0xFF, 0xD8, 0xFF, 0xE0];
+        assert_eq!(format_magic_bytes(&data), "FF D8 FF E0");
+    }
+
+    #[test]
+    fn test_format_magic_bytes_truncates_at_16() {
+        let data: Vec<u8> = (0..20).collect();
+        let result = format_magic_bytes(&data);
+        // Should only include first 16 bytes
+        assert_eq!(result, "00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F");
+    }
+
+    #[test]
+    fn test_format_magic_bytes_empty() {
+        let data: [u8; 0] = [];
+        assert_eq!(format_magic_bytes(&data), "");
     }
 }
