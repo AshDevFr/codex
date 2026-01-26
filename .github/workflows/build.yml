@@ -52,6 +52,7 @@ jobs:
     timeout-minutes: 90
     env:
       SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_GHA_VERSION: test
       RUSTC_WRAPPER: sccache
     steps:
       - name: Install base dependencies
@@ -79,6 +80,7 @@ jobs:
     timeout-minutes: 30
     env:
       SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_GHA_VERSION: lint
       RUSTC_WRAPPER: sccache
     steps:
       - name: Install base dependencies
