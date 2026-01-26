@@ -14,12 +14,18 @@ import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { renderTemplate } from "@/utils/templateEngine";
+import type { MetadataForTemplate } from "@/utils/templateUtils";
 
 export interface CustomMetadataDisplayProps {
 	/**
 	 * The custom metadata object to display
 	 */
 	customMetadata: Record<string, unknown> | null | undefined;
+	/**
+	 * Built-in series metadata for template access via `metadata.*` syntax.
+	 * Should be transformed using `transformToMetadataForTemplate()` before passing.
+	 */
+	metadata?: MetadataForTemplate | null;
 	/**
 	 * The Handlebars template to use for rendering.
 	 * If empty or not provided, nothing will be rendered.
@@ -72,27 +78,42 @@ function parseListItemContent(children: ReactNode): {
 
 /**
  * Displays custom metadata rendered using a Handlebars template and Markdown
+ *
+ * Template context includes:
+ * - `custom_metadata.*` - User-defined custom metadata fields
+ * - `metadata.*` - Built-in series metadata (title, genres, tags, etc.)
  */
 export function CustomMetadataDisplay({
 	customMetadata,
+	metadata,
 	template,
 	showErrors = false,
 }: CustomMetadataDisplayProps) {
 	const result = useMemo(() => {
-		// If no template or no custom metadata, return empty result
-		if (
-			!template ||
-			!customMetadata ||
-			Object.keys(customMetadata).length === 0
-		) {
+		// Check if we have anything to render
+		const hasCustomMetadata =
+			customMetadata && Object.keys(customMetadata).length > 0;
+		const hasMetadata = metadata !== null && metadata !== undefined;
+
+		// If no template or no data at all, return empty result
+		if (!template || (!hasCustomMetadata && !hasMetadata)) {
 			return { success: true, output: "" };
 		}
 
-		// Render the template with the custom metadata
-		return renderTemplate(template, {
-			custom_metadata: customMetadata,
-		});
-	}, [customMetadata, template]);
+		// Build the template context with both custom_metadata and metadata
+		const context: Record<string, unknown> = {};
+
+		if (hasCustomMetadata) {
+			context.custom_metadata = customMetadata;
+		}
+
+		if (hasMetadata) {
+			context.metadata = metadata;
+		}
+
+		// Render the template with the combined context
+		return renderTemplate(template, context);
+	}, [customMetadata, metadata, template]);
 
 	// Nothing to display if empty
 	if (!result.output || result.output.trim() === "") {

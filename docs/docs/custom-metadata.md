@@ -9,6 +9,10 @@ Codex allows you to store and display custom metadata for your series beyond the
 
 Custom metadata is a flexible JSON object that can contain any data you want to associate with a series. It's displayed on the series detail page using a configurable Handlebars template that renders to Markdown.
 
+Templates have access to two data sources:
+- **`custom_metadata`** - Your custom JSON data stored on the series
+- **`metadata`** - Built-in series metadata (title, genres, publisher, ratings, etc.)
+
 **Use cases:**
 - Track reading progress and personal ratings
 - Link to external databases (MyAnimeList, AniList, etc.)
@@ -65,14 +69,19 @@ Custom metadata is rendered on the series detail page using a Handlebars templat
 ### How Templates Work
 
 1. Your custom metadata is passed to the template as `custom_metadata`
-2. The template is rendered using Handlebars syntax
-3. The output (Markdown) is displayed using styled components
+2. Built-in series metadata is passed as `metadata`
+3. The template is rendered using Handlebars syntax
+4. The output (Markdown) is displayed using styled components
 
 ### Default Template
 
-The default template displays all fields as a simple bullet list:
+The default template displays genres from built-in metadata and custom fields as a bullet list:
 
 ```handlebars
+{{#if metadata.genres}}
+**Genres:** {{join metadata.genres " • "}}
+{{/if}}
+
 {{#if custom_metadata}}
 ## Additional Information
 
@@ -133,6 +142,7 @@ Codex provides these custom helpers:
 | `truncate` | Truncate string to length | `{{truncate value 100 "..."}}` |
 | `lowercase` | Convert to lowercase | `{{lowercase value}}` |
 | `uppercase` | Convert to uppercase | `{{uppercase value}}` |
+| `capitalize` | Capitalize first letter | `{{capitalize value}}` |
 | `first` | Get first N items of array | `{{#first items 3}}...{{/first}}` |
 | `join` | Join array with separator | `{{join array ", "}}` |
 | `exists` | Check if value exists | `{{#exists value}}...{{/exists}}` |
@@ -194,6 +204,88 @@ Total: {{length custom_metadata.items}} items
 ```handlebars
 Status: {{default custom_metadata.status "Not started"}}
 Rating: {{default custom_metadata.rating "—"}}/10
+```
+
+## Built-in Metadata Fields
+
+In addition to `custom_metadata`, templates have access to the series' built-in metadata via the `metadata` object. This allows you to combine your custom tracking data with standard series information.
+
+### Available Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `metadata.title` | string | Series title |
+| `metadata.summary` | string | Series description/summary |
+| `metadata.publisher` | string | Publisher name |
+| `metadata.imprint` | string | Publisher imprint |
+| `metadata.year` | number | Publication year |
+| `metadata.status` | string | Series status (e.g., "ongoing", "completed") |
+| `metadata.totalBookCount` | number | Total number of books in the series |
+| `metadata.ageRating` | number | Age rating (e.g., 13, 18) |
+| `metadata.language` | string | Primary language |
+| `metadata.genres` | string[] | List of genres |
+| `metadata.tags` | string[] | List of tags |
+| `metadata.externalRatings` | array | External ratings (source, rating, votes) |
+| `metadata.externalLinks` | array | External links (source, url) |
+| `metadata.alternateTitles` | array | Alternate titles (title, label) |
+
+### Metadata Examples
+
+**Display genres and publisher:**
+
+```handlebars
+{{#if metadata.genres}}
+**Genres:** {{join metadata.genres " • "}}
+{{/if}}
+
+{{#if metadata.publisher}}
+**Publisher:** {{metadata.publisher}}{{#if metadata.year}} ({{metadata.year}}){{/if}}
+{{/if}}
+```
+
+**Show series status with capitalization:**
+
+```handlebars
+{{#if metadata.status}}
+**Status:** {{capitalize metadata.status}}
+{{/if}}
+```
+
+**Display external ratings:**
+
+```handlebars
+{{#if metadata.externalRatings}}
+### Community Ratings
+{{#each metadata.externalRatings}}
+- **{{this.source}}**: {{this.rating}}{{#if this.votes}} ({{this.votes}} votes){{/if}}
+{{/each}}
+{{/if}}
+```
+
+**Combine custom and built-in metadata:**
+
+```handlebars
+{{#if metadata}}
+## {{metadata.title}}
+
+{{#if metadata.summary}}
+{{metadata.summary}}
+{{/if}}
+
+{{#if metadata.genres}}
+**Genres:** {{join metadata.genres " • "}}
+{{/if}}
+{{/if}}
+
+{{#if custom_metadata}}
+---
+## My Progress
+
+**Status:** {{default custom_metadata.status "Not started"}}
+{{#if custom_metadata.current_volume}}
+**Currently on:** Volume {{custom_metadata.current_volume}}{{#if metadata.totalBookCount}} of {{metadata.totalBookCount}}{{/if}}
+{{/if}}
+{{/if}}
 ```
 
 ## Supported Markdown
@@ -282,9 +374,13 @@ Codex includes several pre-built templates to get you started:
 
 ### Simple List
 
-Basic key-value display:
+Basic key-value display with optional genres from built-in metadata:
 
 ```handlebars
+{{#if metadata.genres}}
+**Genres:** {{join metadata.genres " • "}}
+{{/if}}
+
 {{#if custom_metadata}}
 ## Additional Information
 
@@ -392,6 +488,95 @@ Display data in tables:
 | {{default custom_metadata.status "Not started"}} | {{default custom_metadata.rating "—"}}/10 | {{default custom_metadata.priority "—"}} |
 
 {{/and}}
+{{/if}}
+```
+
+### Series Info (Built-in Metadata)
+
+Display only built-in series metadata:
+
+```handlebars
+{{#if metadata}}
+## Series Info
+
+{{#if metadata.publisher}}
+**Publisher:** {{metadata.publisher}}{{#if metadata.imprint}} ({{metadata.imprint}}){{/if}}
+{{/if}}
+
+{{#if metadata.year}}
+**Year:** {{metadata.year}}
+{{/if}}
+
+{{#if metadata.status}}
+**Status:** {{capitalize metadata.status}}
+{{/if}}
+
+{{#if metadata.genres}}
+### Genres
+{{join metadata.genres " • "}}
+{{/if}}
+
+{{#if metadata.externalRatings}}
+### Ratings
+{{#each metadata.externalRatings}}
+- **{{this.source}}**: {{this.rating}}{{#if this.votes}} ({{this.votes}} votes){{/if}}
+{{/each}}
+{{/if}}
+
+{{#if metadata.externalLinks}}
+### Links
+{{#each metadata.externalLinks}}
+- [{{this.source}}]({{this.url}})
+{{/each}}
+{{/if}}
+{{/if}}
+```
+
+### Complete Overview (Combined)
+
+Combine custom tracking data with built-in series metadata:
+
+```handlebars
+{{#if metadata}}
+## {{metadata.title}}
+
+{{#if metadata.summary}}
+{{metadata.summary}}
+{{/if}}
+
+{{#and metadata.publisher metadata.year}}
+*Published by {{metadata.publisher}} in {{metadata.year}}*
+{{/and}}
+{{/if}}
+
+{{#if custom_metadata}}
+---
+
+## My Progress
+
+{{#if custom_metadata.status}}
+**Status:** {{custom_metadata.status}}
+{{/if}}
+
+{{#if custom_metadata.rating}}
+**My Rating:** {{custom_metadata.rating}}/10
+{{/if}}
+
+{{#if custom_metadata.current_volume}}
+**Currently on:** Volume {{custom_metadata.current_volume}}{{#if metadata.totalBookCount}} of {{metadata.totalBookCount}}{{/if}}
+{{/if}}
+
+{{#if custom_metadata.notes}}
+### Notes
+{{custom_metadata.notes}}
+{{/if}}
+{{/if}}
+
+{{#if metadata}}
+{{#if metadata.genres}}
+---
+**Genres:** {{join metadata.genres " • "}}
+{{/if}}
 {{/if}}
 ```
 

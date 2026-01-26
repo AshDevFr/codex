@@ -178,7 +178,11 @@ const mockSettings = [
 	// Display settings
 	createSetting({
 		key: "display.custom_metadata_template",
-		value: `{{#if custom_metadata}}
+		value: `{{#if metadata.genres}}
+**Genres:** {{join metadata.genres " • "}}
+{{/if}}
+
+{{#if custom_metadata}}
 ## Additional Information
 
 {{#each custom_metadata}}

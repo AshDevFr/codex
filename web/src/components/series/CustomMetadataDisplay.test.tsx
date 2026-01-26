@@ -1,6 +1,34 @@
 import { describe, expect, it } from "vitest";
 import { renderWithProviders, screen } from "@/test/utils";
+import type { MetadataForTemplate } from "@/utils/templateUtils";
 import { CustomMetadataDisplay } from "./CustomMetadataDisplay";
+
+/**
+ * Creates a mock MetadataForTemplate for testing
+ */
+function createMockTemplateMetadata(
+	overrides: Partial<MetadataForTemplate> = {},
+): MetadataForTemplate {
+	return {
+		title: "Test Series",
+		summary: null,
+		publisher: null,
+		imprint: null,
+		year: null,
+		ageRating: null,
+		language: null,
+		status: null,
+		readingDirection: null,
+		totalBookCount: null,
+		titleSort: null,
+		genres: [],
+		tags: [],
+		externalRatings: [],
+		externalLinks: [],
+		alternateTitles: [],
+		...overrides,
+	};
+}
 
 describe("CustomMetadataDisplay", () => {
 	describe("rendering", () => {
@@ -257,6 +285,214 @@ describe("CustomMetadataDisplay", () => {
 				s.textContent?.includes("alert"),
 			);
 			expect(alertScript).toBeUndefined();
+		});
+	});
+
+	describe("built-in metadata support", () => {
+		it("should render metadata fields via metadata.* syntax", () => {
+			const metadata = createMockTemplateMetadata({
+				title: "Attack on Titan",
+				publisher: "Kodansha",
+				year: 2009,
+			});
+
+			renderWithProviders(
+				<CustomMetadataDisplay
+					customMetadata={null}
+					metadata={metadata}
+					template="**{{metadata.title}}** by {{metadata.publisher}} ({{metadata.year}})"
+				/>,
+			);
+
+			expect(screen.getByText("Attack on Titan")).toBeInTheDocument();
+			expect(screen.getByText(/Kodansha/)).toBeInTheDocument();
+			expect(screen.getByText(/2009/)).toBeInTheDocument();
+		});
+
+		it("should render genres as array of strings", () => {
+			const metadata = createMockTemplateMetadata({
+				genres: ["Action", "Dark Fantasy", "Drama"],
+			});
+
+			renderWithProviders(
+				<CustomMetadataDisplay
+					customMetadata={null}
+					metadata={metadata}
+					template='Genres: {{join metadata.genres ", "}}'
+				/>,
+			);
+
+			expect(
+				screen.getByText(/Action, Dark Fantasy, Drama/),
+			).toBeInTheDocument();
+		});
+
+		it("should render tags as array of strings", () => {
+			const metadata = createMockTemplateMetadata({
+				tags: ["manga", "titans", "survival"],
+			});
+
+			renderWithProviders(
+				<CustomMetadataDisplay
+					customMetadata={null}
+					metadata={metadata}
+					template='Tags: {{join metadata.tags ", "}}'
+				/>,
+			);
+
+			expect(screen.getByText(/manga, titans, survival/)).toBeInTheDocument();
+		});
+
+		it("should render external ratings", () => {
+			const metadata = createMockTemplateMetadata({
+				externalRatings: [
+					{ source: "MyAnimeList", rating: 8.54, votes: 1250000 },
+					{ source: "AniList", rating: 84 },
+				],
+			});
+
+			renderWithProviders(
+				<CustomMetadataDisplay
+					customMetadata={null}
+					metadata={metadata}
+					template={`{{#each metadata.externalRatings}}
+- {{source}}: {{rating}}{{#if votes}} ({{votes}} votes){{/if}}
+{{/each}}`}
+				/>,
+			);
+
+			expect(screen.getByText(/MyAnimeList/)).toBeInTheDocument();
+			expect(screen.getByText(/8.54/)).toBeInTheDocument();
+			expect(screen.getByText(/1250000/)).toBeInTheDocument();
+			expect(screen.getByText(/AniList/)).toBeInTheDocument();
+		});
+
+		it("should render external links", () => {
+			const metadata = createMockTemplateMetadata({
+				externalLinks: [
+					{
+						source: "MyAnimeList",
+						url: "https://myanimelist.net/manga/23390",
+					},
+				],
+			});
+
+			renderWithProviders(
+				<CustomMetadataDisplay
+					customMetadata={null}
+					metadata={metadata}
+					template={`{{#each metadata.externalLinks}}[{{source}}]({{url}}){{/each}}`}
+				/>,
+			);
+
+			const link = screen.getByRole("link", { name: "MyAnimeList" });
+			expect(link).toHaveAttribute(
+				"href",
+				"https://myanimelist.net/manga/23390",
+			);
+		});
+
+		it("should render alternate titles", () => {
+			const metadata = createMockTemplateMetadata({
+				alternateTitles: [
+					{ title: "Shingeki no Kyojin", label: "Japanese" },
+					{ title: "進撃の巨人", label: "Native" },
+				],
+			});
+
+			renderWithProviders(
+				<CustomMetadataDisplay
+					customMetadata={null}
+					metadata={metadata}
+					template={`{{#each metadata.alternateTitles}}- {{label}}: {{title}}
+{{/each}}`}
+				/>,
+			);
+
+			expect(screen.getByText(/Japanese/)).toBeInTheDocument();
+			expect(screen.getByText(/Shingeki no Kyojin/)).toBeInTheDocument();
+			expect(screen.getByText(/Native/)).toBeInTheDocument();
+		});
+
+		it("should support combining custom_metadata and metadata", () => {
+			const metadata = createMockTemplateMetadata({
+				title: "Attack on Titan",
+				genres: ["Action", "Drama"],
+			});
+
+			renderWithProviders(
+				<CustomMetadataDisplay
+					customMetadata={{ myRating: 9.5, status: "reading" }}
+					metadata={metadata}
+					template={`# {{metadata.title}}
+Genres: {{join metadata.genres ", "}}
+My Rating: {{custom_metadata.myRating}}
+Status: {{custom_metadata.status}}`}
+				/>,
+			);
+
+			expect(screen.getByText("Attack on Titan")).toBeInTheDocument();
+			expect(screen.getByText(/Action, Drama/)).toBeInTheDocument();
+			expect(screen.getByText(/9.5/)).toBeInTheDocument();
+			expect(screen.getByText(/reading/)).toBeInTheDocument();
+		});
+
+		it("should render with only metadata (no custom_metadata)", () => {
+			const metadata = createMockTemplateMetadata({
+				title: "Solo Leveling",
+				status: "ended",
+			});
+
+			renderWithProviders(
+				<CustomMetadataDisplay
+					customMetadata={null}
+					metadata={metadata}
+					template="{{metadata.title}} - {{metadata.status}}"
+				/>,
+			);
+
+			expect(screen.getByText(/Solo Leveling - ended/)).toBeInTheDocument();
+		});
+
+		it("should render nothing when only metadata is provided but template is empty", () => {
+			const metadata = createMockTemplateMetadata({ title: "Test" });
+
+			const { container } = renderWithProviders(
+				<CustomMetadataDisplay customMetadata={null} metadata={metadata} />,
+			);
+
+			expect(container.querySelector(".custom-metadata-display")).toBeNull();
+		});
+
+		it("should handle null metadata gracefully", () => {
+			const { container } = renderWithProviders(
+				<CustomMetadataDisplay
+					customMetadata={{ test: "value" }}
+					metadata={null}
+					template="{{custom_metadata.test}}"
+				/>,
+			);
+
+			expect(container.textContent).toContain("value");
+		});
+
+		it("should handle missing metadata fields gracefully", () => {
+			const metadata = createMockTemplateMetadata({
+				title: "Test",
+				summary: null,
+				publisher: null,
+			});
+
+			renderWithProviders(
+				<CustomMetadataDisplay
+					customMetadata={null}
+					metadata={metadata}
+					template='Title: {{metadata.title}}, Publisher: {{default metadata.publisher "Unknown"}}'
+				/>,
+			);
+
+			expect(screen.getByText(/Title: Test/)).toBeInTheDocument();
+			expect(screen.getByText(/Publisher: Unknown/)).toBeInTheDocument();
 		});
 	});
 });

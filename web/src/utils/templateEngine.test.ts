@@ -105,6 +105,15 @@ describe("templateEngine", () => {
 			const result = validateTemplate("");
 			expect(result.valid).toBe(true);
 		});
+
+		it("should catch malformed closing tags that only fail at render time", () => {
+			// This template has {{/if} instead of {{/if}} - missing closing braces
+			// Handlebars compiles it successfully but fails when rendering
+			const template = `{{#if condition}}content{{/if}`;
+			const result = validateTemplate(template);
+			expect(result.valid).toBe(false);
+			expect(result.error).toBeDefined();
+		});
 	});
 
 	describe("helpers", () => {

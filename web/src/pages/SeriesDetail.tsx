@@ -47,6 +47,7 @@ import {
 } from "@/components/series";
 import { usePermissions } from "@/hooks/usePermissions";
 import { PERMISSIONS } from "@/types/permissions";
+import { transformFullSeriesToMetadataForTemplate } from "@/utils/templateUtils";
 
 // Helper to format reading direction
 function formatReadingDirection(dir?: string | null): string | null {
@@ -584,11 +585,12 @@ export function SeriesDetail() {
 					</Group>
 
 					{/* Custom Metadata */}
-					{metadata?.customMetadata && (
+					{(metadata?.customMetadata || series) && (
 						<CustomMetadataDisplay
 							customMetadata={
-								metadata.customMetadata as Record<string, unknown>
+								metadata?.customMetadata as Record<string, unknown>
 							}
+							metadata={transformFullSeriesToMetadataForTemplate(series)}
 							template={
 								publicSettings?.["display.custom_metadata_template"]?.value
 							}

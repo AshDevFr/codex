@@ -17,6 +17,7 @@ import {
 	type ExampleTemplate,
 } from "@/data/exampleTemplates";
 import { renderTemplate } from "@/utils/templateEngine";
+import { SAMPLE_METADATA_FOR_TEMPLATE } from "@/utils/templateUtils";
 
 export interface TemplateSelectorProps {
 	/** Callback when a template is selected - receives template and its sample data */
@@ -109,10 +110,11 @@ function TemplateCard({
 	isCurrent: boolean;
 	onSelect: () => void;
 }) {
-	// Render preview with sample data
+	// Render preview with sample data (include metadata for templates that use it)
 	const preview = useMemo(() => {
 		return renderTemplate(template.template, {
 			custom_metadata: template.sampleData,
+			metadata: SAMPLE_METADATA_FOR_TEMPLATE,
 		});
 	}, [template]);
 
@@ -156,11 +158,19 @@ function TemplateCard({
 
 				{/* Tags */}
 				<Group gap={4}>
-					{template.tags.slice(0, 3).map((tag) => (
-						<Badge key={tag} size="xs" variant="light" color="gray">
-							{tag}
+					{template.tags.includes("uses-metadata") && (
+						<Badge size="xs" variant="light" color="blue">
+							metadata
 						</Badge>
-					))}
+					)}
+					{template.tags
+						.filter((tag) => tag !== "uses-metadata")
+						.slice(0, 3)
+						.map((tag) => (
+							<Badge key={tag} size="xs" variant="light" color="gray">
+								{tag}
+							</Badge>
+						))}
 				</Group>
 
 				{/* Preview */}
@@ -173,8 +183,10 @@ function TemplateCard({
 							<MarkdownContent compact>{preview.output}</MarkdownContent>
 						</div>
 					) : (
-						<Text size="xs" c="dimmed" fs="italic">
-							{preview.success ? "(no output)" : "Error rendering"}
+						<Text size="xs" c={preview.success ? "dimmed" : "red"} fs="italic">
+							{preview.success
+								? "(no output)"
+								: `Error: ${preview.error || "Unknown error"}`}
 						</Text>
 					)}
 				</Card>

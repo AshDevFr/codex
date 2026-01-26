@@ -180,5 +180,19 @@ describe("exampleTemplates", () => {
 				.filter((l) => l.trim());
 			expect(lines.length).toBe(1);
 		});
+
+		it("kitchen-sink template should produce substantial content with sample data", () => {
+			const template = getTemplateById("kitchen-sink");
+			const result = renderTemplate(template!.template, {
+				custom_metadata: template!.sampleData,
+			});
+			expect(result.success).toBe(true);
+			// Should produce significant content
+			expect(result.output.trim().length).toBeGreaterThan(100);
+			// Should contain the hero title in uppercase
+			expect(result.output).toContain("ATTACK ON TITAN");
+			// Should contain power level warning
+			expect(result.output).toContain("IT'S OVER 9000");
+		});
 	});
 });

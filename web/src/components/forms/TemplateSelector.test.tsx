@@ -161,10 +161,17 @@ describe("TemplateSelector", () => {
 			expect(screen.getByRole("dialog")).toBeInTheDocument();
 		});
 
-		// Check that at least some tags are displayed (first 3 per template)
+		// Check that at least some tags are displayed (first 3 non-metadata tags per template)
 		const firstTemplate = EXAMPLE_TEMPLATES[0];
-		for (const tag of firstTemplate.tags.slice(0, 3)) {
+		const nonMetadataTags = firstTemplate.tags.filter(
+			(tag) => tag !== "uses-metadata",
+		);
+		for (const tag of nonMetadataTags.slice(0, 3)) {
 			expect(screen.getByText(tag)).toBeInTheDocument();
+		}
+		// If template uses metadata, the "metadata" badge should be shown (at least one)
+		if (firstTemplate.tags.includes("uses-metadata")) {
+			expect(screen.getAllByText("metadata").length).toBeGreaterThan(0);
 		}
 	});
 

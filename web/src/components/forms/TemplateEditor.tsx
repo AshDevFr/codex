@@ -34,6 +34,10 @@ import "prismjs/components/prism-handlebars";
 import "prismjs/components/prism-markdown";
 import { CustomMetadataDisplay } from "@/components/series";
 import { getAvailableHelpers, validateTemplate } from "@/utils/templateEngine";
+import {
+	type MetadataForTemplate,
+	SAMPLE_METADATA_FOR_TEMPLATE,
+} from "@/utils/templateUtils";
 
 // Sample data for preview - comprehensive example showcasing various data types
 const SAMPLE_METADATA = {
@@ -126,6 +130,15 @@ export interface TemplateEditorProps {
 	 * Callback when test data changes (for external control)
 	 */
 	onTestDataChange?: (data: Record<string, unknown>) => void;
+	/**
+	 * Mock metadata for template testing (defaults to SAMPLE_METADATA_FOR_TEMPLATE).
+	 * This is displayed in a read-only section and passed to the preview.
+	 */
+	metadataTestData?: MetadataForTemplate;
+	/**
+	 * Whether to show the metadata section (defaults to true)
+	 */
+	showMetadataSection?: boolean;
 }
 
 /**
@@ -140,6 +153,8 @@ export function TemplateEditor({
 	initialSampleData = SAMPLE_METADATA,
 	testData: externalTestData,
 	onTestDataChange,
+	metadataTestData = SAMPLE_METADATA_FOR_TEMPLATE,
+	showMetadataSection = true,
 }: TemplateEditorProps) {
 	const colorScheme = useComputedColorScheme("dark");
 	const [helpOpened, { toggle: toggleHelp }] = useDisclosure(false);
@@ -412,6 +427,83 @@ export function TemplateEditor({
 		</Box>
 	);
 
+	// Metadata section - read-only display of sample built-in metadata
+	const [metadataOpened, { toggle: toggleMetadata }] = useDisclosure(false);
+	const metadataSection = showMetadataSection ? (
+		<Card withBorder padding="sm">
+			<Group
+				onClick={toggleMetadata}
+				style={{ cursor: "pointer" }}
+				justify="space-between"
+			>
+				<Group gap="xs">
+					<Text size="sm" fw={500}>
+						Series Metadata (Mock)
+					</Text>
+					<Text size="xs" c="dimmed">
+						Available as <code>metadata.*</code> in templates
+					</Text>
+				</Group>
+				{metadataOpened ? (
+					<IconChevronDown size={16} />
+				) : (
+					<IconChevronRight size={16} />
+				)}
+			</Group>
+			<Collapse in={metadataOpened}>
+				<Box
+					mt="sm"
+					style={{
+						border:
+							colorScheme === "dark"
+								? "1px solid var(--mantine-color-dark-4)"
+								: "1px solid var(--mantine-color-gray-4)",
+						borderRadius: "var(--mantine-radius-sm)",
+						overflow: "auto",
+						maxHeight: 300,
+						backgroundColor:
+							colorScheme === "dark"
+								? "var(--mantine-color-dark-6)"
+								: "var(--mantine-color-gray-0)",
+					}}
+					className="metadata-json-editor"
+				>
+					<JsonEditor
+						data={metadataTestData as unknown as Record<string, unknown>}
+						setData={() => {}}
+						theme={{
+							...jsonTheme,
+							styles: {
+								...jsonTheme.styles,
+								container: {
+									...(typeof jsonTheme.styles?.container === "object"
+										? jsonTheme.styles.container
+										: {}),
+									fontSize: 12,
+									fontFamily:
+										'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
+								},
+							},
+						}}
+						maxWidth="100%"
+						rootName="metadata"
+						collapse={1}
+						enableClipboard={false}
+						restrictEdit={true}
+						restrictDelete={true}
+						restrictAdd={true}
+						restrictTypeSelection={true}
+					/>
+				</Box>
+				<Text size="xs" c="dimmed" mt="xs">
+					This mock data represents the built-in series metadata available in
+					templates. Use <code>{"{{metadata.title}}"}</code>,{" "}
+					<code>{"{{metadata.genres}}"}</code>, etc.
+				</Text>
+			</Collapse>
+		</Card>
+	) : null;
+
 	// Preview component - uses CustomMetadataDisplay to show exactly how it will render
 	const previewSection = (
 		<Box>
@@ -436,12 +528,13 @@ export function TemplateEditor({
 				}}
 			>
 				{!validation.valid ? (
-					<Alert icon={<IconAlertCircle size={16} />} color="orange">
-						{validation.error || "Invalid template syntax"}
-					</Alert>
+					<Text size="sm" c="dimmed" fs="italic">
+						Fix template errors to see preview
+					</Text>
 				) : (
 					<CustomMetadataDisplay
 						customMetadata={testData}
+						metadata={metadataTestData}
 						template={localValue}
 						showErrors
 					/>
@@ -513,6 +606,9 @@ export function TemplateEditor({
 					{previewSection}
 				</Stack>
 			)}
+
+			{/* Metadata section - shows available series metadata fields */}
+			{metadataSection}
 
 			{/* Help section */}
 			<Card withBorder padding="sm">
@@ -620,6 +716,69 @@ export function TemplateEditor({
 									<li>
 										<code>{'{{default rating "N/A"}}'}</code> - Default for
 										missing values
+									</li>
+								</ul>
+							</Text>
+						</Box>
+
+						<Box>
+							<Text size="sm" fw={500} mb="xs">
+								Available Data Sources
+							</Text>
+							<Text size="xs" c="dimmed" component="div">
+								<p style={{ margin: "0 0 8px 0" }}>
+									Templates have access to two data sources:
+								</p>
+								<ul style={{ margin: 0, paddingLeft: 20 }}>
+									<li>
+										<code>custom_metadata.*</code> - User-defined custom fields
+										(editable)
+									</li>
+									<li>
+										<code>metadata.*</code> - Built-in series metadata
+										(read-only)
+									</li>
+								</ul>
+							</Text>
+						</Box>
+
+						<Box>
+							<Text size="sm" fw={500} mb="xs">
+								Metadata Fields
+							</Text>
+							<Text size="xs" c="dimmed" component="div">
+								<ul style={{ margin: 0, paddingLeft: 20 }}>
+									<li>
+										<code>metadata.title</code>, <code>metadata.summary</code>,{" "}
+										<code>metadata.publisher</code> - Basic info
+									</li>
+									<li>
+										<code>metadata.year</code>, <code>metadata.ageRating</code>,{" "}
+										<code>metadata.language</code> - Publication details
+									</li>
+									<li>
+										<code>metadata.status</code> - Series status (ongoing,
+										ended, hiatus, etc.)
+									</li>
+									<li>
+										<code>metadata.readingDirection</code> - Reading direction
+										(ltr, rtl, ttb, webtoon)
+									</li>
+									<li>
+										<code>metadata.genres</code>, <code>metadata.tags</code> -
+										Arrays of strings
+									</li>
+									<li>
+										<code>metadata.externalRatings</code> - Array of{" "}
+										{"{source, rating, votes}"}
+									</li>
+									<li>
+										<code>metadata.externalLinks</code> - Array of{" "}
+										{"{source, url}"}
+									</li>
+									<li>
+										<code>metadata.alternateTitles</code> - Array of{" "}
+										{"{title, label}"}
 									</li>
 								</ul>
 							</Text>

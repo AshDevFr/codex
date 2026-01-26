@@ -27,14 +27,18 @@ export interface ExampleTemplate {
 }
 
 /**
- * Default template - Simple key-value list
+ * Default template - Simple key-value list with optional metadata
  */
 const defaultTemplate: ExampleTemplate = {
 	id: "default",
 	name: "Simple List",
 	description:
-		"Displays all custom metadata fields as a simple bullet list with bold keys.",
-	template: `{{#if custom_metadata}}
+		"Displays custom metadata as a bullet list, with optional series info from built-in metadata.",
+	template: `{{#if metadata.genres}}
+**Genres:** {{join metadata.genres " • "}}
+{{/if}}
+
+{{#if custom_metadata}}
 ## Additional Information
 
 {{#each custom_metadata}}
@@ -46,7 +50,7 @@ const defaultTemplate: ExampleTemplate = {
 		edition: "First Edition",
 		notes: "Good condition",
 	},
-	tags: ["basic", "default"],
+	tags: ["basic", "default", "uses-metadata"],
 };
 
 /**
@@ -300,13 +304,160 @@ const minimalTemplate: ExampleTemplate = {
 };
 
 /**
+ * Series Info template - Shows built-in series metadata
+ *
+ * Uses the `metadata.*` fields which are available from the series' built-in metadata.
+ * This is different from `custom_metadata.*` which contains user-defined data.
+ */
+const seriesInfoTemplate: ExampleTemplate = {
+	id: "series-info",
+	name: "Series Info",
+	description:
+		"Display built-in series metadata like genres, tags, ratings, and external links.",
+	template: `{{#if metadata}}
+## Series Info
+
+{{#if metadata.publisher}}
+**Publisher:** {{metadata.publisher}}{{#if metadata.imprint}} ({{metadata.imprint}}){{/if}}
+{{/if}}
+
+{{#if metadata.year}}
+**Year:** {{metadata.year}}
+{{/if}}
+
+{{#if metadata.status}}
+**Status:** {{capitalize metadata.status}}
+{{/if}}
+
+{{#if metadata.totalBookCount}}
+**Volumes:** {{metadata.totalBookCount}}
+{{/if}}
+
+{{#if metadata.ageRating}}
+**Age Rating:** {{metadata.ageRating}}+
+{{/if}}
+
+{{#if metadata.genres}}
+### Genres
+{{join metadata.genres " • "}}
+{{/if}}
+
+{{#if metadata.tags}}
+### Tags
+{{#each metadata.tags}}{{#if @index}}, {{/if}}{{this}}{{/each}}
+{{/if}}
+
+{{#if metadata.externalRatings}}
+### Ratings
+{{#each metadata.externalRatings}}
+- **{{this.source}}**: {{this.rating}}{{#if this.votes}} ({{this.votes}} votes){{/if}}
+{{/each}}
+{{/if}}
+
+{{#if metadata.externalLinks}}
+### Links
+{{#each metadata.externalLinks}}
+- [{{this.source}}]({{this.url}})
+{{/each}}
+{{/if}}
+
+{{#if metadata.alternateTitles}}
+### Also Known As
+{{#each metadata.alternateTitles}}
+- {{this.title}}{{#if this.label}} *({{this.label}})*{{/if}}
+{{/each}}
+{{/if}}
+{{/if}}`,
+	sampleData: {},
+	tags: ["metadata", "series", "info", "genres", "ratings", "uses-metadata"],
+};
+
+/**
+ * Complete Overview template - Combines custom metadata with built-in series metadata
+ */
+const completeOverviewTemplate: ExampleTemplate = {
+	id: "complete-overview",
+	name: "Complete Overview",
+	description:
+		"Combines your custom tracking data with the series' built-in metadata for a complete view.",
+	template: `{{#if metadata}}
+## {{metadata.title}}
+
+{{#if metadata.summary}}
+{{metadata.summary}}
+{{/if}}
+
+{{#and metadata.publisher metadata.year}}
+*Published by {{metadata.publisher}} in {{metadata.year}}*
+{{/and}}
+{{/if}}
+
+{{#if custom_metadata}}
+---
+
+## My Progress
+
+{{#if custom_metadata.status}}
+**Status:** {{custom_metadata.status}}
+{{/if}}
+
+{{#if custom_metadata.rating}}
+**My Rating:** {{custom_metadata.rating}}/10
+{{/if}}
+
+{{#if custom_metadata.current_volume}}
+**Currently on:** Volume {{custom_metadata.current_volume}}{{#if metadata.totalBookCount}} of {{metadata.totalBookCount}}{{/if}}
+{{/if}}
+
+{{#if custom_metadata.notes}}
+### Notes
+{{custom_metadata.notes}}
+{{/if}}
+{{/if}}
+
+{{#if metadata}}
+{{#if metadata.genres}}
+---
+**Genres:** {{join metadata.genres " • "}}
+{{/if}}
+
+{{#if metadata.externalRatings}}
+### Community Ratings
+| Source | Rating |
+|--------|--------|
+{{#each metadata.externalRatings}}
+| {{this.source}} | {{this.rating}} |
+{{/each}}
+{{/if}}
+
+{{#if metadata.externalLinks}}
+**Links:** {{#each metadata.externalLinks}}{{#if @index}} | {{/if}}[{{this.source}}]({{this.url}}){{/each}}
+{{/if}}
+{{/if}}`,
+	sampleData: {
+		status: "In Progress",
+		rating: 9,
+		current_volume: 12,
+		notes: "Taking a break before the final arc. Amazing story so far!",
+	},
+	tags: [
+		"metadata",
+		"custom",
+		"combined",
+		"complete",
+		"overview",
+		"uses-metadata",
+	],
+};
+
+/**
  * Kitchen Sink template - The ultimate showcase
  */
 const kitchenSinkTemplate: ExampleTemplate = {
 	id: "kitchen-sink",
 	name: "🚀 Maximum Overdrive",
 	description:
-		"I heard you like features, so I put features in your features. This template uses EVERYTHING.",
+		"I heard you like features, so I put features in your features. This template uses EVERYTHING including built-in metadata.",
 	template: `{{#if custom_metadata}}
 {{#exists custom_metadata.hero}}
 # {{uppercase custom_metadata.hero.title}}
@@ -321,6 +472,40 @@ const kitchenSinkTemplate: ExampleTemplate = {
 > *"{{custom_metadata.hero.catchphrase}}"*
 {{/if}}
 {{/exists}}
+
+{{#if metadata}}
+---
+
+## 📖 Series Metadata
+
+{{#if metadata.summary}}
+*{{truncate metadata.summary 150 "..."}}*
+{{/if}}
+
+| Field | Value |
+|-------|-------|
+{{#if metadata.publisher}}| Publisher | {{metadata.publisher}}{{#if metadata.imprint}} ({{metadata.imprint}}){{/if}} |{{/if}}
+{{#if metadata.year}}| Year | {{metadata.year}} |{{/if}}
+{{#if metadata.status}}| Status | {{capitalize metadata.status}} |{{/if}}
+{{#if metadata.totalBookCount}}| Volumes | {{metadata.totalBookCount}} |{{/if}}
+{{#if metadata.ageRating}}| Age Rating | {{metadata.ageRating}}+ |{{/if}}
+{{#if metadata.language}}| Language | {{metadata.language}} |{{/if}}
+
+{{#if metadata.genres}}
+**Official Genres:** {{join metadata.genres " • "}}
+{{/if}}
+
+{{#if metadata.externalRatings}}
+### 🌐 Community Ratings
+{{#each metadata.externalRatings}}
+- **{{this.source}}**: {{this.rating}}{{#if this.votes}} *({{this.votes}} votes)*{{/if}}
+{{/each}}
+{{/if}}
+
+{{#if metadata.alternateTitles}}
+**Also Known As:** {{#each metadata.alternateTitles}}{{#if @index}}, {{/if}}{{this.title}}{{/each}}
+{{/if}}
+{{/if}}
 
 ---
 
@@ -545,7 +730,7 @@ File ID: \`{{custom_metadata.technical.file_id}}\`
 			"Contains graphic violence, intense action sequences, and mature themes. Viewer discretion advised.",
 		last_updated: "2024-12-28T14:30:00Z",
 	},
-	tags: ["showcase", "advanced", "everything", "kitchen-sink"],
+	tags: ["showcase", "advanced", "everything", "kitchen-sink", "uses-metadata"],
 };
 
 /**
@@ -559,6 +744,8 @@ export const EXAMPLE_TEMPLATES: ExampleTemplate[] = [
 	collectionInfoTemplate,
 	comprehensiveTemplate,
 	minimalTemplate,
+	seriesInfoTemplate,
+	completeOverviewTemplate,
 	kitchenSinkTemplate,
 ];
 

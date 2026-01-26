@@ -134,6 +134,15 @@ function registerSafeHelpers(instance: typeof Handlebars): void {
 	});
 
 	/**
+	 * Capitalize the first letter of a string
+	 * Usage: {{capitalize value}}
+	 */
+	instance.registerHelper("capitalize", (value: unknown) => {
+		if (!value || typeof value !== "string") return "";
+		return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+	});
+
+	/**
 	 * Get the first N items of an array
 	 * Usage: {{#first items 3}}...{{/first}}
 	 */
@@ -297,6 +306,7 @@ export function compileTemplate(
 				truncate: true,
 				lowercase: true,
 				uppercase: true,
+				capitalize: true,
 				first: true,
 				join: true,
 				exists: true,
@@ -373,7 +383,9 @@ export function renderTemplate(
 }
 
 /**
- * Validate a template string without rendering
+ * Validate a template string by compiling and doing a test render.
+ * Some Handlebars errors (like malformed tags) are only caught during rendering,
+ * so we do a test render with empty data to catch those.
  */
 export function validateTemplate(template: string): {
 	valid: boolean;
@@ -381,7 +393,10 @@ export function validateTemplate(template: string): {
 } {
 	try {
 		const instance = createSafeHandlebarsInstance();
-		instance.compile(template);
+		const compiled = instance.compile(template);
+		// Do a test render with empty data to catch runtime errors
+		// (e.g., malformed tags like {{/if} that pass compilation but fail on render)
+		compiled({});
 		return { valid: true };
 	} catch (error) {
 		const message =
@@ -402,6 +417,7 @@ export function getAvailableHelpers(): string[] {
 		"truncate",
 		"lowercase",
 		"uppercase",
+		"capitalize",
 		"first",
 		"join",
 		"exists",
