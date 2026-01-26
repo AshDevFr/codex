@@ -1,6 +1,8 @@
 use crate::parsers::ImageFormat;
 
 /// Check if a file name is an image file
+///
+/// Includes SVG files which are rendered to raster format using resvg.
 pub fn is_image_file(name: &str) -> bool {
     let lower = name.to_lowercase();
     lower.ends_with(".jpg")
@@ -28,7 +30,6 @@ pub fn get_image_format(name: &str) -> Option<ImageFormat> {
     } else if lower.ends_with(".svg") {
         Some(ImageFormat::SVG)
     } else {
-        // Other formats are not supported
         None
     }
 }

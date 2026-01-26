@@ -42,6 +42,7 @@ pdfium-render = "0.8"
 
 # Image processing
 image = { version = "0.25", features = ["avif"] }
+resvg = "0.44"
 
 # Hashing
 sha2 = "0.10"

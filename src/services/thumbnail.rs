@@ -7,6 +7,7 @@
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use image::imageops::FilterType;
+use image::{DynamicImage, RgbaImage};
 use sea_orm::{ActiveModelTrait, DatabaseConnection, Set};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -53,6 +54,15 @@ fn detect_image_format(data: &[u8]) -> &'static str {
         }
         // ICO: 00 00 01 00
         [0x00, 0x00, 0x01, 0x00] => "ICO",
+        // SVG: <svg or <?xml (not supported by image crate)
+        [0x3C, 0x73, 0x76, 0x67] => "SVG (unsupported - requires rendering)",
+        [0x3C, 0x3F, 0x78, 0x6D] => "XML/SVG (unsupported - requires rendering)",
+        // Zlib compressed data (common in PDFs): 78 9C, 78 DA, 78 01
+        [0x78, 0x9C, _, _] | [0x78, 0xDA, _, _] | [0x78, 0x01, _, _] => {
+            "zlib-compressed data (raw stream, not a valid image)"
+        }
+        // All null bytes (corrupted data)
+        [0x00, 0x00, 0x00, 0x00] => "null bytes (corrupted or empty data)",
         _ => "unknown",
     }
 }
@@ -65,6 +75,78 @@ fn format_magic_bytes(data: &[u8]) -> String {
         .map(|b| format!("{:02X}", b))
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// Check if data appears to be SVG based on magic bytes
+fn is_svg_data(data: &[u8]) -> bool {
+    if data.len() < 4 {
+        return false;
+    }
+    // SVG starts with "<svg" or "<?xml"
+    data.starts_with(b"<svg") || data.starts_with(b"<?xml")
+}
+
+/// Render SVG data to a raster image using resvg
+///
+/// Returns a DynamicImage that can be used with the image crate for further processing.
+fn render_svg_to_image(svg_data: &[u8]) -> Result<DynamicImage> {
+    use resvg::tiny_skia::Pixmap;
+    use resvg::usvg::{Options, Tree};
+
+    // Parse the SVG
+    let tree = Tree::from_data(svg_data, &Options::default())
+        .map_err(|e| anyhow!("Failed to parse SVG: {}", e))?;
+
+    // Get the SVG size
+    let size = tree.size();
+    let width = size.width() as u32;
+    let height = size.height() as u32;
+
+    // Ensure we have valid dimensions
+    if width == 0 || height == 0 {
+        return Err(anyhow!("SVG has invalid dimensions: {}x{}", width, height));
+    }
+
+    // Create a pixmap to render into
+    let mut pixmap = Pixmap::new(width, height)
+        .ok_or_else(|| anyhow!("Failed to create pixmap for SVG rendering"))?;
+
+    // Render the SVG
+    resvg::render(
+        &tree,
+        resvg::tiny_skia::Transform::default(),
+        &mut pixmap.as_mut(),
+    );
+
+    // Convert to image::RgbaImage
+    let rgba_data = pixmap.take();
+    let img = RgbaImage::from_raw(width, height, rgba_data)
+        .ok_or_else(|| anyhow!("Failed to create image from SVG render data"))?;
+
+    Ok(DynamicImage::ImageRgba8(img))
+}
+
+/// Load image from bytes, with special handling for SVG
+///
+/// This function attempts to load an image from raw bytes. It first checks if the data
+/// is SVG format (which the image crate doesn't support natively) and renders it using
+/// resvg. For other formats, it uses the image crate directly.
+fn load_image_with_svg_support(data: &[u8]) -> Result<DynamicImage> {
+    if is_svg_data(data) {
+        render_svg_to_image(data)
+    } else {
+        image::load_from_memory(data).map_err(|e| {
+            let detected_format = detect_image_format(data);
+            let magic_bytes = format_magic_bytes(data);
+            anyhow!(
+                "Failed to load image: {} (size: {} bytes, detected format: {}, magic bytes: [{}])",
+                e,
+                data.len(),
+                detected_format,
+                magic_bytes
+            )
+        })
+    }
 }
 
 /// Metadata for a cached thumbnail file (for HTTP conditional caching)
@@ -316,18 +398,8 @@ impl ThumbnailService {
 
         // Use spawn_blocking for CPU-intensive image processing
         tokio::task::spawn_blocking(move || {
-            // Load image from bytes with detailed error context
-            let img = image::load_from_memory(&image_data).map_err(|e| {
-                let detected_format = detect_image_format(&image_data);
-                let magic_bytes = format_magic_bytes(&image_data);
-                anyhow!(
-                    "Failed to load image: {} (size: {} bytes, detected format: {}, magic bytes: [{}])",
-                    e,
-                    image_data.len(),
-                    detected_format,
-                    magic_bytes
-                )
-            })?;
+            // Load image from bytes (with SVG support)
+            let img = load_image_with_svg_support(&image_data)?;
 
             // Calculate new dimensions while maintaining aspect ratio
             let (width, height) = (img.width(), img.height());
@@ -594,18 +666,8 @@ impl ThumbnailService {
         max_dimension: u32,
         jpeg_quality: u8,
     ) -> Result<Vec<u8>> {
-        // Load image from bytes with detailed error context
-        let img = image::load_from_memory(image_data).map_err(|e| {
-            let detected_format = detect_image_format(image_data);
-            let magic_bytes = format_magic_bytes(image_data);
-            anyhow!(
-                "Failed to load image: {} (size: {} bytes, detected format: {}, magic bytes: [{}])",
-                e,
-                image_data.len(),
-                detected_format,
-                magic_bytes
-            )
-        })?;
+        // Load image from bytes (with SVG support)
+        let img = load_image_with_svg_support(image_data)?;
 
         // Calculate new dimensions while maintaining aspect ratio
         let (width, height) = (img.width(), img.height());

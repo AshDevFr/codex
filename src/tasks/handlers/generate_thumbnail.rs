@@ -5,11 +5,11 @@ use tracing::{debug, error, info, warn};
 
 use crate::db::entities::book_error::{BookError, BookErrorType};
 use crate::db::entities::tasks;
-use crate::db::repositories::{BookRepository, SeriesRepository};
+use crate::db::repositories::{BookRepository, SeriesRepository, TaskRepository};
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
 use crate::services::ThumbnailService;
 use crate::tasks::handlers::TaskHandler;
-use crate::tasks::types::TaskResult;
+use crate::tasks::types::{TaskResult, TaskType};
 
 pub struct GenerateThumbnailHandler {
     thumbnail_service: Arc<ThumbnailService>,
@@ -89,21 +89,23 @@ impl TaskHandler for GenerateThumbnailHandler {
                         );
                     }
 
-                    // If this book is the first in its series, invalidate the cached series thumbnail
-                    // so it gets regenerated with the new book thumbnail
+                    // If this book is the first in its series, regenerate the series thumbnail
+                    // to use this book's new cover
                     if let Ok(is_first) = BookRepository::is_first_in_series(db, book_id).await {
                         if is_first {
                             debug!(
-                                "Book {} is first in series {}, invalidating series thumbnail",
+                                "Book {} is first in series {}, queueing series thumbnail regeneration",
                                 book_id, book.series_id
                             );
-                            if let Err(e) = self
-                                .thumbnail_service
-                                .delete_series_thumbnail(book.series_id)
-                                .await
-                            {
+                            // Queue a task to regenerate the series thumbnail with force=true
+                            // This will delete the old thumbnail and create a new one from this book
+                            let task_type = TaskType::GenerateSeriesThumbnail {
+                                series_id: book.series_id,
+                                force: true,
+                            };
+                            if let Err(e) = TaskRepository::enqueue(db, task_type, 0, None).await {
                                 warn!(
-                                    "Failed to invalidate series thumbnail for series {}: {}",
+                                    "Failed to queue series thumbnail regeneration for series {}: {}",
                                     book.series_id, e
                                 );
                             }

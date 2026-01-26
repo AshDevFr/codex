@@ -181,6 +181,8 @@ impl BookRepository {
     ///
     /// Returns only the first book (ordered by number, title, filename).
     /// More efficient than list_by_series when you only need the first book.
+    /// Excludes books with page_count == 0 (failed analysis) to ensure a valid
+    /// book is returned for thumbnail generation.
     pub async fn get_first_in_series(
         db: &DatabaseConnection,
         series_id: Uuid,
@@ -191,6 +193,7 @@ impl BookRepository {
         Books::find()
             .filter(books::Column::SeriesId.eq(series_id))
             .filter(books::Column::Deleted.eq(false))
+            .filter(books::Column::PageCount.gt(0))
             .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
             .order_by_asc(book_metadata::Column::Number)
             .order_by_asc(book_metadata::Column::TitleSort)

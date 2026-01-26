@@ -5,11 +5,25 @@ use crate::parsers::{BookMetadata, FileFormat, ImageFormat, PageInfo};
 use crate::utils::{hash_file, CodexError, Result};
 use chrono::{DateTime, Utc};
 use image::GenericImageView;
+use resvg::usvg::{Options, Tree};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use zip::ZipArchive;
+
+/// Get dimensions from SVG data using resvg
+fn get_svg_dimensions(svg_data: &[u8]) -> Option<(u32, u32)> {
+    let tree = Tree::from_data(svg_data, &Options::default()).ok()?;
+    let size = tree.size();
+    let width = size.width() as u32;
+    let height = size.height() as u32;
+    if width > 0 && height > 0 {
+        Some((width, height))
+    } else {
+        None
+    }
+}
 
 pub struct EpubParser;
 
@@ -259,22 +273,25 @@ impl FormatParser for EpubParser {
                 None => continue, // Skip if format is unknown
             };
 
-            // Skip SVG files - they require rendering to get dimensions
-            // and the `image` crate doesn't support SVG
-            if format == ImageFormat::SVG {
-                continue;
-            }
-
             // Read image data
             let mut image_data = Vec::new();
             file.read_to_end(&mut image_data)?;
 
-            // Get image dimensions
-            let img = match image::load_from_memory(&image_data) {
-                Ok(img) => img,
-                Err(_) => continue, // Skip if we can't load the image
+            // Get image dimensions (with special handling for SVG)
+            let (width, height) = if format == ImageFormat::SVG {
+                // Use resvg to get SVG dimensions
+                match get_svg_dimensions(&image_data) {
+                    Some((w, h)) => (w, h),
+                    None => continue, // Skip if we can't parse the SVG
+                }
+            } else {
+                // Use image crate for raster formats
+                let img = match image::load_from_memory(&image_data) {
+                    Ok(img) => img,
+                    Err(_) => continue, // Skip if we can't load the image
+                };
+                img.dimensions()
             };
-            let (width, height) = img.dimensions();
 
             pages.push(PageInfo {
                 page_number: page_num + 1,
