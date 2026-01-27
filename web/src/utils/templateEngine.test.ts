@@ -386,6 +386,198 @@ describe("templateEngine", () => {
 				expect(result.output).toBe("fallback");
 			});
 		});
+
+		describe("urlencode", () => {
+			it("should encode spaces as %20", () => {
+				const result = renderTemplate("{{urlencode title}}", {
+					title: "My Series Name",
+				});
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("My%20Series%20Name");
+			});
+
+			it("should encode special characters", () => {
+				const result = renderTemplate("{{urlencode query}}", {
+					query: "search?q=test&page=1",
+				});
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("search%3Fq%3Dtest%26page%3D1");
+			});
+
+			it("should encode unicode characters", () => {
+				const result = renderTemplate("{{urlencode title}}", {
+					title: "日本語タイトル",
+				});
+				expect(result.success).toBe(true);
+				expect(result.output).toBe(
+					"%E6%97%A5%E6%9C%AC%E8%AA%9E%E3%82%BF%E3%82%A4%E3%83%88%E3%83%AB",
+				);
+			});
+
+			it("should return empty for non-strings", () => {
+				const result = renderTemplate("{{urlencode value}}", { value: 123 });
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("");
+			});
+		});
+
+		describe("replace", () => {
+			it("should replace all occurrences", () => {
+				const result = renderTemplate('{{replace text " " "-"}}', {
+					text: "hello world test",
+				});
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("hello-world-test");
+			});
+
+			it("should handle no matches", () => {
+				const result = renderTemplate('{{replace text "x" "y"}}', {
+					text: "hello",
+				});
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("hello");
+			});
+
+			it("should return empty for non-strings", () => {
+				const result = renderTemplate('{{replace value "a" "b"}}', {
+					value: null,
+				});
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("");
+			});
+		});
+
+		describe("split", () => {
+			it("should split and return item at index", () => {
+				const result = renderTemplate('{{split text "-" 1}}', {
+					text: "foo-bar-baz",
+				});
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("bar");
+			});
+
+			it("should return first item by default", () => {
+				const result = renderTemplate('{{split text "-"}}', {
+					text: "foo-bar-baz",
+				});
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("foo");
+			});
+
+			it("should return empty for out of bounds index", () => {
+				const result = renderTemplate('{{split text "-" 10}}', {
+					text: "foo-bar",
+				});
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("");
+			});
+		});
+
+		describe("includes", () => {
+			it("should render content when substring found", () => {
+				const result = renderTemplate(
+					'{{#includes title "manga"}}Is Manga{{/includes}}',
+					{ title: "One Piece manga" },
+				);
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("Is Manga");
+			});
+
+			it("should render else when substring not found", () => {
+				const result = renderTemplate(
+					'{{#includes title "manga"}}Is Manga{{else}}Not Manga{{/includes}}',
+					{ title: "Batman comic" },
+				);
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("Not Manga");
+			});
+		});
+
+		describe("math", () => {
+			it("should add numbers", () => {
+				const result = renderTemplate('{{math value "+" 5}}', { value: 10 });
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("15");
+			});
+
+			it("should subtract numbers", () => {
+				const result = renderTemplate('{{math value "-" 3}}', { value: 10 });
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("7");
+			});
+
+			it("should multiply numbers", () => {
+				const result = renderTemplate('{{math value "*" 4}}', { value: 5 });
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("20");
+			});
+
+			it("should divide numbers", () => {
+				const result = renderTemplate('{{math value "/" 2}}', { value: 10 });
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("5");
+			});
+
+			it("should handle modulo", () => {
+				const result = renderTemplate('{{math value "%" 3}}', { value: 10 });
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("1");
+			});
+
+			it("should return empty for division by zero", () => {
+				const result = renderTemplate('{{math value "/" 0}}', { value: 10 });
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("");
+			});
+
+			it("should return empty for non-numbers", () => {
+				const result = renderTemplate('{{math value "+" 5}}', {
+					value: "text",
+				});
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("");
+			});
+		});
+
+		describe("padStart", () => {
+			it("should pad numbers with zeros", () => {
+				const result = renderTemplate('{{padStart volume 3 "0"}}', {
+					volume: 5,
+				});
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("005");
+			});
+
+			it("should not pad when already long enough", () => {
+				const result = renderTemplate('{{padStart volume 2 "0"}}', {
+					volume: 100,
+				});
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("100");
+			});
+
+			it("should default to padding with zeros", () => {
+				const result = renderTemplate("{{padStart volume 3}}", { volume: 7 });
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("007");
+			});
+		});
+
+		describe("trim", () => {
+			it("should trim whitespace", () => {
+				const result = renderTemplate("{{trim text}}", {
+					text: "  hello world  ",
+				});
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("hello world");
+			});
+
+			it("should return empty for non-strings", () => {
+				const result = renderTemplate("{{trim value}}", { value: null });
+				expect(result.success).toBe(true);
+				expect(result.output).toBe("");
+			});
+		});
 	});
 
 	describe("getAvailableHelpers", () => {

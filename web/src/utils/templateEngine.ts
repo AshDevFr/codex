@@ -283,6 +283,115 @@ function registerSafeHelpers(instance: typeof Handlebars): void {
 			return value;
 		},
 	);
+
+	/**
+	 * URL-encode a string for use in URLs
+	 * Usage: {{urlencode value}}
+	 */
+	instance.registerHelper("urlencode", (value: unknown) => {
+		if (!value || typeof value !== "string") return "";
+		return encodeURIComponent(value);
+	});
+
+	/**
+	 * Replace occurrences of a substring
+	 * Usage: {{replace value "search" "replacement"}}
+	 */
+	instance.registerHelper(
+		"replace",
+		(value: unknown, search: unknown, replacement: unknown) => {
+			if (!value || typeof value !== "string") return "";
+			const searchStr = typeof search === "string" ? search : "";
+			const replaceStr = typeof replacement === "string" ? replacement : "";
+			return value.split(searchStr).join(replaceStr);
+		},
+	);
+
+	/**
+	 * Split a string and get an item by index
+	 * Usage: {{split value "-" 0}} gets first part of "foo-bar-baz" => "foo"
+	 */
+	instance.registerHelper(
+		"split",
+		(value: unknown, separator: unknown, index: unknown) => {
+			if (!value || typeof value !== "string") return "";
+			const sep = typeof separator === "string" ? separator : " ";
+			const idx = typeof index === "number" ? index : 0;
+			const parts = value.split(sep);
+			return parts[idx] ?? "";
+		},
+	);
+
+	/**
+	 * Check if a string contains a substring
+	 * Usage: {{#includes value "search"}}...{{/includes}}
+	 */
+	instance.registerHelper(
+		"includes",
+		function (
+			this: unknown,
+			value: unknown,
+			search: unknown,
+			options: Handlebars.HelperOptions,
+		) {
+			if (!value || typeof value !== "string") return options.inverse(this);
+			const searchStr = typeof search === "string" ? search : "";
+			return value.includes(searchStr)
+				? options.fn(this)
+				: options.inverse(this);
+		},
+	);
+
+	/**
+	 * Basic math operations
+	 * Usage: {{math value "+" 5}}, {{math value "-" 2}}, {{math value "*" 3}}, {{math value "/" 2}}
+	 */
+	instance.registerHelper(
+		"math",
+		(value: unknown, operator: unknown, operand: unknown) => {
+			const v = Number(value);
+			const o = Number(operand);
+			if (Number.isNaN(v) || Number.isNaN(o)) return "";
+
+			switch (operator) {
+				case "+":
+					return v + o;
+				case "-":
+					return v - o;
+				case "*":
+					return v * o;
+				case "/":
+					return o !== 0 ? v / o : "";
+				case "%":
+					return o !== 0 ? v % o : "";
+				default:
+					return v;
+			}
+		},
+	);
+
+	/**
+	 * Pad a number with leading zeros
+	 * Usage: {{padStart value 3 "0"}} turns 5 into "005"
+	 */
+	instance.registerHelper(
+		"padStart",
+		(value: unknown, length: unknown, char: unknown) => {
+			const str = String(value ?? "");
+			const len = typeof length === "number" ? length : 2;
+			const padChar = typeof char === "string" ? char : "0";
+			return str.padStart(len, padChar);
+		},
+	);
+
+	/**
+	 * Trim whitespace from a string
+	 * Usage: {{trim value}}
+	 */
+	instance.registerHelper("trim", (value: unknown) => {
+		if (!value || typeof value !== "string") return "";
+		return value.trim();
+	});
 }
 
 /**
@@ -317,6 +426,13 @@ export function compileTemplate(
 				or: true,
 				lookup: true,
 				default: true,
+				urlencode: true,
+				replace: true,
+				split: true,
+				includes: true,
+				math: true,
+				padStart: true,
+				trim: true,
 			},
 		});
 
@@ -428,5 +544,12 @@ export function getAvailableHelpers(): string[] {
 		"or",
 		"lookup",
 		"default",
+		"urlencode",
+		"replace",
+		"split",
+		"includes",
+		"math",
+		"padStart",
+		"trim",
 	];
 }
