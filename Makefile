@@ -372,3 +372,50 @@ changelog-release: ## Generate changelog for a new release (usage: make changelo
 	fi
 	git-cliff --tag v$(VERSION) -o CHANGELOG.md
 	@echo "$(GREEN)Changelog generated for v$(VERSION)$(NC)"
+
+# =============================================================================
+# Release
+# =============================================================================
+
+release-prepare: ## Prepare a release (usage: make release-prepare VERSION=1.0.0)
+	@if [ -z "$(VERSION)" ]; then \
+		echo "$(YELLOW)Error: VERSION not set. Use: make release-prepare VERSION=1.0.0$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)Preparing release v$(VERSION)...$(NC)"
+	@echo ""
+	@# Update Cargo.toml version
+	@sed -i.bak 's/^version = ".*"/version = "$(VERSION)"/' Cargo.toml && rm Cargo.toml.bak
+	@echo "$(GREEN)✓$(NC) Cargo.toml version set to $(VERSION)"
+	@# Update web/package.json version
+	@cd web && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null 2>&1
+	@echo "$(GREEN)✓$(NC) web/package.json version set to $(VERSION)"
+	@# Update Cargo.lock
+	@cargo build --quiet 2>/dev/null || cargo build
+	@echo "$(GREEN)✓$(NC) Updated Cargo.lock"
+	@# Generate changelog (skip if already modified)
+	@if git diff --quiet CHANGELOG.md 2>/dev/null && git diff --cached --quiet CHANGELOG.md 2>/dev/null; then \
+		git-cliff --tag v$(VERSION) -o CHANGELOG.md; \
+		echo "$(GREEN)✓$(NC) Generated CHANGELOG.md for v$(VERSION)"; \
+	else \
+		echo "$(YELLOW)⊘$(NC) Skipped CHANGELOG.md (already modified)"; \
+		echo "   To regenerate: git checkout CHANGELOG.md && make changelog-release VERSION=$(VERSION)"; \
+	fi
+	@echo ""
+	@echo "$(BLUE)═══════════════════════════════════════════════════════════════$(NC)"
+	@echo "$(GREEN)Release v$(VERSION) prepared!$(NC)"
+	@echo "$(BLUE)═══════════════════════════════════════════════════════════════$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Next steps:$(NC)"
+	@echo "  1. Review the changes:"
+	@echo "     $(GREEN)git diff$(NC)"
+	@echo ""
+	@echo "  2. Commit the release:"
+	@echo "     $(GREEN)git add -A && git commit -m \"chore(release): v$(VERSION)\"$(NC)"
+	@echo ""
+	@echo "  3. Create the tag:"
+	@echo "     $(GREEN)git tag -a v$(VERSION) -m \"v$(VERSION)\"$(NC)"
+	@echo ""
+	@echo "  4. Push to remote:"
+	@echo "     $(GREEN)git push && git push --tags$(NC)"
+	@echo ""
