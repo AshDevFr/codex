@@ -120,7 +120,7 @@ Deploy with PostgreSQL to support multiple concurrent users with proper read tra
 
 Scale horizontally with multiple replicas behind a load balancer. Codex's stateless design makes it perfect for cloud-native deployments.
 
-### Integration Platform
+### API Platform
 
 Use the comprehensive API to build custom tools, sync with other services, or integrate with automation workflows.
 

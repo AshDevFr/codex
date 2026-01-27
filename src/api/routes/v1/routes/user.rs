@@ -1,6 +1,6 @@
 //! Current user routes
 //!
-//! Handles current user's preferences, integrations, ratings, and API keys.
+//! Handles current user's preferences, ratings, and API keys.
 
 use super::super::handlers;
 use crate::api::extractors::AppState;
@@ -16,7 +16,6 @@ use std::sync::Arc;
 ///
 /// Routes:
 /// - Preferences: /user/preferences
-/// - Integrations: /user/integrations
 /// - Ratings: /user/ratings
 /// - Sharing tags: /user/sharing-tags
 /// - API keys: /api-keys
@@ -49,35 +48,6 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route(
             "/user/preferences/:key",
             delete(handlers::user_preferences::delete_preference),
-        )
-        // User integrations routes
-        .route(
-            "/user/integrations",
-            get(handlers::user_integrations::list_user_integrations),
-        )
-        .route(
-            "/user/integrations",
-            post(handlers::user_integrations::connect_integration),
-        )
-        .route(
-            "/user/integrations/:name",
-            get(handlers::user_integrations::get_user_integration),
-        )
-        .route(
-            "/user/integrations/:name",
-            patch(handlers::user_integrations::update_integration_settings),
-        )
-        .route(
-            "/user/integrations/:name",
-            delete(handlers::user_integrations::disconnect_integration),
-        )
-        .route(
-            "/user/integrations/:name/callback",
-            post(handlers::user_integrations::oauth_callback),
-        )
-        .route(
-            "/user/integrations/:name/sync",
-            post(handlers::user_integrations::trigger_sync),
         )
         // API key routes
         .route("/api-keys", get(handlers::api_keys::list_api_keys))

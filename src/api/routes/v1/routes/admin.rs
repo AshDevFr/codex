@@ -1,7 +1,6 @@
 //! Admin routes
 //!
-//! Handles administrative operations including settings, system integrations,
-//! sharing tags, and cleanup tasks.
+//! Handles administrative operations including settings, sharing tags, and cleanup tasks.
 
 use super::super::handlers;
 use crate::api::extractors::AppState;
@@ -17,7 +16,6 @@ use std::sync::Arc;
 ///
 /// Routes:
 /// - Settings: /admin/settings
-/// - Integrations: /admin/integrations
 /// - Sharing tags: /admin/sharing-tags
 /// - Cleanup: /admin/cleanup-orphans
 pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
@@ -43,39 +41,6 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route(
             "/admin/settings/:setting_key/history",
             get(handlers::settings::get_setting_history),
-        )
-        // System integrations routes (admin only)
-        .route(
-            "/admin/integrations",
-            get(handlers::system_integrations::list_system_integrations),
-        )
-        .route(
-            "/admin/integrations",
-            post(handlers::system_integrations::create_system_integration),
-        )
-        .route(
-            "/admin/integrations/:id",
-            get(handlers::system_integrations::get_system_integration),
-        )
-        .route(
-            "/admin/integrations/:id",
-            patch(handlers::system_integrations::update_system_integration),
-        )
-        .route(
-            "/admin/integrations/:id",
-            delete(handlers::system_integrations::delete_system_integration),
-        )
-        .route(
-            "/admin/integrations/:id/enable",
-            post(handlers::system_integrations::enable_system_integration),
-        )
-        .route(
-            "/admin/integrations/:id/disable",
-            post(handlers::system_integrations::disable_system_integration),
-        )
-        .route(
-            "/admin/integrations/:id/test",
-            post(handlers::system_integrations::test_system_integration),
         )
         // Sharing tags routes (admin only)
         .route(

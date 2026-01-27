@@ -43,10 +43,12 @@ fn create_rate_limit_test_config() -> Config {
     config.komga_api.enabled = false;
 
     // Configure rate limiting with small values for testing
+    // Use very low refill rates to prevent tokens from being replenished
+    // between requests during tests (which would cause flaky failures)
     config.rate_limit.enabled = true;
-    config.rate_limit.anonymous_rps = 10;
+    config.rate_limit.anonymous_rps = 1; // 1 token per second - won't refill during test
     config.rate_limit.anonymous_burst = 3; // Small burst for easy testing
-    config.rate_limit.authenticated_rps = 50;
+    config.rate_limit.authenticated_rps = 1; // 1 token per second - won't refill during test
     config.rate_limit.authenticated_burst = 5; // Small burst for easy testing
     config.rate_limit.exempt_paths = vec!["/health".to_string(), "/api/v1/events".to_string()];
 

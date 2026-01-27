@@ -15,12 +15,10 @@ import {
 	Table,
 	Tabs,
 	Text,
-	Textarea,
 	TextInput,
 	Title,
 	Tooltip,
 } from "@mantine/core";
-import { useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
@@ -30,23 +28,19 @@ import {
 	IconChevronRight,
 	IconFileCode,
 	IconHistory,
-	IconPlug,
 	IconRefresh,
 	IconRestore,
-	IconServer,
 	IconSettings,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { type SettingDto, settingsApi } from "@/api/settings";
-import { systemIntegrationsApi } from "@/api/systemIntegrations";
 import { TemplateEditor } from "@/components/forms/TemplateEditor";
 import { TemplateSelector } from "@/components/forms/TemplateSelector";
 import { brandingQueryKey } from "@/hooks/useAppName";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import type { components } from "@/types/api.generated";
 
-type SystemIntegrationDto = components["schemas"]["SystemIntegrationDto"];
 type SettingHistoryDto = components["schemas"]["SettingHistoryDto"];
 
 // Group settings by category
@@ -365,86 +359,10 @@ function SettingsCategorySection({
 	);
 }
 
-// Integration Card component
-function IntegrationCard({
-	integration,
-	onEnable,
-	onDisable,
-	onTest,
-	onDelete,
-}: {
-	integration: SystemIntegrationDto;
-	onEnable: () => void;
-	onDisable: () => void;
-	onTest: () => void;
-	onDelete: () => void;
-}) {
-	const healthColor =
-		{
-			healthy: "green",
-			degraded: "yellow",
-			unhealthy: "red",
-			unknown: "gray",
-			disabled: "gray",
-		}[integration.healthStatus] || "gray";
-
-	return (
-		<Card withBorder padding="md">
-			<Group justify="space-between" mb="xs">
-				<Group gap="sm">
-					<Text fw={500}>{integration.displayName}</Text>
-					<Badge size="sm" variant="light">
-						{integration.integrationType}
-					</Badge>
-				</Group>
-				<Group gap="xs">
-					<Badge color={healthColor} size="sm">
-						{integration.healthStatus}
-					</Badge>
-					<Badge color={integration.enabled ? "green" : "gray"} size="sm">
-						{integration.enabled ? "Enabled" : "Disabled"}
-					</Badge>
-				</Group>
-			</Group>
-			<Text size="sm" c="dimmed" mb="md">
-				{integration.name}
-			</Text>
-			{integration.errorMessage && (
-				<Alert
-					icon={<IconAlertCircle size={16} />}
-					color="red"
-					mb="md"
-					title="Error"
-				>
-					{integration.errorMessage}
-				</Alert>
-			)}
-			<Group gap="xs">
-				{integration.enabled ? (
-					<Button size="xs" variant="light" color="gray" onClick={onDisable}>
-						Disable
-					</Button>
-				) : (
-					<Button size="xs" variant="light" color="green" onClick={onEnable}>
-						Enable
-					</Button>
-				)}
-				<Button size="xs" variant="light" onClick={onTest}>
-					Test Connection
-				</Button>
-				<Button size="xs" variant="light" color="red" onClick={onDelete}>
-					Delete
-				</Button>
-			</Group>
-		</Card>
-	);
-}
-
 export function ServerSettings() {
 	const queryClient = useQueryClient();
 	const [historyModalOpened, setHistoryModalOpened] = useState(false);
 	const [historyKey, setHistoryKey] = useState<string | null>(null);
-	const [createIntegrationOpened, setCreateIntegrationOpened] = useState(false);
 
 	useDocumentTitle("Server Settings");
 
@@ -463,32 +381,6 @@ export function ServerSettings() {
 		queryKey: ["admin-settings-history", historyKey],
 		queryFn: () => (historyKey ? settingsApi.getHistory(historyKey) : []),
 		enabled: !!historyKey && historyModalOpened,
-	});
-
-	// Fetch system integrations
-	const { data: integrations, isLoading: integrationsLoading } = useQuery({
-		queryKey: ["system-integrations"],
-		queryFn: systemIntegrationsApi.getAll,
-	});
-
-	// Create integration form
-	const integrationForm = useForm({
-		initialValues: {
-			name: "",
-			displayName: "",
-			integrationType: "metadata_provider",
-			config: "{}",
-		},
-		validate: {
-			name: (value) =>
-				value.length < 1
-					? "Name is required"
-					: !/^[a-z0-9_]+$/.test(value)
-						? "Name must be lowercase alphanumeric with underscores"
-						: null,
-			displayName: (value) =>
-				value.length < 1 ? "Display name is required" : null,
-		},
 	});
 
 	// Mutations
@@ -544,86 +436,6 @@ export function ServerSettings() {
 		},
 	});
 
-	const createIntegrationMutation = useMutation({
-		mutationFn: async (data: {
-			name: string;
-			displayName: string;
-			integrationType: string;
-			config: string;
-		}) => {
-			return systemIntegrationsApi.create({
-				name: data.name,
-				displayName: data.displayName,
-				integrationType: data.integrationType,
-				config: JSON.parse(data.config || "{}"),
-			});
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["system-integrations"] });
-			setCreateIntegrationOpened(false);
-			integrationForm.reset();
-			notifications.show({
-				title: "Success",
-				message: "Integration created",
-				color: "green",
-			});
-		},
-		onError: () => {
-			notifications.show({
-				title: "Error",
-				message: "Failed to create integration",
-				color: "red",
-			});
-		},
-	});
-
-	const enableIntegrationMutation = useMutation({
-		mutationFn: systemIntegrationsApi.enable,
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["system-integrations"] });
-			notifications.show({
-				title: "Success",
-				message: "Integration enabled",
-				color: "green",
-			});
-		},
-	});
-
-	const disableIntegrationMutation = useMutation({
-		mutationFn: systemIntegrationsApi.disable,
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["system-integrations"] });
-			notifications.show({
-				title: "Success",
-				message: "Integration disabled",
-				color: "green",
-			});
-		},
-	});
-
-	const testIntegrationMutation = useMutation({
-		mutationFn: systemIntegrationsApi.test,
-		onSuccess: (result) => {
-			notifications.show({
-				title: result.success ? "Success" : "Failed",
-				message: result.message,
-				color: result.success ? "green" : "red",
-			});
-		},
-	});
-
-	const deleteIntegrationMutation = useMutation({
-		mutationFn: systemIntegrationsApi.delete,
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["system-integrations"] });
-			notifications.show({
-				title: "Success",
-				message: "Integration deleted",
-				color: "green",
-			});
-		},
-	});
-
 	const handleViewHistory = (key: string) => {
 		setHistoryKey(key);
 		setHistoryModalOpened(true);
@@ -646,9 +458,6 @@ export function ServerSettings() {
 							leftSection={<IconFileCode size={16} />}
 						>
 							Custom Metadata
-						</Tabs.Tab>
-						<Tabs.Tab value="integrations" leftSection={<IconPlug size={16} />}>
-							System Integrations
 						</Tabs.Tab>
 					</Tabs.List>
 
@@ -705,67 +514,6 @@ export function ServerSettings() {
 								isSaving={updateSettingMutation.isPending}
 							/>
 						)}
-					</Tabs.Panel>
-
-					{/* System Integrations Tab */}
-					<Tabs.Panel value="integrations" pt="md">
-						<Stack gap="md">
-							<Group justify="space-between">
-								<Text c="dimmed">
-									System integrations are app-wide external service connections
-									managed by admins.
-								</Text>
-								<Button
-									leftSection={<IconPlug size={16} />}
-									onClick={() => setCreateIntegrationOpened(true)}
-								>
-									Add Integration
-								</Button>
-							</Group>
-
-							{integrationsLoading ? (
-								<Group justify="center" py="xl">
-									<Loader />
-								</Group>
-							) : integrations?.integrations &&
-								integrations.integrations.length > 0 ? (
-								<Stack gap="md">
-									{integrations.integrations.map(
-										(integration: SystemIntegrationDto) => (
-											<IntegrationCard
-												key={integration.id}
-												integration={integration}
-												onEnable={() =>
-													enableIntegrationMutation.mutate(integration.id)
-												}
-												onDisable={() =>
-													disableIntegrationMutation.mutate(integration.id)
-												}
-												onTest={() =>
-													testIntegrationMutation.mutate(integration.id)
-												}
-												onDelete={() =>
-													deleteIntegrationMutation.mutate(integration.id)
-												}
-											/>
-										),
-									)}
-								</Stack>
-							) : (
-								<Card withBorder>
-									<Stack align="center" py="xl">
-										<IconServer size={48} color="gray" />
-										<Text c="dimmed">No system integrations configured.</Text>
-										<Button
-											variant="light"
-											onClick={() => setCreateIntegrationOpened(true)}
-										>
-											Add Your First Integration
-										</Button>
-									</Stack>
-								</Card>
-							)}
-						</Stack>
 					</Tabs.Panel>
 				</Tabs>
 			</Stack>
@@ -874,64 +622,6 @@ export function ServerSettings() {
 						No history available for this setting.
 					</Text>
 				)}
-			</Modal>
-
-			{/* Create Integration Modal */}
-			<Modal
-				opened={createIntegrationOpened}
-				onClose={() => {
-					setCreateIntegrationOpened(false);
-					integrationForm.reset();
-				}}
-				title="Add System Integration"
-			>
-				<form
-					onSubmit={integrationForm.onSubmit((values) =>
-						createIntegrationMutation.mutate(values),
-					)}
-				>
-					<Stack gap="md">
-						<TextInput
-							label="Name"
-							placeholder="mangaupdates"
-							description="Unique identifier (lowercase, alphanumeric, underscores)"
-							{...integrationForm.getInputProps("name")}
-						/>
-						<TextInput
-							label="Display Name"
-							placeholder="MangaUpdates"
-							description="Human-readable name"
-							{...integrationForm.getInputProps("displayName")}
-						/>
-						<TextInput
-							label="Integration Type"
-							placeholder="metadata_provider"
-							description="Type of integration (metadata_provider, notification, storage)"
-							{...integrationForm.getInputProps("integrationType")}
-						/>
-						<Textarea
-							label="Configuration (JSON)"
-							placeholder='{"base_url": "https://api.example.com"}'
-							description="Non-sensitive configuration in JSON format"
-							{...integrationForm.getInputProps("config")}
-							minRows={3}
-						/>
-						<Group justify="flex-end">
-							<Button
-								variant="subtle"
-								onClick={() => setCreateIntegrationOpened(false)}
-							>
-								Cancel
-							</Button>
-							<Button
-								type="submit"
-								loading={createIntegrationMutation.isPending}
-							>
-								Create
-							</Button>
-						</Group>
-					</Stack>
-				</form>
 			</Modal>
 		</Box>
 	);

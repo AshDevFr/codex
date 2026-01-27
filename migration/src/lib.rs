@@ -40,10 +40,8 @@ mod m20260109_000024_create_task_notification_trigger;
 mod m20260111_000025_create_task_metrics;
 mod m20260111_000026_seed_metrics_settings;
 
-// User preferences and integrations
+// User preferences
 mod m20260112_000027_create_user_preferences;
-mod m20260112_000028_create_system_integrations;
-mod m20260112_000029_create_user_integrations;
 
 // Sharing tags for content access control
 mod m20260120_000030_create_sharing_tags;
@@ -99,10 +97,8 @@ impl MigratorTrait for Migrator {
             // Task metrics
             Box::new(m20260111_000025_create_task_metrics::Migration),
             Box::new(m20260111_000026_seed_metrics_settings::Migration),
-            // User preferences and integrations
+            // User preferences
             Box::new(m20260112_000027_create_user_preferences::Migration),
-            Box::new(m20260112_000028_create_system_integrations::Migration),
-            Box::new(m20260112_000029_create_user_integrations::Migration),
             // Sharing tags for content access control
             Box::new(m20260120_000030_create_sharing_tags::Migration),
             // Performance indexes for foreign keys

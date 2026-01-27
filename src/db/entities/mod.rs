@@ -16,7 +16,6 @@ pub mod read_progress;
 pub mod series;
 pub mod settings;
 pub mod settings_history;
-pub mod system_integrations;
 pub mod task_metrics;
 pub mod tasks;
 pub mod users;
@@ -31,7 +30,6 @@ pub mod series_genres;
 pub mod series_metadata;
 pub mod series_tags;
 pub mod tags;
-pub mod user_integrations;
 pub mod user_preferences;
 pub mod user_series_ratings;
 

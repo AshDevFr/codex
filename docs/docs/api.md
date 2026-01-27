@@ -381,17 +381,6 @@ Per-user settings (theme, language, reader options). See [User Management](./use
 | PUT | `/user/preferences/{key}` | Set a preference |
 | DELETE | `/user/preferences/{key}` | Reset to default |
 
-### User Integrations
-
-Connect external services (AniList, MyAnimeList, etc.). See [User Management](./users/user-management#external-integrations) for details.
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/user/integrations` | List connected and available integrations |
-| POST | `/user/integrations` | Connect integration |
-| DELETE | `/user/integrations/{name}` | Disconnect integration |
-| POST | `/user/integrations/{name}/sync` | Trigger manual sync |
-
 ### Settings (Admin Only)
 
 | Method | Endpoint | Description |
@@ -402,16 +391,6 @@ Connect external services (AniList, MyAnimeList, etc.). See [User Management](./
 | POST | `/admin/settings/bulk` | Bulk update settings |
 | POST | `/admin/settings/{key}/reset` | Reset to default |
 | GET | `/admin/settings/{key}/history` | Get setting change history |
-
-### System Integrations (Admin Only)
-
-App-wide external service connections (metadata providers, notifications).
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/admin/integrations` | List all system integrations |
-| POST | `/admin/integrations` | Create integration |
-| POST | `/admin/integrations/{id}/test` | Test connection |
 
 ### Filesystem (Admin Only)
 

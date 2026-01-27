@@ -23,11 +23,9 @@ import {
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
 import {
-	IconAlertCircle,
 	IconCheck,
 	IconCopy,
 	IconKey,
-	IconLink,
 	IconPalette,
 	IconPlus,
 	IconTrash,
@@ -36,7 +34,6 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "@/api/client";
-import { userIntegrationsApi } from "@/api/userIntegrations";
 import { userPreferencesApi } from "@/api/userPreferences";
 import { PermissionPicker } from "@/components/common";
 import { useAppName } from "@/hooks/useAppName";
@@ -56,8 +53,6 @@ import type { PreferenceKey, TypedPreferences } from "@/types/preferences";
 import { PREFERENCE_DEFAULTS } from "@/types/preferences";
 
 type ApiKeyDto = components["schemas"]["ApiKeyDto"];
-type UserIntegrationDto = components["schemas"]["UserIntegrationDto"];
-type AvailableIntegrationDto = components["schemas"]["AvailableIntegrationDto"];
 
 export function ProfileSettings() {
 	const appName = useAppName();
@@ -96,12 +91,6 @@ export function ProfileSettings() {
 			}
 			return [];
 		},
-	});
-
-	// Fetch user integrations
-	const { data: integrationsData, isLoading: integrationsLoading } = useQuery({
-		queryKey: ["user-integrations"],
-		queryFn: userIntegrationsApi.getAll,
 	});
 
 	// Password change form
@@ -236,27 +225,6 @@ export function ProfileSettings() {
 		},
 	});
 
-	const disconnectIntegrationMutation = useMutation({
-		mutationFn: async (name: string) => {
-			await userIntegrationsApi.disconnect(name);
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["user-integrations"] });
-			notifications.show({
-				title: "Success",
-				message: "Integration disconnected",
-				color: "green",
-			});
-		},
-		onError: () => {
-			notifications.show({
-				title: "Error",
-				message: "Failed to disconnect integration",
-				color: "red",
-			});
-		},
-	});
-
 	// Helper to get preference value with default
 	const getPref = <K extends PreferenceKey>(key: K): TypedPreferences[K] => {
 		const cached = getPreference(key);
@@ -293,9 +261,6 @@ export function ProfileSettings() {
 							leftSection={<IconPalette size={16} />}
 						>
 							Preferences
-						</Tabs.Tab>
-						<Tabs.Tab value="integrations" leftSection={<IconLink size={16} />}>
-							Integrations
 						</Tabs.Tab>
 						<Tabs.Tab value="api-keys" leftSection={<IconKey size={16} />}>
 							API Keys
@@ -422,146 +387,6 @@ export function ProfileSettings() {
 									</Group>
 								</Stack>
 							</Card>
-						</Stack>
-					</Tabs.Panel>
-
-					{/* Integrations Tab */}
-					<Tabs.Panel value="integrations" pt="md">
-						<Stack gap="lg">
-							{integrationsLoading ? (
-								<Text>Loading integrations...</Text>
-							) : (
-								<Stack gap="lg">
-									{/* Connected Integrations */}
-									<Card withBorder>
-										<Stack gap="md">
-											<Title order={3}>Connected Integrations</Title>
-											{integrationsData?.integrations &&
-											integrationsData.integrations.length > 0 ? (
-												<Table>
-													<Table.Thead>
-														<Table.Tr>
-															<Table.Th>Service</Table.Th>
-															<Table.Th>Status</Table.Th>
-															<Table.Th>Last Sync</Table.Th>
-															<Table.Th>Actions</Table.Th>
-														</Table.Tr>
-													</Table.Thead>
-													<Table.Tbody>
-														{integrationsData.integrations.map(
-															(integration: UserIntegrationDto) => (
-																<Table.Tr key={integration.integrationName}>
-																	<Table.Td>
-																		<Group gap="xs">
-																			<Text fw={500}>
-																				{integration.displayName ||
-																					integration.integrationName}
-																			</Text>
-																			{integration.externalUsername && (
-																				<Text size="sm" c="dimmed">
-																					(@{integration.externalUsername})
-																				</Text>
-																			)}
-																		</Group>
-																	</Table.Td>
-																	<Table.Td>
-																		<Badge
-																			color={
-																				integration.enabled ? "green" : "gray"
-																			}
-																		>
-																			{integration.enabled
-																				? "Enabled"
-																				: "Disabled"}
-																		</Badge>
-																	</Table.Td>
-																	<Table.Td>
-																		{integration.lastSyncAt
-																			? new Date(
-																					integration.lastSyncAt,
-																				).toLocaleString()
-																			: "Never"}
-																	</Table.Td>
-																	<Table.Td>
-																		<Button
-																			size="xs"
-																			color="red"
-																			variant="light"
-																			onClick={() =>
-																				disconnectIntegrationMutation.mutate(
-																					integration.integrationName,
-																				)
-																			}
-																			loading={
-																				disconnectIntegrationMutation.isPending
-																			}
-																		>
-																			Disconnect
-																		</Button>
-																	</Table.Td>
-																</Table.Tr>
-															),
-														)}
-													</Table.Tbody>
-												</Table>
-											) : (
-												<Text c="dimmed">No integrations connected yet.</Text>
-											)}
-										</Stack>
-									</Card>
-
-									{/* Available Integrations */}
-									<Card withBorder>
-										<Stack gap="md">
-											<Title order={3}>Available Integrations</Title>
-											<Alert icon={<IconAlertCircle size={16} />} color="blue">
-												Integration providers are coming soon. Connect your
-												AniList, MyAnimeList, and other accounts to sync your
-												reading progress.
-											</Alert>
-											{integrationsData?.available &&
-												integrationsData.available.length > 0 && (
-													<Stack gap="sm">
-														{integrationsData.available.map(
-															(available: AvailableIntegrationDto) => (
-																<Card
-																	key={available.name}
-																	withBorder
-																	padding="sm"
-																>
-																	<Group justify="space-between">
-																		<div>
-																			<Text fw={500}>
-																				{available.displayName}
-																			</Text>
-																			<Text size="sm" c="dimmed">
-																				{available.description}
-																			</Text>
-																			<Group gap="xs" mt="xs">
-																				{available.features.map((feature) => (
-																					<Badge
-																						key={feature}
-																						size="xs"
-																						variant="light"
-																					>
-																						{feature.replace(/_/g, " ")}
-																					</Badge>
-																				))}
-																			</Group>
-																		</div>
-																		<Button variant="light" disabled size="sm">
-																			Connect
-																		</Button>
-																	</Group>
-																</Card>
-															),
-														)}
-													</Stack>
-												)}
-										</Stack>
-									</Card>
-								</Stack>
-							)}
 						</Stack>
 					</Tabs.Panel>
 

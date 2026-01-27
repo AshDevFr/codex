@@ -211,15 +211,6 @@ The following paths are exempt from rate limiting:
         v1::handlers::user_preferences::set_bulk_preferences,
         v1::handlers::user_preferences::delete_preference,
 
-        // User integrations endpoints
-        v1::handlers::user_integrations::list_user_integrations,
-        v1::handlers::user_integrations::get_user_integration,
-        v1::handlers::user_integrations::connect_integration,
-        v1::handlers::user_integrations::oauth_callback,
-        v1::handlers::user_integrations::update_integration_settings,
-        v1::handlers::user_integrations::disconnect_integration,
-        v1::handlers::user_integrations::trigger_sync,
-
         // Alternate title endpoints
         v1::handlers::get_series_alternate_titles,
         v1::handlers::create_alternate_title,
@@ -345,16 +336,6 @@ The following paths are exempt from rate limiting:
         v1::handlers::settings::bulk_update_settings,
         v1::handlers::settings::reset_setting,
         v1::handlers::settings::get_setting_history,
-
-        // System integrations endpoints
-        v1::handlers::system_integrations::list_system_integrations,
-        v1::handlers::system_integrations::create_system_integration,
-        v1::handlers::system_integrations::get_system_integration,
-        v1::handlers::system_integrations::update_system_integration,
-        v1::handlers::system_integrations::delete_system_integration,
-        v1::handlers::system_integrations::enable_system_integration,
-        v1::handlers::system_integrations::disable_system_integration,
-        v1::handlers::system_integrations::test_system_integration,
 
         // Sharing Tags endpoints
         v1::handlers::sharing_tags::list_sharing_tags,
@@ -621,14 +602,6 @@ The following paths are exempt from rate limiting:
             v1::dto::SettingHistoryDto,
             v1::dto::ListSettingsQuery,
 
-            // System Integrations DTOs
-            v1::dto::SystemIntegrationDto,
-            v1::dto::SystemIntegrationsListResponse,
-            v1::dto::CreateSystemIntegrationRequest,
-            v1::dto::UpdateSystemIntegrationRequest,
-            v1::dto::IntegrationTestResult,
-            v1::dto::IntegrationStatusResponse,
-
             // Task Queue DTOs
             v1::handlers::task_queue::CreateTaskRequest,
             v1::handlers::task_queue::CreateTaskResponse,
@@ -729,7 +702,6 @@ The following paths are exempt from rate limiting:
         (name = "Users", description = "User management (admin only)"),
         (name = "User Preferences", description = "Per-user settings and preferences"),
         (name = "Reading Progress", description = "Reading progress tracking"),
-        (name = "User Integrations", description = "User external service connections (AniList, etc.)"),
 
         // Background Jobs
         (name = "Task Queue", description = "Background job queue management"),
@@ -739,7 +711,6 @@ The following paths are exempt from rate limiting:
         // System Administration
         (name = "Admin", description = "Administrative operations (cleanup, maintenance)"),
         (name = "Settings", description = "Runtime configuration settings (admin only)"),
-        (name = "System Integrations", description = "Admin-managed external service integrations"),
         (name = "Metrics", description = "Application metrics and statistics"),
         (name = "Filesystem", description = "Filesystem browsing for library paths"),
         (name = "Duplicates", description = "Duplicate book detection and management"),
@@ -864,7 +835,7 @@ impl utoipa::Modify for TagGroupsModifier {
             },
             {
                 "name": "User Features",
-                "tags": ["Users", "User Preferences", "Reading Progress", "User Integrations"]
+                "tags": ["Users", "User Preferences", "Reading Progress"]
             },
             {
                 "name": "Background Jobs",
@@ -872,7 +843,7 @@ impl utoipa::Modify for TagGroupsModifier {
             },
             {
                 "name": "Administration",
-                "tags": ["Admin", "Settings", "System Integrations", "Metrics", "Filesystem", "Duplicates", "Sharing Tags"]
+                "tags": ["Admin", "Settings", "Metrics", "Filesystem", "Duplicates", "Sharing Tags"]
             },
             {
                 "name": "Real-time Events",

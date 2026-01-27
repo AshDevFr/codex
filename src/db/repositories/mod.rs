@@ -15,12 +15,10 @@ pub mod series;
 pub mod series_covers;
 pub mod series_metadata;
 pub mod settings;
-pub mod system_integrations;
 pub mod tag;
 pub mod task;
 pub mod task_metrics;
 pub mod user;
-pub mod user_integrations;
 pub mod user_preferences;
 pub mod user_series_rating;
 
@@ -45,11 +43,9 @@ pub use series::SeriesRepository;
 pub use series_covers::SeriesCoversRepository;
 pub use series_metadata::SeriesMetadataRepository;
 pub use settings::SettingsRepository;
-pub use system_integrations::SystemIntegrationsRepository;
 pub use tag::TagRepository;
 pub use task::TaskRepository;
 pub use user::{UserListFilter, UserRepository};
-pub use user_integrations::UserIntegrationsRepository;
 pub use user_preferences::UserPreferencesRepository;
 pub use user_series_rating::UserSeriesRatingRepository;
 
