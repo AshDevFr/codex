@@ -141,8 +141,13 @@ fn test_extract_page_from_pdf_first_page() {
     // Should return valid image data
     assert!(!image_data.is_empty());
 
-    // Check it's a valid PNG (from our test PDF)
-    assert_eq!(&image_data[0..4], b"\x89PNG");
+    // Check it's a valid JPEG (from our test PDF with DCTDecode)
+    // JPEG magic bytes: FF D8 FF
+    assert!(
+        image_data.len() >= 3 && image_data[0] == 0xFF && image_data[1] == 0xD8,
+        "Expected JPEG magic bytes, got: {:02X?}",
+        &image_data[..image_data.len().min(4)]
+    );
 }
 
 #[test]

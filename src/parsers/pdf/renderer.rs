@@ -93,7 +93,6 @@ fn create_pdfium_instance(library_path: Option<&Path>) -> Result<Pdfium> {
             for path in &search_paths {
                 match Pdfium::bind_to_library(path) {
                     Ok(b) => {
-                        tracing::debug!("Found PDFium library at {:?}", path);
                         bindings_result = Some(b);
                         break;
                     }

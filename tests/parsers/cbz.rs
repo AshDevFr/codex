@@ -164,3 +164,193 @@ fn test_extract_page_from_cbz_nonexistent_file() {
     let result = extract_page_from_cbz("/nonexistent/file.cbz", 1);
     assert!(result.is_err());
 }
+
+#[test]
+fn test_cbz_parser_skips_macos_resource_forks() {
+    use std::fs::File;
+    use std::io::Write;
+    use zip::write::FileOptions;
+    use zip::ZipWriter;
+
+    let temp_dir = TempDir::new().unwrap();
+    let cbz_path = temp_dir.path().join("macos_test.cbz");
+
+    // Create a CBZ with macOS resource fork files
+    let file = File::create(&cbz_path).unwrap();
+    let mut zip = ZipWriter::new(file);
+
+    let options: FileOptions<'_, ()> =
+        FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    // Add actual image pages
+    for i in 1..=3 {
+        let page_data = common::create_test_png(10, 10);
+        let filename = format!("page{:03}.jpg", i);
+        zip.start_file(&filename, options).unwrap();
+        zip.write_all(&page_data).unwrap();
+    }
+
+    // Add macOS resource fork files (these look like images by extension but aren't)
+    // __MACOSX directory files
+    let macos_metadata = b"\x00\x05\x16\x07Mac OS X    ATTR";
+    zip.start_file("__MACOSX/._page001.jpg", options).unwrap();
+    zip.write_all(macos_metadata).unwrap();
+
+    zip.start_file("__MACOSX/._page002.jpg", options).unwrap();
+    zip.write_all(macos_metadata).unwrap();
+
+    // AppleDouble file at root level
+    zip.start_file("._page003.jpg", options).unwrap();
+    zip.write_all(macos_metadata).unwrap();
+
+    zip.finish().unwrap();
+
+    // Parse the CBZ - should only find 3 pages, not 6
+    let parser = CbzParser::new();
+    let metadata = parser.parse(&cbz_path).unwrap();
+
+    assert_eq!(
+        metadata.page_count, 3,
+        "Should skip macOS resource fork files"
+    );
+    assert_eq!(metadata.pages.len(), 3);
+
+    // Verify all pages are actual images
+    for page in &metadata.pages {
+        assert!(!page.file_name.starts_with("._"));
+        assert!(!page.file_name.contains("__MACOSX"));
+    }
+}
+
+#[test]
+fn test_cbz_parser_skips_non_image_files_with_image_extensions() {
+    use std::fs::File;
+    use std::io::Write;
+    use zip::write::FileOptions;
+    use zip::ZipWriter;
+
+    let temp_dir = TempDir::new().unwrap();
+    let cbz_path = temp_dir.path().join("fake_images.cbz");
+
+    let file = File::create(&cbz_path).unwrap();
+    let mut zip = ZipWriter::new(file);
+
+    let options: FileOptions<'_, ()> =
+        FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    // Add actual image pages
+    for i in 1..=2 {
+        let page_data = common::create_test_png(10, 10);
+        let filename = format!("page{:03}.png", i);
+        zip.start_file(&filename, options).unwrap();
+        zip.write_all(&page_data).unwrap();
+    }
+
+    // Add a file with .jpg extension but non-image content (e.g., text)
+    zip.start_file("fake_image.jpg", options).unwrap();
+    zip.write_all(b"This is not a real image file").unwrap();
+
+    // Add a file with .png extension but random binary content
+    zip.start_file("corrupted.png", options).unwrap();
+    zip.write_all(&[0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC])
+        .unwrap();
+
+    zip.finish().unwrap();
+
+    // Parse the CBZ - should only find 2 valid pages
+    let parser = CbzParser::new();
+    let metadata = parser.parse(&cbz_path).unwrap();
+
+    assert_eq!(
+        metadata.page_count, 2,
+        "Should skip files that don't pass image format verification"
+    );
+    assert_eq!(metadata.pages.len(), 2);
+
+    // Verify page numbers are sequential starting from 1
+    assert_eq!(metadata.pages[0].page_number, 1);
+    assert_eq!(metadata.pages[1].page_number, 2);
+}
+
+#[test]
+fn test_extract_page_with_fallback_skips_corrupted_first_image() {
+    use codex::parsers::cbz::extract_page_from_cbz_with_fallback;
+    use std::fs::File;
+    use std::io::Write;
+    use zip::write::FileOptions;
+    use zip::ZipWriter;
+
+    let temp_dir = TempDir::new().unwrap();
+    let cbz_path = temp_dir.path().join("corrupted_first.cbz");
+
+    let file = File::create(&cbz_path).unwrap();
+    let mut zip = ZipWriter::new(file);
+
+    let options: FileOptions<'_, ()> =
+        FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    // Add a corrupted image first (alphabetically first due to 'a' prefix)
+    // This simulates a corrupted cover image with null bytes
+    zip.start_file("a_cover.jpg", options).unwrap();
+    zip.write_all(&[0u8; 100]).unwrap(); // 100 null bytes
+
+    // Add valid images after
+    let valid_png = common::create_test_png(10, 10);
+    zip.start_file("b_page001.png", options).unwrap();
+    zip.write_all(&valid_png).unwrap();
+
+    zip.start_file("c_page002.png", options).unwrap();
+    zip.write_all(&valid_png).unwrap();
+
+    zip.finish().unwrap();
+
+    // Extract page 1 without fallback should fail (first image is corrupted)
+    let result = extract_page_from_cbz_with_fallback(&cbz_path, 1, false);
+    assert!(
+        result.is_err(),
+        "Should fail without fallback when first image is corrupted"
+    );
+
+    // Extract page 1 with fallback should succeed (skips corrupted, uses next valid)
+    let result = extract_page_from_cbz_with_fallback(&cbz_path, 1, true);
+    assert!(result.is_ok(), "Should succeed with fallback enabled");
+
+    // The returned data should be the valid PNG (starts with PNG magic bytes)
+    let data = result.unwrap();
+    assert_eq!(&data[0..4], b"\x89PNG", "Should return valid PNG data");
+}
+
+#[test]
+fn test_extract_page_with_fallback_fails_when_all_images_corrupted() {
+    use codex::parsers::cbz::extract_page_from_cbz_with_fallback;
+    use std::fs::File;
+    use std::io::Write;
+    use zip::write::FileOptions;
+    use zip::ZipWriter;
+
+    let temp_dir = TempDir::new().unwrap();
+    let cbz_path = temp_dir.path().join("all_corrupted.cbz");
+
+    let file = File::create(&cbz_path).unwrap();
+    let mut zip = ZipWriter::new(file);
+
+    let options: FileOptions<'_, ()> =
+        FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    // Add only corrupted images
+    zip.start_file("page001.jpg", options).unwrap();
+    zip.write_all(&[0u8; 100]).unwrap(); // null bytes
+
+    zip.start_file("page002.jpg", options).unwrap();
+    zip.write_all(b"not an image").unwrap(); // text content
+
+    zip.start_file("page003.png", options).unwrap();
+    zip.write_all(&[0x12, 0x34, 0x56, 0x78]).unwrap(); // random bytes
+
+    zip.finish().unwrap();
+
+    // Even with fallback, should fail when all images are corrupted
+    let result = extract_page_from_cbz_with_fallback(&cbz_path, 1, true);
+    assert!(result.is_err(), "Should fail when all images are corrupted");
+    assert!(result.unwrap_err().to_string().contains("No valid images"));
+}

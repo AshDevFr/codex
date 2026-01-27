@@ -1,11 +1,8 @@
-use crate::parsers::image_utils::{
-    get_jxl_dimensions, get_svg_dimensions, get_verified_image_format, is_image_file,
-};
+use crate::parsers::image_utils::{create_page_info, is_image_file, process_image_data};
 use crate::parsers::traits::FormatParser;
-use crate::parsers::{parse_comic_info, BookMetadata, FileFormat, ImageFormat, PageInfo};
-use crate::utils::{hash_file, CodexError, Result};
+use crate::parsers::{parse_comic_info, BookMetadata, FileFormat};
+use crate::utils::{hash_file, Result};
 use chrono::{DateTime, Utc};
-use image::GenericImageView;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -70,49 +67,34 @@ impl FormatParser for CbzParser {
         // Sort by name (this gives us page order)
         image_entries.sort_by(|a, b| a.1.cmp(&b.1));
 
-        // Process each page
+        // Process each page - collect valid images and assign page numbers
         let mut pages = Vec::new();
-        for (page_num, (idx, name)) in image_entries.iter().enumerate() {
+        for (idx, name) in image_entries.iter() {
             let mut file = archive.by_index(*idx)?;
             let file_size = file.size();
 
-            // Read image data first for magic byte detection
+            // Read image data
             let mut image_data = Vec::new();
             file.read_to_end(&mut image_data)?;
 
-            // Detect format using both extension and magic bytes (with logging)
-            let format = get_verified_image_format(name, &image_data)
-                .ok_or_else(|| CodexError::UnsupportedFormat(name.clone()))?;
-
-            // Get image dimensions (with special handling for SVG and JXL)
-            let (width, height) = match format {
-                ImageFormat::SVG => {
-                    // Use resvg to get SVG dimensions
-                    get_svg_dimensions(&image_data).ok_or_else(|| {
-                        CodexError::ParseError(format!("Failed to parse SVG dimensions: {}", name))
-                    })?
-                }
-                ImageFormat::JXL => {
-                    // Use jxl-oxide to get JXL dimensions
-                    get_jxl_dimensions(&image_data).ok_or_else(|| {
-                        CodexError::ParseError(format!("Failed to parse JXL dimensions: {}", name))
-                    })?
-                }
-                _ => {
-                    // Use image crate for raster formats
-                    let img = image::load_from_memory(&image_data)?;
-                    img.dimensions()
-                }
+            // Process image: verify format and extract dimensions
+            // Skip files that don't pass verification
+            let Some(processed) = process_image_data(name, &image_data) else {
+                tracing::debug!(
+                    filename = %name,
+                    "Skipping file: could not verify image format or dimensions"
+                );
+                continue;
             };
 
-            pages.push(PageInfo {
-                page_number: page_num + 1,
-                file_name: name.clone(),
-                format,
-                width,
-                height,
+            // Assign page number based on successfully processed pages
+            let page_number = pages.len() + 1;
+            pages.push(create_page_info(
+                page_number,
+                name.clone(),
+                processed,
                 file_size,
-            });
+            ));
         }
 
         let page_count = pages.len();
@@ -179,6 +161,29 @@ impl Default for CbzParser {
 /// # Returns
 /// The raw image data as bytes
 pub fn extract_page_from_cbz<P: AsRef<Path>>(path: P, page_number: i32) -> anyhow::Result<Vec<u8>> {
+    extract_page_from_cbz_with_fallback(path, page_number, false)
+}
+
+/// Extract a page image from a CBZ file with optional fallback for corrupted images
+///
+/// When `fallback_on_invalid` is true and the requested page image is corrupted,
+/// this function will try subsequent images until it finds a valid one.
+/// This is useful for thumbnail generation where any valid image is acceptable.
+///
+/// # Arguments
+/// * `path` - Path to the CBZ file
+/// * `page_number` - Page number (1-indexed)
+/// * `fallback_on_invalid` - If true, try subsequent images when the requested one is corrupted
+///
+/// # Returns
+/// The raw image data as bytes
+pub fn extract_page_from_cbz_with_fallback<P: AsRef<Path>>(
+    path: P,
+    page_number: i32,
+    fallback_on_invalid: bool,
+) -> anyhow::Result<Vec<u8>> {
+    use crate::parsers::image_utils::is_valid_image_data;
+
     let file = File::open(path)?;
     let mut archive = ZipArchive::new(file)?;
 
@@ -196,17 +201,53 @@ pub fn extract_page_from_cbz<P: AsRef<Path>>(path: P, page_number: i32) -> anyho
     image_files.sort();
 
     // Get the requested page (1-indexed)
-    let index = (page_number - 1) as usize;
-    if index >= image_files.len() {
+    let start_index = (page_number - 1) as usize;
+    if start_index >= image_files.len() {
         anyhow::bail!("Page {} not found in archive", page_number);
     }
 
-    // Extract image data
-    let mut file = archive.by_name(&image_files[index])?;
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)?;
+    // Try to extract the requested page, with optional fallback to subsequent pages
+    let end_index = if fallback_on_invalid {
+        image_files.len()
+    } else {
+        start_index + 1
+    };
 
-    Ok(buffer)
+    for (index, filename) in image_files
+        .iter()
+        .enumerate()
+        .skip(start_index)
+        .take(end_index - start_index)
+    {
+        let mut file = archive.by_name(filename)?;
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer)?;
+
+        // Validate the image data
+        if is_valid_image_data(&buffer) {
+            if index > start_index {
+                tracing::info!(
+                    original_page = page_number,
+                    actual_index = index + 1,
+                    filename = %filename,
+                    "Using fallback image after skipping corrupted images"
+                );
+            }
+            return Ok(buffer);
+        }
+
+        tracing::warn!(
+            page = index + 1,
+            filename = %filename,
+            size = buffer.len(),
+            "Skipping corrupted image in CBZ archive"
+        );
+    }
+
+    anyhow::bail!(
+        "No valid images found in archive starting from page {}",
+        page_number
+    )
 }
 
 #[cfg(test)]

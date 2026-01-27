@@ -31,6 +31,27 @@ pub fn create_test_png(width: u32, height: u32) -> Vec<u8> {
     buffer
 }
 
+/// Create a simple test JPEG image using the image crate
+pub fn create_test_jpeg(width: u32, height: u32) -> Vec<u8> {
+    let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_fn(width, height, |x, y| {
+        // Create a simple pattern
+        if (x + y) % 2 == 0 {
+            Rgb([255, 0, 0]) // Red
+        } else {
+            Rgb([0, 0, 255]) // Blue
+        }
+    });
+
+    let mut buffer = Vec::new();
+    img.write_to(
+        &mut std::io::Cursor::new(&mut buffer),
+        image::ImageFormat::Jpeg,
+    )
+    .unwrap();
+
+    buffer
+}
+
 /// Create a test CBZ file with the specified number of pages
 pub fn create_test_cbz(temp_dir: &TempDir, num_pages: usize, with_comic_info: bool) -> PathBuf {
     let cbz_path = temp_dir.path().join("test_comic.cbz");
@@ -218,13 +239,17 @@ pub fn create_test_pdf(
             let mut xobject_dict = Dictionary::new();
 
             for img_num in 0..num_images_per_page {
-                // Create a simple test image (10x10 PNG)
-                let image_data = create_test_png(10, 10);
+                // Create a simple test image (10x10 JPEG)
+                // We use JPEG with DCTDecode filter because:
+                // - DCTDecode means the stream contains raw JPEG data
+                // - This is directly readable by image decoders without conversion
+                // - FlateDecode would mean raw pixel data, not a file format
+                let image_data = create_test_jpeg(10, 10);
 
                 let image_id = doc.new_object_id();
                 let image_name = format!("Im{}", img_num + 1);
 
-                // Create image XObject
+                // Create image XObject with DCTDecode (JPEG)
                 let image_dict = dictionary! {
                     "Type" => "XObject",
                     "Subtype" => "Image",
@@ -232,7 +257,7 @@ pub fn create_test_pdf(
                     "Height" => 10,
                     "ColorSpace" => "DeviceRGB",
                     "BitsPerComponent" => 8,
-                    "Filter" => "FlateDecode",
+                    "Filter" => "DCTDecode",
                 };
 
                 let image_stream = Stream::new(image_dict.clone(), image_data);

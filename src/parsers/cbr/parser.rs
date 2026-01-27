@@ -1,9 +1,8 @@
-use crate::parsers::image_utils::{get_jxl_dimensions, get_verified_image_format, is_image_file};
+use crate::parsers::image_utils::{create_page_info, is_image_file, process_image_data};
 use crate::parsers::traits::FormatParser;
-use crate::parsers::{parse_comic_info, BookMetadata, FileFormat, ImageFormat, PageInfo};
+use crate::parsers::{parse_comic_info, BookMetadata, FileFormat};
 use crate::utils::{hash_file, CodexError, Result};
 use chrono::{DateTime, Utc};
-use image::GenericImageView;
 use std::path::Path;
 use unrar::Archive;
 
@@ -100,39 +99,27 @@ impl FormatParser for CbrParser {
         // Sort images by filename for page order
         image_data_entries.sort_by(|a, b| a.0.cmp(&b.0));
 
-        // Process images to extract dimensions
+        // Process images to extract dimensions - skip files that fail verification
         let mut pages = Vec::new();
-        for (page_num, (filename, data, unpacked_size)) in image_data_entries.iter().enumerate() {
-            // Detect format using both extension and magic bytes (with logging)
-            let format = get_verified_image_format(filename, data)
-                .ok_or_else(|| CodexError::UnsupportedFormat(filename.clone()))?;
-
-            // Get image dimensions (with special handling for JXL)
-            let (width, height) = match format {
-                ImageFormat::JXL => {
-                    // Use jxl-oxide to get JXL dimensions
-                    get_jxl_dimensions(data).ok_or_else(|| {
-                        CodexError::ParseError(format!(
-                            "Failed to parse JXL dimensions: {}",
-                            filename
-                        ))
-                    })?
-                }
-                _ => {
-                    // Use image crate for raster formats
-                    let img = image::load_from_memory(data)?;
-                    img.dimensions()
-                }
+        for (filename, data, unpacked_size) in image_data_entries.iter() {
+            // Process image: verify format and extract dimensions
+            // Skip files that don't pass verification
+            let Some(processed) = process_image_data(filename, data) else {
+                tracing::debug!(
+                    filename = %filename,
+                    "Skipping file: could not verify image format or dimensions"
+                );
+                continue;
             };
 
-            pages.push(PageInfo {
-                page_number: page_num + 1,
-                file_name: filename.clone(),
-                format,
-                width,
-                height,
-                file_size: *unpacked_size,
-            });
+            // Assign page number based on successfully processed pages
+            let page_number = pages.len() + 1;
+            pages.push(create_page_info(
+                page_number,
+                filename.clone(),
+                processed,
+                *unpacked_size,
+            ));
         }
 
         let page_count = pages.len();
@@ -199,6 +186,29 @@ impl Default for CbrParser {
 /// # Returns
 /// The raw image data as bytes
 pub fn extract_page_from_cbr<P: AsRef<Path>>(path: P, page_number: i32) -> anyhow::Result<Vec<u8>> {
+    extract_page_from_cbr_with_fallback(path, page_number, false)
+}
+
+/// Extract a page image from a CBR file with optional fallback for corrupted images
+///
+/// When `fallback_on_invalid` is true and the requested page image is corrupted,
+/// this function will try subsequent images until it finds a valid one.
+/// This is useful for thumbnail generation where any valid image is acceptable.
+///
+/// # Arguments
+/// * `path` - Path to the CBR file
+/// * `page_number` - Page number (1-indexed)
+/// * `fallback_on_invalid` - If true, try subsequent images when the requested one is corrupted
+///
+/// # Returns
+/// The raw image data as bytes
+pub fn extract_page_from_cbr_with_fallback<P: AsRef<Path>>(
+    path: P,
+    page_number: i32,
+    fallback_on_invalid: bool,
+) -> anyhow::Result<Vec<u8>> {
+    use crate::parsers::image_utils::is_valid_image_data;
+
     let mut archive = unrar::Archive::new(path.as_ref())
         .open_for_processing()
         .map_err(|e| anyhow::anyhow!("Failed to open RAR archive: {}", e))?;
@@ -228,12 +238,49 @@ pub fn extract_page_from_cbr<P: AsRef<Path>>(path: P, page_number: i32) -> anyho
     image_files.sort_by(|a, b| a.0.cmp(&b.0));
 
     // Get the requested page (1-indexed)
-    let index = (page_number - 1) as usize;
-    if index >= image_files.len() {
+    let start_index = (page_number - 1) as usize;
+    if start_index >= image_files.len() {
         anyhow::bail!("Page {} not found in archive", page_number);
     }
 
-    Ok(image_files[index].1.clone())
+    // Try to extract the requested page, with optional fallback to subsequent pages
+    let end_index = if fallback_on_invalid {
+        image_files.len()
+    } else {
+        start_index + 1
+    };
+
+    for (index, (filename, data)) in image_files
+        .iter()
+        .enumerate()
+        .skip(start_index)
+        .take(end_index - start_index)
+    {
+        // Validate the image data
+        if is_valid_image_data(data) {
+            if index > start_index {
+                tracing::info!(
+                    original_page = page_number,
+                    actual_index = index + 1,
+                    filename = %filename,
+                    "Using fallback image after skipping corrupted images in CBR"
+                );
+            }
+            return Ok(data.clone());
+        }
+
+        tracing::warn!(
+            page = index + 1,
+            filename = %filename,
+            size = data.len(),
+            "Skipping corrupted image in CBR archive"
+        );
+    }
+
+    anyhow::bail!(
+        "No valid images found in archive starting from page {}",
+        page_number
+    )
 }
 
 #[cfg(test)]

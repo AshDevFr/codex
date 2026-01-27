@@ -320,6 +320,322 @@ impl Default for EpubParser {
     }
 }
 
+/// Find the cover image path from the OPF manifest
+///
+/// EPUB cover images can be specified in several ways:
+/// 1. `<meta name="cover" content="cover-image-id"/>` pointing to a manifest item
+/// 2. `<item properties="cover-image" .../>` in EPUB3
+/// 3. `<reference type="cover" href="..."/>` in the guide section
+/// 4. Item with id containing "cover" and being an image type
+///
+/// Returns the full path to the cover image relative to the EPUB root.
+fn find_cover_image_from_opf(archive: &mut ZipArchive<File>) -> Option<String> {
+    // First, find the OPF file path from container.xml
+    let opf_path = {
+        let mut container_file = archive.by_name("META-INF/container.xml").ok()?;
+        let mut xml_content = String::new();
+        container_file.read_to_string(&mut xml_content).ok()?;
+
+        // Parse container.xml to find rootfile path
+        let start = xml_content.find("full-path=\"")?;
+        let path_start = start + 11;
+        let end = xml_content[path_start..].find('"')?;
+        xml_content[path_start..path_start + end].to_string()
+    };
+
+    // Get the base path (directory containing OPF)
+    let base_path = if let Some(pos) = opf_path.rfind('/') {
+        &opf_path[..pos + 1]
+    } else {
+        ""
+    };
+
+    // Read the OPF file
+    let opf_content = {
+        let mut opf_file = archive.by_name(&opf_path).ok()?;
+        let mut content = String::new();
+        opf_file.read_to_string(&mut content).ok()?;
+        content
+    };
+
+    // Build a map of manifest item IDs to hrefs
+    let mut manifest_items: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    let mut remaining = &opf_content[..];
+
+    while let Some(item_start) = remaining.find("<item ") {
+        let item_section = &remaining[item_start..];
+        if let Some(item_end) = item_section.find('>') {
+            let item_tag = &item_section[..item_end];
+
+            // Extract id
+            let id = if let Some(id_start) = item_tag.find("id=\"") {
+                let id_value_start = id_start + 4;
+                item_tag[id_value_start..]
+                    .find('"')
+                    .map(|id_end| item_tag[id_value_start..id_value_start + id_end].to_string())
+            } else {
+                None
+            };
+
+            // Extract href
+            let href = if let Some(href_start) = item_tag.find("href=\"") {
+                let href_value_start = href_start + 6;
+                item_tag[href_value_start..].find('"').map(|href_end| {
+                    item_tag[href_value_start..href_value_start + href_end].to_string()
+                })
+            } else {
+                None
+            };
+
+            // Check for EPUB3 cover-image property
+            let has_cover_property = item_tag.contains("properties=\"cover-image\"")
+                || item_tag.contains("properties='cover-image'");
+
+            if let (Some(id), Some(href)) = (id, href) {
+                let full_path = format!("{}{}", base_path, href);
+
+                // If this item has the cover-image property (EPUB3), return it immediately
+                if has_cover_property && is_image_file(&full_path) {
+                    tracing::debug!(
+                        cover_path = %full_path,
+                        "Found cover image via EPUB3 cover-image property"
+                    );
+                    return Some(full_path);
+                }
+
+                manifest_items.insert(id, full_path);
+            }
+
+            remaining = &item_section[item_end..];
+        } else {
+            break;
+        }
+    }
+
+    // Method 1: Look for <meta name="cover" content="item-id"/>
+    if let Some(meta_start) = opf_content.find("<meta") {
+        let meta_section = &opf_content[meta_start..];
+        // Find meta tags with name="cover"
+        let mut meta_remaining = meta_section;
+        while let Some(tag_start) = meta_remaining.find("<meta") {
+            let tag_section = &meta_remaining[tag_start..];
+            if let Some(tag_end) = tag_section.find('>') {
+                let meta_tag = &tag_section[..tag_end];
+
+                if meta_tag.contains("name=\"cover\"") || meta_tag.contains("name='cover'") {
+                    // Extract content attribute (the item ID)
+                    if let Some(content_start) = meta_tag.find("content=\"") {
+                        let value_start = content_start + 9;
+                        if let Some(value_end) = meta_tag[value_start..].find('"') {
+                            let cover_id = &meta_tag[value_start..value_start + value_end];
+                            if let Some(cover_path) = manifest_items.get(cover_id) {
+                                if is_image_file(cover_path) {
+                                    tracing::debug!(
+                                        cover_id = %cover_id,
+                                        cover_path = %cover_path,
+                                        "Found cover image via meta name=\"cover\""
+                                    );
+                                    return Some(cover_path.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+
+                meta_remaining = &tag_section[tag_end..];
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Method 2: Look for <reference type="cover" href="..."/> in guide section
+    if let Some(guide_start) = opf_content.find("<guide") {
+        if let Some(guide_end) = opf_content[guide_start..].find("</guide>") {
+            let guide_section = &opf_content[guide_start..guide_start + guide_end];
+
+            let mut ref_remaining = guide_section;
+            while let Some(ref_start) = ref_remaining.find("<reference") {
+                let ref_section = &ref_remaining[ref_start..];
+                if let Some(ref_end) = ref_section.find('>') {
+                    let ref_tag = &ref_section[..ref_end];
+
+                    // Check for type="cover" or type containing "cover"
+                    if ref_tag.contains("type=\"cover\"")
+                        || ref_tag.contains("type='cover'")
+                        || ref_tag.contains("coverimage")
+                    {
+                        if let Some(href_start) = ref_tag.find("href=\"") {
+                            let value_start = href_start + 6;
+                            if let Some(value_end) = ref_tag[value_start..].find('"') {
+                                let href = &ref_tag[value_start..value_start + value_end];
+                                let full_path = format!("{}{}", base_path, href);
+                                if is_image_file(&full_path) {
+                                    tracing::debug!(
+                                        cover_path = %full_path,
+                                        "Found cover image via guide reference"
+                                    );
+                                    return Some(full_path);
+                                }
+                            }
+                        }
+                    }
+
+                    ref_remaining = &ref_section[ref_end..];
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    // Method 3: Look for manifest item with ID containing "cover" that's an image
+    for (id, path) in &manifest_items {
+        let id_lower = id.to_lowercase();
+        if (id_lower.contains("cover") || id_lower == "cvi") && is_image_file(path) {
+            tracing::debug!(
+                cover_id = %id,
+                cover_path = %path,
+                "Found cover image via manifest item ID heuristic"
+            );
+            return Some(path.clone());
+        }
+    }
+
+    None
+}
+
+/// Extract the cover image from an EPUB file
+///
+/// This function first tries to find the cover image as specified in the OPF manifest,
+/// then falls back to extracting images in alphabetical order if no cover is defined.
+///
+/// # Arguments
+/// * `path` - Path to the EPUB file
+///
+/// # Returns
+/// The raw image data as bytes
+#[allow(dead_code)] // Public API - may be used by external callers
+pub fn extract_cover_from_epub<P: AsRef<Path>>(path: P) -> anyhow::Result<Vec<u8>> {
+    extract_cover_from_epub_with_fallback(path, true)
+}
+
+/// Extract the cover image from an EPUB file with optional fallback
+///
+/// This function:
+/// 1. First tries to find the cover image as specified in the OPF manifest
+/// 2. If no cover is defined in OPF, falls back to the first image alphabetically
+/// 3. If `fallback_on_invalid` is true and the cover is corrupted, tries subsequent images
+///
+/// # Arguments
+/// * `path` - Path to the EPUB file
+/// * `fallback_on_invalid` - If true, try other images when the primary cover is corrupted
+///
+/// # Returns
+/// The raw image data as bytes
+pub fn extract_cover_from_epub_with_fallback<P: AsRef<Path>>(
+    path: P,
+    fallback_on_invalid: bool,
+) -> anyhow::Result<Vec<u8>> {
+    use crate::parsers::image_utils::is_valid_image_data;
+
+    let path = path.as_ref();
+    let file = File::open(path)?;
+    let mut archive = ZipArchive::new(file)?;
+
+    // Try to find the cover image from OPF first
+    let opf_cover_path = find_cover_image_from_opf(&mut archive);
+
+    if let Some(ref cover_path) = opf_cover_path {
+        // Try to extract the OPF-specified cover image
+        if let Ok(mut cover_file) = archive.by_name(cover_path) {
+            let mut buffer = Vec::new();
+            if cover_file.read_to_end(&mut buffer).is_ok() && is_valid_image_data(&buffer) {
+                tracing::debug!(
+                    cover_path = %cover_path,
+                    size = buffer.len(),
+                    "Successfully extracted cover image from OPF-specified path"
+                );
+                return Ok(buffer);
+            } else {
+                tracing::warn!(
+                    cover_path = %cover_path,
+                    "OPF-specified cover image is corrupted or unreadable"
+                );
+                // If fallback is disabled and the OPF cover is corrupted, fail
+                if !fallback_on_invalid {
+                    anyhow::bail!("Cover image specified in OPF is corrupted");
+                }
+            }
+        }
+    }
+
+    // Fallback: get images from archive and try them in order
+    // This happens when:
+    // 1. No cover is defined in OPF (opf_cover_path is None)
+    // 2. OPF cover is corrupted and fallback_on_invalid is true
+    tracing::debug!("Falling back to alphabetical image order for cover extraction");
+
+    // Re-open archive since we consumed it
+    let file = File::open(path)?;
+    let mut archive = ZipArchive::new(file)?;
+
+    // Get list of image files in EPUB (only from archive, not checking manifest)
+    let mut image_files: Vec<String> = Vec::new();
+    for i in 0..archive.len() {
+        let file = archive.by_index(i)?;
+        let name = file.name().to_string();
+        if !file.is_dir() && is_image_file(&name) {
+            image_files.push(name);
+        }
+    }
+
+    // Sort alphabetically
+    image_files.sort();
+
+    if image_files.is_empty() {
+        anyhow::bail!("No images found in EPUB");
+    }
+
+    // If fallback is disabled, only try the first image
+    let images_to_try = if fallback_on_invalid {
+        &image_files[..]
+    } else {
+        &image_files[..1]
+    };
+
+    // Try each image until we find a valid one
+    for filename in images_to_try {
+        let mut file = archive.by_name(filename)?;
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer)?;
+
+        if is_valid_image_data(&buffer) {
+            if opf_cover_path.is_some() {
+                tracing::info!(
+                    filename = %filename,
+                    "Using fallback image as cover (OPF cover was corrupted)"
+                );
+            } else {
+                tracing::debug!(
+                    filename = %filename,
+                    "Using first image as cover (no cover defined in OPF)"
+                );
+            }
+            return Ok(buffer);
+        }
+
+        tracing::warn!(
+            filename = %filename,
+            size = buffer.len(),
+            "Skipping corrupted image in EPUB archive"
+        );
+    }
+
+    anyhow::bail!("No valid images found in EPUB")
+}
+
 /// Extract a specific page image from an EPUB file
 ///
 /// # Arguments
@@ -332,6 +648,37 @@ pub fn extract_page_from_epub<P: AsRef<Path>>(
     path: P,
     page_number: i32,
 ) -> anyhow::Result<Vec<u8>> {
+    extract_page_from_epub_with_fallback(path, page_number, false)
+}
+
+/// Extract a page image from an EPUB file with optional fallback for corrupted images
+///
+/// When `fallback_on_invalid` is true and the requested page image is corrupted,
+/// this function will try subsequent images until it finds a valid one.
+/// This is useful for thumbnail generation where any valid image is acceptable.
+///
+/// For page 1 (cover), this will first try to use the OPF-specified cover image.
+///
+/// # Arguments
+/// * `path` - Path to the EPUB file
+/// * `page_number` - Page number (1-indexed)
+/// * `fallback_on_invalid` - If true, try subsequent images when the requested one is corrupted
+///
+/// # Returns
+/// The raw image data as bytes, or an error if no valid images found
+pub fn extract_page_from_epub_with_fallback<P: AsRef<Path>>(
+    path: P,
+    page_number: i32,
+    fallback_on_invalid: bool,
+) -> anyhow::Result<Vec<u8>> {
+    // For page 1 (cover), use the smart cover extraction that checks OPF first
+    if page_number == 1 {
+        return extract_cover_from_epub_with_fallback(path, fallback_on_invalid);
+    }
+
+    // For other pages, use alphabetical order
+    use crate::parsers::image_utils::is_valid_image_data;
+
     let file = File::open(path)?;
     let mut archive = ZipArchive::new(file)?;
 
@@ -349,17 +696,56 @@ pub fn extract_page_from_epub<P: AsRef<Path>>(
     image_files.sort();
 
     // Get the requested page (1-indexed)
-    let index = (page_number - 1) as usize;
-    if index >= image_files.len() {
-        anyhow::bail!("Page {} not found in EPUB", page_number);
+    let start_index = (page_number - 1) as usize;
+    if start_index >= image_files.len() {
+        anyhow::bail!(
+            "Page {} not found in EPUB (no images available)",
+            page_number
+        );
     }
 
-    // Extract image data
-    let mut file = archive.by_name(&image_files[index])?;
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)?;
+    // Try to extract the requested page, with optional fallback to subsequent pages
+    let end_index = if fallback_on_invalid {
+        image_files.len()
+    } else {
+        start_index + 1
+    };
 
-    Ok(buffer)
+    for (index, filename) in image_files
+        .iter()
+        .enumerate()
+        .skip(start_index)
+        .take(end_index - start_index)
+    {
+        let mut file = archive.by_name(filename)?;
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer)?;
+
+        // Validate the image data
+        if is_valid_image_data(&buffer) {
+            if index > start_index {
+                tracing::info!(
+                    original_page = page_number,
+                    actual_index = index + 1,
+                    filename = %filename,
+                    "Using fallback image after skipping corrupted images in EPUB"
+                );
+            }
+            return Ok(buffer);
+        }
+
+        tracing::warn!(
+            page = index + 1,
+            filename = %filename,
+            size = buffer.len(),
+            "Skipping corrupted image in EPUB archive"
+        );
+    }
+
+    anyhow::bail!(
+        "No valid images found in EPUB starting from page {}",
+        page_number
+    )
 }
 
 #[cfg(test)]

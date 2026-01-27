@@ -1,4 +1,3 @@
-use crate::parsers::image_utils::{detect_image_format_from_bytes, ImageFormatDetection};
 use crate::parsers::isbn_utils::extract_isbns;
 use crate::parsers::pdf::renderer;
 use crate::parsers::traits::FormatParser;
@@ -151,52 +150,60 @@ impl PdfParser {
     }
 
     /// Extract image data from a PDF stream
+    ///
+    /// This function extracts embedded images from PDF streams. It only returns
+    /// data that can be directly loaded by the `image` crate (JPEG, PNG, etc.).
+    ///
+    /// **Important**: PDF streams with `FlateDecode` filter contain raw pixel data
+    /// (not PNG files). We don't try to reconstruct these as it requires knowledge
+    /// of the colorspace, bit depth, and pixel layout. Instead, we fall back to
+    /// PDFium rendering for such pages.
     fn extract_image_stream(
         _doc: &Document,
         stream: &lopdf::Stream,
     ) -> Option<(Vec<u8>, ImageFormat, u32, u32, u64)> {
         // Get image dimensions
         let width = stream.dict.get(b"Width").ok()?.as_i64().ok()? as u32;
-
         let height = stream.dict.get(b"Height").ok()?.as_i64().ok()? as u32;
 
-        // Try to decode the stream content
-        let content = match stream.decompressed_content() {
-            Ok(data) => data,
-            Err(_) => stream.content.clone(),
-        };
+        // Check the PDF filter to determine how to handle the stream
+        let filter = stream.dict.get(b"Filter").ok()?.as_name_str().ok()?;
 
-        let file_size = content.len() as u64;
+        match filter {
+            // DCTDecode means the stream contains raw JPEG data
+            "DCTDecode" => {
+                // For JPEG, the raw stream content is the JPEG file
+                // (no decompression needed - DCT is the JPEG compression itself)
+                let content = stream.content.clone();
 
-        // Try to determine the image format
-        // First check the PDF filter hint, then fall back to magic byte detection
-        let format = Self::detect_format_from_filter(stream).or_else(|| {
-            // Use infer crate for magic byte detection
-            match detect_image_format_from_bytes(&content) {
-                ImageFormatDetection::Supported(fmt) => Some(fmt),
-                ImageFormatDetection::Unsupported(mime) => {
-                    tracing::debug!(
-                        mime_type = %mime,
-                        "Unsupported image format detected in PDF stream"
-                    );
-                    None
+                // Verify it's actually JPEG by checking magic bytes
+                if content.len() >= 3 && content[0] == 0xFF && content[1] == 0xD8 {
+                    let file_size = content.len() as u64;
+                    return Some((content, ImageFormat::JPEG, width, height, file_size));
                 }
-                ImageFormatDetection::Unknown => None,
+
+                tracing::debug!("DCTDecode stream doesn't have JPEG magic bytes, skipping");
+                None
             }
-        })?;
 
-        Some((content, format, width, height, file_size))
-    }
+            // JPXDecode means JPEG 2000 - not widely supported, skip
+            "JPXDecode" => None,
 
-    /// Try to determine image format from PDF filter
-    fn detect_format_from_filter(stream: &lopdf::Stream) -> Option<ImageFormat> {
-        let filter = stream.dict.get(b"Filter").ok()?;
-        let filter_name = filter.as_name_str().ok()?;
-        match filter_name {
-            "DCTDecode" => Some(ImageFormat::JPEG),
-            "FlateDecode" => Some(ImageFormat::PNG), // Usually PNG-like compression
-            "JPXDecode" => Some(ImageFormat::JPEG),  // JPEG2000
-            _ => None,
+            // FlateDecode means zlib-compressed raw pixel data, not a PNG file!
+            // We cannot use this directly - need PDFium to render the page.
+            // FlateDecode produces raw pixel data (RGB/CMYK/Grayscale bytes),
+            // not a PNG file. Converting this to a usable image requires knowing
+            // the exact colorspace, handling masks/SMasks, and reconstructing headers.
+            "FlateDecode" => None,
+
+            // Other filters (CCITTFaxDecode, JBIG2Decode, etc.) - let PDFium handle
+            _ => {
+                tracing::debug!(
+                    filter = filter,
+                    "Unsupported PDF filter, will use PDFium rendering"
+                );
+                None
+            }
         }
     }
 }
