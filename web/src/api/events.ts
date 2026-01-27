@@ -1,4 +1,7 @@
 import type { EntityChangeEvent } from "@/types";
+import { createDevLog } from "@/utils/devLog";
+
+const log = createDevLog("[SSE]");
 
 /**
  * SSE Reconnection Manager for entity events with exponential backoff
@@ -89,10 +92,12 @@ class EntityEventsReconnectionManager {
 							try {
 								const data = line.substring(6);
 								if (data === "keep-alive") continue;
+								log("Raw event data:", data);
 								const event: EntityChangeEvent = JSON.parse(data);
 								this.onEvent(event);
 							} catch (error) {
-								console.error("Failed to parse entity event:", error);
+								console.error("[SSE] Failed to parse entity event:", error);
+								log("Raw data that failed to parse:", line);
 							}
 						}
 					}
@@ -126,8 +131,8 @@ class EntityEventsReconnectionManager {
 					);
 					this.reconnectAttempts++;
 
-					console.debug(
-						`Reconnecting entity events in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxAttempts})`,
+					log(
+						`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxAttempts})`,
 					);
 
 					this.reconnectTimer = setTimeout(() => {

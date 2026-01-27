@@ -4,8 +4,11 @@ import { eventsApi } from "@/api/events";
 import { useAuthStore } from "@/store/authStore";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import type { EntityChangeEvent } from "@/types";
+import { createDevLog } from "@/utils/devLog";
 
 type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
+
+const log = createDevLog("[SSE]");
 
 /**
  * React hook that subscribes to entity change events and automatically
@@ -30,7 +33,7 @@ export function useEntityEvents() {
 
 	useEffect(() => {
 		if (!isAuthenticated) {
-			console.debug("Not authenticated, skipping entity events subscription");
+			log("Not authenticated, skipping subscription");
 			return;
 		}
 
@@ -39,10 +42,10 @@ export function useEntityEvents() {
 				handleEntityEvent(event, queryClient);
 			},
 			(error: Error) => {
-				console.error("[EntityEvents] Connection error:", error);
+				console.error("[SSE] Connection error:", error);
 			},
 			(state) => {
-				console.debug(`Entity events connection state: ${state}`);
+				log("Connection state:", state);
 				setConnectionState(state as ConnectionState);
 			},
 		);
@@ -64,7 +67,7 @@ function handleEntityEvent(
 	event: EntityChangeEvent,
 	queryClient: ReturnType<typeof useQueryClient>,
 ) {
-	console.debug("Received entity event:", event);
+	log("Received entity event:", event.type, event);
 
 	// Handle events using the discriminated union type field
 	switch (event.type) {
@@ -129,6 +132,13 @@ function handleEntityEvent(
 			// not images. The timestamp is used as a query param to force image reload.
 			useCoverUpdatesStore.getState().recordCoverUpdate(event.entity_id);
 
+			const timestamp = useCoverUpdatesStore
+				.getState()
+				.getCoverTimestamp(event.entity_id);
+			log(
+				`Cover updated for ${event.entity_type} ${event.entity_id}, cache-bust timestamp: ${timestamp}`,
+			);
+
 			if (event.entity_type === "book") {
 				// Invalidate book queries to refresh covers
 				queryClient.invalidateQueries({
@@ -178,6 +188,6 @@ function handleEntityEvent(
 		}
 
 		default:
-			console.debug("Unknown event type:", event);
+			log("Unknown event type:", event);
 	}
 }

@@ -393,7 +393,7 @@ describe("useEntityEvents", () => {
 
 		await waitFor(() => {
 			expect(consoleError).toHaveBeenCalledWith(
-				"[EntityEvents] Connection error:",
+				"[SSE] Connection error:",
 				testError,
 			);
 		});
