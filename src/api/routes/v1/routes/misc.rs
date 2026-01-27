@@ -67,6 +67,8 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         // Filesystem routes (admin only)
         .route("/filesystem/browse", get(handlers::browse_filesystem))
         .route("/filesystem/drives", get(handlers::list_drives))
+        // App info route (public, no authentication required)
+        .route("/info", get(handlers::info::get_app_info))
         // Branding settings route (public, no authentication required)
         .route(
             "/settings/branding",

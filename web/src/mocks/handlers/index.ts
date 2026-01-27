@@ -11,6 +11,7 @@ import { bookHandlers } from "./books";
 import { cleanupHandlers } from "./cleanup";
 import { duplicatesHandlers } from "./duplicates";
 import { eventHandlers } from "./events";
+import { infoHandlers } from "./info";
 import { libraryHandlers } from "./libraries";
 import { metadataHandlers } from "./metadata";
 import { metricsHandlers } from "./metrics";
@@ -105,6 +106,7 @@ const utilityHandlers = [
 export const handlers = [
 	...apiKeysHandlers,
 	...authHandlers,
+	...infoHandlers,
 	...libraryHandlers,
 	...seriesHandlers,
 	...bookHandlers,
@@ -128,6 +130,7 @@ export { bookHandlers } from "./books";
 export { cleanupHandlers } from "./cleanup";
 export { duplicatesHandlers } from "./duplicates";
 export { eventHandlers } from "./events";
+export { infoHandlers } from "./info";
 export { libraryHandlers } from "./libraries";
 export { metadataHandlers } from "./metadata";
 export { metricsHandlers } from "./metrics";

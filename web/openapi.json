@@ -7,7 +7,7 @@
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
     },
-    "version": "1.0.0"
+    "version": "0.1.0"
   },
   "paths": {
     "/api/v1/admin/cleanup-orphans": {
@@ -3208,6 +3208,28 @@
             "api_key": []
           }
         ]
+      }
+    },
+    "/api/v1/info": {
+      "get": {
+        "tags": [
+          "Info"
+        ],
+        "summary": "Get application information",
+        "description": "Returns the application name and version.\nThis endpoint is public (no authentication required).",
+        "operationId": "get_app_info",
+        "responses": {
+          "200": {
+            "description": "Application info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppInfoDto"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/libraries": {
@@ -11688,6 +11710,26 @@
             "format": "uuid",
             "description": "Owner user ID",
             "example": "550e8400-e29b-41d4-a716-446655440001"
+          }
+        }
+      },
+      "AppInfoDto": {
+        "type": "object",
+        "description": "Application information response",
+        "required": [
+          "version",
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Application name",
+            "example": "codex"
+          },
+          "version": {
+            "type": "string",
+            "description": "Application version from Cargo.toml",
+            "example": "1.0.0"
           }
         }
       },
@@ -23345,6 +23387,10 @@
     {
       "name": "Health",
       "description": "Health check endpoints"
+    },
+    {
+      "name": "Info",
+      "description": "Application info endpoints"
     },
     {
       "name": "Setup",

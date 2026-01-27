@@ -47,6 +47,7 @@ pub mod duplicates;
 pub mod events;
 pub mod filesystem;
 pub mod health;
+pub mod info;
 pub mod libraries;
 pub mod metrics;
 pub mod pages;

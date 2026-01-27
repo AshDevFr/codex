@@ -1057,6 +1057,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get application information
+         * @description Returns the application name and version.
+         *     This endpoint is public (no authentication required).
+         */
+        get: operations["get_app_info"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/libraries": {
         parameters: {
             query?: never;
@@ -4025,6 +4046,19 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440001
              */
             userId: string;
+        };
+        /** @description Application information response */
+        AppInfoDto: {
+            /**
+             * @description Application name
+             * @example codex
+             */
+            name: string;
+            /**
+             * @description Application version from Cargo.toml
+             * @example 1.0.0
+             */
+            version: string;
         };
         /** @description Series membership information */
         BelongsTo: {
@@ -12875,6 +12909,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_app_info: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Application info */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppInfoDto"];
+                };
             };
         };
     };

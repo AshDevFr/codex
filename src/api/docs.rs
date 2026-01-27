@@ -12,7 +12,7 @@ use utoipa::OpenApi;
 #[openapi(
     info(
         title = "Codex API",
-        version = "1.0.0",
+        version = env!("CARGO_PKG_VERSION"),
         description = r#"REST API for Codex, a digital library server for comics, manga, and ebooks.
 
 ## Interactive API Documentation
@@ -131,8 +131,9 @@ The following paths are exempt from rate limiting:
         )
     ),
     paths(
-        // Health check
+        // Health check and info
         v1::handlers::health_check,
+        v1::handlers::info::get_app_info,
 
         // Setup endpoints
         v1::handlers::setup::setup_status,
@@ -414,6 +415,9 @@ The following paths are exempt from rate limiting:
     ),
     components(
         schemas(
+            // App info
+            v1::dto::AppInfoDto,
+
             // DTOs
             v1::dto::LoginRequest,
             v1::dto::LoginResponse,
@@ -681,6 +685,7 @@ The following paths are exempt from rate limiting:
     tags(
         // Getting Started
         (name = "Health", description = "Health check endpoints"),
+        (name = "Info", description = "Application info endpoints"),
         (name = "Setup", description = "Initial server setup and configuration"),
 
         // Authentication & Security

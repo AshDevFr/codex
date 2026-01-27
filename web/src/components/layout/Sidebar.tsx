@@ -40,6 +40,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { librariesApi } from "@/api/libraries";
 import { LibraryModal } from "@/components/forms/LibraryModal";
 import { TaskNotificationBadge } from "@/components/TaskNotificationBadge";
+import { useAppInfo } from "@/hooks/useAppInfo";
 import { useAppName } from "@/hooks/useAppName";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuthStore } from "@/store/authStore";
@@ -53,6 +54,7 @@ interface SidebarProps {
 
 export function Sidebar({ currentPath = "/" }: SidebarProps) {
 	const appName = useAppName();
+	const { data: appInfo } = useAppInfo();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const { clearAuth } = useAuthStore();
@@ -483,6 +485,11 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 							onClick={handleLogout}
 							color="red"
 						/>
+						{appInfo?.version && (
+							<Text size="xs" c="dimmed" ta="center">
+								v{appInfo.version}
+							</Text>
+						)}
 					</Stack>
 				</AppShell.Section>
 			</AppShell.Navbar>
