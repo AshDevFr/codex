@@ -93,6 +93,11 @@ export function PdfReader({
 		width: 0,
 		height: 0,
 	});
+	// Store actual PDF page dimensions from the first rendered page
+	const [pdfPageDimensions, setPdfPageDimensions] = useState<{
+		width: number;
+		height: number;
+	} | null>(null);
 
 	// PDF zoom state (local, not in global store since it's PDF-specific)
 	const [zoomLevel, setZoomLevel] = useState<PdfZoomLevel>("fit-page");
@@ -208,37 +213,44 @@ export function PdfReader({
 		width?: number;
 		height?: number;
 		scale?: number;
+		// Indicates if scale needs halving for double-page mode (only percentage zoom levels)
+		needsSpreadAdjustment?: boolean;
 	} => {
 		const isDoublePageMode = pdfSpreadMode !== "single";
 
 		// For scale-based zoom levels, we don't need container dimensions
 		// This ensures zoom changes work even before container is measured
+		// These return the "full" scale - will be halved by spreadPageDimensions for double-page
 		switch (zoomLevel) {
 			case "50%":
-				return { scale: 0.5 * BASE_SCALE };
+				return { scale: 0.5 * BASE_SCALE, needsSpreadAdjustment: true };
 			case "75%":
-				return { scale: 0.75 * BASE_SCALE };
+				return { scale: 0.75 * BASE_SCALE, needsSpreadAdjustment: true };
 			case "100%":
-				return { scale: 1.0 * BASE_SCALE };
+				return { scale: 1.0 * BASE_SCALE, needsSpreadAdjustment: true };
 			case "125%":
-				return { scale: 1.25 * BASE_SCALE };
+				return { scale: 1.25 * BASE_SCALE, needsSpreadAdjustment: true };
 			case "150%":
-				return { scale: 1.5 * BASE_SCALE };
+				return { scale: 1.5 * BASE_SCALE, needsSpreadAdjustment: true };
 			case "200%":
-				return { scale: 2.0 * BASE_SCALE };
+				return { scale: 2.0 * BASE_SCALE, needsSpreadAdjustment: true };
 		}
 
 		// For fit modes, we need container dimensions
 		if (!containerDimensions.width || !containerDimensions.height) {
 			// Fallback to scale-based rendering until container is measured
-			// Use a smaller scale for double-page mode since we need to fit two pages
-			return { scale: isDoublePageMode ? BASE_SCALE * 0.4 : BASE_SCALE * 0.7 };
+			// Use a reasonable scale that fills more of the viewport
+			// These are already tuned for single vs double, no further adjustment needed
+			return { scale: isDoublePageMode ? BASE_SCALE * 0.8 : BASE_SCALE * 1.2 };
 		}
 
+		// Always reserve space for toolbar since it can appear at any time
 		const toolbarHeight = 64;
-		const padding = 40;
+		// Padding around the page(s) - the page container has padding: 20px
+		const padding = 40; // 20px on each side
 		const gap = isDoublePageMode ? 8 : 0;
 		const availableWidth = containerDimensions.width - padding;
+		// Subtract toolbar height and padding from both top and bottom
 		const availableHeight =
 			containerDimensions.height - toolbarHeight - padding;
 
@@ -247,29 +259,30 @@ export function PdfReader({
 			? Math.floor((availableWidth - gap) / 2)
 			: availableWidth;
 
-		// Typical PDF page aspect ratio (US Letter ~8.5x11 = 0.773, A4 ~0.707)
-		// Use a conservative ratio that works for most documents
-		const typicalPageAspectRatio = 0.75; // width/height
+		// PDF pages at scale=1 are 72 DPI, so dimensions are in points (1/72 inch)
+		// Default to US Letter size (612x792 points) if not yet measured
+		const pageWidth = pdfPageDimensions?.width ?? 612;
+		const pageHeight = pdfPageDimensions?.height ?? 792;
 
 		switch (zoomLevel) {
 			case "fit-page": {
-				// Fit page: the page should fit within both width and height constraints
-				// react-pdf ignores height when width is provided, so we must calculate
-				// the width that will result in a page that fits the height
-				const widthFromHeight = Math.floor(
-					availableHeight * typicalPageAspectRatio,
-				);
-				// Use the smaller of the two to ensure it fits both constraints
-				const fitWidth = Math.min(perPageWidth, widthFromHeight);
-				return { width: fitWidth };
+				// Fit page: scale to fit within both width and height constraints
+				// Calculate which dimension is the limiting factor
+				const scaleByWidth = perPageWidth / pageWidth;
+				const scaleByHeight = availableHeight / pageHeight;
+				// Use the smaller scale to ensure it fits both constraints
+				const fitScale = Math.min(scaleByWidth, scaleByHeight);
+				return { scale: fitScale };
 			}
-			case "fit-width":
-				// Fit width: only constrain by width, allow vertical scrolling
-				return { width: perPageWidth };
+			case "fit-width": {
+				// Fit width: scale to fill available width, allow vertical scrolling
+				const scaleByWidth = perPageWidth / pageWidth;
+				return { scale: scaleByWidth };
+			}
 			default:
 				return { scale: BASE_SCALE };
 		}
-	}, [containerDimensions, zoomLevel, pdfSpreadMode]);
+	}, [containerDimensions, zoomLevel, pdfSpreadMode, pdfPageDimensions]);
 
 	// Initialize reader when PDF loads and progress is ready
 	useEffect(() => {
@@ -306,20 +319,43 @@ export function PdfReader({
 		};
 	}, []);
 
-	// Update container dimensions on resize
+	// Track ResizeObserver instance for cleanup
+	const resizeObserverRef = useRef<ResizeObserver | null>(null);
+
+	// Ref callback to set up ResizeObserver when container is attached
+	// This solves the timing issue where useLayoutEffect runs before ref is attached
+	// (e.g., when there's an early return for loading state on page reload)
+	const setContainerRef = useCallback((element: HTMLDivElement | null) => {
+		// Clean up previous observer
+		if (resizeObserverRef.current) {
+			resizeObserverRef.current.disconnect();
+			resizeObserverRef.current = null;
+		}
+
+		// Update the ref
+		(containerRef as React.MutableRefObject<HTMLDivElement | null>).current =
+			element;
+
+		// Set up new observer if element exists
+		if (element) {
+			const resizeObserver = new ResizeObserver((entries) => {
+				for (const entry of entries) {
+					const { width, height } = entry.contentRect;
+					setContainerDimensions({ width, height });
+				}
+			});
+			resizeObserver.observe(element);
+			resizeObserverRef.current = resizeObserver;
+		}
+	}, []);
+
+	// Cleanup ResizeObserver on unmount
 	useEffect(() => {
-		const updateDimensions = () => {
-			if (containerRef.current) {
-				setContainerDimensions({
-					width: containerRef.current.clientWidth,
-					height: containerRef.current.clientHeight,
-				});
+		return () => {
+			if (resizeObserverRef.current) {
+				resizeObserverRef.current.disconnect();
 			}
 		};
-
-		updateDimensions();
-		window.addEventListener("resize", updateDimensions);
-		return () => window.removeEventListener("resize", updateDimensions);
 	}, []);
 
 	// Fullscreen handling
@@ -435,6 +471,20 @@ export function PdfReader({
 		setPageError(error.message || "Failed to load PDF");
 	}, []);
 
+	// Capture PDF page dimensions on first render for accurate fit calculations
+	const handlePageRenderSuccess = useCallback(
+		(page: { originalWidth: number; originalHeight: number }) => {
+			// Only set once - all pages in a PDF typically have the same dimensions
+			if (!pdfPageDimensions) {
+				setPdfPageDimensions({
+					width: page.originalWidth,
+					height: page.originalHeight,
+				});
+			}
+		},
+		[pdfPageDimensions],
+	);
+
 	// Page click handler
 	const handlePageClick = useCallback(
 		(e: React.MouseEvent) => {
@@ -475,18 +525,20 @@ export function PdfReader({
 	);
 
 	// Calculate spread page dimensions
-	// Note: getPageDimensions already handles double-page mode for fit-page and fit-width
-	// We only need to adjust scale-based zoom levels here
+	// For double-page mode, percentage zoom levels need to be halved so two pages fit
+	// Fit modes already account for double-page in their calculation (using perPageWidth)
 	const spreadPageDimensions = useMemo(() => {
 		if (pdfSpreadMode === "single") {
 			return pageDimensions;
 		}
-		// For scale-based zoom levels (50%, 75%, 100%, etc.), halve the scale for double-page
-		if ("scale" in pageDimensions && pageDimensions.scale !== undefined) {
-			return { ...pageDimensions, scale: pageDimensions.scale * 0.5 };
+		// Only halve scale for percentage zoom levels (marked with needsSpreadAdjustment)
+		if (
+			pageDimensions.needsSpreadAdjustment &&
+			pageDimensions.scale !== undefined
+		) {
+			return { scale: pageDimensions.scale * 0.5 };
 		}
-		// For fit-page and fit-width modes, getPageDimensions already calculated
-		// the correct per-page dimensions, so just pass through
+		// Fit modes already calculated correct per-page scale, pass through
 		return pageDimensions;
 	}, [pageDimensions, pdfSpreadMode]);
 
@@ -538,6 +590,18 @@ export function PdfReader({
 			};
 		}
 	}, [currentPage, numPages, pdfSpreadMode]);
+
+	// Determine if showing a single page in double-page mode (e.g., page 1 in double-odd)
+	// When showing just one page, it should use full width, not half
+	const isSinglePageInSpread = useMemo(() => {
+		if (pdfSpreadMode === "single") return false;
+		return spreadPages.right === null;
+	}, [pdfSpreadMode, spreadPages]);
+
+	// Check if fit modes require container dimensions that aren't ready yet
+	const isFitMode = zoomLevel === "fit-page" || zoomLevel === "fit-width";
+	const containerReady =
+		containerDimensions.width > 0 && containerDimensions.height > 0;
 
 	// Background color style
 	const bgColor = useMemo(() => {
@@ -596,7 +660,7 @@ export function PdfReader({
 
 	return (
 		<Box
-			ref={containerRef}
+			ref={setContainerRef}
 			onMouseMove={handleMouseMove}
 			style={containerStyle}
 		>
@@ -711,96 +775,110 @@ export function PdfReader({
 								</Center>
 							}
 						>
-							<Box
-								style={{
-									display: "flex",
-									flexDirection: "row",
-									gap: pdfSpreadMode !== "single" ? "8px" : "0",
-									justifyContent: "center",
-									alignItems: "flex-start",
-								}}
-							>
-								{/* Left page (or single page) */}
-								{spreadPages.left && (
-									<Page
-										pageNumber={spreadPages.left}
-										{...(pdfSpreadMode === "single"
-											? pageDimensions
-											: spreadPageDimensions)}
-										renderTextLayer={true}
-										renderAnnotationLayer={true}
-										loading={
-											<Center
-												style={{
-													width: 300,
-													height: 400,
-													backgroundColor: "transparent",
-												}}
-											>
-												<Loader size="md" color="gray" />
-											</Center>
-										}
-										customTextRenderer={
-											debouncedSearchText
-												? ({ str }) => {
-														if (!debouncedSearchText) return str;
-														const regex = new RegExp(
-															`(${debouncedSearchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
-															"gi",
-														);
-														const parts = str.split(regex);
-														return parts
-															.map((part) =>
-																regex.test(part)
-																	? `<mark style="background-color: yellow; padding: 0;">${part}</mark>`
-																	: part,
-															)
-															.join("");
-													}
-												: undefined
-										}
-									/>
-								)}
-								{/* Right page (only in spread modes) */}
-								{spreadPages.right && (
-									<Page
-										pageNumber={spreadPages.right}
-										{...spreadPageDimensions}
-										renderTextLayer={true}
-										renderAnnotationLayer={true}
-										loading={
-											<Center
-												style={{
-													width: 300,
-													height: 400,
-													backgroundColor: "transparent",
-												}}
-											>
-												<Loader size="md" color="gray" />
-											</Center>
-										}
-										customTextRenderer={
-											debouncedSearchText
-												? ({ str }) => {
-														if (!debouncedSearchText) return str;
-														const regex = new RegExp(
-															`(${debouncedSearchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
-															"gi",
-														);
-														const parts = str.split(regex);
-														return parts
-															.map((part) =>
-																regex.test(part)
-																	? `<mark style="background-color: yellow; padding: 0;">${part}</mark>`
-																	: part,
-															)
-															.join("");
-													}
-												: undefined
-										}
-									/>
-								)}
-							</Box>
+							{/* Wait for container dimensions before rendering pages in fit modes */}
+							{isFitMode && !containerReady ? (
+								<Center
+									style={{
+										width: "100%",
+										height: "calc(100vh - 128px)",
+										backgroundColor: "transparent",
+									}}
+								>
+									<Loader size="lg" color="gray" />
+								</Center>
+							) : (
+								<Box
+									style={{
+										display: "flex",
+										flexDirection: "row",
+										gap: pdfSpreadMode !== "single" ? "8px" : "0",
+										justifyContent: "center",
+										alignItems: "flex-start",
+									}}
+								>
+									{/* Left page (or single page) */}
+									{spreadPages.left && (
+										<Page
+											pageNumber={spreadPages.left}
+											{...(pdfSpreadMode === "single" || isSinglePageInSpread
+												? pageDimensions
+												: spreadPageDimensions)}
+											renderTextLayer={true}
+											renderAnnotationLayer={true}
+											onRenderSuccess={handlePageRenderSuccess}
+											loading={
+												<Center
+													style={{
+														width: 300,
+														height: 400,
+														backgroundColor: "transparent",
+													}}
+												>
+													<Loader size="md" color="gray" />
+												</Center>
+											}
+											customTextRenderer={
+												debouncedSearchText
+													? ({ str }) => {
+															if (!debouncedSearchText) return str;
+															const regex = new RegExp(
+																`(${debouncedSearchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
+																"gi",
+															);
+															const parts = str.split(regex);
+															return parts
+																.map((part) =>
+																	regex.test(part)
+																		? `<mark style="background-color: yellow; padding: 0;">${part}</mark>`
+																		: part,
+																)
+																.join("");
+														}
+													: undefined
+											}
+										/>
+									)}
+									{/* Right page (only in spread modes) */}
+									{spreadPages.right && (
+										<Page
+											pageNumber={spreadPages.right}
+											{...spreadPageDimensions}
+											renderTextLayer={true}
+											renderAnnotationLayer={true}
+											loading={
+												<Center
+													style={{
+														width: 300,
+														height: 400,
+														backgroundColor: "transparent",
+													}}
+												>
+													<Loader size="md" color="gray" />
+												</Center>
+											}
+											customTextRenderer={
+												debouncedSearchText
+													? ({ str }) => {
+															if (!debouncedSearchText) return str;
+															const regex = new RegExp(
+																`(${debouncedSearchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
+																"gi",
+															);
+															const parts = str.split(regex);
+															return parts
+																.map((part) =>
+																	regex.test(part)
+																		? `<mark style="background-color: yellow; padding: 0;">${part}</mark>`
+																		: part,
+																)
+																.join("");
+														}
+													: undefined
+											}
+										/>
+									)}
+								</Box>
+							)}
 						</Document>
 					)}
 				</Box>

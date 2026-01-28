@@ -78,6 +78,11 @@ vi.mock("./hooks", () => ({
 // Import component after mocks
 import { PdfReader } from "./PdfReader";
 
+// Mock ResizeObserver - needed for container dimension measurement
+const mockResizeObserver = vi.fn();
+const mockResizeObserve = vi.fn();
+const mockResizeDisconnect = vi.fn();
+
 describe("PdfReader", () => {
 	const defaultProps = {
 		bookId: "book-123",
@@ -90,6 +95,19 @@ describe("PdfReader", () => {
 		vi.clearAllMocks();
 		// Reset store state
 		useReaderStore.getState().resetSession();
+
+		// Setup ResizeObserver mock - simulate container with dimensions
+		mockResizeObserver.mockImplementation((callback) => {
+			// Immediately call the callback with mock dimensions
+			queueMicrotask(() => {
+				callback([{ contentRect: { width: 800, height: 600 } }]);
+			});
+			return {
+				observe: mockResizeObserve,
+				disconnect: mockResizeDisconnect,
+			};
+		});
+		global.ResizeObserver = mockResizeObserver;
 	});
 
 	it("should render PDF document with correct file URL", async () => {

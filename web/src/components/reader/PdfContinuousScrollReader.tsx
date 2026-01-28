@@ -158,17 +158,41 @@ export function PdfContinuousScrollReader({
 		);
 	}, [visiblePages, initialPage, totalPages, preloadBuffer]);
 
-	// Update container width on resize
+	// Track ResizeObserver instance for cleanup
+	const resizeObserverRef = useRef<ResizeObserver | null>(null);
+
+	// Ref callback to set up ResizeObserver when container is attached
+	// This solves the timing issue where the effect runs before ref is attached
+	const setContainerRef = useCallback((element: HTMLDivElement | null) => {
+		// Clean up previous observer
+		if (resizeObserverRef.current) {
+			resizeObserverRef.current.disconnect();
+			resizeObserverRef.current = null;
+		}
+
+		// Update the ref
+		(containerRef as React.MutableRefObject<HTMLDivElement | null>).current =
+			element;
+
+		// Set up new observer if element exists
+		if (element) {
+			const resizeObserver = new ResizeObserver((entries) => {
+				for (const entry of entries) {
+					setContainerWidth(entry.contentRect.width);
+				}
+			});
+			resizeObserver.observe(element);
+			resizeObserverRef.current = resizeObserver;
+		}
+	}, []);
+
+	// Cleanup ResizeObserver on unmount
 	useEffect(() => {
-		const updateWidth = () => {
-			if (containerRef.current) {
-				setContainerWidth(containerRef.current.clientWidth);
+		return () => {
+			if (resizeObserverRef.current) {
+				resizeObserverRef.current.disconnect();
 			}
 		};
-
-		updateWidth();
-		window.addEventListener("resize", updateWidth);
-		return () => window.removeEventListener("resize", updateWidth);
 	}, []);
 
 	// Set up intersection observer
@@ -306,6 +330,10 @@ export function PdfContinuousScrollReader({
 		};
 	}, [searchText]);
 
+	// Check if fit modes require container width that isn't ready yet
+	const isFitMode = zoomLevel === "fit-page" || zoomLevel === "fit-width";
+	const containerReady = containerWidth > 0;
+
 	if (totalPages === 0) {
 		return (
 			<Center style={{ width: "100%", height: "100vh" }}>
@@ -316,7 +344,7 @@ export function PdfContinuousScrollReader({
 
 	return (
 		<Box
-			ref={containerRef}
+			ref={setContainerRef}
 			data-testid="pdf-continuous-scroll-container"
 			style={{
 				width: "100%",
@@ -342,79 +370,93 @@ export function PdfContinuousScrollReader({
 					</Center>
 				}
 			>
-				<Box
-					data-testid="pdf-continuous-scroll-inner"
-					style={{
-						display: "flex",
-						flexDirection: "column",
-						alignItems: "center",
-						gap: pageGap,
-						padding: "20px",
-					}}
-				>
-					{Array.from({ length: totalPages }, (_, i) => {
-						const pageNumber = i + 1;
-						const shouldRender = pagesToRender.has(pageNumber);
+				{/* Wait for container dimensions before rendering pages in fit modes */}
+				{isFitMode && !containerReady ? (
+					<Center
+						style={{
+							width: "100%",
+							height: "100%",
+							minHeight: "calc(100vh - 128px)",
+							backgroundColor: "transparent",
+						}}
+					>
+						<Loader size="lg" color="gray" />
+					</Center>
+				) : (
+					<Box
+						data-testid="pdf-continuous-scroll-inner"
+						style={{
+							display: "flex",
+							flexDirection: "column",
+							alignItems: "center",
+							gap: pageGap,
+							padding: "20px",
+						}}
+					>
+						{Array.from({ length: totalPages }, (_, i) => {
+							const pageNumber = i + 1;
+							const shouldRender = pagesToRender.has(pageNumber);
 
-						return (
-							<Box
-								key={pageNumber}
-								ref={(el) => registerPageRef(pageNumber, el)}
-								data-page={pageNumber}
-								data-testid={`pdf-page-container-${pageNumber}`}
-								style={{
-									width: "100%",
-									minHeight: shouldRender ? undefined : "800px",
-									display: "flex",
-									justifyContent: "center",
-									alignItems: "center",
-								}}
-							>
-								{shouldRender ? (
-									<Page
-										pageNumber={pageNumber}
-										width={pageDimensions.width}
-										height={pageDimensions.height}
-										scale={
-											"scale" in pageDimensions
-												? pageDimensions.scale
-												: undefined
-										}
-										renderTextLayer={true}
-										renderAnnotationLayer={true}
-										loading={
-											<Center
-												style={{
-													width: "100%",
-													height: 400,
-													backgroundColor: "transparent",
-												}}
-											>
-												<Loader size="md" color="gray" />
-											</Center>
-										}
-										customTextRenderer={customTextRenderer}
-									/>
-								) : (
-									<Box
-										data-testid={`pdf-page-placeholder-${pageNumber}`}
-										style={{
-											width: "100%",
-											height: "800px",
-											display: "flex",
-											justifyContent: "center",
-											alignItems: "center",
-										}}
-									>
-										<Text c="dimmed" size="sm">
-											Page {pageNumber}
-										</Text>
-									</Box>
-								)}
-							</Box>
-						);
-					})}
-				</Box>
+							return (
+								<Box
+									key={pageNumber}
+									ref={(el) => registerPageRef(pageNumber, el)}
+									data-page={pageNumber}
+									data-testid={`pdf-page-container-${pageNumber}`}
+									style={{
+										width: "100%",
+										minHeight: shouldRender ? undefined : "800px",
+										display: "flex",
+										justifyContent: "center",
+										alignItems: "center",
+									}}
+								>
+									{shouldRender ? (
+										<Page
+											pageNumber={pageNumber}
+											width={pageDimensions.width}
+											height={pageDimensions.height}
+											scale={
+												"scale" in pageDimensions
+													? pageDimensions.scale
+													: undefined
+											}
+											renderTextLayer={true}
+											renderAnnotationLayer={true}
+											loading={
+												<Center
+													style={{
+														width: "100%",
+														height: 400,
+														backgroundColor: "transparent",
+													}}
+												>
+													<Loader size="md" color="gray" />
+												</Center>
+											}
+											customTextRenderer={customTextRenderer}
+										/>
+									) : (
+										<Box
+											data-testid={`pdf-page-placeholder-${pageNumber}`}
+											style={{
+												width: "100%",
+												height: "800px",
+												display: "flex",
+												justifyContent: "center",
+												alignItems: "center",
+											}}
+										>
+											<Text c="dimmed" size="sm">
+												Page {pageNumber}
+											</Text>
+										</Box>
+									)}
+								</Box>
+							);
+						})}
+					</Box>
+				)}
 			</Document>
 		</Box>
 	);

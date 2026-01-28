@@ -67,6 +67,11 @@ const mockObserve = vi.fn();
 const mockUnobserve = vi.fn();
 const mockDisconnect = vi.fn();
 
+// Mock ResizeObserver - needed for container dimension measurement
+const mockResizeObserver = vi.fn();
+const mockResizeObserve = vi.fn();
+const mockResizeDisconnect = vi.fn();
+
 beforeEach(() => {
 	// Reset all mocks
 	vi.clearAllMocks();
@@ -95,6 +100,19 @@ beforeEach(() => {
 		thresholds: [],
 	}));
 	global.IntersectionObserver = mockIntersectionObserver;
+
+	// Setup ResizeObserver mock - simulate container with dimensions
+	mockResizeObserver.mockImplementation((callback) => {
+		// Immediately call the callback with mock dimensions
+		queueMicrotask(() => {
+			callback([{ contentRect: { width: 800, height: 600 } }]);
+		});
+		return {
+			observe: mockResizeObserve,
+			disconnect: mockResizeDisconnect,
+		};
+	});
+	global.ResizeObserver = mockResizeObserver;
 });
 
 describe("PdfContinuousScrollReader", () => {
@@ -127,6 +145,13 @@ describe("PdfContinuousScrollReader", () => {
 
 		it("should render page placeholders for all pages", async () => {
 			renderWithProviders(<PdfContinuousScrollReader {...defaultProps} />);
+
+			// Wait for ResizeObserver callback and re-render
+			await waitFor(() => {
+				expect(
+					screen.getByTestId("pdf-continuous-scroll-inner"),
+				).toBeInTheDocument();
+			});
 
 			// Should have containers for all 10 pages
 			for (let i = 1; i <= 10; i++) {
@@ -206,28 +231,31 @@ describe("PdfContinuousScrollReader", () => {
 	});
 
 	describe("Page Gap", () => {
-		it("should use default page gap of 16px", () => {
+		it("should use default page gap of 16px", async () => {
 			renderWithProviders(<PdfContinuousScrollReader {...defaultProps} />);
 
-			const inner = screen.getByTestId("pdf-continuous-scroll-inner");
+			// Wait for ResizeObserver callback
+			const inner = await screen.findByTestId("pdf-continuous-scroll-inner");
 			expect(inner).toHaveStyle({ gap: "16px" });
 		});
 
-		it("should use custom page gap when provided", () => {
+		it("should use custom page gap when provided", async () => {
 			renderWithProviders(
 				<PdfContinuousScrollReader {...defaultProps} pageGap={24} />,
 			);
 
-			const inner = screen.getByTestId("pdf-continuous-scroll-inner");
+			// Wait for ResizeObserver callback
+			const inner = await screen.findByTestId("pdf-continuous-scroll-inner");
 			expect(inner).toHaveStyle({ gap: "24px" });
 		});
 
-		it("should handle zero page gap", () => {
+		it("should handle zero page gap", async () => {
 			renderWithProviders(
 				<PdfContinuousScrollReader {...defaultProps} pageGap={0} />,
 			);
 
-			const inner = screen.getByTestId("pdf-continuous-scroll-inner");
+			// Wait for ResizeObserver callback
+			const inner = await screen.findByTestId("pdf-continuous-scroll-inner");
 			expect(inner).toHaveStyle({ gap: "0" });
 		});
 	});
@@ -414,8 +442,11 @@ describe("PdfContinuousScrollReader", () => {
 			});
 		});
 
-		it("should render page containers with data-page attributes", () => {
+		it("should render page containers with data-page attributes", async () => {
 			renderWithProviders(<PdfContinuousScrollReader {...defaultProps} />);
+
+			// Wait for ResizeObserver callback
+			await screen.findByTestId("pdf-continuous-scroll-inner");
 
 			for (let i = 1; i <= 10; i++) {
 				const pageContainer = screen.getByTestId(`pdf-page-container-${i}`);
@@ -425,12 +456,15 @@ describe("PdfContinuousScrollReader", () => {
 	});
 
 	describe("Edge Cases", () => {
-		it("should handle single page PDF", () => {
+		it("should handle single page PDF", async () => {
 			renderWithProviders(
 				<PdfContinuousScrollReader {...defaultProps} totalPages={1} />,
 			);
 
-			expect(screen.getByTestId("pdf-page-container-1")).toBeInTheDocument();
+			// Wait for ResizeObserver callback
+			await waitFor(() => {
+				expect(screen.getByTestId("pdf-page-container-1")).toBeInTheDocument();
+			});
 		});
 
 		it("should handle large page counts", () => {
