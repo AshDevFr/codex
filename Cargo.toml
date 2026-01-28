@@ -1,6 +1,6 @@
 [package]
 name = "codex"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 description = "A next-generation digital library server for comics, manga, and ebooks"
 license = "MIT"

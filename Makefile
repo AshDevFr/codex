@@ -414,7 +414,7 @@ dist-build-local: ## Build binary for current platform only
 # =============================================================================
 
 changelog: ## Generate changelog from git history
-	git-cliff -o CHANGELOG.md
+	git-cliff --unreleased --prepend CHANGELOG.md
 
 changelog-unreleased: ## Show unreleased changes (preview)
 	git-cliff --unreleased
@@ -424,7 +424,7 @@ changelog-release: ## Generate changelog for a new release (usage: make changelo
 		echo "$(YELLOW)Error: VERSION not set. Use: make changelog-release VERSION=1.0.0$(NC)"; \
 		exit 1; \
 	fi
-	git-cliff --tag v$(VERSION) -o CHANGELOG.md
+	git-cliff --unreleased --tag v$(VERSION) --prepend CHANGELOG.md
 	@echo "$(GREEN)Changelog generated for v$(VERSION)$(NC)"
 
 # =============================================================================
@@ -449,7 +449,7 @@ release-prepare: ## Prepare a release (usage: make release-prepare VERSION=1.0.0
 	@echo "$(GREEN)✓$(NC) Updated Cargo.lock"
 	@# Generate changelog (skip if already modified)
 	@if git diff --quiet CHANGELOG.md 2>/dev/null && git diff --cached --quiet CHANGELOG.md 2>/dev/null; then \
-		git-cliff --tag v$(VERSION) -o CHANGELOG.md; \
+		$(MAKE) changelog-release VERSION=$(VERSION); \
 		echo "$(GREEN)✓$(NC) Generated CHANGELOG.md for v$(VERSION)"; \
 	else \
 		echo "$(YELLOW)⊘$(NC) Skipped CHANGELOG.md (already modified)"; \

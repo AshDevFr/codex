@@ -2,6 +2,17 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.0.1] - 2026-01-28
+
+### 🚀 Features
+
+- *(docs)* Add automated screenshot capture system with Playwright
+
+### 🐛 Bug Fixes
+
+- *(web)* Show focus ring only for keyboard navigation
+- *(web)* Fix PDF fit modes not working on initial page load
+
 ## [1.0.0] - 2026-01-26
 
 **Initial Release** - Codex is a next-generation digital library server for comics, manga, and ebooks.
