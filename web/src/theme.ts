@@ -26,6 +26,9 @@ export const theme = createTheme({
 		blue: primaryBlue,
 	},
 
+	// Only show focus ring for keyboard navigation, not mouse clicks
+	focusRing: "auto",
+
 	// Base text color (dark theme defaults)
 	black: "#121212",
 	white: "#e0e0e0",

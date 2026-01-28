@@ -51,9 +51,13 @@ button {
 button:hover {
 	border-color: #646cff;
 }
-button:focus,
 button:focus-visible {
 	outline: 4px auto -webkit-focus-ring-color;
+}
+
+/* Hide focus outline for mouse clicks, show only for keyboard navigation */
+*:focus:not(:focus-visible) {
+	outline: none;
 }
 
 @media (prefers-color-scheme: light) {
