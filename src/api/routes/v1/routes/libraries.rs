@@ -95,4 +95,9 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/libraries/:library_id/analyze-unanalyzed",
             post(handlers::trigger_library_unanalyzed_analysis),
         )
+        // Plugin auto-match for library (Phase 5.5)
+        .route(
+            "/libraries/:library_id/metadata/auto-match/task",
+            post(handlers::plugin_actions::enqueue_library_auto_match_tasks),
+        )
 }

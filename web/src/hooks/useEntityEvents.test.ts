@@ -91,7 +91,7 @@ describe("useEntityEvents", () => {
 		});
 	});
 
-	it("should invalidate book queries and record cover update on CoverUpdated event", async () => {
+	it("should invalidate and refetch queries and record cover update on CoverUpdated event", async () => {
 		let capturedCallback: ((event: EntityChangeEvent) => void) | undefined;
 
 		vi.spyOn(eventsApi.eventsApi, "subscribeToEntityEvents").mockImplementation(
@@ -102,6 +102,7 @@ describe("useEntityEvents", () => {
 		);
 
 		const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+		const refetchSpy = vi.spyOn(queryClient, "refetchQueries");
 
 		// Reset cover updates store before test
 		useCoverUpdatesStore.setState({ updates: {} });
@@ -126,12 +127,18 @@ describe("useEntityEvents", () => {
 		}
 
 		await waitFor(() => {
+			// Invalidate the specific series
 			expect(invalidateSpy).toHaveBeenCalledWith({
 				queryKey: ["series", "series-123"],
 			});
+			// Invalidate all series list queries
 			expect(invalidateSpy).toHaveBeenCalledWith({
 				queryKey: ["series"],
-				refetchType: "all",
+			});
+			// Refetch all active series queries to trigger component re-render
+			expect(refetchSpy).toHaveBeenCalledWith({
+				queryKey: ["series"],
+				type: "active",
 			});
 		});
 

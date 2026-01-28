@@ -1,0 +1,526 @@
+//! Plugin Handle - Lifecycle Management
+//!
+//! This module provides the `PluginHandle` which manages a single plugin's lifecycle,
+//! including initialization, request handling, health tracking, and shutdown.
+//!
+//! Note: Some methods and error variants are designed for the complete plugin API
+//! but may not be called from external code yet.
+
+// Allow dead code for plugin API methods and error variants that are part of the
+// complete API surface but not yet called from external code.
+#![allow(dead_code)]
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+use serde_json::Value;
+use tokio::sync::RwLock;
+use tracing::{debug, error, info, warn};
+
+use super::health::{HealthState, HealthTracker};
+use super::process::{PluginProcess, PluginProcessConfig, ProcessError};
+use super::protocol::{
+    methods, InitializeParams, MetadataGetParams, MetadataMatchParams, MetadataSearchParams,
+    MetadataSearchResponse, PluginBookMetadata, PluginManifest, PluginSeriesMetadata, SearchResult,
+};
+use super::rpc::{RpcClient, RpcError};
+use super::secrets::SecretValue;
+
+/// Error type for plugin handle operations
+#[derive(Debug, thiserror::Error)]
+pub enum PluginError {
+    #[error("Plugin process error: {0}")]
+    Process(#[from] ProcessError),
+
+    #[error("Plugin RPC error: {0}")]
+    Rpc(#[from] RpcError),
+
+    #[error("Plugin not initialized")]
+    NotInitialized,
+
+    #[error("Plugin is disabled: {reason}")]
+    Disabled { reason: String },
+
+    #[error("Plugin health check failed: {0}")]
+    HealthCheckFailed(String),
+
+    #[error("Plugin spawn failed: {0}")]
+    SpawnFailed(String),
+
+    #[error("Invalid manifest: {0}")]
+    InvalidManifest(String),
+}
+
+/// Configuration for a plugin handle
+///
+/// Note: The `credentials` field uses `SecretValue` which implements `Debug`
+/// to show `[REDACTED]` instead of actual credential values, preventing
+/// accidental exposure in logs.
+#[derive(Clone)]
+pub struct PluginConfig {
+    /// Process configuration
+    pub process: PluginProcessConfig,
+    /// Request timeout
+    pub request_timeout: Duration,
+    /// Shutdown timeout
+    pub shutdown_timeout: Duration,
+    /// Maximum consecutive failures before disabling
+    pub max_failures: u32,
+    /// Initial configuration to pass to plugin
+    pub config: Option<Value>,
+    /// Credentials to pass to plugin (via init message)
+    /// Uses SecretValue to prevent logging of sensitive data
+    pub credentials: Option<SecretValue>,
+}
+
+impl std::fmt::Debug for PluginConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PluginConfig")
+            .field("process", &self.process)
+            .field("request_timeout", &self.request_timeout)
+            .field("shutdown_timeout", &self.shutdown_timeout)
+            .field("max_failures", &self.max_failures)
+            .field("config", &self.config)
+            .field("credentials", &self.credentials) // SecretValue shows [REDACTED]
+            .finish()
+    }
+}
+
+impl Default for PluginConfig {
+    fn default() -> Self {
+        Self {
+            process: PluginProcessConfig::new("echo"),
+            request_timeout: Duration::from_secs(30),
+            shutdown_timeout: Duration::from_secs(5),
+            max_failures: 3,
+            config: None,
+            credentials: None,
+        }
+    }
+}
+
+/// State of the plugin handle
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PluginState {
+    /// Not yet started
+    Idle,
+    /// Process starting
+    Starting,
+    /// Process running and initialized
+    Running,
+    /// Being shut down
+    ShuttingDown,
+    /// Stopped (either gracefully or due to error)
+    Stopped,
+    /// Disabled due to failures
+    Disabled { reason: String },
+}
+
+/// Handle for managing a single plugin's lifecycle
+pub struct PluginHandle {
+    /// Plugin configuration
+    config: PluginConfig,
+    /// Plugin state
+    state: Arc<RwLock<PluginState>>,
+    /// RPC client (if running)
+    client: Arc<RwLock<Option<RpcClient>>>,
+    /// Cached manifest (after initialization)
+    manifest: Arc<RwLock<Option<PluginManifest>>>,
+    /// Health tracker
+    health: Arc<HealthTracker>,
+}
+
+impl PluginHandle {
+    /// Create a new plugin handle with the given configuration
+    pub fn new(config: PluginConfig) -> Self {
+        Self {
+            health: Arc::new(HealthTracker::new(config.max_failures)),
+            config,
+            state: Arc::new(RwLock::new(PluginState::Idle)),
+            client: Arc::new(RwLock::new(None)),
+            manifest: Arc::new(RwLock::new(None)),
+        }
+    }
+
+    /// Get the current plugin state
+    pub async fn state(&self) -> PluginState {
+        self.state.read().await.clone()
+    }
+
+    /// Get the cached manifest (if initialized)
+    pub async fn manifest(&self) -> Option<PluginManifest> {
+        self.manifest.read().await.clone()
+    }
+
+    /// Get the health state
+    pub async fn health_state(&self) -> HealthState {
+        self.health.state().await
+    }
+
+    /// Check if the plugin is currently running
+    pub async fn is_running(&self) -> bool {
+        matches!(*self.state.read().await, PluginState::Running)
+    }
+
+    /// Check if the plugin is disabled
+    pub async fn is_disabled(&self) -> bool {
+        matches!(*self.state.read().await, PluginState::Disabled { .. })
+    }
+
+    /// Spawn the plugin process and initialize it
+    pub async fn start(&self) -> Result<PluginManifest, PluginError> {
+        // Check if already running
+        {
+            let state = self.state.read().await;
+            match &*state {
+                PluginState::Running => {
+                    if let Some(manifest) = self.manifest.read().await.clone() {
+                        return Ok(manifest);
+                    }
+                }
+                PluginState::Disabled { reason } => {
+                    return Err(PluginError::Disabled {
+                        reason: reason.clone(),
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        // Update state to starting
+        {
+            let mut state = self.state.write().await;
+            *state = PluginState::Starting;
+        }
+
+        debug!("Starting plugin process");
+
+        // Spawn the process
+        let process = match PluginProcess::spawn(&self.config.process).await {
+            Ok(p) => p,
+            Err(e) => {
+                let mut state = self.state.write().await;
+                *state = PluginState::Stopped;
+                return Err(PluginError::SpawnFailed(e.to_string()));
+            }
+        };
+
+        // Create RPC client
+        let mut client = RpcClient::new(process, self.config.request_timeout);
+
+        // Initialize the plugin
+        // Convert SecretValue to Value for the init message
+        let init_params = InitializeParams {
+            config: self.config.config.clone(),
+            credentials: self.config.credentials.as_ref().map(|s| s.inner().clone()),
+        };
+
+        let manifest: PluginManifest = match client.call(methods::INITIALIZE, init_params).await {
+            Ok(m) => m,
+            Err(e) => {
+                error!("Plugin initialization failed: {}", e);
+                let _ = client.shutdown(self.config.shutdown_timeout).await;
+                let mut state = self.state.write().await;
+                *state = PluginState::Stopped;
+                self.health.record_failure().await;
+                return Err(PluginError::Rpc(e));
+            }
+        };
+
+        info!(
+            name = %manifest.name,
+            version = %manifest.version,
+            "Plugin initialized successfully"
+        );
+
+        // Store the client and manifest
+        {
+            let mut client_lock = self.client.write().await;
+            *client_lock = Some(client);
+        }
+        {
+            let mut manifest_lock = self.manifest.write().await;
+            *manifest_lock = Some(manifest.clone());
+        }
+        {
+            let mut state = self.state.write().await;
+            *state = PluginState::Running;
+        }
+
+        self.health.record_success().await;
+        Ok(manifest)
+    }
+
+    /// Stop the plugin gracefully
+    pub async fn stop(&self) -> Result<(), PluginError> {
+        let current_state = self.state.read().await.clone();
+
+        if !matches!(current_state, PluginState::Running) {
+            debug!("Plugin not running, nothing to stop");
+            return Ok(());
+        }
+
+        // Update state
+        {
+            let mut state = self.state.write().await;
+            *state = PluginState::ShuttingDown;
+        }
+
+        debug!("Stopping plugin");
+
+        // Send shutdown message and close client
+        let mut client_opt = self.client.write().await;
+        if let Some(mut client) = client_opt.take() {
+            // Try to send shutdown notification
+            if let Err(e) = client.call_no_params::<Value>(methods::SHUTDOWN).await {
+                warn!("Plugin shutdown request failed: {}", e);
+            }
+
+            // Wait for process to exit
+            match client.shutdown(self.config.shutdown_timeout).await {
+                Ok(code) => {
+                    info!("Plugin process exited with code {}", code);
+                }
+                Err(e) => {
+                    warn!("Plugin shutdown error: {}", e);
+                }
+            }
+        }
+
+        // Update state
+        {
+            let mut state = self.state.write().await;
+            *state = PluginState::Stopped;
+        }
+
+        Ok(())
+    }
+
+    /// Restart the plugin
+    pub async fn restart(&self) -> Result<PluginManifest, PluginError> {
+        self.stop().await?;
+        self.start().await
+    }
+
+    /// Send a ping to check if the plugin is responsive
+    pub async fn ping(&self) -> Result<(), PluginError> {
+        self.ensure_running().await?;
+        let client_guard = self.client.read().await;
+        let client = client_guard.as_ref().ok_or(PluginError::NotInitialized)?;
+        let _: String = client.call_no_params(methods::PING).await?;
+        self.health.record_success().await;
+        Ok(())
+    }
+
+    /// Search for series metadata
+    pub async fn search_series(
+        &self,
+        params: MetadataSearchParams,
+    ) -> Result<MetadataSearchResponse, PluginError> {
+        self.ensure_running().await?;
+        let client_guard = self.client.read().await;
+        let client = client_guard.as_ref().ok_or(PluginError::NotInitialized)?;
+        match client.call(methods::METADATA_SERIES_SEARCH, params).await {
+            Ok(response) => {
+                self.health.record_success().await;
+                Ok(response)
+            }
+            Err(e) => {
+                self.health.record_failure().await;
+                self.check_and_disable().await;
+                Err(PluginError::Rpc(e))
+            }
+        }
+    }
+
+    /// Get series metadata by external ID
+    pub async fn get_series_metadata(
+        &self,
+        params: MetadataGetParams,
+    ) -> Result<PluginSeriesMetadata, PluginError> {
+        self.ensure_running().await?;
+        let client_guard = self.client.read().await;
+        let client = client_guard.as_ref().ok_or(PluginError::NotInitialized)?;
+        match client.call(methods::METADATA_SERIES_GET, params).await {
+            Ok(response) => {
+                self.health.record_success().await;
+                Ok(response)
+            }
+            Err(e) => {
+                self.health.record_failure().await;
+                self.check_and_disable().await;
+                Err(PluginError::Rpc(e))
+            }
+        }
+    }
+
+    /// Get book metadata by external ID (future use)
+    #[allow(dead_code)]
+    pub async fn get_book_metadata(
+        &self,
+        params: MetadataGetParams,
+    ) -> Result<PluginBookMetadata, PluginError> {
+        self.ensure_running().await?;
+        let client_guard = self.client.read().await;
+        let client = client_guard.as_ref().ok_or(PluginError::NotInitialized)?;
+        // TODO: Change to METADATA_BOOK_GET when book metadata is implemented
+        match client.call(methods::METADATA_SERIES_GET, params).await {
+            Ok(response) => {
+                self.health.record_success().await;
+                Ok(response)
+            }
+            Err(e) => {
+                self.health.record_failure().await;
+                self.check_and_disable().await;
+                Err(PluginError::Rpc(e))
+            }
+        }
+    }
+
+    /// Find best match for a series title
+    pub async fn match_series(
+        &self,
+        params: MetadataMatchParams,
+    ) -> Result<Option<SearchResult>, PluginError> {
+        self.ensure_running().await?;
+        let client_guard = self.client.read().await;
+        let client = client_guard.as_ref().ok_or(PluginError::NotInitialized)?;
+        match client.call(methods::METADATA_SERIES_MATCH, params).await {
+            Ok(response) => {
+                self.health.record_success().await;
+                Ok(response)
+            }
+            Err(e) => {
+                self.health.record_failure().await;
+                self.check_and_disable().await;
+                Err(PluginError::Rpc(e))
+            }
+        }
+    }
+
+    /// Call an arbitrary method on the plugin
+    pub async fn call_method<P, R>(&self, method: &str, params: P) -> Result<R, PluginError>
+    where
+        P: Serialize,
+        R: DeserializeOwned,
+    {
+        self.ensure_running().await?;
+        let client_guard = self.client.read().await;
+        let client = client_guard.as_ref().ok_or(PluginError::NotInitialized)?;
+        match client.call(method, params).await {
+            Ok(response) => {
+                self.health.record_success().await;
+                Ok(response)
+            }
+            Err(e) => {
+                self.health.record_failure().await;
+                self.check_and_disable().await;
+                Err(PluginError::Rpc(e))
+            }
+        }
+    }
+
+    /// Re-enable a disabled plugin
+    pub async fn enable(&self) -> Result<(), PluginError> {
+        let current_state = self.state.read().await.clone();
+
+        if let PluginState::Disabled { reason: _ } = current_state {
+            self.health.reset().await;
+            {
+                let mut state = self.state.write().await;
+                *state = PluginState::Idle;
+            }
+            info!("Plugin re-enabled");
+            Ok(())
+        } else {
+            Ok(()) // Already enabled
+        }
+    }
+
+    /// Ensure the plugin is in a running state
+    async fn ensure_running(&self) -> Result<(), PluginError> {
+        let state = self.state.read().await.clone();
+        match state {
+            PluginState::Running => Ok(()),
+            PluginState::Disabled { reason } => Err(PluginError::Disabled { reason }),
+            _ => Err(PluginError::NotInitialized),
+        }
+    }
+
+    /// Check if the plugin should be disabled due to failures
+    async fn check_and_disable(&self) {
+        if self.health.should_disable().await {
+            let mut state = self.state.write().await;
+            if matches!(*state, PluginState::Running) {
+                let reason = format!(
+                    "Disabled after {} consecutive failures",
+                    self.config.max_failures
+                );
+                warn!("{}", reason);
+                *state = PluginState::Disabled { reason };
+            }
+        }
+    }
+}
+
+// Note: We need a custom impl because RpcClient contains tokio tasks
+impl Drop for PluginHandle {
+    fn drop(&mut self) {
+        // The RpcClient will clean up its tasks when dropped
+        // The process will be killed due to kill_on_drop(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_plugin_config_default() {
+        let config = PluginConfig::default();
+        assert_eq!(config.request_timeout, Duration::from_secs(30));
+        assert_eq!(config.shutdown_timeout, Duration::from_secs(5));
+        assert_eq!(config.max_failures, 3);
+    }
+
+    #[test]
+    fn test_plugin_state_eq() {
+        assert_eq!(PluginState::Idle, PluginState::Idle);
+        assert_eq!(PluginState::Running, PluginState::Running);
+        assert_ne!(PluginState::Idle, PluginState::Running);
+
+        let disabled1 = PluginState::Disabled {
+            reason: "test".to_string(),
+        };
+        let disabled2 = PluginState::Disabled {
+            reason: "test".to_string(),
+        };
+        assert_eq!(disabled1, disabled2);
+    }
+
+    #[tokio::test]
+    async fn test_plugin_handle_initial_state() {
+        let config = PluginConfig::default();
+        let handle = PluginHandle::new(config);
+
+        assert_eq!(handle.state().await, PluginState::Idle);
+        assert!(!handle.is_running().await);
+        assert!(!handle.is_disabled().await);
+        assert!(handle.manifest().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_plugin_handle_enable_when_not_disabled() {
+        let config = PluginConfig::default();
+        let handle = PluginHandle::new(config);
+
+        // Should be a no-op when not disabled
+        handle.enable().await.unwrap();
+        assert_eq!(handle.state().await, PluginState::Idle);
+    }
+
+    // Integration tests would require a mock plugin process
+    // See tests/integration/plugin_handle.rs for full integration tests
+}

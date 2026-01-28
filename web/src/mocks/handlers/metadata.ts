@@ -3,6 +3,34 @@
  */
 
 import { delay, HttpResponse, http } from "msw";
+import type { components } from "@/types/api.generated";
+
+type GenreDto = components["schemas"]["GenreDto"];
+type TagDto = components["schemas"]["TagDto"];
+
+// Helper to convert internal mock genre to GenreDto
+const toGenreDto = (g: {
+	id: string;
+	name: string;
+	series_count: number;
+}): GenreDto => ({
+	id: g.id,
+	name: g.name,
+	seriesCount: g.series_count,
+	createdAt: "2024-01-01T00:00:00Z",
+});
+
+// Helper to convert internal mock tag to TagDto
+const toTagDto = (t: {
+	id: string;
+	name: string;
+	series_count: number;
+}): TagDto => ({
+	id: t.id,
+	name: t.name,
+	seriesCount: t.series_count,
+	createdAt: "2024-01-01T00:00:00Z",
+});
 
 // Mock genres data - includes all genres used in series metadata
 const mockGenres = [
@@ -112,12 +140,7 @@ export const metadataHandlers = [
 
 		// Return paginated response format expected by the API client
 		return HttpResponse.json({
-			data: paginatedGenres.map((g) => ({
-				id: g.id,
-				name: g.name,
-				seriesCount: g.series_count,
-				createdAt: "2024-01-01T00:00:00Z",
-			})),
+			data: paginatedGenres.map(toGenreDto),
 			page,
 			pageSize,
 			total: mockGenres.length,
@@ -158,7 +181,7 @@ export const metadataHandlers = [
 			"Action",
 			"Adventure",
 		];
-		const genres = genreNames.map((name, index) => {
+		const genres: GenreDto[] = genreNames.map((name, index) => {
 			const genre = mockGenres.find((g) => g.name === name);
 			return {
 				id: genre?.id || `genre-series-${params.seriesId}-${index}`,
@@ -178,7 +201,7 @@ export const metadataHandlers = [
 			genreNames?: string[];
 		};
 		const names = body.genreNames || [];
-		const genres = names.map((name, index) => ({
+		const genres: GenreDto[] = names.map((name, index) => ({
 			id: `genre-${index}`,
 			name,
 			seriesCount: 1,
@@ -194,12 +217,13 @@ export const metadataHandlers = [
 			genreId?: string;
 			genreName?: string;
 		};
-		return HttpResponse.json({
+		const genre: GenreDto = {
 			id: body.genreId || `genre-${params.seriesId}-${Date.now()}`,
 			name: body.genreName || "New Genre",
 			seriesCount: 1,
 			createdAt: new Date().toISOString(),
-		});
+		};
+		return HttpResponse.json(genre);
 	}),
 
 	// Remove a genre from a series
@@ -227,12 +251,7 @@ export const metadataHandlers = [
 
 		// Return paginated response format expected by the API client
 		return HttpResponse.json({
-			data: paginatedTags.map((t) => ({
-				id: t.id,
-				name: t.name,
-				seriesCount: t.series_count,
-				createdAt: "2024-01-01T00:00:00Z",
-			})),
+			data: paginatedTags.map(toTagDto),
 			page,
 			pageSize,
 			total: mockTags.length,
@@ -273,7 +292,7 @@ export const metadataHandlers = [
 			"adventure",
 			"action",
 		];
-		const tags = tagNames.map((name, index) => {
+		const tags: TagDto[] = tagNames.map((name, index) => {
 			const tag = mockTags.find((t) => t.name === name);
 			return {
 				id: tag?.id || `tag-series-${params.seriesId}-${index}`,
@@ -293,7 +312,7 @@ export const metadataHandlers = [
 			tagNames?: string[];
 		};
 		const names = body.tagNames || [];
-		const tags = names.map((name, index) => ({
+		const tags: TagDto[] = names.map((name, index) => ({
 			id: `tag-${index}`,
 			name,
 			seriesCount: 1,
@@ -306,12 +325,13 @@ export const metadataHandlers = [
 	http.post("/api/v1/series/:seriesId/tags", async ({ params, request }) => {
 		await delay(100);
 		const body = (await request.json()) as { tagId?: string; tagName?: string };
-		return HttpResponse.json({
+		const tag: TagDto = {
 			id: body.tagId || `tag-${params.seriesId}-${Date.now()}`,
 			name: body.tagName || "new-tag",
 			seriesCount: 1,
 			createdAt: new Date().toISOString(),
-		});
+		};
+		return HttpResponse.json(tag);
 	}),
 
 	// Remove a tag from a series

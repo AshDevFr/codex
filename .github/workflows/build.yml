@@ -115,6 +115,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+      # Note: We remove package-lock.json and use npm install instead of npm ci
+      # because Biome updates frequently and we want to use the latest compatible version
       - name: Install dependencies
         working-directory: web
         run: |
@@ -136,10 +138,60 @@ jobs:
           path: web/dist
           retention-days: 1
 
+  # Run plugin checks (lint, typecheck, tests)
+  plugins:
+    name: Plugins (${{ matrix.plugin }})
+    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
+    runs-on: arc-runner-codex
+    container: ubuntu:22.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin:
+          - sdk-typescript
+          - metadata-echo
+          - metadata-mangabaka
+    steps:
+      - name: Install base dependencies
+        run: |
+          apt-get update
+          apt-get install -y git curl
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # SDK must be built first for other plugins to use
+      - name: Build SDK (dependency)
+        if: matrix.plugin != 'sdk-typescript'
+        working-directory: plugins/sdk-typescript
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
+          npm run build
+      - name: Install dependencies
+        working-directory: plugins/${{ matrix.plugin }}
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
+      - name: Lint
+        working-directory: plugins/${{ matrix.plugin }}
+        run: npm run lint
+      - name: Typecheck
+        working-directory: plugins/${{ matrix.plugin }}
+        run: npx tsc --noEmit
+      - name: Test
+        working-directory: plugins/${{ matrix.plugin }}
+        run: npm run test
+      - name: Build
+        working-directory: plugins/${{ matrix.plugin }}
+        run: npm run build
+
   # Run 'dist plan' (or host) to determine what tasks we need to do
   plan:
     name: Plan
-    needs: [test, lint, frontend]
+    needs: [test, lint, frontend, plugins]
     # SELF-HOSTED: Change to ubuntu-22.04 for GitHub runners and remove container
     runs-on: arc-runner-codex
     container: ubuntu:22.04
@@ -366,7 +418,7 @@ jobs:
   # Uses Dockerfile.cross which cross-compiles ARM on x86 (no QEMU emulation)
   docker:
     name: Docker
-    needs: [test, lint, frontend]
+    needs: [test, lint, frontend, plugins]
     # Only build Docker on main branch or release tags
     if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
     # SELF-HOSTED: Change to ubuntu-latest for GitHub runners
@@ -516,10 +568,101 @@ jobs:
 
           gh release create "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
 
+  # Publish SDK to npm (only for releases)
+  publish-sdk:
+    name: Publish SDK
+    needs:
+      - plan
+      - host
+    if: ${{ always() && needs.host.result == 'success' }}
+    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
+    runs-on: arc-runner-codex
+    container: ubuntu:22.04
+    steps:
+      - name: Install base dependencies
+        run: |
+          apt-get update
+          apt-get install -y git curl
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      # Note: We remove package-lock.json and use npm install instead of npm ci
+      # because Biome updates frequently and we want to use the latest compatible version
+      - name: Install dependencies and build
+        working-directory: plugins/sdk-typescript
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
+          npm run build
+      - name: Publish to npm
+        working-directory: plugins/sdk-typescript
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Publish plugins to npm (only for releases, after SDK is published)
+  publish-plugins:
+    name: Publish Plugins
+    needs:
+      - plan
+      - publish-sdk
+    if: ${{ always() && needs.publish-sdk.result == 'success' }}
+    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
+    runs-on: arc-runner-codex
+    container: ubuntu:22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin:
+          - metadata-echo
+          - metadata-mangabaka
+    steps:
+      - name: Install base dependencies
+        run: |
+          apt-get update
+          apt-get install -y git curl jq
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      # Update SDK dependency from file: to published npm version before install
+      - name: Update SDK dependency for publish
+        working-directory: plugins/${{ matrix.plugin }}
+        run: |
+          SDK_VERSION=$(jq -r .version ../sdk-typescript/package.json)
+          echo "Updating @codex/plugin-sdk dependency to ^$SDK_VERSION"
+          jq --arg v "^$SDK_VERSION" '.dependencies["@codex/plugin-sdk"] = $v' package.json > tmp.json
+          mv tmp.json package.json
+          cat package.json | grep -A2 '"dependencies"'
+      - name: Install plugin dependencies
+        working-directory: plugins/${{ matrix.plugin }}
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
+      - name: Build plugin
+        working-directory: plugins/${{ matrix.plugin }}
+        run: npm run build
+      - name: Publish to npm
+        working-directory: plugins/${{ matrix.plugin }}
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
   announce:
     needs:
       - plan
       - host
+      - publish-sdk
+      - publish-plugins
     # use "always() && ..." to allow us to wait for all publish jobs while
     # still allowing individual publish jobs to skip themselves (for prereleases).
     # "host" however must run to completion, no skipping allowed!

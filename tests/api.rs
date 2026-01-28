@@ -24,6 +24,7 @@ mod api {
     mod opds2;
     mod pages;
     mod pdf_cache;
+    mod plugins;
     mod rate_limit;
     mod read_progress;
     mod scan;

@@ -85,11 +85,17 @@ services:
       - ./docker/data/thumbnails:/app/data/thumbnails:rw
       - ./docker/data/uploads:/app/data/uploads:rw
       - ./docker/data/cache:/app/data/cache:rw
+      # Plugin dist directories (built by plugins-builder service)
+      - ./plugins/metadata-mangabaka/dist:/opt/codex/plugins/metadata-mangabaka/dist:ro
+      - ./plugins/metadata-echo/dist:/opt/codex/plugins/metadata-echo/dist:ro
     environment:
       RUST_BACKTRACE: 1
       # Email configuration for Mailhog
       EMAIL_SMTP_HOST: mailhog
       EMAIL_SMTP_PORT: 1025
+      # Encryption key for plugin secrets (base64-encoded 32-byte key)
+      # Generate with: openssl rand -base64 32
+      CODEX_ENCRYPTION_KEY: "pjImnrzPzSmuvBKkzWAlTzrfyZ9O3pU/9IKuRT94Y/w="
       # Disable workers in web container (workers run in separate container)
       CODEX_DISABLE_WORKERS: "true"
       # Configuration overrides (optional - uses CODEX_ prefix)
@@ -134,6 +140,9 @@ services:
       - ./docker/data/thumbnails:/app/data/thumbnails:rw
       - ./docker/data/uploads:/app/data/uploads:rw
       - ./docker/data/cache:/app/data/cache:rw
+      # Plugin dist directories (built by plugins-builder service)
+      - ./plugins/metadata-mangabaka/dist:/opt/codex/plugins/metadata-mangabaka/dist:ro
+      - ./plugins/metadata-echo/dist:/opt/codex/plugins/metadata-echo/dist:ro
     command:
       [
         "cargo",
@@ -163,6 +172,8 @@ services:
       ]
     environment:
       RUST_BACKTRACE: 1
+      # Encryption key for plugin secrets (must match codex-dev)
+      CODEX_ENCRYPTION_KEY: "pjImnrzPzSmuvBKkzWAlTzrfyZ9O3pU/9IKuRT94Y/w="
       # Worker count (can also be set in config file)
       CODEX_TASK_WORKER_COUNT: "2"
       CODEX_SKIP_MIGRATIONS: "true"
@@ -174,6 +185,36 @@ services:
       # CODEX_DATABASE_POSTGRES_PASSWORD: codex
       # CODEX_DATABASE_POSTGRES_DATABASE_NAME: codex
       CODEX_LOGGING_LEVEL: debug
+    networks:
+      - codex-network
+    profiles:
+      - dev
+
+  # Plugin builder - watches and rebuilds TypeScript plugins on changes
+  plugins-builder:
+    image: node:22-alpine
+    container_name: codex-plugins-builder
+    working_dir: /plugins
+    volumes:
+      - ./plugins:/plugins
+      # Exclude node_modules to prevent platform-specific binary conflicts
+      - /plugins/sdk-typescript/node_modules
+      - /plugins/metadata-echo/node_modules
+      - /plugins/metadata-mangabaka/node_modules
+    command:
+      - sh
+      - -c
+      - |
+        echo 'Installing plugin dependencies...' &&
+        cd /plugins/sdk-typescript && npm install && npm run build &&
+        cd /plugins/metadata-echo && npm install && npm run build &&
+        cd /plugins/metadata-mangabaka && npm install && npm run build &&
+        echo 'Initial build complete. Watching for changes...' &&
+        npm install -g concurrently &&
+        concurrently --names 'sdk,metadata-echo,metadata-mangabaka' --prefix-colors 'blue,green,yellow' \
+          "cd /plugins/sdk-typescript && npm run dev" \
+          "cd /plugins/metadata-echo && npm run dev" \
+          "cd /plugins/metadata-mangabaka && npm run dev"
     networks:
       - codex-network
     profiles:
@@ -298,10 +339,12 @@ services:
       - screenshots_thumbnails:/app/data/thumbnails:rw
       - screenshots_uploads:/app/data/uploads:rw
       - screenshots_cache:/app/data/cache:rw
+      - ./plugins/metadata-echo/dist:/opt/codex/plugins/metadata-echo/dist:ro
     command:
       ["codex", "serve", "--config", "/app/config/config.screenshots.yaml"]
     environment:
       CODEX_LOGGING_LEVEL: info
+      CODEX_ENCRYPTION_KEY: "pjImnrzPzSmuvBKkzWAlTzrfyZ9O3pU/9IKuRT94Y/w="
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
       interval: 5s
@@ -328,15 +371,6 @@ services:
       BASE_URL: http://codex-screenshots:8080
       VIEWPORT_WIDTH: "1280"
       VIEWPORT_HEIGHT: "900"
-      # ADMIN_USERNAME: admin
-      # ADMIN_EMAIL: admin@example.com
-      # ADMIN_PASSWORD: "SecurePass123!"
-      # LIBRARY_1_NAME: Comics
-      # LIBRARY_1_PATH: /libraries/comics
-      # LIBRARY_2_NAME: Manga
-      # LIBRARY_2_PATH: /libraries/manga
-      # LIBRARY_3_NAME: Books
-      # LIBRARY_3_PATH: /libraries/books
     depends_on:
       codex-screenshots:
         condition: service_healthy

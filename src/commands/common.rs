@@ -406,6 +406,7 @@ pub fn spawn_workers(
     task_metrics_service: Option<Arc<TaskMetricsService>>,
     files_config: crate::config::FilesConfig,
     pdf_page_cache: Option<Arc<crate::services::PdfPageCache>>,
+    plugin_manager: Option<Arc<crate::services::plugin::PluginManager>>,
 ) -> (
     Vec<tokio::task::JoinHandle<()>>,
     Vec<tokio::sync::broadcast::Sender<()>>,
@@ -437,6 +438,11 @@ pub fn spawn_workers(
         // Add PDF cache handler if available
         if let Some(ref pdf_cache) = pdf_page_cache {
             task_worker = task_worker.with_pdf_cache(pdf_cache.clone(), settings_service.clone());
+        }
+
+        // Add plugin manager if available (for plugin auto-match tasks)
+        if let Some(ref pm) = plugin_manager {
+            task_worker = task_worker.with_plugin_manager(pm.clone());
         }
 
         let (mut task_worker, worker_shutdown_tx) = task_worker.with_shutdown();

@@ -293,6 +293,26 @@ impl SeriesMetadataRepository {
         Ok(model)
     }
 
+    /// Update total book count (expected number of books in the series)
+    pub async fn update_total_book_count(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+        total_book_count: Option<i32>,
+    ) -> Result<series_metadata::Model> {
+        let existing = Self::get_by_series_id(db, series_id)
+            .await?
+            .ok_or_else(|| {
+                anyhow::anyhow!("Series metadata not found for series: {}", series_id)
+            })?;
+
+        let mut active_model: series_metadata::ActiveModel = existing.into();
+        active_model.total_book_count = Set(total_book_count);
+        active_model.updated_at = Set(Utc::now());
+
+        let model = active_model.update(db).await?;
+        Ok(model)
+    }
+
     /// Lock or unlock a specific metadata field
     pub async fn set_lock(
         db: &DatabaseConnection,

@@ -203,6 +203,9 @@ pub struct AppState {
     /// Rate limiter service for API rate limiting
     /// None when rate limiting is disabled in config
     pub rate_limiter_service: Option<Arc<crate::services::RateLimiterService>>,
+    /// Plugin manager for coordinating external plugin processes
+    /// Manages plugin lifecycle, spawning, and request routing
+    pub plugin_manager: Arc<crate::services::plugin::PluginManager>,
 }
 
 // Legacy alias for backwards compatibility during transition

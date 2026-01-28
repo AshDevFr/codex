@@ -83,6 +83,15 @@ pub enum TaskType {
 
     /// Clean up old pages from the PDF page cache
     CleanupPdfCache,
+
+    /// Auto-match metadata for a series using a plugin
+    PluginAutoMatch {
+        series_id: Uuid,
+        plugin_id: Uuid,
+        /// Source scope that triggered this task (for tracking)
+        #[serde(default)]
+        source_scope: Option<String>, // "series:detail", "series:bulk", "library:detail", "library:scan"
+    },
 }
 
 fn default_mode() -> String {
@@ -106,6 +115,7 @@ impl TaskType {
             TaskType::CleanupSeriesFiles { .. } => "cleanup_series_files",
             TaskType::CleanupOrphanedFiles => "cleanup_orphaned_files",
             TaskType::CleanupPdfCache => "cleanup_pdf_cache",
+            TaskType::PluginAutoMatch { .. } => "plugin_auto_match",
         }
     }
 
@@ -155,6 +165,13 @@ impl TaskType {
                 // Store series_id in params since the FK column can't reference deleted series
                 serde_json::json!({ "series_id": series_id })
             }
+            TaskType::PluginAutoMatch {
+                plugin_id,
+                source_scope,
+                ..
+            } => {
+                serde_json::json!({ "plugin_id": plugin_id, "source_scope": source_scope })
+            }
             _ => serde_json::json!({}),
         }
     }
@@ -166,6 +183,7 @@ impl TaskType {
             TaskType::AnalyzeSeries { series_id, .. } => Some(*series_id),
             TaskType::GenerateThumbnails { series_id, .. } => *series_id,
             TaskType::GenerateSeriesThumbnail { series_id, .. } => Some(*series_id),
+            TaskType::PluginAutoMatch { series_id, .. } => Some(*series_id),
             // CleanupSeriesFiles intentionally NOT included - series_id is stored in params
             // because the series may already be deleted when the task runs
             _ => None,

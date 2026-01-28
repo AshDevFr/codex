@@ -1,0 +1,55 @@
+{
+  "name": "@codex/plugin-sdk",
+  "version": "1.0.0",
+  "description": "SDK for building Codex plugins",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run lint && npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "check": "biome check . && tsc --noEmit"
+  },
+  "keywords": [
+    "codex",
+    "plugin",
+    "sdk",
+    "metadata"
+  ],
+  "author": "Codex",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AshDevFr/codex.git",
+    "directory": "plugins/sdk-typescript"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "codex": {
+    "protocolVersion": "1.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.11",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

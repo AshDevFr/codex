@@ -321,7 +321,7 @@ This was fixed in recent versions. If you experience this:
 2. **Monitor the Task Queue**:
    Go to **Settings** > **Tasks** to view active and pending tasks.
 
-   ![Task Queue](./screenshots/31-settings-tasks.png)
+   ![Task Queue](./screenshots/settings/tasks.png)
 
 3. **Use normal scan** for updates:
    Deep scans re-process everything.
@@ -598,9 +598,9 @@ If you're still experiencing issues:
 
 Go to **Settings** > **Metrics** to view server statistics including inventory counts and task history.
 
-![Server Metrics - Inventory](./screenshots/32-settings-metrics.png)
+![Server Metrics - Inventory](./screenshots/settings/metrics.png)
 
-![Server Metrics - Tasks](./screenshots/32-settings-metrics-tasks.png)
+![Server Metrics - Tasks](./screenshots/settings/metrics-tasks.png)
 
 ### Gather Information
 

@@ -3,6 +3,7 @@
 FROM rust:1.92-alpine
 
 # Install development dependencies
+# Includes Node.js and npm for TypeScript/JavaScript plugin development
 RUN apk add --no-cache \
     pkgconf \
     openssl-dev \
@@ -14,7 +15,15 @@ RUN apk add --no-cache \
     libstdc++ \
     libgcc \
     clang \
-    mold
+    mold \
+    nodejs \
+    npm
+
+# Install uv (fast Python package manager) for Python plugin development
+# uv provides 'uvx' command for running Python packages without installation
+RUN wget -qO- https://astral.sh/uv/install.sh | sh && \
+    mv /root/.local/bin/uv /usr/local/bin/uv && \
+    mv /root/.local/bin/uvx /usr/local/bin/uvx
 
 # Install PDFium library for PDF page rendering
 # This enables rendering of text-only and vector PDF pages in development

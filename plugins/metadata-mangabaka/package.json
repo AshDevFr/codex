@@ -1,0 +1,51 @@
+{
+  "name": "@codex/plugin-metadata-mangabaka",
+  "version": "1.0.0",
+  "description": "MangaBaka metadata provider plugin for Codex",
+  "main": "dist/index.js",
+  "bin": "dist/index.js",
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AshDevFr/codex.git",
+    "directory": "plugins/metadata-mangabaka"
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/index.js --sourcemap --banner:js='#!/usr/bin/env node'",
+    "dev": "npm run build -- --watch",
+    "clean": "rm -rf dist",
+    "start": "node dist/index.js",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run lint && npm run build"
+  },
+  "keywords": [
+    "codex",
+    "plugin",
+    "mangabaka",
+    "manga",
+    "metadata"
+  ],
+  "author": "Codex",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@codex/plugin-sdk": "file:../sdk-typescript"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.11",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

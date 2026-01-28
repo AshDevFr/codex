@@ -8,6 +8,7 @@ mod auth;
 mod books;
 mod libraries;
 mod misc;
+mod plugins;
 mod series;
 mod setup;
 mod tasks;
@@ -33,6 +34,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .merge(admin::routes(state.clone()))
         .merge(tasks::routes(state.clone()))
         .merge(misc::routes(state.clone()))
+        .merge(plugins::routes(state.clone()))
         // Apply state to all routes
         .with_state(state)
 }

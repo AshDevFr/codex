@@ -70,7 +70,7 @@ export function useReadProgress({
 
 			readProgressApi
 				.update(currentBookId, {
-					currentPage: page,
+					current_page: page,
 					completed: page >= currentTotalPages,
 				})
 				.then((updatedProgress) => {

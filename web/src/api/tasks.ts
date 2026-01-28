@@ -1,34 +1,20 @@
-import type { TaskProgressEvent, TaskResponse } from "@/types";
+import type { components, TaskProgressEvent, TaskResponse } from "@/types";
 
 // Re-export TaskResponse for consumers
 export type { TaskResponse };
 
+// Re-export generated types for convenience
+export type TaskTypeStats = components["schemas"]["TaskTypeStats"];
+export type TaskStats = components["schemas"]["TaskStats"];
+
+// Custom type for pending counts (not in generated types)
+export interface PendingTaskCounts {
+	[taskType: string]: number;
+}
+
 interface TaskProgressReconnectionManager {
 	connect: () => Promise<() => void>;
 	disconnect: () => void;
-}
-
-export interface TaskTypeStats {
-	pending: number;
-	processing: number;
-	completed: number;
-	failed: number;
-	stale: number;
-	total: number;
-}
-
-export interface TaskStats {
-	pending: number;
-	processing: number;
-	completed: number;
-	failed: number;
-	stale: number;
-	total: number;
-	by_type: { [taskType: string]: TaskTypeStats };
-}
-
-export interface PendingTaskCounts {
-	[taskType: string]: number;
 }
 
 /**

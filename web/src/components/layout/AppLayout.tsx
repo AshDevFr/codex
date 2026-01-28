@@ -4,6 +4,7 @@ import { useRef } from "react";
 import type { SearchInputHandle } from "@/components/search";
 import { useSearchShortcut } from "@/hooks/useSearchShortcut";
 import { Header } from "./Header";
+import { PluginStatusBanner } from "./PluginStatusBanner";
 import { Sidebar } from "./Sidebar";
 
 interface AppLayoutProps {
@@ -37,7 +38,10 @@ export function AppLayout({ children, currentPath }: AppLayoutProps) {
 			/>
 			<Sidebar currentPath={currentPath} />
 
-			<AppShell.Main>{children}</AppShell.Main>
+			<AppShell.Main>
+				<PluginStatusBanner />
+				{children}
+			</AppShell.Main>
 		</AppShell>
 	);
 }

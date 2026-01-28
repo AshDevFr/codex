@@ -14,19 +14,19 @@ export interface ScreenshotOptions {
 const capturedScreenshots: string[] = [];
 
 /**
- * Ensure the output directory exists
+ * Ensure a directory exists, creating it if necessary
  */
-async function ensureOutputDir(): Promise<void> {
-  const outputDir = path.resolve(config.outputDir);
-  if (!existsSync(outputDir)) {
-    await mkdir(outputDir, { recursive: true });
+async function ensureDir(dirPath: string): Promise<void> {
+  const resolvedPath = path.resolve(dirPath);
+  if (!existsSync(resolvedPath)) {
+    await mkdir(resolvedPath, { recursive: true });
   }
 }
 
 /**
  * Capture a screenshot with consistent naming
  * @param page - Playwright page instance
- * @param name - Screenshot name (without extension)
+ * @param name - Screenshot name (can include subdirectory, e.g., "setup/wizard-step1")
  * @param options - Screenshot options
  * @returns Path to the saved screenshot
  */
@@ -35,13 +35,15 @@ export async function captureScreenshot(
   name: string,
   options: ScreenshotOptions = {}
 ): Promise<string> {
-  await ensureOutputDir();
-
   // Wait for any toast notifications to disappear before capturing
   await waitForToastsToDisappear(page);
 
   const filename = `${name}.png`;
   const filepath = path.join(config.outputDir, filename);
+
+  // Ensure the directory exists (handles subdirectories like "setup/", "reader/", etc.)
+  const dir = path.dirname(filepath);
+  await ensureDir(dir);
 
   await page.screenshot({
     path: filepath,

@@ -338,6 +338,29 @@ The following paths are exempt from rate limiting:
         v1::handlers::settings::reset_setting,
         v1::handlers::settings::get_setting_history,
 
+        // Plugins endpoints
+        v1::handlers::plugins::list_plugins,
+        v1::handlers::plugins::create_plugin,
+        v1::handlers::plugins::get_plugin,
+        v1::handlers::plugins::update_plugin,
+        v1::handlers::plugins::delete_plugin,
+        v1::handlers::plugins::enable_plugin,
+        v1::handlers::plugins::disable_plugin,
+        v1::handlers::plugins::test_plugin,
+        v1::handlers::plugins::get_plugin_health,
+        v1::handlers::plugins::reset_plugin_failures,
+        v1::handlers::plugins::get_plugin_failures,
+
+        // Plugin Actions endpoints
+        v1::handlers::plugin_actions::get_plugin_actions,
+        v1::handlers::plugin_actions::execute_plugin,
+        v1::handlers::plugin_actions::preview_series_metadata,
+        v1::handlers::plugin_actions::apply_series_metadata,
+        v1::handlers::plugin_actions::auto_match_series_metadata,
+        v1::handlers::plugin_actions::enqueue_auto_match_task,
+        v1::handlers::plugin_actions::enqueue_bulk_auto_match_tasks,
+        v1::handlers::plugin_actions::enqueue_library_auto_match_tasks,
+
         // Sharing Tags endpoints
         v1::handlers::sharing_tags::list_sharing_tags,
         v1::handlers::sharing_tags::get_sharing_tag,
@@ -606,6 +629,45 @@ The following paths are exempt from rate limiting:
             v1::dto::SettingHistoryDto,
             v1::dto::ListSettingsQuery,
 
+            // Plugin DTOs
+            v1::dto::PluginDto,
+            v1::dto::PluginsListResponse,
+            v1::dto::CreatePluginRequest,
+            v1::dto::UpdatePluginRequest,
+            v1::dto::EnvVarDto,
+            v1::dto::PluginManifestDto,
+            v1::dto::PluginCapabilitiesDto,
+            v1::dto::CredentialFieldDto,
+            v1::dto::PluginTestResult,
+            v1::dto::PluginStatusResponse,
+            v1::dto::PluginHealthDto,
+            v1::dto::PluginHealthResponse,
+            v1::dto::PluginFailureDto,
+            v1::dto::PluginFailuresResponse,
+
+            // Plugin Actions DTOs
+            v1::dto::PluginActionDto,
+            v1::dto::PluginActionsResponse,
+            v1::dto::ExecutePluginRequest,
+            v1::dto::ExecutePluginResponse,
+            v1::dto::PluginSearchResultDto,
+            v1::dto::SearchResultPreviewDto,
+            v1::dto::PluginSearchResponse,
+            v1::dto::MetadataPreviewRequest,
+            v1::dto::MetadataPreviewResponse,
+            v1::dto::MetadataFieldPreview,
+            v1::dto::FieldApplyStatus,
+            v1::dto::PreviewSummary,
+            v1::dto::MetadataApplyRequest,
+            v1::dto::MetadataApplyResponse,
+            v1::dto::SkippedField,
+            v1::dto::MetadataAutoMatchRequest,
+            v1::dto::MetadataAutoMatchResponse,
+            v1::dto::EnqueueAutoMatchRequest,
+            v1::dto::EnqueueAutoMatchResponse,
+            v1::dto::EnqueueBulkAutoMatchRequest,
+            v1::dto::EnqueueLibraryAutoMatchRequest,
+
             // Task Queue DTOs
             v1::handlers::task_queue::CreateTaskRequest,
             v1::handlers::task_queue::CreateTaskResponse,
@@ -716,6 +778,8 @@ The following paths are exempt from rate limiting:
         // System Administration
         (name = "Admin", description = "Administrative operations (cleanup, maintenance)"),
         (name = "Settings", description = "Runtime configuration settings (admin only)"),
+        (name = "Plugins", description = "Admin-managed external plugin processes"),
+        (name = "Plugin Actions", description = "Plugin action discovery and execution for metadata fetching"),
         (name = "Metrics", description = "Application metrics and statistics"),
         (name = "Filesystem", description = "Filesystem browsing for library paths"),
         (name = "Duplicates", description = "Duplicate book detection and management"),
@@ -848,7 +912,7 @@ impl utoipa::Modify for TagGroupsModifier {
             },
             {
                 "name": "Administration",
-                "tags": ["Admin", "Settings", "Metrics", "Filesystem", "Duplicates", "Sharing Tags"]
+                "tags": ["Admin", "Settings", "Plugins", "Plugin Actions", "Metrics", "Filesystem", "Duplicates", "Sharing Tags"]
             },
             {
                 "name": "Real-time Events",

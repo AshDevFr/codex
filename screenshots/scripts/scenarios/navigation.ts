@@ -19,7 +19,7 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
   await page.goto("/");
   await waitForPageReady(page);
   await waitForImages(page);
-  await captureScreenshot(page, "50-home-dashboard");
+  await captureScreenshot(page, "navigation/home-dashboard");
 
   // Capture sidebar expanded with settings
   console.log("    📷 Sidebar with settings");
@@ -28,14 +28,14 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
   if (settingsNavItem) {
     await settingsNavItem.click();
     await page.waitForTimeout(300);
-    await captureScreenshot(page, "51-sidebar-settings-expanded");
+    await captureScreenshot(page, "navigation/sidebar-settings-expanded");
   }
 
   // Capture login page (logout first)
   console.log("    📷 Login page");
   await logout(page);
   await waitForPageReady(page);
-  await captureScreenshot(page, "52-login-page");
+  await captureScreenshot(page, "navigation/login-page");
 }
 
 /**
@@ -54,7 +54,15 @@ async function captureSearchPage(page: Page): Promise<void> {
     await page.waitForTimeout(200);
 
     // Type a search query (needs at least 2 characters)
-    await searchInput.fill("cook");
+    await searchInput.fill("hello");
+
+    // Wait for search dropdown/suggestions to appear
+    await page.waitForTimeout(800);
+
+    // Capture the search dropdown before pressing Enter
+    await captureScreenshot(page, "navigation/search-dropdown");
+
+    // Press Enter to go to full search results page
     await page.keyboard.press("Enter");
 
     // Wait for search results
@@ -66,7 +74,7 @@ async function captureSearchPage(page: Page): Promise<void> {
     await waitForImages(page);
     await page.waitForTimeout(500);
 
-    await captureScreenshot(page, "53-search-results");
+    await captureScreenshot(page, "navigation/search-results");
   } else {
     console.log("    ⚠️  Search input not found");
   }

@@ -61,13 +61,11 @@ describe("readProgressApi", () => {
 			vi.mocked(api.put).mockResolvedValueOnce({ data: mockProgress });
 
 			const result = await readProgressApi.update("book-123", {
-				currentPage: 50,
+				current_page: 50,
 			});
 
 			expect(api.put).toHaveBeenCalledWith("/books/book-123/progress", {
 				current_page: 50,
-				progress_percentage: undefined,
-				completed: false,
 			});
 			expect(result).toEqual(mockProgress);
 		});
@@ -84,13 +82,12 @@ describe("readProgressApi", () => {
 			vi.mocked(api.put).mockResolvedValueOnce({ data: mockProgress });
 
 			const result = await readProgressApi.update("book-123", {
-				currentPage: 100,
+				current_page: 100,
 				completed: true,
 			});
 
 			expect(api.put).toHaveBeenCalledWith("/books/book-123/progress", {
 				current_page: 100,
-				progress_percentage: undefined,
 				completed: true,
 			});
 			expect(result).toEqual(mockProgress);
@@ -108,14 +105,13 @@ describe("readProgressApi", () => {
 			vi.mocked(api.put).mockResolvedValueOnce({ data: mockProgress });
 
 			const result = await readProgressApi.update("book-123", {
-				currentPage: 45,
-				progressPercentage: 0.45,
+				current_page: 45,
+				progress_percentage: 0.45,
 			});
 
 			expect(api.put).toHaveBeenCalledWith("/books/book-123/progress", {
 				current_page: 45,
 				progress_percentage: 0.45,
-				completed: false,
 			});
 			expect(result).toEqual(mockProgress);
 		});

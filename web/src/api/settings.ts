@@ -13,11 +13,8 @@ export type BrandingSettingsDto = components["schemas"]["BrandingSettingsDto"];
 // Bulk update returns an array of SettingDto
 export type BulkUpdateSettingsResponse = SettingDto[];
 
-// Public setting type (simplified, for non-admin users)
-export interface PublicSettingDto {
-	key: string;
-	value: string;
-}
+// Re-export generated public setting type
+export type PublicSettingDto = components["schemas"]["PublicSettingDto"];
 
 // Map of setting key to public setting
 export type PublicSettingsMap = Record<string, PublicSettingDto>;

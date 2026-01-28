@@ -136,7 +136,14 @@ FROM alpine:latest AS runtime
 # - ca-certificates for HTTPS
 # - su-exec for user switching
 # - libstdc++ and libgcc for PDFium
-RUN apk add --no-cache ca-certificates su-exec libstdc++ libgcc curl wget
+# - nodejs and npm for TypeScript/JavaScript plugins
+RUN apk add --no-cache ca-certificates su-exec libstdc++ libgcc curl wget nodejs npm
+
+# Install uv (fast Python package manager) for Python plugins
+# uv provides 'uvx' command for running Python packages without installation
+RUN wget -qO- https://astral.sh/uv/install.sh | sh && \
+    mv /root/.local/bin/uv /usr/local/bin/uv && \
+    mv /root/.local/bin/uvx /usr/local/bin/uvx
 
 # Install PDFium library for PDF page rendering
 # This enables rendering of text-only and vector PDF pages

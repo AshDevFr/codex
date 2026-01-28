@@ -10,6 +10,12 @@ pub use super::task_metrics::Entity as TaskMetrics;
 pub use super::tasks::Entity as Tasks;
 pub use super::users::Entity as Users;
 
+// Plugin entities (exported for external use, may not be used internally)
+#[allow(unused_imports)]
+pub use super::plugin_failures::Entity as PluginFailures;
+#[allow(unused_imports)]
+pub use super::plugins::Entity as Plugins;
+
 // Series metadata enhancement entities
 pub use super::series_metadata::Entity as SeriesMetadata;
 

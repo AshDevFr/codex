@@ -24,7 +24,7 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
   await waitForPageReady(page);
 
   // Capture empty form
-  await captureScreenshot(page, "01-setup-wizard-step1-empty");
+  await captureScreenshot(page, "setup/wizard-step1-empty");
 
   // Fill in admin credentials
   await page.fill('input[placeholder="admin"]', config.admin.username);
@@ -36,7 +36,7 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
   await page.waitForTimeout(300);
 
   // Capture filled form
-  await captureScreenshot(page, "02-setup-wizard-step1-filled");
+  await captureScreenshot(page, "setup/wizard-step1-filled");
 
   // Submit the form
   await page.click('button[type="submit"]:has-text("Create Admin User")');
@@ -58,7 +58,7 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
   }
 
   // Capture with skip checked (settings hidden)
-  await captureScreenshot(page, "03-setup-wizard-step2-skip");
+  await captureScreenshot(page, "setup/wizard-step2-skip");
 
   // Now uncheck the skip switch to show settings
   if (skipLabel) {
@@ -67,14 +67,14 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
   }
 
   // Capture with basic settings visible
-  await captureScreenshot(page, "04-setup-wizard-step2-basic-settings");
+  await captureScreenshot(page, "setup/wizard-step2-basic-settings");
 
   // Click "Show Advanced Settings" to expand
   const advancedButton = await page.$('button:has-text("Show Advanced Settings")');
   if (advancedButton) {
     await advancedButton.click();
     await page.waitForTimeout(500); // Wait for collapse animation
-    await captureScreenshot(page, "05-setup-wizard-step2-advanced-settings", { fullPage: true });
+    await captureScreenshot(page, "setup/wizard-step2-advanced-settings", { fullPage: true });
   }
 
   // Check the skip option and complete setup
@@ -99,5 +99,5 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
 
   // Capture post-setup dashboard
   console.log("  📝 Post-setup: Dashboard");
-  await captureScreenshot(page, "06-setup-complete-dashboard");
+  await captureScreenshot(page, "setup/complete-dashboard");
 }

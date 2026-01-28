@@ -1,7 +1,11 @@
-import {themes as prismThemes} from 'prism-react-renderer';
-import type {Config} from '@docusaurus/types';
+import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import type * as OpenApiPlugin from 'docusaurus-plugin-openapi-docs';
+import { themes as prismThemes } from 'prism-react-renderer';
+
+// Read version from package.json
+import packageJson from './package.json';
+const appVersion = packageJson.version;
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
@@ -55,6 +59,16 @@ const config: Config = {
   ],
 
   plugins: [
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'dev',
+        path: 'dev',
+        routeBasePath: 'dev',
+        sidebarPath: './devSidebar.ts',
+        editUrl: 'https://github.com/AshDevFr/codex/edit/main/docs/',
+      },
+    ],
     [
       'docusaurus-plugin-openapi-docs',
       {
@@ -110,10 +124,20 @@ const config: Config = {
       },
       items: [
         {
+          type: 'html',
+          position: 'left',
+          value: `<span class="badge badge--primary" style="margin-left: 4px; font-size: 0.7rem; vertical-align: middle;">v${appVersion}</span>`,
+        },
+        {
           type: 'docSidebar',
           sidebarId: 'tutorialSidebar',
           position: 'left',
           label: 'Docs',
+        },
+        {
+          to: '/dev/intro',
+          position: 'left',
+          label: 'Dev',
         },
         {
           to: '/docs/api/codex-api',
@@ -144,6 +168,19 @@ const config: Config = {
             {
               label: 'API Reference',
               to: '/docs/api',
+            },
+          ],
+        },
+        {
+          title: 'Developers',
+          items: [
+            {
+              label: 'Plugin Development',
+              to: '/dev/plugins/overview',
+            },
+            {
+              label: 'Contributing',
+              to: '/dev/contributing/development',
             },
           ],
         },

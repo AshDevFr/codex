@@ -28,6 +28,7 @@ import {
 	DuplicatesSettings,
 	MetricsSettings,
 	PdfCacheSettings,
+	PluginsSettings,
 	ProfileSettings,
 	ServerSettings,
 	SharingTagsSettings,
@@ -255,6 +256,17 @@ function App() {
 						<ProtectedRoute>
 							<AppLayout currentPath="/settings/sharing-tags">
 								<SharingTagsSettings />
+							</AppLayout>
+						</ProtectedRoute>
+					}
+				/>
+
+				<Route
+					path="/settings/plugins"
+					element={
+						<ProtectedRoute>
+							<AppLayout currentPath="/settings/plugins">
+								<PluginsSettings />
 							</AppLayout>
 						</ProtectedRoute>
 					}

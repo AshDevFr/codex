@@ -6,7 +6,7 @@ slug: /
 
 **Codex** is a next-generation digital library server for comics, manga, and ebooks built in Rust. Designed to scale horizontally while remaining simple for homelab deployments, Codex provides a powerful self-hosted solution for managing and reading your digital media collections.
 
-![Codex Home Page](./screenshots/50-home-dashboard.png)
+![Codex Home Page](./screenshots/navigation/home-dashboard.png)
 
 ## Key Features
 

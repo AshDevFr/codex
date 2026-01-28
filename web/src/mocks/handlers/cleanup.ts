@@ -3,9 +3,13 @@
  */
 
 import { delay, HttpResponse, http } from "msw";
+import type { components } from "@/types/api.generated";
+
+type OrphanStatsDto = components["schemas"]["OrphanStatsDto"];
+type CleanupResultDto = components["schemas"]["CleanupResultDto"];
 
 // Mock data for orphan stats
-let mockOrphanStats = {
+let mockOrphanStats: Omit<OrphanStatsDto, "files"> = {
 	orphaned_thumbnails: 42,
 	orphaned_covers: 5,
 	total_size_bytes: 15_728_640, // ~15 MB
@@ -71,12 +75,12 @@ export const cleanupHandlers = [
 	http.delete("/api/v1/admin/cleanup-orphans", async () => {
 		await delay(500);
 
-		const result = {
+		const result: CleanupResultDto = {
 			thumbnails_deleted: mockOrphanStats.orphaned_thumbnails,
 			covers_deleted: mockOrphanStats.orphaned_covers,
 			bytes_freed: mockOrphanStats.total_size_bytes,
 			failures: 0,
-			errors: [] as string[],
+			errors: [],
 		};
 
 		// Reset mock stats after cleanup

@@ -16,19 +16,19 @@ const READER_CONFIGS: ReaderConfig[] = [
   {
     format: "cbz",
     searchPattern: ".cbz",
-    prefix: "20-reader-comic",
+    prefix: "reader/comic",
     label: "Comic (CBZ)",
   },
   {
     format: "epub",
     searchPattern: ".epub",
-    prefix: "21-reader-epub",
+    prefix: "reader/epub",
     label: "EPUB",
   },
   {
     format: "pdf",
     searchPattern: ".pdf",
-    prefix: "22-reader-pdf",
+    prefix: "reader/pdf",
     label: "PDF",
   },
 ];
