@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Output (generated screenshots)
+output/*.png
+output/*.jpg
+
+# Fixtures (user-provided sample files)
+fixtures/books/*
+fixtures/comics/*
+fixtures/manga/*
+!fixtures/books/.gitkeep
+!fixtures/comics/.gitkeep
+!fixtures/manga/.gitkeep
+
+# Build artifacts
+dist/
+
+# Playwright artifacts
+test-results/
+playwright-report/

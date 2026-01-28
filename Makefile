@@ -1,6 +1,6 @@
 # Makefile for Codex development and deployment
 
-.PHONY: help build test run dev-* test-* docs-* docker-* db-*
+.PHONY: help build test run dev-* test-* docs-* docker-* db-* screenshots screenshots-*
 
 # Colors for output
 BLUE := \033[0;34m
@@ -298,6 +298,9 @@ db-restore: ## Restore database (usage: make db-restore BACKUP_FILE=file.sql)
 docker-build: ## Build production Docker image
 	docker build -t codex:latest .
 
+docker-build-clean-cache: ## Clean build cache
+	docker buildx prune --filter type=exec.cachemount -f
+
 docker-run: ## Run production container
 	docker run -p 8080:8080 codex:latest
 
@@ -338,6 +341,57 @@ clean-docker: ## Remove Docker containers and images
 
 clean-all: clean clean-docker ## Clean everything (artifacts + Docker + volumes)
 	docker compose --profile dev --profile test --profile prod down -v
+
+# =============================================================================
+# Screenshot Automation (Playwright)
+# =============================================================================
+# Automated screenshot capture for documentation and marketing.
+# Requires fixture files in screenshots/fixtures/{comics,manga,books}/
+#
+# Quick start:
+#   1. Add sample files to screenshots/fixtures/
+#   2. Run: make screenshots
+#   3. Find screenshots in screenshots/output/
+
+screenshots: ## Run full screenshot workflow (start, capture, stop)
+	@echo "$(BLUE)Starting screenshot automation...$(NC)"
+	@$(MAKE) screenshots-up
+	@echo "$(YELLOW)Waiting for services to be ready...$(NC)"
+	@sleep 10
+	@$(MAKE) screenshots-run || ($(MAKE) screenshots-down && exit 1)
+	@$(MAKE) screenshots-down
+	@echo "$(GREEN)Screenshots complete! Check screenshots/output/$(NC)"
+
+screenshots-up: ## Start screenshot environment
+	docker compose --profile screenshots up -d --build
+	@echo "$(GREEN)Screenshot environment started$(NC)"
+
+screenshots-down: ## Stop screenshot environment
+	docker compose --profile screenshots down
+	@echo "$(GREEN)Screenshot environment stopped$(NC)"
+
+screenshots-down-v: ## Stop screenshot environment and remove volumes
+	docker compose --profile screenshots down -v
+	@echo "$(GREEN)Screenshot environment stopped and volumes removed$(NC)"
+
+screenshots-run: ## Run screenshot capture (requires environment running)
+	@echo "$(YELLOW)Running screenshot capture...$(NC)"
+	docker compose --profile screenshots exec playwright npm run capture
+
+screenshots-logs: ## View screenshot environment logs
+	docker compose --profile screenshots logs -f
+
+screenshots-shell: ## Open shell in Playwright container
+	docker compose --profile screenshots exec playwright sh
+
+screenshots-clean: ## Remove generated screenshots
+	rm -f screenshots/output/*.png screenshots/output/*.jpg
+	@echo "$(GREEN)Screenshots cleaned$(NC)"
+
+screenshots-move-to-docs: ## Move screenshots to docs/screenshots
+	mkdir -p docs/docs/screenshots
+	cp -r screenshots/output/* docs/docs/screenshots/
+	@echo "$(GREEN)Screenshots moved to docs/docs/screenshots$(NC)"
 
 # =============================================================================
 # Binary Distribution (cargo-dist)

@@ -1,9 +1,9 @@
 ---
 ---
 
-import DockerRunQuickStart from './_partials/_docker-run-quick-start.mdx';
-import DockerVolumes from './_partials/_docker-volumes.mdx';
-import BinaryQuickStart from './_partials/_binary-quick-start.mdx';
+import DockerRunQuickStart from "./_partials/_docker-run-quick-start.mdx";
+import DockerVolumes from "./_partials/_docker-volumes.mdx";
+import BinaryQuickStart from "./_partials/_binary-quick-start.mdx";
 
 # Getting Started
 
@@ -41,6 +41,7 @@ If you prefer running without Docker:
 Download the latest release from [GitHub Releases](https://github.com/AshDevFr/codex/releases).
 
 Available platforms:
+
 - Linux x86_64 / ARM64
 - macOS x86_64 (Intel) / ARM64 (Apple Silicon)
 - Windows x86_64
@@ -63,15 +64,15 @@ sudo mv codex /usr/local/bin/
 1. Open Codex in your browser at `http://localhost:8080`
 2. Complete the setup wizard to create your admin account
 
-![Setup Wizard - Create Admin Account](./screenshots/setup-wizard-admin.png)
+![Setup Wizard - Create Admin Account](./screenshots/02-setup-wizard-step1-filled.png)
 
 3. Optionally configure initial settings (scanner, thumbnails, etc.)
 
-![Setup Wizard - Configure Settings](./screenshots/setup-wizard-settings.png)
+![Setup Wizard - Configure Settings](./screenshots/04-setup-wizard-step2-basic-settings.png)
 
 4. Log in with your new credentials
 
-![Login Screen](./screenshots/login.png)
+![Login Screen](./screenshots/52-login-page.png)
 
 ## Creating Your First Library
 
@@ -83,17 +84,17 @@ sudo mv codex /usr/local/bin/
      - Binary: Use the local path (e.g., `/home/user/comics`)
    - **Default Reading Direction**: Choose based on your content type
 
-![Add Library - General Settings](./screenshots/add-library-general.png)
+![Add Library - General Settings](./screenshots/07-add-library-general-comics.png)
 
 3. Configure the **Strategy** tab for how series and books are detected
 
-![Add Library - Strategy Settings](./screenshots/add-library-strategy.png)
+![Add Library - Strategy Settings](./screenshots/08-add-library-strategy-comics.png)
 
 4. Set up **Scanning** options:
    - **Manual**: Scan only when you trigger it
    - **Automatic**: Schedule regular scans with cron expressions
 
-![Add Library - Scanning Settings](./screenshots/add-library-scanning.png)
+![Add Library - Scanning Settings](./screenshots/10-add-library-scanning-comics.png)
 
 5. Click **Create Library**
 
@@ -115,6 +116,7 @@ Then create separate libraries pointing to `/library/comics`, `/library/manga`, 
 If you enabled "Scan on startup", Codex will automatically scan when the library is created.
 
 For manual scans:
+
 1. Go to your library in the sidebar
 2. Click the **Scan** button
 3. Choose **Normal** for incremental scan or **Deep** for full re-scan
@@ -128,9 +130,9 @@ Once scanning completes:
 - **By Series**: Click a library in the sidebar to browse series
 - **By Books**: Toggle between series and books view
 
-![Home Page](./screenshots/home.png)
+![Home Page](./screenshots/10-home-with-libraries.png)
 
-![All Libraries - Series View](./screenshots/all-libraries-series.png)
+![All Libraries - Series View](./screenshots/11-all-libraries-series.png)
 
 ### Reading a Book
 
@@ -139,9 +141,9 @@ Once scanning completes:
 3. Progress is saved automatically
 4. Access settings via the gear icon in the toolbar
 
-![Comic Reader](./screenshots/comic-reader-comic.png)
+![Comic Reader](./screenshots/20-reader-comic-view.png)
 
-![EPUB Reader](./screenshots/epub-reader-epub.png)
+![Comic Reader Toolbar](./screenshots/20-reader-comic-toolbar.png)
 
 ## Upgrading
 
@@ -165,6 +167,7 @@ docker stop codex && docker rm codex
 ### Library Not Found
 
 **Docker**: Ensure the volume is mounted correctly:
+
 ```bash
 docker exec codex ls -la /library
 ```

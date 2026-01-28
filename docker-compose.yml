@@ -257,6 +257,94 @@ services:
     profiles:
       - docs
 
+  # =============================================================================
+  # Screenshot Automation (Playwright)
+  # =============================================================================
+  # Usage: docker compose --profile screenshots up -d
+  # Then:  docker compose --profile screenshots exec playwright npx tsx scripts/capture.ts
+  # =============================================================================
+
+  # PostgreSQL for screenshots (isolated from dev/test)
+  postgres-screenshots:
+    image: postgres:16-alpine
+    container_name: codex-postgres-screenshots
+    environment:
+      POSTGRES_USER: codex
+      POSTGRES_PASSWORD: codex
+      POSTGRES_DB: codex
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codex"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - codex-network
+    profiles:
+      - screenshots
+
+  # Backend API for screenshots (uses prebuilt image for faster startup)
+  # Override image with: CODEX_IMAGE=codex:latest docker compose --profile screenshots up
+  codex-screenshots:
+    image: ${CODEX_IMAGE:-ghcr.io/ashdevfr/codex:latest}
+    container_name: codex-screenshots
+    depends_on:
+      postgres-screenshots:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config:ro
+      - ./screenshots/fixtures:/libraries:ro
+      - screenshots_thumbnails:/app/data/thumbnails:rw
+      - screenshots_uploads:/app/data/uploads:rw
+      - screenshots_cache:/app/data/cache:rw
+    command:
+      ["codex", "serve", "--config", "/app/config/config.screenshots.yaml"]
+    environment:
+      CODEX_LOGGING_LEVEL: info
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+    networks:
+      - codex-network
+    profiles:
+      - screenshots
+
+  # Playwright browser automation (connects to backend which serves embedded frontend)
+  playwright:
+    build:
+      context: ./screenshots
+      dockerfile: Dockerfile
+    container_name: codex-playwright
+    working_dir: /work
+    volumes:
+      - ./screenshots:/work
+      - ./screenshots/output:/work/output
+      - playwright_node_modules:/work/node_modules
+    environment:
+      BASE_URL: http://codex-screenshots:8080
+      VIEWPORT_WIDTH: "1280"
+      VIEWPORT_HEIGHT: "900"
+      # ADMIN_USERNAME: admin
+      # ADMIN_EMAIL: admin@example.com
+      # ADMIN_PASSWORD: "SecurePass123!"
+      # LIBRARY_1_NAME: Comics
+      # LIBRARY_1_PATH: /libraries/comics
+      # LIBRARY_2_NAME: Manga
+      # LIBRARY_2_PATH: /libraries/manga
+      # LIBRARY_3_NAME: Books
+      # LIBRARY_3_PATH: /libraries/books
+    depends_on:
+      codex-screenshots:
+        condition: service_healthy
+    networks:
+      - codex-network
+    profiles:
+      - screenshots
+
 volumes:
   postgres_data:
     driver: local
@@ -267,6 +355,15 @@ volumes:
   target_cache:
     driver: local
   node_modules:
+    driver: local
+  # Screenshot volumes (isolated)
+  screenshots_thumbnails:
+    driver: local
+  screenshots_uploads:
+    driver: local
+  screenshots_cache:
+    driver: local
+  playwright_node_modules:
     driver: local
 
 networks:

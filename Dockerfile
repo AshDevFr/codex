@@ -29,7 +29,10 @@ WORKDIR /app
 
 # Stage 3: Prepare recipe
 FROM chef AS planner
-COPY . .
+# Only copy Rust-related files to avoid cache invalidation from frontend changes
+COPY Cargo.toml Cargo.lock ./
+COPY src/ ./src/
+COPY migration/ ./migration/
 RUN cargo chef prepare --recipe-path recipe.json
 
 # Stage 4: Build dependencies (cached layer)
@@ -41,16 +44,28 @@ COPY --from=planner /app/recipe.json recipe.json
 ENV RUSTFLAGS="-C target-feature=-crt-static"
 
 # Build dependencies (this layer is cached)
-RUN cargo chef cook --release --features embed-frontend --recipe-path recipe.json
+# Use BuildKit cache mounts to persist Cargo registry/git between builds
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    cargo chef cook --release --features embed-frontend --recipe-path recipe.json
 
 # Stage 5: Build application
-COPY . .
+# Only copy Rust-related files to avoid cache invalidation from frontend changes
+COPY Cargo.toml Cargo.lock ./
+COPY assets/ ./assets/
+COPY migration/ ./migration/
+COPY src/ ./src/
 
 # Copy frontend dist from frontend-builder
 COPY --from=frontend-builder /web/dist ./web/dist
 
 # Build with embedded frontend
-RUN cargo build --release --features embed-frontend
+# Cache target directory for incremental compilation
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/target \
+    cargo build --release --features embed-frontend && \
+    cp /app/target/release/codex /app/codex
 
 # Stage 6: Runtime
 FROM alpine:latest AS runtime
@@ -86,8 +101,8 @@ RUN addgroup -g 1000 codex && \
 
 WORKDIR /app
 
-# Copy binary from builder
-COPY --from=builder /app/target/release/codex /usr/local/bin/codex
+# Copy binary from builder (copied out of cache mount during build)
+COPY --from=builder /app/codex /usr/local/bin/codex
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

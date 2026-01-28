@@ -1,0 +1,16 @@
+{
+  "name": "codex-screenshots",
+  "version": "1.0.0",
+  "description": "Automated screenshot capture for Codex using Playwright",
+  "type": "module",
+  "scripts": {
+    "capture": "tsx scripts/capture.ts",
+    "capture:debug": "DEBUG=pw:api tsx scripts/capture.ts"
+  },
+  "dependencies": {
+    "@types/node": "^22.0.0",
+    "playwright": "1.58.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

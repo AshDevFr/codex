@@ -8,17 +8,9 @@ Explore the main features of Codex through screenshots and descriptions.
 
 ## Home Page
 
-The home page provides quick access to your reading activity and recently added content.
+The home page provides quick access to your reading activity and recently added content. The **Keep Reading** section lets you continue where you left off, and the **Recently Added** section helps you discover new additions to your library.
 
-![Home Page](./screenshots/home.png)
-
-The **Keep Reading** section lets you continue where you left off, tracking your progress across all series.
-
-![Keep Reading](./screenshots/home-keep-reading.png)
-
-The **Recently Added** section helps you discover new additions to your library.
-
-![Recently Added](./screenshots/home-recently-added.png)
+![Home Page](./screenshots/50-home-dashboard.png)
 
 ## Library Management
 
@@ -26,27 +18,45 @@ The **Recently Added** section helps you discover new additions to your library.
 
 Create libraries to organize your comics, manga, and ebooks. Configure general settings, file formats, scanning strategies, and schedules.
 
-![Add Library - General](./screenshots/add-library-general.png)
+#### Comics Library
 
-![Add Library - Path Selection](./screenshots/add-library-general-select-path.png)
+![Add Library - Comics General](./screenshots/07-add-library-general-comics.png)
 
-![Add Library - Manga Settings](./screenshots/add-library-general-manga.png)
+![Add Library - Comics Strategy](./screenshots/08-add-library-strategy-comics.png)
 
-![Add Library - Strategy](./screenshots/add-library-strategy.png)
+![Add Library - Comics Formats](./screenshots/09-add-library-formats-comics.png)
 
-![Add Library - Scanning](./screenshots/add-library-scanning.png)
+![Add Library - Comics Scanning](./screenshots/10-add-library-scanning-comics.png)
 
-![Add Library - Formats](./screenshots/add-library-formats.png)
+#### Manga Library
+
+![Add Library - Manga General](./screenshots/07-add-library-general-manga.png)
+
+![Add Library - Manga Strategy](./screenshots/08-add-library-strategy-manga.png)
+
+![Add Library - Manga Formats](./screenshots/09-add-library-formats-manga.png)
+
+![Add Library - Manga Scanning](./screenshots/10-add-library-scanning-manga.png)
+
+#### Books Library
+
+![Add Library - Books General](./screenshots/07-add-library-general-books.png)
+
+![Add Library - Books Strategy](./screenshots/08-add-library-strategy-books.png)
+
+![Add Library - Books Formats](./screenshots/09-add-library-formats-books.png)
+
+![Add Library - Books Scanning](./screenshots/10-add-library-scanning-books.png)
 
 ### Browsing Libraries
 
 View your libraries by series or books with powerful filtering and sorting options.
 
-![All Libraries - Series View](./screenshots/all-libraries-series.png)
+![All Libraries - Series View](./screenshots/11-all-libraries-series.png)
 
-![Library Books with Toolbar](./screenshots/library-books-comic-toolbar.png)
+![All Libraries - Books View](./screenshots/12-all-libraries-books.png)
 
-![Library Books - Recommended](./screenshots/library-books-recommended.png)
+![Library Detail - Series](./screenshots/13-library-detail-series.png)
 
 ## Series & Book Details
 
@@ -54,59 +64,13 @@ View your libraries by series or books with powerful filtering and sorting optio
 
 View comprehensive information about a series including metadata, books, and reading progress.
 
-![Series Details Page](./screenshots/series-details-page.png)
+![Series Details Page](./screenshots/14-series-detail.png)
 
-### Editing Series Metadata
+### Book Detail Page
 
-Codex provides a full-featured metadata editor for your series.
+View detailed information about a specific book.
 
-#### General Information
-
-![Edit Metadata - General](./screenshots/edit-series-metadata-general.png)
-
-#### Titles
-
-Manage alternate titles and display names.
-
-![Edit Metadata - Titles](./screenshots/edit-series-metadata-titles.png)
-
-#### Details
-
-Add detailed information like synopsis, genres, and more.
-
-![Edit Metadata - Details](./screenshots/edit-series-metadata-details.png)
-
-#### Tags
-
-Organize your series with custom tags.
-
-![Edit Metadata - Tags](./screenshots/edit-series-metadata-tags.png)
-
-#### External Links
-
-Link to external databases and resources.
-
-![Edit Metadata - Links](./screenshots/edit-series-metadata-links.png)
-
-#### Poster/Cover Selection
-
-Choose or upload custom posters for your series.
-
-![Edit Metadata - Poster](./screenshots/edit-series-metadata-poster.png)
-
-![Edit Metadata - Poster Selected](./screenshots/edit-series-metadata-poster-selected.png)
-
-#### Custom Metadata
-
-Store any custom data you want with flexible JSON metadata.
-
-![Edit Metadata - Custom](./screenshots/edit-series-metadata-custom-metadata.png)
-
-### Rating
-
-Rate your series for personal tracking.
-
-![Series Rating](./screenshots/edit-series-rating.png)
+![Book Details Page](./screenshots/15-book-detail.png)
 
 ## Readers
 
@@ -114,35 +78,43 @@ Rate your series for personal tracking.
 
 A powerful comic reader with customizable display settings.
 
-![Comic Reader](./screenshots/comic-reader-comic.png)
+![Comic Reader](./screenshots/20-reader-comic-view.png)
+
+![Comic Reader Toolbar](./screenshots/20-reader-comic-toolbar.png)
 
 #### Comic Reader Settings
 
 Customize reading mode, scale, background, and page layout.
 
-![Comic Reader Settings](./screenshots/comic-reader-comic-settings.png)
-
-![Comic Reader Series Settings](./screenshots/comic-reader-comic-settings-series.png)
+![Comic Reader Settings](./screenshots/20-reader-comic-settings.png)
 
 ### EPUB Reader
 
 A beautiful EPUB reader with extensive typography controls and themes.
 
-![EPUB Reader](./screenshots/epub-reader-epub.png)
+![EPUB Reader](./screenshots/21-reader-epub-view.png)
 
-![EPUB Reader Toolbar](./screenshots/epub-reader-epub-toolbar.png)
+![EPUB Reader Toolbar](./screenshots/21-reader-epub-toolbar.png)
 
 #### EPUB Settings
 
 Configure fonts, themes, margins, and more.
 
-![EPUB Reader Settings](./screenshots/epub-reader-epub-settings.png)
+![EPUB Reader Settings](./screenshots/21-reader-epub-settings.png)
 
-#### Table of Contents
+### PDF Reader
 
-Navigate chapters easily with the built-in table of contents.
+A native PDF reader with zoom controls and page spread options.
 
-![EPUB Table of Contents](./screenshots/epub-reader-epub-toc.png)
+![PDF Reader](./screenshots/22-reader-pdf-view.png)
+
+![PDF Reader Toolbar](./screenshots/22-reader-pdf-toolbar.png)
+
+#### PDF Settings
+
+Configure zoom levels and page spread modes.
+
+![PDF Reader Settings](./screenshots/22-reader-pdf-settings.png)
 
 ## Settings & Administration
 
@@ -152,19 +124,19 @@ Navigate chapters easily with the built-in table of contents.
 
 Manage your account details and preferences.
 
-![Profile - Account](./screenshots/settings-profile-account.png)
+![Profile - Account](./screenshots/39-settings-profile.png)
 
 #### User Preferences
 
 Customize your Codex experience.
 
-![Profile - Preferences](./screenshots/settings-profile-preferences.png)
+![Profile - Preferences](./screenshots/41-settings-profile-preferences.png)
 
 #### API Keys
 
 Generate and manage API keys for integrations.
 
-![Profile - API Keys](./screenshots/settings-profile-api-keys.png)
+![Profile - API Keys](./screenshots/40-settings-profile-api-keys.png)
 
 ### Server Settings
 
@@ -172,41 +144,57 @@ Generate and manage API keys for integrations.
 
 Configure server-wide options.
 
-![Server Settings](./screenshots/settings-server-settings.png)
+![Server Settings](./screenshots/30-settings-server.png)
 
 #### Custom Metadata Templates
 
 Create templates for displaying custom metadata.
 
-![Custom Metadata](./screenshots/settings-server-custom-metadata.png)
+![Custom Metadata](./screenshots/30-settings-server-custom-metadata.png)
 
-![Custom Metadata Templates](./screenshots/settings-server-custom-metadata-templates.png)
+![Custom Metadata Templates](./screenshots/30-settings-server-custom-metadata-templates.png)
 
 ### User Management
 
 Manage users and their permissions.
 
-![User Management](./screenshots/settings-users.png)
+![User Management](./screenshots/33-settings-users.png)
+
+### Sharing Tags
+
+Configure sharing tags for library access control.
+
+![Sharing Tags](./screenshots/34-settings-sharing-tags.png)
 
 ### Tasks & Background Jobs
 
 Monitor and manage background tasks like scanning and thumbnail generation.
 
-![Task Queue](./screenshots/settings-tasks.png)
+![Task Queue](./screenshots/31-settings-tasks.png)
 
 ### Duplicate Detection
 
 Find and manage duplicate files across your libraries.
 
-![Duplicate Detection](./screenshots/settings-duplicates.png)
+![Duplicate Detection](./screenshots/35-settings-duplicates.png)
 
-![Duplicate Results](./screenshots/settings-duplicates-results.png)
+### Book Errors
+
+View and manage books with parsing or processing errors.
+
+![Book Errors](./screenshots/36-settings-book-errors.png)
 
 ### Cleanup
 
 Clean up orphaned files and database entries.
 
-![Cleanup Settings](./screenshots/settings-cleanup.png)
+![Cleanup Settings](./screenshots/37-settings-cleanup.png)
+
+### PDF Cache
+
+Manage the PDF rendering cache.
+
+![PDF Cache](./screenshots/38-settings-pdf-cache.png)
 
 ### Metrics & Monitoring
 
@@ -214,13 +202,13 @@ Clean up orphaned files and database entries.
 
 View statistics about your library contents.
 
-![Metrics - Inventory](./screenshots/settings-metrics-inventory.png)
+![Metrics - Inventory](./screenshots/32-settings-metrics.png)
 
 #### Task Metrics
 
 Monitor task execution and performance.
 
-![Metrics - Tasks](./screenshots/settings-metrics-tasks.png)
+![Metrics - Tasks](./screenshots/32-settings-metrics-tasks.png)
 
 ## Authentication
 
@@ -228,18 +216,34 @@ Monitor task execution and performance.
 
 Secure authentication for your library.
 
-![Login](./screenshots/login.png)
-
-### Registration
-
-User registration (when enabled).
-
-![Register](./screenshots/register.png)
+![Login](./screenshots/52-login-page.png)
 
 ### Setup Wizard
 
 First-time setup for creating your admin account.
 
-![Setup Wizard - Admin](./screenshots/setup-wizard-admin.png)
+![Setup Wizard - Step 1 Empty](./screenshots/01-setup-wizard-step1-empty.png)
 
-![Setup Wizard - Settings](./screenshots/setup-wizard-settings.png)
+![Setup Wizard - Step 1 Filled](./screenshots/02-setup-wizard-step1-filled.png)
+
+![Setup Wizard - Step 2 Skip](./screenshots/03-setup-wizard-step2-skip.png)
+
+![Setup Wizard - Step 2 Basic Settings](./screenshots/04-setup-wizard-step2-basic-settings.png)
+
+![Setup Wizard - Step 2 Advanced Settings](./screenshots/05-setup-wizard-step2-advanced-settings.png)
+
+![Setup Complete - Dashboard](./screenshots/06-setup-complete-dashboard.png)
+
+## Navigation
+
+### Sidebar
+
+The sidebar provides quick access to settings and navigation.
+
+![Sidebar - Settings Expanded](./screenshots/51-sidebar-settings-expanded.png)
+
+### Search
+
+Search across your entire library.
+
+![Search Results](./screenshots/53-search-results.png)

@@ -20,7 +20,7 @@ Templates have access to two data sources:
 - Add personal notes and reviews
 - Track technical information (resolution, audio, subtitles)
 
-![Custom Metadata on Series](./screenshots/edit-series-metadata-custom-metadata.png)
+![Custom Metadata on Series](./screenshots/30-settings-server-custom-metadata.png)
 
 ## Storing Custom Metadata
 
@@ -99,9 +99,9 @@ The default template displays genres from built-in metadata and custom fields as
 4. Use the live preview to test your changes
 5. Save your changes
 
-![Custom Metadata Settings](./screenshots/settings-server-custom-metadata.png)
+![Custom Metadata Settings](./screenshots/30-settings-server-custom-metadata.png)
 
-![Custom Metadata Template Editor](./screenshots/settings-server-custom-metadata-templates.png)
+![Custom Metadata Template Editor](./screenshots/30-settings-server-custom-metadata-templates.png)
 
 ## Handlebars Syntax
 

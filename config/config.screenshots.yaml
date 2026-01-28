@@ -1,0 +1,41 @@
+# Codex Configuration for Screenshot Automation
+# Uses PostgreSQL with ephemeral tmpfs storage for clean state
+
+database:
+  db_type: postgres
+  postgres:
+    host: postgres-screenshots
+    port: 5432
+    username: codex
+    password: codex
+    database_name: codex
+
+application:
+  host: 0.0.0.0
+  port: 8080
+
+logging:
+  level: info
+  console: true
+
+auth:
+  jwt_secret: "screenshot-automation-secret"
+
+api:
+  enable_api_docs: true
+
+task:
+  worker_count: 2
+
+scanner:
+  max_concurrent_scans: 2
+
+files:
+  thumbnail_dir: data/thumbnails
+  uploads_dir: data/uploads
+
+pdf:
+  cache_dir: data/cache
+
+komga_api:
+  enabled: false
