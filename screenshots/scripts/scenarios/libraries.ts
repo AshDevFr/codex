@@ -35,19 +35,19 @@ export async function run(page: Page, context: BrowserContext): Promise<void> {
   await page.goto("/");
   await waitForPageReady(page);
   await waitForThumbnails(page);
-  await captureScreenshot(page, "10-home-with-libraries");
+  await captureScreenshot(page, "libraries/home-with-libraries");
 
   // Navigate to All Libraries view
   await page.goto("/libraries/all/series");
   await waitForPageReady(page);
   await waitForThumbnails(page);
-  await captureScreenshot(page, "11-all-libraries-series");
+  await captureScreenshot(page, "libraries/all-libraries-series");
 
   // Switch to books view
   await page.goto("/libraries/all/books");
   await waitForPageReady(page);
   await waitForThumbnails(page);
-  await captureScreenshot(page, "12-all-libraries-books");
+  await captureScreenshot(page, "libraries/all-libraries-books");
 
   // Get first library from sidebar and navigate to it
   const libraryLinks = await page.$$('nav a[href^="/libraries/"]');
@@ -59,7 +59,7 @@ export async function run(page: Page, context: BrowserContext): Promise<void> {
         await link.click();
         await waitForPageReady(page);
         await waitForThumbnails(page);
-        await captureScreenshot(page, "13-library-detail-series");
+        await captureScreenshot(page, "libraries/library-detail-series");
         break;
       }
     }
@@ -71,7 +71,7 @@ export async function run(page: Page, context: BrowserContext): Promise<void> {
     await seriesCards[0].click();
     await waitForPageReady(page);
     await waitForThumbnails(page);
-    await captureScreenshot(page, "14-series-detail");
+    await captureScreenshot(page, "libraries/series-detail");
 
     // Try to find and click on a book in the series
     const bookCards = await page.$$('[data-testid="book-card"], .book-card, a[href*="/books/"]');
@@ -79,7 +79,7 @@ export async function run(page: Page, context: BrowserContext): Promise<void> {
       await bookCards[0].click();
       await waitForPageReady(page);
       await waitForThumbnails(page);
-      await captureScreenshot(page, "15-book-detail");
+      await captureScreenshot(page, "libraries/book-detail");
     }
   }
 }
@@ -139,7 +139,7 @@ async function createLibrary(page: Page, libraryConfig: LibraryConfig): Promise<
   }
 
   // Capture filled General tab
-  await captureScreenshot(page, `07-add-library-general-${nameLower}`);
+  await captureScreenshot(page, `libraries/add-library-general-${nameLower}`);
 
   // === STRATEGY TAB ===
   const strategyTab = await page.$('button[role="tab"]:has-text("Strategy")');
@@ -182,7 +182,7 @@ async function createLibrary(page: Page, libraryConfig: LibraryConfig): Promise<
     // Default is series_volume, no change needed for comics/manga
 
     // Capture Strategy tab
-    await captureScreenshot(page, `08-add-library-strategy-${nameLower}`);
+    await captureScreenshot(page, `libraries/add-library-strategy-${nameLower}`);
   }
 
   // === FORMATS TAB ===
@@ -216,7 +216,7 @@ async function createLibrary(page: Page, libraryConfig: LibraryConfig): Promise<
     }
 
     // Capture Formats tab
-    await captureScreenshot(page, `09-add-library-formats-${nameLower}`);
+    await captureScreenshot(page, `libraries/add-library-formats-${nameLower}`);
   }
 
   // === SCANNING TAB ===
@@ -255,7 +255,7 @@ async function createLibrary(page: Page, libraryConfig: LibraryConfig): Promise<
     }
 
     // Capture Scanning tab
-    await captureScreenshot(page, `10-add-library-scanning-${nameLower}`);
+    await captureScreenshot(page, `libraries/add-library-scanning-${nameLower}`);
   }
 
   // Click Create Library button

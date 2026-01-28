@@ -58,6 +58,10 @@ mod m20260122_000033_seed_pdf_cache_settings;
 // Add analysis_errors column to books table
 mod m20260123_000034_add_analysis_errors_column;
 
+// Plugin system
+mod m20260127_000035_create_plugins;
+mod m20260129_000036_seed_plugin_settings;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -109,6 +113,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20260122_000033_seed_pdf_cache_settings::Migration),
             // Add analysis_errors column to books table
             Box::new(m20260123_000034_add_analysis_errors_column::Migration),
+            // Plugin system
+            Box::new(m20260127_000035_create_plugins::Migration),
+            Box::new(m20260129_000036_seed_plugin_settings::Migration),
         ]
     }
 }

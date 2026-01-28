@@ -11,16 +11,16 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
 
   // Define all settings pages to capture
   const settingsPages = [
-    { path: "/settings/server", name: "30-settings-server", label: "Server Settings" },
-    { path: "/settings/tasks", name: "31-settings-tasks", label: "Tasks" },
-    { path: "/settings/metrics", name: "32-settings-metrics", label: "Metrics" },
-    { path: "/settings/users", name: "33-settings-users", label: "User Management" },
-    { path: "/settings/sharing-tags", name: "34-settings-sharing-tags", label: "Sharing Tags" },
-    { path: "/settings/duplicates", name: "35-settings-duplicates", label: "Duplicates" },
-    { path: "/settings/book-errors", name: "36-settings-book-errors", label: "Book Errors" },
-    { path: "/settings/cleanup", name: "37-settings-cleanup", label: "Thumbnail Cleanup" },
-    { path: "/settings/pdf-cache", name: "38-settings-pdf-cache", label: "PDF Cache" },
-    { path: "/settings/profile", name: "39-settings-profile", label: "Profile" },
+    { path: "/settings/server", name: "settings/server", label: "Server Settings" },
+    { path: "/settings/tasks", name: "settings/tasks", label: "Tasks" },
+    { path: "/settings/metrics", name: "settings/metrics", label: "Metrics" },
+    { path: "/settings/users", name: "settings/users", label: "User Management" },
+    { path: "/settings/sharing-tags", name: "settings/sharing-tags", label: "Sharing Tags" },
+    { path: "/settings/duplicates", name: "settings/duplicates", label: "Duplicates" },
+    { path: "/settings/book-errors", name: "settings/book-errors", label: "Book Errors" },
+    { path: "/settings/cleanup", name: "settings/cleanup", label: "Thumbnail Cleanup" },
+    { path: "/settings/pdf-cache", name: "settings/pdf-cache", label: "PDF Cache" },
+    { path: "/settings/profile", name: "settings/profile", label: "Profile" },
   ];
 
   for (const { path, name, label } of settingsPages) {
@@ -53,7 +53,7 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
             await page.waitForSelector('.mantine-Modal-content, [role="dialog"]', { state: "visible", timeout: 5000 });
 
             // Capture the template selection modal
-            await captureScreenshot(page, "30-settings-server-custom-metadata-templates");
+            await captureScreenshot(page, "settings/server-custom-metadata-templates");
 
             // Click on a template card to select it (first Card element in the modal Grid)
             // The cards are rendered inside a Grid within the Modal
@@ -85,7 +85,7 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
           await page.waitForTimeout(300);
 
           // Capture with template applied (shows editor with template code and preview)
-          await captureScreenshot(page, "30-settings-server-custom-metadata");
+          await captureScreenshot(page, "settings/server-custom-metadata");
         } else {
           console.log("      ⚠️  Custom Metadata tab not found");
         }
@@ -100,7 +100,7 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
           await tasksTab.click();
           await waitForPageReady(page);
           await page.waitForTimeout(500);
-          await captureScreenshot(page, "32-settings-metrics-tasks");
+          await captureScreenshot(page, "settings/metrics-tasks");
         } else {
           console.log("      ⚠️  Task Performance tab not found");
         }
@@ -120,7 +120,7 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
     await apiKeysTab.click();
     await waitForPageReady(page);
     await page.waitForTimeout(300);
-    await captureScreenshot(page, "40-settings-profile-api-keys");
+    await captureScreenshot(page, "settings/profile-api-keys");
   }
 
   // Try to capture Preferences tab
@@ -129,6 +129,6 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
     await preferencesTab.click();
     await waitForPageReady(page);
     await page.waitForTimeout(300);
-    await captureScreenshot(page, "41-settings-profile-preferences");
+    await captureScreenshot(page, "settings/profile-preferences");
   }
 }

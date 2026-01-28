@@ -1,0 +1,1646 @@
+//! Plugin Actions API handlers (Phase 4)
+//!
+//! Provides endpoints for plugin action discovery and execution:
+//! - GET /api/v1/plugins/actions - Get available plugin actions for a scope
+//! - POST /api/v1/plugins/:id/execute - Execute a plugin method
+//!
+//! And metadata operations via plugins:
+//! - POST /api/v1/series/:id/metadata/preview - Preview metadata from a plugin
+//! - POST /api/v1/series/:id/metadata/apply - Apply metadata from a plugin
+//! - POST /api/v1/books/:id/metadata/preview - Preview metadata for a book
+//! - POST /api/v1/books/:id/metadata/apply - Apply metadata for a book
+
+use super::super::dto::{
+    parse_scope, EnqueueAutoMatchRequest, EnqueueAutoMatchResponse, EnqueueBulkAutoMatchRequest,
+    EnqueueLibraryAutoMatchRequest, ExecutePluginRequest, ExecutePluginResponse, FieldApplyStatus,
+    MetadataAction, MetadataApplyRequest, MetadataApplyResponse, MetadataAutoMatchRequest,
+    MetadataAutoMatchResponse, MetadataFieldPreview, MetadataPreviewRequest,
+    MetadataPreviewResponse, PluginActionDto, PluginActionRequest, PluginActionsResponse,
+    PluginSearchResponse, PluginSearchResultDto, PreviewSummary, SkippedField,
+};
+use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission, AppState};
+use crate::db::entities::plugins::PluginPermission;
+use crate::db::repositories::{
+    AlternateTitleRepository, ExternalLinkRepository, ExternalRatingRepository, GenreRepository,
+    LibraryRepository, PluginsRepository, SeriesMetadataRepository, SeriesRepository,
+    TagRepository, TaskRepository,
+};
+use crate::services::metadata::{ApplyOptions, MetadataApplier};
+use crate::services::plugin::protocol::{
+    MetadataContentType, MetadataGetParams, MetadataMatchParams, MetadataSearchParams,
+};
+use crate::tasks::types::TaskType;
+use axum::{
+    extract::{Path, Query, State},
+    Json,
+};
+use serde::Deserialize;
+use std::sync::Arc;
+use std::time::Instant;
+use utoipa::OpenApi;
+use uuid::Uuid;
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        get_plugin_actions,
+        execute_plugin,
+        preview_series_metadata,
+        apply_series_metadata,
+        auto_match_series_metadata,
+        enqueue_auto_match_task,
+        enqueue_bulk_auto_match_tasks,
+        enqueue_library_auto_match_tasks,
+    ),
+    components(schemas(
+        PluginActionDto,
+        PluginActionsResponse,
+        MetadataAction,
+        PluginActionRequest,
+        ExecutePluginRequest,
+        ExecutePluginResponse,
+        PluginSearchResponse,
+        PluginSearchResultDto,
+        MetadataPreviewRequest,
+        MetadataPreviewResponse,
+        MetadataFieldPreview,
+        FieldApplyStatus,
+        PreviewSummary,
+        MetadataApplyRequest,
+        MetadataApplyResponse,
+        SkippedField,
+        MetadataAutoMatchRequest,
+        MetadataAutoMatchResponse,
+        EnqueueAutoMatchRequest,
+        EnqueueAutoMatchResponse,
+        EnqueueBulkAutoMatchRequest,
+        EnqueueLibraryAutoMatchRequest,
+    )),
+    tags(
+        (name = "Plugin Actions", description = "Plugin action discovery and execution")
+    )
+)]
+#[allow(dead_code)]
+pub struct PluginActionsApi;
+
+/// Query parameters for getting plugin actions
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginActionsQuery {
+    /// Scope to filter actions by (e.g., "series:detail", "series:bulk")
+    pub scope: String,
+
+    /// Optional library ID to filter plugins by. When provided, only plugins that
+    /// apply to this library (or all libraries) will be returned.
+    #[serde(default)]
+    pub library_id: Option<Uuid>,
+}
+
+/// Get available plugin actions for a scope
+///
+/// Returns a list of available plugin actions for the specified scope.
+/// This is used by the UI to populate dropdown menus with available plugins.
+#[utoipa::path(
+    get,
+    path = "/api/v1/plugins/actions",
+    params(PluginActionsQuery),
+    responses(
+        (status = 200, description = "Plugin actions retrieved", body = PluginActionsResponse),
+        (status = 400, description = "Invalid scope"),
+        (status = 401, description = "Unauthorized"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Plugin Actions"
+)]
+pub async fn get_plugin_actions(
+    State(state): State<Arc<AppState>>,
+    _auth: AuthContext,
+    Query(query): Query<PluginActionsQuery>,
+) -> Result<Json<PluginActionsResponse>, ApiError> {
+    // Parse and validate scope
+    let scope = parse_scope(&query.scope).ok_or_else(|| {
+        ApiError::BadRequest(format!(
+            "Invalid scope '{}'. Valid scopes: series:detail, series:bulk, library:detail, library:scan",
+            query.scope
+        ))
+    })?;
+
+    // Get plugins that support this scope, optionally filtered by library
+    let plugins = match query.library_id {
+        Some(library_id) => {
+            state
+                .plugin_manager
+                .plugins_by_scope_and_library(&scope, library_id)
+                .await
+        }
+        None => state.plugin_manager.plugins_by_scope(&scope).await,
+    };
+
+    // Build actions list
+    let mut actions = Vec::new();
+
+    for plugin in plugins {
+        // Skip disabled plugins
+        if !plugin.enabled {
+            continue;
+        }
+
+        // Check if plugin has metadata provider capability from its cached manifest
+        // Only plugins with a valid manifest that reports series metadata capability are included
+        let has_series_metadata = plugin
+            .cached_manifest()
+            .map(|m| m.capabilities.can_provide_series_metadata())
+            .unwrap_or(false);
+
+        if has_series_metadata {
+            // Add metadata search action
+            actions.push(PluginActionDto {
+                plugin_id: plugin.id,
+                plugin_name: plugin.name.clone(),
+                plugin_display_name: plugin.display_name.clone(),
+                action_type: "metadata_search".to_string(),
+                label: format!("Fetch from {}", plugin.display_name),
+                description: plugin.description.clone(),
+                icon: Some("search".to_string()),
+                library_ids: plugin.library_ids_vec(),
+            });
+        }
+    }
+
+    Ok(Json(PluginActionsResponse {
+        actions,
+        scope: query.scope,
+    }))
+}
+
+/// Execute a plugin action
+///
+/// Invokes a plugin action and returns the result. Actions are typed by plugin type:
+/// - `metadata`: search, get, match (requires content_type: series or book)
+/// - `ping`: health check (works for any plugin)
+#[utoipa::path(
+    post,
+    path = "/api/v1/plugins/{id}/execute",
+    params(
+        ("id" = Uuid, Path, description = "Plugin ID")
+    ),
+    request_body = ExecutePluginRequest,
+    responses(
+        (status = 200, description = "Action executed", body = ExecutePluginResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Plugin not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Plugin Actions"
+)]
+pub async fn execute_plugin(
+    State(state): State<Arc<AppState>>,
+    _auth: AuthContext,
+    Path(plugin_id): Path<Uuid>,
+    Json(request): Json<ExecutePluginRequest>,
+) -> Result<Json<ExecutePluginResponse>, ApiError> {
+    let start = Instant::now();
+
+    // Get plugin from database to verify it exists
+    let plugin = PluginsRepository::get_by_id(&state.db, plugin_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Plugin not found".to_string()))?;
+
+    if !plugin.enabled {
+        return Ok(Json(ExecutePluginResponse {
+            success: false,
+            result: None,
+            error: Some("Plugin is disabled".to_string()),
+            latency_ms: start.elapsed().as_millis() as u64,
+        }));
+    }
+
+    // Execute based on action type
+    // Backend owns the protocol method strings - frontend only knows about typed actions
+    match request.action {
+        PluginActionRequest::Metadata {
+            action,
+            content_type,
+            params,
+        } => execute_metadata_action(&state, plugin_id, action, content_type, params, start).await,
+        PluginActionRequest::Ping => match state.plugin_manager.ping(plugin_id).await {
+            Ok(()) => Ok(Json(ExecutePluginResponse {
+                success: true,
+                result: Some(serde_json::json!("pong")),
+                error: None,
+                latency_ms: start.elapsed().as_millis() as u64,
+            })),
+            Err(e) => Ok(Json(ExecutePluginResponse {
+                success: false,
+                result: None,
+                error: Some(e.to_string()),
+                latency_ms: start.elapsed().as_millis() as u64,
+            })),
+        },
+    }
+}
+
+/// Execute a metadata plugin action
+async fn execute_metadata_action(
+    state: &Arc<AppState>,
+    plugin_id: Uuid,
+    action: MetadataAction,
+    content_type: MetadataContentType,
+    params: serde_json::Value,
+    start: Instant,
+) -> Result<Json<ExecutePluginResponse>, ApiError> {
+    match (action, content_type) {
+        (MetadataAction::Search, MetadataContentType::Series) => {
+            let params: MetadataSearchParams = serde_json::from_value(params)
+                .map_err(|e| ApiError::BadRequest(format!("Invalid search params: {}", e)))?;
+
+            match state.plugin_manager.search_series(plugin_id, params).await {
+                Ok(response) => {
+                    let result = serde_json::to_value(&response)
+                        .map_err(|e| ApiError::Internal(format!("Failed to serialize: {}", e)))?;
+
+                    Ok(Json(ExecutePluginResponse {
+                        success: true,
+                        result: Some(result),
+                        error: None,
+                        latency_ms: start.elapsed().as_millis() as u64,
+                    }))
+                }
+                Err(e) => Ok(Json(ExecutePluginResponse {
+                    success: false,
+                    result: None,
+                    error: Some(e.to_string()),
+                    latency_ms: start.elapsed().as_millis() as u64,
+                })),
+            }
+        }
+        (MetadataAction::Get, MetadataContentType::Series) => {
+            let params: MetadataGetParams = serde_json::from_value(params)
+                .map_err(|e| ApiError::BadRequest(format!("Invalid get params: {}", e)))?;
+
+            match state
+                .plugin_manager
+                .get_series_metadata(plugin_id, params)
+                .await
+            {
+                Ok(metadata) => {
+                    let result = serde_json::to_value(&metadata)
+                        .map_err(|e| ApiError::Internal(format!("Failed to serialize: {}", e)))?;
+
+                    Ok(Json(ExecutePluginResponse {
+                        success: true,
+                        result: Some(result),
+                        error: None,
+                        latency_ms: start.elapsed().as_millis() as u64,
+                    }))
+                }
+                Err(e) => Ok(Json(ExecutePluginResponse {
+                    success: false,
+                    result: None,
+                    error: Some(e.to_string()),
+                    latency_ms: start.elapsed().as_millis() as u64,
+                })),
+            }
+        }
+        (MetadataAction::Match, MetadataContentType::Series) => {
+            let params: MetadataMatchParams = serde_json::from_value(params)
+                .map_err(|e| ApiError::BadRequest(format!("Invalid match params: {}", e)))?;
+
+            match state.plugin_manager.match_series(plugin_id, params).await {
+                Ok(result) => {
+                    let result = serde_json::to_value(&result)
+                        .map_err(|e| ApiError::Internal(format!("Failed to serialize: {}", e)))?;
+
+                    Ok(Json(ExecutePluginResponse {
+                        success: true,
+                        result: Some(result),
+                        error: None,
+                        latency_ms: start.elapsed().as_millis() as u64,
+                    }))
+                }
+                Err(e) => Ok(Json(ExecutePluginResponse {
+                    success: false,
+                    result: None,
+                    error: Some(e.to_string()),
+                    latency_ms: start.elapsed().as_millis() as u64,
+                })),
+            }
+        } // Book metadata actions - not yet implemented
+          // When MetadataContentType::Book is added, these arms will be needed:
+          // (MetadataAction::Search, MetadataContentType::Book) => { ... }
+          // (MetadataAction::Get, MetadataContentType::Book) => { ... }
+          // (MetadataAction::Match, MetadataContentType::Book) => { ... }
+    }
+}
+
+/// Preview metadata from a plugin for a series
+///
+/// Fetches metadata from a plugin and computes a field-by-field diff with the current
+/// series metadata, showing which fields will be applied, locked, or denied by RBAC.
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/{id}/metadata/preview",
+    params(
+        ("id" = Uuid, Path, description = "Series ID")
+    ),
+    request_body = MetadataPreviewRequest,
+    responses(
+        (status = 200, description = "Preview computed", body = MetadataPreviewResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "No permission to edit series"),
+        (status = 404, description = "Series or plugin not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Plugin Actions"
+)]
+pub async fn preview_series_metadata(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+    Json(request): Json<MetadataPreviewRequest>,
+) -> Result<Json<MetadataPreviewResponse>, ApiError> {
+    // Check permission to edit series metadata
+    auth.require_permission(&Permission::SeriesWrite)?;
+
+    // Get the series (verify it exists)
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Get the plugin
+    let plugin = PluginsRepository::get_by_id(&state.db, request.plugin_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Plugin not found".to_string()))?;
+
+    if !plugin.enabled {
+        return Err(ApiError::BadRequest("Plugin is disabled".to_string()));
+    }
+
+    // Check if plugin applies to this series' library
+    if !plugin.applies_to_library(series.library_id) {
+        return Err(ApiError::BadRequest(format!(
+            "Plugin '{}' is not configured to apply to this series' library",
+            plugin.display_name
+        )));
+    }
+
+    // Fetch metadata from plugin
+    let params = MetadataGetParams {
+        external_id: request.external_id.clone(),
+    };
+
+    let plugin_metadata = state
+        .plugin_manager
+        .get_series_metadata(request.plugin_id, params)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch metadata from plugin: {}", e)))?;
+
+    // Get current series metadata
+    let current_metadata = SeriesMetadataRepository::get_by_series_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get current metadata: {}", e)))?;
+
+    // Get current genres, tags, and alternate titles
+    let current_genres = GenreRepository::get_genres_for_series(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get genres: {}", e)))?;
+    let current_tags = TagRepository::get_tags_for_series(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get tags: {}", e)))?;
+    let current_alternate_titles = AlternateTitleRepository::get_for_series(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get alternate titles: {}", e)))?;
+
+    // Get plugin permissions (used via has_permission closure)
+    let _plugin_permissions = plugin.permissions_vec();
+
+    // Build field-by-field preview
+    let mut fields = Vec::new();
+    let mut will_apply = 0;
+    let mut locked = 0;
+    let mut no_permission = 0;
+    let mut unchanged = 0;
+    let mut not_provided = 0;
+
+    // Helper to check permission
+    let has_permission = |perm: PluginPermission| -> bool { plugin.has_permission(&perm) };
+
+    // Title
+    fields.push(build_field_preview(
+        "title",
+        current_metadata
+            .as_ref()
+            .map(|m| serde_json::json!(m.title.clone())),
+        plugin_metadata.title.as_ref().map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.title_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteTitle),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Alternate Titles
+    let current_alt_titles: Vec<serde_json::Value> = current_alternate_titles
+        .iter()
+        .map(|t| serde_json::json!({"label": t.label, "title": t.title}))
+        .collect();
+    fields.push(build_field_preview(
+        "alternateTitles",
+        if current_alt_titles.is_empty() {
+            None
+        } else {
+            Some(serde_json::json!(current_alt_titles))
+        },
+        if plugin_metadata.alternate_titles.is_empty() {
+            None
+        } else {
+            let proposed_alt_titles: Vec<serde_json::Value> = plugin_metadata
+                .alternate_titles
+                .iter()
+                .map(|t| {
+                    serde_json::json!({
+                        "label": t.title_type.as_deref().unwrap_or("Alternative"),
+                        "title": t.title
+                    })
+                })
+                .collect();
+            Some(serde_json::json!(proposed_alt_titles))
+        },
+        current_metadata
+            .as_ref()
+            .map(|m| m.title_lock) // Use title_lock to control alternate titles too
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteTitle), // Use title permission
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Summary
+    fields.push(build_field_preview(
+        "summary",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.summary.as_ref().map(|v| serde_json::json!(v))),
+        plugin_metadata
+            .summary
+            .as_ref()
+            .map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.summary_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteSummary),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Year
+    fields.push(build_field_preview(
+        "year",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.year.map(|v| serde_json::json!(v))),
+        plugin_metadata.year.map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.year_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteYear),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Status
+    fields.push(build_field_preview(
+        "status",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.status.as_ref().map(|v| serde_json::json!(v))),
+        plugin_metadata
+            .status
+            .as_ref()
+            .map(|v| serde_json::json!(v.to_string())),
+        current_metadata
+            .as_ref()
+            .map(|m| m.status_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteStatus),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Publisher
+    fields.push(build_field_preview(
+        "publisher",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.publisher.as_ref().map(|v| serde_json::json!(v))),
+        plugin_metadata
+            .publisher
+            .as_ref()
+            .map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.publisher_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWritePublisher),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Genres
+    let current_genre_names: Vec<String> = current_genres.iter().map(|g| g.name.clone()).collect();
+    fields.push(build_field_preview(
+        "genres",
+        Some(serde_json::json!(current_genre_names)),
+        if plugin_metadata.genres.is_empty() {
+            None
+        } else {
+            Some(serde_json::json!(plugin_metadata.genres))
+        },
+        current_metadata
+            .as_ref()
+            .map(|m| m.genres_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteGenres),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Tags
+    let current_tag_names: Vec<String> = current_tags.iter().map(|t| t.name.clone()).collect();
+    fields.push(build_field_preview(
+        "tags",
+        Some(serde_json::json!(current_tag_names)),
+        if plugin_metadata.tags.is_empty() {
+            None
+        } else {
+            Some(serde_json::json!(plugin_metadata.tags))
+        },
+        current_metadata
+            .as_ref()
+            .map(|m| m.tags_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteTags),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Age Rating
+    fields.push(build_field_preview(
+        "ageRating",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.age_rating.map(|v| serde_json::json!(v))),
+        plugin_metadata.age_rating.map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.age_rating_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteAgeRating),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Language
+    fields.push(build_field_preview(
+        "language",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.language.as_ref().map(|v| serde_json::json!(v))),
+        plugin_metadata
+            .language
+            .as_ref()
+            .map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.language_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteLanguage),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Reading Direction
+    fields.push(build_field_preview(
+        "readingDirection",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.reading_direction.as_ref().map(|v| serde_json::json!(v))),
+        plugin_metadata
+            .reading_direction
+            .as_ref()
+            .map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.reading_direction_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteReadingDirection),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Total Book Count
+    fields.push(build_field_preview(
+        "totalBookCount",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.total_book_count.map(|v| serde_json::json!(v))),
+        plugin_metadata
+            .total_book_count
+            .map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.total_book_count_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteTotalBookCount),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // External Links (preview only - shows what links would be added/updated)
+    // Get current external links
+    let current_links = ExternalLinkRepository::get_for_series(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get external links: {}", e)))?;
+    let current_link_sources: Vec<String> = current_links
+        .iter()
+        .map(|l| l.source_name.clone())
+        .collect();
+    fields.push(build_field_preview(
+        "externalLinks",
+        Some(serde_json::json!(current_link_sources)),
+        if plugin_metadata.external_links.is_empty() {
+            None
+        } else {
+            let proposed_links: Vec<serde_json::Value> = plugin_metadata
+                .external_links
+                .iter()
+                .map(|l| serde_json::json!({"label": l.label, "url": l.url}))
+                .collect();
+            Some(serde_json::json!(proposed_links))
+        },
+        false, // Links don't have a lock field
+        has_permission(PluginPermission::MetadataWriteLinks),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // External Rating (primary rating - preview only)
+    let current_ratings = ExternalRatingRepository::get_for_series(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get external ratings: {}", e)))?;
+    let current_rating_info: Option<serde_json::Value> = current_ratings
+        .iter()
+        .find(|r| r.source_name == plugin.name.to_lowercase())
+        .map(|r| serde_json::json!({"score": r.rating, "source": r.source_name}));
+    fields.push(build_field_preview(
+        "rating",
+        current_rating_info,
+        plugin_metadata.rating.as_ref().map(|r| {
+            serde_json::json!({
+                "score": r.score,
+                "voteCount": r.vote_count,
+                "source": r.source
+            })
+        }),
+        false, // Ratings don't have a lock field
+        has_permission(PluginPermission::MetadataWriteRatings),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // External Ratings array (multiple sources like AniList, MAL, etc.)
+    if !plugin_metadata.external_ratings.is_empty() {
+        // Build current ratings map for comparison
+        let current_ext_ratings: Vec<serde_json::Value> = current_ratings
+            .iter()
+            .map(|r| serde_json::json!({"score": r.rating, "source": r.source_name}))
+            .collect();
+        let proposed_ext_ratings: Vec<serde_json::Value> = plugin_metadata
+            .external_ratings
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "score": r.score,
+                    "voteCount": r.vote_count,
+                    "source": r.source
+                })
+            })
+            .collect();
+        fields.push(build_field_preview(
+            "externalRatings",
+            if current_ext_ratings.is_empty() {
+                None
+            } else {
+                Some(serde_json::json!(current_ext_ratings))
+            },
+            Some(serde_json::json!(proposed_ext_ratings)),
+            false, // Ratings don't have a lock field
+            has_permission(PluginPermission::MetadataWriteRatings),
+            &mut will_apply,
+            &mut locked,
+            &mut no_permission,
+            &mut unchanged,
+            &mut not_provided,
+        ));
+    }
+
+    // Cover URL (preview only - shows if a cover would be downloaded)
+    fields.push(build_field_preview(
+        "coverUrl",
+        None, // We don't show the current cover URL in preview
+        plugin_metadata
+            .cover_url
+            .as_ref()
+            .map(|v| serde_json::json!(v)),
+        false, // Covers don't have a lock field
+        has_permission(PluginPermission::MetadataWriteCovers),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    Ok(Json(MetadataPreviewResponse {
+        fields,
+        summary: PreviewSummary {
+            will_apply,
+            locked,
+            no_permission,
+            unchanged,
+            not_provided,
+        },
+        plugin_id: plugin.id,
+        plugin_name: plugin.display_name,
+        external_id: request.external_id,
+        external_url: Some(plugin_metadata.external_url),
+    }))
+}
+
+/// Apply metadata from a plugin to a series
+///
+/// Fetches metadata from a plugin and applies it to the series, respecting
+/// RBAC permissions and field locks.
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/{id}/metadata/apply",
+    params(
+        ("id" = Uuid, Path, description = "Series ID")
+    ),
+    request_body = MetadataApplyRequest,
+    responses(
+        (status = 200, description = "Metadata applied", body = MetadataApplyResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "No permission to edit series"),
+        (status = 404, description = "Series or plugin not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Plugin Actions"
+)]
+pub async fn apply_series_metadata(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+    Json(request): Json<MetadataApplyRequest>,
+) -> Result<Json<MetadataApplyResponse>, ApiError> {
+    // Check permission to edit series metadata
+    auth.require_permission(&Permission::SeriesWrite)?;
+
+    // Get the series (verify it exists and get library_id for events)
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Get the plugin
+    let plugin = PluginsRepository::get_by_id(&state.db, request.plugin_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Plugin not found".to_string()))?;
+
+    if !plugin.enabled {
+        return Err(ApiError::BadRequest("Plugin is disabled".to_string()));
+    }
+
+    // Check if plugin applies to this series' library
+    if !plugin.applies_to_library(series.library_id) {
+        return Err(ApiError::BadRequest(format!(
+            "Plugin '{}' is not configured to apply to this series' library",
+            plugin.display_name
+        )));
+    }
+
+    // Fetch metadata from plugin
+    let params = MetadataGetParams {
+        external_id: request.external_id.clone(),
+    };
+
+    let plugin_metadata = state
+        .plugin_manager
+        .get_series_metadata(request.plugin_id, params)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch metadata from plugin: {}", e)))?;
+
+    // Get current series metadata
+    let current_metadata = SeriesMetadataRepository::get_by_series_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get current metadata: {}", e)))?;
+
+    // Build apply options
+    let options = ApplyOptions {
+        fields_filter: request.fields.map(|f| f.into_iter().collect()),
+        thumbnail_service: Some(state.thumbnail_service.clone()),
+        event_broadcaster: Some(state.event_broadcaster.clone()),
+    };
+
+    // Apply metadata using the shared service
+    let result = MetadataApplier::apply(
+        &state.db,
+        series_id,
+        series.library_id,
+        &plugin,
+        &plugin_metadata,
+        current_metadata.as_ref(),
+        &options,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to apply metadata: {}", e)))?;
+
+    // Convert SkippedField types
+    let skipped_fields: Vec<SkippedField> = result
+        .skipped_fields
+        .into_iter()
+        .map(|sf| SkippedField {
+            field: sf.field,
+            reason: sf.reason,
+        })
+        .collect();
+
+    let message = if result.applied_fields.is_empty() {
+        "No fields were applied".to_string()
+    } else {
+        format!("Applied {} field(s)", result.applied_fields.len())
+    };
+
+    Ok(Json(MetadataApplyResponse {
+        success: !result.applied_fields.is_empty(),
+        applied_fields: result.applied_fields,
+        skipped_fields,
+        message,
+    }))
+}
+
+/// Auto-match and apply metadata from a plugin to a series
+///
+/// Searches for the series using the plugin's metadata search, picks the best match,
+/// and applies the metadata in one step. This is a convenience endpoint for quick
+/// metadata updates without user intervention.
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/{id}/metadata/auto-match",
+    params(
+        ("id" = Uuid, Path, description = "Series ID")
+    ),
+    request_body = MetadataAutoMatchRequest,
+    responses(
+        (status = 200, description = "Auto-match completed", body = MetadataAutoMatchResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "No permission to edit series"),
+        (status = 404, description = "Series or plugin not found or no match found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Plugin Actions"
+)]
+pub async fn auto_match_series_metadata(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+    Json(request): Json<MetadataAutoMatchRequest>,
+) -> Result<Json<MetadataAutoMatchResponse>, ApiError> {
+    // Check permission to edit series metadata
+    auth.require_permission(&Permission::SeriesWrite)?;
+
+    // Get the series (verify it exists and get its title)
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Get the current series metadata for title
+    let series_metadata = SeriesMetadataRepository::get_by_series_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get series metadata: {}", e)))?;
+
+    // Use the provided query or fall back to series title
+    let search_query = request.query.unwrap_or_else(|| {
+        series_metadata
+            .map(|m| m.title)
+            .unwrap_or_else(|| series.name.clone())
+    });
+
+    // Get the plugin
+    let plugin = PluginsRepository::get_by_id(&state.db, request.plugin_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Plugin not found".to_string()))?;
+
+    if !plugin.enabled {
+        return Err(ApiError::BadRequest("Plugin is disabled".to_string()));
+    }
+
+    // Check if plugin applies to this series' library
+    if !plugin.applies_to_library(series.library_id) {
+        return Err(ApiError::BadRequest(format!(
+            "Plugin '{}' is not configured to apply to this series' library",
+            plugin.display_name
+        )));
+    }
+
+    // Search for metadata using the plugin
+    let search_params = MetadataSearchParams {
+        query: search_query.clone(),
+        limit: Some(10), // Only need a few results to find the best match
+        cursor: None,
+    };
+
+    let search_response = state
+        .plugin_manager
+        .search_series(request.plugin_id, search_params)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to search for metadata: {}", e)))?;
+
+    // Check if we got any results
+    if search_response.results.is_empty() {
+        return Ok(Json(MetadataAutoMatchResponse {
+            success: false,
+            matched_result: None,
+            applied_fields: vec![],
+            skipped_fields: vec![],
+            message: format!("No matches found for '{}'", search_query),
+            external_url: None,
+        }));
+    }
+
+    // Pick the best result - use relevance_score if available, otherwise take first result
+    // (APIs typically return results in relevance order already)
+    let best_match = search_response
+        .results
+        .into_iter()
+        .enumerate()
+        .max_by(|(i, a), (j, b)| {
+            match (a.relevance_score, b.relevance_score) {
+                (Some(a_score), Some(b_score)) => a_score
+                    .partial_cmp(&b_score)
+                    .unwrap_or(std::cmp::Ordering::Equal),
+                // If no scores, prefer earlier results (lower index = higher relevance)
+                _ => j.cmp(i),
+            }
+        })
+        .map(|(_, result)| result)
+        .unwrap(); // Safe: we checked results is non-empty
+
+    let external_id = best_match.external_id.clone();
+    let matched_result_dto = PluginSearchResultDto::from(best_match);
+
+    // Fetch full metadata for the best match
+    let params = MetadataGetParams {
+        external_id: external_id.clone(),
+    };
+
+    let plugin_metadata = state
+        .plugin_manager
+        .get_series_metadata(request.plugin_id, params)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch metadata from plugin: {}", e)))?;
+
+    let external_url = plugin_metadata.external_url.clone();
+
+    // Get current series metadata
+    let current_metadata = SeriesMetadataRepository::get_by_series_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get current metadata: {}", e)))?;
+
+    // Build apply options (no field filtering for auto-match)
+    let options = ApplyOptions {
+        fields_filter: None, // Apply all fields
+        thumbnail_service: Some(state.thumbnail_service.clone()),
+        event_broadcaster: Some(state.event_broadcaster.clone()),
+    };
+
+    // Apply metadata using the shared service
+    let result = MetadataApplier::apply(
+        &state.db,
+        series_id,
+        series.library_id,
+        &plugin,
+        &plugin_metadata,
+        current_metadata.as_ref(),
+        &options,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to apply metadata: {}", e)))?;
+
+    // Convert SkippedField types
+    let skipped_fields: Vec<SkippedField> = result
+        .skipped_fields
+        .into_iter()
+        .map(|sf| SkippedField {
+            field: sf.field,
+            reason: sf.reason,
+        })
+        .collect();
+
+    let message = if result.applied_fields.is_empty() {
+        format!(
+            "Matched '{}' but no fields were applied",
+            matched_result_dto.title
+        )
+    } else {
+        format!(
+            "Matched '{}' and applied {} field(s)",
+            matched_result_dto.title,
+            result.applied_fields.len()
+        )
+    };
+
+    Ok(Json(MetadataAutoMatchResponse {
+        success: !result.applied_fields.is_empty(),
+        matched_result: Some(matched_result_dto),
+        applied_fields: result.applied_fields,
+        skipped_fields,
+        message,
+        external_url: Some(external_url),
+    }))
+}
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+/// Build a field preview entry
+#[allow(clippy::too_many_arguments)]
+fn build_field_preview(
+    field: &str,
+    current_value: Option<serde_json::Value>,
+    proposed_value: Option<serde_json::Value>,
+    is_locked: bool,
+    has_permission: bool,
+    will_apply: &mut usize,
+    locked: &mut usize,
+    no_permission: &mut usize,
+    unchanged: &mut usize,
+    not_provided: &mut usize,
+) -> MetadataFieldPreview {
+    let (status, reason) = if proposed_value.is_none() {
+        *not_provided += 1;
+        (
+            FieldApplyStatus::NotProvided,
+            Some("Not provided by plugin".to_string()),
+        )
+    } else if is_locked {
+        *locked += 1;
+        (
+            FieldApplyStatus::Locked,
+            Some("Field is locked".to_string()),
+        )
+    } else if !has_permission {
+        *no_permission += 1;
+        (
+            FieldApplyStatus::NoPermission,
+            Some("Plugin lacks permission".to_string()),
+        )
+    } else if current_value == proposed_value {
+        *unchanged += 1;
+        (
+            FieldApplyStatus::Unchanged,
+            Some("Value unchanged".to_string()),
+        )
+    } else {
+        *will_apply += 1;
+        (FieldApplyStatus::WillApply, None)
+    };
+
+    MetadataFieldPreview {
+        field: field.to_string(),
+        current_value,
+        proposed_value,
+        status,
+        reason,
+    }
+}
+
+// =============================================================================
+// Task-based Auto-Match Endpoints (Background Processing)
+// =============================================================================
+
+/// Enqueue a plugin auto-match task for a single series
+///
+/// Creates a background task to auto-match metadata for a series using the specified plugin.
+/// The task runs asynchronously in a worker process and emits a SeriesMetadataUpdated event
+/// when complete.
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/{id}/metadata/auto-match/task",
+    params(
+        ("id" = Uuid, Path, description = "Series ID")
+    ),
+    request_body = EnqueueAutoMatchRequest,
+    responses(
+        (status = 200, description = "Task enqueued", body = EnqueueAutoMatchResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "No permission to edit series"),
+        (status = 404, description = "Series or plugin not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Plugin Actions"
+)]
+pub async fn enqueue_auto_match_task(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+    Json(request): Json<EnqueueAutoMatchRequest>,
+) -> Result<Json<EnqueueAutoMatchResponse>, ApiError> {
+    // Check permission to edit series metadata
+    auth.require_permission(&Permission::SeriesWrite)?;
+
+    // Verify series exists
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Verify plugin exists and is enabled
+    let plugin = PluginsRepository::get_by_id(&state.db, request.plugin_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Plugin not found".to_string()))?;
+
+    if !plugin.enabled {
+        return Err(ApiError::BadRequest("Plugin is disabled".to_string()));
+    }
+
+    // Check if plugin applies to this series' library
+    if !plugin.applies_to_library(series.library_id) {
+        return Err(ApiError::BadRequest(format!(
+            "Plugin '{}' is not configured to apply to this series' library",
+            plugin.display_name
+        )));
+    }
+
+    // Create the task
+    let task_type = TaskType::PluginAutoMatch {
+        series_id,
+        plugin_id: request.plugin_id,
+        source_scope: Some("series:detail".to_string()),
+    };
+
+    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
+
+    Ok(Json(EnqueueAutoMatchResponse {
+        success: true,
+        tasks_enqueued: 1,
+        task_ids: vec![task_id],
+        message: "Auto-match task enqueued".to_string(),
+    }))
+}
+
+/// Enqueue plugin auto-match tasks for multiple series (bulk operation)
+///
+/// Creates background tasks to auto-match metadata for multiple series using the specified plugin.
+/// Each series gets its own task that runs asynchronously in a worker process.
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/metadata/auto-match/task/bulk",
+    request_body = EnqueueBulkAutoMatchRequest,
+    responses(
+        (status = 200, description = "Tasks enqueued", body = EnqueueAutoMatchResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "No permission to edit series"),
+        (status = 404, description = "Plugin not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Plugin Actions"
+)]
+pub async fn enqueue_bulk_auto_match_tasks(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Json(request): Json<EnqueueBulkAutoMatchRequest>,
+) -> Result<Json<EnqueueAutoMatchResponse>, ApiError> {
+    // Check permission to edit series metadata
+    auth.require_permission(&Permission::SeriesWrite)?;
+
+    if request.series_ids.is_empty() {
+        return Err(ApiError::BadRequest(
+            "At least one series ID is required".to_string(),
+        ));
+    }
+
+    // Verify plugin exists and is enabled
+    let plugin = PluginsRepository::get_by_id(&state.db, request.plugin_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Plugin not found".to_string()))?;
+
+    if !plugin.enabled {
+        return Err(ApiError::BadRequest("Plugin is disabled".to_string()));
+    }
+
+    // Create tasks for each series
+    let mut task_ids = Vec::new();
+    let mut enqueued = 0;
+    let mut skipped_not_found = 0;
+    let mut skipped_library_mismatch = 0;
+
+    for series_id in &request.series_ids {
+        // Verify series exists (skip if not)
+        let series = match SeriesRepository::get_by_id(&state.db, *series_id).await {
+            Ok(Some(s)) => s,
+            Ok(None) => {
+                skipped_not_found += 1;
+                continue;
+            }
+            Err(e) => {
+                tracing::warn!("Failed to get series {}: {}", series_id, e);
+                skipped_not_found += 1;
+                continue;
+            }
+        };
+
+        // Check if plugin applies to this series' library
+        if !plugin.applies_to_library(series.library_id) {
+            skipped_library_mismatch += 1;
+            continue;
+        }
+
+        let task_type = TaskType::PluginAutoMatch {
+            series_id: *series_id,
+            plugin_id: request.plugin_id,
+            source_scope: Some("series:bulk".to_string()),
+        };
+
+        match TaskRepository::enqueue(&state.db, task_type, 0, None).await {
+            Ok(task_id) => {
+                task_ids.push(task_id);
+                enqueued += 1;
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to enqueue auto-match task for series {}: {}",
+                    series_id,
+                    e
+                );
+            }
+        }
+    }
+
+    let message = if enqueued == request.series_ids.len() {
+        format!("Enqueued {} auto-match task(s)", enqueued)
+    } else {
+        let mut parts = vec![format!(
+            "Enqueued {} of {} task(s)",
+            enqueued,
+            request.series_ids.len()
+        )];
+        if skipped_library_mismatch > 0 {
+            parts.push(format!(
+                "{} skipped (plugin doesn't apply to library)",
+                skipped_library_mismatch
+            ));
+        }
+        if skipped_not_found > 0 {
+            parts.push(format!("{} skipped (series not found)", skipped_not_found));
+        }
+        parts.join(", ")
+    };
+
+    Ok(Json(EnqueueAutoMatchResponse {
+        success: enqueued > 0,
+        tasks_enqueued: enqueued,
+        task_ids,
+        message,
+    }))
+}
+
+/// Enqueue plugin auto-match tasks for all series in a library
+///
+/// Creates background tasks to auto-match metadata for all series in a library using
+/// the specified plugin. Each series gets its own task that runs asynchronously.
+#[utoipa::path(
+    post,
+    path = "/api/v1/libraries/{id}/metadata/auto-match/task",
+    params(
+        ("id" = Uuid, Path, description = "Library ID")
+    ),
+    request_body = EnqueueLibraryAutoMatchRequest,
+    responses(
+        (status = 200, description = "Tasks enqueued", body = EnqueueAutoMatchResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "No permission to edit series"),
+        (status = 404, description = "Library or plugin not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Plugin Actions"
+)]
+pub async fn enqueue_library_auto_match_tasks(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(library_id): Path<Uuid>,
+    Json(request): Json<EnqueueLibraryAutoMatchRequest>,
+) -> Result<Json<EnqueueAutoMatchResponse>, ApiError> {
+    // Check permission to edit series metadata
+    auth.require_permission(&Permission::SeriesWrite)?;
+
+    // Verify library exists
+    let _library = LibraryRepository::get_by_id(&state.db, library_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get library: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
+
+    // Verify plugin exists and is enabled
+    let plugin = PluginsRepository::get_by_id(&state.db, request.plugin_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Plugin not found".to_string()))?;
+
+    if !plugin.enabled {
+        return Err(ApiError::BadRequest("Plugin is disabled".to_string()));
+    }
+
+    // Check if plugin applies to this library
+    if !plugin.applies_to_library(library_id) {
+        return Err(ApiError::BadRequest(format!(
+            "Plugin '{}' is not configured to apply to this library",
+            plugin.display_name
+        )));
+    }
+
+    // Get all series in the library
+    let series_list = SeriesRepository::list_by_library(&state.db, library_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get series: {}", e)))?;
+
+    if series_list.is_empty() {
+        return Ok(Json(EnqueueAutoMatchResponse {
+            success: true,
+            tasks_enqueued: 0,
+            task_ids: vec![],
+            message: "No series in library".to_string(),
+        }));
+    }
+
+    // Create tasks for each series
+    let mut task_ids = Vec::new();
+    let mut enqueued = 0;
+
+    for series in &series_list {
+        let task_type = TaskType::PluginAutoMatch {
+            series_id: series.id,
+            plugin_id: request.plugin_id,
+            source_scope: Some("library:detail".to_string()),
+        };
+
+        match TaskRepository::enqueue(&state.db, task_type, 0, None).await {
+            Ok(task_id) => {
+                task_ids.push(task_id);
+                enqueued += 1;
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to enqueue auto-match task for series {}: {}",
+                    series.id,
+                    e
+                );
+            }
+        }
+    }
+
+    let message = if enqueued == series_list.len() {
+        format!("Enqueued {} auto-match task(s) for library", enqueued)
+    } else {
+        format!(
+            "Enqueued {} of {} auto-match task(s) for library",
+            enqueued,
+            series_list.len()
+        )
+    };
+
+    Ok(Json(EnqueueAutoMatchResponse {
+        success: enqueued > 0,
+        tasks_enqueued: enqueued,
+        task_ids,
+        message,
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_field_preview_will_apply() {
+        let mut will_apply = 0;
+        let mut locked = 0;
+        let mut no_permission = 0;
+        let mut unchanged = 0;
+        let mut not_provided = 0;
+
+        let preview = build_field_preview(
+            "title",
+            Some(serde_json::json!("Old Title")),
+            Some(serde_json::json!("New Title")),
+            false,
+            true,
+            &mut will_apply,
+            &mut locked,
+            &mut no_permission,
+            &mut unchanged,
+            &mut not_provided,
+        );
+
+        assert_eq!(preview.status, FieldApplyStatus::WillApply);
+        assert!(preview.reason.is_none());
+        assert_eq!(will_apply, 1);
+    }
+
+    #[test]
+    fn test_build_field_preview_locked() {
+        let mut will_apply = 0;
+        let mut locked = 0;
+        let mut no_permission = 0;
+        let mut unchanged = 0;
+        let mut not_provided = 0;
+
+        let preview = build_field_preview(
+            "title",
+            Some(serde_json::json!("Old Title")),
+            Some(serde_json::json!("New Title")),
+            true, // locked
+            true,
+            &mut will_apply,
+            &mut locked,
+            &mut no_permission,
+            &mut unchanged,
+            &mut not_provided,
+        );
+
+        assert_eq!(preview.status, FieldApplyStatus::Locked);
+        assert_eq!(locked, 1);
+    }
+
+    #[test]
+    fn test_build_field_preview_no_permission() {
+        let mut will_apply = 0;
+        let mut locked = 0;
+        let mut no_permission = 0;
+        let mut unchanged = 0;
+        let mut not_provided = 0;
+
+        let preview = build_field_preview(
+            "title",
+            Some(serde_json::json!("Old Title")),
+            Some(serde_json::json!("New Title")),
+            false,
+            false, // no permission
+            &mut will_apply,
+            &mut locked,
+            &mut no_permission,
+            &mut unchanged,
+            &mut not_provided,
+        );
+
+        assert_eq!(preview.status, FieldApplyStatus::NoPermission);
+        assert_eq!(no_permission, 1);
+    }
+
+    #[test]
+    fn test_build_field_preview_unchanged() {
+        let mut will_apply = 0;
+        let mut locked = 0;
+        let mut no_permission = 0;
+        let mut unchanged = 0;
+        let mut not_provided = 0;
+
+        let preview = build_field_preview(
+            "title",
+            Some(serde_json::json!("Same Title")),
+            Some(serde_json::json!("Same Title")),
+            false,
+            true,
+            &mut will_apply,
+            &mut locked,
+            &mut no_permission,
+            &mut unchanged,
+            &mut not_provided,
+        );
+
+        assert_eq!(preview.status, FieldApplyStatus::Unchanged);
+        assert_eq!(unchanged, 1);
+    }
+
+    #[test]
+    fn test_build_field_preview_not_provided() {
+        let mut will_apply = 0;
+        let mut locked = 0;
+        let mut no_permission = 0;
+        let mut unchanged = 0;
+        let mut not_provided = 0;
+
+        let preview = build_field_preview(
+            "title",
+            Some(serde_json::json!("Old Title")),
+            None, // not provided
+            false,
+            true,
+            &mut will_apply,
+            &mut locked,
+            &mut no_permission,
+            &mut unchanged,
+            &mut not_provided,
+        );
+
+        assert_eq!(preview.status, FieldApplyStatus::NotProvided);
+        assert_eq!(not_provided, 1);
+    }
+}

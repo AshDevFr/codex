@@ -23,25 +23,28 @@ FROM rust:1.92-alpine AS chef
 RUN apk add --no-cache \
     musl-dev \
     build-base \
-    clang
+    clang \
+    mold
 RUN cargo install cargo-chef
 WORKDIR /app
+
+# Compiler flags:
+# - target-feature=-crt-static: Disable static linking for PDFium dlopen() support
+# - linker=clang + fuse-ld=mold: Use mold linker for faster linking
+ENV RUSTFLAGS="-C target-feature=-crt-static -C linker=clang -C link-arg=-fuse-ld=mold"
 
 # Stage 3: Prepare recipe
 FROM chef AS planner
 # Only copy Rust-related files to avoid cache invalidation from frontend changes
 COPY Cargo.toml Cargo.lock ./
-COPY src/ ./src/
+COPY assets/ ./assets/
 COPY migration/ ./migration/
+COPY src/ ./src/
 RUN cargo chef prepare --recipe-path recipe.json
 
 # Stage 4: Build dependencies (cached layer)
 FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
-
-# Disable static linking to enable dlopen() for PDFium dynamic loading
-# This is required because musl's static linking doesn't support dlopen()
-ENV RUSTFLAGS="-C target-feature=-crt-static"
 
 # Build dependencies (this layer is cached)
 # Use BuildKit cache mounts to persist Cargo registry/git between builds
@@ -74,7 +77,14 @@ FROM alpine:latest AS runtime
 # - ca-certificates for HTTPS
 # - su-exec for user switching
 # - libstdc++ and libgcc for PDFium
-RUN apk add --no-cache ca-certificates su-exec libstdc++ libgcc curl wget
+# - nodejs and npm for TypeScript/JavaScript plugins
+RUN apk add --no-cache ca-certificates su-exec libstdc++ libgcc curl wget nodejs npm
+
+# Install uv (fast Python package manager) for Python plugins
+# uv provides 'uvx' command for running Python packages without installation
+RUN wget -qO- https://astral.sh/uv/install.sh | sh && \
+    mv /root/.local/bin/uv /usr/local/bin/uv && \
+    mv /root/.local/bin/uvx /usr/local/bin/uvx
 
 # Install PDFium library for PDF page rendering
 # This enables rendering of text-only and vector PDF pages

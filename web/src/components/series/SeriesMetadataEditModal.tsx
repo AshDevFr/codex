@@ -973,23 +973,21 @@ export function SeriesMetadataEditModal({
 											</Text>
 										)}
 									</Stack>
-									{cover.source === "custom" && (
-										<Tooltip label="Delete cover">
-											<ActionIcon
-												variant="subtle"
-												color="red"
-												size="sm"
-												onClick={(e: React.MouseEvent) => {
-													e.stopPropagation();
-													deleteCoverMutation.mutate(cover.id);
-												}}
-												loading={deleteCoverMutation.isPending}
-												aria-label="Delete cover"
-											>
-												<IconTrash size={14} />
-											</ActionIcon>
-										</Tooltip>
-									)}
+									<Tooltip label="Delete cover">
+										<ActionIcon
+											variant="subtle"
+											color="red"
+											size="sm"
+											onClick={(e: React.MouseEvent) => {
+												e.stopPropagation();
+												deleteCoverMutation.mutate(cover.id);
+											}}
+											loading={deleteCoverMutation.isPending}
+											aria-label="Delete cover"
+										>
+											<IconTrash size={14} />
+										</ActionIcon>
+									</Tooltip>
 								</Group>
 							</Card>
 						))}

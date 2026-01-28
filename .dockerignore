@@ -11,6 +11,22 @@ web/.vite/
 docs/node_modules/
 docs/build/
 
+# Screenshots build artifacts and dependencies
+screenshots/node_modules/
+screenshots/dist/
+screenshots/.vite/
+
+# Plugins build artifacts and dependencies
+plugins/sdk-typescript/node_modules/
+plugins/sdk-typescript/dist/
+plugins/sdk-typescript/.vite/
+plugins/metadata-mangabaka/node_modules/
+plugins/metadata-mangabaka/dist/
+plugins/metadata-mangabaka/.vite/
+plugins/metadata-echo/node_modules/
+plugins/metadata-echo/dist/
+plugins/metadata-echo/.vite/
+
 # Database files
 *.db
 *.db-shm

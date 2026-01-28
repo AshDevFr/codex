@@ -1,6 +1,7 @@
 //! Handler for GenerateSeriesThumbnail task
 //!
-//! Generates a thumbnail for a series using the first book's cover.
+//! Generates a thumbnail for a series using the selected cover from series_covers,
+//! or falls back to the first book's cover if no cover is selected.
 
 use anyhow::{anyhow, Result};
 use sea_orm::DatabaseConnection;
@@ -8,7 +9,7 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 use crate::db::entities::tasks;
-use crate::db::repositories::{BookRepository, SeriesRepository};
+use crate::db::repositories::{BookRepository, SeriesCoversRepository, SeriesRepository};
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
 use crate::services::ThumbnailService;
 use crate::tasks::handlers::TaskHandler;
@@ -87,7 +88,80 @@ impl TaskHandler for GenerateSeriesThumbnailHandler {
                 }
             }
 
-            // Get the first book in the series to generate thumbnail from
+            // First, check if there's a selected cover in series_covers
+            if let Ok(Some(selected_cover)) =
+                SeriesCoversRepository::get_selected(db, series_id).await
+            {
+                debug!(
+                    "Found selected cover for series {}: source={}",
+                    series_id, selected_cover.source
+                );
+
+                // Read the cover image file
+                match tokio::fs::read(&selected_cover.path).await {
+                    Ok(image_data) => {
+                        // Generate thumbnail from the selected cover
+                        match self
+                            .thumbnail_service
+                            .generate_thumbnail_from_image(db, image_data)
+                            .await
+                        {
+                            Ok(thumbnail_data) => {
+                                // Save series thumbnail
+                                match self
+                                    .thumbnail_service
+                                    .save_series_thumbnail(series_id, &thumbnail_data)
+                                    .await
+                                {
+                                    Ok(path) => {
+                                        info!(
+                                            "Task {}: Generated series thumbnail from selected cover ({}) at {:?}",
+                                            task.id, selected_cover.source, path
+                                        );
+
+                                        // Emit CoverUpdated event for series
+                                        emit_series_cover_updated(
+                                            event_broadcaster,
+                                            series_id,
+                                            series.library_id,
+                                        );
+
+                                        return Ok(TaskResult::success_with_data(
+                                            format!("Generated thumbnail for series {}", series_id),
+                                            serde_json::json!({
+                                                "series_id": series_id,
+                                                "source": selected_cover.source,
+                                                "path": path.to_string_lossy(),
+                                                "force": force,
+                                            }),
+                                        ));
+                                    }
+                                    Err(e) => {
+                                        warn!(
+                                            "Failed to save series thumbnail from selected cover: {}",
+                                            e
+                                        );
+                                        // Fall through to book-based thumbnail
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                warn!("Failed to generate thumbnail from selected cover: {}", e);
+                                // Fall through to book-based thumbnail
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to read selected cover file at {}: {}",
+                            selected_cover.path, e
+                        );
+                        // Fall through to book-based thumbnail
+                    }
+                }
+            }
+
+            // No selected cover or failed to use it - fall back to first book's cover
             let first_book = BookRepository::get_first_in_series(db, series_id)
                 .await?
                 .ok_or_else(|| anyhow!("Series {} has no books", series_id))?;

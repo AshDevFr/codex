@@ -140,6 +140,161 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all plugins */
+        get: operations["list_plugins"];
+        put?: never;
+        /**
+         * Create a new plugin
+         * @description Creates a new plugin configuration. If the plugin is created with `enabled: true`,
+         *     an automatic health check is performed to verify connectivity.
+         */
+        post: operations["create_plugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/plugins/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a plugin by ID */
+        get: operations["get_plugin"];
+        put?: never;
+        post?: never;
+        /** Delete a plugin */
+        delete: operations["delete_plugin"];
+        options?: never;
+        head?: never;
+        /** Update a plugin */
+        patch: operations["update_plugin"];
+        trace?: never;
+    };
+    "/api/v1/admin/plugins/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable a plugin */
+        post: operations["disable_plugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/plugins/{id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable a plugin
+         * @description Enables the plugin and automatically performs a health check to verify connectivity.
+         */
+        post: operations["enable_plugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/plugins/{id}/failures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get plugin failure history
+         * @description Returns failure events for a plugin, including time-window statistics.
+         */
+        get: operations["get_plugin_failures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/plugins/{id}/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get plugin health information */
+        get: operations["get_plugin_health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/plugins/{id}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset plugin failure count
+         * @description Clears the failure count and disabled reason, allowing the plugin to be used again.
+         */
+        post: operations["reset_plugin_failures"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/plugins/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test a plugin connection
+         * @description Spawns the plugin process, sends an initialize request, and returns the manifest.
+         */
+        post: operations["test_plugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings": {
         parameters: {
             query?: never;
@@ -1118,6 +1273,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/libraries/{id}/metadata/auto-match/task": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enqueue plugin auto-match tasks for all series in a library
+         * @description Creates background tasks to auto-match metadata for all series in a library using
+         *     the specified plugin. Each series gets its own task that runs asynchronously.
+         */
+        post: operations["enqueue_library_auto_match_tasks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/libraries/{library_id}": {
         parameters: {
             query?: never;
@@ -1568,6 +1744,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plugins/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get available plugin actions for a scope
+         * @description Returns a list of available plugin actions for the specified scope.
+         *     This is used by the UI to populate dropdown menus with available plugins.
+         */
+        get: operations["get_plugin_actions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plugins/{id}/execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Execute a plugin action
+         * @description Invokes a plugin action and returns the result. Actions are typed by plugin type:
+         *     - `metadata`: search, get, match (requires content_type: series or book)
+         *     - `ping`: health check (works for any plugin)
+         */
+        post: operations["execute_plugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/progress": {
         parameters: {
             query?: never;
@@ -1689,6 +1908,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/metadata/auto-match/task/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enqueue plugin auto-match tasks for multiple series (bulk operation)
+         * @description Creates background tasks to auto-match metadata for multiple series using the specified plugin.
+         *     Each series gets its own task that runs asynchronously in a worker process.
+         */
+        post: operations["enqueue_bulk_auto_match_tasks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/recently-added": {
         parameters: {
             query?: never;
@@ -1734,6 +1974,92 @@ export interface paths {
         put?: never;
         /** Search series by name */
         post: operations["search_series"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/metadata/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply metadata from a plugin to a series
+         * @description Fetches metadata from a plugin and applies it to the series, respecting
+         *     RBAC permissions and field locks.
+         */
+        post: operations["apply_series_metadata"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/metadata/auto-match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Auto-match and apply metadata from a plugin to a series
+         * @description Searches for the series using the plugin's metadata search, picks the best match,
+         *     and applies the metadata in one step. This is a convenience endpoint for quick
+         *     metadata updates without user intervention.
+         */
+        post: operations["auto_match_series_metadata"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/metadata/auto-match/task": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enqueue a plugin auto-match task for a single series
+         * @description Creates a background task to auto-match metadata for a series using the specified plugin.
+         *     The task runs asynchronously in a worker process and emits a SeriesMetadataUpdated event
+         *     when complete.
+         */
+        post: operations["enqueue_auto_match_task"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/metadata/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview metadata from a plugin for a series
+         * @description Fetches metadata from a plugin and computes a field-by-field diff with the current
+         *     series metadata, showing which fields will be applied, locked, or denied by RBAC.
+         */
+        post: operations["preview_series_metadata"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5095,6 +5421,91 @@ export interface components {
             seriesConfig?: unknown;
             seriesStrategy?: null | components["schemas"]["SeriesStrategy"];
         };
+        /** @description Request to create a new plugin */
+        CreatePluginRequest: {
+            /**
+             * @description Command arguments
+             * @example [
+             *       "/opt/codex/plugins/mangabaka/dist/index.js"
+             *     ]
+             */
+            args?: string[];
+            /**
+             * @description Command to spawn the plugin
+             * @example node
+             */
+            command: string;
+            /** @description Plugin-specific configuration */
+            config?: unknown;
+            /**
+             * @description How credentials are delivered to the plugin: "env", "init_message", or "both"
+             * @example env
+             */
+            credentialDelivery?: string;
+            /** @description Credentials (will be encrypted before storage) */
+            credentials?: unknown;
+            /**
+             * @description Description of the plugin
+             * @example Fetch manga metadata from MangaBaka (MangaUpdates)
+             */
+            description?: string | null;
+            /**
+             * @description Human-readable display name
+             * @example MangaBaka
+             */
+            displayName: string;
+            /**
+             * @description Whether to enable immediately
+             * @example false
+             */
+            enabled?: boolean;
+            /**
+             * @description Additional environment variables
+             * @example {
+             *       "LOG_LEVEL": "info"
+             *     }
+             */
+            env?: components["schemas"]["EnvVarDto"][];
+            /**
+             * @description Library IDs this plugin applies to (empty = all libraries)
+             * @example []
+             */
+            libraryIds?: string[];
+            /**
+             * @description Unique identifier (alphanumeric with underscores)
+             * @example mangabaka
+             */
+            name: string;
+            /**
+             * @description RBAC permissions for metadata writes
+             * @example [
+             *       "metadata:write:summary",
+             *       "metadata:write:genres"
+             *     ]
+             */
+            permissions?: string[];
+            /**
+             * @description Plugin type: "system" (default) or "user"
+             * @example system
+             */
+            pluginType?: string;
+            /**
+             * Format: int32
+             * @description Rate limit in requests per minute (default: 60, None = no limit)
+             * @example 60
+             */
+            rateLimitRequestsPerMinute?: number | null;
+            /**
+             * @description Scopes where plugin can be invoked
+             * @example [
+             *       "series:detail",
+             *       "series:bulk"
+             *     ]
+             */
+            scopes?: string[];
+            /** @description Working directory for the plugin process */
+            workingDirectory?: string | null;
+        };
         /** @description Create sharing tag request */
         CreateSharingTagRequest: {
             /**
@@ -5150,6 +5561,21 @@ export interface components {
              * @example newuser
              */
             username: string;
+        };
+        /** @description Credential field definition */
+        CredentialFieldDto: {
+            /** @description Input type for UI */
+            credentialType: string;
+            /** @description Description for the user */
+            description?: string | null;
+            /** @description Credential key (e.g., "api_key") */
+            key: string;
+            /** @description Display label (e.g., "API Key") */
+            label: string;
+            /** @description Whether this credential is required */
+            required?: boolean;
+            /** @description Whether to mask the value in UI */
+            sensitive?: boolean;
         };
         /**
          * @description Configuration for custom series strategy
@@ -5234,6 +5660,43 @@ export interface components {
              */
             updated_at: string;
         };
+        /** @description Request to enqueue plugin auto-match task for a single series */
+        EnqueueAutoMatchRequest: {
+            /**
+             * Format: uuid
+             * @description Plugin ID to use for matching
+             */
+            pluginId: string;
+        };
+        /** @description Response after enqueuing auto-match task(s) */
+        EnqueueAutoMatchResponse: {
+            /** @description Message */
+            message: string;
+            /** @description Whether the operation succeeded */
+            success: boolean;
+            /** @description Task IDs that were created */
+            taskIds: string[];
+            /** @description Number of tasks enqueued */
+            tasksEnqueued: number;
+        };
+        /** @description Request to enqueue plugin auto-match tasks for multiple series (bulk) */
+        EnqueueBulkAutoMatchRequest: {
+            /**
+             * Format: uuid
+             * @description Plugin ID to use for matching
+             */
+            pluginId: string;
+            /** @description Series IDs to auto-match */
+            seriesIds: string[];
+        };
+        /** @description Request to enqueue plugin auto-match tasks for all series in a library */
+        EnqueueLibraryAutoMatchRequest: {
+            /**
+             * Format: uuid
+             * @description Plugin ID to use for matching
+             */
+            pluginId: string;
+        };
         /** @description Complete entity change event with metadata */
         EntityChangeEvent: components["schemas"]["EntityEvent"] & {
             /**
@@ -5299,6 +5762,20 @@ export interface components {
             /** @enum {string} */
             type: "series_deleted";
         } | {
+            /** @description Fields that were updated */
+            fields_updated: string[];
+            /** Format: uuid */
+            library_id: string;
+            /**
+             * Format: uuid
+             * @description Plugin that updated the metadata
+             */
+            plugin_id: string;
+            /** Format: uuid */
+            series_id: string;
+            /** @enum {string} */
+            type: "series_metadata_updated";
+        } | {
             /** Format: int64 */
             count: number;
             /** Format: uuid */
@@ -5331,6 +5808,11 @@ export interface components {
          * @enum {string}
          */
         EntityType: "book" | "series" | "library";
+        /** @description Environment variable key-value pair */
+        EnvVarDto: {
+            key: string;
+            value: string;
+        };
         /** @description Summary of errors grouped by type */
         ErrorGroupDto: {
             /** @description Books with this error type (paginated) */
@@ -5353,6 +5835,25 @@ export interface components {
             details?: unknown;
             error: string;
             message: string;
+        };
+        /** @description Request to execute a plugin action */
+        ExecutePluginRequest: {
+            /** @description The action to execute, tagged by plugin type */
+            action: components["schemas"]["PluginActionRequest"];
+        };
+        /** @description Response from executing a plugin method */
+        ExecutePluginResponse: {
+            /** @description Error message if failed */
+            error?: string | null;
+            /**
+             * Format: int64
+             * @description Execution time in milliseconds
+             */
+            latencyMs: number;
+            /** @description Result data (varies by method) */
+            result?: unknown;
+            /** @description Whether the execution succeeded */
+            success: boolean;
         };
         /** @description External link data transfer object */
         ExternalLinkDto: {
@@ -5487,6 +5988,11 @@ export interface components {
             /** @description Title of the feed */
             title: string;
         };
+        /**
+         * @description Status of a field during metadata preview
+         * @enum {string}
+         */
+        FieldApplyStatus: "will_apply" | "locked" | "no_permission" | "unchanged" | "not_provided";
         /** @description Operators for string and equality comparisons */
         FieldOperator: {
             /** @enum {string} */
@@ -6836,6 +7342,76 @@ export interface components {
              */
             message: string;
         };
+        /**
+         * @description Action for metadata plugins
+         * @enum {string}
+         */
+        MetadataAction: "search" | "get" | "match";
+        /** @description Request to apply metadata from a plugin */
+        MetadataApplyRequest: {
+            /** @description External ID from the plugin's search results */
+            externalId: string;
+            /** @description Optional list of fields to apply (default: all applicable fields) */
+            fields?: string[] | null;
+            /**
+             * Format: uuid
+             * @description Plugin ID to fetch metadata from
+             */
+            pluginId: string;
+        };
+        /** @description Response after applying metadata */
+        MetadataApplyResponse: {
+            /** @description Fields that were applied */
+            appliedFields: string[];
+            /** @description Message */
+            message: string;
+            /** @description Fields that were skipped (with reasons) */
+            skippedFields: components["schemas"]["SkippedField"][];
+            /** @description Whether the operation succeeded */
+            success: boolean;
+        };
+        /** @description Request to auto-match and apply metadata from a plugin */
+        MetadataAutoMatchRequest: {
+            /**
+             * Format: uuid
+             * @description Plugin ID to use for matching
+             */
+            pluginId: string;
+            /** @description Optional query to use for matching (defaults to series title) */
+            query?: string | null;
+        };
+        /** @description Response after auto-matching metadata */
+        MetadataAutoMatchResponse: {
+            /** @description Fields that were applied */
+            appliedFields: string[];
+            /** @description External URL (link to matched item on provider) */
+            externalUrl?: string | null;
+            matchedResult?: null | components["schemas"]["PluginSearchResultDto"];
+            /** @description Message */
+            message: string;
+            /** @description Fields that were skipped (with reasons) */
+            skippedFields: components["schemas"]["SkippedField"][];
+            /** @description Whether the operation succeeded */
+            success: boolean;
+        };
+        /**
+         * @description Content types that a metadata provider can support
+         * @enum {string}
+         */
+        MetadataContentType: "series";
+        /** @description A single field in the metadata preview */
+        MetadataFieldPreview: {
+            /** @description Current value in database */
+            currentValue?: unknown;
+            /** @description Field name */
+            field: string;
+            /** @description Proposed value from plugin */
+            proposedValue?: unknown;
+            /** @description Human-readable reason for status */
+            reason?: string | null;
+            /** @description Apply status */
+            status: components["schemas"]["FieldApplyStatus"];
+        };
         /** @description Lock states for all lockable metadata fields */
         MetadataLocks: {
             /**
@@ -6908,6 +7484,34 @@ export interface components {
              * @example false
              */
             year: boolean;
+        };
+        /** @description Request to preview metadata from a plugin */
+        MetadataPreviewRequest: {
+            /** @description External ID from the plugin's search results */
+            externalId: string;
+            /**
+             * Format: uuid
+             * @description Plugin ID to fetch metadata from
+             */
+            pluginId: string;
+        };
+        /** @description Response containing metadata preview */
+        MetadataPreviewResponse: {
+            /** @description External ID used */
+            externalId: string;
+            /** @description External URL (link to provider's page) */
+            externalUrl?: string | null;
+            /** @description Field-by-field preview */
+            fields: components["schemas"]["MetadataFieldPreview"][];
+            /**
+             * Format: uuid
+             * @description Plugin that provided the metadata
+             */
+            pluginId: string;
+            /** @description Plugin name */
+            pluginName: string;
+            /** @description Summary counts */
+            summary: components["schemas"]["PreviewSummary"];
         };
         /** @description Response for cleanup operation */
         MetricsCleanupResponse: {
@@ -8145,6 +8749,394 @@ export interface components {
              */
             total_size_human: string;
         };
+        /** @description A plugin action available for a specific scope */
+        PluginActionDto: {
+            /** @description Action type (e.g., "metadata_search", "metadata_get") */
+            actionType: string;
+            /** @description Description of the action */
+            description?: string | null;
+            /** @description Icon hint for UI (optional) */
+            icon?: string | null;
+            /** @description Human-readable label for the action */
+            label: string;
+            /**
+             * @description Library IDs this plugin applies to (empty means all libraries)
+             *     Used by frontend to filter which plugins show up for each library
+             */
+            libraryIds?: string[];
+            /** @description Plugin display name */
+            pluginDisplayName: string;
+            /**
+             * Format: uuid
+             * @description Plugin ID
+             */
+            pluginId: string;
+            /** @description Plugin name */
+            pluginName: string;
+        };
+        /**
+         * @description Plugin action request - tagged by plugin type
+         *
+         *     Each plugin type has its own set of valid actions.
+         *     This ensures type safety - you can't call a metadata action on a sync plugin.
+         */
+        PluginActionRequest: {
+            /** @description Metadata plugin actions (search, get, match) */
+            metadata: {
+                /** @description The metadata action to perform */
+                action: components["schemas"]["MetadataAction"];
+                /** @description Content type (series or book) */
+                content_type: components["schemas"]["MetadataContentType"];
+                /** @description Action-specific parameters */
+                params?: unknown;
+            };
+        } | "ping";
+        /** @description Response containing available plugin actions for a scope */
+        PluginActionsResponse: {
+            /** @description Available actions grouped by plugin */
+            actions: components["schemas"]["PluginActionDto"][];
+            /** @description The scope these actions are for */
+            scope: string;
+        };
+        /** @description Plugin capabilities */
+        PluginCapabilitiesDto: {
+            /** @description Content types this plugin can provide metadata for (e.g., ["series", "book"]) */
+            metadataProvider?: string[];
+            /** @description Can sync user reading progress */
+            userSyncProvider?: boolean;
+        };
+        /** @description A plugin (credentials are never exposed) */
+        PluginDto: {
+            /**
+             * @description Command arguments
+             * @example [
+             *       "/opt/codex/plugins/mangabaka/dist/index.js"
+             *     ]
+             */
+            args: string[];
+            /**
+             * @description Command to spawn the plugin
+             * @example node
+             */
+            command: string;
+            /** @description Plugin-specific configuration */
+            config: unknown;
+            /**
+             * Format: date-time
+             * @description When the plugin was created
+             */
+            createdAt: string;
+            /**
+             * @description How credentials are delivered to the plugin
+             * @example env
+             */
+            credentialDelivery: string;
+            /**
+             * @description Description of the plugin
+             * @example Fetch manga metadata from MangaBaka (MangaUpdates)
+             */
+            description?: string | null;
+            /** @description Reason the plugin was disabled */
+            disabledReason?: string | null;
+            /**
+             * @description Human-readable display name
+             * @example MangaBaka
+             */
+            displayName: string;
+            /**
+             * @description Whether the plugin is enabled
+             * @example true
+             */
+            enabled: boolean;
+            /** @description Additional environment variables (non-sensitive only) */
+            env: unknown;
+            /**
+             * Format: int32
+             * @description Number of consecutive failures
+             * @example 0
+             */
+            failureCount: number;
+            /**
+             * @description Whether credentials have been set (actual credentials are never returned)
+             * @example true
+             */
+            hasCredentials: boolean;
+            /**
+             * @description Health status: unknown, healthy, degraded, unhealthy, disabled
+             * @example healthy
+             */
+            healthStatus: string;
+            /**
+             * Format: uuid
+             * @description Plugin ID
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /**
+             * Format: date-time
+             * @description When the last failure occurred
+             */
+            lastFailureAt?: string | null;
+            /**
+             * Format: date-time
+             * @description When the last successful operation occurred
+             */
+            lastSuccessAt?: string | null;
+            /**
+             * @description Library IDs this plugin applies to (empty = all libraries)
+             * @example []
+             */
+            libraryIds: string[];
+            manifest?: null | components["schemas"]["PluginManifestDto"];
+            /**
+             * @description Unique identifier (e.g., "mangabaka")
+             * @example mangabaka
+             */
+            name: string;
+            /**
+             * @description RBAC permissions for metadata writes
+             * @example [
+             *       "metadata:write:summary",
+             *       "metadata:write:genres"
+             *     ]
+             */
+            permissions: string[];
+            /**
+             * @description Plugin type: "system" (admin-configured) or "user" (per-user instances)
+             * @example system
+             */
+            pluginType: string;
+            /**
+             * Format: int32
+             * @description Rate limit in requests per minute (None = no limit)
+             * @example 60
+             */
+            rateLimitRequestsPerMinute?: number | null;
+            /**
+             * @description Scopes where plugin can be invoked
+             * @example [
+             *       "series:detail",
+             *       "series:bulk"
+             *     ]
+             */
+            scopes: string[];
+            /**
+             * Format: date-time
+             * @description When the plugin was last updated
+             */
+            updatedAt: string;
+            /** @description Working directory for the plugin process */
+            workingDirectory?: string | null;
+        };
+        /** @description A single plugin failure event */
+        PluginFailureDto: {
+            /** @description Additional context (parameters, stack trace, etc.) */
+            context?: unknown;
+            /**
+             * @description Error code for categorization
+             * @example TIMEOUT
+             */
+            errorCode?: string | null;
+            /**
+             * @description Human-readable error message
+             * @example Connection timeout after 30s
+             */
+            errorMessage: string;
+            /**
+             * Format: uuid
+             * @description Failure ID
+             */
+            id: string;
+            /**
+             * @description Which method failed
+             * @example metadata/search
+             */
+            method?: string | null;
+            /**
+             * Format: date-time
+             * @description When the failure occurred
+             */
+            occurredAt: string;
+        };
+        /** @description Response containing plugin failure history */
+        PluginFailuresResponse: {
+            /** @description List of failure events */
+            failures: components["schemas"]["PluginFailureDto"][];
+            /**
+             * Format: int32
+             * @description Threshold for auto-disable
+             * @example 3
+             */
+            threshold: number;
+            /**
+             * Format: int64
+             * @description Total number of failures (for pagination)
+             */
+            total: number;
+            /**
+             * Format: int64
+             * @description Number of failures within the current time window
+             */
+            windowFailures: number;
+            /**
+             * Format: int64
+             * @description Time window size in seconds
+             * @example 3600
+             */
+            windowSeconds: number;
+        };
+        /** @description Plugin health information */
+        PluginHealthDto: {
+            /** @description Reason the plugin was disabled */
+            disabledReason?: string | null;
+            /** @description Whether the plugin is enabled */
+            enabled: boolean;
+            /**
+             * Format: int32
+             * @description Number of consecutive failures
+             */
+            failureCount: number;
+            /** @description Current health status */
+            healthStatus: string;
+            /**
+             * Format: date-time
+             * @description When the last failure occurred
+             */
+            lastFailureAt?: string | null;
+            /**
+             * Format: date-time
+             * @description When the last successful operation occurred
+             */
+            lastSuccessAt?: string | null;
+            /** @description Plugin name */
+            name: string;
+            /**
+             * Format: uuid
+             * @description Plugin ID
+             */
+            pluginId: string;
+        };
+        /** @description Response containing plugin health history/summary */
+        PluginHealthResponse: {
+            /** @description Plugin health information */
+            health: components["schemas"]["PluginHealthDto"];
+        };
+        /** @description Plugin manifest from the plugin itself */
+        PluginManifestDto: {
+            /** @description Author */
+            author?: string | null;
+            /** @description Plugin capabilities */
+            capabilities: components["schemas"]["PluginCapabilitiesDto"];
+            /** @description Supported content types */
+            contentTypes: string[];
+            /** @description Description */
+            description?: string | null;
+            /** @description Display name for UI */
+            displayName: string;
+            /** @description Homepage URL */
+            homepage?: string | null;
+            /** @description Unique identifier */
+            name: string;
+            /** @description Protocol version */
+            protocolVersion: string;
+            /** @description Required credentials */
+            requiredCredentials?: components["schemas"]["CredentialFieldDto"][];
+            /** @description Supported scopes */
+            scopes?: string[];
+            /** @description Semantic version */
+            version: string;
+        };
+        /** @description Response containing search results from a plugin */
+        PluginSearchResponse: {
+            /** @description Cursor for next page (if available) */
+            nextCursor?: string | null;
+            /**
+             * Format: uuid
+             * @description Plugin that provided the results
+             */
+            pluginId: string;
+            /** @description Plugin name */
+            pluginName: string;
+            /** @description Search results */
+            results: components["schemas"]["PluginSearchResultDto"][];
+        };
+        /** @description Search result from a plugin */
+        PluginSearchResultDto: {
+            /** @description Alternative titles */
+            alternateTitles?: string[];
+            /** @description Cover image URL */
+            coverUrl?: string | null;
+            /** @description External ID from the provider */
+            externalId: string;
+            preview?: null | components["schemas"]["SearchResultPreviewDto"];
+            /**
+             * Format: double
+             * @description Relevance score (0.0-1.0). Optional - if not provided, result order indicates relevance.
+             */
+            relevanceScore?: number | null;
+            /** @description Primary title */
+            title: string;
+            /**
+             * Format: int32
+             * @description Year of publication
+             */
+            year?: number | null;
+        };
+        /** @description Response after enabling or disabling a plugin */
+        PluginStatusResponse: {
+            /** @description Health check error message (None if passed or not performed) */
+            healthCheckError?: string | null;
+            /**
+             * Format: int64
+             * @description Health check latency in milliseconds (None if not performed)
+             * @example 150
+             */
+            healthCheckLatencyMs?: number | null;
+            /**
+             * @description Health check passed (None if not performed)
+             * @example true
+             */
+            healthCheckPassed?: boolean | null;
+            /**
+             * @description Whether a health check was performed
+             * @example true
+             */
+            healthCheckPerformed?: boolean;
+            /**
+             * @description Status change message
+             * @example Plugin enabled successfully
+             */
+            message: string;
+            /** @description The updated plugin */
+            plugin: components["schemas"]["PluginDto"];
+        };
+        /** @description Response from testing a plugin connection */
+        PluginTestResult: {
+            /**
+             * Format: int64
+             * @description Response latency in milliseconds
+             * @example 150
+             */
+            latencyMs?: number | null;
+            manifest?: null | components["schemas"]["PluginManifestDto"];
+            /**
+             * @description Test result message
+             * @example Successfully connected to plugin
+             */
+            message: string;
+            /**
+             * @description Whether the test was successful
+             * @example true
+             */
+            success: boolean;
+        };
+        /** @description Response containing a list of plugins */
+        PluginsListResponse: {
+            /** @description List of plugins */
+            plugins: components["schemas"]["PluginDto"][];
+            /** @description Total count */
+            total: number;
+        };
         /** @description Preview scan request */
         PreviewScanRequest: {
             /**
@@ -8162,6 +9154,19 @@ export interface components {
             detectedSeries: components["schemas"]["DetectedSeriesDto"][];
             /** @description Total number of files found */
             totalFiles: number;
+        };
+        /** @description Summary of preview results */
+        PreviewSummary: {
+            /** @description Number of fields that are locked */
+            locked: number;
+            /** @description Number of fields with no permission */
+            noPermission: number;
+            /** @description Number of fields not provided */
+            notProvided: number;
+            /** @description Number of fields that are unchanged */
+            unchanged: number;
+            /** @description Number of fields that will be applied */
+            willApply: number;
         };
         /**
          * @description Public setting DTO (for non-admin users)
@@ -8741,6 +9746,20 @@ export interface components {
              * @example false
              */
             scanOnStart?: boolean;
+        };
+        /** @description Preview data for search results */
+        SearchResultPreviewDto: {
+            /** @description Short description */
+            description?: string | null;
+            /** @description Genres */
+            genres?: string[];
+            /**
+             * Format: double
+             * @description Rating
+             */
+            rating?: number | null;
+            /** @description Status string */
+            status?: string | null;
         };
         /** @description Search series request */
         SearchSeriesRequest: {
@@ -9441,6 +10460,13 @@ export interface components {
              */
             name: string;
         };
+        /** @description A field that was skipped during apply */
+        SkippedField: {
+            /** @description Field name */
+            field: string;
+            /** @description Reason for skipping */
+            reason: string;
+        };
         /** @description Configuration for smart book naming strategy */
         SmartBookConfig: {
             /** @description Additional patterns to consider as "generic" titles (beyond defaults) */
@@ -9867,6 +10893,15 @@ export interface components {
         } | {
             /** @enum {string} */
             type: "cleanup_pdf_cache";
+        } | {
+            /** Format: uuid */
+            plugin_id: string;
+            /** Format: uuid */
+            series_id: string;
+            /** @description Source scope that triggered this task (for tracking) */
+            source_scope?: string | null;
+            /** @enum {string} */
+            type: "plugin_auto_match";
         };
         /** @description Metrics for a specific task type */
         TaskTypeMetricsDto: {
@@ -10233,6 +11268,42 @@ export interface components {
              * @example false
              */
             year?: boolean | null;
+        };
+        /** @description Request to update a plugin */
+        UpdatePluginRequest: {
+            /** @description Updated command arguments */
+            args?: string[] | null;
+            /** @description Updated command */
+            command?: string | null;
+            /** @description Updated configuration */
+            config?: unknown;
+            /** @description Updated credential delivery method */
+            credentialDelivery?: string | null;
+            /** @description Updated credentials (set to null to clear) */
+            credentials?: unknown;
+            /** @description Updated description */
+            description?: string | null;
+            /**
+             * @description Updated display name
+             * @example MangaBaka v2
+             */
+            displayName?: string | null;
+            /** @description Updated environment variables */
+            env?: components["schemas"]["EnvVarDto"][] | null;
+            /** @description Updated library IDs (empty = all libraries) */
+            libraryIds?: string[] | null;
+            /** @description Updated permissions */
+            permissions?: string[] | null;
+            /**
+             * Format: int32
+             * @description Updated rate limit in requests per minute (Some(None) = remove limit)
+             * @example 60
+             */
+            rateLimitRequestsPerMinute?: number | null;
+            /** @description Updated scopes */
+            scopes?: string[] | null;
+            /** @description Updated working directory */
+            workingDirectory?: string | null;
         };
         /** @description Request to update reading progress for a book */
         UpdateProgressRequest: {
@@ -10815,6 +11886,502 @@ export interface operations {
             };
             /** @description Admin access required */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_plugins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plugins retrieved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginsListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_plugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePluginRequest"];
+            };
+        };
+        responses: {
+            /** @description Plugin created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginStatusResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin with this name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_plugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plugin retrieved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_plugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plugin deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_plugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePluginRequest"];
+            };
+        };
+        responses: {
+            /** @description Plugin updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginDto"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    disable_plugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plugin disabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginStatusResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    enable_plugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plugin enabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginStatusResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_plugin_failures: {
+        parameters: {
+            query?: {
+                /** @description Maximum number of failures to return */
+                limit?: number;
+                /** @description Number of failures to skip */
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Plugin ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Failures retrieved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginFailuresResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_plugin_health: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Health information retrieved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginHealthResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reset_plugin_failures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Failure count reset */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginStatusResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    test_plugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Test completed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginTestResult"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13040,6 +14607,61 @@ export interface operations {
             };
         };
     };
+    enqueue_library_auto_match_tasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Library ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnqueueLibraryAutoMatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Tasks enqueued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnqueueAutoMatchResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No permission to edit series */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Library or plugin not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_library: {
         parameters: {
             query?: never;
@@ -13966,6 +15588,96 @@ export interface operations {
             };
         };
     };
+    get_plugin_actions: {
+        parameters: {
+            query: {
+                /** @description Scope to filter actions by (e.g., "series:detail", "series:bulk") */
+                scope: string;
+                /**
+                 * @description Optional library ID to filter plugins by. When provided, only plugins that
+                 *     apply to this library (or all libraries) will be returned.
+                 */
+                libraryId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plugin actions retrieved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginActionsResponse"];
+                };
+            };
+            /** @description Invalid scope */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    execute_plugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExecutePluginRequest"];
+            };
+        };
+        responses: {
+            /** @description Action executed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutePluginResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_user_progress: {
         parameters: {
             query?: never;
@@ -14172,6 +15884,58 @@ export interface operations {
             };
         };
     };
+    enqueue_bulk_auto_match_tasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnqueueBulkAutoMatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Tasks enqueued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnqueueAutoMatchResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No permission to edit series */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_recently_added_series: {
         parameters: {
             query?: {
@@ -14264,6 +16028,226 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    apply_series_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetadataApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Metadata applied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataApplyResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No permission to edit series */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or plugin not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    auto_match_series_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetadataAutoMatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Auto-match completed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataAutoMatchResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No permission to edit series */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or plugin not found or no match found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    enqueue_auto_match_task: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnqueueAutoMatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Task enqueued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnqueueAutoMatchResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No permission to edit series */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or plugin not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_series_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetadataPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview computed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataPreviewResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No permission to edit series */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or plugin not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -210,6 +210,29 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             .start_background_cleanup(background_task_cancel.clone())
     });
 
+    // Initialize email service
+    info!("Initializing email service...");
+    let email_service = Arc::new(crate::services::email::EmailService::new(
+        config.email.clone(),
+    ));
+    info!("  SMTP host: {}", config.email.smtp_host);
+    info!("  SMTP port: {}", config.email.smtp_port);
+    info!("  From: {}", config.email.smtp_from_email);
+
+    // Initialize plugin manager (before workers so they can handle plugin tasks)
+    info!("Initializing plugin manager...");
+    let plugin_manager = Arc::new(crate::services::plugin::PluginManager::with_defaults(
+        Arc::new(db.sea_orm_connection().clone()),
+    ));
+    // Load enabled plugins from database
+    match plugin_manager.load_all().await {
+        Ok(count) => info!("  Loaded {} enabled plugins", count),
+        Err(e) => tracing::warn!("  Failed to load plugins: {}", e),
+    }
+    // Start periodic health checks for plugins
+    plugin_manager.start_health_checks().await;
+    info!("  Plugin health checks started (60s interval)");
+
     // Initialize worker tracking variables
     let mut worker_handles = Vec::new();
     let mut worker_shutdown_channels = Vec::new();
@@ -242,21 +265,13 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             Some(task_metrics_service.clone()),
             config.files.clone(),
             Some(pdf_page_cache.clone()),
+            Some(plugin_manager.clone()),
         );
         worker_handles = handles;
         worker_shutdown_channels = channels;
 
         info!("All {} task workers started successfully", worker_count);
     }
-
-    // Initialize email service
-    info!("Initializing email service...");
-    let email_service = Arc::new(crate::services::email::EmailService::new(
-        config.email.clone(),
-    ));
-    info!("  SMTP host: {}", config.email.smtp_host);
-    info!("  SMTP port: {}", config.email.smtp_port);
-    info!("  From: {}", config.email.smtp_from_email);
 
     // Create application state for API
     let api_state = Arc::new(crate::api::AppState {
@@ -285,6 +300,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         inflight_thumbnails: Arc::new(crate::services::InflightThumbnailTracker::new()),
         user_auth_cache: Arc::new(crate::api::extractors::auth::UserAuthCache::new()),
         rate_limiter_service,
+        plugin_manager: plugin_manager.clone(),
     });
 
     // Build router using API module
@@ -386,6 +402,11 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     if let Err(e) = scheduler.lock().await.shutdown().await {
         tracing::warn!("Failed to shutdown scheduler gracefully: {}", e);
     }
+
+    // Shutdown plugin manager (stops health checks and all plugins)
+    info!("Shutting down plugin manager...");
+    plugin_manager.shutdown_all().await;
+    info!("Plugin manager shutdown complete");
 
     // Shutdown workers if they were started
     if !disable_workers && worker_count > 0 {

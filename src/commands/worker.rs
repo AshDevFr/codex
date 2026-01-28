@@ -111,6 +111,20 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         }
     }
 
+    // Initialize plugin manager for plugin auto-match tasks
+    info!("Initializing plugin manager...");
+    let plugin_manager = Arc::new(crate::services::plugin::PluginManager::with_defaults(
+        Arc::new(db.sea_orm_connection().clone()),
+    ));
+    // Load enabled plugins from database
+    match plugin_manager.load_all().await {
+        Ok(count) => info!("  Loaded {} enabled plugins", count),
+        Err(e) => tracing::warn!("  Failed to load plugins: {}", e),
+    }
+    // Start periodic health checks for plugins
+    plugin_manager.start_health_checks().await;
+    info!("  Plugin health checks started (60s interval)");
+
     // Spawn multiple workers for parallel task processing
     let (worker_handles, worker_shutdown_channels) = spawn_workers(
         db.sea_orm_connection(),
@@ -121,6 +135,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         Some(task_metrics_service),
         config.files.clone(),
         Some(pdf_page_cache),
+        Some(plugin_manager),
     );
 
     info!("All {} task workers started successfully", worker_count);

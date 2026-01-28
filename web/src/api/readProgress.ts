@@ -3,13 +3,8 @@ import { api } from "./client";
 
 export type ReadProgressResponse =
 	components["schemas"]["ReadProgressResponse"];
-
-export interface UpdateProgressRequest {
-	currentPage: number;
-	/** Progress as percentage (0.0-1.0), used for EPUB books with reflowable content */
-	progressPercentage?: number;
-	completed?: boolean;
-}
+export type UpdateProgressRequest =
+	components["schemas"]["UpdateProgressRequest"];
 
 export const readProgressApi = {
 	/**
@@ -41,11 +36,7 @@ export const readProgressApi = {
 	): Promise<ReadProgressResponse> => {
 		const response = await api.put<ReadProgressResponse>(
 			`/books/${bookId}/progress`,
-			{
-				current_page: request.currentPage,
-				progress_percentage: request.progressPercentage,
-				completed: request.completed ?? false,
-			},
+			request,
 		);
 		return response.data;
 	},

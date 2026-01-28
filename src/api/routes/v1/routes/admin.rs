@@ -16,6 +16,7 @@ use std::sync::Arc;
 ///
 /// Routes:
 /// - Settings: /admin/settings
+/// - Plugins: /admin/plugins
 /// - Sharing tags: /admin/sharing-tags
 /// - Cleanup: /admin/cleanup-orphans
 pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
@@ -88,5 +89,41 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route(
             "/admin/pdf-cache",
             delete(handlers::pdf_cache::clear_pdf_cache),
+        )
+        // Plugin management routes (admin only)
+        .route("/admin/plugins", get(handlers::plugins::list_plugins))
+        .route("/admin/plugins", post(handlers::plugins::create_plugin))
+        .route("/admin/plugins/:id", get(handlers::plugins::get_plugin))
+        .route(
+            "/admin/plugins/:id",
+            patch(handlers::plugins::update_plugin),
+        )
+        .route(
+            "/admin/plugins/:id",
+            delete(handlers::plugins::delete_plugin),
+        )
+        .route(
+            "/admin/plugins/:id/enable",
+            post(handlers::plugins::enable_plugin),
+        )
+        .route(
+            "/admin/plugins/:id/disable",
+            post(handlers::plugins::disable_plugin),
+        )
+        .route(
+            "/admin/plugins/:id/test",
+            post(handlers::plugins::test_plugin),
+        )
+        .route(
+            "/admin/plugins/:id/health",
+            get(handlers::plugins::get_plugin_health),
+        )
+        .route(
+            "/admin/plugins/:id/reset",
+            post(handlers::plugins::reset_plugin_failures),
+        )
+        .route(
+            "/admin/plugins/:id/failures",
+            get(handlers::plugins::get_plugin_failures),
         )
 }

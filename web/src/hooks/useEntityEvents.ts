@@ -104,17 +104,28 @@ function handleEntityEvent(
 		case "series_created":
 		case "series_updated":
 		case "series_deleted":
-		case "series_bulk_purged": {
+		case "series_bulk_purged":
+		case "series_metadata_updated": {
 			// Invalidate series queries - use default to ensure Recommended section updates
 			queryClient.invalidateQueries({
 				queryKey: ["series"],
 			});
 
 			// Invalidate specific series if it's an update
-			if (event.type === "series_updated") {
+			if (
+				event.type === "series_updated" ||
+				event.type === "series_metadata_updated"
+			) {
 				queryClient.invalidateQueries({
 					queryKey: ["series", event.series_id],
 				});
+				// For metadata updates, also refetch active queries to immediately update the UI
+				if (event.type === "series_metadata_updated") {
+					queryClient.refetchQueries({
+						queryKey: ["series", event.series_id],
+						type: "active",
+					});
+				}
 			}
 
 			// Invalidate library queries
@@ -140,22 +151,34 @@ function handleEntityEvent(
 			);
 
 			if (event.entity_type === "book") {
-				// Invalidate book queries to refresh covers
+				// Invalidate the specific book query
 				queryClient.invalidateQueries({
 					queryKey: ["books", event.entity_id],
 				});
+				// Invalidate all book list queries (marks them as stale)
 				queryClient.invalidateQueries({
 					queryKey: ["books"],
-					refetchType: "all",
+				});
+				// Force immediate refetch of active queries to trigger component re-render
+				// This ensures MediaCard components pick up the new cache-busting timestamp
+				queryClient.refetchQueries({
+					queryKey: ["books"],
+					type: "active",
 				});
 			} else if (event.entity_type === "series") {
-				// Invalidate series queries to refresh covers
+				// Invalidate the specific series query
 				queryClient.invalidateQueries({
 					queryKey: ["series", event.entity_id],
 				});
+				// Invalidate all series list queries (marks them as stale)
 				queryClient.invalidateQueries({
 					queryKey: ["series"],
-					refetchType: "all",
+				});
+				// Force immediate refetch of active queries to trigger component re-render
+				// This ensures MediaCard components pick up the new cache-busting timestamp
+				queryClient.refetchQueries({
+					queryKey: ["series"],
+					type: "active",
 				});
 			}
 			break;

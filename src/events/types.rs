@@ -82,6 +82,15 @@ pub enum EntityEvent {
     },
     /// A series was deleted
     SeriesDeleted { series_id: Uuid, library_id: Uuid },
+    /// Series metadata was updated by a plugin
+    SeriesMetadataUpdated {
+        series_id: Uuid,
+        library_id: Uuid,
+        /// Plugin that updated the metadata
+        plugin_id: Uuid,
+        /// Fields that were updated
+        fields_updated: Vec<String>,
+    },
     /// Deleted books were purged from a series
     SeriesBulkPurged {
         series_id: Uuid,
@@ -136,6 +145,7 @@ impl EntityChangeEvent {
             | EntityEvent::SeriesCreated { library_id, .. }
             | EntityEvent::SeriesUpdated { library_id, .. }
             | EntityEvent::SeriesDeleted { library_id, .. }
+            | EntityEvent::SeriesMetadataUpdated { library_id, .. }
             | EntityEvent::SeriesBulkPurged { library_id, .. }
             | EntityEvent::LibraryUpdated { library_id }
             | EntityEvent::LibraryDeleted { library_id } => Some(*library_id),

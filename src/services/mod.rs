@@ -4,7 +4,9 @@ pub mod email;
 pub mod file_cleanup;
 pub mod filter;
 pub mod inflight_thumbnails;
+pub mod metadata;
 pub mod pdf_cache;
+pub mod plugin;
 pub mod rate_limiter;
 pub mod read_progress;
 pub mod settings;
@@ -24,3 +26,5 @@ pub use settings::SettingsService;
 pub use task_listener::TaskListener;
 pub use task_metrics::TaskMetricsService;
 pub use thumbnail::ThumbnailService;
+
+pub use plugin::encryption::CredentialEncryption;

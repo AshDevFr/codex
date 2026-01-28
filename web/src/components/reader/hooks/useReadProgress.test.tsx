@@ -208,7 +208,7 @@ describe("useReadProgress", () => {
 
 			// Now it should have been called
 			expect(mockUpdate).toHaveBeenCalledWith("test-book", {
-				currentPage: 5,
+				current_page: 5,
 				completed: false,
 			});
 		});
@@ -277,7 +277,7 @@ describe("useReadProgress", () => {
 
 			// Should be called immediately without waiting
 			expect(mockUpdate).toHaveBeenCalledWith("test-book", {
-				currentPage: 25,
+				current_page: 25,
 				completed: false,
 			});
 		});
@@ -301,7 +301,7 @@ describe("useReadProgress", () => {
 			});
 
 			expect(mockUpdate).toHaveBeenCalledWith("test-book", {
-				currentPage: 100,
+				current_page: 100,
 				completed: true,
 			});
 		});
@@ -444,7 +444,7 @@ describe("useReadProgress", () => {
 
 			// The save should happen on unmount with final page
 			expect(mockUpdate).toHaveBeenCalledWith("test-book", {
-				currentPage: 30,
+				current_page: 30,
 				completed: false,
 			});
 

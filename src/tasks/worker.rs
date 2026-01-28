@@ -19,13 +19,14 @@ use uuid::Uuid;
 use crate::config::FilesConfig;
 use crate::db::repositories::TaskRepository;
 use crate::events::{EventBroadcaster, RecordedEvent, TaskProgressEvent};
+use crate::services::plugin::PluginManager;
 use crate::services::PdfPageCache;
 use crate::services::{SettingsService, TaskMetricsService, ThumbnailService};
 use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, CleanupBookFilesHandler, CleanupOrphanedFilesHandler,
     CleanupPdfCacheHandler, CleanupSeriesFilesHandler, FindDuplicatesHandler,
     GenerateSeriesThumbnailHandler, GenerateThumbnailHandler, GenerateThumbnailsHandler,
-    PurgeDeletedHandler, ScanLibraryHandler, TaskHandler,
+    PluginAutoMatchHandler, PurgeDeletedHandler, ScanLibraryHandler, TaskHandler,
 };
 
 /// Task worker that processes tasks from the queue
@@ -38,6 +39,7 @@ pub struct TaskWorker {
     settings_service: Option<Arc<SettingsService>>,
     thumbnail_service: Option<Arc<ThumbnailService>>,
     task_metrics_service: Option<Arc<TaskMetricsService>>,
+    plugin_manager: Option<Arc<PluginManager>>,
     shutdown_tx: Option<broadcast::Sender<()>>,
 }
 
@@ -83,6 +85,7 @@ impl TaskWorker {
             settings_service: None,
             thumbnail_service: None,
             task_metrics_service: None,
+            plugin_manager: None,
             shutdown_tx: None,
         }
     }
@@ -106,7 +109,15 @@ impl TaskWorker {
     }
 
     /// Set the settings service for runtime configuration
+    ///
+    /// This also registers/updates handlers that depend on settings:
+    /// - `ScanLibraryHandler` for post-scan auto-match settings
     pub fn with_settings_service(mut self, settings_service: Arc<SettingsService>) -> Self {
+        // Re-register ScanLibraryHandler with settings service for post-scan auto-match
+        self.handlers.insert(
+            "scan_library".to_string(),
+            Arc::new(ScanLibraryHandler::new().with_settings_service(settings_service.clone())),
+        );
         self.settings_service = Some(settings_service);
         self
     }
@@ -140,6 +151,38 @@ impl TaskWorker {
         task_metrics_service: Arc<TaskMetricsService>,
     ) -> Self {
         self.task_metrics_service = Some(task_metrics_service);
+        self
+    }
+
+    /// Set the plugin manager for plugin auto-match tasks
+    ///
+    /// This registers the `plugin_auto_match` task handler that enables
+    /// background metadata matching via plugins.
+    ///
+    /// **Note**: Call `with_thumbnail_service` and `with_settings_service` before this method so that
+    /// `PluginAutoMatchHandler` can download/apply cover images and respect confidence threshold settings.
+    pub fn with_plugin_manager(mut self, plugin_manager: Arc<PluginManager>) -> Self {
+        // Register the PluginAutoMatchHandler with ThumbnailService and SettingsService if available
+        let mut handler = PluginAutoMatchHandler::new(plugin_manager.clone());
+        if let Some(ref thumbnail_service) = self.thumbnail_service {
+            handler = handler.with_thumbnail_service(thumbnail_service.clone());
+        } else {
+            tracing::warn!(
+                "ThumbnailService not set - PluginAutoMatchHandler will not download covers. \
+                 Call with_thumbnail_service before with_plugin_manager."
+            );
+        }
+        if let Some(ref settings_service) = self.settings_service {
+            handler = handler.with_settings_service(settings_service.clone());
+        } else {
+            tracing::warn!(
+                "SettingsService not set - PluginAutoMatchHandler will use default confidence threshold. \
+                 Call with_settings_service before with_plugin_manager."
+            );
+        }
+        self.handlers
+            .insert("plugin_auto_match".to_string(), Arc::new(handler));
+        self.plugin_manager = Some(plugin_manager);
         self
     }
 

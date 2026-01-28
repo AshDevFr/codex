@@ -3,9 +3,16 @@
  */
 
 import { delay, HttpResponse, http } from "msw";
+import type { components } from "@/types/api.generated";
+
+type PdfCacheStatsDto = components["schemas"]["PdfCacheStatsDto"];
+type PdfCacheCleanupResultDto =
+	components["schemas"]["PdfCacheCleanupResultDto"];
+type TriggerPdfCacheCleanupResponse =
+	components["schemas"]["TriggerPdfCacheCleanupResponse"];
 
 // Mock data for PDF cache stats
-let mockPdfCacheStats = {
+let mockPdfCacheStats: PdfCacheStatsDto = {
 	total_files: 1500,
 	total_size_bytes: 157_286_400, // ~150 MB
 	total_size_human: "150.0 MB",
@@ -26,18 +33,19 @@ export const pdfCacheHandlers = [
 	http.post("/api/v1/admin/pdf-cache/cleanup", async () => {
 		await delay(200);
 
-		return HttpResponse.json({
+		const response: TriggerPdfCacheCleanupResponse = {
 			task_id: crypto.randomUUID(),
 			message: "PDF cache cleanup task queued successfully",
 			max_age_days: 30,
-		});
+		};
+		return HttpResponse.json(response);
 	}),
 
 	// Clear entire cache immediately (sync)
 	http.delete("/api/v1/admin/pdf-cache", async () => {
 		await delay(500);
 
-		const result = {
+		const result: PdfCacheCleanupResultDto = {
 			files_deleted: mockPdfCacheStats.total_files,
 			bytes_reclaimed: mockPdfCacheStats.total_size_bytes,
 			bytes_reclaimed_human: mockPdfCacheStats.total_size_human,

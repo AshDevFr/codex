@@ -6,7 +6,79 @@
 use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::str::FromStr;
 use uuid::Uuid;
+
+// =============================================================================
+// Series Status Enum
+// =============================================================================
+
+/// Series publication status - canonical values stored in database
+///
+/// This enum defines the allowed status values for series metadata.
+/// The database stores these as lowercase strings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SeriesStatus {
+    /// Series is currently being published
+    Ongoing,
+    /// Series has finished publication
+    Ended,
+    /// Series is on hiatus
+    Hiatus,
+    /// Series was abandoned/cancelled
+    Abandoned,
+    /// Publication status is unknown
+    #[default]
+    Unknown,
+}
+
+impl SeriesStatus {
+    /// Get the string representation used in the database
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SeriesStatus::Ongoing => "ongoing",
+            SeriesStatus::Ended => "ended",
+            SeriesStatus::Hiatus => "hiatus",
+            SeriesStatus::Abandoned => "abandoned",
+            SeriesStatus::Unknown => "unknown",
+        }
+    }
+
+    /// All valid status values
+    #[allow(dead_code)]
+    pub fn all() -> &'static [SeriesStatus] {
+        &[
+            SeriesStatus::Ongoing,
+            SeriesStatus::Ended,
+            SeriesStatus::Hiatus,
+            SeriesStatus::Abandoned,
+            SeriesStatus::Unknown,
+        ]
+    }
+}
+
+impl fmt::Display for SeriesStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl FromStr for SeriesStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "ongoing" => Ok(SeriesStatus::Ongoing),
+            "ended" | "completed" => Ok(SeriesStatus::Ended), // Accept "completed" as alias
+            "hiatus" => Ok(SeriesStatus::Hiatus),
+            "abandoned" | "cancelled" => Ok(SeriesStatus::Abandoned), // Accept "cancelled" as alias
+            "unknown" => Ok(SeriesStatus::Unknown),
+            _ => Err(format!("Invalid series status: {}", s)),
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "series_metadata")]

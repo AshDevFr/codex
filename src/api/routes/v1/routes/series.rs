@@ -242,4 +242,26 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/series/:series_id/unread",
             post(handlers::mark_series_as_unread),
         )
+        // Series metadata from plugins (Phase 4)
+        .route(
+            "/series/:series_id/metadata/preview",
+            post(handlers::plugin_actions::preview_series_metadata),
+        )
+        .route(
+            "/series/:series_id/metadata/apply",
+            post(handlers::plugin_actions::apply_series_metadata),
+        )
+        .route(
+            "/series/:series_id/metadata/auto-match",
+            post(handlers::plugin_actions::auto_match_series_metadata),
+        )
+        // Task-based auto-match endpoints (Phase 5.5 - Worker plugin integration)
+        .route(
+            "/series/:series_id/metadata/auto-match/task",
+            post(handlers::plugin_actions::enqueue_auto_match_task),
+        )
+        .route(
+            "/series/metadata/auto-match/task/bulk",
+            post(handlers::plugin_actions::enqueue_bulk_auto_match_tasks),
+        )
 }

@@ -64,8 +64,8 @@ async fn create_rate_limited_app_state(
     use codex::events::EventBroadcaster;
     use codex::services::email::EmailService;
     use codex::services::{
-        AuthTrackingService, FileCleanupService, PdfPageCache, ReadProgressService,
-        SettingsService, ThumbnailService,
+        plugin::PluginManager, AuthTrackingService, FileCleanupService, PdfPageCache,
+        ReadProgressService, SettingsService, ThumbnailService,
     };
     use codex::utils::jwt::JwtService;
 
@@ -93,6 +93,7 @@ async fn create_rate_limited_app_state(
 
     // Create rate limiter service with test config
     let rate_limiter_service = Some(Arc::new(RateLimiterService::new(Arc::new(config.clone()))));
+    let plugin_manager = Arc::new(PluginManager::with_defaults(Arc::new(db.clone())));
 
     Arc::new(AppState {
         db,
@@ -113,6 +114,7 @@ async fn create_rate_limited_app_state(
         inflight_thumbnails: Arc::new(InflightThumbnailTracker::new()),
         user_auth_cache: Arc::new(UserAuthCache::new()),
         rate_limiter_service,
+        plugin_manager,
     })
 }
 

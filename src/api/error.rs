@@ -15,6 +15,8 @@ pub enum ApiError {
     Conflict(String),
     /// Resource exists but cannot be processed (e.g., PDF without PDFium)
     UnprocessableEntity(String),
+    /// Service is unavailable due to missing configuration or dependencies
+    ServiceUnavailable(String),
     Internal(String),
 }
 
@@ -61,6 +63,11 @@ impl IntoResponse for ApiError {
                 tracing::debug!(error = "UnprocessableEntity", message = %msg, "Unprocessable entity");
                 (StatusCode::UNPROCESSABLE_ENTITY, "UnprocessableEntity", msg)
             }
+            ApiError::ServiceUnavailable(msg) => {
+                // Log at warn level - server configuration issue
+                tracing::warn!(error = "ServiceUnavailable", message = %msg, "Service unavailable");
+                (StatusCode::SERVICE_UNAVAILABLE, "ServiceUnavailable", msg)
+            }
             ApiError::Internal(msg) => {
                 tracing::error!(error = "InternalServerError", message = %msg, "Internal server error");
                 (
@@ -97,6 +104,17 @@ impl From<anyhow::Error> for ApiError {
             );
         }
 
+        // Check for encryption key errors - server misconfiguration
+        if err_msg.contains("Encryption key not set")
+            || err_msg.contains("Encryption key must be 32 bytes")
+        {
+            return ApiError::ServiceUnavailable(
+                "Plugin secrets encryption is not configured. \
+                 Set CODEX_ENCRYPTION_KEY environment variable with a base64-encoded 32-byte key."
+                    .to_string(),
+            );
+        }
+
         ApiError::Internal(err_msg)
     }
 }
@@ -118,6 +136,17 @@ impl ApiError {
             return ApiError::UnprocessableEntity(
                 "This PDF contains text or vector graphics that require PDFium to render. \
                  PDFium is not installed or configured on this server."
+                    .to_string(),
+            );
+        }
+
+        // Check for encryption key errors - server misconfiguration
+        if err_msg.contains("Encryption key not set")
+            || err_msg.contains("Encryption key must be 32 bytes")
+        {
+            return ApiError::ServiceUnavailable(
+                "Plugin secrets encryption is not configured. \
+                 Set CODEX_ENCRYPTION_KEY environment variable with a base64-encoded 32-byte key."
                     .to_string(),
             );
         }
@@ -156,5 +185,24 @@ mod tests {
         let json_str = serde_json::to_string(&response).unwrap();
         assert!(json_str.contains("BadRequest"));
         assert!(json_str.contains("email"));
+    }
+
+    #[test]
+    fn test_encryption_key_not_set_returns_service_unavailable() {
+        let err = anyhow::anyhow!("Encryption key not set. Set CODEX_ENCRYPTION_KEY");
+        let api_error: ApiError = err.into();
+
+        assert!(matches!(api_error, ApiError::ServiceUnavailable(_)));
+        if let ApiError::ServiceUnavailable(msg) = api_error {
+            assert!(msg.contains("CODEX_ENCRYPTION_KEY"));
+        }
+    }
+
+    #[test]
+    fn test_encryption_key_wrong_size_returns_service_unavailable() {
+        let err = anyhow::anyhow!("Encryption key must be 32 bytes (256 bits), got 16 bytes");
+        let api_error: ApiError = err.into();
+
+        assert!(matches!(api_error, ApiError::ServiceUnavailable(_)));
     }
 }

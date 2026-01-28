@@ -1,48 +1,12 @@
+import type { components } from "@/types/api.generated";
 import { api } from "./client";
 
-/**
- * Statistics about the PDF page cache
- */
-export interface PdfCacheStatsDto {
-	/** Total number of cached page files */
-	total_files: number;
-	/** Total size of cache in bytes */
-	total_size_bytes: number;
-	/** Human-readable total size (e.g., "150.0 MB") */
-	total_size_human: string;
-	/** Number of unique books with cached pages */
-	book_count: number;
-	/** Age of the oldest cached file in days (if any files exist) */
-	oldest_file_age_days?: number;
-	/** Path to the cache directory */
-	cache_dir: string;
-	/** Whether the PDF page cache is enabled */
-	cache_enabled: boolean;
-}
-
-/**
- * Result of a PDF cache cleanup operation
- */
-export interface PdfCacheCleanupResultDto {
-	/** Number of cached page files deleted */
-	files_deleted: number;
-	/** Bytes freed by the cleanup */
-	bytes_reclaimed: number;
-	/** Human-readable size reclaimed (e.g., "25.0 MB") */
-	bytes_reclaimed_human: string;
-}
-
-/**
- * Response when triggering a PDF cache cleanup task
- */
-export interface TriggerPdfCacheCleanupResponse {
-	/** ID of the queued cleanup task */
-	task_id: string;
-	/** Message describing the action taken */
-	message: string;
-	/** Max age setting being used for cleanup (in days) */
-	max_age_days: number;
-}
+// Re-export generated types for convenience
+export type PdfCacheStatsDto = components["schemas"]["PdfCacheStatsDto"];
+export type PdfCacheCleanupResultDto =
+	components["schemas"]["PdfCacheCleanupResultDto"];
+export type TriggerPdfCacheCleanupResponse =
+	components["schemas"]["TriggerPdfCacheCleanupResponse"];
 
 export const pdfCacheApi = {
 	/**

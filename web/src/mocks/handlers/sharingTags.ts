@@ -3,23 +3,17 @@
  */
 
 import { delay, HttpResponse, http } from "msw";
+import type { components } from "@/types/api.generated";
 import { createPaginatedResponse } from "../data/factories";
 
+type SharingTagDto = components["schemas"]["SharingTagDto"];
+type UserSharingTagGrantDto = components["schemas"]["UserSharingTagGrantDto"];
+
 // Mock sharing tags
-const mockSharingTags: Array<{
-	id: string;
-	name: string;
-	normalizedName: string;
-	description: string | null;
-	seriesCount: number;
-	userCount: number;
-	createdAt: string;
-	updatedAt: string;
-}> = [
+const mockSharingTags: SharingTagDto[] = [
 	{
 		id: "tag-kids",
 		name: "Kids",
-		normalizedName: "kids",
 		description: "Content appropriate for children",
 		seriesCount: 5,
 		userCount: 2,
@@ -29,7 +23,6 @@ const mockSharingTags: Array<{
 	{
 		id: "tag-mature",
 		name: "Mature",
-		normalizedName: "mature",
 		description: "Adult content",
 		seriesCount: 3,
 		userCount: 1,
@@ -42,16 +35,7 @@ const mockSharingTags: Array<{
 const mockSeriesSharingTags: Record<string, string[]> = {};
 
 // Mock user sharing tag grants (user_id -> grants)
-const mockUserGrants: Record<
-	string,
-	Array<{
-		id: string;
-		sharingTagId: string;
-		sharingTagName: string;
-		accessMode: "allow" | "deny";
-		createdAt: string;
-	}>
-> = {};
+const mockUserGrants: Record<string, UserSharingTagGrantDto[]> = {};
 
 export const sharingTagsHandlers = [
 	// ============================================
@@ -104,10 +88,9 @@ export const sharingTagsHandlers = [
 			description?: string;
 		};
 
-		const newTag = {
+		const newTag: SharingTagDto = {
 			id: `tag-${Date.now()}`,
 			name: body.name,
-			normalizedName: body.name.toLowerCase(),
 			description: body.description || null,
 			seriesCount: 0,
 			userCount: 0,
@@ -136,7 +119,6 @@ export const sharingTagsHandlers = [
 
 			if (body.name !== undefined) {
 				mockSharingTags[tagIndex].name = body.name;
-				mockSharingTags[tagIndex].normalizedName = body.name.toLowerCase();
 			}
 			if (body.description !== undefined) {
 				mockSharingTags[tagIndex].description = body.description;

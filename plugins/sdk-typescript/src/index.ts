@@ -1,0 +1,80 @@
+/**
+ * @codex/plugin-sdk
+ *
+ * SDK for building Codex plugins. Provides types, utilities, and a server
+ * framework for communicating with Codex via JSON-RPC over stdio.
+ *
+ * @example
+ * ```typescript
+ * import {
+ *   createMetadataPlugin,
+ *   type MetadataProvider,
+ *   type PluginManifest,
+ * } from "@codex/plugin-sdk";
+ *
+ * const manifest: PluginManifest = {
+ *   name: "my-plugin",
+ *   displayName: "My Plugin",
+ *   version: "1.0.0",
+ *   description: "A custom metadata plugin",
+ *   author: "Your Name",
+ *   protocolVersion: "1.0",
+ *   capabilities: { metadataProvider: ["series"] },
+ * };
+ *
+ * const provider: MetadataProvider = {
+ *   async search(params) {
+ *     return {
+ *       results: [{
+ *         externalId: "123",
+ *         title: "Example",
+ *         alternateTitles: [],
+ *         relevanceScore: 0.95,
+ *       }],
+ *     };
+ *   },
+ *   async get(params) {
+ *     return {
+ *       externalId: params.externalId,
+ *       externalUrl: "https://example.com/123",
+ *       alternateTitles: [],
+ *       genres: [],
+ *       tags: [],
+ *       authors: [],
+ *       artists: [],
+ *       externalLinks: [],
+ *     };
+ *   },
+ * };
+ *
+ * createMetadataPlugin({ manifest, provider });
+ * ```
+ *
+ * @packageDocumentation
+ */
+
+// Errors
+export {
+  ApiError,
+  AuthError,
+  ConfigError,
+  NotFoundError,
+  PluginError,
+  RateLimitError,
+} from "./errors.js";
+
+// Logger
+export { createLogger, Logger, type LoggerOptions, type LogLevel } from "./logger.js";
+// Server
+export {
+  // Primary exports
+  createMetadataPlugin,
+  // Deprecated aliases
+  createSeriesMetadataPlugin,
+  type InitializeParams,
+  type MetadataPluginOptions,
+  type SeriesMetadataPluginOptions,
+} from "./server.js";
+
+// Types
+export * from "./types/index.js";

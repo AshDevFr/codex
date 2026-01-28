@@ -79,6 +79,14 @@ async function main(): Promise<void> {
     }
 
     try {
+      const plugins = await import("./scenarios/plugins.js");
+      scenarios.push({ name: "Plugins", run: plugins.run });
+    } catch {
+      console.log("⚠️  Plugins scenario not found, skipping");
+    }
+
+    // Navigation runs last since it logs out
+    try {
       const navigation = await import("./scenarios/navigation.js");
       scenarios.push({ name: "Navigation", run: navigation.run });
     } catch {

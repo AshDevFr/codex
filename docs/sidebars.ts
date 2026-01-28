@@ -60,15 +60,6 @@ const sidebars: SidebarsConfig = {
       ],
     },
     "troubleshooting",
-    {
-      type: "category",
-      label: "Development",
-      items: [
-        "development/development",
-        "development/architecture",
-        "development/migrations",
-      ],
-    },
   ],
   apiSidebar,
 };

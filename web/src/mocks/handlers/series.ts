@@ -3,6 +3,7 @@
  */
 
 import { delay, HttpResponse, http } from "msw";
+import type { components } from "@/types/api.generated";
 import {
 	COMPLETED_COMIC,
 	EXTERNAL_LINKS_METADATA,
@@ -12,6 +13,8 @@ import {
 import { createPaginatedResponse, seriesSummaries } from "../data/factories";
 import { getSeriesByLibrary, mockSeries } from "../data/store";
 import coverSvg from "../fixtures/cover.svg?raw";
+
+type ExternalRatingDto = components["schemas"]["ExternalRatingDto"];
 
 /**
  * Sample custom metadata for specific series (by title match)
@@ -25,34 +28,16 @@ const SERIES_CUSTOM_METADATA: Record<string, Record<string, unknown> | null> = {
 	// All other series will have null (no custom metadata)
 };
 
-/**
- * External ratings from sources like MAL, AniList, etc.
- * Ratings are stored on 0-100 scale, displayed as 0-10
- */
-interface MockExternalRating {
-	id: string;
-	seriesId: string;
-	sourceName: string;
-	rating: number; // 0-100 scale
-	voteCount: number | null;
-	fetchedAt: string;
-	createdAt: string;
-	updatedAt: string;
-}
-
 function getExternalRatingsForSeries(
 	seriesId: string,
 	title: string,
-): MockExternalRating[] {
+): ExternalRatingDto[] {
 	const now = new Date().toISOString();
 
 	// Define external ratings for popular series
 	const externalRatingsData: Record<
 		string,
-		Omit<
-			MockExternalRating,
-			"id" | "seriesId" | "fetchedAt" | "createdAt" | "updatedAt"
-		>[]
+		{ sourceName: string; rating: number; voteCount: number }[]
 	> = {
 		"One Piece": [
 			{ sourceName: "myanimelist", rating: 90, voteCount: 450000 },

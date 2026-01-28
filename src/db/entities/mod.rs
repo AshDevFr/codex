@@ -2,6 +2,9 @@
 
 pub mod prelude;
 
+// Re-export common enums
+pub use series_metadata::SeriesStatus;
+
 // Core entities
 pub mod api_keys;
 pub mod book_duplicates;
@@ -12,6 +15,8 @@ pub mod email_verification_tokens;
 pub mod libraries;
 pub mod metadata_sources;
 pub mod pages;
+pub mod plugin_failures;
+pub mod plugins;
 pub mod read_progress;
 pub mod series;
 pub mod settings;

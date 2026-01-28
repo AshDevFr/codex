@@ -52,6 +52,8 @@ pub mod libraries;
 pub mod metrics;
 pub mod pages;
 pub mod pdf_cache;
+pub mod plugin_actions;
+pub mod plugins;
 pub mod read_progress;
 pub mod scan;
 pub mod series;

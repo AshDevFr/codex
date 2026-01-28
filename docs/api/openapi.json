@@ -7,7 +7,7 @@
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
     },
-    "version": "1.0.0"
+    "version": "1.0.1"
   },
   "paths": {
     "/api/v1/admin/cleanup-orphans": {
@@ -244,6 +244,569 @@
         "security": [
           {
             "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/plugins": {
+      "get": {
+        "tags": [
+          "Plugins"
+        ],
+        "summary": "List all plugins",
+        "operationId": "list_plugins",
+        "responses": {
+          "200": {
+            "description": "Plugins retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginsListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Plugins"
+        ],
+        "summary": "Create a new plugin",
+        "description": "Creates a new plugin configuration. If the plugin is created with `enabled: true`,\nan automatic health check is performed to verify connectivity.",
+        "operationId": "create_plugin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePluginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Plugin created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          },
+          "409": {
+            "description": "Plugin with this name already exists"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/plugins/{id}": {
+      "get": {
+        "tags": [
+          "Plugins"
+        ],
+        "summary": "Get a plugin by ID",
+        "operationId": "get_plugin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Plugin ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Plugin retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          },
+          "404": {
+            "description": "Plugin not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Plugins"
+        ],
+        "summary": "Delete a plugin",
+        "operationId": "delete_plugin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Plugin ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Plugin deleted"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          },
+          "404": {
+            "description": "Plugin not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Plugins"
+        ],
+        "summary": "Update a plugin",
+        "operationId": "update_plugin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Plugin ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePluginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Plugin updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          },
+          "404": {
+            "description": "Plugin not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/plugins/{id}/disable": {
+      "post": {
+        "tags": [
+          "Plugins"
+        ],
+        "summary": "Disable a plugin",
+        "operationId": "disable_plugin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Plugin ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Plugin disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          },
+          "404": {
+            "description": "Plugin not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/plugins/{id}/enable": {
+      "post": {
+        "tags": [
+          "Plugins"
+        ],
+        "summary": "Enable a plugin",
+        "description": "Enables the plugin and automatically performs a health check to verify connectivity.",
+        "operationId": "enable_plugin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Plugin ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Plugin enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          },
+          "404": {
+            "description": "Plugin not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/plugins/{id}/failures": {
+      "get": {
+        "tags": [
+          "Plugins"
+        ],
+        "summary": "Get plugin failure history",
+        "description": "Returns failure events for a plugin, including time-window statistics.",
+        "operationId": "get_plugin_failures",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Plugin ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of failures to return",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Number of failures to skip",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Failures retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginFailuresResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          },
+          "404": {
+            "description": "Plugin not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/plugins/{id}/health": {
+      "get": {
+        "tags": [
+          "Plugins"
+        ],
+        "summary": "Get plugin health information",
+        "operationId": "get_plugin_health",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Plugin ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Health information retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginHealthResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          },
+          "404": {
+            "description": "Plugin not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/plugins/{id}/reset": {
+      "post": {
+        "tags": [
+          "Plugins"
+        ],
+        "summary": "Reset plugin failure count",
+        "description": "Clears the failure count and disabled reason, allowing the plugin to be used again.",
+        "operationId": "reset_plugin_failures",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Plugin ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Failure count reset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          },
+          "404": {
+            "description": "Plugin not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/plugins/{id}/test": {
+      "post": {
+        "tags": [
+          "Plugins"
+        ],
+        "summary": "Test a plugin connection",
+        "description": "Spawns the plugin process, sends an initialize request, and returns the manifest.",
+        "operationId": "test_plugin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Plugin ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginTestResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin permission required"
+          },
+          "404": {
+            "description": "Plugin not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
           },
           {
             "api_key": []
@@ -3377,6 +3940,70 @@
         ]
       }
     },
+    "/api/v1/libraries/{id}/metadata/auto-match/task": {
+      "post": {
+        "tags": [
+          "Plugin Actions"
+        ],
+        "summary": "Enqueue plugin auto-match tasks for all series in a library",
+        "description": "Creates background tasks to auto-match metadata for all series in a library using\nthe specified plugin. Each series gets its own task that runs asynchronously.",
+        "operationId": "enqueue_library_auto_match_tasks",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnqueueLibraryAutoMatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tasks enqueued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnqueueAutoMatchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "No permission to edit series"
+          },
+          "404": {
+            "description": "Library or plugin not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/libraries/{library_id}": {
       "get": {
         "tags": [
@@ -4840,6 +5467,127 @@
         ]
       }
     },
+    "/api/v1/plugins/actions": {
+      "get": {
+        "tags": [
+          "Plugin Actions"
+        ],
+        "summary": "Get available plugin actions for a scope",
+        "description": "Returns a list of available plugin actions for the specified scope.\nThis is used by the UI to populate dropdown menus with available plugins.",
+        "operationId": "get_plugin_actions",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Scope to filter actions by (e.g., \"series:detail\", \"series:bulk\")",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "libraryId",
+            "in": "query",
+            "description": "Optional library ID to filter plugins by. When provided, only plugins that\napply to this library (or all libraries) will be returned.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Plugin actions retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginActionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid scope"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/plugins/{id}/execute": {
+      "post": {
+        "tags": [
+          "Plugin Actions"
+        ],
+        "summary": "Execute a plugin action",
+        "description": "Invokes a plugin action and returns the result. Actions are typed by plugin type:\n- `metadata`: search, get, match (requires content_type: series or book)\n- `ping`: health check (works for any plugin)",
+        "operationId": "execute_plugin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Plugin ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecutePluginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Action executed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutePluginResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Plugin not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/progress": {
       "get": {
         "tags": [
@@ -5201,6 +5949,58 @@
         ]
       }
     },
+    "/api/v1/series/metadata/auto-match/task/bulk": {
+      "post": {
+        "tags": [
+          "Plugin Actions"
+        ],
+        "summary": "Enqueue plugin auto-match tasks for multiple series (bulk operation)",
+        "description": "Creates background tasks to auto-match metadata for multiple series using the specified plugin.\nEach series gets its own task that runs asynchronously in a worker process.",
+        "operationId": "enqueue_bulk_auto_match_tasks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnqueueBulkAutoMatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tasks enqueued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnqueueAutoMatchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "No permission to edit series"
+          },
+          "404": {
+            "description": "Plugin not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/recently-added": {
       "get": {
         "tags": [
@@ -5379,6 +6179,262 @@
         "security": [
           {
             "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/metadata/apply": {
+      "post": {
+        "tags": [
+          "Plugin Actions"
+        ],
+        "summary": "Apply metadata from a plugin to a series",
+        "description": "Fetches metadata from a plugin and applies it to the series, respecting\nRBAC permissions and field locks.",
+        "operationId": "apply_series_metadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetadataApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Metadata applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataApplyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "No permission to edit series"
+          },
+          "404": {
+            "description": "Series or plugin not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/metadata/auto-match": {
+      "post": {
+        "tags": [
+          "Plugin Actions"
+        ],
+        "summary": "Auto-match and apply metadata from a plugin to a series",
+        "description": "Searches for the series using the plugin's metadata search, picks the best match,\nand applies the metadata in one step. This is a convenience endpoint for quick\nmetadata updates without user intervention.",
+        "operationId": "auto_match_series_metadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetadataAutoMatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Auto-match completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataAutoMatchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "No permission to edit series"
+          },
+          "404": {
+            "description": "Series or plugin not found or no match found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/metadata/auto-match/task": {
+      "post": {
+        "tags": [
+          "Plugin Actions"
+        ],
+        "summary": "Enqueue a plugin auto-match task for a single series",
+        "description": "Creates a background task to auto-match metadata for a series using the specified plugin.\nThe task runs asynchronously in a worker process and emits a SeriesMetadataUpdated event\nwhen complete.",
+        "operationId": "enqueue_auto_match_task",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnqueueAutoMatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Task enqueued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnqueueAutoMatchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "No permission to edit series"
+          },
+          "404": {
+            "description": "Series or plugin not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/metadata/preview": {
+      "post": {
+        "tags": [
+          "Plugin Actions"
+        ],
+        "summary": "Preview metadata from a plugin for a series",
+        "description": "Fetches metadata from a plugin and computes a field-by-field diff with the current\nseries metadata, showing which fields will be applied, locked, or denied by RBAC.",
+        "operationId": "preview_series_metadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetadataPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Preview computed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "No permission to edit series"
+          },
+          "404": {
+            "description": "Series or plugin not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
           },
           {
             "api_key": []
@@ -13525,6 +14581,128 @@
           }
         }
       },
+      "CreatePluginRequest": {
+        "type": "object",
+        "description": "Request to create a new plugin",
+        "required": [
+          "name",
+          "displayName",
+          "command"
+        ],
+        "properties": {
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Command arguments",
+            "example": [
+              "/opt/codex/plugins/mangabaka/dist/index.js"
+            ]
+          },
+          "command": {
+            "type": "string",
+            "description": "Command to spawn the plugin",
+            "example": "node"
+          },
+          "config": {
+            "description": "Plugin-specific configuration"
+          },
+          "credentialDelivery": {
+            "type": "string",
+            "description": "How credentials are delivered to the plugin: \"env\", \"init_message\", or \"both\"",
+            "example": "env"
+          },
+          "credentials": {
+            "description": "Credentials (will be encrypted before storage)"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Description of the plugin",
+            "example": "Fetch manga metadata from MangaBaka (MangaUpdates)"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Human-readable display name",
+            "example": "MangaBaka"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether to enable immediately",
+            "example": false
+          },
+          "env": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnvVarDto"
+            },
+            "description": "Additional environment variables",
+            "example": {
+              "LOG_LEVEL": "info"
+            }
+          },
+          "libraryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Library IDs this plugin applies to (empty = all libraries)",
+            "example": []
+          },
+          "name": {
+            "type": "string",
+            "description": "Unique identifier (alphanumeric with underscores)",
+            "example": "mangabaka"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "RBAC permissions for metadata writes",
+            "example": [
+              "metadata:write:summary",
+              "metadata:write:genres"
+            ]
+          },
+          "pluginType": {
+            "type": "string",
+            "description": "Plugin type: \"system\" (default) or \"user\"",
+            "example": "system"
+          },
+          "rateLimitRequestsPerMinute": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Rate limit in requests per minute (default: 60, None = no limit)",
+            "example": 60
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Scopes where plugin can be invoked",
+            "example": [
+              "series:detail",
+              "series:bulk"
+            ]
+          },
+          "workingDirectory": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Working directory for the plugin process"
+          }
+        }
+      },
       "CreateSharingTagRequest": {
         "type": "object",
         "description": "Create sharing tag request",
@@ -13625,6 +14803,44 @@
             "type": "string",
             "description": "Username for the new account",
             "example": "newuser"
+          }
+        }
+      },
+      "CredentialFieldDto": {
+        "type": "object",
+        "description": "Credential field definition",
+        "required": [
+          "key",
+          "label",
+          "credentialType"
+        ],
+        "properties": {
+          "credentialType": {
+            "type": "string",
+            "description": "Input type for UI"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Description for the user"
+          },
+          "key": {
+            "type": "string",
+            "description": "Credential key (e.g., \"api_key\")"
+          },
+          "label": {
+            "type": "string",
+            "description": "Display label (e.g., \"API Key\")"
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Whether this credential is required"
+          },
+          "sensitive": {
+            "type": "boolean",
+            "description": "Whether to mask the value in UI"
           }
         }
       },
@@ -13776,6 +14992,90 @@
             "type": "string",
             "description": "When the group was last updated",
             "example": "2024-01-15T10:30:00Z"
+          }
+        }
+      },
+      "EnqueueAutoMatchRequest": {
+        "type": "object",
+        "description": "Request to enqueue plugin auto-match task for a single series",
+        "required": [
+          "pluginId"
+        ],
+        "properties": {
+          "pluginId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Plugin ID to use for matching"
+          }
+        }
+      },
+      "EnqueueAutoMatchResponse": {
+        "type": "object",
+        "description": "Response after enqueuing auto-match task(s)",
+        "required": [
+          "success",
+          "tasksEnqueued",
+          "taskIds",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Whether the operation succeeded"
+          },
+          "taskIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task IDs that were created"
+          },
+          "tasksEnqueued": {
+            "type": "integer",
+            "description": "Number of tasks enqueued",
+            "minimum": 0
+          }
+        }
+      },
+      "EnqueueBulkAutoMatchRequest": {
+        "type": "object",
+        "description": "Request to enqueue plugin auto-match tasks for multiple series (bulk)",
+        "required": [
+          "pluginId",
+          "seriesIds"
+        ],
+        "properties": {
+          "pluginId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Plugin ID to use for matching"
+          },
+          "seriesIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Series IDs to auto-match"
+          }
+        }
+      },
+      "EnqueueLibraryAutoMatchRequest": {
+        "type": "object",
+        "description": "Request to enqueue plugin auto-match tasks for all series in a library",
+        "required": [
+          "pluginId"
+        ],
+        "properties": {
+          "pluginId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Plugin ID to use for matching"
           }
         }
       },
@@ -13996,6 +15296,45 @@
           },
           {
             "type": "object",
+            "description": "Series metadata was updated by a plugin",
+            "required": [
+              "series_id",
+              "library_id",
+              "plugin_id",
+              "fields_updated",
+              "type"
+            ],
+            "properties": {
+              "fields_updated": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Fields that were updated"
+              },
+              "library_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "plugin_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Plugin that updated the metadata"
+              },
+              "series_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "series_metadata_updated"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Deleted books were purged from a series",
             "required": [
               "series_id",
@@ -14108,6 +15447,22 @@
           "library"
         ]
       },
+      "EnvVarDto": {
+        "type": "object",
+        "description": "Environment variable key-value pair",
+        "required": [
+          "key",
+          "value"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
       "ErrorGroupDto": {
         "type": "object",
         "description": "Summary of errors grouped by type",
@@ -14156,6 +15511,49 @@
           },
           "message": {
             "type": "string"
+          }
+        }
+      },
+      "ExecutePluginRequest": {
+        "type": "object",
+        "description": "Request to execute a plugin action",
+        "required": [
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/PluginActionRequest",
+            "description": "The action to execute, tagged by plugin type"
+          }
+        }
+      },
+      "ExecutePluginResponse": {
+        "type": "object",
+        "description": "Response from executing a plugin method",
+        "required": [
+          "success",
+          "latencyMs"
+        ],
+        "properties": {
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Error message if failed"
+          },
+          "latencyMs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Execution time in milliseconds",
+            "minimum": 0
+          },
+          "result": {
+            "description": "Result data (varies by method)"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Whether the execution succeeded"
           }
         }
       },
@@ -14363,6 +15761,17 @@
             "description": "Title of the feed"
           }
         }
+      },
+      "FieldApplyStatus": {
+        "type": "string",
+        "description": "Status of a field during metadata preview",
+        "enum": [
+          "will_apply",
+          "locked",
+          "no_permission",
+          "unchanged",
+          "not_provided"
+        ]
       },
       "FieldOperator": {
         "oneOf": [
@@ -17016,6 +18425,189 @@
           }
         }
       },
+      "MetadataAction": {
+        "type": "string",
+        "description": "Action for metadata plugins",
+        "enum": [
+          "search",
+          "get",
+          "match"
+        ]
+      },
+      "MetadataApplyRequest": {
+        "type": "object",
+        "description": "Request to apply metadata from a plugin",
+        "required": [
+          "pluginId",
+          "externalId"
+        ],
+        "properties": {
+          "externalId": {
+            "type": "string",
+            "description": "External ID from the plugin's search results"
+          },
+          "fields": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of fields to apply (default: all applicable fields)"
+          },
+          "pluginId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Plugin ID to fetch metadata from"
+          }
+        }
+      },
+      "MetadataApplyResponse": {
+        "type": "object",
+        "description": "Response after applying metadata",
+        "required": [
+          "success",
+          "appliedFields",
+          "skippedFields",
+          "message"
+        ],
+        "properties": {
+          "appliedFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Fields that were applied"
+          },
+          "message": {
+            "type": "string",
+            "description": "Message"
+          },
+          "skippedFields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkippedField"
+            },
+            "description": "Fields that were skipped (with reasons)"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Whether the operation succeeded"
+          }
+        }
+      },
+      "MetadataAutoMatchRequest": {
+        "type": "object",
+        "description": "Request to auto-match and apply metadata from a plugin",
+        "required": [
+          "pluginId"
+        ],
+        "properties": {
+          "pluginId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Plugin ID to use for matching"
+          },
+          "query": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional query to use for matching (defaults to series title)"
+          }
+        }
+      },
+      "MetadataAutoMatchResponse": {
+        "type": "object",
+        "description": "Response after auto-matching metadata",
+        "required": [
+          "success",
+          "appliedFields",
+          "skippedFields",
+          "message"
+        ],
+        "properties": {
+          "appliedFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Fields that were applied"
+          },
+          "externalUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "External URL (link to matched item on provider)"
+          },
+          "matchedResult": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PluginSearchResultDto",
+                "description": "The search result that was matched"
+              }
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "Message"
+          },
+          "skippedFields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkippedField"
+            },
+            "description": "Fields that were skipped (with reasons)"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Whether the operation succeeded"
+          }
+        }
+      },
+      "MetadataContentType": {
+        "type": "string",
+        "description": "Content types that a metadata provider can support",
+        "enum": [
+          "series"
+        ]
+      },
+      "MetadataFieldPreview": {
+        "type": "object",
+        "description": "A single field in the metadata preview",
+        "required": [
+          "field",
+          "status"
+        ],
+        "properties": {
+          "currentValue": {
+            "description": "Current value in database"
+          },
+          "field": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "proposedValue": {
+            "description": "Proposed value from plugin"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Human-readable reason for status"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FieldApplyStatus",
+            "description": "Apply status"
+          }
+        }
+      },
       "MetadataLocks": {
         "type": "object",
         "description": "Lock states for all lockable metadata fields",
@@ -17105,6 +18697,69 @@
             "type": "boolean",
             "description": "Whether the year field is locked",
             "example": false
+          }
+        }
+      },
+      "MetadataPreviewRequest": {
+        "type": "object",
+        "description": "Request to preview metadata from a plugin",
+        "required": [
+          "pluginId",
+          "externalId"
+        ],
+        "properties": {
+          "externalId": {
+            "type": "string",
+            "description": "External ID from the plugin's search results"
+          },
+          "pluginId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Plugin ID to fetch metadata from"
+          }
+        }
+      },
+      "MetadataPreviewResponse": {
+        "type": "object",
+        "description": "Response containing metadata preview",
+        "required": [
+          "fields",
+          "summary",
+          "pluginId",
+          "pluginName",
+          "externalId"
+        ],
+        "properties": {
+          "externalId": {
+            "type": "string",
+            "description": "External ID used"
+          },
+          "externalUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "External URL (link to provider's page)"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetadataFieldPreview"
+            },
+            "description": "Field-by-field preview"
+          },
+          "pluginId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Plugin that provided the metadata"
+          },
+          "pluginName": {
+            "type": "string",
+            "description": "Plugin name"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/PreviewSummary",
+            "description": "Summary counts"
           }
         }
       },
@@ -19063,6 +20718,777 @@
           }
         }
       },
+      "PluginActionDto": {
+        "type": "object",
+        "description": "A plugin action available for a specific scope",
+        "required": [
+          "pluginId",
+          "pluginName",
+          "pluginDisplayName",
+          "actionType",
+          "label"
+        ],
+        "properties": {
+          "actionType": {
+            "type": "string",
+            "description": "Action type (e.g., \"metadata_search\", \"metadata_get\")"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Description of the action"
+          },
+          "icon": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Icon hint for UI (optional)"
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable label for the action"
+          },
+          "libraryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Library IDs this plugin applies to (empty means all libraries)\nUsed by frontend to filter which plugins show up for each library"
+          },
+          "pluginDisplayName": {
+            "type": "string",
+            "description": "Plugin display name"
+          },
+          "pluginId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Plugin ID"
+          },
+          "pluginName": {
+            "type": "string",
+            "description": "Plugin name"
+          }
+        }
+      },
+      "PluginActionRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Metadata plugin actions (search, get, match)",
+            "required": [
+              "metadata"
+            ],
+            "properties": {
+              "metadata": {
+                "type": "object",
+                "description": "Metadata plugin actions (search, get, match)",
+                "required": [
+                  "action",
+                  "content_type"
+                ],
+                "properties": {
+                  "action": {
+                    "$ref": "#/components/schemas/MetadataAction",
+                    "description": "The metadata action to perform"
+                  },
+                  "content_type": {
+                    "$ref": "#/components/schemas/MetadataContentType",
+                    "description": "Content type (series or book)"
+                  },
+                  "params": {
+                    "description": "Action-specific parameters"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "string",
+            "description": "Health check (works for any plugin type)",
+            "enum": [
+              "ping"
+            ]
+          }
+        ],
+        "description": "Plugin action request - tagged by plugin type\n\nEach plugin type has its own set of valid actions.\nThis ensures type safety - you can't call a metadata action on a sync plugin."
+      },
+      "PluginActionsResponse": {
+        "type": "object",
+        "description": "Response containing available plugin actions for a scope",
+        "required": [
+          "actions",
+          "scope"
+        ],
+        "properties": {
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PluginActionDto"
+            },
+            "description": "Available actions grouped by plugin"
+          },
+          "scope": {
+            "type": "string",
+            "description": "The scope these actions are for"
+          }
+        }
+      },
+      "PluginCapabilitiesDto": {
+        "type": "object",
+        "description": "Plugin capabilities",
+        "properties": {
+          "metadataProvider": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Content types this plugin can provide metadata for (e.g., [\"series\", \"book\"])"
+          },
+          "userSyncProvider": {
+            "type": "boolean",
+            "description": "Can sync user reading progress"
+          }
+        }
+      },
+      "PluginDto": {
+        "type": "object",
+        "description": "A plugin (credentials are never exposed)",
+        "required": [
+          "id",
+          "name",
+          "displayName",
+          "pluginType",
+          "command",
+          "args",
+          "env",
+          "permissions",
+          "scopes",
+          "libraryIds",
+          "hasCredentials",
+          "credentialDelivery",
+          "config",
+          "enabled",
+          "healthStatus",
+          "failureCount",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Command arguments",
+            "example": [
+              "/opt/codex/plugins/mangabaka/dist/index.js"
+            ]
+          },
+          "command": {
+            "type": "string",
+            "description": "Command to spawn the plugin",
+            "example": "node"
+          },
+          "config": {
+            "description": "Plugin-specific configuration"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the plugin was created"
+          },
+          "credentialDelivery": {
+            "type": "string",
+            "description": "How credentials are delivered to the plugin",
+            "example": "env"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Description of the plugin",
+            "example": "Fetch manga metadata from MangaBaka (MangaUpdates)"
+          },
+          "disabledReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reason the plugin was disabled"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Human-readable display name",
+            "example": "MangaBaka"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the plugin is enabled",
+            "example": true
+          },
+          "env": {
+            "description": "Additional environment variables (non-sensitive only)"
+          },
+          "failureCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of consecutive failures",
+            "example": 0
+          },
+          "hasCredentials": {
+            "type": "boolean",
+            "description": "Whether credentials have been set (actual credentials are never returned)",
+            "example": true
+          },
+          "healthStatus": {
+            "type": "string",
+            "description": "Health status: unknown, healthy, degraded, unhealthy, disabled",
+            "example": "healthy"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Plugin ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "lastFailureAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the last failure occurred"
+          },
+          "lastSuccessAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the last successful operation occurred"
+          },
+          "libraryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Library IDs this plugin applies to (empty = all libraries)",
+            "example": []
+          },
+          "manifest": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PluginManifestDto",
+                "description": "Cached manifest from plugin (if available)"
+              }
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "Unique identifier (e.g., \"mangabaka\")",
+            "example": "mangabaka"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "RBAC permissions for metadata writes",
+            "example": [
+              "metadata:write:summary",
+              "metadata:write:genres"
+            ]
+          },
+          "pluginType": {
+            "type": "string",
+            "description": "Plugin type: \"system\" (admin-configured) or \"user\" (per-user instances)",
+            "example": "system"
+          },
+          "rateLimitRequestsPerMinute": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Rate limit in requests per minute (None = no limit)",
+            "example": 60
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Scopes where plugin can be invoked",
+            "example": [
+              "series:detail",
+              "series:bulk"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the plugin was last updated"
+          },
+          "workingDirectory": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Working directory for the plugin process"
+          }
+        }
+      },
+      "PluginFailureDto": {
+        "type": "object",
+        "description": "A single plugin failure event",
+        "required": [
+          "id",
+          "errorMessage",
+          "occurredAt"
+        ],
+        "properties": {
+          "context": {
+            "description": "Additional context (parameters, stack trace, etc.)"
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Error code for categorization",
+            "example": "TIMEOUT"
+          },
+          "errorMessage": {
+            "type": "string",
+            "description": "Human-readable error message",
+            "example": "Connection timeout after 30s"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Failure ID"
+          },
+          "method": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Which method failed",
+            "example": "metadata/search"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the failure occurred"
+          }
+        }
+      },
+      "PluginFailuresResponse": {
+        "type": "object",
+        "description": "Response containing plugin failure history",
+        "required": [
+          "failures",
+          "total",
+          "windowFailures",
+          "windowSeconds",
+          "threshold"
+        ],
+        "properties": {
+          "failures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PluginFailureDto"
+            },
+            "description": "List of failure events"
+          },
+          "threshold": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Threshold for auto-disable",
+            "example": 3,
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of failures (for pagination)",
+            "minimum": 0
+          },
+          "windowFailures": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of failures within the current time window",
+            "minimum": 0
+          },
+          "windowSeconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Time window size in seconds",
+            "example": 3600
+          }
+        }
+      },
+      "PluginHealthDto": {
+        "type": "object",
+        "description": "Plugin health information",
+        "required": [
+          "pluginId",
+          "name",
+          "healthStatus",
+          "enabled",
+          "failureCount"
+        ],
+        "properties": {
+          "disabledReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reason the plugin was disabled"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the plugin is enabled"
+          },
+          "failureCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of consecutive failures"
+          },
+          "healthStatus": {
+            "type": "string",
+            "description": "Current health status"
+          },
+          "lastFailureAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the last failure occurred"
+          },
+          "lastSuccessAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the last successful operation occurred"
+          },
+          "name": {
+            "type": "string",
+            "description": "Plugin name"
+          },
+          "pluginId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Plugin ID"
+          }
+        }
+      },
+      "PluginHealthResponse": {
+        "type": "object",
+        "description": "Response containing plugin health history/summary",
+        "required": [
+          "health"
+        ],
+        "properties": {
+          "health": {
+            "$ref": "#/components/schemas/PluginHealthDto",
+            "description": "Plugin health information"
+          }
+        }
+      },
+      "PluginManifestDto": {
+        "type": "object",
+        "description": "Plugin manifest from the plugin itself",
+        "required": [
+          "name",
+          "displayName",
+          "version",
+          "protocolVersion",
+          "capabilities",
+          "contentTypes"
+        ],
+        "properties": {
+          "author": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Author"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/PluginCapabilitiesDto",
+            "description": "Plugin capabilities"
+          },
+          "contentTypes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Supported content types"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Description"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Display name for UI"
+          },
+          "homepage": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Homepage URL"
+          },
+          "name": {
+            "type": "string",
+            "description": "Unique identifier"
+          },
+          "protocolVersion": {
+            "type": "string",
+            "description": "Protocol version"
+          },
+          "requiredCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CredentialFieldDto"
+            },
+            "description": "Required credentials"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Supported scopes"
+          },
+          "version": {
+            "type": "string",
+            "description": "Semantic version"
+          }
+        }
+      },
+      "PluginSearchResponse": {
+        "type": "object",
+        "description": "Response containing search results from a plugin",
+        "required": [
+          "results",
+          "pluginId",
+          "pluginName"
+        ],
+        "properties": {
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Cursor for next page (if available)"
+          },
+          "pluginId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Plugin that provided the results"
+          },
+          "pluginName": {
+            "type": "string",
+            "description": "Plugin name"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PluginSearchResultDto"
+            },
+            "description": "Search results"
+          }
+        }
+      },
+      "PluginSearchResultDto": {
+        "type": "object",
+        "description": "Search result from a plugin",
+        "required": [
+          "externalId",
+          "title"
+        ],
+        "properties": {
+          "alternateTitles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Alternative titles"
+          },
+          "coverUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Cover image URL"
+          },
+          "externalId": {
+            "type": "string",
+            "description": "External ID from the provider"
+          },
+          "preview": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SearchResultPreviewDto",
+                "description": "Preview data for search results"
+              }
+            ]
+          },
+          "relevanceScore": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Relevance score (0.0-1.0). Optional - if not provided, result order indicates relevance."
+          },
+          "title": {
+            "type": "string",
+            "description": "Primary title"
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Year of publication"
+          }
+        }
+      },
+      "PluginStatusResponse": {
+        "type": "object",
+        "description": "Response after enabling or disabling a plugin",
+        "required": [
+          "plugin",
+          "message"
+        ],
+        "properties": {
+          "healthCheckError": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Health check error message (None if passed or not performed)"
+          },
+          "healthCheckLatencyMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Health check latency in milliseconds (None if not performed)",
+            "example": 150,
+            "minimum": 0
+          },
+          "healthCheckPassed": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Health check passed (None if not performed)",
+            "example": true
+          },
+          "healthCheckPerformed": {
+            "type": "boolean",
+            "description": "Whether a health check was performed",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "description": "Status change message",
+            "example": "Plugin enabled successfully"
+          },
+          "plugin": {
+            "$ref": "#/components/schemas/PluginDto",
+            "description": "The updated plugin"
+          }
+        }
+      },
+      "PluginTestResult": {
+        "type": "object",
+        "description": "Response from testing a plugin connection",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "latencyMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Response latency in milliseconds",
+            "example": 150,
+            "minimum": 0
+          },
+          "manifest": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PluginManifestDto",
+                "description": "Plugin manifest (if connection succeeded)"
+              }
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "Test result message",
+            "example": "Successfully connected to plugin"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Whether the test was successful",
+            "example": true
+          }
+        }
+      },
+      "PluginsListResponse": {
+        "type": "object",
+        "description": "Response containing a list of plugins",
+        "required": [
+          "plugins",
+          "total"
+        ],
+        "properties": {
+          "plugins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PluginDto"
+            },
+            "description": "List of plugins"
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total count",
+            "minimum": 0
+          }
+        }
+      },
       "PreviewScanRequest": {
         "type": "object",
         "description": "Preview scan request",
@@ -19109,6 +21535,44 @@
           "totalFiles": {
             "type": "integer",
             "description": "Total number of files found",
+            "minimum": 0
+          }
+        }
+      },
+      "PreviewSummary": {
+        "type": "object",
+        "description": "Summary of preview results",
+        "required": [
+          "willApply",
+          "locked",
+          "noPermission",
+          "unchanged",
+          "notProvided"
+        ],
+        "properties": {
+          "locked": {
+            "type": "integer",
+            "description": "Number of fields that are locked",
+            "minimum": 0
+          },
+          "noPermission": {
+            "type": "integer",
+            "description": "Number of fields with no permission",
+            "minimum": 0
+          },
+          "notProvided": {
+            "type": "integer",
+            "description": "Number of fields not provided",
+            "minimum": 0
+          },
+          "unchanged": {
+            "type": "integer",
+            "description": "Number of fields that are unchanged",
+            "minimum": 0
+          },
+          "willApply": {
+            "type": "integer",
+            "description": "Number of fields that will be applied",
             "minimum": 0
           }
         }
@@ -20061,6 +22525,41 @@
             "type": "boolean",
             "description": "Scan library when the application starts",
             "example": false
+          }
+        }
+      },
+      "SearchResultPreviewDto": {
+        "type": "object",
+        "description": "Preview data for search results",
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Short description"
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Genres"
+          },
+          "rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Rating"
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Status string"
           }
         }
       },
@@ -21268,6 +23767,24 @@
           }
         }
       },
+      "SkippedField": {
+        "type": "object",
+        "description": "A field that was skipped during apply",
+        "required": [
+          "field",
+          "reason"
+        ],
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason for skipping"
+          }
+        }
+      },
       "SmartBookConfig": {
         "type": "object",
         "description": "Configuration for smart book naming strategy",
@@ -22144,6 +24661,38 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Auto-match metadata for a series using a plugin",
+            "required": [
+              "series_id",
+              "plugin_id",
+              "type"
+            ],
+            "properties": {
+              "plugin_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "series_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "source_scope": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Source scope that triggered this task (for tracking)"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "plugin_auto_match"
+                ]
+              }
+            }
           }
         ],
         "description": "Task types supported by the distributed task queue"
@@ -22752,6 +25301,114 @@
             ],
             "description": "Whether to lock the year field",
             "example": false
+          }
+        }
+      },
+      "UpdatePluginRequest": {
+        "type": "object",
+        "description": "Request to update a plugin",
+        "properties": {
+          "args": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Updated command arguments"
+          },
+          "command": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Updated command"
+          },
+          "config": {
+            "description": "Updated configuration"
+          },
+          "credentialDelivery": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Updated credential delivery method"
+          },
+          "credentials": {
+            "description": "Updated credentials (set to null to clear)"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Updated description"
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Updated display name",
+            "example": "MangaBaka v2"
+          },
+          "env": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/EnvVarDto"
+            },
+            "description": "Updated environment variables"
+          },
+          "libraryIds": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Updated library IDs (empty = all libraries)"
+          },
+          "permissions": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Updated permissions"
+          },
+          "rateLimitRequestsPerMinute": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Updated rate limit in requests per minute (Some(None) = remove limit)",
+            "example": 60
+          },
+          "scopes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Updated scopes"
+          },
+          "workingDirectory": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Updated working directory"
           }
         }
       },
@@ -23465,6 +26122,14 @@
       "description": "Runtime configuration settings (admin only)"
     },
     {
+      "name": "Plugins",
+      "description": "Admin-managed external plugin processes"
+    },
+    {
+      "name": "Plugin Actions",
+      "description": "Plugin action discovery and execution for metadata fetching"
+    },
+    {
       "name": "Metrics",
       "description": "Application metrics and statistics"
     },
@@ -23550,6 +26215,8 @@
       "tags": [
         "Admin",
         "Settings",
+        "Plugins",
+        "Plugin Actions",
         "Metrics",
         "Filesystem",
         "Duplicates",

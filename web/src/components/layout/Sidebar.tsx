@@ -23,6 +23,7 @@ import {
 	IconFileTypePdf,
 	IconHome,
 	IconLogout,
+	IconPlugConnected,
 	IconPlus,
 	IconRadar,
 	IconScan,
@@ -33,11 +34,17 @@ import {
 	IconTrashX,
 	IconUser,
 	IconUsers,
+	IconWand,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { librariesApi } from "@/api/libraries";
+import {
+	type PluginActionDto,
+	pluginActionsApi,
+	pluginsApi,
+} from "@/api/plugins";
 import { LibraryModal } from "@/components/forms/LibraryModal";
 import { TaskNotificationBadge } from "@/components/TaskNotificationBadge";
 import { useAppInfo } from "@/hooks/useAppInfo";
@@ -77,6 +84,14 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 	const { data: libraries } = useQuery({
 		queryKey: ["libraries"],
 		queryFn: librariesApi.getAll,
+	});
+
+	// Fetch available plugin actions for library:detail scope
+	const { data: pluginActions } = useQuery({
+		queryKey: ["plugin-actions", "library:detail"],
+		queryFn: () => pluginsApi.getActions("library:detail"),
+		staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+		enabled: canEditLibrary, // Only fetch if user can edit libraries
 	});
 
 	const scanMutation = useMutation({
@@ -149,11 +164,55 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 		},
 	});
 
+	// Auto-match mutation for library-wide metadata matching
+	const autoMatchMutation = useMutation({
+		mutationFn: ({
+			libraryId,
+			pluginId,
+		}: {
+			libraryId: string;
+			pluginId: string;
+		}) => pluginActionsApi.enqueueLibraryAutoMatchTasks(libraryId, pluginId),
+		onSuccess: (data) => {
+			if (data.success) {
+				notifications.show({
+					title: "Auto-match started",
+					message: data.message,
+					color: "blue",
+				});
+			} else {
+				notifications.show({
+					title: "Auto-match",
+					message: data.message,
+					color: "yellow",
+				});
+			}
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Auto-match failed",
+				message: error.message || "Failed to start auto-match",
+				color: "red",
+			});
+		},
+	});
+
 	const handleScanAll = (mode: "normal" | "deep") => {
 		if (!libraries) return;
 
 		libraries.forEach((library) => {
 			scanMutation.mutate({ libraryId: library.id, mode });
+		});
+	};
+
+	// Handler for library auto-match action
+	const handleLibraryAutoMatch = (
+		library: Library,
+		plugin: PluginActionDto,
+	) => {
+		autoMatchMutation.mutate({
+			libraryId: library.id,
+			pluginId: plugin.pluginId,
 		});
 	};
 
@@ -317,6 +376,45 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 															>
 																Edit Library
 															</Menu.Item>
+															{/* Plugin actions for library-wide auto-match */}
+															{(() => {
+																// Filter plugin actions to only show those that apply to this library
+																// Empty libraryIds means plugin applies to all libraries
+																const libraryPluginActions =
+																	pluginActions?.actions.filter((action) => {
+																		const libIds = action.libraryIds ?? [];
+																		return (
+																			libIds.length === 0 ||
+																			libIds.includes(library.id)
+																		);
+																	}) ?? [];
+
+																return (
+																	libraryPluginActions.length > 0 && (
+																		<>
+																			<Menu.Divider />
+																			<Menu.Label>
+																				Auto Match All Series
+																			</Menu.Label>
+																			{libraryPluginActions.map((action) => (
+																				<Menu.Item
+																					key={`auto-match-${action.pluginId}`}
+																					leftSection={<IconWand size={16} />}
+																					onClick={() =>
+																						handleLibraryAutoMatch(
+																							library,
+																							action,
+																						)
+																					}
+																					disabled={autoMatchMutation.isPending}
+																				>
+																					{action.pluginDisplayName}
+																				</Menu.Item>
+																			))}
+																		</>
+																	)
+																);
+															})()}
 															<Menu.Divider />
 															<Menu.Item
 																leftSection={<IconTrashX size={16} />}
@@ -387,6 +485,13 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 										label="Metrics"
 										leftSection={<IconChartBar size={16} />}
 										active={currentPath.startsWith("/settings/metrics")}
+									/>
+									<NavLink
+										component={Link}
+										to="/settings/plugins"
+										label="Plugins"
+										leftSection={<IconPlugConnected size={16} />}
+										active={currentPath.startsWith("/settings/plugins")}
 									/>
 
 									{/* Access Section */}

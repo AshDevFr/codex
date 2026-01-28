@@ -1,6 +1,6 @@
 # Makefile for Codex development and deployment
 
-.PHONY: help build test run dev-* test-* docs-* docker-* db-* screenshots screenshots-*
+.PHONY: help build test run dev-* test-* docs-* docker-* db-* screenshots screenshots-* plugins-*
 
 # Colors for output
 BLUE := \033[0;34m
@@ -234,8 +234,79 @@ frontend-fixtures: ## Generate mock fixture files (CBZ, EPUB, PDF)
 frontend-lint: ## Run frontend lint
 	cd web && npm run lint
 
-frontend-lint-fix: ## Run frontend lint
+frontend-lint-fix: ## Run frontend lint with auto-fix
 	cd web && npm run lint -- --write
+
+# =============================================================================
+# Plugin Development
+# =============================================================================
+
+PLUGIN_DIRS := sdk-typescript metadata-echo metadata-mangabaka
+
+plugins-install: ## Install dependencies for all plugins
+	@echo "$(BLUE)Installing plugin dependencies...$(NC)"
+	@for dir in $(PLUGIN_DIRS); do \
+		echo "$(YELLOW)Installing $$dir...$(NC)"; \
+		(cd plugins/$$dir && npm install); \
+	done
+	@echo "$(GREEN)All plugin dependencies installed!$(NC)"
+
+plugins-build: ## Build all plugins
+	@echo "$(BLUE)Building plugins...$(NC)"
+	@echo "$(YELLOW)Building sdk-typescript...$(NC)"
+	@cd plugins/sdk-typescript && npm run build
+	@echo "$(YELLOW)Building metadata-echo...$(NC)"
+	@cd plugins/metadata-echo && npm run build
+	@echo "$(YELLOW)Building metadata-mangabaka...$(NC)"
+	@cd plugins/metadata-mangabaka && npm run build
+	@echo "$(GREEN)All plugins built!$(NC)"
+
+plugins-lint: ## Run lint on all plugins
+	@echo "$(BLUE)Linting plugins...$(NC)"
+	@for dir in $(PLUGIN_DIRS); do \
+		echo "$(YELLOW)Linting $$dir...$(NC)"; \
+		(cd plugins/$$dir && npm run lint) || exit 1; \
+	done
+	@echo "$(GREEN)All plugins linted!$(NC)"
+
+plugins-lint-fix: ## Run lint with auto-fix on all plugins
+	@echo "$(BLUE)Fixing lint issues in plugins...$(NC)"
+	@for dir in $(PLUGIN_DIRS); do \
+		echo "$(YELLOW)Fixing $$dir...$(NC)"; \
+		(cd plugins/$$dir && npm run lint:fix) || exit 1; \
+	done
+	@echo "$(GREEN)All plugin lint issues fixed!$(NC)"
+
+plugins-test: ## Run tests on all plugins
+	@echo "$(BLUE)Testing plugins...$(NC)"
+	@for dir in $(PLUGIN_DIRS); do \
+		echo "$(YELLOW)Testing $$dir...$(NC)"; \
+		(cd plugins/$$dir && npm run test) || exit 1; \
+	done
+	@echo "$(GREEN)All plugin tests passed!$(NC)"
+
+plugins-typecheck: ## Run typecheck on all plugins
+	@echo "$(BLUE)Typechecking plugins...$(NC)"
+	@cd plugins/sdk-typescript && npm run build
+	@for dir in $(PLUGIN_DIRS); do \
+		echo "$(YELLOW)Typechecking $$dir...$(NC)"; \
+		(cd plugins/$$dir && npx tsc --noEmit) || exit 1; \
+	done
+	@echo "$(GREEN)All plugins typechecked!$(NC)"
+
+plugins-check: ## Run lint, typecheck, and tests on all plugins
+	@$(MAKE) plugins-lint
+	@$(MAKE) plugins-typecheck
+	@$(MAKE) plugins-test
+	@echo "$(GREEN)All plugin checks passed!$(NC)"
+
+plugins-clean: ## Clean build artifacts from all plugins
+	@echo "$(BLUE)Cleaning plugins...$(NC)"
+	@for dir in $(PLUGIN_DIRS); do \
+		echo "$(YELLOW)Cleaning $$dir...$(NC)"; \
+		(cd plugins/$$dir && npm run clean) || exit 1; \
+	done
+	@echo "$(GREEN)All plugins cleaned!$(NC)"
 
 # =============================================================================
 # Setup
@@ -354,6 +425,8 @@ clean-all: clean clean-docker ## Clean everything (artifacts + Docker + volumes)
 #   3. Find screenshots in screenshots/output/
 
 screenshots: ## Run full screenshot workflow (start, capture, stop)
+	@echo "$(BLUE)Building plugins...$(NC)"
+	@$(MAKE) plugins-build
 	@echo "$(BLUE)Starting screenshot automation...$(NC)"
 	@$(MAKE) screenshots-up
 	@echo "$(YELLOW)Waiting for services to be ready...$(NC)"
@@ -361,6 +434,11 @@ screenshots: ## Run full screenshot workflow (start, capture, stop)
 	@$(MAKE) screenshots-run || ($(MAKE) screenshots-down && exit 1)
 	@$(MAKE) screenshots-down
 	@echo "$(GREEN)Screenshots complete! Check screenshots/output/$(NC)"
+
+screenshots-fresh: ## Run full screenshot workflow with fresh plugins
+	@$(MAKE) screenshots-clean
+	@$(MAKE) screenshots-down
+	@$(MAKE) screenshots
 
 screenshots-up: ## Start screenshot environment
 	docker compose --profile screenshots up -d --build
@@ -385,7 +463,7 @@ screenshots-shell: ## Open shell in Playwright container
 	docker compose --profile screenshots exec playwright sh
 
 screenshots-clean: ## Remove generated screenshots
-	rm -f screenshots/output/*.png screenshots/output/*.jpg
+	rm -rf screenshots/output/*
 	@echo "$(GREEN)Screenshots cleaned$(NC)"
 
 screenshots-move-to-docs: ## Move screenshots to docs/screenshots
@@ -441,12 +519,31 @@ release-prepare: ## Prepare a release (usage: make release-prepare VERSION=1.0.0
 	@# Update Cargo.toml version
 	@sed -i.bak 's/^version = ".*"/version = "$(VERSION)"/' Cargo.toml && rm Cargo.toml.bak
 	@echo "$(GREEN)✓$(NC) Cargo.toml version set to $(VERSION)"
+
 	@# Update web/package.json version
 	@cd web && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null 2>&1
 	@echo "$(GREEN)✓$(NC) web/package.json version set to $(VERSION)"
+
+	@# Update plugins/sdk-typescript/package.json version
+	@cd plugins/sdk-typescript && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null 2>&1
+	@echo "$(GREEN)✓$(NC) plugins/sdk-typescript/package.json version set to $(VERSION)"
+
+	@# Update plugins/metadata-echo/package.json version
+	@cd plugins/metadata-echo && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null 2>&1
+	@echo "$(GREEN)✓$(NC) plugins/metadata-echo/package.json version set to $(VERSION)"
+
+	@# Update plugins/metadata-mangabaka/package.json version
+	@cd plugins/metadata-mangabaka && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null 2>&1
+	@echo "$(GREEN)✓$(NC) plugins/metadata-mangabaka/package.json version set to $(VERSION)"
+
+	@# Update docs/package.json version
+	@cd docs && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null 2>&1
+	@echo "$(GREEN)✓$(NC) docs/package.json version set to $(VERSION)"
+
 	@# Update Cargo.lock
 	@cargo build --quiet 2>/dev/null || cargo build
 	@echo "$(GREEN)✓$(NC) Updated Cargo.lock"
+
 	@# Generate changelog (skip if already modified)
 	@if git diff --quiet CHANGELOG.md 2>/dev/null && git diff --cached --quiet CHANGELOG.md 2>/dev/null; then \
 		$(MAKE) changelog-release VERSION=$(VERSION); \

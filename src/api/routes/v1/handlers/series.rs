@@ -1394,6 +1394,9 @@ pub async fn set_series_cover_source(
         )));
     }
 
+    // Regenerate the series thumbnail to reflect the new cover
+    regenerate_series_thumbnail(&state, series_id).await;
+
     // Emit cover updated event
     let event = EntityChangeEvent {
         event: EntityEvent::CoverUpdated {
@@ -1532,11 +1535,27 @@ pub async fn get_series_thumbnail(
                             );
                         }
 
+                        // Generate ETag from cover ID + thumbnail size + current timestamp
+                        // This ensures browser cache is busted when cover changes
+                        let now = std::time::SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0);
+                        let etag = format!(
+                            "\"{:x}-{:x}-{:x}\"",
+                            cover.id.as_u128(),
+                            thumbnail_data.len(),
+                            now
+                        );
+                        let last_modified_str = fmt_http_date(std::time::SystemTime::now());
+
                         return Ok(Response::builder()
                             .status(StatusCode::OK)
                             .header(header::CONTENT_TYPE, "image/jpeg")
                             .header(header::CACHE_CONTROL, "public, max-age=31536000")
                             .header(header::CONTENT_LENGTH, thumbnail_data.len())
+                            .header(header::ETAG, &etag)
+                            .header(header::LAST_MODIFIED, last_modified_str)
                             .body(Body::from(thumbnail_data))
                             .unwrap());
                     }
@@ -4741,6 +4760,9 @@ pub async fn select_series_cover(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to update series timestamp: {}", e)))?;
 
+    // Regenerate the series thumbnail to reflect the new cover
+    regenerate_series_thumbnail(&state, series_id).await;
+
     // Emit cover updated event
     let event = EntityChangeEvent {
         event: EntityEvent::CoverUpdated {
@@ -4806,6 +4828,9 @@ pub async fn reset_series_cover(
     SeriesRepository::touch(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to update series timestamp: {}", e)))?;
+
+    // Regenerate the series thumbnail to use the default cover (first book's cover)
+    regenerate_series_thumbnail(&state, series_id).await;
 
     // Emit cover updated event
     let event = EntityChangeEvent {
@@ -4901,6 +4926,11 @@ pub async fn delete_series_cover(
     SeriesRepository::touch(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to update series timestamp: {}", e)))?;
+
+    // Regenerate the series thumbnail (will use alternate cover or default)
+    if cover.is_selected {
+        regenerate_series_thumbnail(&state, series_id).await;
+    }
 
     // Emit cover updated event
     let event = EntityChangeEvent {
@@ -5039,6 +5069,42 @@ pub async fn get_series_cover_image(
         .header(header::CACHE_CONTROL, "public, max-age=31536000")
         .body(Body::from_stream(stream))
         .unwrap())
+}
+
+/// Regenerate the series thumbnail by deleting the cache and queuing a new generation task.
+///
+/// This should be called whenever a series cover is selected/unselected to ensure
+/// the cached thumbnail reflects the current cover selection.
+async fn regenerate_series_thumbnail(state: &AuthState, series_id: Uuid) {
+    use crate::db::repositories::TaskRepository;
+    use crate::tasks::types::TaskType;
+
+    // Delete the cached series thumbnail first
+    if let Err(e) = state
+        .thumbnail_service
+        .delete_series_thumbnail(series_id)
+        .await
+    {
+        tracing::warn!(
+            "Failed to delete series thumbnail cache for {}: {}",
+            series_id,
+            e
+        );
+    }
+
+    // Queue a task to regenerate the thumbnail with force=true
+    let task_type = TaskType::GenerateSeriesThumbnail {
+        series_id,
+        force: true, // Force regeneration since we just deleted the cache
+    };
+
+    if let Err(e) = TaskRepository::enqueue(&state.db, task_type, 0, None).await {
+        tracing::warn!(
+            "Failed to queue series thumbnail regeneration task for {}: {}",
+            series_id,
+            e
+        );
+    }
 }
 
 #[cfg(test)]

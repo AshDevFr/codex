@@ -1,4 +1,4 @@
-import { ActionIcon, Group, Tooltip } from "@mantine/core";
+import { Badge, Group } from "@mantine/core";
 import { IconExternalLink } from "@tabler/icons-react";
 import type { ExternalLink } from "@/api/seriesMetadata";
 
@@ -9,14 +9,14 @@ interface ExternalLinksProps {
 // Map source names to display names and colors
 const SOURCE_CONFIG: Record<
 	string,
-	{ name: string; color: string; icon?: string }
+	{ name: string; color: string; abbrev?: string }
 > = {
-	myanimelist: { name: "MyAnimeList", color: "#2e51a2" },
+	myanimelist: { name: "MyAnimeList", color: "#2e51a2", abbrev: "MAL" },
 	anilist: { name: "AniList", color: "#02a9ff" },
 	mangabaka: { name: "MangaBaka", color: "#ff6b35" },
 	mangadex: { name: "MangaDex", color: "#ff6740" },
 	kitsu: { name: "Kitsu", color: "#f75239" },
-	mangaupdates: { name: "MangaUpdates", color: "#2a4a6d" },
+	mangaupdates: { name: "MangaUpdates", color: "#2a4a6d", abbrev: "MU" },
 	comicvine: { name: "Comic Vine", color: "#e41d25" },
 	goodreads: { name: "Goodreads", color: "#553b08" },
 	amazon: { name: "Amazon", color: "#ff9900" },
@@ -34,21 +34,23 @@ export function ExternalLinks({ links }: ExternalLinksProps) {
 					name: link.sourceName,
 					color: "gray",
 				};
+				const displayName = config.abbrev || config.name;
 
 				return (
-					<Tooltip key={link.id} label={config.name} position="top">
-						<ActionIcon
-							component="a"
-							href={link.url}
-							target="_blank"
-							rel="noopener noreferrer"
-							variant="light"
-							color="gray"
-							size="md"
-						>
-							<IconExternalLink size={16} />
-						</ActionIcon>
-					</Tooltip>
+					<Badge
+						key={link.id}
+						component="a"
+						href={link.url}
+						target="_blank"
+						rel="noopener noreferrer"
+						variant="light"
+						color={config.color}
+						size="sm"
+						rightSection={<IconExternalLink size={10} />}
+						style={{ cursor: "pointer" }}
+					>
+						{displayName}
+					</Badge>
 				);
 			})}
 		</Group>

@@ -116,10 +116,60 @@ jobs:
         working-directory: web
         run: npm run build
 
+  # Run plugin checks (lint, typecheck, tests)
+  plugins:
+    name: Plugins (${{ matrix.plugin }})
+    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
+    runs-on: arc-runner-codex
+    container: ubuntu:22.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin:
+          - sdk-typescript
+          - metadata-echo
+          - metadata-mangabaka
+    steps:
+      - name: Install base dependencies
+        run: |
+          apt-get update
+          apt-get install -y git curl
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # SDK must be built first for other plugins to use
+      - name: Build SDK (dependency)
+        if: matrix.plugin != 'sdk-typescript'
+        working-directory: plugins/sdk-typescript
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
+          npm run build
+      - name: Install dependencies
+        working-directory: plugins/${{ matrix.plugin }}
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
+      - name: Lint
+        working-directory: plugins/${{ matrix.plugin }}
+        run: npm run lint
+      - name: Typecheck
+        working-directory: plugins/${{ matrix.plugin }}
+        run: npx tsc --noEmit
+      - name: Test
+        working-directory: plugins/${{ matrix.plugin }}
+        run: npm run test
+      - name: Build
+        working-directory: plugins/${{ matrix.plugin }}
+        run: npm run build
+
   # Build and push Docker image with PR tag
   docker:
     name: Docker
-    needs: [test, lint, frontend]
+    needs: [test, lint, frontend, plugins]
     runs-on: arc-runner-codex
     timeout-minutes: 240
     steps:

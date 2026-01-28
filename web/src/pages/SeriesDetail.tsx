@@ -28,12 +28,21 @@ import {
 	IconDownload,
 	IconEdit,
 	IconPhoto,
+	IconSearch,
+	IconWand,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+	type PluginActionDto,
+	pluginActionsApi,
+	pluginsApi,
+} from "@/api/plugins";
 import { seriesApi } from "@/api/series";
 import { settingsApi } from "@/api/settings";
 import { sharingTagsApi } from "@/api/sharingTags";
+import { MetadataApplyFlow } from "@/components/metadata";
 import {
 	AlternateTitles,
 	CommunityRating,
@@ -46,6 +55,7 @@ import {
 	SeriesRating,
 } from "@/components/series";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import { PERMISSIONS } from "@/types/permissions";
 import { transformFullSeriesToMetadataForTemplate } from "@/utils/templateUtils";
 
@@ -77,6 +87,20 @@ export function SeriesDetail() {
 	const [editModalOpened, { open: openEditModal, close: closeEditModal }] =
 		useDisclosure(false);
 
+	// Get cover update timestamp for cache-busting (forces image reload when cover is regenerated via SSE)
+	const coverTimestamp = useCoverUpdatesStore((state) =>
+		seriesId ? state.updates[seriesId] : undefined,
+	);
+
+	// Plugin metadata flow state
+	const [selectedPlugin, setSelectedPlugin] = useState<PluginActionDto | null>(
+		null,
+	);
+	const [
+		metadataFlowOpened,
+		{ open: openMetadataFlow, close: closeMetadataFlow },
+	] = useDisclosure(false);
+
 	// Fetch full series data (includes metadata, genres, tags, etc.)
 	const {
 		data: series,
@@ -101,6 +125,61 @@ export function SeriesDetail() {
 		queryFn: () => sharingTagsApi.getForSeries(seriesId!),
 		enabled: !!seriesId && isAdmin,
 	});
+
+	// Fetch available plugin actions for series:detail scope, filtered by library
+	const { data: pluginActions } = useQuery({
+		queryKey: ["plugin-actions", "series:detail", series?.libraryId],
+		queryFn: () => pluginsApi.getActions("series:detail", series?.libraryId),
+		staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+		enabled: canEditSeries && !!series, // Only fetch if user can edit series and series is loaded
+	});
+
+	// Handler for plugin action click (opens search modal)
+	const handlePluginAction = (plugin: PluginActionDto) => {
+		setSelectedPlugin(plugin);
+		openMetadataFlow();
+	};
+
+	// Auto-match mutation
+	const autoMatchMutation = useMutation({
+		mutationFn: (pluginId: string) =>
+			pluginActionsApi.autoMatchSeriesMetadata(seriesId!, pluginId),
+		onSuccess: (data) => {
+			if (data.success) {
+				notifications.show({
+					title: "Metadata Applied",
+					message: data.message,
+					color: "green",
+					icon: <IconCheck size={16} />,
+				});
+				queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
+			} else {
+				notifications.show({
+					title: "No Match Found",
+					message: data.message,
+					color: "yellow",
+				});
+			}
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Auto-match Failed",
+				message: error.message,
+				color: "red",
+			});
+		},
+	});
+
+	// Handler for auto-match action
+	const handleAutoMatch = (plugin: PluginActionDto) => {
+		autoMatchMutation.mutate(plugin.pluginId);
+	};
+
+	// Handler for metadata apply success
+	const handleMetadataApplySuccess = () => {
+		// Refetch series data to show updated metadata
+		queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
+	};
 
 	// Mark as read mutation
 	const markAsReadMutation = useMutation({
@@ -267,7 +346,9 @@ export function SeriesDetail() {
 		);
 	}
 
-	const coverUrl = `/api/v1/series/${series.id}/thumbnail?v=${encodeURIComponent(series.updatedAt)}`;
+	// Use coverTimestamp from SSE events for cache-busting, fall back to series.updatedAt
+	const coverCacheBuster = coverTimestamp ?? series.updatedAt;
+	const coverUrl = `/api/v1/series/${series.id}/thumbnail?v=${encodeURIComponent(String(coverCacheBuster))}`;
 	const hasUnread = (series.unreadCount ?? 0) > 0;
 	const hasRead = (series.bookCount ?? 0) > (series.unreadCount ?? 0);
 	// Access metadata fields from the nested metadata object
@@ -366,7 +447,7 @@ export function SeriesDetail() {
 									</Group>
 								</Box>
 
-								<Menu shadow="md" width={200} position="bottom-end">
+								<Menu shadow="md" width={240} position="bottom-end">
 									<Menu.Target>
 										<ActionIcon variant="subtle" size="lg">
 											<IconDotsVertical size={20} />
@@ -431,6 +512,34 @@ export function SeriesDetail() {
 												>
 													Edit Metadata
 												</Menu.Item>
+												{/* Plugin actions for metadata fetching */}
+												{pluginActions && pluginActions.actions.length > 0 && (
+													<>
+														<Menu.Divider />
+														<Menu.Label>Fetch Metadata</Menu.Label>
+														{pluginActions.actions.map((action) => (
+															<Menu.Item
+																key={`search-${action.pluginId}`}
+																leftSection={<IconSearch size={14} />}
+																onClick={() => handlePluginAction(action)}
+															>
+																{action.label}
+															</Menu.Item>
+														))}
+														<Menu.Divider />
+														<Menu.Label>Auto Match</Menu.Label>
+														{pluginActions.actions.map((action) => (
+															<Menu.Item
+																key={`auto-${action.pluginId}`}
+																leftSection={<IconWand size={14} />}
+																onClick={() => handleAutoMatch(action)}
+																disabled={autoMatchMutation.isPending}
+															>
+																Auto Match ({action.pluginDisplayName})
+															</Menu.Item>
+														))}
+													</>
+												)}
 											</>
 										)}
 									</Menu.Dropdown>
@@ -613,6 +722,19 @@ export function SeriesDetail() {
 				seriesId={series.id}
 				seriesTitle={seriesTitle}
 			/>
+
+			{/* Plugin Metadata Apply Flow */}
+			{selectedPlugin && (
+				<MetadataApplyFlow
+					opened={metadataFlowOpened}
+					onClose={closeMetadataFlow}
+					plugin={selectedPlugin}
+					entityId={series.id}
+					entityTitle={seriesTitle}
+					contentType="series"
+					onApplySuccess={handleMetadataApplySuccess}
+				/>
+			)}
 		</Box>
 	);
 }

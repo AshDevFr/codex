@@ -26,32 +26,8 @@ export type BookMetadata = components["schemas"]["BookMetadataDto"];
 export type AdjacentBooksResponse =
 	components["schemas"]["AdjacentBooksResponse"];
 
-// Book metadata lock types
-export interface BookMetadataLocks {
-	summaryLock: boolean;
-	writerLock: boolean;
-	pencillerLock: boolean;
-	inkerLock: boolean;
-	coloristLock: boolean;
-	lettererLock: boolean;
-	coverArtistLock: boolean;
-	editorLock: boolean;
-	publisherLock: boolean;
-	imprintLock: boolean;
-	genreLock: boolean;
-	webLock: boolean;
-	languageIsoLock: boolean;
-	formatDetailLock: boolean;
-	blackAndWhiteLock: boolean;
-	mangaLock: boolean;
-	yearLock: boolean;
-	monthLock: boolean;
-	dayLock: boolean;
-	volumeLock: boolean;
-	countLock: boolean;
-	isbnsLock: boolean;
-}
-
+// Book metadata lock types (re-export from generated types)
+export type BookMetadataLocks = components["schemas"]["BookMetadataLocks"];
 export type UpdateBookMetadataLocksRequest = Partial<BookMetadataLocks>;
 
 export interface BookFilters {
