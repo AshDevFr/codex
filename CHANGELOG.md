@@ -2,6 +2,20 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.2.0] - 2026-01-31
+
+### 🚀 Features
+
+- *(web)* Upgrade Mantine to v8 and refine card styling
+- *(filters)* Add series completion filter
+
+### 🐛 Bug Fixes
+
+- *(metadata)* Update title_sort automatically when title changes via plugin
+- *(ci)* Add docker job dependency to release step
+- *(plugins)* Improve npx support with npm cache dir and absolute path handling
+- *(plugins)* Prevent panic when logging UTF-8 responses with multi-byte chars
+
 ## [1.1.0] - 2026-01-31
 
 ### 🚀 Features
