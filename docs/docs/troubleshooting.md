@@ -321,7 +321,7 @@ This was fixed in recent versions. If you experience this:
 2. **Monitor the Task Queue**:
    Go to **Settings** > **Tasks** to view active and pending tasks.
 
-   ![Task Queue](./screenshots/settings/tasks.png)
+   ![Task Queue](../screenshots/settings/tasks.png)
 
 3. **Use normal scan** for updates:
    Deep scans re-process everything.
@@ -590,6 +590,181 @@ This was fixed in recent versions. If you experience this:
 3. **Regenerate thumbnails**:
    Run a scan to regenerate missing thumbnails.
 
+## Plugin Issues
+
+Codex supports external plugins for metadata providers and other integrations. Plugins run as separate processes managed by Codex.
+
+### Plugin Won't Start
+
+#### Symptoms
+
+- "INIT_ERROR" health status
+- Plugin shows as disabled
+- "Command not found" error
+
+#### Solutions
+
+1. **Verify the command exists**:
+   ```bash
+   # Test the command directly
+   /path/to/plugin/command --version
+
+   # For Node.js plugins
+   node /path/to/plugin/index.js
+   ```
+
+2. **Check working directory**:
+   If the plugin expects to be run from a specific directory:
+   ```yaml
+   # In plugin configuration
+   workingDirectory: /opt/codex/plugins/my-plugin
+   ```
+
+3. **Verify arguments**:
+   Plugin arguments must be valid. Test manually:
+   ```bash
+   node /path/to/plugin/index.js arg1 arg2
+   ```
+
+4. **Check Docker permissions**:
+   If running in Docker, ensure the plugin command is available inside the container.
+
+### Plugin Auto-Disabled
+
+#### Symptoms
+
+- Plugin health shows "disabled"
+- "disabled_reason" shows failure count exceeded threshold
+- Red status badge on plugin row
+
+#### Recovery Steps
+
+1. **Go to Settings > Plugins**
+2. **Review the failure history**:
+   - Click the expand arrow on the plugin row
+   - Check the "Failure History" section
+   - Look at error codes and messages
+
+3. **Fix the underlying issue**:
+   - `TIMEOUT`: Plugin took too long; check network or increase timeout
+   - `RATE_LIMITED`: External API throttling; reduce request rate
+   - `AUTH_FAILED`: Invalid credentials; update API key
+   - `RPC_ERROR`: Plugin returned an error; check plugin logs
+   - `PROCESS_CRASHED`: Plugin crashed; check command/args
+
+4. **Reset failures**:
+   - Click the "Reset Failures" button (refresh icon)
+   - This clears the failure counter
+
+5. **Re-enable the plugin**:
+   - Toggle the "Status" switch to ON
+   - Codex will attempt to start the plugin
+
+### Rate Limit Errors
+
+#### Symptoms
+
+- "RATE_LIMITED" error code
+- Requests rejected before reaching plugin
+- Plugin health showing "degraded"
+
+#### Solutions
+
+1. **Reduce request rate** in plugin settings:
+   ```yaml
+   rateLimitRequestsPerMinute: 30  # Lower than default 60
+   ```
+
+2. **Check external API limits**:
+   External providers (AniList, MangaUpdates, etc.) have their own rate limits.
+   Configure Codex's rate limit to stay well below external limits.
+
+3. **Stagger bulk operations**:
+   For bulk metadata operations, consider processing in smaller batches.
+
+### Invalid Credentials
+
+#### Symptoms
+
+- "AUTH_FAILED" error
+- Plugin can't access external API
+- 401/403 errors in failure history
+
+#### Solutions
+
+1. **Update credentials**:
+   - Go to Settings > Plugins
+   - Click Edit on the plugin
+   - Go to "Credentials" tab
+   - Enter new credentials as JSON
+
+2. **Check credential format**:
+   ```json
+   {
+     "api_key": "your-actual-api-key"
+   }
+   ```
+
+3. **Verify credential delivery**:
+   Plugins can receive credentials via:
+   - `env`: Environment variables (most common)
+   - `config`: In the config JSON
+   - `stdin`: Via standard input
+
+### Plugin Timeout
+
+#### Symptoms
+
+- "TIMEOUT" error code
+- Operations taking too long
+- High latency in health checks
+
+#### Solutions
+
+1. **Check plugin health**:
+   - Is the external API slow?
+   - Is there network latency?
+
+2. **Increase timeout** (if using custom plugin):
+   Default timeout is 30 seconds. For slow APIs, consider:
+   - Implementing caching in the plugin
+   - Processing requests asynchronously
+
+3. **Check network connectivity**:
+   ```bash
+   # From Docker container
+   docker compose exec codex curl -I https://api.example.com
+   ```
+
+### Viewing Plugin Logs
+
+For detailed debugging:
+
+1. **Check Codex logs** for plugin-related messages:
+   ```bash
+   docker compose logs | grep -i "plugin"
+   ```
+
+2. **Check plugin process output**:
+   Plugin stdout/stderr may be captured in logs.
+
+3. **Enable debug logging**:
+   ```bash
+   CODEX_LOGGING_LEVEL=debug docker compose up
+   ```
+
+### Common Error Codes
+
+| Error Code | Description | Common Fixes |
+|------------|-------------|--------------|
+| `INIT_ERROR` | Plugin failed to start | Check command, args, working directory |
+| `TIMEOUT` | Request exceeded time limit | Check network, reduce payload size |
+| `RATE_LIMITED` | Too many requests | Reduce rate limit setting |
+| `AUTH_FAILED` | Authentication failed | Update credentials |
+| `RPC_ERROR` | Plugin returned an error | Check plugin logs, fix plugin code |
+| `PROCESS_CRASHED` | Plugin process died | Check command, memory, dependencies |
+| `PROTOCOL_ERROR` | Invalid JSON-RPC response | Plugin SDK mismatch, update plugin |
+
 ## Getting Help
 
 If you're still experiencing issues:
@@ -598,9 +773,9 @@ If you're still experiencing issues:
 
 Go to **Settings** > **Metrics** to view server statistics including inventory counts and task history.
 
-![Server Metrics - Inventory](./screenshots/settings/metrics.png)
+![Server Metrics - Inventory](../screenshots/settings/metrics.png)
 
-![Server Metrics - Tasks](./screenshots/settings/metrics-tasks.png)
+![Server Metrics - Tasks](../screenshots/settings/metrics-tasks.png)
 
 ### Gather Information
 

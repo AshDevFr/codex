@@ -1,7 +1,11 @@
 use axum::{extract::State, Json};
+use chrono::Utc;
 use std::sync::Arc;
 
-use super::super::dto::{LibraryMetricsDto, MetricsDto};
+use super::super::dto::{
+    LibraryMetricsDto, MetricsDto, PluginMethodMetricsDto, PluginMetricsDto, PluginMetricsResponse,
+    PluginMetricsSummaryDto,
+};
 use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission, AppState};
 use crate::db::repositories::MetricsRepository;
 
@@ -107,5 +111,103 @@ pub async fn get_inventory_metrics(
         database_size,
         page_count,
         libraries,
+    }))
+}
+
+/// Get plugin metrics
+///
+/// Returns real-time performance statistics for all plugins including:
+/// - Summary metrics across all plugins
+/// - Per-plugin breakdown with timing, error rates, and health status
+/// - Per-method breakdown within each plugin
+///
+/// # Permission Required
+/// - `libraries:read` or admin status
+#[utoipa::path(
+    get,
+    path = "/api/v1/metrics/plugins",
+    responses(
+        (status = 200, description = "Plugin metrics retrieved successfully", body = PluginMetricsResponse),
+        (status = 403, description = "Permission denied"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Metrics"
+)]
+pub async fn get_plugin_metrics(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+) -> Result<Json<PluginMetricsResponse>, ApiError> {
+    auth.require_permission(&Permission::LibrariesRead)?;
+
+    let summary = state.plugin_metrics_service.get_summary().await;
+    let plugin_snapshots = state.plugin_metrics_service.get_all_metrics().await;
+
+    // Convert snapshots to DTOs
+    let plugins: Vec<PluginMetricsDto> = plugin_snapshots
+        .into_iter()
+        .map(|snapshot| {
+            let by_method = if snapshot.by_method.is_empty() {
+                None
+            } else {
+                Some(
+                    snapshot
+                        .by_method
+                        .into_iter()
+                        .map(|(name, m)| {
+                            (
+                                name,
+                                PluginMethodMetricsDto {
+                                    method: m.method,
+                                    requests_total: m.requests_total,
+                                    requests_success: m.requests_success,
+                                    requests_failed: m.requests_failed,
+                                    avg_duration_ms: m.avg_duration_ms,
+                                },
+                            )
+                        })
+                        .collect(),
+                )
+            };
+
+            let failure_counts = if snapshot.failure_counts.is_empty() {
+                None
+            } else {
+                Some(snapshot.failure_counts)
+            };
+
+            PluginMetricsDto {
+                plugin_id: snapshot.plugin_id,
+                plugin_name: snapshot.plugin_name,
+                requests_total: snapshot.requests_total,
+                requests_success: snapshot.requests_success,
+                requests_failed: snapshot.requests_failed,
+                avg_duration_ms: snapshot.avg_duration_ms,
+                rate_limit_rejections: snapshot.rate_limit_rejections,
+                error_rate_pct: snapshot.error_rate_pct,
+                last_success: snapshot.last_success,
+                last_failure: snapshot.last_failure,
+                health_status: snapshot.health_status.as_str().to_string(),
+                by_method,
+                failure_counts,
+            }
+        })
+        .collect();
+
+    Ok(Json(PluginMetricsResponse {
+        updated_at: Utc::now(),
+        summary: PluginMetricsSummaryDto {
+            total_plugins: summary.total_plugins,
+            healthy_plugins: summary.healthy_plugins,
+            degraded_plugins: summary.degraded_plugins,
+            unhealthy_plugins: summary.unhealthy_plugins,
+            total_requests: summary.total_requests,
+            total_success: summary.total_success,
+            total_failed: summary.total_failed,
+            total_rate_limit_rejections: summary.total_rate_limit_rejections,
+        },
+        plugins,
     }))
 }

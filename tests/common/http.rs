@@ -8,7 +8,7 @@ use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
 use codex::services::{
     plugin::PluginManager, AuthTrackingService, FileCleanupService, InflightThumbnailTracker,
-    PdfPageCache, ReadProgressService, SettingsService, ThumbnailService,
+    PdfPageCache, PluginMetricsService, ReadProgressService, SettingsService, ThumbnailService,
 };
 use codex::utils::jwt::JwtService;
 use http_body_util::BodyExt;
@@ -43,6 +43,7 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
     let pdf_page_cache = Arc::new(PdfPageCache::new(&pdf_config.cache_dir, false)); // Disabled in tests
 
     let plugin_manager = Arc::new(PluginManager::with_defaults(Arc::new(db.clone())));
+    let plugin_metrics_service = Arc::new(PluginMetricsService::new());
 
     Arc::new(AppState {
         db,
@@ -64,6 +65,7 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
         user_auth_cache: Arc::new(UserAuthCache::new()),
         rate_limiter_service: None, // Tests disable rate limiting by default
         plugin_manager,
+        plugin_metrics_service,
     })
 }
 
@@ -91,6 +93,7 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
     let auth_tracking_service = Arc::new(AuthTrackingService::new(db.clone()));
     let pdf_page_cache = Arc::new(PdfPageCache::new(&pdf_config.cache_dir, false)); // Disabled in tests
     let plugin_manager = Arc::new(PluginManager::with_defaults(Arc::new(db.clone())));
+    let plugin_metrics_service = Arc::new(PluginMetricsService::new());
 
     Arc::new(AppState {
         db,
@@ -112,6 +115,7 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
         user_auth_cache: Arc::new(UserAuthCache::new()),
         rate_limiter_service: None, // Tests disable rate limiting by default
         plugin_manager,
+        plugin_metrics_service,
     })
 }
 
@@ -165,6 +169,7 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
     let auth_tracking_service = Arc::new(AuthTrackingService::new(state.db.clone()));
     let pdf_page_cache = Arc::new(PdfPageCache::new(&pdf_config.cache_dir, false)); // Disabled in tests
     let plugin_manager = Arc::new(PluginManager::with_defaults(Arc::new(state.db.clone())));
+    let plugin_metrics_service = Arc::new(PluginMetricsService::new());
     let app_state = Arc::new(AppState {
         db: state.db.clone(),
         jwt_service: state.jwt_service.clone(),
@@ -185,6 +190,7 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
         user_auth_cache: Arc::new(UserAuthCache::new()),
         rate_limiter_service: None, // Tests disable rate limiting by default
         plugin_manager,
+        plugin_metrics_service,
     });
     let config = create_test_config();
     create_router(app_state, &config)

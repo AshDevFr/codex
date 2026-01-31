@@ -62,6 +62,12 @@ mod m20260123_000034_add_analysis_errors_column;
 mod m20260127_000035_create_plugins;
 mod m20260129_000036_seed_plugin_settings;
 
+// Thumbnail cron settings
+mod m20260130_000037_seed_thumbnail_cron_settings;
+
+// Update validation_rules for settings UI hints
+mod m20260130_000038_update_settings_validation_rules;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -116,6 +122,10 @@ impl MigratorTrait for Migrator {
             // Plugin system
             Box::new(m20260127_000035_create_plugins::Migration),
             Box::new(m20260129_000036_seed_plugin_settings::Migration),
+            // Thumbnail cron settings
+            Box::new(m20260130_000037_seed_thumbnail_cron_settings::Migration),
+            // Update validation_rules for settings UI hints
+            Box::new(m20260130_000038_update_settings_validation_rules::Migration),
         ]
     }
 }

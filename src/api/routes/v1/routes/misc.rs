@@ -41,6 +41,7 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/tags/:tag_id", delete(handlers::delete_tag))
         // Metrics routes
         .route("/metrics/inventory", get(handlers::get_inventory_metrics))
+        .route("/metrics/plugins", get(handlers::get_plugin_metrics))
         .route(
             "/metrics/tasks",
             get(handlers::task_metrics::get_task_metrics),

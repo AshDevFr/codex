@@ -25,18 +25,24 @@ import {
 	IconBook,
 	IconBooks,
 	IconChartBar,
+	IconCheck,
 	IconChevronDown,
 	IconChevronRight,
+	IconClock,
 	IconDatabase,
 	IconFolder,
+	IconPlugConnected,
 	IconRefresh,
 	IconTrash,
 	IconUsers,
+	IconX,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
 	LibraryMetricsDto,
 	MetricsDto,
+	PluginMetricsDto,
+	PluginMetricsResponse,
 	TaskMetricsResponse,
 	TaskTypeMetricsDto,
 } from "@/api/metrics";
@@ -626,6 +632,408 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
 	);
 }
 
+// Plugin metrics row with expandable details
+function PluginMetricsRow({ metrics }: { metrics: PluginMetricsDto }) {
+	const [opened, { toggle }] = useDisclosure(false);
+	const successRate =
+		metrics.requests_total > 0
+			? (
+					((metrics.requests_success ?? 0) / metrics.requests_total) *
+					100
+				).toFixed(1)
+			: "0";
+
+	const healthColor =
+		metrics.health_status === "healthy"
+			? "green"
+			: metrics.health_status === "degraded"
+				? "yellow"
+				: metrics.health_status === "unhealthy"
+					? "red"
+					: "gray";
+
+	return (
+		<>
+			<Table.Tr onClick={toggle} style={{ cursor: "pointer" }}>
+				<Table.Td>
+					<Group gap="xs">
+						{opened ? (
+							<IconChevronDown size={14} />
+						) : (
+							<IconChevronRight size={14} />
+						)}
+						<Text fw={500} size="sm">
+							{metrics.plugin_name}
+						</Text>
+					</Group>
+				</Table.Td>
+				<Table.Td>
+					<Text size="sm">{metrics.requests_total.toLocaleString()}</Text>
+				</Table.Td>
+				<Table.Td>
+					<Group gap="xs">
+						<Progress
+							value={Number.parseFloat(successRate)}
+							color={
+								Number.parseFloat(successRate) >= 95
+									? "green"
+									: Number.parseFloat(successRate) >= 80
+										? "yellow"
+										: "red"
+							}
+							size="sm"
+							w={60}
+						/>
+						<Text size="sm">{successRate}%</Text>
+					</Group>
+				</Table.Td>
+				<Table.Td>
+					<Text size="sm">{formatDuration(metrics.avg_duration_ms ?? 0)}</Text>
+				</Table.Td>
+				<Table.Td>
+					<Text size="sm">
+						{(metrics.rate_limit_rejections ?? 0).toLocaleString()}
+					</Text>
+				</Table.Td>
+				<Table.Td>
+					<Badge color={healthColor} size="sm" variant="light">
+						{metrics.health_status}
+					</Badge>
+				</Table.Td>
+			</Table.Tr>
+			{opened && (
+				<Table.Tr>
+					<Table.Td colSpan={6} p={0}>
+						<Box bg="var(--mantine-color-gray-light)" p="md">
+							<SimpleGrid cols={{ base: 2, sm: 4, md: 6 }} spacing="md">
+								<div>
+									<Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+										Succeeded
+									</Text>
+									<Text size="sm" fw={500} c="green">
+										{(metrics.requests_success ?? 0).toLocaleString()}
+									</Text>
+								</div>
+								<div>
+									<Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+										Failed
+									</Text>
+									<Text
+										size="sm"
+										fw={500}
+										c={(metrics.requests_failed ?? 0) > 0 ? "red" : undefined}
+									>
+										{(metrics.requests_failed ?? 0).toLocaleString()}
+									</Text>
+								</div>
+								<div>
+									<Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+										Error Rate
+									</Text>
+									<Text
+										size="sm"
+										fw={500}
+										c={
+											(metrics.error_rate_pct ?? 0) > 10
+												? "red"
+												: (metrics.error_rate_pct ?? 0) > 5
+													? "yellow"
+													: undefined
+										}
+									>
+										{(metrics.error_rate_pct ?? 0).toFixed(2)}%
+									</Text>
+								</div>
+								<div>
+									<Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+										Rate Limit Hits
+									</Text>
+									<Text
+										size="sm"
+										fw={500}
+										c={
+											(metrics.rate_limit_rejections ?? 0) > 0
+												? "yellow"
+												: undefined
+										}
+									>
+										{(metrics.rate_limit_rejections ?? 0).toLocaleString()}
+									</Text>
+								</div>
+								{metrics.last_success && (
+									<div>
+										<Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+											Last Success
+										</Text>
+										<Text size="sm" fw={500}>
+											{new Date(metrics.last_success).toLocaleString()}
+										</Text>
+									</div>
+								)}
+								{metrics.last_failure && (
+									<div>
+										<Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+											Last Failure
+										</Text>
+										<Text size="sm" fw={500} c="red">
+											{new Date(metrics.last_failure).toLocaleString()}
+										</Text>
+									</div>
+								)}
+							</SimpleGrid>
+
+							{/* Method breakdown */}
+							{metrics.by_method &&
+								Object.keys(metrics.by_method).length > 0 && (
+									<Box mt="md">
+										<Text size="xs" c="dimmed" tt="uppercase" fw={600} mb="xs">
+											By Method
+										</Text>
+										<SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="xs">
+											{Object.entries(metrics.by_method).map(
+												([method, methodMetrics]) => (
+													<Paper key={method} p="xs" withBorder>
+														<Group justify="space-between" mb={4}>
+															<Text size="xs" fw={500}>
+																{method}
+															</Text>
+															<Badge size="xs" variant="light">
+																{methodMetrics.requests_total} calls
+															</Badge>
+														</Group>
+														<Group gap="xs">
+															<Text size="xs" c="dimmed">
+																{methodMetrics.requests_success} ok
+															</Text>
+															{(methodMetrics.requests_failed ?? 0) > 0 && (
+																<Text size="xs" c="red">
+																	{methodMetrics.requests_failed} failed
+																</Text>
+															)}
+															<Text size="xs" c="dimmed">
+																avg{" "}
+																{formatDuration(methodMetrics.avg_duration_ms)}
+															</Text>
+														</Group>
+													</Paper>
+												),
+											)}
+										</SimpleGrid>
+									</Box>
+								)}
+
+							{/* Failure breakdown */}
+							{metrics.failure_counts &&
+								Object.keys(metrics.failure_counts).length > 0 && (
+									<Box mt="md">
+										<Text size="xs" c="dimmed" tt="uppercase" fw={600} mb="xs">
+											Failures by Type
+										</Text>
+										<Group gap="xs">
+											{Object.entries(metrics.failure_counts).map(
+												([code, count]) => (
+													<Badge
+														key={code}
+														color="red"
+														variant="light"
+														size="sm"
+													>
+														{code}: {count}
+													</Badge>
+												),
+											)}
+										</Group>
+									</Box>
+								)}
+						</Box>
+					</Table.Td>
+				</Table.Tr>
+			)}
+		</>
+	);
+}
+
+// Plugin metrics tab content
+function PluginMetricsTab({ metrics }: { metrics: PluginMetricsResponse }) {
+	const summary = metrics.summary;
+	const plugins = metrics.plugins ?? [];
+
+	const successRate =
+		summary.total_requests > 0
+			? ((summary.total_success ?? 0) / summary.total_requests) * 100
+			: 0;
+
+	return (
+		<Stack gap="lg">
+			{/* Summary cards */}
+			<SimpleGrid cols={{ base: 2, sm: 3, lg: 6 }}>
+				<Paper p="md" withBorder>
+					<Text c="dimmed" size="xs" tt="uppercase" fw={700}>
+						Total Plugins
+					</Text>
+					<Text fw={700} size="xl">
+						{summary.total_plugins}
+					</Text>
+				</Paper>
+				<Paper p="md" withBorder>
+					<Text c="dimmed" size="xs" tt="uppercase" fw={700}>
+						Healthy
+					</Text>
+					<Text fw={700} size="xl" c="green">
+						{summary.healthy_plugins}
+					</Text>
+				</Paper>
+				<Paper p="md" withBorder>
+					<Text c="dimmed" size="xs" tt="uppercase" fw={700}>
+						Degraded
+					</Text>
+					<Text
+						fw={700}
+						size="xl"
+						c={(summary.degraded_plugins ?? 0) > 0 ? "yellow" : undefined}
+					>
+						{summary.degraded_plugins}
+					</Text>
+				</Paper>
+				<Paper p="md" withBorder>
+					<Text c="dimmed" size="xs" tt="uppercase" fw={700}>
+						Unhealthy
+					</Text>
+					<Text
+						fw={700}
+						size="xl"
+						c={(summary.unhealthy_plugins ?? 0) > 0 ? "red" : undefined}
+					>
+						{summary.unhealthy_plugins}
+					</Text>
+				</Paper>
+				<Paper p="md" withBorder>
+					<Text c="dimmed" size="xs" tt="uppercase" fw={700}>
+						Total Requests
+					</Text>
+					<Text fw={700} size="xl">
+						{(summary.total_requests ?? 0).toLocaleString()}
+					</Text>
+				</Paper>
+				<Paper p="md" withBorder>
+					<Text c="dimmed" size="xs" tt="uppercase" fw={700}>
+						Success Rate
+					</Text>
+					<Text
+						fw={700}
+						size="xl"
+						c={
+							successRate >= 95 ? "green" : successRate >= 80 ? "yellow" : "red"
+						}
+					>
+						{successRate.toFixed(1)}%
+					</Text>
+				</Paper>
+			</SimpleGrid>
+
+			{/* Additional stats */}
+			<SimpleGrid cols={{ base: 1, sm: 3 }}>
+				<Paper p="md" withBorder>
+					<Group gap="xs">
+						<IconCheck size={18} color="var(--mantine-color-green-6)" />
+						<div>
+							<Text size="xs" c="dimmed">
+								Successful Requests
+							</Text>
+							<Text fw={500} size="lg">
+								{(summary.total_success ?? 0).toLocaleString()}
+							</Text>
+						</div>
+					</Group>
+				</Paper>
+				<Paper p="md" withBorder>
+					<Group gap="xs">
+						<IconX size={18} color="var(--mantine-color-red-6)" />
+						<div>
+							<Text size="xs" c="dimmed">
+								Failed Requests
+							</Text>
+							<Text
+								fw={500}
+								size="lg"
+								c={(summary.total_failed ?? 0) > 0 ? "red" : undefined}
+							>
+								{(summary.total_failed ?? 0).toLocaleString()}
+							</Text>
+						</div>
+					</Group>
+				</Paper>
+				<Paper p="md" withBorder>
+					<Group gap="xs">
+						<IconClock size={18} color="var(--mantine-color-yellow-6)" />
+						<div>
+							<Text size="xs" c="dimmed">
+								Rate Limit Rejections
+							</Text>
+							<Text
+								fw={500}
+								size="lg"
+								c={
+									(summary.total_rate_limit_rejections ?? 0) > 0
+										? "yellow"
+										: undefined
+								}
+							>
+								{(summary.total_rate_limit_rejections ?? 0).toLocaleString()}
+							</Text>
+						</div>
+					</Group>
+				</Paper>
+			</SimpleGrid>
+
+			{/* Plugin breakdown table */}
+			{plugins.length > 0 ? (
+				<div>
+					<Title order={5} mb="md">
+						Plugin Performance
+					</Title>
+					<Table striped highlightOnHover>
+						<Table.Thead>
+							<Table.Tr>
+								<Table.Th>Plugin</Table.Th>
+								<Table.Th>Requests</Table.Th>
+								<Table.Th>Success Rate</Table.Th>
+								<Table.Th>Avg Duration</Table.Th>
+								<Table.Th>Rate Limited</Table.Th>
+								<Table.Th>Health</Table.Th>
+							</Table.Tr>
+						</Table.Thead>
+						<Table.Tbody>
+							{[...plugins]
+								.sort((a, b) => a.plugin_name.localeCompare(b.plugin_name))
+								.map((plugin) => (
+									<PluginMetricsRow key={plugin.plugin_id} metrics={plugin} />
+								))}
+						</Table.Tbody>
+					</Table>
+				</div>
+			) : (
+				<Paper p="xl" withBorder>
+					<Center>
+						<Stack align="center" gap="xs">
+							<IconPlugConnected
+								size={48}
+								color="var(--mantine-color-dimmed)"
+							/>
+							<Text c="dimmed" size="sm">
+								No plugin metrics available yet
+							</Text>
+							<Text c="dimmed" size="xs">
+								Plugin metrics will appear here after plugins are used
+							</Text>
+						</Stack>
+					</Center>
+				</Paper>
+			)}
+		</Stack>
+	);
+}
+
 export function MetricsSettings() {
 	const queryClient = useQueryClient();
 
@@ -647,6 +1055,16 @@ export function MetricsSettings() {
 	} = useQuery({
 		queryKey: ["metrics", "tasks"],
 		queryFn: metricsApi.getTaskMetrics,
+	});
+
+	// Fetch plugin metrics
+	const {
+		data: pluginMetrics,
+		isLoading: pluginLoading,
+		error: pluginError,
+	} = useQuery({
+		queryKey: ["metrics", "plugins"],
+		queryFn: metricsApi.getPluginMetrics,
 	});
 
 	// Cleanup mutation
@@ -673,7 +1091,7 @@ export function MetricsSettings() {
 		queryClient.invalidateQueries({ queryKey: ["metrics"] });
 	};
 
-	if (inventoryLoading || taskLoading) {
+	if (inventoryLoading || taskLoading || pluginLoading) {
 		return (
 			<Center h={400}>
 				<Loader size="lg" />
@@ -681,7 +1099,7 @@ export function MetricsSettings() {
 		);
 	}
 
-	if (inventoryError || taskError) {
+	if (inventoryError || taskError || pluginError) {
 		return (
 			<Center h={400}>
 				<Stack align="center" gap="md">
@@ -733,6 +1151,12 @@ export function MetricsSettings() {
 					<Tabs.Tab value="tasks" leftSection={<IconChartBar size={16} />}>
 						Task Performance
 					</Tabs.Tab>
+					<Tabs.Tab
+						value="plugins"
+						leftSection={<IconPlugConnected size={16} />}
+					>
+						Plugins
+					</Tabs.Tab>
 				</Tabs.List>
 
 				<Tabs.Panel value="inventory" pt="md">
@@ -741,6 +1165,10 @@ export function MetricsSettings() {
 
 				<Tabs.Panel value="tasks" pt="md">
 					{taskMetrics && <TaskMetricsTab metrics={taskMetrics} />}
+				</Tabs.Panel>
+
+				<Tabs.Panel value="plugins" pt="md">
+					{pluginMetrics && <PluginMetricsTab metrics={pluginMetrics} />}
 				</Tabs.Panel>
 			</Tabs>
 		</Stack>

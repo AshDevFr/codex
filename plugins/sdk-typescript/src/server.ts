@@ -12,7 +12,85 @@ import type {
   MetadataMatchParams,
   MetadataSearchParams,
 } from "./types/protocol.js";
-import { JSON_RPC_ERROR_CODES, type JsonRpcRequest, type JsonRpcResponse } from "./types/rpc.js";
+import {
+  JSON_RPC_ERROR_CODES,
+  type JsonRpcError,
+  type JsonRpcRequest,
+  type JsonRpcResponse,
+} from "./types/rpc.js";
+
+// =============================================================================
+// Parameter Validation
+// =============================================================================
+
+interface ValidationError {
+  field: string;
+  message: string;
+}
+
+/**
+ * Validate that the required string fields are present and non-empty
+ */
+function validateStringFields(params: unknown, fields: string[]): ValidationError | null {
+  if (params === null || params === undefined) {
+    return { field: "params", message: "params is required" };
+  }
+  if (typeof params !== "object") {
+    return { field: "params", message: "params must be an object" };
+  }
+
+  const obj = params as Record<string, unknown>;
+  for (const field of fields) {
+    const value = obj[field];
+    if (value === undefined || value === null) {
+      return { field, message: `${field} is required` };
+    }
+    if (typeof value !== "string") {
+      return { field, message: `${field} must be a string` };
+    }
+    if (value.trim() === "") {
+      return { field, message: `${field} cannot be empty` };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Validate MetadataSearchParams
+ */
+function validateSearchParams(params: unknown): ValidationError | null {
+  return validateStringFields(params, ["query"]);
+}
+
+/**
+ * Validate MetadataGetParams
+ */
+function validateGetParams(params: unknown): ValidationError | null {
+  return validateStringFields(params, ["externalId"]);
+}
+
+/**
+ * Validate MetadataMatchParams
+ */
+function validateMatchParams(params: unknown): ValidationError | null {
+  return validateStringFields(params, ["title"]);
+}
+
+/**
+ * Create an INVALID_PARAMS error response
+ */
+function invalidParamsError(id: string | number | null, error: ValidationError): JsonRpcResponse {
+  return {
+    jsonrpc: "2.0",
+    id,
+    error: {
+      code: JSON_RPC_ERROR_CODES.INVALID_PARAMS,
+      message: `Invalid params: ${error.message}`,
+      data: { field: error.field },
+    } as JsonRpcError,
+  };
+}
 
 /**
  * Initialize parameters received from Codex
@@ -181,7 +259,10 @@ async function handleLine(
     logger.debug(`Received request: ${request.method}`, { id: request.id });
 
     const response = await handleRequest(request, manifest, provider, onInitialize, logger);
-    writeResponse(response);
+    // Shutdown handler writes response directly and returns null
+    if (response !== null) {
+      writeResponse(response);
+    }
   } catch (error) {
     if (error instanceof SyntaxError) {
       // JSON parse error
@@ -242,32 +323,48 @@ async function handleRequest(
         result: "pong",
       };
 
-    case "shutdown":
+    case "shutdown": {
       logger.info("Shutdown requested");
-      // Give time for response to be sent before exiting
-      setTimeout(() => process.exit(0), 100);
-      return {
+      // Write response directly with callback to ensure it's flushed before exit
+      const response: JsonRpcResponse = {
         jsonrpc: "2.0",
         id,
         result: null,
       };
+      process.stdout.write(`${JSON.stringify(response)}\n`, () => {
+        // Callback is called after the write is flushed to the OS
+        process.exit(0);
+      });
+      // Return a sentinel that handleLine will recognize and skip normal writeResponse
+      return null as unknown as JsonRpcResponse;
+    }
 
     // Series metadata methods (scoped by content type)
-    case "metadata/series/search":
+    case "metadata/series/search": {
+      const validationError = validateSearchParams(params);
+      if (validationError) {
+        return invalidParamsError(id, validationError);
+      }
       return {
         jsonrpc: "2.0",
         id,
         result: await provider.search(params as MetadataSearchParams),
       };
+    }
 
-    case "metadata/series/get":
+    case "metadata/series/get": {
+      const validationError = validateGetParams(params);
+      if (validationError) {
+        return invalidParamsError(id, validationError);
+      }
       return {
         jsonrpc: "2.0",
         id,
         result: await provider.get(params as MetadataGetParams),
       };
+    }
 
-    case "metadata/series/match":
+    case "metadata/series/match": {
       if (!provider.match) {
         return {
           jsonrpc: "2.0",
@@ -278,11 +375,16 @@ async function handleRequest(
           },
         };
       }
+      const validationError = validateMatchParams(params);
+      if (validationError) {
+        return invalidParamsError(id, validationError);
+      }
       return {
         jsonrpc: "2.0",
         id,
         result: await provider.match(params as MetadataMatchParams),
       };
+    }
 
     // Future: book metadata methods
     // case "metadata/book/search":

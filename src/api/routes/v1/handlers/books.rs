@@ -71,28 +71,6 @@ pub struct BookListQuery {
     pub full: bool,
 }
 
-/// Query parameters for listing books with analysis errors
-#[derive(Debug, Deserialize, utoipa::IntoParams)]
-#[serde(rename_all = "camelCase")]
-#[into_params(rename_all = "camelCase")]
-pub struct BooksWithErrorsQuery {
-    /// Optional library filter
-    #[serde(default)]
-    pub library_id: Option<Uuid>,
-
-    /// Optional series filter
-    #[serde(default)]
-    pub series_id: Option<Uuid>,
-
-    /// Page number (1-indexed, minimum 1)
-    #[serde(default = "default_page")]
-    pub page: u64,
-
-    /// Number of items per page (max 100, default 50)
-    #[serde(default = "default_page_size")]
-    pub page_size: u64,
-}
-
 /// Query parameters for getting a single book
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
@@ -748,194 +726,6 @@ pub async fn list_books_filtered(
         let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
         Ok(paginated_response(response, &link_builder))
     }
-}
-
-/// List books with analysis errors
-#[utoipa::path(
-    get,
-    path = "/api/v1/books/with-errors",
-    params(BooksWithErrorsQuery),
-    responses(
-        (status = 200, description = "Paginated list of books with analysis errors", body = BookListResponse),
-        (status = 403, description = "Forbidden"),
-    ),
-    security(
-        ("jwt_bearer" = []),
-        ("api_key" = [])
-    ),
-    tag = "Books"
-)]
-pub async fn list_books_with_errors(
-    State(state): State<Arc<AuthState>>,
-    auth: AuthContext,
-    Query(query): Query<BooksWithErrorsQuery>,
-) -> Result<Response, ApiError> {
-    require_permission!(auth, Permission::BooksRead)?;
-
-    // Validate and normalize pagination params (1-indexed)
-    let page = query.page.max(1);
-    let page_size = if query.page_size == 0 {
-        default_page_size()
-    } else {
-        query.page_size.min(MAX_PAGE_SIZE)
-    };
-    let offset = (page - 1) * page_size;
-
-    // Fetch books with errors
-    let (books_list, total) = BookRepository::list_with_errors(
-        &state.db,
-        query.library_id,
-        query.series_id,
-        offset,
-        page_size,
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to fetch books with errors: {}", e)))?;
-
-    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
-
-    // Build pagination links
-    let total_pages = if page_size == 0 {
-        0
-    } else {
-        total.div_ceil(page_size)
-    };
-    let mut link_builder =
-        PaginationLinkBuilder::new("/api/v1/books/with-errors", page, page_size, total_pages);
-    if let Some(library_id) = query.library_id {
-        link_builder = link_builder.with_param("library_id", &library_id.to_string());
-    }
-    if let Some(series_id) = query.series_id {
-        link_builder = link_builder.with_param("series_id", &series_id.to_string());
-    }
-
-    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
-
-    Ok(paginated_response(response, &link_builder))
-}
-
-/// List books with analysis errors in a specific library
-#[utoipa::path(
-    get,
-    path = "/api/v1/libraries/{library_id}/books/with-errors",
-    params(
-        ("library_id" = Uuid, Path, description = "Library ID"),
-        BooksWithErrorsQuery
-    ),
-    responses(
-        (status = 200, description = "Paginated list of books with analysis errors in library", body = BookListResponse),
-        (status = 403, description = "Forbidden"),
-    ),
-    security(
-        ("jwt_bearer" = []),
-        ("api_key" = [])
-    ),
-    tag = "Books"
-)]
-pub async fn list_library_books_with_errors(
-    State(state): State<Arc<AuthState>>,
-    auth: AuthContext,
-    Path(library_id): Path<Uuid>,
-    Query(query): Query<BooksWithErrorsQuery>,
-) -> Result<Response, ApiError> {
-    require_permission!(auth, Permission::BooksRead)?;
-
-    // Validate and normalize pagination params (1-indexed)
-    let page = query.page.max(1);
-    let page_size = if query.page_size == 0 {
-        default_page_size()
-    } else {
-        query.page_size.min(MAX_PAGE_SIZE)
-    };
-    let offset = (page - 1) * page_size;
-
-    let (books_list, total) =
-        BookRepository::list_with_errors(&state.db, Some(library_id), None, offset, page_size)
-            .await
-            .map_err(|e| {
-                ApiError::Internal(format!("Failed to fetch library books with errors: {}", e))
-            })?;
-
-    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
-
-    // Build pagination links
-    let total_pages = if page_size == 0 {
-        0
-    } else {
-        total.div_ceil(page_size)
-    };
-    let link_builder = PaginationLinkBuilder::new(
-        &format!("/api/v1/libraries/{}/books/with-errors", library_id),
-        page,
-        page_size,
-        total_pages,
-    );
-
-    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
-
-    Ok(paginated_response(response, &link_builder))
-}
-
-/// List books with analysis errors in a specific series
-#[utoipa::path(
-    get,
-    path = "/api/v1/series/{series_id}/books/with-errors",
-    params(
-        ("series_id" = Uuid, Path, description = "Series ID"),
-        BooksWithErrorsQuery
-    ),
-    responses(
-        (status = 200, description = "Paginated list of books with analysis errors in series", body = BookListResponse),
-        (status = 403, description = "Forbidden"),
-    ),
-    security(
-        ("jwt_bearer" = []),
-        ("api_key" = [])
-    ),
-    tag = "Books"
-)]
-pub async fn list_series_books_with_errors(
-    State(state): State<Arc<AuthState>>,
-    auth: AuthContext,
-    Path(series_id): Path<Uuid>,
-    Query(query): Query<BooksWithErrorsQuery>,
-) -> Result<Response, ApiError> {
-    require_permission!(auth, Permission::BooksRead)?;
-
-    // Validate and normalize pagination params (1-indexed)
-    let page = query.page.max(1);
-    let page_size = if query.page_size == 0 {
-        default_page_size()
-    } else {
-        query.page_size.min(MAX_PAGE_SIZE)
-    };
-    let offset = (page - 1) * page_size;
-
-    let (books_list, total) =
-        BookRepository::list_with_errors(&state.db, None, Some(series_id), offset, page_size)
-            .await
-            .map_err(|e| {
-                ApiError::Internal(format!("Failed to fetch series books with errors: {}", e))
-            })?;
-
-    let dtos = books_to_dtos(&state.db, auth.user_id, books_list).await?;
-
-    // Build pagination links
-    let total_pages = if page_size == 0 {
-        0
-    } else {
-        total.div_ceil(page_size)
-    };
-    let link_builder = PaginationLinkBuilder::new(
-        &format!("/api/v1/series/{}/books/with-errors", series_id),
-        page,
-        page_size,
-        total_pages,
-    );
-
-    let response = BookListResponse::with_builder(dtos, page, page_size, total, &link_builder);
-
-    Ok(paginated_response(response, &link_builder))
 }
 
 /// Get book by ID
@@ -2852,7 +2642,7 @@ pub async fn upload_book_cover(
 }
 
 // ============================================================================
-// Book Error Endpoints (v2 - Enhanced with grouping and retry)
+// Book Error Endpoints (Enhanced with grouping and retry)
 // ============================================================================
 
 use super::super::dto::{
@@ -2863,11 +2653,11 @@ use crate::db::entities::book_error::{parse_analysis_errors, BookErrorType};
 use crate::db::repositories::TaskRepository;
 use crate::tasks::types::TaskType;
 
-/// Query parameters for v2 books with errors endpoint
+/// Query parameters for listing books with analysis errors
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
 #[into_params(rename_all = "camelCase")]
-pub struct BooksWithErrorsQueryV2 {
+pub struct BooksWithErrorsQuery {
     /// Optional library filter
     #[serde(default)]
     pub library_id: Option<Uuid>,
@@ -2889,15 +2679,15 @@ pub struct BooksWithErrorsQueryV2 {
     pub page_size: u64,
 }
 
-/// List books with errors (v2 - grouped by error type)
+/// List books with errors (grouped by error type)
 ///
 /// Returns books with errors grouped by error type, with counts and pagination.
-/// This enhanced endpoint provides detailed error information including error
+/// This endpoint provides detailed error information including error
 /// types, messages, and timestamps.
 #[utoipa::path(
     get,
     path = "/api/v1/books/errors",
-    params(BooksWithErrorsQueryV2),
+    params(BooksWithErrorsQuery),
     responses(
         (status = 200, description = "Books with errors grouped by type", body = BooksWithErrorsResponse,
             example = json!({
@@ -2922,10 +2712,10 @@ pub struct BooksWithErrorsQueryV2 {
     ),
     tag = "Books"
 )]
-pub async fn list_books_with_errors_v2(
+pub async fn list_books_with_errors(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Query(query): Query<BooksWithErrorsQueryV2>,
+    Query(query): Query<BooksWithErrorsQuery>,
 ) -> Result<Json<BooksWithErrorsResponse>, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
@@ -2946,7 +2736,7 @@ pub async fn list_books_with_errors_v2(
     let error_type_filter = query.error_type.map(|t| t.into());
 
     // Fetch books with errors (convert to 0-indexed for repository)
-    let (books_with_errors, total) = BookRepository::list_with_errors_v2(
+    let (books_with_errors, total) = BookRepository::list_with_errors(
         &state.db,
         query.library_id,
         query.series_id,
@@ -3191,7 +2981,7 @@ pub async fn retry_all_book_errors(
 
     // Fetch all books with errors (unpaginated - we need all for bulk retry)
     // Use a large page size to get all results
-    let (books_with_errors, _) = BookRepository::list_with_errors_v2(
+    let (books_with_errors, _) = BookRepository::list_with_errors(
         &state.db,
         request.library_id,
         None, // No series filter for bulk retry

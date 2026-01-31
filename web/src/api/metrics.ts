@@ -17,6 +17,15 @@ export type TaskMetricsDataPointDto =
 export type MetricsCleanupResponse =
 	components["schemas"]["MetricsCleanupResponse"];
 
+// Plugin metrics types
+export type PluginMetricsResponse =
+	components["schemas"]["PluginMetricsResponse"];
+export type PluginMetricsSummaryDto =
+	components["schemas"]["PluginMetricsSummaryDto"];
+export type PluginMetricsDto = components["schemas"]["PluginMetricsDto"];
+export type PluginMethodMetricsDto =
+	components["schemas"]["PluginMethodMetricsDto"];
+
 export const metricsApi = {
 	/**
 	 * Get inventory metrics (libraries, books, series counts)
@@ -62,6 +71,14 @@ export const metricsApi = {
 		const response = await api.post<MetricsCleanupResponse>(
 			"/metrics/tasks/cleanup",
 		);
+		return response.data;
+	},
+
+	/**
+	 * Get plugin metrics (performance statistics for all plugins)
+	 */
+	getPluginMetrics: async (): Promise<PluginMetricsResponse> => {
+		const response = await api.get<PluginMetricsResponse>("/metrics/plugins");
 		return response.data;
 	},
 };

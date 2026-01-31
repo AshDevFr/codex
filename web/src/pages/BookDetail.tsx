@@ -407,14 +407,14 @@ export function BookDetail() {
 													onClick={() => analyzeMutation.mutate()}
 													disabled={analyzeMutation.isPending}
 												>
-													Force Analyze
+													Analyze Book
 												</Menu.Item>
 												<Menu.Item
 													leftSection={<IconPhoto size={14} />}
 													onClick={() => generateThumbnailMutation.mutate()}
 													disabled={generateThumbnailMutation.isPending}
 												>
-													Generate Thumbnail
+													Regenerate Thumbnail
 												</Menu.Item>
 												<Menu.Divider />
 												<Menu.Item

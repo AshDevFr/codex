@@ -111,11 +111,18 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         }
     }
 
+    // Initialize plugin metrics service for plugin operation metrics
+    info!("Initializing plugin metrics service...");
+    let plugin_metrics_service = Arc::new(crate::services::PluginMetricsService::new());
+
     // Initialize plugin manager for plugin auto-match tasks
     info!("Initializing plugin manager...");
-    let plugin_manager = Arc::new(crate::services::plugin::PluginManager::with_defaults(
-        Arc::new(db.sea_orm_connection().clone()),
-    ));
+    let plugin_manager = Arc::new(
+        crate::services::plugin::PluginManager::with_defaults(Arc::new(
+            db.sea_orm_connection().clone(),
+        ))
+        .with_metrics_service(plugin_metrics_service),
+    );
     // Load enabled plugins from database
     match plugin_manager.load_all().await {
         Ok(count) => info!("  Loaded {} enabled plugins", count),

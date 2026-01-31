@@ -108,6 +108,9 @@ pub enum Permission {
     TasksRead,
     TasksWrite,
 
+    // Plugins (admin configuration)
+    PluginsManage,
+
     // System
     SystemHealth,
     SystemAdmin,
@@ -136,6 +139,7 @@ impl Permission {
             Permission::ApiKeysDelete => "api-keys:delete",
             Permission::TasksRead => "tasks:read",
             Permission::TasksWrite => "tasks:write",
+            Permission::PluginsManage => "plugins:manage",
             Permission::SystemHealth => "system:health",
             Permission::SystemAdmin => "system:admin",
         }
@@ -165,6 +169,7 @@ impl FromStr for Permission {
             "api-keys:delete" => Ok(Permission::ApiKeysDelete),
             "tasks:read" => Ok(Permission::TasksRead),
             "tasks:write" => Ok(Permission::TasksWrite),
+            "plugins:manage" => Ok(Permission::PluginsManage),
             "system:health" => Ok(Permission::SystemHealth),
             "system:admin" => Ok(Permission::SystemAdmin),
             _ => Err(format!("Unknown permission: {}", s)),
@@ -249,6 +254,7 @@ lazy_static::lazy_static! {
     /// Admin can do everything, including:
     /// - Delete libraries
     /// - Manage users
+    /// - Manage plugins
     /// - System administration
     pub static ref ADMIN_PERMISSIONS: HashSet<Permission> = {
         let mut set = MAINTAINER_PERMISSIONS.clone();
@@ -258,6 +264,8 @@ lazy_static::lazy_static! {
         set.insert(Permission::UsersRead);
         set.insert(Permission::UsersWrite);
         set.insert(Permission::UsersDelete);
+        // Plugins (configuration)
+        set.insert(Permission::PluginsManage);
         // System admin
         set.insert(Permission::SystemAdmin);
         set
@@ -274,6 +282,7 @@ mod tests {
     fn test_permission_as_str() {
         assert_eq!(Permission::LibrariesRead.as_str(), "libraries:read");
         assert_eq!(Permission::BooksWrite.as_str(), "books:write");
+        assert_eq!(Permission::PluginsManage.as_str(), "plugins:manage");
         assert_eq!(Permission::SystemAdmin.as_str(), "system:admin");
     }
 
@@ -286,6 +295,10 @@ mod tests {
         assert_eq!(
             Permission::from_str("books:write").unwrap(),
             Permission::BooksWrite
+        );
+        assert_eq!(
+            Permission::from_str("plugins:manage").unwrap(),
+            Permission::PluginsManage
         );
         assert!(Permission::from_str("invalid:permission").is_err());
     }
@@ -395,10 +408,12 @@ mod tests {
         assert!(ADMIN_PERMISSIONS.contains(&Permission::UsersRead));
         assert!(ADMIN_PERMISSIONS.contains(&Permission::UsersWrite));
         assert!(ADMIN_PERMISSIONS.contains(&Permission::UsersDelete));
+        // Admin has plugin management
+        assert!(ADMIN_PERMISSIONS.contains(&Permission::PluginsManage));
         // Admin has system admin
         assert!(ADMIN_PERMISSIONS.contains(&Permission::SystemAdmin));
 
-        assert_eq!(ADMIN_PERMISSIONS.len(), 20); // All permissions
+        assert_eq!(ADMIN_PERMISSIONS.len(), 21); // All permissions
     }
 
     // ============== UserRole tests ==============

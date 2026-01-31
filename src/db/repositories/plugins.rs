@@ -38,6 +38,30 @@ impl PluginsRepository {
         Ok(plugins)
     }
 
+    /// Get all plugins with pagination
+    ///
+    /// Returns a tuple of (plugins, total_count) for building paginated responses.
+    /// Use limit=0 to get total count without loading any plugins.
+    pub async fn get_all_paginated(
+        db: &DatabaseConnection,
+        limit: u64,
+        offset: u64,
+    ) -> Result<(Vec<plugins::Model>, u64)> {
+        let total = Plugins::find().count(db).await?;
+
+        if limit == 0 {
+            return Ok((vec![], total));
+        }
+
+        let plugins = Plugins::find()
+            .order_by_asc(plugins::Column::Name)
+            .limit(limit)
+            .offset(offset)
+            .all(db)
+            .await?;
+        Ok((plugins, total))
+    }
+
     /// Get all enabled plugins
     pub async fn get_enabled(db: &DatabaseConnection) -> Result<Vec<plugins::Model>> {
         let plugins = Plugins::find()
@@ -46,6 +70,34 @@ impl PluginsRepository {
             .all(db)
             .await?;
         Ok(plugins)
+    }
+
+    /// Get all enabled plugins with pagination
+    ///
+    /// Returns a tuple of (plugins, total_count) for building paginated responses.
+    /// Use limit=0 to get total count without loading any plugins.
+    pub async fn get_enabled_paginated(
+        db: &DatabaseConnection,
+        limit: u64,
+        offset: u64,
+    ) -> Result<(Vec<plugins::Model>, u64)> {
+        let total = Plugins::find()
+            .filter(plugins::Column::Enabled.eq(true))
+            .count(db)
+            .await?;
+
+        if limit == 0 {
+            return Ok((vec![], total));
+        }
+
+        let plugins = Plugins::find()
+            .filter(plugins::Column::Enabled.eq(true))
+            .order_by_asc(plugins::Column::Name)
+            .limit(limit)
+            .offset(offset)
+            .all(db)
+            .await?;
+        Ok((plugins, total))
     }
 
     /// Get a plugin by ID
@@ -1341,5 +1393,121 @@ mod tests {
         .unwrap();
         assert_eq!(unknown_plugins.len(), 1);
         assert_eq!(unknown_plugins[0].name, "all_libraries_plugin");
+    }
+
+    #[tokio::test]
+    async fn test_get_all_paginated() {
+        setup_test_encryption_key();
+        let db = setup_test_db().await;
+
+        // Create 5 plugins (3 enabled, 2 disabled)
+        for i in 0..5 {
+            PluginsRepository::create(
+                &db,
+                &format!("plugin_{}", i),
+                &format!("Plugin {}", i),
+                None,
+                "system",
+                "node",
+                vec![],
+                vec![],
+                None,
+                vec![],
+                vec![],
+                vec![],
+                None,
+                "env",
+                None,
+                i < 3, // First 3 enabled
+                None,
+                Some(60),
+            )
+            .await
+            .unwrap();
+        }
+
+        // Get first page (2 plugins)
+        let (plugins, total) = PluginsRepository::get_all_paginated(&db, 2, 0)
+            .await
+            .unwrap();
+        assert_eq!(total, 5);
+        assert_eq!(plugins.len(), 2);
+        assert_eq!(plugins[0].name, "plugin_0");
+        assert_eq!(plugins[1].name, "plugin_1");
+
+        // Get second page
+        let (plugins, total) = PluginsRepository::get_all_paginated(&db, 2, 2)
+            .await
+            .unwrap();
+        assert_eq!(total, 5);
+        assert_eq!(plugins.len(), 2);
+        assert_eq!(plugins[0].name, "plugin_2");
+
+        // Get third page (only 1 remaining)
+        let (plugins, total) = PluginsRepository::get_all_paginated(&db, 2, 4)
+            .await
+            .unwrap();
+        assert_eq!(total, 5);
+        assert_eq!(plugins.len(), 1);
+
+        // Get count only (limit=0)
+        let (plugins, total) = PluginsRepository::get_all_paginated(&db, 0, 0)
+            .await
+            .unwrap();
+        assert_eq!(total, 5);
+        assert!(plugins.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_enabled_paginated() {
+        setup_test_encryption_key();
+        let db = setup_test_db().await;
+
+        // Create 5 plugins (3 enabled, 2 disabled)
+        for i in 0..5 {
+            PluginsRepository::create(
+                &db,
+                &format!("plugin_{}", i),
+                &format!("Plugin {}", i),
+                None,
+                "system",
+                "node",
+                vec![],
+                vec![],
+                None,
+                vec![],
+                vec![],
+                vec![],
+                None,
+                "env",
+                None,
+                i < 3, // First 3 enabled
+                None,
+                Some(60),
+            )
+            .await
+            .unwrap();
+        }
+
+        // Get first page of enabled plugins
+        let (plugins, total) = PluginsRepository::get_enabled_paginated(&db, 2, 0)
+            .await
+            .unwrap();
+        assert_eq!(total, 3); // Only 3 are enabled
+        assert_eq!(plugins.len(), 2);
+
+        // Get second page
+        let (plugins, total) = PluginsRepository::get_enabled_paginated(&db, 2, 2)
+            .await
+            .unwrap();
+        assert_eq!(total, 3);
+        assert_eq!(plugins.len(), 1); // Only 1 remaining
+
+        // Get count only (limit=0)
+        let (plugins, total) = PluginsRepository::get_enabled_paginated(&db, 0, 0)
+            .await
+            .unwrap();
+        assert_eq!(total, 3);
+        assert!(plugins.is_empty());
     }
 }

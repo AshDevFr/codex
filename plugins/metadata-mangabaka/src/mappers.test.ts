@@ -99,8 +99,8 @@ describe("mappers", () => {
         authors: ["Test Author"],
         artists: ["Test Artist"],
         source: {
-          anilist: { id: 111, rating: 85, rating_normalized: 8.5 },
-          mal: { id: 222, rating: 8.2, rating_normalized: 8.2 },
+          anilist: { id: 111, rating: 8.3, rating_normalized: 83 },
+          my_anime_list: { id: 222, rating: 7.96, rating_normalized: 80 },
         },
         rating: {
           bayesian: 8.75,
@@ -151,6 +151,51 @@ describe("mappers", () => {
         url: "https://myanimelist.net/manga/222",
         linkType: "provider",
       });
+
+      // Check external ratings are extracted dynamically
+      expect(result.externalRatings).toContainEqual({ score: 83, source: "anilist" });
+      expect(result.externalRatings).toContainEqual({ score: 80, source: "myanimelist" });
+    });
+
+    it("should dynamically extract all external ratings from sources", () => {
+      const series: MbSeries = {
+        id: 1668,
+        state: "active",
+        title: "Test Series with Many Sources",
+        cover: {
+          raw: { url: null },
+          x150: { x1: null, x2: null, x3: null },
+          x250: { x1: null, x2: null, x3: null },
+          x350: { x1: null, x2: null, x3: null },
+        },
+        type: "manga",
+        status: "completed",
+        source: {
+          anilist: { id: 31668, rating: 8.3, rating_normalized: 83 },
+          anime_planet: { id: "test-manga", rating: 4, rating_normalized: 80 },
+          anime_news_network: { id: null, rating: null, rating_normalized: null },
+          kitsu: { id: 3556, rating: 7.759, rating_normalized: 78 },
+          manga_updates: { id: "hly6oqa", rating: 7.74, rating_normalized: 77 },
+          my_anime_list: { id: 1668, rating: 7.96, rating_normalized: 80 },
+          shikimori: { id: 1668, rating: 7.96, rating_normalized: 80 },
+        },
+      };
+
+      const result = mapSeriesMetadata(series);
+
+      // Should include all sources with valid rating_normalized (excluding anime_news_network which has null)
+      expect(result.externalRatings).toHaveLength(6);
+      expect(result.externalRatings).toContainEqual({ score: 83, source: "anilist" });
+      expect(result.externalRatings).toContainEqual({ score: 80, source: "animeplanet" });
+      expect(result.externalRatings).toContainEqual({ score: 78, source: "kitsu" });
+      expect(result.externalRatings).toContainEqual({ score: 77, source: "mangaupdates" });
+      expect(result.externalRatings).toContainEqual({ score: 80, source: "myanimelist" });
+      expect(result.externalRatings).toContainEqual({ score: 80, source: "shikimori" });
+
+      // Should NOT include anime_news_network (rating_normalized is null)
+      expect(result.externalRatings).not.toContainEqual(
+        expect.objectContaining({ source: "animenewsnetwork" }),
+      );
     });
 
     it("should map completed series correctly", () => {

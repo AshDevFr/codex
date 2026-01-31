@@ -34,7 +34,7 @@ const mockPlugins: PluginDto[] = [
 			"metadata:write:year",
 			"metadata:write:status",
 		],
-		scopes: ["series:detail", "series:bulk"],
+		scopes: ["library:detail", "series:detail", "series:bulk"],
 		libraryIds: [],
 		credentialDelivery: "env",
 		hasCredentials: true,

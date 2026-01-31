@@ -281,15 +281,54 @@ export function SeriesDetail() {
 		},
 	});
 
-	// Generate thumbnails mutation (for all books)
-	const generateThumbnailsMutation = useMutation({
-		mutationFn: () => seriesApi.generateThumbnails(seriesId!),
+	// Generate missing book thumbnails mutation
+	const generateMissingBookThumbnailsMutation = useMutation({
+		mutationFn: () => seriesApi.generateMissingBookThumbnails(seriesId!),
 		onSuccess: () => {
 			notifications.show({
-				title: "Thumbnails generation started",
-				message: "All books queued for thumbnail generation",
+				title: "Thumbnail generation started",
+				message: "Missing book thumbnails queued for generation",
 				color: "blue",
 			});
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Failed",
+				message: error.message,
+				color: "red",
+			});
+		},
+	});
+
+	// Regenerate all book thumbnails mutation
+	const regenerateBookThumbnailsMutation = useMutation({
+		mutationFn: () => seriesApi.regenerateBookThumbnails(seriesId!),
+		onSuccess: () => {
+			notifications.show({
+				title: "Thumbnail regeneration started",
+				message: "All books queued for thumbnail regeneration",
+				color: "blue",
+			});
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Failed",
+				message: error.message,
+				color: "red",
+			});
+		},
+	});
+
+	// Generate series cover thumbnail if missing mutation
+	const generateSeriesThumbnailIfMissingMutation = useMutation({
+		mutationFn: () => seriesApi.generateSeriesThumbnailIfMissing(seriesId!),
+		onSuccess: () => {
+			notifications.show({
+				title: "Series cover generation started",
+				message: "Series cover thumbnail will be generated if missing",
+				color: "blue",
+			});
+			queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
 		},
 		onError: (error: Error) => {
 			notifications.show({
@@ -309,7 +348,6 @@ export function SeriesDetail() {
 				message: "Series cover thumbnail will be regenerated",
 				color: "blue",
 			});
-			// Invalidate series queries to refresh the cover
 			queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
 		},
 		onError: (error: Error) => {
@@ -480,21 +518,49 @@ export function SeriesDetail() {
 													onClick={() => analyzeMutation.mutate()}
 													disabled={analyzeMutation.isPending}
 												>
-													Analyze All
+													Analyze All Books
 												</Menu.Item>
 												<Menu.Item
 													leftSection={<IconAnalyze size={14} />}
 													onClick={() => analyzeUnanalyzedMutation.mutate()}
 													disabled={analyzeUnanalyzedMutation.isPending}
 												>
-													Analyze Unanalyzed
+													Analyze Unanalyzed Books
+												</Menu.Item>
+												<Menu.Divider />
+												<Menu.Label>Book Thumbnails</Menu.Label>
+												<Menu.Item
+													leftSection={<IconPhoto size={14} />}
+													onClick={() =>
+														generateMissingBookThumbnailsMutation.mutate()
+													}
+													disabled={
+														generateMissingBookThumbnailsMutation.isPending
+													}
+												>
+													Generate Missing
 												</Menu.Item>
 												<Menu.Item
 													leftSection={<IconPhoto size={14} />}
-													onClick={() => generateThumbnailsMutation.mutate()}
-													disabled={generateThumbnailsMutation.isPending}
+													onClick={() =>
+														regenerateBookThumbnailsMutation.mutate()
+													}
+													disabled={regenerateBookThumbnailsMutation.isPending}
 												>
-													Generate Books Thumbnails
+													Regenerate All
+												</Menu.Item>
+												<Menu.Divider />
+												<Menu.Label>Series Thumbnail</Menu.Label>
+												<Menu.Item
+													leftSection={<IconPhoto size={14} />}
+													onClick={() =>
+														generateSeriesThumbnailIfMissingMutation.mutate()
+													}
+													disabled={
+														generateSeriesThumbnailIfMissingMutation.isPending
+													}
+												>
+													Generate If Missing
 												</Menu.Item>
 												<Menu.Item
 													leftSection={<IconPhoto size={14} />}
@@ -503,7 +569,7 @@ export function SeriesDetail() {
 													}
 													disabled={regenerateSeriesThumbnailMutation.isPending}
 												>
-													Generate Series Thumbnail
+													Regenerate
 												</Menu.Item>
 												<Menu.Divider />
 												<Menu.Item
@@ -527,7 +593,7 @@ export function SeriesDetail() {
 															</Menu.Item>
 														))}
 														<Menu.Divider />
-														<Menu.Label>Auto Match</Menu.Label>
+														<Menu.Label>Auto-Apply Metadata</Menu.Label>
 														{pluginActions.actions.map((action) => (
 															<Menu.Item
 																key={`auto-${action.pluginId}`}
@@ -535,7 +601,7 @@ export function SeriesDetail() {
 																onClick={() => handleAutoMatch(action)}
 																disabled={autoMatchMutation.isPending}
 															>
-																Auto Match ({action.pluginDisplayName})
+																{action.pluginDisplayName}
 															</Menu.Item>
 														))}
 													</>

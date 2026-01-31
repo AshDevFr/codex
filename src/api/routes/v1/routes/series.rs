@@ -36,10 +36,6 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/series/:series_id", get(handlers::get_series))
         .route("/series/:series_id", patch(handlers::patch_series))
         .route("/series/:series_id/books", get(handlers::get_series_books))
-        .route(
-            "/series/:series_id/books/with-errors",
-            get(handlers::list_series_books_with_errors),
-        )
         // Series collection routes
         .route(
             "/series/in-progress",
@@ -62,10 +58,7 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/series/:series_id/thumbnail",
             get(handlers::get_series_thumbnail),
         )
-        .route(
-            "/series/:series_id/thumbnail/generate",
-            post(handlers::generate_series_thumbnail),
-        )
+        // Note: POST /series/:series_id/thumbnail/generate is in tasks.rs
         .route(
             "/series/:series_id/cover",
             post(handlers::upload_series_cover),

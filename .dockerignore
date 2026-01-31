@@ -2,6 +2,9 @@
 target/
 **/*.rs.bk
 
+# Docker local data (mounted volumes, caches)
+docker/
+
 # Frontend build artifacts and dependencies
 web/node_modules/
 web/dist/
@@ -15,6 +18,8 @@ docs/build/
 screenshots/node_modules/
 screenshots/dist/
 screenshots/.vite/
+screenshots/fixtures/
+screenshots/output/
 
 # Plugins build artifacts and dependencies
 plugins/sdk-typescript/node_modules/

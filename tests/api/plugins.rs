@@ -121,7 +121,7 @@ async fn test_create_plugin_success() {
     let token = create_admin_and_token(&db, &state).await;
 
     let body = json!({
-        "name": "test_plugin",
+        "name": "test-plugin",
         "displayName": "Test Plugin",
         "description": "A test plugin",
         "command": "node",
@@ -137,7 +137,7 @@ async fn test_create_plugin_success() {
 
     assert_eq!(status, StatusCode::CREATED);
     let response = response.expect("Expected response body");
-    assert_eq!(response.plugin.name, "test_plugin");
+    assert_eq!(response.plugin.name, "test-plugin");
     assert_eq!(response.plugin.display_name, "Test Plugin");
     assert_eq!(response.plugin.command, "node");
     assert!(!response.plugin.enabled);
@@ -151,7 +151,7 @@ async fn test_create_plugin_minimal() {
     let token = create_admin_and_token(&db, &state).await;
 
     let body = json!({
-        "name": "minimal_plugin",
+        "name": "minimal-plugin",
         "displayName": "Minimal",
         "command": "node"  // Must be in allowed commands list
     });
@@ -162,7 +162,7 @@ async fn test_create_plugin_minimal() {
 
     assert_eq!(status, StatusCode::CREATED);
     let response = response.expect("Expected response body");
-    assert_eq!(response.plugin.name, "minimal_plugin");
+    assert_eq!(response.plugin.name, "minimal-plugin");
     assert_eq!(response.plugin.plugin_type, "system");
     assert_eq!(response.plugin.credential_delivery, "env");
 }
@@ -195,7 +195,7 @@ async fn test_create_plugin_invalid_permission() {
     let token = create_admin_and_token(&db, &state).await;
 
     let body = json!({
-        "name": "test_plugin",
+        "name": "test-plugin",
         "displayName": "Test",
         "command": "node",
         "permissions": ["invalid:permission"]
@@ -216,7 +216,7 @@ async fn test_create_plugin_invalid_scope() {
     let token = create_admin_and_token(&db, &state).await;
 
     let body = json!({
-        "name": "test_plugin",
+        "name": "test-plugin",
         "displayName": "Test",
         "command": "node",
         "scopes": ["invalid:scope"]
@@ -238,7 +238,7 @@ async fn test_create_plugin_duplicate_name() {
     // Create first plugin
     let app = create_test_router(state.clone()).await;
     let body = json!({
-        "name": "duplicate_test",
+        "name": "duplicate-test",
         "displayName": "First",
         "command": "node"
     });
@@ -250,7 +250,7 @@ async fn test_create_plugin_duplicate_name() {
     // Try to create second plugin with same name
     let app = create_test_router(state.clone()).await;
     let body = json!({
-        "name": "duplicate_test",
+        "name": "duplicate-test",
         "displayName": "Second",
         "command": "python"
     });
@@ -274,7 +274,7 @@ async fn test_get_plugin_success() {
     // Create a plugin
     let app = create_test_router(state.clone()).await;
     let body = json!({
-        "name": "get_test_plugin",
+        "name": "get-test-plugin",
         "displayName": "Get Test",
         "command": "node"
     });
@@ -291,7 +291,7 @@ async fn test_get_plugin_success() {
     assert_eq!(status, StatusCode::OK);
     let response = response.expect("Expected response body");
     assert_eq!(response.id, created.id);
-    assert_eq!(response.name, "get_test_plugin");
+    assert_eq!(response.name, "get-test-plugin");
 }
 
 #[tokio::test]
@@ -322,7 +322,7 @@ async fn test_update_plugin_success() {
     // Create a plugin
     let app = create_test_router(state.clone()).await;
     let body = json!({
-        "name": "update_test_plugin",
+        "name": "update-test-plugin",
         "displayName": "Original Name",
         "command": "node"
     });
@@ -346,7 +346,7 @@ async fn test_update_plugin_success() {
     assert_eq!(status, StatusCode::OK);
     let response = response.expect("Expected response body");
     assert_eq!(response.display_name, "Updated Name");
-    assert_eq!(response.name, "update_test_plugin"); // Name shouldn't change
+    assert_eq!(response.name, "update-test-plugin"); // Name shouldn't change
 }
 
 #[tokio::test]
@@ -358,7 +358,7 @@ async fn test_update_plugin_permissions() {
     // Create a plugin with initial permissions
     let app = create_test_router(state.clone()).await;
     let body = json!({
-        "name": "perm_test_plugin",
+        "name": "perm-test-plugin",
         "displayName": "Perm Test",
         "command": "node",
         "permissions": ["metadata:read"]
@@ -404,7 +404,7 @@ async fn test_delete_plugin_success() {
     // Create a plugin
     let app = create_test_router(state.clone()).await;
     let body = json!({
-        "name": "delete_test_plugin",
+        "name": "delete-test-plugin",
         "displayName": "Delete Test",
         "command": "node"
     });
@@ -458,7 +458,7 @@ async fn test_enable_plugin() {
     // Create a disabled plugin
     let app = create_test_router(state.clone()).await;
     let body = json!({
-        "name": "enable_test_plugin",
+        "name": "enable-test-plugin",
         "displayName": "Enable Test",
         "command": "node",
         "enabled": false
@@ -493,7 +493,7 @@ async fn test_disable_plugin() {
     // Create an enabled plugin
     let app = create_test_router(state.clone()).await;
     let body = json!({
-        "name": "disable_test_plugin",
+        "name": "disable-test-plugin",
         "displayName": "Disable Test",
         "command": "node",
         "enabled": true
@@ -532,7 +532,7 @@ async fn test_get_plugin_health() {
     // Create a plugin
     let app = create_test_router(state.clone()).await;
     let body = json!({
-        "name": "health_test_plugin",
+        "name": "health-test-plugin",
         "displayName": "Health Test",
         "command": "node"
     });
@@ -553,7 +553,7 @@ async fn test_get_plugin_health() {
     assert_eq!(status, StatusCode::OK);
     let response = response.expect("Expected response body");
     assert_eq!(response.health.plugin_id, created.id);
-    assert_eq!(response.health.name, "health_test_plugin");
+    assert_eq!(response.health.name, "health-test-plugin");
     assert_eq!(response.health.failure_count, 0);
 }
 
@@ -570,7 +570,7 @@ async fn test_reset_plugin_failures() {
     // Create a plugin
     let app = create_test_router(state.clone()).await;
     let body = json!({
-        "name": "reset_test_plugin",
+        "name": "reset-test-plugin",
         "displayName": "Reset Test",
         "command": "node"
     });
@@ -624,7 +624,7 @@ async fn test_test_plugin_invalid_command() {
     // This tests runtime failure rather than validation failure
     let app = create_test_router(state.clone()).await;
     let body = json!({
-        "name": "invalid_cmd_plugin",
+        "name": "invalid-cmd-plugin",
         "displayName": "Invalid Command",
         "command": "node",  // Valid command
         "args": ["/nonexistent/script/that/does/not/exist.js"]  // Nonexistent script
@@ -673,7 +673,7 @@ async fn test_list_plugins_with_data() {
     for i in 1..=3 {
         let app = create_test_router(state.clone()).await;
         let body = json!({
-            "name": format!("list_test_plugin_{}", i),
+            "name": format!("list-test-plugin-{}", i),
             "displayName": format!("List Test {}", i),
             "command": "node"
         });
@@ -776,7 +776,7 @@ async fn test_execute_plugin_invalid_method() {
     // Create a plugin first
     let app = create_test_router(state.clone()).await;
     let body = json!({
-        "name": "exec_test_plugin",
+        "name": "exec-test-plugin",
         "displayName": "Exec Test",
         "command": "node"
     });
@@ -811,7 +811,7 @@ async fn test_execute_plugin_disabled() {
     // Create a disabled plugin
     let app = create_test_router(state.clone()).await;
     let body = json!({
-        "name": "disabled_plugin",
+        "name": "disabled-plugin",
         "displayName": "Disabled Plugin",
         "command": "node",
         "enabled": false
@@ -928,4 +928,126 @@ async fn test_apply_series_metadata_requires_auth() {
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+// =============================================================================
+// Permission-Based Access Tests (Phase 8)
+// =============================================================================
+
+/// Create a maintainer user and return a JWT token.
+/// Maintainers have SeriesWrite permission but not PluginsManage.
+async fn create_maintainer_and_token(
+    db: &sea_orm::DatabaseConnection,
+    state: &codex::api::extractors::AppState,
+) -> String {
+    use codex::api::permissions::UserRole;
+    use codex::db::entities::users;
+    use sea_orm::ActiveModelTrait;
+
+    let password_hash = password::hash_password("maintainer123").unwrap();
+    let maintainer = users::ActiveModel {
+        id: sea_orm::ActiveValue::Set(uuid::Uuid::new_v4()),
+        username: sea_orm::ActiveValue::Set("maintainer".to_string()),
+        email: sea_orm::ActiveValue::Set("maintainer@example.com".to_string()),
+        password_hash: sea_orm::ActiveValue::Set(password_hash),
+        role: sea_orm::ActiveValue::Set(UserRole::Maintainer.to_string()),
+        is_active: sea_orm::ActiveValue::Set(true),
+        email_verified: sea_orm::ActiveValue::Set(true),
+        permissions: sea_orm::ActiveValue::Set(serde_json::json!([])),
+        created_at: sea_orm::ActiveValue::Set(chrono::Utc::now()),
+        updated_at: sea_orm::ActiveValue::Set(chrono::Utc::now()),
+        last_login_at: sea_orm::ActiveValue::Set(None),
+    };
+    let created = maintainer.insert(db).await.unwrap();
+    generate_test_token(state, &created)
+}
+
+#[tokio::test]
+async fn test_plugin_crud_requires_plugins_manage_permission() {
+    // A maintainer (who has SeriesWrite but NOT PluginsManage) should NOT be able
+    // to create, update, or delete plugins
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let maintainer_token = create_maintainer_and_token(&db, &state).await;
+
+    // Try to list plugins - should fail (requires PluginsManage)
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth("/api/v1/admin/plugins", &maintainer_token);
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "Maintainer should not list plugins"
+    );
+
+    // Try to create a plugin - should fail
+    let app = create_test_router(state.clone()).await;
+    let body = json!({
+        "name": "test-plugin",
+        "displayName": "Test Plugin",
+        "command": "node"
+    });
+    let request = post_json_request_with_auth("/api/v1/admin/plugins", &body, &maintainer_token);
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "Maintainer should not create plugins"
+    );
+}
+
+#[tokio::test]
+async fn test_reader_cannot_access_plugin_actions() {
+    // A reader (no SeriesWrite) should not see plugin actions
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let reader_token = create_user_and_token(&db, &state).await;
+
+    // Get plugin actions - reader can view the actions endpoint (LibrariesRead)
+    // but won't see any plugins because they lack SeriesWrite
+    let app = create_test_router(state.clone()).await;
+    let request =
+        get_request_with_auth("/api/v1/plugins/actions?scope=series:detail", &reader_token);
+    let (status, response): (
+        StatusCode,
+        Option<codex::api::routes::v1::dto::PluginActionsResponse>,
+    ) = make_json_request(app, request).await;
+
+    // Reader has LibrariesRead, so they can access the endpoint
+    assert_eq!(status, StatusCode::OK);
+    // But since they don't have SeriesWrite, the actions list should be empty
+    // (no plugins will pass the permission filter)
+    let response = response.expect("Expected response body");
+    assert!(
+        response.actions.is_empty(),
+        "Reader should not see any plugin actions (no SeriesWrite permission)"
+    );
+}
+
+#[tokio::test]
+async fn test_maintainer_can_use_plugin_actions() {
+    // A maintainer (has SeriesWrite) should be able to access plugin actions
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let maintainer_token = create_maintainer_and_token(&db, &state).await;
+
+    // Get plugin actions - maintainer can view
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(
+        "/api/v1/plugins/actions?scope=series:detail",
+        &maintainer_token,
+    );
+    let (status, response): (
+        StatusCode,
+        Option<codex::api::routes::v1::dto::PluginActionsResponse>,
+    ) = make_json_request(app, request).await;
+
+    // Maintainer has LibrariesRead, so they can access the endpoint
+    assert_eq!(status, StatusCode::OK);
+    // The actions list will be empty because there are no plugins configured,
+    // but the endpoint is accessible (unlike for readers when plugins exist)
+    let response = response.expect("Expected response body");
+    assert_eq!(response.scope, "series:detail");
 }

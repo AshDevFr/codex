@@ -43,15 +43,6 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Initialize database connection
     let db = init_database(&config).await?;
 
-    // Create and start scheduler
-    info!("Initializing job scheduler...");
-    let scheduler: Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>> =
-        Arc::new(tokio::sync::Mutex::new(
-            crate::scheduler::Scheduler::new(db.sea_orm_connection().clone()).await?,
-        ));
-    scheduler.lock().await.start().await?;
-    info!("Job scheduler started successfully");
-
     // Create cancellation token for graceful shutdown of background tasks
     let background_task_cancel = CancellationToken::new();
 
@@ -102,12 +93,21 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
         .unwrap_or(false);
 
-    // Initialize thumbnail service (needed for both workers and API handlers)
+    // Initialize thumbnail service (needed for both workers, API handlers, and scheduler)
     let thumbnail_service = Arc::new(crate::services::ThumbnailService::new(config.files.clone()));
     info!(
         "Files service initialized (thumbnails: {}, uploads: {})",
         config.files.thumbnail_dir, config.files.uploads_dir
     );
+
+    // Create and start scheduler
+    info!("Initializing job scheduler...");
+    let scheduler: Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>> =
+        Arc::new(tokio::sync::Mutex::new(
+            crate::scheduler::Scheduler::new(db.sea_orm_connection().clone()).await?,
+        ));
+    scheduler.lock().await.start().await?;
+    info!("Job scheduler started successfully");
 
     // Initialize file cleanup service (for orphaned file cleanup via API)
     let file_cleanup_service = Arc::new(crate::services::FileCleanupService::new(
@@ -219,11 +219,19 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("  SMTP port: {}", config.email.smtp_port);
     info!("  From: {}", config.email.smtp_from_email);
 
+    // Initialize plugin metrics service
+    info!("Initializing plugin metrics service...");
+    let plugin_metrics_service = Arc::new(crate::services::PluginMetricsService::new());
+    info!("Plugin metrics service initialized");
+
     // Initialize plugin manager (before workers so they can handle plugin tasks)
     info!("Initializing plugin manager...");
-    let plugin_manager = Arc::new(crate::services::plugin::PluginManager::with_defaults(
-        Arc::new(db.sea_orm_connection().clone()),
-    ));
+    let plugin_manager = Arc::new(
+        crate::services::plugin::PluginManager::with_defaults(Arc::new(
+            db.sea_orm_connection().clone(),
+        ))
+        .with_metrics_service(plugin_metrics_service.clone()),
+    );
     // Load enabled plugins from database
     match plugin_manager.load_all().await {
         Ok(count) => info!("  Loaded {} enabled plugins", count),
@@ -301,6 +309,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         user_auth_cache: Arc::new(crate::api::extractors::auth::UserAuthCache::new()),
         rate_limiter_service,
         plugin_manager: plugin_manager.clone(),
+        plugin_metrics_service,
     });
 
     // Build router using API module

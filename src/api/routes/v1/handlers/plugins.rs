@@ -1,7 +1,7 @@
-//! Plugins API handlers (Admin only)
+//! Plugins API handlers
 //!
-//! Provides CRUD operations for admin-configured plugins that communicate
-//! with Codex via JSON-RPC over stdio.
+//! Provides CRUD operations for plugins that communicate with Codex via JSON-RPC over stdio.
+//! Requires the `PluginsManage` permission (granted to Admins by default).
 
 use super::super::dto::{
     available_credential_delivery_methods, available_permissions, available_scopes,
@@ -14,6 +14,7 @@ use crate::db::entities::plugins::PluginPermission;
 use crate::db::repositories::{PluginFailuresRepository, PluginsRepository};
 use crate::services::plugin::process::{allowed_commands_description, is_command_allowed};
 use crate::services::plugin::protocol::PluginScope;
+use crate::services::PluginHealthStatus;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -67,7 +68,7 @@ pub struct PluginsApi;
     responses(
         (status = 200, description = "Plugins retrieved", body = PluginsListResponse),
         (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Admin permission required"),
+        (status = 403, description = "PluginsManage permission required"),
     ),
     security(
         ("bearer_auth" = []),
@@ -79,7 +80,7 @@ pub async fn list_plugins(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
 ) -> Result<Json<PluginsListResponse>, ApiError> {
-    auth.require_permission(&Permission::SystemAdmin)?;
+    auth.require_permission(&Permission::PluginsManage)?;
 
     let plugins = PluginsRepository::get_all(&state.db)
         .await
@@ -106,7 +107,7 @@ pub async fn list_plugins(
         (status = 201, description = "Plugin created", body = PluginStatusResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Admin permission required"),
+        (status = 403, description = "PluginsManage permission required"),
         (status = 409, description = "Plugin with this name already exists"),
     ),
     security(
@@ -120,12 +121,12 @@ pub async fn create_plugin(
     auth: AuthContext,
     Json(request): Json<CreatePluginRequest>,
 ) -> Result<(StatusCode, Json<PluginStatusResponse>), ApiError> {
-    auth.require_permission(&Permission::SystemAdmin)?;
+    auth.require_permission(&Permission::PluginsManage)?;
 
     // Validate name
     if !is_valid_plugin_name(&request.name) {
         return Err(ApiError::BadRequest(
-            "Invalid plugin name. Use lowercase alphanumeric characters and underscores only"
+            "Invalid plugin name. Use lowercase alphanumeric characters and hyphens only. Cannot start or end with a hyphen."
                 .to_string(),
         ));
     }
@@ -296,7 +297,7 @@ pub async fn create_plugin(
     responses(
         (status = 200, description = "Plugin retrieved", body = PluginDto),
         (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Admin permission required"),
+        (status = 403, description = "PluginsManage permission required"),
         (status = 404, description = "Plugin not found"),
     ),
     security(
@@ -310,7 +311,7 @@ pub async fn get_plugin(
     auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> Result<Json<PluginDto>, ApiError> {
-    auth.require_permission(&Permission::SystemAdmin)?;
+    auth.require_permission(&Permission::PluginsManage)?;
 
     let plugin = PluginsRepository::get_by_id(&state.db, id)
         .await
@@ -332,7 +333,7 @@ pub async fn get_plugin(
         (status = 200, description = "Plugin updated", body = PluginDto),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Admin permission required"),
+        (status = 403, description = "PluginsManage permission required"),
         (status = 404, description = "Plugin not found"),
     ),
     security(
@@ -347,7 +348,7 @@ pub async fn update_plugin(
     Path(id): Path<Uuid>,
     Json(request): Json<UpdatePluginRequest>,
 ) -> Result<Json<PluginDto>, ApiError> {
-    auth.require_permission(&Permission::SystemAdmin)?;
+    auth.require_permission(&Permission::PluginsManage)?;
 
     // Validate command against allowlist if provided (security)
     if let Some(ref command) = request.command {
@@ -487,7 +488,7 @@ pub async fn update_plugin(
     responses(
         (status = 204, description = "Plugin deleted"),
         (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Admin permission required"),
+        (status = 403, description = "PluginsManage permission required"),
         (status = 404, description = "Plugin not found"),
     ),
     security(
@@ -501,7 +502,7 @@ pub async fn delete_plugin(
     auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
-    auth.require_permission(&Permission::SystemAdmin)?;
+    auth.require_permission(&Permission::PluginsManage)?;
 
     // Stop the plugin process if running (via PluginManager)
     if let Err(e) = state.plugin_manager.stop_plugin(id).await {
@@ -515,6 +516,8 @@ pub async fn delete_plugin(
     if deleted {
         // Remove the plugin from the manager's memory
         state.plugin_manager.remove(id).await;
+        // Remove the plugin's metrics
+        state.plugin_metrics_service.remove_plugin(id).await;
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(ApiError::NotFound("Plugin not found".to_string()))
@@ -533,7 +536,7 @@ pub async fn delete_plugin(
     responses(
         (status = 200, description = "Plugin enabled", body = PluginStatusResponse),
         (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Admin permission required"),
+        (status = 403, description = "PluginsManage permission required"),
         (status = 404, description = "Plugin not found"),
     ),
     security(
@@ -547,7 +550,7 @@ pub async fn enable_plugin(
     auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> Result<Json<PluginStatusResponse>, ApiError> {
-    auth.require_permission(&Permission::SystemAdmin)?;
+    auth.require_permission(&Permission::PluginsManage)?;
 
     let _plugin = PluginsRepository::enable(&state.db, id, Some(auth.user_id))
         .await
@@ -608,7 +611,7 @@ pub async fn enable_plugin(
     responses(
         (status = 200, description = "Plugin disabled", body = PluginStatusResponse),
         (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Admin permission required"),
+        (status = 403, description = "PluginsManage permission required"),
         (status = 404, description = "Plugin not found"),
     ),
     security(
@@ -622,7 +625,7 @@ pub async fn disable_plugin(
     auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> Result<Json<PluginStatusResponse>, ApiError> {
-    auth.require_permission(&Permission::SystemAdmin)?;
+    auth.require_permission(&Permission::PluginsManage)?;
 
     // Stop the plugin process if running (via PluginManager)
     if let Err(e) = state.plugin_manager.stop_plugin(id).await {
@@ -643,6 +646,12 @@ pub async fn disable_plugin(
     if let Err(e) = state.plugin_manager.reload(id).await {
         tracing::warn!("Failed to reload plugin manager after disable: {}", e);
     }
+
+    // Mark plugin as unhealthy in metrics
+    state
+        .plugin_metrics_service
+        .set_health_status(id, PluginHealthStatus::Unhealthy)
+        .await;
 
     Ok(Json(PluginStatusResponse {
         plugin: plugin.into(),
@@ -666,7 +675,7 @@ pub async fn disable_plugin(
     responses(
         (status = 200, description = "Test completed", body = PluginTestResult),
         (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Admin permission required"),
+        (status = 403, description = "PluginsManage permission required"),
         (status = 404, description = "Plugin not found"),
     ),
     security(
@@ -680,7 +689,7 @@ pub async fn test_plugin(
     auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> Result<Json<PluginTestResult>, ApiError> {
-    auth.require_permission(&Permission::SystemAdmin)?;
+    auth.require_permission(&Permission::PluginsManage)?;
 
     let plugin = PluginsRepository::get_by_id(&state.db, id)
         .await
@@ -751,7 +760,7 @@ pub async fn test_plugin(
     responses(
         (status = 200, description = "Health information retrieved", body = PluginHealthResponse),
         (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Admin permission required"),
+        (status = 403, description = "PluginsManage permission required"),
         (status = 404, description = "Plugin not found"),
     ),
     security(
@@ -765,7 +774,7 @@ pub async fn get_plugin_health(
     auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> Result<Json<PluginHealthResponse>, ApiError> {
-    auth.require_permission(&Permission::SystemAdmin)?;
+    auth.require_permission(&Permission::PluginsManage)?;
 
     let plugin = PluginsRepository::get_by_id(&state.db, id)
         .await
@@ -789,7 +798,7 @@ pub async fn get_plugin_health(
     responses(
         (status = 200, description = "Failure count reset", body = PluginStatusResponse),
         (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Admin permission required"),
+        (status = 403, description = "PluginsManage permission required"),
         (status = 404, description = "Plugin not found"),
     ),
     security(
@@ -803,7 +812,7 @@ pub async fn reset_plugin_failures(
     auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> Result<Json<PluginStatusResponse>, ApiError> {
-    auth.require_permission(&Permission::SystemAdmin)?;
+    auth.require_permission(&Permission::PluginsManage)?;
 
     let plugin = PluginsRepository::reset_failure_count(&state.db, id, Some(auth.user_id))
         .await
@@ -854,7 +863,7 @@ fn default_failures_limit() -> u64 {
     responses(
         (status = 200, description = "Failures retrieved", body = PluginFailuresResponse),
         (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Admin permission required"),
+        (status = 403, description = "PluginsManage permission required"),
         (status = 404, description = "Plugin not found"),
     ),
     security(
@@ -869,7 +878,7 @@ pub async fn get_plugin_failures(
     Path(id): Path<Uuid>,
     axum::extract::Query(query): axum::extract::Query<PluginFailuresQuery>,
 ) -> Result<Json<PluginFailuresResponse>, ApiError> {
-    auth.require_permission(&Permission::SystemAdmin)?;
+    auth.require_permission(&Permission::PluginsManage)?;
 
     // Verify plugin exists
     PluginsRepository::get_by_id(&state.db, id)
@@ -904,16 +913,21 @@ pub async fn get_plugin_failures(
     }))
 }
 
-/// Validate a plugin name (lowercase alphanumeric with underscores)
+/// Validate a plugin name (lowercase alphanumeric with hyphens)
+///
+/// A valid plugin name:
+/// - Is 1-100 characters long
+/// - Contains only lowercase letters, digits, or hyphens
+/// - Does not start or end with a hyphen
 fn is_valid_plugin_name(name: &str) -> bool {
     if name.is_empty() || name.len() > 100 {
         return false;
     }
 
     name.chars()
-        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
-        && !name.starts_with('_')
-        && !name.ends_with('_')
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        && !name.starts_with('-')
+        && !name.ends_with('-')
 }
 
 #[cfg(test)]
@@ -922,22 +936,48 @@ mod tests {
 
     #[test]
     fn test_valid_plugin_names() {
+        // Basic names
         assert!(is_valid_plugin_name("mangabaka"));
-        assert!(is_valid_plugin_name("anilist_api"));
         assert!(is_valid_plugin_name("provider123"));
-        assert!(is_valid_plugin_name("my_custom_plugin"));
+
+        // With hyphens
+        assert!(is_valid_plugin_name("my-plugin"));
+        assert!(is_valid_plugin_name("anilist-api"));
+        assert!(is_valid_plugin_name("my-custom-plugin"));
+
+        // Numbers and hyphens
+        assert!(is_valid_plugin_name("plugin-v2"));
+        assert!(is_valid_plugin_name("api123-test"));
     }
 
     #[test]
     fn test_invalid_plugin_names() {
+        // Empty
         assert!(!is_valid_plugin_name(""));
-        assert!(!is_valid_plugin_name("MangaBaka")); // uppercase
-        assert!(!is_valid_plugin_name("my-plugin")); // dash
-        assert!(!is_valid_plugin_name("my plugin")); // space
-        assert!(!is_valid_plugin_name("_plugin")); // starts with underscore
-        assert!(!is_valid_plugin_name("plugin_")); // ends with underscore
-                                                   // Too long
+
+        // Uppercase
+        assert!(!is_valid_plugin_name("MangaBaka"));
+        assert!(!is_valid_plugin_name("My-Plugin"));
+
+        // Spaces
+        assert!(!is_valid_plugin_name("my plugin"));
+
+        // Underscores (not allowed)
+        assert!(!is_valid_plugin_name("my_plugin"));
+        assert!(!is_valid_plugin_name("anilist_api"));
+
+        // Starts with hyphen
+        assert!(!is_valid_plugin_name("-plugin"));
+
+        // Ends with hyphen
+        assert!(!is_valid_plugin_name("plugin-"));
+
+        // Too long
         let long_name = "a".repeat(101);
         assert!(!is_valid_plugin_name(&long_name));
+
+        // Special characters
+        assert!(!is_valid_plugin_name("plugin@name"));
+        assert!(!is_valid_plugin_name("plugin.name"));
     }
 }

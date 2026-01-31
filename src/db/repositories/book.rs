@@ -1514,46 +1514,6 @@ impl BookRepository {
         Ok(())
     }
 
-    /// List books with analysis errors
-    /// Optional filters by library_id or series_id
-    pub async fn list_with_errors(
-        db: &DatabaseConnection,
-        library_id: Option<Uuid>,
-        series_id: Option<Uuid>,
-        offset: u64,
-        page_size: u64,
-    ) -> Result<(Vec<books::Model>, u64)> {
-        let mut query = Books::find()
-            .filter(books::Column::AnalysisError.is_not_null())
-            .filter(books::Column::Deleted.eq(false));
-
-        if let Some(lib_id) = library_id {
-            query = query.filter(books::Column::LibraryId.eq(lib_id));
-        }
-
-        if let Some(ser_id) = series_id {
-            query = query.filter(books::Column::SeriesId.eq(ser_id));
-        }
-
-        // Get total count
-        let total = query
-            .clone()
-            .count(db)
-            .await
-            .context("Failed to count books with errors")?;
-
-        // Get paginated results
-        let books = query
-            .order_by_desc(books::Column::UpdatedAt)
-            .offset(offset)
-            .limit(page_size)
-            .all(db)
-            .await
-            .context("Failed to list books with errors")?;
-
-        Ok((books, total))
-    }
-
     /// Set a specific error type for a book
     ///
     /// This adds or updates a specific error type in the analysis_errors JSON map.
@@ -1660,9 +1620,9 @@ impl BookRepository {
         Ok(parse_analysis_errors(book.analysis_errors.as_deref()))
     }
 
-    /// List books with errors (using the new analysis_errors JSON field)
+    /// List books with errors (using analysis_errors JSON field)
     /// Returns books with their parsed errors, filtered optionally by library, series, or error type
-    pub async fn list_with_errors_v2(
+    pub async fn list_with_errors(
         db: &DatabaseConnection,
         library_id: Option<Uuid>,
         series_id: Option<Uuid>,
@@ -2844,95 +2804,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_list_with_errors() {
-        let (db, _temp_dir) = create_test_db().await;
-
-        let library = LibraryRepository::create(
-            db.sea_orm_connection(),
-            "Test Library",
-            "/test/path",
-            ScanningStrategy::Default,
-        )
-        .await
-        .unwrap();
-
-        let series =
-            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
-                .await
-                .unwrap();
-
-        // Create a book without error
-        let book1 = create_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz");
-        BookRepository::create(db.sea_orm_connection(), &book1, None)
-            .await
-            .unwrap();
-
-        // Create a book with error
-        let mut book2 = create_book_model(series.id, library.id, "/test/book2.cbz", "book2.cbz");
-        book2.analysis_error = Some("Failed to parse: invalid archive".to_string());
-        BookRepository::create(db.sea_orm_connection(), &book2, None)
-            .await
-            .unwrap();
-
-        // Create another book with error
-        let mut book3 = create_book_model(series.id, library.id, "/test/book3.cbz", "book3.cbz");
-        book3.analysis_error = Some("Unsupported format".to_string());
-        BookRepository::create(db.sea_orm_connection(), &book3, None)
-            .await
-            .unwrap();
-
-        // List all books with errors (no filter)
-        let (books, total) =
-            BookRepository::list_with_errors(db.sea_orm_connection(), None, None, 0, 10)
-                .await
-                .unwrap();
-
-        assert_eq!(total, 2);
-        assert_eq!(books.len(), 2);
-        assert!(books.iter().all(|b| b.analysis_error.is_some()));
-
-        // List with library filter
-        let (books, total) = BookRepository::list_with_errors(
-            db.sea_orm_connection(),
-            Some(library.id),
-            None,
-            0,
-            10,
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(total, 2);
-        assert_eq!(books.len(), 2);
-
-        // List with series filter
-        let (books, total) =
-            BookRepository::list_with_errors(db.sea_orm_connection(), None, Some(series.id), 0, 10)
-                .await
-                .unwrap();
-
-        assert_eq!(total, 2);
-        assert_eq!(books.len(), 2);
-
-        // Test pagination
-        let (books, total) =
-            BookRepository::list_with_errors(db.sea_orm_connection(), None, None, 0, 1)
-                .await
-                .unwrap();
-
-        assert_eq!(total, 2);
-        assert_eq!(books.len(), 1);
-
-        let (books, total) =
-            BookRepository::list_with_errors(db.sea_orm_connection(), None, None, 1, 1)
-                .await
-                .unwrap();
-
-        assert_eq!(total, 2);
-        assert_eq!(books.len(), 1);
-    }
-
-    #[tokio::test]
     async fn test_get_existing_ids() {
         let (db, _temp_dir) = create_test_db().await;
 
@@ -3356,7 +3227,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_list_with_errors_v2() {
+    async fn test_list_with_errors() {
         let (db, _temp_dir) = create_test_db().await;
 
         let library = LibraryRepository::create(
@@ -3418,7 +3289,7 @@ mod tests {
 
         // List all books with errors
         let (books, total) =
-            BookRepository::list_with_errors_v2(db.sea_orm_connection(), None, None, None, 0, 10)
+            BookRepository::list_with_errors(db.sea_orm_connection(), None, None, None, 0, 10)
                 .await
                 .unwrap();
 
@@ -3426,7 +3297,7 @@ mod tests {
         assert_eq!(books.len(), 2);
 
         // Filter by error type - Parser
-        let (books, total) = BookRepository::list_with_errors_v2(
+        let (books, total) = BookRepository::list_with_errors(
             db.sea_orm_connection(),
             None,
             None,
@@ -3441,7 +3312,7 @@ mod tests {
         assert_eq!(books.len(), 2);
 
         // Filter by error type - Thumbnail
-        let (books, total) = BookRepository::list_with_errors_v2(
+        let (books, total) = BookRepository::list_with_errors(
             db.sea_orm_connection(),
             None,
             None,
@@ -3458,7 +3329,7 @@ mod tests {
 
         // Test pagination
         let (books, total) =
-            BookRepository::list_with_errors_v2(db.sea_orm_connection(), None, None, None, 0, 1)
+            BookRepository::list_with_errors(db.sea_orm_connection(), None, None, None, 0, 1)
                 .await
                 .unwrap();
 

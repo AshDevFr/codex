@@ -103,13 +103,35 @@ export const seriesApi = {
 		return response.data;
 	},
 
-	// Generate thumbnails for all books in series (queues a background task)
-	generateThumbnails: async (
+	// Generate missing thumbnails for books in series (queues a background task)
+	generateMissingBookThumbnails: async (
 		seriesId: string,
 	): Promise<{ task_id: string }> => {
 		const response = await api.post<{ task_id: string }>(
-			`/series/${seriesId}/thumbnails/generate`,
-			{ force: true },
+			"/books/thumbnails/generate",
+			{ series_id: seriesId, force: false },
+		);
+		return response.data;
+	},
+
+	// Regenerate all thumbnails for books in series (queues a background task)
+	regenerateBookThumbnails: async (
+		seriesId: string,
+	): Promise<{ task_id: string }> => {
+		const response = await api.post<{ task_id: string }>(
+			"/books/thumbnails/generate",
+			{ series_id: seriesId, force: true },
+		);
+		return response.data;
+	},
+
+	// Generate series cover thumbnail if missing (from first book's cover)
+	generateSeriesThumbnailIfMissing: async (
+		seriesId: string,
+	): Promise<{ task_id: string }> => {
+		const response = await api.post<{ task_id: string }>(
+			`/series/${seriesId}/thumbnail/generate`,
+			{ force: false },
 		);
 		return response.data;
 	},
@@ -117,11 +139,10 @@ export const seriesApi = {
 	// Regenerate the series cover thumbnail (from first book's cover)
 	regenerateSeriesThumbnail: async (
 		seriesId: string,
-		force = true,
 	): Promise<{ task_id: string }> => {
 		const response = await api.post<{ task_id: string }>(
 			`/series/${seriesId}/thumbnail/generate`,
-			{ force },
+			{ force: true },
 		);
 		return response.data;
 	},

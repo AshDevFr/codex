@@ -178,6 +178,37 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        // Add CHECK constraints on enum columns to prevent data corruption
+        // Note: SQLite doesn't support ALTER TABLE ADD CONSTRAINT, so we use raw SQL
+        // PostgreSQL and SQLite both support CHECK constraints in raw SQL
+        let check_plugin_type = if is_postgres {
+            "ALTER TABLE plugins ADD CONSTRAINT chk_plugins_plugin_type CHECK (plugin_type IN ('system', 'user'))"
+        } else {
+            // SQLite requires recreating the table to add constraints, but we can add a trigger instead
+            // For simplicity, we skip CHECK constraints in SQLite as it has less strict enforcement anyway
+            ""
+        };
+
+        let check_health_status = if is_postgres {
+            "ALTER TABLE plugins ADD CONSTRAINT chk_plugins_health_status CHECK (health_status IN ('unknown', 'healthy', 'degraded', 'unhealthy', 'disabled'))"
+        } else {
+            ""
+        };
+
+        let check_credential_delivery = if is_postgres {
+            "ALTER TABLE plugins ADD CONSTRAINT chk_plugins_credential_delivery CHECK (credential_delivery IN ('env', 'stdin'))"
+        } else {
+            ""
+        };
+
+        // Execute CHECK constraints (PostgreSQL only)
+        if is_postgres {
+            let db = manager.get_connection();
+            db.execute_unprepared(check_plugin_type).await?;
+            db.execute_unprepared(check_health_status).await?;
+            db.execute_unprepared(check_credential_delivery).await?;
+        }
+
         // Index on enabled for finding active plugins
         manager
             .create_index(

@@ -595,12 +595,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List books with errors (v2 - grouped by error type)
+         * List books with errors (grouped by error type)
          * @description Returns books with errors grouped by error type, with counts and pagination.
-         *     This enhanced endpoint provides detailed error information including error
+         *     This endpoint provides detailed error information including error
          *     types, messages, and timestamps.
          */
-        get: operations["list_books_with_errors_v2"];
+        get: operations["list_books_with_errors"];
         put?: never;
         post?: never;
         delete?: never;
@@ -722,17 +722,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/books/with-errors": {
+    "/api/v1/books/thumbnails/generate": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List books with analysis errors */
-        get: operations["list_books_with_errors"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Generate thumbnails for books in a scope
+         * @description This queues a fan-out task that enqueues individual thumbnail generation tasks for each book.
+         *
+         *     **Scope priority:**
+         *     1. If `series_id` is provided, only books in that series
+         *     2. If `library_id` is provided, only books in that library
+         *     3. If neither is provided, all books in all libraries
+         *
+         *     **Force behavior:**
+         *     - `force: false` (default): Only generates thumbnails for books that don't have one
+         *     - `force: true`: Regenerates all thumbnails, replacing existing ones
+         *
+         *     # Permission Required
+         *     - `tasks:write`
+         */
+        post: operations["generate_book_thumbnails"];
         delete?: never;
         options?: never;
         head?: never;
@@ -753,7 +768,13 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update book core fields (title, number)
+         * @description Partially updates book_metadata fields. Only provided fields will be updated.
+         *     Absent fields are unchanged. Explicitly null fields will be cleared.
+         *     When a field is set to a non-null value, it is automatically locked.
+         */
+        patch: operations["patch_book"];
         trace?: never;
     };
     "/api/v1/books/{book_id}/adjacent": {
@@ -828,6 +849,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a custom cover image for a book
+         * @description Accepts a multipart form with an image file. The image will be stored
+         *     in the uploads directory and used as the book's cover/thumbnail.
+         */
+        post: operations["upload_book_cover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/file": {
         parameters: {
             query?: never;
@@ -874,6 +916,30 @@ export interface paths {
          *     If no metadata record exists, one will be created with the provided fields.
          */
         patch: operations["patch_book_metadata"];
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/metadata/locks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get book metadata lock states
+         * @description Returns which metadata fields are locked (protected from automatic updates).
+         */
+        get: operations["get_book_metadata_locks"];
+        /**
+         * Update book metadata lock states
+         * @description Updates which metadata fields are locked. Only provided fields will be updated.
+         */
+        put: operations["update_book_metadata_locks"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/books/{book_id}/pages/{page_number}": {
@@ -1450,17 +1516,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/libraries/{library_id}/books/with-errors": {
+    "/api/v1/libraries/{library_id}/books/thumbnails/generate": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List books with analysis errors in a specific library */
-        get: operations["list_library_books_with_errors"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Generate thumbnails for all books in a library
+         * @description Queues a fan-out task that enqueues individual thumbnail generation tasks for each book in the library.
+         *
+         *     # Permission Required
+         *     - `tasks:write`
+         */
+        post: operations["generate_library_book_thumbnails"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1615,7 +1687,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/libraries/{library_id}/thumbnails/generate": {
+    "/api/v1/libraries/{library_id}/series/thumbnails/generate": {
         parameters: {
             query?: never;
             header?: never;
@@ -1625,13 +1697,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Generate thumbnails for all books in a library
-         * @description Queues a fan-out task that enqueues individual thumbnail generation tasks for each book in the library.
+         * Generate thumbnails for all series in a library
+         * @description Queues a fan-out task that generates thumbnails for all series in the specified library.
          *
          *     # Permission Required
          *     - `tasks:write`
          */
-        post: operations["generate_library_thumbnails"];
+        post: operations["generate_library_series_thumbnails"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1654,6 +1726,32 @@ export interface paths {
          *     - `libraries:read` or admin status
          */
         get: operations["get_inventory_metrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/metrics/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get plugin metrics
+         * @description Returns real-time performance statistics for all plugins including:
+         *     - Summary metrics across all plugins
+         *     - Per-plugin breakdown with timing, error rates, and health status
+         *     - Per-method breakdown within each plugin
+         *
+         *     # Permission Required
+         *     - `libraries:read` or admin status
+         */
+        get: operations["get_plugin_metrics"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1777,8 +1875,8 @@ export interface paths {
         /**
          * Execute a plugin action
          * @description Invokes a plugin action and returns the result. Actions are typed by plugin type:
-         *     - `metadata`: search, get, match (requires content_type: series or book)
-         *     - `ping`: health check (works for any plugin)
+         *     - `metadata`: search, get, match (requires write permission for the content_type)
+         *     - `ping`: health check (requires PluginsManage permission)
          */
         post: operations["execute_plugin"];
         delete?: never;
@@ -1908,6 +2006,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/list/alphabetical-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get alphabetical groups for series
+         * @description Returns a list of alphabetical groups with counts, showing how many series
+         *     start with each letter/character. This is useful for building A-Z navigation.
+         *     The same filters as list_series_filtered can be applied.
+         */
+        post: operations["list_series_alphabetical_groups"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/metadata/auto-match/task/bulk": {
         parameters: {
             query?: never;
@@ -1974,6 +2094,38 @@ export interface paths {
         put?: never;
         /** Search series by name */
         post: operations["search_series"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/thumbnails/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate thumbnails for series in a scope
+         * @description This queues a fan-out task that enqueues individual series thumbnail generation tasks.
+         *     Series thumbnails are the cover images displayed for each series (derived from the first book's cover).
+         *
+         *     **Scope:**
+         *     - If `library_id` is provided, only series in that library
+         *     - If not provided, all series in all libraries
+         *
+         *     **Force behavior:**
+         *     - `force: false` (default): Only generates thumbnails for series that don't have one
+         *     - `force: true`: Regenerates all thumbnails, replacing existing ones
+         *
+         *     # Permission Required
+         *     - `tasks:write`
+         */
+        post: operations["generate_series_thumbnails"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2080,7 +2232,12 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update series core fields (name/title)
+         * @description Partially updates series_metadata fields. Only provided fields will be updated.
+         *     Absent fields are unchanged. When name is set to a non-null value, it is automatically locked.
+         */
+        patch: operations["patch_series"];
         trace?: never;
     };
     "/api/v1/series/{series_id}/alternate-titles": {
@@ -2180,23 +2337,6 @@ export interface paths {
         };
         /** Get books in a series */
         get: operations["get_series_books"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/series/{series_id}/books/with-errors": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List books with analysis errors in a specific series */
-        get: operations["list_series_books_with_errors"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2674,7 +2814,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/series/{series_id}/thumbnails/generate": {
+    "/api/v1/series/{series_id}/thumbnail/generate": {
         parameters: {
             query?: never;
             header?: never;
@@ -2684,13 +2824,14 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Generate thumbnails for all books in a series
-         * @description Queues a fan-out task that enqueues individual thumbnail generation tasks for each book in the series.
+         * Generate thumbnail for a series
+         * @description Queues a task to generate (or regenerate) the thumbnail for a specific series.
+         *     The series thumbnail is derived from the first book's cover.
          *
          *     # Permission Required
          *     - `tasks:write`
          */
-        post: operations["generate_series_thumbnails"];
+        post: operations["generate_series_thumbnail"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3078,38 +3219,6 @@ export interface paths {
          *     - `tasks:write`
          */
         post: operations["unlock_task"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/thumbnails/generate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Generate thumbnails for books in a scope
-         * @description This queues a fan-out task that enqueues individual thumbnail generation tasks for each book.
-         *
-         *     **Scope priority:**
-         *     1. If `series_id` is provided, only books in that series
-         *     2. If `library_id` is provided, only books in that library
-         *     3. If neither is provided, all books in all libraries
-         *
-         *     **Force behavior:**
-         *     - `force: false` (default): Only generates thumbnails for books that don't have one
-         *     - `force: true`: Regenerates all thumbnails, replacing existing ones
-         *
-         *     # Permission Required
-         *     - `tasks:write`
-         */
-        post: operations["generate_thumbnails"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4265,6 +4374,25 @@ export interface components {
             next?: null | components["schemas"]["BookDto"];
             prev?: null | components["schemas"]["BookDto"];
         };
+        /**
+         * @description Alphabetical group with count
+         *
+         *     Represents a group of series starting with a specific letter/character
+         *     along with the count of series in that group.
+         */
+        AlphabeticalGroupDto: {
+            /**
+             * Format: int64
+             * @description Number of series starting with this character
+             * @example 20
+             */
+            count: number;
+            /**
+             * @description The first character (lowercase letter, digit, or special character)
+             * @example a
+             */
+            group: string;
+        };
         /** @description Alternate title data transfer object */
         AlternateTitleDto: {
             /**
@@ -5074,6 +5202,32 @@ export interface components {
          * @enum {string}
          */
         BookStrategy: "filename" | "metadata_first" | "smart" | "series_name" | "custom";
+        /** @description Response for book update */
+        BookUpdateResponse: {
+            /**
+             * Format: uuid
+             * @description Book ID
+             * @example 550e8400-e29b-41d4-a716-446655440001
+             */
+            id: string;
+            /**
+             * Format: double
+             * @description Updated number
+             * @example 1.5
+             */
+            number?: number | null;
+            /**
+             * @description Updated title
+             * @example Chapter 1: The Beginning
+             */
+            title?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+        };
         /** @description A book with its associated errors */
         BookWithErrorsDto: {
             /** @description The book data */
@@ -6327,7 +6481,8 @@ export interface components {
              */
             updatedAt: string;
         };
-        GenerateThumbnailsRequest: {
+        /** @description Request body for batch book thumbnail generation */
+        GenerateBookThumbnailsRequest: {
             /**
              * @description If true, regenerate all thumbnails even if they exist. If false (default), only generate missing thumbnails.
              * @example false
@@ -6335,16 +6490,30 @@ export interface components {
             force?: boolean;
             /**
              * Format: uuid
-             * @description Library ID to generate thumbnails for (optional)
+             * @description Optional: scope to a specific library
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             library_id?: string | null;
             /**
              * Format: uuid
-             * @description Series ID to generate thumbnails for (optional, takes precedence over library_id)
+             * @description Optional: scope to a specific series (within library if both provided)
              * @example 550e8400-e29b-41d4-a716-446655440001
              */
             series_id?: string | null;
+        };
+        /** @description Request body for batch series thumbnail generation */
+        GenerateSeriesThumbnailsRequest: {
+            /**
+             * @description If true, regenerate all thumbnails even if they exist. If false (default), only generate missing thumbnails.
+             * @example false
+             */
+            force?: boolean;
+            /**
+             * Format: uuid
+             * @description Optional: scope to a specific library
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            library_id?: string | null;
         };
         /** @description Genre data transfer object */
         GenreDto: {
@@ -8620,6 +8789,25 @@ export interface components {
             year?: number | null;
         };
         /**
+         * @description PATCH request for updating book core fields (title, number)
+         *
+         *     Only provided fields will be updated. Absent fields are unchanged.
+         *     Explicitly null fields will be cleared.
+         */
+        PatchBookRequest: {
+            /**
+             * Format: double
+             * @description Book number (for sorting within series). Supports decimals like 1.5 for special chapters.
+             * @example 1.5
+             */
+            number?: number | null;
+            /**
+             * @description Book title (display name)
+             * @example Chapter 1: The Beginning
+             */
+            title?: string | null;
+        };
+        /**
          * @description PATCH request for partial update of series metadata
          *
          *     Only provided fields will be updated. Absent fields are unchanged.
@@ -8686,6 +8874,19 @@ export interface components {
              * @example 1987
              */
             year?: number | null;
+        };
+        /**
+         * @description PATCH request for updating series title
+         *
+         *     Only provided fields will be updated. Absent fields are unchanged.
+         *     Explicitly null fields will be cleared (where applicable).
+         */
+        PatchSeriesRequest: {
+            /**
+             * @description Series title (stored in series_metadata.title)
+             * @example Batman: Year One
+             */
+            title?: string | null;
         };
         /** @description Result of a PDF cache cleanup operation */
         PdfCacheCleanupResultDto: {
@@ -8957,6 +9158,11 @@ export interface components {
              * @description When the failure occurred
              */
             occurredAt: string;
+            /**
+             * @description Sanitized summary of request parameters (sensitive fields redacted)
+             * @example query: "One Piece", limit: 10
+             */
+            requestSummary?: string | null;
         };
         /** @description Response containing plugin failure history */
         PluginFailuresResponse: {
@@ -9045,6 +9251,175 @@ export interface components {
             scopes?: string[];
             /** @description Semantic version */
             version: string;
+        };
+        /** @description Metrics breakdown by method for a plugin */
+        PluginMethodMetricsDto: {
+            /**
+             * Format: double
+             * @description Average duration in milliseconds
+             * @example 180.5
+             */
+            avg_duration_ms: number;
+            /**
+             * @description Method name
+             * @example search
+             */
+            method: string;
+            /**
+             * Format: int64
+             * @description Failed requests
+             * @example 5
+             */
+            requests_failed: number;
+            /**
+             * Format: int64
+             * @description Successful requests
+             * @example 195
+             */
+            requests_success: number;
+            /**
+             * Format: int64
+             * @description Total requests for this method
+             * @example 200
+             */
+            requests_total: number;
+        };
+        /** @description Metrics for a single plugin */
+        PluginMetricsDto: {
+            /**
+             * Format: double
+             * @description Average request duration in milliseconds
+             * @example 250.5
+             */
+            avg_duration_ms: number;
+            /** @description Per-method breakdown */
+            by_method?: {
+                [key: string]: components["schemas"]["PluginMethodMetricsDto"];
+            } | null;
+            /**
+             * Format: double
+             * @description Error rate as percentage
+             * @example 4
+             */
+            error_rate_pct: number;
+            /** @description Failure counts by error code */
+            failure_counts?: {
+                [key: string]: number;
+            } | null;
+            /**
+             * @description Current health status
+             * @example healthy
+             */
+            health_status: string;
+            /**
+             * Format: date-time
+             * @description Last failure timestamp
+             */
+            last_failure?: string | null;
+            /**
+             * Format: date-time
+             * @description Last successful request timestamp
+             */
+            last_success?: string | null;
+            /**
+             * Format: uuid
+             * @description Plugin ID
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            plugin_id: string;
+            /**
+             * @description Plugin name
+             * @example AniList Provider
+             */
+            plugin_name: string;
+            /**
+             * Format: int64
+             * @description Number of rate limit rejections
+             * @example 2
+             */
+            rate_limit_rejections: number;
+            /**
+             * Format: int64
+             * @description Failed requests
+             * @example 20
+             */
+            requests_failed: number;
+            /**
+             * Format: int64
+             * @description Successful requests
+             * @example 480
+             */
+            requests_success: number;
+            /**
+             * Format: int64
+             * @description Total requests made
+             * @example 500
+             */
+            requests_total: number;
+        };
+        /** @description Plugin metrics response - current performance statistics for all plugins */
+        PluginMetricsResponse: {
+            /** @description Per-plugin breakdown */
+            plugins: components["schemas"]["PluginMetricsDto"][];
+            /** @description Overall summary statistics */
+            summary: components["schemas"]["PluginMetricsSummaryDto"];
+            /**
+             * Format: date-time
+             * @description When the metrics were last updated
+             * @example 2026-01-30T12:00:00Z
+             */
+            updated_at: string;
+        };
+        /** @description Summary metrics across all plugins */
+        PluginMetricsSummaryDto: {
+            /**
+             * Format: int64
+             * @description Number of degraded plugins
+             * @example 1
+             */
+            degraded_plugins: number;
+            /**
+             * Format: int64
+             * @description Number of healthy plugins
+             * @example 2
+             */
+            healthy_plugins: number;
+            /**
+             * Format: int64
+             * @description Total failed requests
+             * @example 100
+             */
+            total_failed: number;
+            /**
+             * Format: int64
+             * @description Total number of registered plugins
+             * @example 3
+             */
+            total_plugins: number;
+            /**
+             * Format: int64
+             * @description Total rate limit rejections
+             * @example 5
+             */
+            total_rate_limit_rejections: number;
+            /**
+             * Format: int64
+             * @description Total requests made across all plugins
+             * @example 1500
+             */
+            total_requests: number;
+            /**
+             * Format: int64
+             * @description Total successful requests
+             * @example 1400
+             */
+            total_success: number;
+            /**
+             * Format: int64
+             * @description Number of unhealthy plugins
+             * @example 0
+             */
+            unhealthy_plugins: number;
         };
         /** @description Response containing search results from a plugin */
         PluginSearchResponse: {
@@ -10175,6 +10550,26 @@ export interface components {
          * @enum {string}
          */
         SeriesStrategy: "series_volume" | "series_volume_chapter" | "flat" | "publisher_hierarchy" | "calibre" | "custom";
+        /** @description Response for series update */
+        SeriesUpdateResponse: {
+            /**
+             * Format: uuid
+             * @description Series ID
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            id: string;
+            /**
+             * @description Updated title
+             * @example Batman: Year One
+             */
+            title: string;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+        };
         /** @description Request to set a single preference value */
         SetPreferenceRequest: {
             /** @description The value to set */
@@ -10868,6 +11263,12 @@ export interface components {
             /** @enum {string} */
             type: "generate_series_thumbnail";
         } | {
+            force?: boolean;
+            /** Format: uuid */
+            library_id?: string | null;
+            /** @enum {string} */
+            type: "generate_series_thumbnails";
+        } | {
             /** @enum {string} */
             type: "find_duplicates";
         } | {
@@ -11142,6 +11543,60 @@ export interface components {
             name?: string | null;
             /** @description Permissions for the API key (array of permission strings) */
             permissions?: string[] | null;
+        };
+        /**
+         * @description Request to update book metadata locks
+         *
+         *     All fields are optional. Only provided fields will be updated.
+         */
+        UpdateBookMetadataLocksRequest: {
+            /** @description Whether to lock black_and_white */
+            blackAndWhiteLock?: boolean | null;
+            /** @description Whether to lock colorist */
+            coloristLock?: boolean | null;
+            /** @description Whether to lock count */
+            countLock?: boolean | null;
+            /** @description Whether to lock cover artist */
+            coverArtistLock?: boolean | null;
+            /** @description Whether to lock day */
+            dayLock?: boolean | null;
+            /** @description Whether to lock editor */
+            editorLock?: boolean | null;
+            /** @description Whether to lock format_detail */
+            formatDetailLock?: boolean | null;
+            /** @description Whether to lock genre */
+            genreLock?: boolean | null;
+            /** @description Whether to lock imprint */
+            imprintLock?: boolean | null;
+            /** @description Whether to lock inker */
+            inkerLock?: boolean | null;
+            /** @description Whether to lock isbns */
+            isbnsLock?: boolean | null;
+            /** @description Whether to lock language_iso */
+            languageIsoLock?: boolean | null;
+            /** @description Whether to lock letterer */
+            lettererLock?: boolean | null;
+            /** @description Whether to lock manga */
+            mangaLock?: boolean | null;
+            /** @description Whether to lock month */
+            monthLock?: boolean | null;
+            /** @description Whether to lock penciller */
+            pencillerLock?: boolean | null;
+            /** @description Whether to lock publisher */
+            publisherLock?: boolean | null;
+            /**
+             * @description Whether to lock summary
+             * @example true
+             */
+            summaryLock?: boolean | null;
+            /** @description Whether to lock volume */
+            volumeLock?: boolean | null;
+            /** @description Whether to lock web URL */
+            webLock?: boolean | null;
+            /** @description Whether to lock writer */
+            writerLock?: boolean | null;
+            /** @description Whether to lock year */
+            yearLock?: boolean | null;
         };
         /**
          * @description Update library request
@@ -11918,7 +12373,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Admin permission required */
+            /** @description PluginsManage permission required */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -11963,7 +12418,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Admin permission required */
+            /** @description PluginsManage permission required */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -12007,7 +12462,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Admin permission required */
+            /** @description PluginsManage permission required */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -12049,7 +12504,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Admin permission required */
+            /** @description PluginsManage permission required */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -12104,7 +12559,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Admin permission required */
+            /** @description PluginsManage permission required */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -12148,7 +12603,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Admin permission required */
+            /** @description PluginsManage permission required */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -12192,7 +12647,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Admin permission required */
+            /** @description PluginsManage permission required */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -12241,7 +12696,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Admin permission required */
+            /** @description PluginsManage permission required */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -12285,7 +12740,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Admin permission required */
+            /** @description PluginsManage permission required */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -12329,7 +12784,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Admin permission required */
+            /** @description PluginsManage permission required */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -12373,7 +12828,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Admin permission required */
+            /** @description PluginsManage permission required */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -13184,7 +13639,7 @@ export interface operations {
             };
         };
     };
-    list_books_with_errors_v2: {
+    list_books_with_errors: {
         parameters: {
             query?: {
                 /** @description Optional library filter */
@@ -13489,34 +13944,29 @@ export interface operations {
             };
         };
     };
-    list_books_with_errors: {
+    generate_book_thumbnails: {
         parameters: {
-            query?: {
-                /** @description Optional library filter */
-                libraryId?: string | null;
-                /** @description Optional series filter */
-                seriesId?: string | null;
-                /** @description Page number (1-indexed, minimum 1) */
-                page?: number;
-                /** @description Number of items per page (max 100, default 50) */
-                pageSize?: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateBookThumbnailsRequest"];
+            };
+        };
         responses: {
-            /** @description Paginated list of books with analysis errors */
+            /** @description Thumbnail generation task queued */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponse"];
+                    "application/json": components["schemas"]["CreateTaskResponse"];
                 };
             };
-            /** @description Forbidden */
+            /** @description Permission denied */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -13551,6 +14001,47 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BookDetailResponse"];
                 };
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    patch_book: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchBookRequest"];
+            };
+        };
+        responses: {
+            /** @description Book updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookUpdateResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Book not found */
             404: {
@@ -13657,6 +14148,52 @@ export interface operations {
                 content?: never;
             };
             /** @description Permission denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    upload_book_cover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": unknown;
+            };
+        };
+        responses: {
+            /** @description Cover uploaded successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request - no image file provided or invalid image */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -13783,6 +14320,84 @@ export interface operations {
                 content?: never;
             };
             /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_book_metadata_locks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lock states retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookMetadataLocks"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book or metadata not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_book_metadata_locks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBookMetadataLocksRequest"];
+            };
+        };
+        responses: {
+            /** @description Lock states updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookMetadataLocks"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book or metadata not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -15011,18 +15626,9 @@ export interface operations {
             };
         };
     };
-    list_library_books_with_errors: {
+    generate_library_book_thumbnails: {
         parameters: {
-            query?: {
-                /** @description Optional library filter */
-                libraryId?: string | null;
-                /** @description Optional series filter */
-                seriesId?: string | null;
-                /** @description Page number (1-indexed, minimum 1) */
-                page?: number;
-                /** @description Number of items per page (max 100, default 50) */
-                pageSize?: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 /** @description Library ID */
@@ -15030,19 +15636,30 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForceRequest"];
+            };
+        };
         responses: {
-            /** @description Paginated list of books with analysis errors in library */
+            /** @description Thumbnail generation task queued */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponse"];
+                    "application/json": components["schemas"]["CreateTaskResponse"];
                 };
             };
-            /** @description Forbidden */
+            /** @description Permission denied */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Library not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15368,7 +15985,7 @@ export interface operations {
             };
         };
     };
-    generate_library_thumbnails: {
+    generate_library_series_thumbnails: {
         parameters: {
             query?: never;
             header?: never;
@@ -15384,7 +16001,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Thumbnail generation task queued */
+            /** @description Series thumbnail generation task queued */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -15425,6 +16042,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MetricsDto"];
+                };
+            };
+            /** @description Permission denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_plugin_metrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plugin metrics retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginMetricsResponse"];
                 };
             };
             /** @description Permission denied */
@@ -15669,6 +16313,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Insufficient permission for this action */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Plugin not found */
             404: {
                 headers: {
@@ -15884,6 +16535,37 @@ export interface operations {
             };
         };
     };
+    list_series_alphabetical_groups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SeriesListRequest"];
+            };
+        };
+        responses: {
+            /** @description List of alphabetical groups with counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlphabeticalGroupDto"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     enqueue_bulk_auto_match_tasks: {
         parameters: {
             query?: never;
@@ -16027,6 +16709,37 @@ export interface operations {
                 };
             };
             /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    generate_series_thumbnails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateSeriesThumbnailsRequest"];
+            };
+        };
+        responses: {
+            /** @description Series thumbnail generation task queued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateTaskResponse"];
+                };
+            };
+            /** @description Permission denied */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -16278,6 +16991,47 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SeriesDto"];
                 };
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    patch_series: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchSeriesRequest"];
+            };
+        };
+        responses: {
+            /** @description Series updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesUpdateResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Series not found */
             404: {
@@ -16558,45 +17312,6 @@ export interface operations {
             };
             /** @description Series not found */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    list_series_books_with_errors: {
-        parameters: {
-            query?: {
-                /** @description Optional library filter */
-                libraryId?: string | null;
-                /** @description Optional series filter */
-                seriesId?: string | null;
-                /** @description Page number (1-indexed, minimum 1) */
-                page?: number;
-                /** @description Number of items per page (max 100, default 50) */
-                pageSize?: number;
-            };
-            header?: never;
-            path: {
-                /** @description Series ID */
-                series_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Paginated list of books with analysis errors in series */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18088,7 +18803,7 @@ export interface operations {
             };
         };
     };
-    generate_series_thumbnails: {
+    generate_series_thumbnail: {
         parameters: {
             query?: never;
             header?: never;
@@ -18753,37 +19468,6 @@ export interface operations {
             };
             /** @description Task not found */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    generate_thumbnails: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GenerateThumbnailsRequest"];
-            };
-        };
-        responses: {
-            /** @description Thumbnail generation task queued */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreateTaskResponse"];
-                };
-            };
-            /** @description Permission denied */
-            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -15,7 +15,7 @@ import {
 import { useDebouncedValue } from "@mantine/hooks";
 import { IconSearch, IconX } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	type PluginActionDto,
 	type PluginSearchResultDto,
@@ -57,22 +57,51 @@ export function MetadataSearchModal({
 	const [debouncedQuery] = useDebouncedValue(query, 400);
 	const [results, setResults] = useState<PluginSearchResultDto[]>([]);
 
-	// Search mutation
-	const searchMutation = useMutation({
-		mutationFn: async (searchQuery: string) => {
-			const response = await pluginsApi.searchMetadata(
-				plugin.pluginId,
-				searchQuery,
-				contentType,
-			);
-			if (!response.success || !response.result) {
-				throw new Error(response.error || "Search failed");
+	// Track request ID to prevent race conditions in debounced search.
+	// Each search gets a unique ID, and we only update results if the response
+	// matches the latest request ID.
+	const requestIdRef = useRef(0);
+	const lastSearchedQueryRef = useRef<string | null>(null);
+
+	// Perform search with race condition protection
+	const performSearch = useCallback(
+		async (searchQuery: string) => {
+			// Increment request ID for this search
+			const currentRequestId = ++requestIdRef.current;
+			lastSearchedQueryRef.current = searchQuery;
+
+			try {
+				const response = await pluginsApi.searchMetadata(
+					plugin.pluginId,
+					searchQuery,
+					contentType,
+				);
+
+				// Only update results if this is still the latest request
+				if (currentRequestId !== requestIdRef.current) {
+					return; // Stale request, ignore results
+				}
+
+				if (!response.success || !response.result) {
+					throw new Error(response.error || "Search failed");
+				}
+
+				const data = response.result as { results: PluginSearchResultDto[] };
+				setResults(data.results || []);
+			} catch (error) {
+				// Only propagate error if this is still the latest request
+				if (currentRequestId !== requestIdRef.current) {
+					return; // Stale request, ignore error
+				}
+				throw error;
 			}
-			return response.result as { results: PluginSearchResultDto[] };
 		},
-		onSuccess: (data) => {
-			setResults(data.results || []);
-		},
+		[plugin.pluginId, contentType],
+	);
+
+	// Search mutation with race condition protection
+	const searchMutation = useMutation({
+		mutationFn: performSearch,
 	});
 
 	// Reset state and trigger search when modal opens
@@ -81,6 +110,8 @@ export function MetadataSearchModal({
 		if (opened) {
 			setQuery(initialQuery);
 			setResults([]);
+			// Reset request tracking
+			lastSearchedQueryRef.current = null;
 			// Trigger search immediately if we have a valid initial query
 			if (initialQuery.trim().length >= 2) {
 				searchMutation.mutate(initialQuery);
@@ -94,9 +125,11 @@ export function MetadataSearchModal({
 		// Skip if modal just opened (handled by the effect above)
 		if (!opened) return;
 
-		if (debouncedQuery.trim().length >= 2) {
-			// Only search if query changed from initial
-			if (debouncedQuery !== initialQuery) {
+		const trimmedQuery = debouncedQuery.trim();
+		if (trimmedQuery.length >= 2) {
+			// Only search if the query is different from what we last searched.
+			// This prevents duplicate searches when debounced value catches up.
+			if (trimmedQuery !== lastSearchedQueryRef.current) {
 				searchMutation.mutate(debouncedQuery);
 			}
 		} else {

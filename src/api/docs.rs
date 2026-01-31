@@ -160,7 +160,9 @@ The following paths are exempt from rate limiting:
         v1::handlers::list_series,
         v1::handlers::search_series,
         v1::handlers::list_series_filtered,
+        v1::handlers::list_series_alphabetical_groups,
         v1::handlers::get_series,
+        v1::handlers::patch_series,
         v1::handlers::get_series_books,
         v1::handlers::purge_series_deleted_books,
         v1::handlers::get_series_thumbnail,
@@ -242,6 +244,7 @@ The following paths are exempt from rate limiting:
         v1::handlers::list_books,
         v1::handlers::list_books_filtered,
         v1::handlers::get_book,
+        v1::handlers::patch_book,
         v1::handlers::get_adjacent_books,
         v1::handlers::get_book_file,
         v1::handlers::get_book_thumbnail,
@@ -256,13 +259,13 @@ The following paths are exempt from rate limiting:
         v1::handlers::list_recently_read_books,
         v1::handlers::list_library_recently_read_books,
         v1::handlers::list_books_with_errors,
-        v1::handlers::list_library_books_with_errors,
-        v1::handlers::list_series_books_with_errors,
-        v1::handlers::list_books_with_errors_v2,
         v1::handlers::retry_book_errors,
         v1::handlers::retry_all_book_errors,
         v1::handlers::replace_book_metadata,
         v1::handlers::patch_book_metadata,
+        v1::handlers::get_book_metadata_locks,
+        v1::handlers::update_book_metadata_locks,
+        v1::handlers::upload_book_cover,
 
         // Page endpoints
         v1::handlers::get_page_image,
@@ -293,6 +296,7 @@ The following paths are exempt from rate limiting:
 
         // Metrics endpoints
         v1::handlers::get_inventory_metrics,
+        v1::handlers::get_plugin_metrics,
         v1::handlers::task_metrics::get_task_metrics,
         v1::handlers::task_metrics::get_task_metrics_history,
         v1::handlers::task_metrics::trigger_metrics_cleanup,
@@ -319,10 +323,14 @@ The following paths are exempt from rate limiting:
         v1::handlers::task_queue::get_task_stats,
         v1::handlers::task_queue::purge_old_tasks,
         v1::handlers::task_queue::nuke_all_tasks,
-        v1::handlers::task_queue::generate_thumbnails,
-        v1::handlers::task_queue::generate_library_thumbnails,
-        v1::handlers::task_queue::generate_series_thumbnails,
+        // Book thumbnail endpoints
+        v1::handlers::task_queue::generate_book_thumbnails,
         v1::handlers::task_queue::generate_book_thumbnail,
+        v1::handlers::task_queue::generate_library_book_thumbnails,
+        // Series thumbnail endpoints
+        v1::handlers::task_queue::generate_series_thumbnails,
+        v1::handlers::task_queue::generate_series_thumbnail,
+        v1::handlers::task_queue::generate_library_series_thumbnails,
 
         // Filesystem endpoints
         v1::handlers::browse_filesystem,
@@ -480,6 +488,9 @@ The following paths are exempt from rate limiting:
             v1::dto::SearchSeriesRequest,
             v1::dto::SeriesListRequest,
             v1::dto::SeriesCondition,
+            v1::dto::AlphabeticalGroupDto,
+            v1::dto::PatchSeriesRequest,
+            v1::dto::SeriesUpdateResponse,
             v1::dto::BookListRequest,
             v1::dto::BookCondition,
             v1::dto::FieldOperator,
@@ -563,6 +574,9 @@ The following paths are exempt from rate limiting:
             v1::dto::FullBookListResponse,
             v1::dto::BookFullMetadata,
             v1::dto::BookMetadataLocks,
+            v1::dto::UpdateBookMetadataLocksRequest,
+            v1::dto::PatchBookRequest,
+            v1::dto::BookUpdateResponse,
             v1::dto::AdjacentBooksResponse,
             v1::dto::BookMetadataDto,
             v1::dto::ReplaceBookMetadataRequest,
@@ -592,6 +606,12 @@ The following paths are exempt from rate limiting:
             // Metrics DTOs
             v1::dto::MetricsDto,
             v1::dto::LibraryMetricsDto,
+
+            // Plugin Metrics DTOs
+            v1::dto::PluginMetricsResponse,
+            v1::dto::PluginMetricsSummaryDto,
+            v1::dto::PluginMetricsDto,
+            v1::dto::PluginMethodMetricsDto,
 
             // Task Metrics DTOs
             v1::dto::TaskMetricsResponse,
@@ -674,7 +694,8 @@ The following paths are exempt from rate limiting:
             v1::handlers::task_queue::TaskResponse,
             v1::handlers::task_queue::PurgeTasksResponse,
             v1::handlers::task_queue::MessageResponse,
-            v1::handlers::task_queue::GenerateThumbnailsRequest,
+            v1::handlers::task_queue::GenerateBookThumbnailsRequest,
+            v1::handlers::task_queue::GenerateSeriesThumbnailsRequest,
             v1::handlers::task_queue::ForceRequest,
             crate::tasks::types::TaskStats,
             crate::tasks::types::TaskTypeStats,
