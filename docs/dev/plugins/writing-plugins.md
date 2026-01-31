@@ -21,7 +21,7 @@ npm init -y
 ### 2. Install Dependencies
 
 ```bash
-npm install @codex/plugin-sdk
+npm install @ashdev/codex-plugin-sdk
 npm install -D typescript @types/node esbuild
 ```
 
@@ -50,7 +50,7 @@ Update `package.json`:
 
 ```json
 {
-  "name": "@codex/plugin-metadata-myplugin",
+  "name": "@ashdev/codex-plugin-metadata-myplugin",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -75,7 +75,7 @@ import {
   type PluginSeriesMetadata,
   type PluginManifest,
   type MetadataContentType,
-} from "@codex/plugin-sdk";
+} from "@ashdev/codex-plugin-sdk";
 
 // Define your plugin manifest
 const manifest = {
@@ -298,7 +298,7 @@ import {
   AuthError,
   ApiError,
   ConfigError,
-} from "@codex/plugin-sdk";
+} from "@ashdev/codex-plugin-sdk";
 
 // Rate limited by API
 if (response.status === 429) {
@@ -332,7 +332,7 @@ if (!apiKey) {
 Always log to stderr (stdout is reserved for JSON-RPC):
 
 ```typescript
-import { createLogger } from "@codex/plugin-sdk";
+import { createLogger } from "@ashdev/codex-plugin-sdk";
 
 const logger = createLogger({ name: "metadata-myplugin", level: "info" });
 
@@ -361,7 +361,7 @@ Codex supports three methods for delivering credentials to plugins:
 Credentials are passed in the `initialize` request params:
 
 ```typescript
-import { createMetadataPlugin, ConfigError, type InitializeParams } from "@codex/plugin-sdk";
+import { createMetadataPlugin, ConfigError, type InitializeParams } from "@ashdev/codex-plugin-sdk";
 
 let apiKey: string | undefined;
 

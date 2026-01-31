@@ -126,7 +126,7 @@ export interface MetadataPluginOptions {
  *
  * @example
  * ```typescript
- * import { createMetadataPlugin, type MetadataProvider } from "@codex/plugin-sdk";
+ * import { createMetadataPlugin, type MetadataProvider } from "@ashdev/codex-plugin-sdk";
  *
  * const provider: MetadataProvider = {
  *   async search(params) {

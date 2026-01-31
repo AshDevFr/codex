@@ -2,7 +2,7 @@ import {
   createLogger,
   type MetadataSearchParams,
   type MetadataSearchResponse,
-} from "@codex/plugin-sdk";
+} from "@ashdev/codex-plugin-sdk";
 import type { MangaBakaClient } from "../api.js";
 import { mapSearchResult } from "../mappers.js";
 

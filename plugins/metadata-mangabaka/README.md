@@ -1,4 +1,4 @@
-# @codex/plugin-metadata-mangabaka
+# @ashdev/codex-plugin-metadata-mangabaka
 
 A Codex metadata plugin for fetching manga metadata from [MangaBaka](https://mangabaka.org). MangaBaka aggregates metadata from multiple sources including AniList, MyAnimeList, MangaDex, and more.
 
@@ -26,7 +26,7 @@ You need a MangaBaka API key to use this plugin:
 ## Installation
 
 ```bash
-npm install -g @codex/plugin-metadata-mangabaka
+npm install -g @ashdev/codex-plugin-metadata-mangabaka
 ```
 
 Or run directly with npx (no installation required).
@@ -42,7 +42,7 @@ Or run directly with npx (no installation required).
    - **Name**: `metadata-mangabaka`
    - **Display Name**: `MangaBaka Metadata`
    - **Command**: `npx`
-   - **Arguments**: `-y @codex/plugin-metadata-mangabaka@1.0.0`
+   - **Arguments**: `-y @ashdev/codex-plugin-metadata-mangabaka@1.0.0`
    - **Scopes**: Select `series:detail`
 5. In the **Credentials** tab:
    - **Credential Delivery**: Select `Initialize Message` or `Both`
@@ -55,9 +55,9 @@ Or run directly with npx (no installation required).
 
 | Configuration | Arguments | Description |
 |--------------|-----------|-------------|
-| Latest version | `-y @codex/plugin-metadata-mangabaka` | Always uses latest |
-| Pinned version | `-y @codex/plugin-metadata-mangabaka@1.0.0` | Recommended for production |
-| Fast startup | `-y --prefer-offline @codex/plugin-metadata-mangabaka@1.0.0` | Skips version check if cached |
+| Latest version | `-y @ashdev/codex-plugin-metadata-mangabaka` | Always uses latest |
+| Pinned version | `-y @ashdev/codex-plugin-metadata-mangabaka@1.0.0` | Recommended for production |
+| Fast startup | `-y --prefer-offline @ashdev/codex-plugin-metadata-mangabaka@1.0.0` | Skips version check if cached |
 
 **Flags:**
 - `-y`: Auto-confirms installation (required for containers)
@@ -69,14 +69,14 @@ For Docker deployments, use npx with `--prefer-offline` for faster startup:
 
 ```
 Command: npx
-Arguments: -y --prefer-offline @codex/plugin-metadata-mangabaka@1.0.0
+Arguments: -y --prefer-offline @ashdev/codex-plugin-metadata-mangabaka@1.0.0
 ```
 
 Pre-warm the cache in your Dockerfile:
 
 ```dockerfile
 # Pre-cache plugin during image build
-RUN npx -y @codex/plugin-metadata-mangabaka@1.0.0 --version || true
+RUN npx -y @ashdev/codex-plugin-metadata-mangabaka@1.0.0 --version || true
 ```
 
 ### Manual Installation (Alternative)
@@ -84,7 +84,7 @@ RUN npx -y @codex/plugin-metadata-mangabaka@1.0.0 --version || true
 For maximum performance, install globally:
 
 ```bash
-npm install -g @codex/plugin-metadata-mangabaka
+npm install -g @ashdev/codex-plugin-metadata-mangabaka
 ```
 
 Then configure:

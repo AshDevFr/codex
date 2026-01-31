@@ -16,7 +16,7 @@ import {
   createMetadataPlugin,
   type InitializeParams,
   type MetadataProvider,
-} from "@codex/plugin-sdk";
+} from "@ashdev/codex-plugin-sdk";
 import { MangaBakaClient } from "./api.js";
 import { handleGet } from "./handlers/get.js";
 import { handleMatch } from "./handlers/match.js";

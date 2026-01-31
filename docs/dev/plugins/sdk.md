@@ -1,11 +1,11 @@
 # Plugin SDK
 
-The `@codex/plugin-sdk` package provides TypeScript types, utilities, and a server framework for building Codex plugins.
+The `@ashdev/codex-plugin-sdk` package provides TypeScript types, utilities, and a server framework for building Codex plugins.
 
 ## Installation
 
 ```bash
-npm install @codex/plugin-sdk
+npm install @ashdev/codex-plugin-sdk
 ```
 
 ## Quick Example
@@ -15,7 +15,7 @@ import {
   createSeriesMetadataPlugin,
   type SeriesMetadataProvider,
   type PluginManifest,
-} from "@codex/plugin-sdk";
+} from "@ashdev/codex-plugin-sdk";
 
 const manifest = {
   name: "metadata-my-plugin",
@@ -115,7 +115,7 @@ logger.error("Request failed", error);
 Thrown when rate limited by an external API.
 
 ```typescript
-import { RateLimitError } from "@codex/plugin-sdk";
+import { RateLimitError } from "@ashdev/codex-plugin-sdk";
 
 if (response.status === 429) {
   throw new RateLimitError(60); // Retry after 60 seconds
@@ -127,7 +127,7 @@ if (response.status === 429) {
 Thrown when a requested resource doesn't exist.
 
 ```typescript
-import { NotFoundError } from "@codex/plugin-sdk";
+import { NotFoundError } from "@ashdev/codex-plugin-sdk";
 
 if (response.status === 404) {
   throw new NotFoundError("Series not found");
@@ -139,7 +139,7 @@ if (response.status === 404) {
 Thrown when authentication fails.
 
 ```typescript
-import { AuthError } from "@codex/plugin-sdk";
+import { AuthError } from "@ashdev/codex-plugin-sdk";
 
 if (response.status === 401) {
   throw new AuthError("Invalid API key");
@@ -151,7 +151,7 @@ if (response.status === 401) {
 Thrown for generic API errors.
 
 ```typescript
-import { ApiError } from "@codex/plugin-sdk";
+import { ApiError } from "@ashdev/codex-plugin-sdk";
 
 if (!response.ok) {
   throw new ApiError(`API error: ${response.status}`, response.status);
@@ -163,7 +163,7 @@ if (!response.ok) {
 Thrown when the plugin is misconfigured.
 
 ```typescript
-import { ConfigError } from "@codex/plugin-sdk";
+import { ConfigError } from "@ashdev/codex-plugin-sdk";
 
 if (!apiKey) {
   throw new ConfigError("api_key credential is required");

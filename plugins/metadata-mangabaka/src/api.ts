@@ -9,7 +9,7 @@ import {
   createLogger,
   NotFoundError,
   RateLimitError,
-} from "@codex/plugin-sdk";
+} from "@ashdev/codex-plugin-sdk";
 import type { MbGetSeriesResponse, MbSearchResponse, MbSeries } from "./types.js";
 
 const BASE_URL = "https://api.mangabaka.dev";

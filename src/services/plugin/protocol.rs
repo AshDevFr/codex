@@ -161,7 +161,7 @@ pub mod error_codes {
     pub const INTERNAL_ERROR: i32 = -32603;
 
     // Plugin-specific error codes (-32000 to -32099)
-    // These MUST match the TypeScript SDK (@codex/plugin-sdk) error codes in types/rpc.ts
+    // These MUST match the TypeScript SDK (@ashdev/codex-plugin-sdk) error codes in types/rpc.ts
     /// Rate limited by external provider
     pub const RATE_LIMITED: i32 = -32001;
     /// Resource not found

@@ -2,7 +2,7 @@ import {
   type MetadataGetParams,
   NotFoundError,
   type PluginSeriesMetadata,
-} from "@codex/plugin-sdk";
+} from "@ashdev/codex-plugin-sdk";
 import type { MangaBakaClient } from "../api.js";
 import { mapSeriesMetadata } from "../mappers.js";
 

@@ -1,4 +1,4 @@
-# @codex/plugin-metadata-echo
+# @ashdev/codex-plugin-metadata-echo
 
 A minimal test metadata plugin for the Codex plugin system. Echoes back search queries and provides predictable responses for testing and development.
 
@@ -12,7 +12,7 @@ This plugin serves two purposes:
 ## Installation
 
 ```bash
-npm install -g @codex/plugin-metadata-echo
+npm install -g @ashdev/codex-plugin-metadata-echo
 ```
 
 Or run directly with npx (no installation required).
@@ -28,7 +28,7 @@ Or run directly with npx (no installation required).
    - **Name**: `metadata-echo`
    - **Display Name**: `Echo Metadata Plugin`
    - **Command**: `npx`
-   - **Arguments**: `-y @codex/plugin-metadata-echo@1.0.0`
+   - **Arguments**: `-y @ashdev/codex-plugin-metadata-echo@1.0.0`
    - **Scopes**: Select `series:detail`
 5. Click **Save**
 6. Click **Test Connection** to verify the plugin works
@@ -38,9 +38,9 @@ Or run directly with npx (no installation required).
 
 | Configuration | Arguments | Description |
 |--------------|-----------|-------------|
-| Latest version | `-y @codex/plugin-metadata-echo` | Always uses latest |
-| Pinned version | `-y @codex/plugin-metadata-echo@1.0.0` | Recommended for production |
-| Fast startup | `-y --prefer-offline @codex/plugin-metadata-echo@1.0.0` | Skips version check if cached |
+| Latest version | `-y @ashdev/codex-plugin-metadata-echo` | Always uses latest |
+| Pinned version | `-y @ashdev/codex-plugin-metadata-echo@1.0.0` | Recommended for production |
+| Fast startup | `-y --prefer-offline @ashdev/codex-plugin-metadata-echo@1.0.0` | Skips version check if cached |
 
 **Flags:**
 - `-y`: Auto-confirms installation (required for containers)
@@ -52,7 +52,7 @@ For Docker deployments, use npx with `--prefer-offline` for faster startup:
 
 ```
 Command: npx
-Arguments: -y --prefer-offline @codex/plugin-metadata-echo@1.0.0
+Arguments: -y --prefer-offline @ashdev/codex-plugin-metadata-echo@1.0.0
 ```
 
 ### Manual Installation (Alternative)
@@ -60,7 +60,7 @@ Arguments: -y --prefer-offline @codex/plugin-metadata-echo@1.0.0
 For maximum performance, install globally:
 
 ```bash
-npm install -g @codex/plugin-metadata-echo
+npm install -g @ashdev/codex-plugin-metadata-echo
 ```
 
 Then configure:
@@ -117,7 +117,7 @@ Use this plugin as a template for building your own metadata plugins:
 import {
   createMetadataPlugin,
   type MetadataProvider,
-} from "@codex/plugin-sdk";
+} from "@ashdev/codex-plugin-sdk";
 
 const provider: MetadataProvider = {
   async search(params) {

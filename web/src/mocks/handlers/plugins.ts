@@ -22,7 +22,7 @@ const mockPlugins: PluginDto[] = [
 		description: "Fetches manga metadata from MangaUpdates/Baka-Updates",
 		pluginType: "system",
 		command: "npx",
-		args: ["@codex/plugin-mangabaka"],
+		args: ["@ashdev/codex-plugin-mangabaka"],
 		workingDirectory: null,
 		env: { LOG_LEVEL: "info" },
 		permissions: [

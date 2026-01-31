@@ -43,8 +43,8 @@ Plugins are external processes that Codex spawns and communicates with. They can
 
 | Plugin | Package | Description | Status |
 |--------|---------|-------------|--------|
-| MangaBaka Metadata | `@codex/plugin-metadata-mangabaka` | Aggregated manga metadata from multiple sources | Available |
-| Echo Metadata | `@codex/plugin-metadata-echo` | Test plugin for development | Available |
+| MangaBaka Metadata | `@ashdev/codex-plugin-metadata-mangabaka` | Aggregated manga metadata from multiple sources | Available |
+| Echo Metadata | `@ashdev/codex-plugin-metadata-echo` | Test plugin for development | Available |
 
 ### Community Plugins
 
@@ -60,7 +60,7 @@ The easiest way to run plugins is via `npx`, which downloads and runs the plugin
 2. Click **Add Plugin**
 3. Configure:
    - **Command**: `npx`
-   - **Arguments**: `-y @codex/plugin-metadata-mangabaka@1.0.0`
+   - **Arguments**: `-y @ashdev/codex-plugin-metadata-mangabaka@1.0.0`
 4. Add your credentials (API keys, etc.)
 5. Click **Save** and **Enable**
 
@@ -68,10 +68,10 @@ The easiest way to run plugins is via `npx`, which downloads and runs the plugin
 
 | Option | Example | Description |
 |--------|---------|-------------|
-| Latest version | `-y @codex/plugin-metadata-mangabaka` | Always uses latest |
-| Specific version | `-y @codex/plugin-metadata-mangabaka@1.0.0` | Pins to exact version |
-| Version range | `-y @codex/plugin-metadata-mangabaka@^1.0.0` | Allows compatible updates |
-| Faster startup | `-y --prefer-offline @codex/plugin-metadata-mangabaka@1.0.0` | Skips version check if cached |
+| Latest version | `-y @ashdev/codex-plugin-metadata-mangabaka` | Always uses latest |
+| Specific version | `-y @ashdev/codex-plugin-metadata-mangabaka@1.0.0` | Pins to exact version |
+| Version range | `-y @ashdev/codex-plugin-metadata-mangabaka@^1.0.0` | Allows compatible updates |
+| Faster startup | `-y --prefer-offline @ashdev/codex-plugin-metadata-mangabaka@1.0.0` | Skips version check if cached |
 
 **Flags explained:**
 - `-y` (or `--yes`): Auto-confirms installation, required for non-interactive environments like containers
@@ -83,14 +83,14 @@ For containers, use `--prefer-offline` with a pinned version for fast, predictab
 
 ```
 Command: npx
-Arguments: -y --prefer-offline @codex/plugin-metadata-mangabaka@1.0.0
+Arguments: -y --prefer-offline @ashdev/codex-plugin-metadata-mangabaka@1.0.0
 ```
 
 You can pre-warm the npx cache in your Dockerfile:
 
 ```dockerfile
 # Pre-cache plugin during image build
-RUN npx -y @codex/plugin-metadata-mangabaka@1.0.0 --version || true
+RUN npx -y @ashdev/codex-plugin-metadata-mangabaka@1.0.0 --version || true
 ```
 
 ### Manual Installation
@@ -98,7 +98,7 @@ RUN npx -y @codex/plugin-metadata-mangabaka@1.0.0 --version || true
 For maximum performance, install globally and reference directly:
 
 ```bash
-npm install -g @codex/plugin-metadata-mangabaka
+npm install -g @ashdev/codex-plugin-metadata-mangabaka
 ```
 
 Then configure:

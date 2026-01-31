@@ -1,5 +1,5 @@
 /**
- * @codex/plugin-sdk
+ * @ashdev/codex-plugin-sdk
  *
  * SDK for building Codex plugins. Provides types, utilities, and a server
  * framework for communicating with Codex via JSON-RPC over stdio.
@@ -10,7 +10,7 @@
  *   createMetadataPlugin,
  *   type MetadataProvider,
  *   type PluginManifest,
- * } from "@codex/plugin-sdk";
+ * } from "@ashdev/codex-plugin-sdk";
  *
  * const manifest: PluginManifest = {
  *   name: "my-plugin",

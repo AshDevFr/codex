@@ -2,6 +2,18 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.1.0] - 2026-01-31
+
+### 🚀 Features
+
+- Add plugin system for external metadata providers
+- Add plugin metrics tracking and scheduled thumbnail generation
+- Add bulk operations and info modals for books and series
+
+### ⚙️ Miscellaneous Tasks
+
+- *(screenshots)* Fix gitignore to exclude all generated output files
+
 ## [1.0.1] - 2026-01-28
 
 ### 🚀 Features

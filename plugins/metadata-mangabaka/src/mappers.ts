@@ -10,7 +10,7 @@ import type {
   ReadingDirection,
   SearchResult,
   SeriesStatus,
-} from "@codex/plugin-sdk";
+} from "@ashdev/codex-plugin-sdk";
 import type { MbContentRating, MbSeries, MbSeriesType, MbStatus } from "./types.js";
 
 /**

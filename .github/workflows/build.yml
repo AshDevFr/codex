@@ -599,9 +599,10 @@ jobs:
           rm -rf node_modules package-lock.json
           npm install
           npm run build
+      # Note: --provenance is not supported on self-hosted runners
       - name: Publish to npm
         working-directory: plugins/sdk-typescript
-        run: npm publish --access public --provenance
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -639,8 +640,8 @@ jobs:
         working-directory: plugins/${{ matrix.plugin }}
         run: |
           SDK_VERSION=$(jq -r .version ../sdk-typescript/package.json)
-          echo "Updating @codex/plugin-sdk dependency to ^$SDK_VERSION"
-          jq --arg v "^$SDK_VERSION" '.dependencies["@codex/plugin-sdk"] = $v' package.json > tmp.json
+          echo "Updating @ashdev/codex-plugin-sdk dependency to ^$SDK_VERSION"
+          jq --arg v "^$SDK_VERSION" '.dependencies["@ashdev/codex-plugin-sdk"] = $v' package.json > tmp.json
           mv tmp.json package.json
           cat package.json | grep -A2 '"dependencies"'
       - name: Install plugin dependencies
@@ -651,9 +652,10 @@ jobs:
       - name: Build plugin
         working-directory: plugins/${{ matrix.plugin }}
         run: npm run build
+      # Note: --provenance is not supported on self-hosted runners
       - name: Publish to npm
         working-directory: plugins/${{ matrix.plugin }}
-        run: npm publish --access public --provenance
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

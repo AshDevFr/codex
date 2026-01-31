@@ -1,4 +1,4 @@
-import type { MetadataContentType, PluginManifest } from "@codex/plugin-sdk";
+import type { MetadataContentType, PluginManifest } from "@ashdev/codex-plugin-sdk";
 
 export const manifest = {
   name: "metadata-mangabaka",

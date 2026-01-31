@@ -1,6 +1,6 @@
 {
-  "name": "@codex/plugin-metadata-mangabaka",
-  "version": "1.0.0",
+  "name": "@ashdev/codex-plugin-metadata-mangabaka",
+  "version": "1.1.0",
   "description": "MangaBaka metadata provider plugin for Codex",
   "main": "dist/index.js",
   "bin": "dist/index.js",
@@ -39,7 +39,7 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "@codex/plugin-sdk": "file:../sdk-typescript"
+    "@ashdev/codex-plugin-sdk": "file:../sdk-typescript"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.11",

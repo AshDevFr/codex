@@ -17,7 +17,7 @@ import {
   type MetadataSearchResponse,
   type PluginManifest,
   type PluginSeriesMetadata,
-} from "@codex/plugin-sdk";
+} from "@ashdev/codex-plugin-sdk";
 
 const manifest = {
   name: "metadata-echo",

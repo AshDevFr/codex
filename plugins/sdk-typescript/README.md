@@ -1,11 +1,11 @@
-# @codex/plugin-sdk
+# @ashdev/codex-plugin-sdk
 
 Official SDK for building Codex plugins. Provides type-safe interfaces, utilities, and a server framework for communicating with Codex via JSON-RPC over stdio.
 
 ## Installation
 
 ```bash
-npm install @codex/plugin-sdk
+npm install @ashdev/codex-plugin-sdk
 ```
 
 ## Quick Start
@@ -16,7 +16,7 @@ import {
   type MetadataContentType,
   type MetadataProvider,
   type PluginManifest,
-} from "@codex/plugin-sdk";
+} from "@ashdev/codex-plugin-sdk";
 
 // Define your plugin manifest
 const manifest = {
@@ -167,7 +167,7 @@ interface MetadataProvider {
 Use built-in error classes for proper error responses:
 
 ```typescript
-import { NotFoundError, RateLimitError, AuthError, ApiError } from "@codex/plugin-sdk";
+import { NotFoundError, RateLimitError, AuthError, ApiError } from "@ashdev/codex-plugin-sdk";
 
 // In your provider:
 async get(params) {
@@ -186,7 +186,7 @@ async get(params) {
 Plugins should log to stderr (stdout is reserved for JSON-RPC):
 
 ```typescript
-import { createLogger } from "@codex/plugin-sdk";
+import { createLogger } from "@ashdev/codex-plugin-sdk";
 
 const logger = createLogger({ name: "my-plugin", level: "debug" });
 logger.info("Plugin started");
@@ -223,7 +223,7 @@ Plugins communicate with Codex via JSON-RPC 2.0 over stdio:
 ## Building Your Plugin
 
 1. Create a new npm package
-2. Install the SDK: `npm install @codex/plugin-sdk`
+2. Install the SDK: `npm install @ashdev/codex-plugin-sdk`
 3. Implement your provider
 4. Bundle with esbuild (include shebang for npx support):
 
@@ -252,8 +252,8 @@ Plugins communicate with Codex via JSON-RPC 2.0 over stdio:
 
 ## Example Plugins
 
-- [`@codex/plugin-metadata-echo`](https://github.com/AshDevFr/codex/tree/main/plugins/metadata-echo) - Test metadata plugin that echoes back queries
-- [`@codex/plugin-metadata-mangabaka`](https://github.com/AshDevFr/codex/tree/main/plugins/metadata-mangabaka) - MangaBaka metadata provider
+- [`@ashdev/codex-plugin-metadata-echo`](https://github.com/AshDevFr/codex/tree/main/plugins/metadata-echo) - Test metadata plugin that echoes back queries
+- [`@ashdev/codex-plugin-metadata-mangabaka`](https://github.com/AshDevFr/codex/tree/main/plugins/metadata-mangabaka) - MangaBaka metadata provider
 
 ## License
 
