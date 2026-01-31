@@ -20,8 +20,8 @@
 /* Style direct children - the MediaCard components
    Use fixed width matching typical grid card size */
 .itemsContainer > * {
-	flex: 0 0 185px;
-	width: 185px;
-	min-width: 185px;
-	max-width: 185px;
+	flex: 0 0 150px;
+	width: 150px;
+	min-width: 150px;
+	max-width: 150px;
 }

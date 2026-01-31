@@ -411,7 +411,7 @@ describe("MediaCard", () => {
 
 			const card = document.querySelector(".mantine-Card-root");
 			expect(card).toHaveStyle({
-				border: "3px solid var(--mantine-color-orange-6)",
+				border: "1px solid var(--mantine-color-orange-6)",
 			});
 		});
 

@@ -193,11 +193,37 @@ button:focus-visible {
 /* Selection checkbox - positioned top-left of card cover */
 .media-card-checkbox {
 	position: absolute;
-	top: 8px;
-	left: 8px;
+	top: 12px;
+	left: 12px;
 	z-index: 5;
 	opacity: 0;
 	transition: opacity 0.15s ease;
+}
+
+/* Circular checkbox styling */
+.media-card-checkbox .mantine-Checkbox-input {
+	border-radius: 50%;
+	width: 20px;
+	height: 20px;
+	border: 2px solid rgba(255, 255, 255, 0.9);
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+	background-color: rgba(0, 0, 0, 0.4);
+	transition: all 0.15s ease;
+}
+
+.media-card-checkbox .mantine-Checkbox-input:checked {
+	background-color: var(--mantine-color-orange-6);
+	border-color: var(--mantine-color-orange-6);
+}
+
+.media-card-checkbox .mantine-Checkbox-inner {
+	width: 20px;
+	height: 20px;
+}
+
+.media-card-checkbox .mantine-Checkbox-icon {
+	color: white;
+	padding-top: 2px;
 }
 
 /* Show checkbox on card hover */

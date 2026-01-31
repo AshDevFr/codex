@@ -393,9 +393,9 @@ export const MediaCard = memo(function MediaCard({
 				boxSizing: "border-box", // Include border in width calculation
 				animation: isNew ? "fadeIn 0.5s ease-in" : undefined,
 				border: isNew
-					? "2px solid var(--mantine-color-blue-6)"
+					? "1px solid var(--mantine-color-blue-6)"
 					: isSelected
-						? "3px solid var(--mantine-color-orange-6)"
+						? "1px solid var(--mantine-color-orange-6)"
 						: undefined,
 				cursor: isSelectionMode && !canBeSelected ? "not-allowed" : "pointer",
 			}}
@@ -489,9 +489,6 @@ export const MediaCard = memo(function MediaCard({
 								styles={{
 									input: {
 										cursor: canBeSelected ? "pointer" : "not-allowed",
-										backgroundColor: isSelected
-											? undefined
-											: "rgba(255, 255, 255, 0.9)",
 									},
 								}}
 							/>
