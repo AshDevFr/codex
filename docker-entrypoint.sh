@@ -28,6 +28,20 @@ if [ "$(id -u)" = "0" ]; then
     echo "Running as codex (UID=$PUID, GID=$PGID)"
     exec su-exec codex "$@"
 else
-    # Not running as root, just execute the command
+    # Not running as root - container started with 'user:' directive
+    CURRENT_UID=$(id -u)
+    CURRENT_GID=$(id -g)
+    echo "Running as UID=$CURRENT_UID, GID=$CURRENT_GID (container started with custom user)"
+
+    # Check write permissions on required directories
+    for dir in /app/data /app/config /app/.npm; do
+        if [ -d "$dir" ] && [ ! -w "$dir" ]; then
+            echo "WARNING: No write permission on $dir"
+            echo "  Current user: UID=$CURRENT_UID, GID=$CURRENT_GID"
+            echo "  Directory owner: $(stat -c '%u:%g' "$dir" 2>/dev/null || stat -f '%u:%g' "$dir" 2>/dev/null || echo 'unknown')"
+            echo "  Fix: Ensure mounted volumes are owned by UID=$CURRENT_UID or use PUID/PGID without 'user:' directive"
+        fi
+    done
+
     exec "$@"
 fi

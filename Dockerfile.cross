@@ -180,8 +180,10 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 # Create directories
 # - /app/data, /app/config: Application data and config
 # - /app/.npm: npm cache for npx plugins (avoids permission issues with /.npm)
+# Set permissions to allow any UID to write (for custom user: directive in docker-compose)
 RUN mkdir -p /app/data /app/config /app/.npm && \
-    chown -R codex:codex /app
+    chown -R codex:codex /app && \
+    chmod 777 /app/data /app/config /app/.npm
 
 # Set npm cache location to avoid permission issues when running as non-root
 # This is needed for npx-based plugins to download packages
