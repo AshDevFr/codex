@@ -485,6 +485,7 @@ jobs:
       - plan
       - build-local-artifacts
       - build-global-artifacts
+      - docker
     # Only run if we're "publishing" a release, and only if plan, local, global didn't fail (skipped is fine)
     if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.is-release == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') }}
     env:
