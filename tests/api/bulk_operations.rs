@@ -1,0 +1,633 @@
+//! Tests for bulk operations endpoints
+//!
+//! Tests bulk mark read/unread and analyze operations for books and series.
+
+#[path = "../common/mod.rs"]
+mod common;
+
+use codex::api::routes::v1::dto::{
+    BulkAnalyzeBooksRequest, BulkAnalyzeResponse, BulkAnalyzeSeriesRequest, BulkBooksRequest,
+    BulkSeriesRequest, MarkReadResponse,
+};
+use codex::db::repositories::{
+    BookRepository, LibraryRepository, ReadProgressRepository, SeriesRepository, UserRepository,
+};
+use codex::db::ScanningStrategy;
+use codex::utils::password;
+use common::*;
+use hyper::StatusCode;
+
+// Helper to create admin and token
+async fn create_admin_and_token(
+    db: &sea_orm::DatabaseConnection,
+    state: &codex::api::extractors::AuthState,
+) -> (uuid::Uuid, String) {
+    let password_hash = password::hash_password("admin123").unwrap();
+    let user = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let created = UserRepository::create(db, &user).await.unwrap();
+    let token = state
+        .jwt_service
+        .generate_token(created.id, created.username.clone(), created.get_role())
+        .unwrap();
+    (created.id, token)
+}
+
+// Helper to create a test book model
+fn create_test_book_model(
+    series_id: uuid::Uuid,
+    library_id: uuid::Uuid,
+    path: &str,
+    name: &str,
+    page_count: i32,
+) -> codex::db::entities::books::Model {
+    use chrono::Utc;
+    codex::db::entities::books::Model {
+        id: uuid::Uuid::new_v4(),
+        series_id,
+        library_id,
+        file_path: path.to_string(),
+        file_name: name.to_string(),
+        file_size: 1024,
+        file_hash: format!("hash_{}", uuid::Uuid::new_v4()),
+        partial_hash: String::new(),
+        format: "cbz".to_string(),
+        page_count,
+        deleted: false,
+        analyzed: false,
+        analysis_error: None,
+        analysis_errors: None,
+        modified_at: Utc::now(),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        thumbnail_path: None,
+        thumbnail_generated_at: None,
+    }
+}
+
+// ============================================================================
+// Bulk Mark Books as Read Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_bulk_mark_books_as_read() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create 3 test books
+    let mut book_ids = Vec::new();
+    for i in 1..=3 {
+        let book = create_test_book_model(
+            series.id,
+            library.id,
+            &format!("/test/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            50,
+        );
+        let book = BookRepository::create(&db, &book, None).await.unwrap();
+        book_ids.push(book.id);
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Bulk mark books as read
+    let request_body = BulkBooksRequest {
+        book_ids: book_ids.clone(),
+    };
+    let request = post_json_request_with_auth("/api/v1/books/bulk/read", &request_body, &token);
+    let (status, response): (StatusCode, Option<MarkReadResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let mark_response = response.unwrap();
+    assert_eq!(mark_response.count, 3);
+    assert!(mark_response.message.contains("3 books"));
+
+    // Verify all books are marked as read
+    for book_id in book_ids {
+        let progress = ReadProgressRepository::get_by_user_and_book(&db, user_id, book_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(progress.completed);
+        assert_eq!(progress.current_page, 50);
+    }
+}
+
+#[tokio::test]
+async fn test_bulk_mark_books_as_read_empty_list() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Bulk mark empty list as read
+    let request_body = BulkBooksRequest { book_ids: vec![] };
+    let request = post_json_request_with_auth("/api/v1/books/bulk/read", &request_body, &token);
+    let (status, response): (StatusCode, Option<MarkReadResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let mark_response = response.unwrap();
+    assert_eq!(mark_response.count, 0);
+    assert!(mark_response.message.contains("No books"));
+}
+
+#[tokio::test]
+async fn test_bulk_mark_books_as_read_with_invalid_ids() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create 1 real book
+    let book = create_test_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz", 50);
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Include real book and non-existent book IDs
+    let request_body = BulkBooksRequest {
+        book_ids: vec![book.id, uuid::Uuid::new_v4(), uuid::Uuid::new_v4()],
+    };
+    let request = post_json_request_with_auth("/api/v1/books/bulk/read", &request_body, &token);
+    let (status, response): (StatusCode, Option<MarkReadResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let mark_response = response.unwrap();
+    // Only the real book should be marked
+    assert_eq!(mark_response.count, 1);
+
+    // Verify only the real book is marked as read
+    let progress = ReadProgressRepository::get_by_user_and_book(&db, user_id, book.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(progress.completed);
+}
+
+// ============================================================================
+// Bulk Mark Books as Unread Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_bulk_mark_books_as_unread() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create 3 test books
+    let mut book_ids = Vec::new();
+    for i in 1..=3 {
+        let book = create_test_book_model(
+            series.id,
+            library.id,
+            &format!("/test/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            50,
+        );
+        let book = BookRepository::create(&db, &book, None).await.unwrap();
+        book_ids.push(book.id);
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_admin_and_token(&db, &state).await;
+
+    // Create progress for all books
+    for book_id in &book_ids {
+        ReadProgressRepository::upsert(&db, user_id, *book_id, 25, false)
+            .await
+            .unwrap();
+    }
+
+    let app = create_test_router(state).await;
+
+    // Bulk mark books as unread
+    let request_body = BulkBooksRequest {
+        book_ids: book_ids.clone(),
+    };
+    let request = post_json_request_with_auth("/api/v1/books/bulk/unread", &request_body, &token);
+    let (status, response): (StatusCode, Option<MarkReadResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let mark_response = response.unwrap();
+    assert_eq!(mark_response.count, 3);
+    assert!(mark_response.message.contains("3 books"));
+
+    // Verify all progress is deleted
+    for book_id in book_ids {
+        let progress = ReadProgressRepository::get_by_user_and_book(&db, user_id, book_id)
+            .await
+            .unwrap();
+        assert!(progress.is_none());
+    }
+}
+
+// ============================================================================
+// Bulk Analyze Books Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_bulk_analyze_books() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create 3 test books
+    let mut book_ids = Vec::new();
+    for i in 1..=3 {
+        let book = create_test_book_model(
+            series.id,
+            library.id,
+            &format!("/test/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            50,
+        );
+        let book = BookRepository::create(&db, &book, None).await.unwrap();
+        book_ids.push(book.id);
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Bulk analyze books
+    let request_body = BulkAnalyzeBooksRequest {
+        book_ids: book_ids.clone(),
+        force: true,
+    };
+    let request = post_json_request_with_auth("/api/v1/books/bulk/analyze", &request_body, &token);
+    let (status, response): (StatusCode, Option<BulkAnalyzeResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let analyze_response = response.unwrap();
+    assert_eq!(analyze_response.tasks_enqueued, 3);
+    assert!(analyze_response.message.contains("3 analysis tasks"));
+}
+
+#[tokio::test]
+async fn test_bulk_analyze_books_empty_list() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Bulk analyze empty list
+    let request_body = BulkAnalyzeBooksRequest {
+        book_ids: vec![],
+        force: false,
+    };
+    let request = post_json_request_with_auth("/api/v1/books/bulk/analyze", &request_body, &token);
+    let (status, response): (StatusCode, Option<BulkAnalyzeResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let analyze_response = response.unwrap();
+    assert_eq!(analyze_response.tasks_enqueued, 0);
+    assert!(analyze_response.message.contains("No books"));
+}
+
+// ============================================================================
+// Bulk Mark Series as Read Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_bulk_mark_series_as_read() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    // Create 2 series with books
+    let mut series_ids = Vec::new();
+    let mut total_books = 0;
+    for s in 1..=2 {
+        let series = SeriesRepository::create(&db, library.id, &format!("Test Series {}", s), None)
+            .await
+            .unwrap();
+        series_ids.push(series.id);
+
+        // Create 3 books per series
+        for i in 1..=3 {
+            let book = create_test_book_model(
+                series.id,
+                library.id,
+                &format!("/test/series{}/book{}.cbz", s, i),
+                &format!("book{}.cbz", i),
+                50,
+            );
+            BookRepository::create(&db, &book, None).await.unwrap();
+            total_books += 1;
+        }
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Bulk mark series as read
+    let request_body = BulkSeriesRequest {
+        series_ids: series_ids.clone(),
+    };
+    let request = post_json_request_with_auth("/api/v1/series/bulk/read", &request_body, &token);
+    let (status, response): (StatusCode, Option<MarkReadResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let mark_response = response.unwrap();
+    assert_eq!(mark_response.count, total_books);
+    assert!(mark_response
+        .message
+        .contains(&format!("{} books", total_books)));
+}
+
+#[tokio::test]
+async fn test_bulk_mark_series_as_read_empty_list() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Bulk mark empty series list as read
+    let request_body = BulkSeriesRequest { series_ids: vec![] };
+    let request = post_json_request_with_auth("/api/v1/series/bulk/read", &request_body, &token);
+    let (status, response): (StatusCode, Option<MarkReadResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let mark_response = response.unwrap();
+    assert_eq!(mark_response.count, 0);
+    assert!(mark_response.message.contains("No series"));
+}
+
+// ============================================================================
+// Bulk Mark Series as Unread Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_bulk_mark_series_as_unread() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    // Create 2 series with books
+    let mut series_ids = Vec::new();
+    let mut all_book_ids = Vec::new();
+    for s in 1..=2 {
+        let series = SeriesRepository::create(&db, library.id, &format!("Test Series {}", s), None)
+            .await
+            .unwrap();
+        series_ids.push(series.id);
+
+        // Create 3 books per series
+        for i in 1..=3 {
+            let book = create_test_book_model(
+                series.id,
+                library.id,
+                &format!("/test/series{}/book{}.cbz", s, i),
+                &format!("book{}.cbz", i),
+                50,
+            );
+            let book = BookRepository::create(&db, &book, None).await.unwrap();
+            all_book_ids.push(book.id);
+        }
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_admin_and_token(&db, &state).await;
+
+    // Create progress for all books
+    for book_id in &all_book_ids {
+        ReadProgressRepository::upsert(&db, user_id, *book_id, 25, false)
+            .await
+            .unwrap();
+    }
+
+    let app = create_test_router(state).await;
+
+    // Bulk mark series as unread
+    let request_body = BulkSeriesRequest {
+        series_ids: series_ids.clone(),
+    };
+    let request = post_json_request_with_auth("/api/v1/series/bulk/unread", &request_body, &token);
+    let (status, response): (StatusCode, Option<MarkReadResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let mark_response = response.unwrap();
+    assert_eq!(mark_response.count, 6); // 2 series * 3 books
+    assert!(mark_response.message.contains("6 books"));
+
+    // Verify all progress is deleted
+    for book_id in all_book_ids {
+        let progress = ReadProgressRepository::get_by_user_and_book(&db, user_id, book_id)
+            .await
+            .unwrap();
+        assert!(progress.is_none());
+    }
+}
+
+// ============================================================================
+// Bulk Analyze Series Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_bulk_analyze_series() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    // Create 2 series with books
+    let mut series_ids = Vec::new();
+    let mut total_books = 0;
+    for s in 1..=2 {
+        let series = SeriesRepository::create(&db, library.id, &format!("Test Series {}", s), None)
+            .await
+            .unwrap();
+        series_ids.push(series.id);
+
+        // Create 3 books per series
+        for i in 1..=3 {
+            let book = create_test_book_model(
+                series.id,
+                library.id,
+                &format!("/test/series{}/book{}.cbz", s, i),
+                &format!("book{}.cbz", i),
+                50,
+            );
+            BookRepository::create(&db, &book, None).await.unwrap();
+            total_books += 1;
+        }
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Bulk analyze series
+    let request_body = BulkAnalyzeSeriesRequest {
+        series_ids: series_ids.clone(),
+        force: true,
+    };
+    let request = post_json_request_with_auth("/api/v1/series/bulk/analyze", &request_body, &token);
+    let (status, response): (StatusCode, Option<BulkAnalyzeResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let analyze_response = response.unwrap();
+    assert_eq!(analyze_response.tasks_enqueued, total_books);
+    assert!(analyze_response
+        .message
+        .contains(&format!("{} analysis tasks", total_books)));
+}
+
+#[tokio::test]
+async fn test_bulk_analyze_series_empty_list() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Bulk analyze empty series list
+    let request_body = BulkAnalyzeSeriesRequest {
+        series_ids: vec![],
+        force: false,
+    };
+    let request = post_json_request_with_auth("/api/v1/series/bulk/analyze", &request_body, &token);
+    let (status, response): (StatusCode, Option<BulkAnalyzeResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let analyze_response = response.unwrap();
+    assert_eq!(analyze_response.tasks_enqueued, 0);
+    assert!(analyze_response.message.contains("No series"));
+}
+
+// ============================================================================
+// Authorization Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_bulk_mark_books_as_read_unauthorized() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    // Try to bulk mark books as read without auth
+    let request_body = BulkBooksRequest {
+        book_ids: vec![uuid::Uuid::new_v4()],
+    };
+    let request = post_json_request("/api/v1/books/bulk/read", &request_body);
+    let (status, _): (StatusCode, Option<MarkReadResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_bulk_mark_series_as_read_unauthorized() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    // Try to bulk mark series as read without auth
+    let request_body = BulkSeriesRequest {
+        series_ids: vec![uuid::Uuid::new_v4()],
+    };
+    let request = post_json_request("/api/v1/series/bulk/read", &request_body);
+    let (status, _): (StatusCode, Option<MarkReadResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_bulk_analyze_books_unauthorized() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    // Try to bulk analyze books without auth
+    let request_body = BulkAnalyzeBooksRequest {
+        book_ids: vec![uuid::Uuid::new_v4()],
+        force: false,
+    };
+    let request = post_json_request("/api/v1/books/bulk/analyze", &request_body);
+    let (status, _): (StatusCode, Option<BulkAnalyzeResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_bulk_analyze_series_unauthorized() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    // Try to bulk analyze series without auth
+    let request_body = BulkAnalyzeSeriesRequest {
+        series_ids: vec![uuid::Uuid::new_v4()],
+        force: false,
+    };
+    let request = post_json_request("/api/v1/series/bulk/analyze", &request_body);
+    let (status, _): (StatusCode, Option<BulkAnalyzeResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}

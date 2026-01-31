@@ -401,4 +401,50 @@ export const booksApi = {
 		);
 		return response.data;
 	},
+
+	// ==================== Bulk Operations API ====================
+
+	/**
+	 * Mark multiple books as read in bulk
+	 * @param bookIds - Array of book IDs to mark as read
+	 */
+	bulkMarkAsRead: async (
+		bookIds: string[],
+	): Promise<{ count: number; message: string }> => {
+		const response = await api.post<{ count: number; message: string }>(
+			"/books/bulk/read",
+			{ bookIds },
+		);
+		return response.data;
+	},
+
+	/**
+	 * Mark multiple books as unread in bulk
+	 * @param bookIds - Array of book IDs to mark as unread
+	 */
+	bulkMarkAsUnread: async (
+		bookIds: string[],
+	): Promise<{ count: number; message: string }> => {
+		const response = await api.post<{ count: number; message: string }>(
+			"/books/bulk/unread",
+			{ bookIds },
+		);
+		return response.data;
+	},
+
+	/**
+	 * Queue analysis for multiple books in bulk
+	 * @param bookIds - Array of book IDs to analyze
+	 * @param force - Whether to force re-analysis of already analyzed books (default: true)
+	 */
+	bulkAnalyze: async (
+		bookIds: string[],
+		force = true,
+	): Promise<{ tasksEnqueued: number; message: string }> => {
+		const response = await api.post<{ tasksEnqueued: number; message: string }>(
+			"/books/bulk/analyze",
+			{ bookIds, force },
+		);
+		return response.data;
+	},
 };

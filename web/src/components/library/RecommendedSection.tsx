@@ -1,10 +1,16 @@
 import { Card, Stack, Text } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
 
 import { booksApi } from "@/api/books";
 import { seriesApi } from "@/api/series";
 import { HorizontalCarousel } from "@/components/library/HorizontalCarousel";
 import { MediaCard } from "@/components/library/MediaCard";
+import {
+	selectCanSelectType,
+	selectIsSelectionMode,
+	useBulkSelectionStore,
+} from "@/store/bulkSelectionStore";
 
 const MAX_ITEMS_PER_SECTION = 20;
 
@@ -13,6 +19,34 @@ interface RecommendedSectionProps {
 }
 
 export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
+	// Bulk selection state - use stable selectors to minimize re-renders
+	const isSelectionMode = useBulkSelectionStore(selectIsSelectionMode);
+	const canSelectBooks = useBulkSelectionStore(selectCanSelectType("book"));
+	const canSelectSeries = useBulkSelectionStore(selectCanSelectType("series"));
+	const toggleSelection = useBulkSelectionStore(
+		(state) => state.toggleSelection,
+	);
+	// Get the Set directly for O(1) lookups - only re-renders when the Set changes
+	const selectedIds = useBulkSelectionStore((state) => state.selectedIds);
+
+	// Handle selection for books
+	const handleBookSelect = useCallback(
+		(id: string, _shiftKey: boolean) => {
+			// TODO: Implement shift+click range selection
+			toggleSelection(id, "book");
+		},
+		[toggleSelection],
+	);
+
+	// Handle selection for series
+	const handleSeriesSelect = useCallback(
+		(id: string, _shiftKey: boolean) => {
+			// TODO: Implement shift+click range selection
+			toggleSelection(id, "series");
+		},
+		[toggleSelection],
+	);
+
 	// Fetch books with reading progress (Keep Reading)
 	const { data: inProgressBooks, isLoading: loadingInProgress } = useQuery({
 		queryKey: ["books", "in-progress", libraryId],
@@ -91,7 +125,15 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 			{limitedInProgressBooks.length > 0 && (
 				<HorizontalCarousel title="Keep Reading">
 					{limitedInProgressBooks.map((book) => (
-						<MediaCard key={book.id} type="book" data={book} />
+						<MediaCard
+							key={book.id}
+							type="book"
+							data={book}
+							onSelect={handleBookSelect}
+							isSelected={selectedIds.has(book.id)}
+							isSelectionMode={isSelectionMode}
+							canBeSelected={canSelectBooks}
+						/>
 					))}
 				</HorizontalCarousel>
 			)}
@@ -103,7 +145,15 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 					subtitle="Next book in series you've been reading"
 				>
 					{onDeckBooks.map((book) => (
-						<MediaCard key={book.id} type="book" data={book} />
+						<MediaCard
+							key={book.id}
+							type="book"
+							data={book}
+							onSelect={handleBookSelect}
+							isSelected={selectedIds.has(book.id)}
+							isSelectionMode={isSelectionMode}
+							canBeSelected={canSelectBooks}
+						/>
 					))}
 				</HorizontalCarousel>
 			)}
@@ -112,7 +162,15 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 			{limitedRecentlyAddedBooks.length > 0 && (
 				<HorizontalCarousel title="Recently Added Books">
 					{limitedRecentlyAddedBooks.map((book) => (
-						<MediaCard key={book.id} type="book" data={book} />
+						<MediaCard
+							key={book.id}
+							type="book"
+							data={book}
+							onSelect={handleBookSelect}
+							isSelected={selectedIds.has(book.id)}
+							isSelectionMode={isSelectionMode}
+							canBeSelected={canSelectBooks}
+						/>
 					))}
 				</HorizontalCarousel>
 			)}
@@ -121,7 +179,15 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 			{recentlyAddedSeries && recentlyAddedSeries.length > 0 && (
 				<HorizontalCarousel title="Recently Added Series">
 					{recentlyAddedSeries.map((series) => (
-						<MediaCard key={series.id} type="series" data={series} />
+						<MediaCard
+							key={series.id}
+							type="series"
+							data={series}
+							onSelect={handleSeriesSelect}
+							isSelected={selectedIds.has(series.id)}
+							isSelectionMode={isSelectionMode}
+							canBeSelected={canSelectSeries}
+						/>
 					))}
 				</HorizontalCarousel>
 			)}
@@ -133,7 +199,15 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 					subtitle="Series with new or updated content"
 				>
 					{recentlyUpdatedSeries.map((series) => (
-						<MediaCard key={series.id} type="series" data={series} />
+						<MediaCard
+							key={series.id}
+							type="series"
+							data={series}
+							onSelect={handleSeriesSelect}
+							isSelected={selectedIds.has(series.id)}
+							isSelectionMode={isSelectionMode}
+							canBeSelected={canSelectSeries}
+						/>
 					))}
 				</HorizontalCarousel>
 			)}
@@ -145,7 +219,15 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
 					subtitle="Books you've read recently"
 				>
 					{recentlyReadBooks.map((book) => (
-						<MediaCard key={book.id} type="book" data={book} />
+						<MediaCard
+							key={book.id}
+							type="book"
+							data={book}
+							onSelect={handleBookSelect}
+							isSelected={selectedIds.has(book.id)}
+							isSelectionMode={isSelectionMode}
+							canBeSelected={canSelectBooks}
+						/>
 					))}
 				</HorizontalCarousel>
 			)}

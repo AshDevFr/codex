@@ -109,4 +109,11 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/books/:book_id/unread",
             post(handlers::mark_book_as_unread),
         )
+        // Bulk operations
+        .route("/books/bulk/read", post(handlers::bulk_mark_books_as_read))
+        .route(
+            "/books/bulk/unread",
+            post(handlers::bulk_mark_books_as_unread),
+        )
+        .route("/books/bulk/analyze", post(handlers::bulk_analyze_books))
 }

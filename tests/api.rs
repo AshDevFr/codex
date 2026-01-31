@@ -9,6 +9,7 @@ mod api {
     mod api_keys;
     mod auth;
     mod books;
+    mod bulk_operations;
     mod covers;
     mod duplicates;
     mod external_links;

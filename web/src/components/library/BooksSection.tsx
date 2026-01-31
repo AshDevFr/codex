@@ -8,13 +8,19 @@ import {
 	Text,
 } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { booksApi } from "@/api/books";
 import { ActiveBookFilters } from "@/components/library/ActiveBookFilters";
 import { MediaCard } from "@/components/library/MediaCard";
 import { useBookFilterState } from "@/hooks/useBookFilterState";
+import {
+	selectCanSelectType,
+	selectIsSelectionMode,
+	useBulkSelectionStore,
+} from "@/store/bulkSelectionStore";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
+import type { Book } from "@/types";
 
 /** Fixed skeleton IDs to avoid array index keys */
 const SKELETON_IDS = [
@@ -67,6 +73,25 @@ export function BooksSection({
 }: BooksSectionProps) {
 	const navigate = useNavigate();
 	const filterState = useBookFilterState();
+
+	// Bulk selection state - use stable selectors to minimize re-renders
+	const isSelectionMode = useBulkSelectionStore(selectIsSelectionMode);
+	const canSelectBooks = useBulkSelectionStore(selectCanSelectType("book"));
+	const toggleSelection = useBulkSelectionStore(
+		(state) => state.toggleSelection,
+	);
+	const selectRange = useBulkSelectionStore((state) => state.selectRange);
+	const getLastSelectedIndex = useBulkSelectionStore(
+		(state) => state.getLastSelectedIndex,
+	);
+	// Get the Set directly for O(1) lookups - only re-renders when the Set changes
+	const selectedIds = useBulkSelectionStore((state) => state.selectedIds);
+
+	// Grid ID for range selection tracking
+	const gridId = `books-${libraryId}`;
+
+	// Ref for storing books data for range selection (updated after query)
+	const booksDataRef = useRef<Book[]>([]);
 
 	// Get show deleted preference from user preferences store
 	const showDeletedBooks = useUserPreferencesStore((state) =>
@@ -146,6 +171,40 @@ export function BooksSection({
 		}
 	}, [booksData, onTotalChange]);
 
+	// Update booksDataRef when data changes (for range selection)
+	if (booksData?.data) {
+		booksDataRef.current = booksData.data;
+	}
+
+	// Handle selection with shift+click range support
+	// This callback is stable because it uses refs for data that changes
+	const handleSelect = useCallback(
+		(id: string, shiftKey: boolean, index?: number) => {
+			if (shiftKey && isSelectionMode && index !== undefined) {
+				// Shift+click: select range from last selected to current
+				const lastIndex = getLastSelectedIndex(gridId);
+				if (lastIndex !== undefined && lastIndex !== index) {
+					const start = Math.min(lastIndex, index);
+					const end = Math.max(lastIndex, index);
+					const rangeIds = booksDataRef.current
+						.slice(start, end + 1)
+						.map((item) => item.id);
+					selectRange(rangeIds, "book");
+					return;
+				}
+			}
+			// Normal click: toggle selection
+			toggleSelection(id, "book", gridId, index);
+		},
+		[
+			toggleSelection,
+			selectRange,
+			getLastSelectedIndex,
+			gridId,
+			isSelectionMode,
+		],
+	);
+
 	return (
 		<Stack gap="md">
 			{/* Active Filters Summary */}
@@ -175,8 +234,17 @@ export function BooksSection({
 							width: "100%",
 						}}
 					>
-						{booksData.data.map((book) => (
-							<MediaCard key={book.id} type="book" data={book} />
+						{booksData.data.map((book, index) => (
+							<MediaCard
+								key={book.id}
+								type="book"
+								data={book}
+								index={index}
+								onSelect={handleSelect}
+								isSelected={selectedIds.has(book.id)}
+								isSelectionMode={isSelectionMode}
+								canBeSelected={canSelectBooks}
+							/>
 						))}
 					</div>
 

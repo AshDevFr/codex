@@ -587,6 +587,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/bulk/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk analyze multiple books
+         * @description Enqueues analysis tasks for all specified books.
+         *     Books that don't exist are silently skipped.
+         */
+        post: operations["bulk_analyze_books"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/bulk/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk mark multiple books as read
+         * @description Marks all specified books as read for the authenticated user.
+         *     Books that don't exist are silently skipped.
+         */
+        post: operations["bulk_mark_books_as_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/bulk/unread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk mark multiple books as unread
+         * @description Marks all specified books as unread for the authenticated user.
+         *     Books that don't exist or have no progress are silently skipped.
+         */
+        post: operations["bulk_mark_books_as_unread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/errors": {
         parameters: {
             query?: never;
@@ -1959,6 +2022,69 @@ export interface paths {
         get: operations["list_series"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/bulk/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk analyze multiple series
+         * @description Enqueues analysis tasks for all books in the specified series.
+         *     Series that don't exist are silently skipped.
+         */
+        post: operations["bulk_analyze_series"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/bulk/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk mark multiple series as read
+         * @description Marks all books in the specified series as read for the authenticated user.
+         *     Series that don't exist are silently skipped.
+         */
+        post: operations["bulk_mark_series_as_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/bulk/unread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk mark multiple series as unread
+         * @description Marks all books in the specified series as unread for the authenticated user.
+         *     Series that don't exist are silently skipped.
+         */
+        post: operations["bulk_mark_series_as_unread"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5337,6 +5463,73 @@ export interface components {
             entries: components["schemas"]["FileSystemEntry"][];
             /** @description Parent directory path (None if at root) */
             parent_path?: string | null;
+        };
+        /** @description Request to perform bulk analyze operations on multiple books */
+        BulkAnalyzeBooksRequest: {
+            /**
+             * @description List of book IDs to analyze
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440001",
+             *       "550e8400-e29b-41d4-a716-446655440002"
+             *     ]
+             */
+            bookIds: string[];
+            /**
+             * @description Whether to force re-analysis of already analyzed books
+             * @example false
+             */
+            force?: boolean;
+        };
+        /** @description Response for bulk analyze operations */
+        BulkAnalyzeResponse: {
+            /**
+             * @description Message describing the operation
+             * @example Enqueued 5 analysis tasks
+             */
+            message: string;
+            /**
+             * @description Number of analysis tasks enqueued
+             * @example 5
+             */
+            tasksEnqueued: number;
+        };
+        /** @description Request to perform bulk analyze operations on multiple series */
+        BulkAnalyzeSeriesRequest: {
+            /**
+             * @description Whether to force re-analysis of already analyzed books
+             * @example false
+             */
+            force?: boolean;
+            /**
+             * @description List of series IDs to analyze
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440001",
+             *       "550e8400-e29b-41d4-a716-446655440002"
+             *     ]
+             */
+            seriesIds: string[];
+        };
+        /** @description Request to perform bulk operations on multiple books */
+        BulkBooksRequest: {
+            /**
+             * @description List of book IDs to operate on
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440001",
+             *       "550e8400-e29b-41d4-a716-446655440002"
+             *     ]
+             */
+            bookIds: string[];
+        };
+        /** @description Request to perform bulk operations on multiple series */
+        BulkSeriesRequest: {
+            /**
+             * @description List of series IDs to operate on
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440001",
+             *       "550e8400-e29b-41d4-a716-446655440002"
+             *     ]
+             */
+            seriesIds: string[];
         };
         /** @description Request to set multiple preferences at once */
         BulkSetPreferencesRequest: {
@@ -13639,6 +13832,120 @@ export interface operations {
             };
         };
     };
+    bulk_analyze_books: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkAnalyzeBooksRequest"];
+            };
+        };
+        responses: {
+            /** @description Analysis tasks enqueued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkAnalyzeResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_mark_books_as_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkBooksRequest"];
+            };
+        };
+        responses: {
+            /** @description Books marked as read */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkReadResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_mark_books_as_unread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkBooksRequest"];
+            };
+        };
+        responses: {
+            /** @description Books marked as unread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkReadResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_books_with_errors: {
         parameters: {
             query?: {
@@ -16450,6 +16757,120 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PaginatedResponse"];
                 };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_analyze_series: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkAnalyzeSeriesRequest"];
+            };
+        };
+        responses: {
+            /** @description Analysis tasks enqueued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkAnalyzeResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_mark_series_as_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkSeriesRequest"];
+            };
+        };
+        responses: {
+            /** @description Series marked as read */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkReadResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_mark_series_as_unread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkSeriesRequest"];
+            };
+        };
+        responses: {
+            /** @description Series marked as unread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkReadResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Forbidden */
             403: {

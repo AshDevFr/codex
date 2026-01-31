@@ -41,12 +41,14 @@ import {
 } from "@/api/plugins";
 import { LibraryModal } from "@/components/forms/LibraryModal";
 import { BooksSection } from "@/components/library/BooksSection";
+import { BulkSelectionToolbar } from "@/components/library/BulkSelectionToolbar";
 import { LibraryToolbar } from "@/components/library/LibraryToolbar";
 import { RecommendedSection } from "@/components/library/RecommendedSection";
 import { SeriesSection } from "@/components/library/SeriesSection";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
+import { useBulkSelectionStore } from "@/store/bulkSelectionStore";
 import {
 	useLibraryPreferencesHydrated,
 	useLibraryPreferencesStore,
@@ -119,6 +121,14 @@ export function LibraryPage() {
 			setSeriesCount(null);
 		}
 	}, [currentTab]);
+
+	// Clear bulk selection when navigating away or changing tabs
+	const clearSelection = useBulkSelectionStore((state) => state.clearSelection);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally clear on library/tab change
+	useEffect(() => {
+		// Clear selection when library or tab changes
+		clearSelection();
+	}, [libraryId, currentTab]);
 
 	// Fetch library data (if not "all")
 	const {
@@ -839,6 +849,9 @@ export function LibraryPage() {
 								}
 							}}
 						/>
+
+						{/* Bulk Selection Toolbar - shows when items are selected */}
+						<BulkSelectionToolbar />
 					</Stack>
 				</Box>
 

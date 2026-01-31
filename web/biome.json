@@ -25,6 +25,9 @@
 		},
 		"rules": {
 			"recommended": true,
+			"complexity": {
+				"noImportantStyles": "off"
+			},
 			"style": {
 				"noNonNullAssertion": "off"
 			},
