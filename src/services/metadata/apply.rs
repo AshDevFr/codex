@@ -109,7 +109,14 @@ impl MetadataApplier {
                 let is_locked = current_metadata.map(|m| m.title_lock).unwrap_or(false);
                 match check_field("title", is_locked, PluginPermission::MetadataWriteTitle) {
                     Ok(_) => {
-                        let title_sort = current_metadata.and_then(|m| m.title_sort.clone());
+                        // Update title_sort to match new title unless it's locked or filtered out
+                        let title_sort_locked =
+                            current_metadata.map(|m| m.title_sort_lock).unwrap_or(false);
+                        let title_sort = if title_sort_locked || !should_apply_field("titleSort") {
+                            current_metadata.and_then(|m| m.title_sort.clone())
+                        } else {
+                            Some(title.clone())
+                        };
                         SeriesMetadataRepository::update_title(
                             db,
                             series_id,
@@ -119,6 +126,9 @@ impl MetadataApplier {
                         .await
                         .context("Failed to update title")?;
                         applied_fields.push("title".to_string());
+                        if !title_sort_locked && should_apply_field("titleSort") {
+                            applied_fields.push("titleSort".to_string());
+                        }
                     }
                     Err(skip) => skipped_fields.push(skip),
                 }

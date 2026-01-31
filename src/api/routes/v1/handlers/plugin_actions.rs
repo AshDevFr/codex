@@ -484,6 +484,17 @@ pub async fn preview_series_metadata(
     let has_permission = |perm: PluginPermission| -> bool { plugin.has_permission(&perm) };
 
     // Title
+    let title_will_change = plugin_metadata.title.is_some()
+        && !current_metadata
+            .as_ref()
+            .map(|m| m.title_lock)
+            .unwrap_or(false)
+        && has_permission(PluginPermission::MetadataWriteTitle)
+        && current_metadata
+            .as_ref()
+            .map(|m| Some(&m.title) != plugin_metadata.title.as_ref())
+            .unwrap_or(true);
+
     fields.push(build_field_preview(
         "title",
         current_metadata
@@ -495,6 +506,33 @@ pub async fn preview_series_metadata(
             .map(|m| m.title_lock)
             .unwrap_or(false),
         has_permission(PluginPermission::MetadataWriteTitle),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // title_sort - automatically updated when title changes (unless locked)
+    // This is a derived field: if title changes and title_sort is not locked,
+    // title_sort will be updated to match the new title
+    let title_sort_locked = current_metadata
+        .as_ref()
+        .map(|m| m.title_sort_lock)
+        .unwrap_or(false);
+    let proposed_title_sort = if title_will_change && !title_sort_locked {
+        plugin_metadata.title.as_ref().map(|v| serde_json::json!(v))
+    } else {
+        None
+    };
+    fields.push(build_field_preview(
+        "titleSort",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.title_sort.as_ref().map(|v| serde_json::json!(v))),
+        proposed_title_sort,
+        title_sort_locked,
+        true, // title_sort update is automatic, no separate permission needed
         &mut will_apply,
         &mut locked,
         &mut no_permission,
