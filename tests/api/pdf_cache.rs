@@ -15,7 +15,7 @@ use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
 use codex::services::{
     plugin::PluginManager, AuthTrackingService, FileCleanupService, InflightThumbnailTracker,
-    PdfPageCache, ReadProgressService, SettingsService, ThumbnailService,
+    PdfPageCache, PluginMetricsService, ReadProgressService, SettingsService, ThumbnailService,
 };
 use codex::utils::jwt::JwtService;
 use codex::utils::password;
@@ -63,6 +63,7 @@ async fn create_test_app_state_with_pdf_cache(
     // Create PDF page cache with cache ENABLED
     let pdf_page_cache = Arc::new(PdfPageCache::new(temp_dir.path(), true));
     let plugin_manager = Arc::new(PluginManager::with_defaults(Arc::new(db.clone())));
+    let plugin_metrics_service = Arc::new(PluginMetricsService::new());
 
     Arc::new(AppState {
         db,
@@ -84,6 +85,7 @@ async fn create_test_app_state_with_pdf_cache(
         user_auth_cache: Arc::new(UserAuthCache::new()),
         rate_limiter_service: None,
         plugin_manager,
+        plugin_metrics_service,
     })
 }
 

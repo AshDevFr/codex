@@ -52,10 +52,6 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             get(handlers::list_library_on_deck_books),
         )
         .route(
-            "/libraries/:library_id/books/with-errors",
-            get(handlers::list_library_books_with_errors),
-        )
-        .route(
             "/libraries/:library_id/books/recently-read",
             get(handlers::list_library_recently_read_books),
         )

@@ -206,6 +206,9 @@ pub struct AppState {
     /// Plugin manager for coordinating external plugin processes
     /// Manages plugin lifecycle, spawning, and request routing
     pub plugin_manager: Arc<crate::services::plugin::PluginManager>,
+    /// Plugin metrics service for collecting plugin performance data
+    /// Always available (in-memory only, no persistence)
+    pub plugin_metrics_service: Arc<crate::services::PluginMetricsService>,
 }
 
 // Legacy alias for backwards compatibility during transition

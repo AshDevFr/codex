@@ -77,9 +77,8 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/books/recently-read",
             get(handlers::list_recently_read_books),
         )
-        .route("/books/with-errors", get(handlers::list_books_with_errors))
-        // Enhanced error endpoints (v2 - grouped with retry)
-        .route("/books/errors", get(handlers::list_books_with_errors_v2))
+        // Error endpoints (grouped with retry)
+        .route("/books/errors", get(handlers::list_books_with_errors))
         .route("/books/:book_id/retry", post(handlers::retry_book_errors))
         .route(
             "/books/retry-all-errors",

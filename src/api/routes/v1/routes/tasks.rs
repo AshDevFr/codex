@@ -17,8 +17,9 @@ use std::sync::Arc;
 /// Routes:
 /// - Tasks: /tasks, /tasks/:id, /tasks/stats
 /// - Task operations: /tasks/:id/cancel, /tasks/:id/retry, /tasks/:id/unlock
-/// - Thumbnails: /thumbnails/generate, /libraries/:id/thumbnails/generate, etc.
 /// - Task stream: /tasks/stream
+/// - Book thumbnails: /books/thumbnails/generate, /books/:id/thumbnail/generate, /libraries/:id/books/thumbnails/generate
+/// - Series thumbnails: /series/thumbnails/generate, /series/:id/thumbnail/generate, /libraries/:id/series/thumbnails/generate
 pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         // Task Queue routes - distributed task queue
@@ -45,21 +46,30 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/tasks/nuke", delete(handlers::task_queue::nuke_all_tasks))
         // Task progress stream
         .route("/tasks/stream", get(handlers::task_progress_stream))
-        // Thumbnail generation routes
+        // Book thumbnail generation routes
         .route(
-            "/thumbnails/generate",
-            post(handlers::task_queue::generate_thumbnails),
-        )
-        .route(
-            "/libraries/:library_id/thumbnails/generate",
-            post(handlers::task_queue::generate_library_thumbnails),
-        )
-        .route(
-            "/series/:series_id/thumbnails/generate",
-            post(handlers::task_queue::generate_series_thumbnails),
+            "/books/thumbnails/generate",
+            post(handlers::task_queue::generate_book_thumbnails),
         )
         .route(
             "/books/:book_id/thumbnail/generate",
             post(handlers::task_queue::generate_book_thumbnail),
+        )
+        .route(
+            "/libraries/:library_id/books/thumbnails/generate",
+            post(handlers::task_queue::generate_library_book_thumbnails),
+        )
+        // Series thumbnail generation routes
+        .route(
+            "/series/thumbnails/generate",
+            post(handlers::task_queue::generate_series_thumbnails),
+        )
+        .route(
+            "/series/:series_id/thumbnail/generate",
+            post(handlers::task_queue::generate_series_thumbnail),
+        )
+        .route(
+            "/libraries/:library_id/series/thumbnails/generate",
+            post(handlers::task_queue::generate_library_series_thumbnails),
         )
 }

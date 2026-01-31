@@ -52,6 +52,116 @@ const ALLOWED_PATH_PREFIXES: &[&str] = &["/opt/codex/plugins/"];
 /// Cached allowlist (initialized once on first use)
 static COMMAND_ALLOWLIST: OnceLock<Vec<String>> = OnceLock::new();
 
+// =============================================================================
+// Environment Variable Blocklist
+// =============================================================================
+
+/// Environment variables that are blocked from being set by plugins.
+///
+/// These variables could be used to:
+/// - Hijack library loading (LD_*, DYLD_*)
+/// - Modify execution path (PATH)
+/// - Change shell behavior (SHELL, BASH_*, ZSH_*)
+/// - Alter user identity (HOME, USER, LOGNAME)
+/// - Inject code into interpreters (PYTHONPATH, NODE_PATH, etc.)
+///
+/// This is a blocklist approach because:
+/// 1. Most env vars are safe (LOG_LEVEL, API_KEY, etc.)
+/// 2. Plugins need flexibility to receive configuration
+/// 3. Dangerous vars are a known, finite set
+const BLOCKED_ENV_VARS: &[&str] = &[
+    // Library loading hijacking
+    "LD_LIBRARY_PATH",
+    "LD_PRELOAD",
+    "LD_AUDIT",
+    "LD_DEBUG",
+    "LD_PROFILE",
+    "DYLD_LIBRARY_PATH",
+    "DYLD_INSERT_LIBRARIES",
+    "DYLD_FALLBACK_LIBRARY_PATH",
+    // Execution path manipulation
+    "PATH",
+    "IFS",
+    // User identity spoofing
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "USERNAME",
+    // Shell behavior
+    "SHELL",
+    "BASH_ENV",
+    "ENV",
+    "CDPATH",
+    "PROMPT_COMMAND",
+    // Interpreter code injection
+    "PYTHONPATH",
+    "PYTHONSTARTUP",
+    "PYTHONHOME",
+    "NODE_PATH",
+    "NODE_OPTIONS",
+    "NODE_EXTRA_CA_CERTS",
+    "RUBYLIB",
+    "RUBYOPT",
+    "PERL5LIB",
+    "PERL5OPT",
+    // Process debugging/tracing
+    "LD_DEBUG_OUTPUT",
+    "MALLOC_CHECK_",
+    "MALLOC_PERTURB_",
+    // SSH/Git hijacking
+    "GIT_SSH",
+    "GIT_SSH_COMMAND",
+    "SSH_AUTH_SOCK",
+    "SSH_ASKPASS",
+    // Proxy hijacking (could redirect traffic)
+    "http_proxy",
+    "https_proxy",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "NO_PROXY",
+    "no_proxy",
+    // Locale manipulation (can affect string handling)
+    "LC_ALL",
+    "LANG",
+    // Systemd
+    "NOTIFY_SOCKET",
+    "LISTEN_FDS",
+    "LISTEN_PID",
+];
+
+/// Check if an environment variable name is blocked
+///
+/// Returns `true` if the variable is in the blocklist, `false` otherwise.
+/// The check is case-insensitive for cross-platform compatibility.
+pub fn is_env_var_blocked(name: &str) -> bool {
+    let name_upper = name.to_uppercase();
+    BLOCKED_ENV_VARS
+        .iter()
+        .any(|blocked| blocked.to_uppercase() == name_upper)
+}
+
+/// Filter environment variables, removing any that are in the blocklist.
+///
+/// Returns a new HashMap with blocked variables removed.
+/// Logs a warning for each blocked variable.
+pub fn filter_blocked_env_vars(env: &HashMap<String, String>) -> HashMap<String, String> {
+    let mut filtered = HashMap::with_capacity(env.len());
+
+    for (key, value) in env {
+        if is_env_var_blocked(key) {
+            warn!(
+                "Blocked dangerous environment variable '{}' from being set for plugin",
+                key
+            );
+        } else {
+            filtered.insert(key.clone(), value.clone());
+        }
+    }
+
+    filtered
+}
+
 /// Get the command allowlist, initializing from env var if needed
 fn get_command_allowlist() -> &'static Vec<String> {
     COMMAND_ALLOWLIST.get_or_init(|| {
@@ -81,6 +191,12 @@ fn get_command_allowlist() -> &'static Vec<String> {
 /// A command is allowed if:
 /// 1. It matches an entry in the allowlist (e.g., "node", "python")
 /// 2. It's an absolute path starting with an allowed prefix (e.g., "/opt/codex/plugins/")
+///
+/// # Security
+///
+/// For absolute paths, symlinks are resolved using `canonicalize()` before checking
+/// the path prefix. This prevents symlink bypass attacks where a malicious symlink
+/// like `/opt/codex/plugins/malicious -> /bin/rm` could be used to execute arbitrary commands.
 pub fn is_command_allowed(command: &str) -> bool {
     let allowlist = get_command_allowlist();
 
@@ -92,10 +208,38 @@ pub fn is_command_allowed(command: &str) -> bool {
     // Check if command is an absolute path under an allowed prefix
     if command.starts_with('/') {
         let path = Path::new(command);
+
+        // Resolve symlinks to prevent bypass attacks
+        // e.g., /opt/codex/plugins/malicious -> /bin/rm
+        // If canonicalize fails (file doesn't exist, broken symlink, etc.),
+        // we reject the command for safety.
+        let resolved_path = match path.canonicalize() {
+            Ok(p) => p,
+            Err(_) => {
+                // Path doesn't exist or symlink is broken - reject for safety
+                warn!(
+                    "Command path '{}' could not be resolved (file may not exist)",
+                    command
+                );
+                return false;
+            }
+        };
+
         for prefix in ALLOWED_PATH_PREFIXES {
-            if path.starts_with(prefix) {
+            if resolved_path.starts_with(prefix) {
                 return true;
             }
+        }
+
+        // If original path looked like it was under allowed prefix but resolved
+        // path is not, this is a symlink bypass attempt
+        let original_under_prefix = ALLOWED_PATH_PREFIXES.iter().any(|p| path.starts_with(p));
+        if original_under_prefix {
+            warn!(
+                "Possible symlink bypass detected: '{}' resolves to '{}'",
+                command,
+                resolved_path.display()
+            );
         }
     }
 
@@ -261,8 +405,10 @@ impl PluginProcess {
     ///
     /// # Security
     ///
-    /// The command is validated against the allowlist before spawning.
-    /// If the command is not allowed, returns `ProcessError::CommandNotAllowed`.
+    /// - The command is validated against the allowlist before spawning.
+    ///   If the command is not allowed, returns `ProcessError::CommandNotAllowed`.
+    /// - Environment variables are filtered against a blocklist to prevent
+    ///   dangerous vars like PATH, LD_PRELOAD, etc. from being set.
     pub async fn spawn(config: &PluginProcessConfig) -> Result<Self, ProcessError> {
         // Validate command against allowlist before spawning
         config.validate_command()?;
@@ -272,8 +418,9 @@ impl PluginProcess {
         // Add arguments
         cmd.args(&config.args);
 
-        // Set environment variables
-        for (key, value) in &config.env {
+        // Filter and set environment variables (removing blocked vars)
+        let filtered_env = filter_blocked_env_vars(&config.env);
+        for (key, value) in &filtered_env {
             cmd.env(key, value);
         }
 
@@ -490,15 +637,42 @@ mod tests {
     }
 
     #[test]
-    fn test_allowed_path_prefix() {
-        // Paths under allowed prefix should be allowed
-        assert!(is_command_allowed("/opt/codex/plugins/my-plugin"));
-        assert!(is_command_allowed("/opt/codex/plugins/metadata/mangabaka"));
+    fn test_allowed_path_prefix_nonexistent() {
+        // Paths that don't exist are rejected for safety (canonicalize fails)
+        // This is the secure behavior - we can't verify where a path points
+        // if the file doesn't exist
+        assert!(!is_command_allowed("/opt/codex/plugins/my-plugin"));
+        assert!(!is_command_allowed("/opt/codex/plugins/metadata/mangabaka"));
 
-        // Paths not under allowed prefix should be blocked
+        // Paths not under allowed prefix should also be blocked
         assert!(!is_command_allowed("/usr/bin/node"));
         assert!(!is_command_allowed("/home/user/malicious"));
         assert!(!is_command_allowed("/opt/other/plugins/plugin"));
+    }
+
+    #[test]
+    fn test_real_paths_not_under_allowed_prefix() {
+        // Real paths that exist but are not under allowed prefix should be blocked
+        // Using /bin/sh which exists on all Unix systems
+        assert!(!is_command_allowed("/bin/sh"));
+        assert!(!is_command_allowed("/usr/bin/env"));
+    }
+
+    #[test]
+    fn test_symlink_bypass_detection() {
+        // This test verifies the symlink resolution behavior
+        // A symlink under /opt/codex/plugins/ pointing to /bin/rm would be blocked
+        // because canonicalize() would resolve it to /bin/rm which is not allowed
+
+        // We can't easily create a symlink in tests without filesystem access,
+        // but we verify that arbitrary paths outside allowed prefix are blocked
+        // even if they look like they could be plugin paths
+
+        // Path traversal attempts
+        assert!(!is_command_allowed("/opt/codex/plugins/../../../bin/rm"));
+
+        // These would fail canonicalize (don't exist)
+        assert!(!is_command_allowed("/opt/codex/plugins/fake-plugin"));
     }
 
     #[test]
@@ -624,5 +798,99 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("200000000"));
         assert!(msg.contains("104857600"));
+    }
+
+    // =========================================================================
+    // Environment Variable Blocklist Tests
+    // =========================================================================
+
+    #[test]
+    fn test_blocked_env_vars_library_loading() {
+        // Library loading hijacking vars should be blocked
+        assert!(is_env_var_blocked("LD_LIBRARY_PATH"));
+        assert!(is_env_var_blocked("LD_PRELOAD"));
+        assert!(is_env_var_blocked("DYLD_INSERT_LIBRARIES"));
+        assert!(is_env_var_blocked("DYLD_LIBRARY_PATH"));
+    }
+
+    #[test]
+    fn test_blocked_env_vars_path_and_identity() {
+        // Path and identity vars should be blocked
+        assert!(is_env_var_blocked("PATH"));
+        assert!(is_env_var_blocked("HOME"));
+        assert!(is_env_var_blocked("USER"));
+        assert!(is_env_var_blocked("SHELL"));
+    }
+
+    #[test]
+    fn test_blocked_env_vars_interpreter_injection() {
+        // Interpreter code injection vars should be blocked
+        assert!(is_env_var_blocked("PYTHONPATH"));
+        assert!(is_env_var_blocked("NODE_PATH"));
+        assert!(is_env_var_blocked("NODE_OPTIONS"));
+        assert!(is_env_var_blocked("RUBYLIB"));
+    }
+
+    #[test]
+    fn test_blocked_env_vars_case_insensitive() {
+        // Check should be case-insensitive
+        assert!(is_env_var_blocked("path"));
+        assert!(is_env_var_blocked("Path"));
+        assert!(is_env_var_blocked("PATH"));
+        assert!(is_env_var_blocked("home"));
+        assert!(is_env_var_blocked("ld_preload"));
+    }
+
+    #[test]
+    fn test_safe_env_vars_allowed() {
+        // Common safe env vars should be allowed
+        assert!(!is_env_var_blocked("LOG_LEVEL"));
+        assert!(!is_env_var_blocked("API_KEY"));
+        assert!(!is_env_var_blocked("DEBUG"));
+        assert!(!is_env_var_blocked("MY_CUSTOM_VAR"));
+        assert!(!is_env_var_blocked("MANGABAKA_API_KEY"));
+        assert!(!is_env_var_blocked("TZ")); // Timezone is safe
+    }
+
+    #[test]
+    fn test_filter_blocked_env_vars() {
+        let mut env = HashMap::new();
+        env.insert("API_KEY".to_string(), "secret".to_string());
+        env.insert("LOG_LEVEL".to_string(), "debug".to_string());
+        env.insert("PATH".to_string(), "/evil/path".to_string());
+        env.insert("LD_PRELOAD".to_string(), "/evil/lib.so".to_string());
+        env.insert("HOME".to_string(), "/tmp/evil".to_string());
+
+        let filtered = filter_blocked_env_vars(&env);
+
+        // Safe vars should be kept
+        assert_eq!(filtered.get("API_KEY"), Some(&"secret".to_string()));
+        assert_eq!(filtered.get("LOG_LEVEL"), Some(&"debug".to_string()));
+
+        // Dangerous vars should be removed
+        assert!(!filtered.contains_key("PATH"));
+        assert!(!filtered.contains_key("LD_PRELOAD"));
+        assert!(!filtered.contains_key("HOME"));
+
+        // Only 2 vars should remain
+        assert_eq!(filtered.len(), 2);
+    }
+
+    #[test]
+    fn test_filter_empty_env() {
+        let env = HashMap::new();
+        let filtered = filter_blocked_env_vars(&env);
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn test_filter_all_safe_env() {
+        let mut env = HashMap::new();
+        env.insert("API_KEY".to_string(), "secret".to_string());
+        env.insert("TIMEOUT".to_string(), "30".to_string());
+
+        let filtered = filter_blocked_env_vars(&env);
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered.get("API_KEY"), Some(&"secret".to_string()));
     }
 }

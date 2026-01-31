@@ -13,6 +13,7 @@ npm install @codex/plugin-sdk
 ```typescript
 import {
   createMetadataPlugin,
+  type MetadataContentType,
   type MetadataProvider,
   type PluginManifest,
 } from "@codex/plugin-sdk";
@@ -25,10 +26,12 @@ const manifest = {
   description: "A custom metadata provider",
   author: "Your Name",
   protocolVersion: "1.0",
-  capabilities: { metadataProvider: true },
-  contentTypes: ["series"],
-  scopes: ["series:detail"],
-} as const satisfies PluginManifest & { capabilities: { metadataProvider: true } };
+  capabilities: {
+    metadataProvider: ["series"] as MetadataContentType[],
+  },
+} as const satisfies PluginManifest & {
+  capabilities: { metadataProvider: MetadataContentType[] };
+};
 
 // Implement the MetadataProvider interface
 const provider: MetadataProvider = {
@@ -102,9 +105,17 @@ Plugins declare capabilities in their manifest. Each capability has a correspond
 
 | Capability | Interface | Description |
 |------------|-----------|-------------|
-| `metadataProvider` | `MetadataProvider` | Search and fetch metadata for series |
+| `metadataProvider` | `MetadataProvider` | Search and fetch metadata for content |
 
-When you set `capabilities.metadataProvider: true`, TypeScript ensures you implement all required methods.
+The `metadataProvider` capability is an array of content types your plugin supports:
+
+```typescript
+capabilities: {
+  metadataProvider: ["series"] as MetadataContentType[],
+}
+```
+
+Supported content types: `"series"` (future: `"book"`)
 
 ### Protocol Types
 
@@ -132,7 +143,7 @@ Creates and starts a metadata provider plugin.
 
 ```typescript
 interface MetadataPluginOptions {
-  manifest: PluginManifest & { capabilities: { metadataProvider: true } };
+  manifest: PluginManifest & { capabilities: { metadataProvider: MetadataContentType[] } };
   provider: MetadataProvider;
   onInitialize?: (params: InitializeParams) => void | Promise<void>;
   logLevel?: "debug" | "info" | "warn" | "error";

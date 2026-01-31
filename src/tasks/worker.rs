@@ -25,8 +25,9 @@ use crate::services::{SettingsService, TaskMetricsService, ThumbnailService};
 use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, CleanupBookFilesHandler, CleanupOrphanedFilesHandler,
     CleanupPdfCacheHandler, CleanupSeriesFilesHandler, FindDuplicatesHandler,
-    GenerateSeriesThumbnailHandler, GenerateThumbnailHandler, GenerateThumbnailsHandler,
-    PluginAutoMatchHandler, PurgeDeletedHandler, ScanLibraryHandler, TaskHandler,
+    GenerateSeriesThumbnailHandler, GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler,
+    GenerateThumbnailsHandler, PluginAutoMatchHandler, PurgeDeletedHandler, ScanLibraryHandler,
+    TaskHandler,
 };
 
 /// Task worker that processes tasks from the queue
@@ -138,6 +139,13 @@ impl TaskWorker {
         self.handlers.insert(
             "generate_series_thumbnail".to_string(),
             Arc::new(GenerateSeriesThumbnailHandler::new(
+                thumbnail_service.clone(),
+            )),
+        );
+        // Register the GenerateSeriesThumbnailsHandler (batch/fan-out) with thumbnail service
+        self.handlers.insert(
+            "generate_series_thumbnails".to_string(),
+            Arc::new(GenerateSeriesThumbnailsHandler::new(
                 thumbnail_service.clone(),
             )),
         );

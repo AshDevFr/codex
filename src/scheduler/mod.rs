@@ -38,6 +38,10 @@ impl Scheduler {
         // Load PDF cache cleanup schedule
         self.load_pdf_cache_cleanup_schedule().await?;
 
+        // Load thumbnail generation schedules
+        self.load_book_thumbnail_schedule().await?;
+        self.load_series_thumbnail_schedule().await?;
+
         // Start the scheduler
         self.scheduler
             .start()
@@ -175,6 +179,104 @@ impl Scheduler {
             .context("Failed to add PDF cache cleanup job to scheduler")?;
 
         info!("Added PDF cache cleanup schedule: {}", cron);
+
+        Ok(())
+    }
+
+    /// Load book thumbnail generation schedule from settings
+    ///
+    /// This job generates thumbnails for all books that don't have one.
+    /// It uses the GenerateThumbnails task type which fans out to individual book tasks.
+    async fn load_book_thumbnail_schedule(&mut self) -> Result<()> {
+        let settings = SettingsService::new(self.db.clone()).await?;
+
+        // Get cron schedule (empty string = disabled)
+        let cron = settings
+            .get_string("thumbnail.book_cron_schedule", "")
+            .await?;
+
+        if cron.is_empty() {
+            debug!("Book thumbnail generation disabled (no cron schedule)");
+            return Ok(());
+        }
+
+        // Create cron job
+        let db = self.db.clone();
+        let job = Job::new_async(cron.as_str(), move |_uuid, _lock| {
+            let db = db.clone();
+            Box::pin(async move {
+                info!("Triggering scheduled book thumbnail generation");
+
+                // GenerateThumbnails with no library_id/series_id will process all books
+                let task_type = TaskType::GenerateThumbnails {
+                    library_id: None,
+                    series_id: None,
+                    force: false, // Only generate missing thumbnails
+                };
+
+                match TaskRepository::enqueue(&db, task_type, 0, None).await {
+                    Ok(_) => debug!("Book thumbnail generation task enqueued"),
+                    Err(e) => error!("Failed to enqueue book thumbnail generation: {}", e),
+                }
+            })
+        })
+        .context("Failed to create book thumbnail generation cron job")?;
+
+        self.scheduler
+            .add(job)
+            .await
+            .context("Failed to add book thumbnail generation job to scheduler")?;
+
+        info!("Added book thumbnail generation schedule: {}", cron);
+
+        Ok(())
+    }
+
+    /// Load series thumbnail generation schedule from settings
+    ///
+    /// This job generates thumbnails for all series that don't have one.
+    /// It enqueues a GenerateSeriesThumbnails fan-out task that handles
+    /// filtering and enqueueing individual GenerateSeriesThumbnail tasks.
+    async fn load_series_thumbnail_schedule(&mut self) -> Result<()> {
+        let settings = SettingsService::new(self.db.clone()).await?;
+
+        // Get cron schedule (empty string = disabled)
+        let cron = settings
+            .get_string("thumbnail.series_cron_schedule", "")
+            .await?;
+
+        if cron.is_empty() {
+            debug!("Series thumbnail generation disabled (no cron schedule)");
+            return Ok(());
+        }
+
+        // Create cron job
+        let db = self.db.clone();
+        let job = Job::new_async(cron.as_str(), move |_uuid, _lock| {
+            let db = db.clone();
+            Box::pin(async move {
+                info!("Triggering scheduled series thumbnail generation");
+
+                // Enqueue fan-out task that will filter and enqueue individual tasks
+                let task_type = TaskType::GenerateSeriesThumbnails {
+                    library_id: None,
+                    force: false, // Only generate missing thumbnails
+                };
+
+                match TaskRepository::enqueue(&db, task_type, 0, None).await {
+                    Ok(_) => debug!("Series thumbnail generation task enqueued"),
+                    Err(e) => error!("Failed to enqueue series thumbnail generation: {}", e),
+                }
+            })
+        })
+        .context("Failed to create series thumbnail generation cron job")?;
+
+        self.scheduler
+            .add(job)
+            .await
+            .context("Failed to add series thumbnail generation job to scheduler")?;
+
+        info!("Added series thumbnail generation schedule: {}", cron);
 
         Ok(())
     }

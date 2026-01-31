@@ -219,57 +219,68 @@ export function mapSeriesMetadata(series: MbSeries): PluginSeriesMetadata {
     },
   ];
 
-  if (series.source?.anilist?.id) {
-    externalLinks.push({
-      url: `https://anilist.co/manga/${series.source.anilist.id}`,
+  // Source configuration: display name, rating key, and URL pattern
+  // URL pattern uses {id} as placeholder for the source ID
+  const sourceConfig: Record<string, { label: string; ratingKey: string; urlPattern?: string }> = {
+    anilist: {
       label: "AniList",
-      linkType: "provider",
-    });
-  }
-  if (series.source?.mal?.id) {
-    externalLinks.push({
-      url: `https://myanimelist.net/manga/${series.source.mal.id}`,
+      ratingKey: "anilist",
+      urlPattern: "https://anilist.co/manga/{id}",
+    },
+    my_anime_list: {
       label: "MyAnimeList",
-      linkType: "provider",
-    });
-  }
-  if (series.source?.mangadex?.id) {
-    externalLinks.push({
-      url: `https://mangadex.org/title/${series.source.mangadex.id}`,
+      ratingKey: "myanimelist",
+      urlPattern: "https://myanimelist.net/manga/{id}",
+    },
+    mangadex: {
       label: "MangaDex",
-      linkType: "provider",
-    });
-  }
+      ratingKey: "mangadex",
+      urlPattern: "https://mangadex.org/title/{id}",
+    },
+    manga_updates: {
+      label: "MangaUpdates",
+      ratingKey: "mangaupdates",
+      urlPattern: "https://www.mangaupdates.com/series/{id}",
+    },
+    kitsu: { label: "Kitsu", ratingKey: "kitsu", urlPattern: "https://kitsu.app/manga/{id}" },
+    anime_planet: {
+      label: "Anime-Planet",
+      ratingKey: "animeplanet",
+      urlPattern: "https://www.anime-planet.com/manga/{id}",
+    },
+    anime_news_network: { label: "Anime News Network", ratingKey: "animenewsnetwork" },
+    shikimori: {
+      label: "Shikimori",
+      ratingKey: "shikimori",
+      urlPattern: "https://shikimori.one/mangas/{id}",
+    },
+  };
 
-  // Build external ratings from sources (all normalized to 0-100 scale)
+  // Build external links and ratings from sources in a single pass
   const externalRatings: ExternalRating[] = [];
 
-  if (series.source?.anilist?.rating_normalized != null) {
-    externalRatings.push({ score: series.source.anilist.rating_normalized, source: "anilist" });
-  }
-  if (series.source?.my_anime_list?.rating_normalized != null) {
-    externalRatings.push({
-      score: series.source.my_anime_list.rating_normalized,
-      source: "myanimelist",
-    });
-  }
-  if (series.source?.mangadex?.rating_normalized != null) {
-    externalRatings.push({ score: series.source.mangadex.rating_normalized, source: "mangadex" });
-  }
-  if (series.source?.manga_updates?.rating_normalized != null) {
-    externalRatings.push({
-      score: series.source.manga_updates.rating_normalized,
-      source: "mangaupdates",
-    });
-  }
-  if (series.source?.kitsu?.rating_normalized != null) {
-    externalRatings.push({ score: series.source.kitsu.rating_normalized, source: "kitsu" });
-  }
-  if (series.source?.anime_planet?.rating_normalized != null) {
-    externalRatings.push({
-      score: series.source.anime_planet.rating_normalized,
-      source: "animeplanet",
-    });
+  if (series.source) {
+    for (const [key, info] of Object.entries(series.source)) {
+      if (!info) continue;
+
+      const config = sourceConfig[key];
+      // Use config if available, otherwise generate defaults from key
+      const ratingKey = config?.ratingKey ?? key.replace(/_/g, "");
+
+      // Add external link if source has an ID and URL pattern
+      if (info.id != null && config?.urlPattern) {
+        externalLinks.push({
+          url: config.urlPattern.replace("{id}", String(info.id)),
+          label: config.label,
+          linkType: "provider",
+        });
+      }
+
+      // Add external rating if source has a normalized rating
+      if (info.rating_normalized != null) {
+        externalRatings.push({ score: info.rating_normalized, source: ratingKey });
+      }
+    }
   }
 
   // Get publisher name (pick first one if available)

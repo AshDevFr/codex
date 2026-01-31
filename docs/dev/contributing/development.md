@@ -365,5 +365,5 @@ cargo build --release
 ## Next Steps
 
 - Review the [Architecture](./architecture) documentation
-- Check the [API Documentation](../api) for endpoint details
-- See [Configuration](../configuration) for available options
+- Check the [API Documentation](/docs/api) for endpoint details
+- See [Configuration](/docs/configuration) for available options

@@ -1,9 +1,9 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { librariesApi } from "@/api/libraries";
 import { useAuthStore } from "@/store/authStore";
 import { renderWithProviders, userEvent } from "@/test/utils";
-import type { User } from "@/types";
+import type { Library, User } from "@/types";
 import { AppLayout } from "./AppLayout";
 
 vi.mock("@/api/libraries");
@@ -11,6 +11,14 @@ vi.mock("@/api/tasks", () => ({
 	subscribeToTaskProgress: vi.fn(() => vi.fn()),
 	fetchPendingTaskCounts: vi.fn(() => Promise.resolve({})),
 	fetchTasksByStatus: vi.fn(() => Promise.resolve([])),
+}));
+vi.mock("@/api/plugins", () => ({
+	pluginsApi: {
+		getActions: vi.fn(() => Promise.resolve({ actions: [] })),
+	},
+	pluginActionsApi: {
+		enqueueLibraryAutoMatchTasks: vi.fn(),
+	},
 }));
 
 describe("Sidebar Component (via AppLayout)", () => {
@@ -223,5 +231,254 @@ describe("Sidebar Component (via AppLayout)", () => {
 
 		// Should clear auth (navigation is handled by React Router now)
 		expect(localStorage.getItem("jwt_token")).toBeNull();
+	});
+
+	describe("Settings navigation", () => {
+		it("should open Settings menu when navigating to a settings page", async () => {
+			const mockAdmin: User = {
+				id: "1",
+				username: "admin",
+				email: "admin@example.com",
+				role: "admin",
+				emailVerified: true,
+				permissions: [],
+			};
+
+			useAuthStore.setState({
+				user: mockAdmin,
+				token: "token",
+				isAuthenticated: true,
+			});
+
+			// Render starting from home page
+			const { rerender } = renderWithProviders(
+				<AppLayout currentPath="/">
+					<div>Content</div>
+				</AppLayout>,
+			);
+
+			// Settings submenu items (like Plugins) should not be visible when Settings is collapsed
+			// Mantine NavLink keeps children in DOM but hides them visually
+			const pluginsLinkBefore = screen.getByText("Plugins");
+			expect(pluginsLinkBefore).not.toBeVisible();
+
+			// Now rerender with a settings path to simulate navigation
+			rerender(
+				<AppLayout currentPath="/settings/plugins">
+					<div>Content</div>
+				</AppLayout>,
+			);
+
+			// After navigation to settings page, the Settings menu should be expanded
+			// and Plugins submenu item should be visible
+			await waitFor(() => {
+				expect(screen.getByText("Plugins")).toBeVisible();
+			});
+		});
+
+		it("should have Settings menu open when starting on a settings page", () => {
+			const mockAdmin: User = {
+				id: "1",
+				username: "admin",
+				email: "admin@example.com",
+				role: "admin",
+				emailVerified: true,
+				permissions: [],
+			};
+
+			useAuthStore.setState({
+				user: mockAdmin,
+				token: "token",
+				isAuthenticated: true,
+			});
+
+			// Render directly on a settings page
+			renderWithProviders(
+				<AppLayout currentPath="/settings/plugins">
+					<div>Content</div>
+				</AppLayout>,
+			);
+
+			// Settings submenu items should be visible since we started on a settings page
+			expect(screen.getByText("Plugins")).toBeVisible();
+		});
+	});
+
+	describe("Library dropdown menu", () => {
+		const mockLibrary: Library = {
+			id: "lib-123",
+			name: "Test Library",
+			path: "/test/path",
+			isActive: true,
+			createdAt: "2024-01-01",
+			updatedAt: "2024-01-01",
+			bookStrategy: "filename",
+			defaultReadingDirection: "ltr",
+			numberStrategy: "filename",
+			seriesStrategy: "flat",
+		};
+
+		it("should show thumbnail options for users with tasks:write permission", async () => {
+			const user = userEvent.setup();
+			const mockMaintainer: User = {
+				id: "1",
+				username: "maintainer",
+				email: "maintainer@example.com",
+				role: "maintainer",
+				emailVerified: true,
+				permissions: ["libraries-write", "tasks-write"],
+			};
+
+			useAuthStore.setState({
+				user: mockMaintainer,
+				token: "token",
+				isAuthenticated: true,
+			});
+
+			vi.mocked(librariesApi.getAll).mockResolvedValue([mockLibrary]);
+
+			renderWithProviders(
+				<AppLayout>
+					<div>Content</div>
+				</AppLayout>,
+			);
+
+			// Wait for the library to appear
+			await waitFor(() => {
+				expect(screen.getByText("Test Library")).toBeInTheDocument();
+			});
+
+			// Find and click the library options button (the dots icon)
+			const libraryItem = screen.getByText("Test Library").closest("a");
+			const optionsButton = libraryItem?.querySelector(
+				'button[title="Library options"]',
+			);
+			expect(optionsButton).toBeInTheDocument();
+
+			if (optionsButton) {
+				await user.click(optionsButton);
+			}
+
+			// Should show thumbnail sections with options
+			await waitFor(() => {
+				expect(screen.getByText("Book Thumbnails")).toBeInTheDocument();
+			});
+			expect(screen.getByText("Series Thumbnails")).toBeInTheDocument();
+			// There should be two "Generate Missing" and two "Regenerate All" options
+			expect(screen.getAllByText("Generate Missing")).toHaveLength(2);
+			expect(screen.getAllByText("Regenerate All")).toHaveLength(2);
+		});
+
+		it("should NOT show thumbnail options for users without tasks:write permission", async () => {
+			const user = userEvent.setup();
+			// Use a reader role with only libraries-write custom permission (no tasks-write)
+			const mockEditor: User = {
+				id: "1",
+				username: "editor",
+				email: "editor@example.com",
+				role: "reader",
+				emailVerified: true,
+				permissions: ["libraries-write"], // Can edit libraries but not write tasks
+			};
+
+			useAuthStore.setState({
+				user: mockEditor,
+				token: "token",
+				isAuthenticated: true,
+			});
+
+			vi.mocked(librariesApi.getAll).mockResolvedValue([mockLibrary]);
+
+			renderWithProviders(
+				<AppLayout>
+					<div>Content</div>
+				</AppLayout>,
+			);
+
+			// Wait for the library to appear
+			await waitFor(() => {
+				expect(screen.getByText("Test Library")).toBeInTheDocument();
+			});
+
+			// Find and click the library options button
+			const libraryItem = screen.getByText("Test Library").closest("a");
+			const optionsButton = libraryItem?.querySelector(
+				'button[title="Library options"]',
+			);
+			expect(optionsButton).toBeInTheDocument();
+
+			if (optionsButton) {
+				await user.click(optionsButton);
+			}
+
+			// Wait for menu to open and check that thumbnail options are NOT shown
+			await waitFor(() => {
+				expect(screen.getByText("Scan Library")).toBeInTheDocument();
+			});
+
+			expect(screen.queryByText("Book Thumbnails")).not.toBeInTheDocument();
+			expect(screen.queryByText("Series Thumbnails")).not.toBeInTheDocument();
+		});
+
+		it("should call generateMissingThumbnails API when clicking the menu item", async () => {
+			const user = userEvent.setup();
+			const mockAdmin: User = {
+				id: "1",
+				username: "admin",
+				email: "admin@example.com",
+				role: "admin",
+				emailVerified: true,
+				permissions: [],
+			};
+
+			useAuthStore.setState({
+				user: mockAdmin,
+				token: "token",
+				isAuthenticated: true,
+			});
+
+			vi.mocked(librariesApi.getAll).mockResolvedValue([mockLibrary]);
+			vi.mocked(librariesApi.generateMissingThumbnails).mockResolvedValue({
+				task_id: "task-123",
+			});
+
+			renderWithProviders(
+				<AppLayout>
+					<div>Content</div>
+				</AppLayout>,
+			);
+
+			// Wait for the library to appear
+			await waitFor(() => {
+				expect(screen.getByText("Test Library")).toBeInTheDocument();
+			});
+
+			// Find and click the library options button
+			const libraryItem = screen.getByText("Test Library").closest("a");
+			const optionsButton = libraryItem?.querySelector(
+				'button[title="Library options"]',
+			);
+			expect(optionsButton).toBeInTheDocument();
+
+			if (optionsButton) {
+				await user.click(optionsButton);
+			}
+
+			// Wait for menu to open
+			await waitFor(() => {
+				expect(screen.getByText("Book Thumbnails")).toBeInTheDocument();
+			});
+
+			// Click the Generate Missing option under Book Thumbnails
+			const generateMissingButtons = screen.getAllByText("Generate Missing");
+			await user.click(generateMissingButtons[0]);
+
+			// Verify the API was called with the correct library ID
+			await waitFor(() => {
+				expect(librariesApi.generateMissingThumbnails).toHaveBeenCalledWith(
+					"lib-123",
+				);
+			});
+		});
 	});
 });

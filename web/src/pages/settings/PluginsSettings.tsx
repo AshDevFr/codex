@@ -103,16 +103,37 @@ const defaultFormValues: PluginFormValues = {
 	rateLimitRequestsPerMinute: 60,
 };
 
-// Normalize plugin name to slug format (lowercase, hyphens, no spaces)
+// Normalize plugin name to slug format (lowercase alphanumeric with hyphens)
+// Matches backend validation: lowercase alphanumeric and hyphens only
+// Cannot start or end with a hyphen
 function normalizePluginName(value: string): string {
 	return value
 		.toLowerCase()
 		.trim()
-		.replace(/\s+/g, "-") // multiple spaces -> single hyphen
-		.replace(/_/g, "-") // underscores -> hyphens
-		.replace(/-+/g, "-") // multiple hyphens -> single hyphen
+		.replace(/[\s_]+/g, "-") // spaces and underscores -> hyphens
+		.replace(/-+/g, "-") // collapse multiple hyphens to single
 		.replace(/[^a-z0-9-]/g, "") // remove invalid chars
-		.replace(/^-|-$/g, ""); // trim leading/trailing hyphens
+		.replace(/^-+|-+$/g, ""); // trim leading/trailing hyphens
+}
+
+/**
+ * Safely parse JSON with try-catch to handle malformed input.
+ * Returns undefined if parsing fails, showing an error notification to the user.
+ */
+function safeJsonParse(
+	jsonString: string,
+	fieldName: string,
+): Record<string, unknown> | undefined {
+	try {
+		return JSON.parse(jsonString);
+	} catch {
+		notifications.show({
+			title: "Invalid JSON",
+			message: `The ${fieldName} field contains invalid JSON. Please check the format.`,
+			color: "red",
+		});
+		return undefined;
+	}
 }
 
 export function PluginsSettings() {
@@ -194,9 +215,11 @@ export function PluginsSettings() {
 				libraryIds: values.allLibraries ? [] : values.libraryIds,
 				credentialDelivery: values.credentialDelivery,
 				credentials: values.credentials.trim()
-					? JSON.parse(values.credentials)
+					? safeJsonParse(values.credentials, "credentials")
 					: undefined,
-				config: values.config.trim() ? JSON.parse(values.config) : undefined,
+				config: values.config.trim()
+					? safeJsonParse(values.config, "config")
+					: undefined,
 				enabled: values.enabled,
 				rateLimitRequestsPerMinute: values.rateLimitEnabled
 					? values.rateLimitRequestsPerMinute
@@ -247,9 +270,11 @@ export function PluginsSettings() {
 				libraryIds: values.allLibraries ? [] : values.libraryIds,
 				credentialDelivery: values.credentialDelivery,
 				credentials: values.credentials.trim()
-					? JSON.parse(values.credentials)
+					? safeJsonParse(values.credentials, "credentials")
 					: undefined,
-				config: values.config.trim() ? JSON.parse(values.config) : undefined,
+				config: values.config.trim()
+					? safeJsonParse(values.config, "config")
+					: undefined,
 				rateLimitRequestsPerMinute: values.rateLimitEnabled
 					? values.rateLimitRequestsPerMinute
 					: null,
@@ -899,10 +924,29 @@ function PluginDetails({
 
 // Plugin failure history component
 function PluginFailureHistory({ pluginId }: { pluginId: string }) {
+	const [showAllModal, setShowAllModal] = useState(false);
+	const [page, setPage] = useState(1);
+	const pageSize = 5; // Show 5 recent failures inline
+	const modalPageSize = 20;
+
+	// Query for inline display (first 5)
 	const { data, isLoading, error } = useQuery<PluginFailuresResponse>({
-		queryKey: ["plugin-failures", pluginId],
-		queryFn: () => pluginsApi.getFailures(pluginId, 10, 0),
+		queryKey: ["plugin-failures", pluginId, "inline"],
+		queryFn: () => pluginsApi.getFailures(pluginId, pageSize, 0),
 	});
+
+	// Query for modal display (paginated)
+	const { data: modalData, isLoading: modalLoading } =
+		useQuery<PluginFailuresResponse>({
+			queryKey: ["plugin-failures", pluginId, "modal", page],
+			queryFn: () =>
+				pluginsApi.getFailures(
+					pluginId,
+					modalPageSize,
+					(page - 1) * modalPageSize,
+				),
+			enabled: showAllModal,
+		});
 
 	if (isLoading) {
 		return (
@@ -919,6 +963,10 @@ function PluginFailureHistory({ pluginId }: { pluginId: string }) {
 	if (data.failures.length === 0) {
 		return null;
 	}
+
+	const totalPages = Math.ceil(
+		(modalData?.total ?? data.total) / modalPageSize,
+	);
 
 	return (
 		<>
@@ -947,35 +995,151 @@ function PluginFailureHistory({ pluginId }: { pluginId: string }) {
 					</Text>
 					<Text size="sm">{data.total}</Text>
 				</div>
+				{data.total > pageSize && (
+					<Button
+						variant="light"
+						size="xs"
+						onClick={() => {
+							setPage(1);
+							setShowAllModal(true);
+						}}
+					>
+						View All ({data.total})
+					</Button>
+				)}
 			</Group>
 
 			<Stack gap="xs">
 				{data.failures.map((failure) => (
-					<Card key={failure.id} withBorder p="xs" radius="sm">
-						<Group justify="space-between" wrap="nowrap">
-							<Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-								{failure.errorCode && (
-									<Badge size="xs" color="red" variant="light">
-										{failure.errorCode}
-									</Badge>
-								)}
-								{failure.method && (
-									<Badge size="xs" color="blue" variant="outline">
-										{failure.method}
-									</Badge>
-								)}
-								<Text size="xs" lineClamp={1} style={{ flex: 1 }}>
-									{failure.errorMessage}
-								</Text>
-							</Group>
-							<Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
-								{new Date(failure.occurredAt).toLocaleString()}
-							</Text>
-						</Group>
-					</Card>
+					<FailureCard key={failure.id} failure={failure} />
 				))}
 			</Stack>
+
+			{/* View All Failures Modal */}
+			<Modal
+				opened={showAllModal}
+				onClose={() => setShowAllModal(false)}
+				title="Failure History"
+				size="lg"
+			>
+				<Stack gap="md">
+					<Group gap="xl">
+						<div>
+							<Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+								Window Failures
+							</Text>
+							<Text size="sm" fw={500}>
+								{data.windowFailures} / {data.threshold}
+							</Text>
+						</div>
+						<div>
+							<Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+								Window Duration
+							</Text>
+							<Text size="sm">
+								{Math.round(data.windowSeconds / 60)} minutes
+							</Text>
+						</div>
+						<div>
+							<Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+								Total Failures
+							</Text>
+							<Text size="sm">{modalData?.total ?? data.total}</Text>
+						</div>
+					</Group>
+
+					<Divider />
+
+					{modalLoading ? (
+						<Group justify="center" py="xl">
+							<Loader />
+						</Group>
+					) : (
+						<ScrollArea.Autosize mah={400}>
+							<Stack gap="xs">
+								{modalData?.failures.map((failure) => (
+									<FailureCard key={failure.id} failure={failure} showDetails />
+								))}
+							</Stack>
+						</ScrollArea.Autosize>
+					)}
+
+					{totalPages > 1 && (
+						<Group justify="center" mt="md">
+							<Button
+								variant="subtle"
+								size="xs"
+								disabled={page === 1}
+								onClick={() => setPage((p) => Math.max(1, p - 1))}
+							>
+								Previous
+							</Button>
+							<Text size="sm">
+								Page {page} of {totalPages}
+							</Text>
+							<Button
+								variant="subtle"
+								size="xs"
+								disabled={page >= totalPages}
+								onClick={() => setPage((p) => p + 1)}
+							>
+								Next
+							</Button>
+						</Group>
+					)}
+				</Stack>
+			</Modal>
 		</>
+	);
+}
+
+// Individual failure card component
+function FailureCard({
+	failure,
+	showDetails = false,
+}: {
+	failure: PluginFailuresResponse["failures"][0];
+	showDetails?: boolean;
+}) {
+	return (
+		<Card withBorder p="xs" radius="sm">
+			<Stack gap="xs">
+				<Group justify="space-between" wrap="nowrap">
+					<Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+						{failure.errorCode && (
+							<Badge size="xs" color="red" variant="light">
+								{failure.errorCode}
+							</Badge>
+						)}
+						{failure.method && (
+							<Badge size="xs" color="blue" variant="outline">
+								{failure.method}
+							</Badge>
+						)}
+						<Text
+							size="xs"
+							lineClamp={showDetails ? undefined : 1}
+							style={{ flex: 1 }}
+						>
+							{failure.errorMessage}
+						</Text>
+					</Group>
+					<Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+						{new Date(failure.occurredAt).toLocaleString()}
+					</Text>
+				</Group>
+				{showDetails && failure.requestSummary && (
+					<Box>
+						<Text size="xs" c="dimmed" fw={600}>
+							Request Summary:
+						</Text>
+						<Code block style={{ fontSize: "11px" }}>
+							{failure.requestSummary}
+						</Code>
+					</Box>
+				)}
+			</Stack>
+		</Card>
 	);
 }
 
@@ -998,6 +1162,7 @@ function PluginForm({
 	libraries,
 }: PluginFormProps) {
 	const [activeTab, setActiveTab] = useState<string | null>("general");
+	const [nameManuallyEdited, setNameManuallyEdited] = useState(false);
 
 	// Check which tabs have errors
 	const generalTabErrors = isCreate
@@ -1044,6 +1209,11 @@ function PluginForm({
 									description="Unique identifier (lowercase alphanumeric with hyphens)"
 									withAsterisk
 									{...form.getInputProps("name")}
+									onChange={(e) => {
+										const value = e.currentTarget.value;
+										form.setFieldValue("name", value);
+										setNameManuallyEdited(value.length > 0);
+									}}
 									onBlur={(e) => {
 										form.setFieldValue(
 											"name",
@@ -1058,6 +1228,17 @@ function PluginForm({
 								description="Human-readable name shown in the UI"
 								withAsterisk
 								{...form.getInputProps("displayName")}
+								onChange={(e) => {
+									const displayName = e.currentTarget.value;
+									form.setFieldValue("displayName", displayName);
+									// Auto-generate name from display name until user manually edits it (create mode only)
+									if (isCreate && !nameManuallyEdited) {
+										form.setFieldValue(
+											"name",
+											normalizePluginName(displayName),
+										);
+									}
+								}}
 							/>
 							<Textarea
 								label="Description"

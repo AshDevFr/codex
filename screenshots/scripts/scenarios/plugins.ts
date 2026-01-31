@@ -17,6 +17,9 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
 
   // Part 3: Library sidebar - auto-match
   await libraryAutoMatchScreenshots(page);
+
+  // Part 4: Plugin Metrics
+  await pluginMetricsScreenshots(page);
 }
 
 /**
@@ -385,3 +388,50 @@ async function libraryAutoMatchScreenshots(page: Page): Promise<void> {
 
   console.log("      ✓ Library auto-match screenshots captured");
 }
+
+/**
+ * Plugin metrics tab in settings
+ * Shows plugin performance statistics after plugin usage
+ */
+async function pluginMetricsScreenshots(page: Page): Promise<void> {
+  console.log("    📷 Plugin Metrics Tab");
+
+  // Navigate to metrics settings
+  await page.goto("/settings/metrics");
+  await waitForPageReady(page);
+  await page.waitForTimeout(500);
+
+  // Click on Plugins tab
+  const pluginsTab = page.locator('[role="tab"]:has-text("Plugins")').first();
+  if ((await pluginsTab.count()) === 0) {
+    console.log("      ⚠️  Plugins tab not found in metrics");
+    return;
+  }
+
+  await pluginsTab.click();
+  await waitForPageReady(page);
+  await page.waitForTimeout(500);
+
+  // Capture the plugin metrics overview
+  await captureScreenshot(page, "settings/metrics-plugins-overview");
+
+  // Try to expand a plugin row to show details
+  // Target the Plugins tab panel specifically using aria attributes
+  const pluginRow = page.locator('[role="tabpanel"][aria-labelledby*="plugins" i] .mantine-Table-tbody .mantine-Table-tr').first();
+  if ((await pluginRow.count()) > 0 && (await pluginRow.isVisible())) {
+    // Scroll the row into view before clicking
+    await pluginRow.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(200);
+
+    await pluginRow.click();
+    await page.waitForTimeout(300);
+
+    // Capture with expanded details
+    await captureScreenshot(page, "settings/metrics-plugins-expanded");
+  } else {
+    console.log("      ⚠️  No plugin rows found in metrics table (empty state or not visible)");
+  }
+
+  console.log("      ✓ Plugin metrics screenshots captured");
+}
+

@@ -29,6 +29,13 @@ export type TaskMetricsSummaryDto =
 export type TaskTypeMetricsDto = components["schemas"]["TaskTypeMetricsDto"];
 export type QueueHealthMetricsDto =
 	components["schemas"]["QueueHealthMetricsDto"];
+export type PluginMetricsResponse =
+	components["schemas"]["PluginMetricsResponse"];
+export type PluginMetricsSummaryDto =
+	components["schemas"]["PluginMetricsSummaryDto"];
+export type PluginMetricsDto = components["schemas"]["PluginMetricsDto"];
+export type PluginMethodMetricsDto =
+	components["schemas"]["PluginMethodMetricsDto"];
 export type TaskResponse = components["schemas"]["TaskResponse"];
 export type TaskStats = components["schemas"]["TaskStats"];
 export type SettingDto = components["schemas"]["SettingDto"];
@@ -925,3 +932,92 @@ export const createList = <T>(
 	factory: (index: number) => T,
 	count: number,
 ): T[] => Array.from({ length: count }, (_, i) => factory(i));
+
+/**
+ * Plugin method metrics factory - matches PluginMethodMetricsDto schema
+ */
+export const createPluginMethodMetrics = (
+	overrides: Partial<PluginMethodMetricsDto> = {},
+): PluginMethodMetricsDto => ({
+	method:
+		overrides.method || faker.helpers.arrayElement(["search", "get", "match"]),
+	requests_total: faker.number.int({ min: 50, max: 500 }),
+	requests_success: faker.number.int({ min: 45, max: 480 }),
+	requests_failed: faker.number.int({ min: 0, max: 20 }),
+	avg_duration_ms: faker.number.float({ min: 100, max: 500 }),
+	...overrides,
+});
+
+/**
+ * Plugin metrics factory - matches PluginMetricsDto schema
+ */
+export const createPluginMetrics = (
+	overrides: Partial<PluginMetricsDto> = {},
+): PluginMetricsDto => {
+	const requests_total =
+		overrides.requests_total ?? faker.number.int({ min: 100, max: 1000 });
+	const requests_failed =
+		overrides.requests_failed ??
+		faker.number.int({ min: 0, max: Math.floor(requests_total * 0.1) });
+	const requests_success =
+		overrides.requests_success ?? requests_total - requests_failed;
+	const error_rate_pct =
+		requests_total > 0 ? (requests_failed / requests_total) * 100 : 0;
+
+	return {
+		plugin_id: faker.string.uuid(),
+		plugin_name: faker.helpers.arrayElement([
+			"MangaBaka",
+			"ComicVine",
+			"AniList",
+			"MyAnimeList",
+		]),
+		requests_total,
+		requests_success,
+		requests_failed,
+		avg_duration_ms: faker.number.float({ min: 150, max: 500 }),
+		rate_limit_rejections: faker.number.int({ min: 0, max: 10 }),
+		error_rate_pct: Number(error_rate_pct.toFixed(2)),
+		last_success: faker.date.recent().toISOString(),
+		last_failure: faker.datatype.boolean()
+			? faker.date.recent().toISOString()
+			: null,
+		health_status: faker.helpers.arrayElement([
+			"healthy",
+			"degraded",
+			"unhealthy",
+		]),
+		by_method: null,
+		failure_counts: null,
+		...overrides,
+	};
+};
+
+/**
+ * Plugin metrics summary factory - matches PluginMetricsSummaryDto schema
+ */
+export const createPluginMetricsSummary = (
+	overrides: Partial<PluginMetricsSummaryDto> = {},
+): PluginMetricsSummaryDto => ({
+	total_plugins: faker.number.int({ min: 1, max: 5 }),
+	healthy_plugins: faker.number.int({ min: 0, max: 4 }),
+	degraded_plugins: faker.number.int({ min: 0, max: 2 }),
+	unhealthy_plugins: faker.number.int({ min: 0, max: 1 }),
+	total_requests: faker.number.int({ min: 500, max: 5000 }),
+	total_success: faker.number.int({ min: 450, max: 4800 }),
+	total_failed: faker.number.int({ min: 0, max: 200 }),
+	total_rate_limit_rejections: faker.number.int({ min: 0, max: 50 }),
+	...overrides,
+});
+
+/**
+ * Plugin metrics response factory - matches PluginMetricsResponse schema
+ */
+export const createPluginMetricsResponse = (
+	overrides: Partial<PluginMetricsResponse> = {},
+): PluginMetricsResponse => ({
+	updated_at: new Date().toISOString(),
+	summary: createPluginMetricsSummary(),
+	plugins: [],
+	...overrides,
+});

@@ -273,7 +273,7 @@
             "description": "Unauthorized"
           },
           "403": {
-            "description": "Admin permission required"
+            "description": "PluginsManage permission required"
           }
         },
         "security": [
@@ -320,7 +320,7 @@
             "description": "Unauthorized"
           },
           "403": {
-            "description": "Admin permission required"
+            "description": "PluginsManage permission required"
           },
           "409": {
             "description": "Plugin with this name already exists"
@@ -370,7 +370,7 @@
             "description": "Unauthorized"
           },
           "403": {
-            "description": "Admin permission required"
+            "description": "PluginsManage permission required"
           },
           "404": {
             "description": "Plugin not found"
@@ -411,7 +411,7 @@
             "description": "Unauthorized"
           },
           "403": {
-            "description": "Admin permission required"
+            "description": "PluginsManage permission required"
           },
           "404": {
             "description": "Plugin not found"
@@ -472,7 +472,7 @@
             "description": "Unauthorized"
           },
           "403": {
-            "description": "Admin permission required"
+            "description": "PluginsManage permission required"
           },
           "404": {
             "description": "Plugin not found"
@@ -522,7 +522,7 @@
             "description": "Unauthorized"
           },
           "403": {
-            "description": "Admin permission required"
+            "description": "PluginsManage permission required"
           },
           "404": {
             "description": "Plugin not found"
@@ -573,7 +573,7 @@
             "description": "Unauthorized"
           },
           "403": {
-            "description": "Admin permission required"
+            "description": "PluginsManage permission required"
           },
           "404": {
             "description": "Plugin not found"
@@ -646,7 +646,7 @@
             "description": "Unauthorized"
           },
           "403": {
-            "description": "Admin permission required"
+            "description": "PluginsManage permission required"
           },
           "404": {
             "description": "Plugin not found"
@@ -696,7 +696,7 @@
             "description": "Unauthorized"
           },
           "403": {
-            "description": "Admin permission required"
+            "description": "PluginsManage permission required"
           },
           "404": {
             "description": "Plugin not found"
@@ -747,7 +747,7 @@
             "description": "Unauthorized"
           },
           "403": {
-            "description": "Admin permission required"
+            "description": "PluginsManage permission required"
           },
           "404": {
             "description": "Plugin not found"
@@ -798,7 +798,7 @@
             "description": "Unauthorized"
           },
           "403": {
-            "description": "Admin permission required"
+            "description": "PluginsManage permission required"
           },
           "404": {
             "description": "Plugin not found"
@@ -1871,9 +1871,9 @@
         "tags": [
           "Books"
         ],
-        "summary": "List books with errors (v2 - grouped by error type)",
-        "description": "Returns books with errors grouped by error type, with counts and pagination.\nThis enhanced endpoint provides detailed error information including error\ntypes, messages, and timestamps.",
-        "operationId": "list_books_with_errors_v2",
+        "summary": "List books with errors (grouped by error type)",
+        "description": "Returns books with errors grouped by error type, with counts and pagination.\nThis endpoint provides detailed error information including error\ntypes, messages, and timestamps.",
+        "operationId": "list_books_with_errors",
         "parameters": [
           {
             "name": "libraryId",
@@ -2495,81 +2495,42 @@
         ]
       }
     },
-    "/api/v1/books/with-errors": {
-      "get": {
+    "/api/v1/books/thumbnails/generate": {
+      "post": {
         "tags": [
-          "Books"
+          "Thumbnails"
         ],
-        "summary": "List books with analysis errors",
-        "operationId": "list_books_with_errors",
-        "parameters": [
-          {
-            "name": "libraryId",
-            "in": "query",
-            "description": "Optional library filter",
-            "required": false,
-            "schema": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "format": "uuid"
+        "summary": "Generate thumbnails for books in a scope",
+        "description": "This queues a fan-out task that enqueues individual thumbnail generation tasks for each book.\n\n**Scope priority:**\n1. If `series_id` is provided, only books in that series\n2. If `library_id` is provided, only books in that library\n3. If neither is provided, all books in all libraries\n\n**Force behavior:**\n- `force: false` (default): Only generates thumbnails for books that don't have one\n- `force: true`: Regenerates all thumbnails, replacing existing ones\n\n# Permission Required\n- `tasks:write`",
+        "operationId": "generate_book_thumbnails",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateBookThumbnailsRequest"
+              }
             }
           },
-          {
-            "name": "seriesId",
-            "in": "query",
-            "description": "Optional series filter",
-            "required": false,
-            "schema": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "description": "Page number (1-indexed, minimum 1)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "minimum": 0
-            }
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "description": "Number of items per page (max 100, default 50)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "minimum": 0
-            }
-          }
-        ],
+          "required": true
+        },
         "responses": {
           "200": {
-            "description": "Paginated list of books with analysis errors",
+            "description": "Thumbnail generation task queued",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse"
+                  "$ref": "#/components/schemas/CreateTaskResponse"
                 }
               }
             }
           },
           "403": {
-            "description": "Forbidden"
+            "description": "Permission denied"
           }
         },
         "security": [
           {
-            "jwt_bearer": []
+            "bearer_auth": []
           },
           {
             "api_key": []
@@ -2615,6 +2576,62 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Books"
+        ],
+        "summary": "Update book core fields (title, number)",
+        "description": "Partially updates book_metadata fields. Only provided fields will be updated.\nAbsent fields are unchanged. Explicitly null fields will be cleared.\nWhen a field is set to a non-null value, it is automatically locked.",
+        "operationId": "patch_book",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchBookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Book updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookUpdateResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Book not found"
@@ -2774,6 +2791,55 @@
         ]
       }
     },
+    "/api/v1/books/{book_id}/cover": {
+      "post": {
+        "tags": [
+          "Books"
+        ],
+        "summary": "Upload a custom cover image for a book",
+        "description": "Accepts a multipart form with an image file. The image will be stored\nin the uploads directory and used as the book's cover/thumbnail.",
+        "operationId": "upload_book_cover",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {}
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cover uploaded successfully"
+          },
+          "400": {
+            "description": "Bad request - no image file provided or invalid image"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/{book_id}/file": {
       "get": {
         "tags": [
@@ -2920,6 +2986,110 @@
           },
           "404": {
             "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/{book_id}/metadata/locks": {
+      "get": {
+        "tags": [
+          "Books"
+        ],
+        "summary": "Get book metadata lock states",
+        "description": "Returns which metadata fields are locked (protected from automatic updates).",
+        "operationId": "get_book_metadata_locks",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lock states retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookMetadataLocks"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book or metadata not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Books"
+        ],
+        "summary": "Update book metadata lock states",
+        "description": "Updates which metadata fields are locked. Only provided fields will be updated.",
+        "operationId": "update_book_metadata_locks",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBookMetadataLocksRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Lock states updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookMetadataLocks"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book or metadata not found"
           }
         },
         "security": [
@@ -4559,13 +4729,14 @@
         ]
       }
     },
-    "/api/v1/libraries/{library_id}/books/with-errors": {
-      "get": {
+    "/api/v1/libraries/{library_id}/books/thumbnails/generate": {
+      "post": {
         "tags": [
-          "Books"
+          "Thumbnails"
         ],
-        "summary": "List books with analysis errors in a specific library",
-        "operationId": "list_library_books_with_errors",
+        "summary": "Generate thumbnails for all books in a library",
+        "description": "Queues a fan-out task that enqueues individual thumbnail generation tasks for each book in the library.\n\n# Permission Required\n- `tasks:write`",
+        "operationId": "generate_library_book_thumbnails",
         "parameters": [
           {
             "name": "library_id",
@@ -4576,74 +4747,39 @@
               "type": "string",
               "format": "uuid"
             }
-          },
-          {
-            "name": "libraryId",
-            "in": "query",
-            "description": "Optional library filter",
-            "required": false,
-            "schema": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "seriesId",
-            "in": "query",
-            "description": "Optional series filter",
-            "required": false,
-            "schema": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "description": "Page number (1-indexed, minimum 1)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "minimum": 0
-            }
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "description": "Number of items per page (max 100, default 50)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "minimum": 0
-            }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForceRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
-            "description": "Paginated list of books with analysis errors in library",
+            "description": "Thumbnail generation task queued",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse"
+                  "$ref": "#/components/schemas/CreateTaskResponse"
                 }
               }
             }
           },
           "403": {
-            "description": "Forbidden"
+            "description": "Permission denied"
+          },
+          "404": {
+            "description": "Library not found"
           }
         },
         "security": [
           {
-            "jwt_bearer": []
+            "bearer_auth": []
           },
           {
             "api_key": []
@@ -5192,14 +5328,14 @@
         ]
       }
     },
-    "/api/v1/libraries/{library_id}/thumbnails/generate": {
+    "/api/v1/libraries/{library_id}/series/thumbnails/generate": {
       "post": {
         "tags": [
           "Thumbnails"
         ],
-        "summary": "Generate thumbnails for all books in a library",
-        "description": "Queues a fan-out task that enqueues individual thumbnail generation tasks for each book in the library.\n\n# Permission Required\n- `tasks:write`",
-        "operationId": "generate_library_thumbnails",
+        "summary": "Generate thumbnails for all series in a library",
+        "description": "Queues a fan-out task that generates thumbnails for all series in the specified library.\n\n# Permission Required\n- `tasks:write`",
+        "operationId": "generate_library_series_thumbnails",
         "parameters": [
           {
             "name": "library_id",
@@ -5224,7 +5360,7 @@
         },
         "responses": {
           "200": {
-            "description": "Thumbnail generation task queued",
+            "description": "Series thumbnail generation task queued",
             "content": {
               "application/json": {
                 "schema": {
@@ -5265,6 +5401,39 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MetricsDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/metrics/plugins": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Get plugin metrics",
+        "description": "Returns real-time performance statistics for all plugins including:\n- Summary metrics across all plugins\n- Per-plugin breakdown with timing, error rates, and health status\n- Per-method breakdown within each plugin\n\n# Permission Required\n- `libraries:read` or admin status",
+        "operationId": "get_plugin_metrics",
+        "responses": {
+          "200": {
+            "description": "Plugin metrics retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginMetricsResponse"
                 }
               }
             }
@@ -5533,7 +5702,7 @@
           "Plugin Actions"
         ],
         "summary": "Execute a plugin action",
-        "description": "Invokes a plugin action and returns the result. Actions are typed by plugin type:\n- `metadata`: search, get, match (requires content_type: series or book)\n- `ping`: health check (works for any plugin)",
+        "description": "Invokes a plugin action and returns the result. Actions are typed by plugin type:\n- `metadata`: search, get, match (requires write permission for the content_type)\n- `ping`: health check (requires PluginsManage permission)",
         "operationId": "execute_plugin",
         "parameters": [
           {
@@ -5573,6 +5742,9 @@
           },
           "401": {
             "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Insufficient permission for this action"
           },
           "404": {
             "description": "Plugin not found"
@@ -5949,6 +6121,52 @@
         ]
       }
     },
+    "/api/v1/series/list/alphabetical-groups": {
+      "post": {
+        "tags": [
+          "Series"
+        ],
+        "summary": "Get alphabetical groups for series",
+        "description": "Returns a list of alphabetical groups with counts, showing how many series\nstart with each letter/character. This is useful for building A-Z navigation.\nThe same filters as list_series_filtered can be applied.",
+        "operationId": "list_series_alphabetical_groups",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeriesListRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "List of alphabetical groups with counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AlphabeticalGroupDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/metadata/auto-match/task/bulk": {
       "post": {
         "tags": [
@@ -6179,6 +6397,49 @@
         "security": [
           {
             "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/thumbnails/generate": {
+      "post": {
+        "tags": [
+          "Thumbnails"
+        ],
+        "summary": "Generate thumbnails for series in a scope",
+        "description": "This queues a fan-out task that enqueues individual series thumbnail generation tasks.\nSeries thumbnails are the cover images displayed for each series (derived from the first book's cover).\n\n**Scope:**\n- If `library_id` is provided, only series in that library\n- If not provided, all series in all libraries\n\n**Force behavior:**\n- `force: false` (default): Only generates thumbnails for series that don't have one\n- `force: true`: Regenerates all thumbnails, replacing existing ones\n\n# Permission Required\n- `tasks:write`",
+        "operationId": "generate_series_thumbnails",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateSeriesThumbnailsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Series thumbnail generation task queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateTaskResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
           },
           {
             "api_key": []
@@ -6480,6 +6741,62 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Series"
+        ],
+        "summary": "Update series core fields (name/title)",
+        "description": "Partially updates series_metadata fields. Only provided fields will be updated.\nAbsent fields are unchanged. When name is set to a non-null value, it is automatically locked.",
+        "operationId": "patch_series",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchSeriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Series updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesUpdateResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Series not found"
@@ -6864,98 +7181,6 @@
           },
           "404": {
             "description": "Series not found"
-          }
-        },
-        "security": [
-          {
-            "jwt_bearer": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      }
-    },
-    "/api/v1/series/{series_id}/books/with-errors": {
-      "get": {
-        "tags": [
-          "Books"
-        ],
-        "summary": "List books with analysis errors in a specific series",
-        "operationId": "list_series_books_with_errors",
-        "parameters": [
-          {
-            "name": "series_id",
-            "in": "path",
-            "description": "Series ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "libraryId",
-            "in": "query",
-            "description": "Optional library filter",
-            "required": false,
-            "schema": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "seriesId",
-            "in": "query",
-            "description": "Optional series filter",
-            "required": false,
-            "schema": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "description": "Page number (1-indexed, minimum 1)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "minimum": 0
-            }
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "description": "Number of items per page (max 100, default 50)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "minimum": 0
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Paginated list of books with analysis errors in series",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "security": [
@@ -8894,14 +9119,14 @@
         ]
       }
     },
-    "/api/v1/series/{series_id}/thumbnails/generate": {
+    "/api/v1/series/{series_id}/thumbnail/generate": {
       "post": {
         "tags": [
           "Thumbnails"
         ],
-        "summary": "Generate thumbnails for all books in a series",
-        "description": "Queues a fan-out task that enqueues individual thumbnail generation tasks for each book in the series.\n\n# Permission Required\n- `tasks:write`",
-        "operationId": "generate_series_thumbnails",
+        "summary": "Generate thumbnail for a series",
+        "description": "Queues a task to generate (or regenerate) the thumbnail for a specific series.\nThe series thumbnail is derived from the first book's cover.\n\n# Permission Required\n- `tasks:write`",
+        "operationId": "generate_series_thumbnail",
         "parameters": [
           {
             "name": "series_id",
@@ -9740,49 +9965,6 @@
           },
           "404": {
             "description": "Task not found"
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      }
-    },
-    "/api/v1/thumbnails/generate": {
-      "post": {
-        "tags": [
-          "Thumbnails"
-        ],
-        "summary": "Generate thumbnails for books in a scope",
-        "description": "This queues a fan-out task that enqueues individual thumbnail generation tasks for each book.\n\n**Scope priority:**\n1. If `series_id` is provided, only books in that series\n2. If `library_id` is provided, only books in that library\n3. If neither is provided, all books in all libraries\n\n**Force behavior:**\n- `force: false` (default): Only generates thumbnails for books that don't have one\n- `force: true`: Regenerates all thumbnails, replacing existing ones\n\n# Permission Required\n- `tasks:write`",
-        "operationId": "generate_thumbnails",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GenerateThumbnailsRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Thumbnail generation task queued",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateTaskResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Permission denied"
           }
         },
         "security": [
@@ -12606,6 +12788,27 @@
           }
         }
       },
+      "AlphabeticalGroupDto": {
+        "type": "object",
+        "description": "Alphabetical group with count\n\nRepresents a group of series starting with a specific letter/character\nalong with the count of series in that group.",
+        "required": [
+          "group",
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of series starting with this character",
+            "example": 20
+          },
+          "group": {
+            "type": "string",
+            "description": "The first character (lowercase letter, digit, or special character)",
+            "example": "a"
+          }
+        }
+      },
       "AlternateTitleDto": {
         "type": "object",
         "description": "Alternate title data transfer object",
@@ -13924,6 +14127,45 @@
           "series_name",
           "custom"
         ]
+      },
+      "BookUpdateResponse": {
+        "type": "object",
+        "description": "Response for book update",
+        "required": [
+          "id",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Book ID",
+            "example": "550e8400-e29b-41d4-a716-446655440001"
+          },
+          "number": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Updated number",
+            "example": 1.5
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Updated title",
+            "example": "Chapter 1: The Beginning"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update timestamp",
+            "example": "2024-01-15T10:30:00Z"
+          }
+        }
       },
       "BookWithErrorsDto": {
         "type": "object",
@@ -16426,8 +16668,9 @@
           }
         }
       },
-      "GenerateThumbnailsRequest": {
+      "GenerateBookThumbnailsRequest": {
         "type": "object",
+        "description": "Request body for batch book thumbnail generation",
         "properties": {
           "force": {
             "type": "boolean",
@@ -16440,7 +16683,7 @@
               "null"
             ],
             "format": "uuid",
-            "description": "Library ID to generate thumbnails for (optional)",
+            "description": "Optional: scope to a specific library",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
           "series_id": {
@@ -16449,8 +16692,28 @@
               "null"
             ],
             "format": "uuid",
-            "description": "Series ID to generate thumbnails for (optional, takes precedence over library_id)",
+            "description": "Optional: scope to a specific series (within library if both provided)",
             "example": "550e8400-e29b-41d4-a716-446655440001"
+          }
+        }
+      },
+      "GenerateSeriesThumbnailsRequest": {
+        "type": "object",
+        "description": "Request body for batch series thumbnail generation",
+        "properties": {
+          "force": {
+            "type": "boolean",
+            "description": "If true, regenerate all thumbnails even if they exist. If false (default), only generate missing thumbnails.",
+            "example": false
+          },
+          "library_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Optional: scope to a specific library",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
           }
         }
       },
@@ -20524,6 +20787,29 @@
           }
         }
       },
+      "PatchBookRequest": {
+        "type": "object",
+        "description": "PATCH request for updating book core fields (title, number)\n\nOnly provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared.",
+        "properties": {
+          "number": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Book number (for sorting within series). Supports decimals like 1.5 for special chapters.",
+            "example": 1.5
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Book title (display name)",
+            "example": "Chapter 1: The Beginning"
+          }
+        }
+      },
       "PatchSeriesMetadataRequest": {
         "type": "object",
         "description": "PATCH request for partial update of series metadata\n\nOnly provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared.",
@@ -20625,6 +20911,20 @@
             "format": "int32",
             "description": "Release year",
             "example": 1987
+          }
+        }
+      },
+      "PatchSeriesRequest": {
+        "type": "object",
+        "description": "PATCH request for updating series title\n\nOnly provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared (where applicable).",
+        "properties": {
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Series title (stored in series_metadata.title)",
+            "example": "Batman: Year One"
           }
         }
       },
@@ -21089,6 +21389,14 @@
             "type": "string",
             "format": "date-time",
             "description": "When the failure occurred"
+          },
+          "requestSummary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Sanitized summary of request parameters (sensitive fields redacted)",
+            "example": "query: \"One Piece\", limit: 10"
           }
         }
       },
@@ -21281,6 +21589,268 @@
           "version": {
             "type": "string",
             "description": "Semantic version"
+          }
+        }
+      },
+      "PluginMethodMetricsDto": {
+        "type": "object",
+        "description": "Metrics breakdown by method for a plugin",
+        "required": [
+          "method",
+          "requests_total",
+          "requests_success",
+          "requests_failed",
+          "avg_duration_ms"
+        ],
+        "properties": {
+          "avg_duration_ms": {
+            "type": "number",
+            "format": "double",
+            "description": "Average duration in milliseconds",
+            "example": 180.5
+          },
+          "method": {
+            "type": "string",
+            "description": "Method name",
+            "example": "search"
+          },
+          "requests_failed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Failed requests",
+            "example": 5,
+            "minimum": 0
+          },
+          "requests_success": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Successful requests",
+            "example": 195,
+            "minimum": 0
+          },
+          "requests_total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total requests for this method",
+            "example": 200,
+            "minimum": 0
+          }
+        }
+      },
+      "PluginMetricsDto": {
+        "type": "object",
+        "description": "Metrics for a single plugin",
+        "required": [
+          "plugin_id",
+          "plugin_name",
+          "requests_total",
+          "requests_success",
+          "requests_failed",
+          "avg_duration_ms",
+          "rate_limit_rejections",
+          "error_rate_pct",
+          "health_status"
+        ],
+        "properties": {
+          "avg_duration_ms": {
+            "type": "number",
+            "format": "double",
+            "description": "Average request duration in milliseconds",
+            "example": 250.5
+          },
+          "by_method": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Per-method breakdown",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PluginMethodMetricsDto"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "error_rate_pct": {
+            "type": "number",
+            "format": "double",
+            "description": "Error rate as percentage",
+            "example": 4.0
+          },
+          "failure_counts": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Failure counts by error code",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "health_status": {
+            "type": "string",
+            "description": "Current health status",
+            "example": "healthy"
+          },
+          "last_failure": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Last failure timestamp"
+          },
+          "last_success": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Last successful request timestamp"
+          },
+          "plugin_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Plugin ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "plugin_name": {
+            "type": "string",
+            "description": "Plugin name",
+            "example": "AniList Provider"
+          },
+          "rate_limit_rejections": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of rate limit rejections",
+            "example": 2,
+            "minimum": 0
+          },
+          "requests_failed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Failed requests",
+            "example": 20,
+            "minimum": 0
+          },
+          "requests_success": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Successful requests",
+            "example": 480,
+            "minimum": 0
+          },
+          "requests_total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total requests made",
+            "example": 500,
+            "minimum": 0
+          }
+        }
+      },
+      "PluginMetricsResponse": {
+        "type": "object",
+        "description": "Plugin metrics response - current performance statistics for all plugins",
+        "required": [
+          "updated_at",
+          "summary",
+          "plugins"
+        ],
+        "properties": {
+          "plugins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PluginMetricsDto"
+            },
+            "description": "Per-plugin breakdown"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/PluginMetricsSummaryDto",
+            "description": "Overall summary statistics"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the metrics were last updated",
+            "example": "2026-01-30T12:00:00Z"
+          }
+        }
+      },
+      "PluginMetricsSummaryDto": {
+        "type": "object",
+        "description": "Summary metrics across all plugins",
+        "required": [
+          "total_plugins",
+          "healthy_plugins",
+          "degraded_plugins",
+          "unhealthy_plugins",
+          "total_requests",
+          "total_success",
+          "total_failed",
+          "total_rate_limit_rejections"
+        ],
+        "properties": {
+          "degraded_plugins": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of degraded plugins",
+            "example": 1,
+            "minimum": 0
+          },
+          "healthy_plugins": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of healthy plugins",
+            "example": 2,
+            "minimum": 0
+          },
+          "total_failed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total failed requests",
+            "example": 100,
+            "minimum": 0
+          },
+          "total_plugins": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of registered plugins",
+            "example": 3,
+            "minimum": 0
+          },
+          "total_rate_limit_rejections": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total rate limit rejections",
+            "example": 5,
+            "minimum": 0
+          },
+          "total_requests": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total requests made across all plugins",
+            "example": 1500,
+            "minimum": 0
+          },
+          "total_success": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total successful requests",
+            "example": 1400,
+            "minimum": 0
+          },
+          "unhealthy_plugins": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of unhealthy plugins",
+            "example": 0,
+            "minimum": 0
           }
         }
       },
@@ -23324,6 +23894,34 @@
           "custom"
         ]
       },
+      "SeriesUpdateResponse": {
+        "type": "object",
+        "description": "Response for series update",
+        "required": [
+          "id",
+          "title",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Series ID",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "title": {
+            "type": "string",
+            "description": "Updated title",
+            "example": "Batman: Year One"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update timestamp",
+            "example": "2024-01-15T10:30:00Z"
+          }
+        }
+      },
       "SetPreferenceRequest": {
         "type": "object",
         "description": "Request to set a single preference value",
@@ -24564,6 +25162,31 @@
           },
           {
             "type": "object",
+            "description": "Generate thumbnails for series in a scope (library or all)\nThis is a fan-out task that enqueues individual GenerateSeriesThumbnail tasks",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "force": {
+                "type": "boolean"
+              },
+              "library_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "generate_series_thumbnails"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Find and catalog duplicate books across all libraries",
             "required": [
               "type"
@@ -25076,6 +25699,167 @@
               "type": "string"
             },
             "description": "Permissions for the API key (array of permission strings)"
+          }
+        }
+      },
+      "UpdateBookMetadataLocksRequest": {
+        "type": "object",
+        "description": "Request to update book metadata locks\n\nAll fields are optional. Only provided fields will be updated.",
+        "properties": {
+          "blackAndWhiteLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock black_and_white"
+          },
+          "coloristLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock colorist"
+          },
+          "countLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock count"
+          },
+          "coverArtistLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock cover artist"
+          },
+          "dayLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock day"
+          },
+          "editorLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock editor"
+          },
+          "formatDetailLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock format_detail"
+          },
+          "genreLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock genre"
+          },
+          "imprintLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock imprint"
+          },
+          "inkerLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock inker"
+          },
+          "isbnsLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock isbns"
+          },
+          "languageIsoLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock language_iso"
+          },
+          "lettererLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock letterer"
+          },
+          "mangaLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock manga"
+          },
+          "monthLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock month"
+          },
+          "pencillerLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock penciller"
+          },
+          "publisherLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock publisher"
+          },
+          "summaryLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock summary",
+            "example": true
+          },
+          "volumeLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock volume"
+          },
+          "webLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock web URL"
+          },
+          "writerLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock writer"
+          },
+          "yearLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock year"
           }
         }
       },

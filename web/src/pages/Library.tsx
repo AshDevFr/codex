@@ -17,10 +17,12 @@ import { notifications } from "@mantine/notifications";
 import {
 	IconDotsVertical,
 	IconEdit,
+	IconPhoto,
 	IconRadar,
 	IconScan,
 	IconTrash,
 	IconTrashX,
+	IconWand,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -32,6 +34,11 @@ import {
 	useSearchParams,
 } from "react-router-dom";
 import { librariesApi } from "@/api/libraries";
+import {
+	type PluginActionDto,
+	pluginActionsApi,
+	pluginsApi,
+} from "@/api/plugins";
 import { LibraryModal } from "@/components/forms/LibraryModal";
 import { BooksSection } from "@/components/library/BooksSection";
 import { LibraryToolbar } from "@/components/library/LibraryToolbar";
@@ -92,6 +99,7 @@ export function LibraryPage() {
 	const { hasPermission } = usePermissions();
 	const canEditLibrary = hasPermission(PERMISSIONS.LIBRARIES_WRITE);
 	const canDeleteLibrary = hasPermission(PERMISSIONS.LIBRARIES_DELETE);
+	const canWriteTasks = hasPermission(PERMISSIONS.TASKS_WRITE);
 
 	// Get active tasks for progress display
 	const { getTasksByLibrary } = useTaskProgress();
@@ -263,6 +271,137 @@ export function LibraryPage() {
 			});
 		},
 	});
+
+	// Generate missing thumbnails mutation
+	const generateMissingThumbnailsMutation = useMutation({
+		mutationFn: (libraryId: string) =>
+			librariesApi.generateMissingThumbnails(libraryId),
+		onSuccess: () => {
+			notifications.show({
+				title: "Thumbnail generation started",
+				message: "Missing thumbnails are being generated",
+				color: "blue",
+			});
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Thumbnail generation failed",
+				message: error.message || "Failed to start thumbnail generation",
+				color: "red",
+			});
+		},
+	});
+
+	// Regenerate all thumbnails mutation (force)
+	const regenerateAllThumbnailsMutation = useMutation({
+		mutationFn: (libraryId: string) =>
+			librariesApi.regenerateAllThumbnails(libraryId),
+		onSuccess: () => {
+			notifications.show({
+				title: "Thumbnail regeneration started",
+				message: "All book thumbnails are being regenerated",
+				color: "blue",
+			});
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Thumbnail regeneration failed",
+				message: error.message || "Failed to start thumbnail regeneration",
+				color: "red",
+			});
+		},
+	});
+
+	// Generate missing series thumbnails mutation
+	const generateMissingSeriesThumbnailsMutation = useMutation({
+		mutationFn: (libraryId: string) =>
+			librariesApi.generateMissingSeriesThumbnails(libraryId),
+		onSuccess: () => {
+			notifications.show({
+				title: "Series thumbnail generation started",
+				message: "Missing series thumbnails are being generated",
+				color: "blue",
+			});
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Series thumbnail generation failed",
+				message: error.message || "Failed to start series thumbnail generation",
+				color: "red",
+			});
+		},
+	});
+
+	// Regenerate all series thumbnails mutation (force)
+	const regenerateAllSeriesThumbnailsMutation = useMutation({
+		mutationFn: (libraryId: string) =>
+			librariesApi.regenerateAllSeriesThumbnails(libraryId),
+		onSuccess: () => {
+			notifications.show({
+				title: "Series thumbnail regeneration started",
+				message: "All series thumbnails are being regenerated",
+				color: "blue",
+			});
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Series thumbnail regeneration failed",
+				message:
+					error.message || "Failed to start series thumbnail regeneration",
+				color: "red",
+			});
+		},
+	});
+
+	// Fetch available plugin actions for library:detail scope
+	const { data: pluginActions } = useQuery({
+		queryKey: ["plugin-actions", "library:detail"],
+		queryFn: () => pluginsApi.getActions("library:detail"),
+		staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+		enabled: canEditLibrary && !isAllLibraries, // Only fetch if user can edit libraries and not on "all" view
+	});
+
+	// Auto-match mutation for library-wide metadata matching
+	const autoMatchMutation = useMutation({
+		mutationFn: ({
+			libraryId,
+			pluginId,
+		}: {
+			libraryId: string;
+			pluginId: string;
+		}) => pluginActionsApi.enqueueLibraryAutoMatchTasks(libraryId, pluginId),
+		onSuccess: (data) => {
+			if (data.success) {
+				notifications.show({
+					title: "Auto-match started",
+					message: data.message,
+					color: "blue",
+				});
+			} else {
+				notifications.show({
+					title: "Auto-match",
+					message: data.message,
+					color: "yellow",
+				});
+			}
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Auto-match failed",
+				message: error.message || "Failed to start auto-match",
+				color: "red",
+			});
+		},
+	});
+
+	// Handler for library auto-match action
+	const handleLibraryAutoMatch = (plugin: PluginActionDto) => {
+		if (!library) return;
+		autoMatchMutation.mutate({
+			libraryId: library.id,
+			pluginId: plugin.pluginId,
+		});
+	};
 
 	// Tab navigation
 	const handleTabChange = (value: string | null) => {
@@ -527,6 +666,100 @@ export function LibraryPage() {
 														>
 															Edit Library
 														</Menu.Item>
+														{canWriteTasks && (
+															<>
+																<Menu.Divider />
+																<Menu.Label>Book Thumbnails</Menu.Label>
+																<Menu.Item
+																	leftSection={<IconPhoto size={16} />}
+																	onClick={() =>
+																		generateMissingThumbnailsMutation.mutate(
+																			library.id,
+																		)
+																	}
+																	disabled={
+																		generateMissingThumbnailsMutation.isPending
+																	}
+																>
+																	Generate Missing
+																</Menu.Item>
+																<Menu.Item
+																	leftSection={<IconPhoto size={16} />}
+																	onClick={() =>
+																		regenerateAllThumbnailsMutation.mutate(
+																			library.id,
+																		)
+																	}
+																	disabled={
+																		regenerateAllThumbnailsMutation.isPending
+																	}
+																>
+																	Regenerate All
+																</Menu.Item>
+																<Menu.Divider />
+																<Menu.Label>Series Thumbnails</Menu.Label>
+																<Menu.Item
+																	leftSection={<IconPhoto size={16} />}
+																	onClick={() =>
+																		generateMissingSeriesThumbnailsMutation.mutate(
+																			library.id,
+																		)
+																	}
+																	disabled={
+																		generateMissingSeriesThumbnailsMutation.isPending
+																	}
+																>
+																	Generate Missing
+																</Menu.Item>
+																<Menu.Item
+																	leftSection={<IconPhoto size={16} />}
+																	onClick={() =>
+																		regenerateAllSeriesThumbnailsMutation.mutate(
+																			library.id,
+																		)
+																	}
+																	disabled={
+																		regenerateAllSeriesThumbnailsMutation.isPending
+																	}
+																>
+																	Regenerate All
+																</Menu.Item>
+															</>
+														)}
+														{/* Plugin actions for library-wide auto-match */}
+														{(() => {
+															// Filter plugin actions to only show those that apply to this library
+															// Empty libraryIds means plugin applies to all libraries
+															const libraryPluginActions =
+																pluginActions?.actions.filter((action) => {
+																	const libIds = action.libraryIds ?? [];
+																	return (
+																		libIds.length === 0 ||
+																		libIds.includes(library.id)
+																	);
+																}) ?? [];
+
+															return (
+																libraryPluginActions.length > 0 && (
+																	<>
+																		<Menu.Divider />
+																		<Menu.Label>Auto-Apply Metadata</Menu.Label>
+																		{libraryPluginActions.map((action) => (
+																			<Menu.Item
+																				key={`auto-match-${action.pluginId}`}
+																				leftSection={<IconWand size={16} />}
+																				onClick={() =>
+																					handleLibraryAutoMatch(action)
+																				}
+																				disabled={autoMatchMutation.isPending}
+																			>
+																				{action.pluginDisplayName}
+																			</Menu.Item>
+																		))}
+																	</>
+																)
+															);
+														})()}
 													</>
 												)}
 												{(canEditLibrary || canDeleteLibrary) && (

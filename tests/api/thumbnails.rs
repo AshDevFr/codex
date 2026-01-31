@@ -64,11 +64,11 @@ async fn process_all_pending_tasks(db: &sea_orm::DatabaseConnection) {
 }
 
 // ============================================================================
-// POST /api/v1/thumbnails/generate Tests (General Endpoint)
+// POST /api/v1/books/thumbnails/generate Tests (Book Thumbnails)
 // ============================================================================
 
 #[tokio::test]
-async fn test_generate_thumbnails_all_success() {
+async fn test_generate_book_thumbnails_all_success() {
     let (db, temp_dir) = setup_test_db().await;
 
     create_test_cbz_files_in_dir(temp_dir.path());
@@ -103,7 +103,8 @@ async fn test_generate_thumbnails_all_success() {
 
     // Trigger thumbnail generation for all books
     let request_body = json!({});
-    let request = post_json_request_with_auth("/api/v1/thumbnails/generate", &request_body, &token);
+    let request =
+        post_json_request_with_auth("/api/v1/books/thumbnails/generate", &request_body, &token);
 
     let (status, response): (StatusCode, Option<CreateTaskResponse>) =
         make_json_request(app, request).await;
@@ -114,7 +115,7 @@ async fn test_generate_thumbnails_all_success() {
 }
 
 #[tokio::test]
-async fn test_generate_thumbnails_with_force() {
+async fn test_generate_book_thumbnails_with_force() {
     let (db, temp_dir) = setup_test_db().await;
 
     create_test_cbz_files_in_dir(temp_dir.path());
@@ -143,7 +144,8 @@ async fn test_generate_thumbnails_with_force() {
 
     // Trigger with force=true
     let request_body = json!({ "force": true });
-    let request = post_json_request_with_auth("/api/v1/thumbnails/generate", &request_body, &token);
+    let request =
+        post_json_request_with_auth("/api/v1/books/thumbnails/generate", &request_body, &token);
 
     let (status, response): (StatusCode, Option<CreateTaskResponse>) =
         make_json_request(app, request).await;
@@ -153,7 +155,7 @@ async fn test_generate_thumbnails_with_force() {
 }
 
 #[tokio::test]
-async fn test_generate_thumbnails_requires_write_permission() {
+async fn test_generate_book_thumbnails_requires_write_permission() {
     let (db, _temp_dir) = setup_test_db().await;
 
     let state = create_test_app_state(db.clone()).await;
@@ -161,7 +163,8 @@ async fn test_generate_thumbnails_requires_write_permission() {
     let app = create_test_router_with_app_state(state);
 
     let request_body = json!({});
-    let request = post_json_request_with_auth("/api/v1/thumbnails/generate", &request_body, &token);
+    let request =
+        post_json_request_with_auth("/api/v1/books/thumbnails/generate", &request_body, &token);
 
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
@@ -169,11 +172,11 @@ async fn test_generate_thumbnails_requires_write_permission() {
 }
 
 // ============================================================================
-// POST /api/v1/libraries/:library_id/thumbnails/generate Tests
+// POST /api/v1/libraries/:library_id/books/thumbnails/generate Tests
 // ============================================================================
 
 #[tokio::test]
-async fn test_generate_library_thumbnails_success() {
+async fn test_generate_library_book_thumbnails_success() {
     let (db, temp_dir) = setup_test_db().await;
 
     create_test_cbz_files_in_dir(temp_dir.path());
@@ -201,8 +204,8 @@ async fn test_generate_library_thumbnails_success() {
 
     let app = create_test_router_with_app_state(state);
 
-    // Trigger thumbnail generation for library
-    let uri = format!("/api/v1/libraries/{}/thumbnails/generate", library.id);
+    // Trigger thumbnail generation for library books
+    let uri = format!("/api/v1/libraries/{}/books/thumbnails/generate", library.id);
     let request_body = json!({});
     let request = post_json_request_with_auth(&uri, &request_body, &token);
 
@@ -215,7 +218,7 @@ async fn test_generate_library_thumbnails_success() {
 }
 
 #[tokio::test]
-async fn test_generate_library_thumbnails_with_force() {
+async fn test_generate_library_book_thumbnails_with_force() {
     let (db, temp_dir) = setup_test_db().await;
 
     create_test_cbz_files_in_dir(temp_dir.path());
@@ -242,7 +245,7 @@ async fn test_generate_library_thumbnails_with_force() {
     let app = create_test_router_with_app_state(state);
 
     // Trigger with force=true
-    let uri = format!("/api/v1/libraries/{}/thumbnails/generate", library.id);
+    let uri = format!("/api/v1/libraries/{}/books/thumbnails/generate", library.id);
     let request_body = json!({ "force": true });
     let request = post_json_request_with_auth(&uri, &request_body, &token);
 
@@ -254,7 +257,7 @@ async fn test_generate_library_thumbnails_with_force() {
 }
 
 #[tokio::test]
-async fn test_generate_library_thumbnails_not_found() {
+async fn test_generate_library_book_thumbnails_not_found() {
     let (db, _temp_dir) = setup_test_db().await;
 
     let state = create_test_app_state(db.clone()).await;
@@ -262,7 +265,7 @@ async fn test_generate_library_thumbnails_not_found() {
     let app = create_test_router_with_app_state(state);
 
     let fake_id = uuid::Uuid::new_v4();
-    let uri = format!("/api/v1/libraries/{}/thumbnails/generate", fake_id);
+    let uri = format!("/api/v1/libraries/{}/books/thumbnails/generate", fake_id);
     let request_body = json!({});
     let request = post_json_request_with_auth(&uri, &request_body, &token);
 
@@ -272,7 +275,7 @@ async fn test_generate_library_thumbnails_not_found() {
 }
 
 #[tokio::test]
-async fn test_generate_library_thumbnails_requires_write_permission() {
+async fn test_generate_library_book_thumbnails_requires_write_permission() {
     let (db, temp_dir) = setup_test_db().await;
 
     let library = LibraryRepository::create(
@@ -288,7 +291,7 @@ async fn test_generate_library_thumbnails_requires_write_permission() {
     let token = create_readonly_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
-    let uri = format!("/api/v1/libraries/{}/thumbnails/generate", library.id);
+    let uri = format!("/api/v1/libraries/{}/books/thumbnails/generate", library.id);
     let request_body = json!({});
     let request = post_json_request_with_auth(&uri, &request_body, &token);
 
@@ -298,11 +301,114 @@ async fn test_generate_library_thumbnails_requires_write_permission() {
 }
 
 // ============================================================================
-// POST /api/v1/series/:series_id/thumbnails/generate Tests
+// POST /api/v1/series/thumbnails/generate Tests (Batch Series Thumbnails)
 // ============================================================================
 
 #[tokio::test]
-async fn test_generate_series_thumbnails_success() {
+async fn test_generate_series_thumbnails_batch_success() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Scan to detect files and create series
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
+    worker.process_once().await.ok();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let app = create_test_router_with_app_state(state);
+
+    // Trigger batch series thumbnail generation
+    let request_body = json!({});
+    let request =
+        post_json_request_with_auth("/api/v1/series/thumbnails/generate", &request_body, &token);
+
+    let (status, response): (StatusCode, Option<CreateTaskResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let task_response = response.unwrap();
+    assert!(!task_response.task_id.to_string().is_empty());
+}
+
+#[tokio::test]
+async fn test_generate_series_thumbnails_batch_with_library_id() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
+    worker.process_once().await.ok();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let app = create_test_router_with_app_state(state);
+
+    // Trigger with library_id scope
+    let request_body = json!({ "library_id": library.id.to_string() });
+    let request =
+        post_json_request_with_auth("/api/v1/series/thumbnails/generate", &request_body, &token);
+
+    let (status, response): (StatusCode, Option<CreateTaskResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(response.is_some());
+}
+
+#[tokio::test]
+async fn test_generate_series_thumbnails_batch_requires_write_permission() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_readonly_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let request_body = json!({});
+    let request =
+        post_json_request_with_auth("/api/v1/series/thumbnails/generate", &request_body, &token);
+
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+// ============================================================================
+// POST /api/v1/series/:series_id/thumbnail/generate Tests (Single Series)
+// ============================================================================
+
+#[tokio::test]
+async fn test_generate_series_thumbnail_single_success() {
     let (db, temp_dir) = setup_test_db().await;
 
     create_test_cbz_files_in_dir(temp_dir.path());
@@ -341,8 +447,8 @@ async fn test_generate_series_thumbnails_success() {
 
     let app = create_test_router_with_app_state(state);
 
-    // Trigger thumbnail generation for series
-    let uri = format!("/api/v1/series/{}/thumbnails/generate", series.id);
+    // Trigger thumbnail generation for single series (singular - uses GenerateSeriesThumbnail)
+    let uri = format!("/api/v1/series/{}/thumbnail/generate", series.id);
     let request_body = json!({});
     let request = post_json_request_with_auth(&uri, &request_body, &token);
 
@@ -355,7 +461,7 @@ async fn test_generate_series_thumbnails_success() {
 }
 
 #[tokio::test]
-async fn test_generate_series_thumbnails_with_force() {
+async fn test_generate_series_thumbnail_single_with_force() {
     let (db, temp_dir) = setup_test_db().await;
 
     create_test_cbz_files_in_dir(temp_dir.path());
@@ -393,7 +499,7 @@ async fn test_generate_series_thumbnails_with_force() {
     let app = create_test_router_with_app_state(state);
 
     // Trigger with force=true
-    let uri = format!("/api/v1/series/{}/thumbnails/generate", series.id);
+    let uri = format!("/api/v1/series/{}/thumbnail/generate", series.id);
     let request_body = json!({ "force": true });
     let request = post_json_request_with_auth(&uri, &request_body, &token);
 
@@ -405,7 +511,7 @@ async fn test_generate_series_thumbnails_with_force() {
 }
 
 #[tokio::test]
-async fn test_generate_series_thumbnails_not_found() {
+async fn test_generate_series_thumbnail_single_not_found() {
     let (db, _temp_dir) = setup_test_db().await;
 
     let state = create_test_app_state(db.clone()).await;
@@ -413,7 +519,7 @@ async fn test_generate_series_thumbnails_not_found() {
     let app = create_test_router_with_app_state(state);
 
     let fake_id = uuid::Uuid::new_v4();
-    let uri = format!("/api/v1/series/{}/thumbnails/generate", fake_id);
+    let uri = format!("/api/v1/series/{}/thumbnail/generate", fake_id);
     let request_body = json!({});
     let request = post_json_request_with_auth(&uri, &request_body, &token);
 
@@ -423,7 +529,7 @@ async fn test_generate_series_thumbnails_not_found() {
 }
 
 #[tokio::test]
-async fn test_generate_series_thumbnails_requires_write_permission() {
+async fn test_generate_series_thumbnail_single_requires_write_permission() {
     let (db, temp_dir) = setup_test_db().await;
 
     let library = LibraryRepository::create(
@@ -443,7 +549,145 @@ async fn test_generate_series_thumbnails_requires_write_permission() {
     let token = create_readonly_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state);
 
-    let uri = format!("/api/v1/series/{}/thumbnails/generate", series.id);
+    let uri = format!("/api/v1/series/{}/thumbnail/generate", series.id);
+    let request_body = json!({});
+    let request = post_json_request_with_auth(&uri, &request_body, &token);
+
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+// ============================================================================
+// POST /api/v1/libraries/:library_id/series/thumbnails/generate Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_generate_library_series_thumbnails_success() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Scan to detect files and create series
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
+    worker.process_once().await.ok();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let app = create_test_router_with_app_state(state);
+
+    // Trigger thumbnail generation for library series
+    let uri = format!(
+        "/api/v1/libraries/{}/series/thumbnails/generate",
+        library.id
+    );
+    let request_body = json!({});
+    let request = post_json_request_with_auth(&uri, &request_body, &token);
+
+    let (status, response): (StatusCode, Option<CreateTaskResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let task_response = response.unwrap();
+    assert!(!task_response.task_id.to_string().is_empty());
+}
+
+#[tokio::test]
+async fn test_generate_library_series_thumbnails_with_force() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
+    worker.process_once().await.ok();
+
+    let app = create_test_router_with_app_state(state);
+
+    // Trigger with force=true
+    let uri = format!(
+        "/api/v1/libraries/{}/series/thumbnails/generate",
+        library.id
+    );
+    let request_body = json!({ "force": true });
+    let request = post_json_request_with_auth(&uri, &request_body, &token);
+
+    let (status, response): (StatusCode, Option<CreateTaskResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(response.is_some());
+}
+
+#[tokio::test]
+async fn test_generate_library_series_thumbnails_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let fake_id = uuid::Uuid::new_v4();
+    let uri = format!("/api/v1/libraries/{}/series/thumbnails/generate", fake_id);
+    let request_body = json!({});
+    let request = post_json_request_with_auth(&uri, &request_body, &token);
+
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_generate_library_series_thumbnails_requires_write_permission() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_readonly_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let uri = format!(
+        "/api/v1/libraries/{}/series/thumbnails/generate",
+        library.id
+    );
     let request_body = json!({});
     let request = post_json_request_with_auth(&uri, &request_body, &token);
 
@@ -694,7 +938,7 @@ async fn test_generate_thumbnails_fan_out() {
     let app = create_test_router_with_app_state(state);
 
     // Trigger thumbnail generation for library (should create GenerateThumbnails task)
-    let uri = format!("/api/v1/libraries/{}/thumbnails/generate", library.id);
+    let uri = format!("/api/v1/libraries/{}/books/thumbnails/generate", library.id);
     let request_body = json!({ "force": true });
     let request = post_json_request_with_auth(&uri, &request_body, &token);
 

@@ -1057,416 +1057,6 @@ async fn test_books_filename_fallback_with_multiple_extensions() {
 }
 
 // ============================================================================
-// Books With Errors Tests
-// ============================================================================
-
-// Helper to create a test book with an analysis error
-// Note: title is now in book_metadata table, not books table
-fn create_test_book_with_error(
-    series_id: uuid::Uuid,
-    library_id: uuid::Uuid,
-    path: &str,
-    name: &str,
-    error: &str,
-) -> codex::db::entities::books::Model {
-    use chrono::Utc;
-    codex::db::entities::books::Model {
-        id: uuid::Uuid::new_v4(),
-        series_id,
-        library_id,
-        file_path: path.to_string(),
-        file_name: name.to_string(),
-        file_size: 1024,
-        file_hash: format!("hash_{}", uuid::Uuid::new_v4()),
-        partial_hash: String::new(),
-        format: "cbz".to_string(),
-        page_count: 0,
-        deleted: false,
-        analyzed: false,
-        analysis_error: Some(error.to_string()),
-        analysis_errors: None,
-        modified_at: Utc::now(),
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-        thumbnail_path: None,
-        thumbnail_generated_at: None,
-    }
-}
-
-#[tokio::test]
-async fn test_list_books_with_errors() {
-    let (db, _temp_dir) = setup_test_db().await;
-
-    // Create library and series
-    let library =
-        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
-            .await
-            .unwrap();
-
-    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
-        .await
-        .unwrap();
-
-    // Create 2 books without errors
-    for i in 1..=2 {
-        let book = create_test_book_model(
-            series.id,
-            library.id,
-            &format!("/test/good{}.cbz", i),
-            &format!("good{}.cbz", i),
-            Some(format!("Good Book {}", i)),
-        );
-        BookRepository::create(&db, &book, None).await.unwrap();
-    }
-
-    // Create 3 books with errors
-    for i in 1..=3 {
-        let book = create_test_book_with_error(
-            series.id,
-            library.id,
-            &format!("/test/bad{}.cbz", i),
-            &format!("bad{}.cbz", i),
-            &format!("Failed to parse CBZ: invalid archive {}", i),
-        );
-        BookRepository::create(&db, &book, None).await.unwrap();
-    }
-
-    let state = create_test_auth_state(db.clone()).await;
-    let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state).await;
-
-    // Request books with errors
-    let request = get_request_with_auth("/api/v1/books/with-errors", &token);
-    let (status, response): (StatusCode, Option<BookListResponse>) =
-        make_json_request(app, request).await;
-
-    assert_eq!(status, StatusCode::OK);
-    let book_list = response.unwrap();
-    assert_eq!(book_list.data.len(), 3);
-    assert_eq!(book_list.total, 3);
-
-    // Verify all returned books have analysis errors
-    for book in &book_list.data {
-        assert!(book.analysis_error.is_some());
-        assert!(book
-            .analysis_error
-            .as_ref()
-            .unwrap()
-            .contains("Failed to parse CBZ"));
-    }
-}
-
-#[tokio::test]
-async fn test_list_books_with_errors_empty() {
-    let (db, _temp_dir) = setup_test_db().await;
-
-    // Create library and series
-    let library =
-        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
-            .await
-            .unwrap();
-
-    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
-        .await
-        .unwrap();
-
-    // Create books without errors
-    for i in 1..=3 {
-        let book = create_test_book_model(
-            series.id,
-            library.id,
-            &format!("/test/book{}.cbz", i),
-            &format!("book{}.cbz", i),
-            Some(format!("Book {}", i)),
-        );
-        BookRepository::create(&db, &book, None).await.unwrap();
-    }
-
-    let state = create_test_auth_state(db.clone()).await;
-    let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state).await;
-
-    // Request books with errors (should be empty)
-    let request = get_request_with_auth("/api/v1/books/with-errors", &token);
-    let (status, response): (StatusCode, Option<BookListResponse>) =
-        make_json_request(app, request).await;
-
-    assert_eq!(status, StatusCode::OK);
-    let book_list = response.unwrap();
-    assert_eq!(book_list.data.len(), 0);
-    assert_eq!(book_list.total, 0);
-}
-
-#[tokio::test]
-async fn test_list_library_books_with_errors() {
-    let (db, _temp_dir) = setup_test_db().await;
-
-    // Create two libraries
-    let library1 = LibraryRepository::create(&db, "Library 1", "/test1", ScanningStrategy::Default)
-        .await
-        .unwrap();
-    let library2 = LibraryRepository::create(&db, "Library 2", "/test2", ScanningStrategy::Default)
-        .await
-        .unwrap();
-
-    let series1 = SeriesRepository::create(&db, library1.id, "Series 1", None)
-        .await
-        .unwrap();
-    let series2 = SeriesRepository::create(&db, library2.id, "Series 2", None)
-        .await
-        .unwrap();
-
-    // Create 2 books with errors in library1
-    for i in 1..=2 {
-        let book = create_test_book_with_error(
-            series1.id,
-            library1.id,
-            &format!("/test1/bad{}.cbz", i),
-            &format!("bad{}.cbz", i),
-            &format!("Error in library 1: {}", i),
-        );
-        BookRepository::create(&db, &book, None).await.unwrap();
-    }
-
-    // Create 3 books with errors in library2
-    for i in 1..=3 {
-        let book = create_test_book_with_error(
-            series2.id,
-            library2.id,
-            &format!("/test2/bad{}.cbz", i),
-            &format!("bad{}.cbz", i),
-            &format!("Error in library 2: {}", i),
-        );
-        BookRepository::create(&db, &book, None).await.unwrap();
-    }
-
-    let state = create_test_auth_state(db.clone()).await;
-    let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state).await;
-
-    // Request books with errors for library1
-    let request = get_request_with_auth(
-        &format!("/api/v1/libraries/{}/books/with-errors", library1.id),
-        &token,
-    );
-    let (status, response): (StatusCode, Option<BookListResponse>) =
-        make_json_request(app, request).await;
-
-    assert_eq!(status, StatusCode::OK);
-    let book_list = response.unwrap();
-    assert_eq!(book_list.data.len(), 2);
-    assert_eq!(book_list.total, 2);
-
-    // Verify all returned books are from library1 (via series1) and have errors
-    for book in &book_list.data {
-        assert_eq!(book.series_id, series1.id);
-        assert!(book.analysis_error.is_some());
-        assert!(book
-            .analysis_error
-            .as_ref()
-            .unwrap()
-            .contains("Error in library 1"));
-    }
-}
-
-#[tokio::test]
-async fn test_list_library_books_with_errors_nonexistent_library() {
-    let (db, _temp_dir) = setup_test_db().await;
-
-    let state = create_test_auth_state(db.clone()).await;
-    let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state).await;
-
-    // Request books with errors for non-existent library
-    // API returns 200 with empty list (consistent with list_library_books behavior)
-    let fake_id = uuid::Uuid::new_v4();
-    let request = get_request_with_auth(
-        &format!("/api/v1/libraries/{}/books/with-errors", fake_id),
-        &token,
-    );
-    let (status, response): (StatusCode, Option<BookListResponse>) =
-        make_json_request(app, request).await;
-
-    assert_eq!(status, StatusCode::OK);
-    let book_list = response.unwrap();
-    assert_eq!(book_list.data.len(), 0);
-    assert_eq!(book_list.total, 0);
-}
-
-#[tokio::test]
-async fn test_list_series_books_with_errors() {
-    let (db, _temp_dir) = setup_test_db().await;
-
-    // Create library with two series
-    let library =
-        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
-            .await
-            .unwrap();
-
-    let series1 = SeriesRepository::create(&db, library.id, "Series 1", None)
-        .await
-        .unwrap();
-    let series2 = SeriesRepository::create(&db, library.id, "Series 2", None)
-        .await
-        .unwrap();
-
-    // Create 2 books with errors in series1
-    for i in 1..=2 {
-        let book = create_test_book_with_error(
-            series1.id,
-            library.id,
-            &format!("/test/series1/bad{}.cbz", i),
-            &format!("bad{}.cbz", i),
-            &format!("Error in series 1: {}", i),
-        );
-        BookRepository::create(&db, &book, None).await.unwrap();
-    }
-
-    // Create 1 good book in series1
-    let good_book = create_test_book_model(
-        series1.id,
-        library.id,
-        "/test/series1/good.cbz",
-        "good.cbz",
-        Some("Good Book".to_string()),
-    );
-    BookRepository::create(&db, &good_book, None).await.unwrap();
-
-    // Create 3 books with errors in series2
-    for i in 1..=3 {
-        let book = create_test_book_with_error(
-            series2.id,
-            library.id,
-            &format!("/test/series2/bad{}.cbz", i),
-            &format!("bad{}.cbz", i),
-            &format!("Error in series 2: {}", i),
-        );
-        BookRepository::create(&db, &book, None).await.unwrap();
-    }
-
-    let state = create_test_auth_state(db.clone()).await;
-    let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state).await;
-
-    // Request books with errors for series1
-    let request = get_request_with_auth(
-        &format!("/api/v1/series/{}/books/with-errors", series1.id),
-        &token,
-    );
-    let (status, response): (StatusCode, Option<BookListResponse>) =
-        make_json_request(app, request).await;
-
-    assert_eq!(status, StatusCode::OK);
-    let book_list = response.unwrap();
-    assert_eq!(book_list.data.len(), 2);
-    assert_eq!(book_list.total, 2);
-
-    // Verify all returned books are from series1 and have errors
-    for book in &book_list.data {
-        assert_eq!(book.series_id, series1.id);
-        assert!(book.analysis_error.is_some());
-        assert!(book
-            .analysis_error
-            .as_ref()
-            .unwrap()
-            .contains("Error in series 1"));
-    }
-}
-
-#[tokio::test]
-async fn test_list_series_books_with_errors_nonexistent_series() {
-    let (db, _temp_dir) = setup_test_db().await;
-
-    let state = create_test_auth_state(db.clone()).await;
-    let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state).await;
-
-    // Request books with errors for non-existent series
-    // API returns 200 with empty list (consistent with list_series_books behavior)
-    let fake_id = uuid::Uuid::new_v4();
-    let request = get_request_with_auth(
-        &format!("/api/v1/series/{}/books/with-errors", fake_id),
-        &token,
-    );
-    let (status, response): (StatusCode, Option<BookListResponse>) =
-        make_json_request(app, request).await;
-
-    assert_eq!(status, StatusCode::OK);
-    let book_list = response.unwrap();
-    assert_eq!(book_list.data.len(), 0);
-    assert_eq!(book_list.total, 0);
-}
-
-#[tokio::test]
-async fn test_list_books_with_errors_pagination() {
-    let (db, _temp_dir) = setup_test_db().await;
-
-    // Create library and series
-    let library =
-        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
-            .await
-            .unwrap();
-
-    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
-        .await
-        .unwrap();
-
-    // Create 15 books with errors
-    for i in 1..=15 {
-        let book = create_test_book_with_error(
-            series.id,
-            library.id,
-            &format!("/test/bad{:02}.cbz", i),
-            &format!("bad{:02}.cbz", i),
-            &format!("Error {}", i),
-        );
-        BookRepository::create(&db, &book, None).await.unwrap();
-    }
-
-    let state = create_test_auth_state(db.clone()).await;
-    let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state).await;
-
-    // Request first page (10 items) - pages are 1-indexed
-    let request = get_request_with_auth("/api/v1/books/with-errors?page=1&pageSize=10", &token);
-    let (status, response): (StatusCode, Option<BookListResponse>) =
-        make_json_request(app, request).await;
-
-    assert_eq!(status, StatusCode::OK);
-    let book_list = response.unwrap();
-    assert_eq!(book_list.data.len(), 10);
-    assert_eq!(book_list.total, 15);
-    assert_eq!(book_list.page, 1);
-    assert_eq!(book_list.page_size, 10);
-
-    // Request second page
-    let app2 = create_test_router(create_test_auth_state(db.clone()).await).await;
-    let request = get_request_with_auth("/api/v1/books/with-errors?page=2&pageSize=10", &token);
-    let (status, response): (StatusCode, Option<BookListResponse>) =
-        make_json_request(app2, request).await;
-
-    assert_eq!(status, StatusCode::OK);
-    let book_list = response.unwrap();
-    assert_eq!(book_list.data.len(), 5);
-    assert_eq!(book_list.total, 15);
-    assert_eq!(book_list.page, 2);
-}
-
-#[tokio::test]
-async fn test_list_books_with_errors_requires_auth() {
-    let (db, _temp_dir) = setup_test_db().await;
-
-    let state = create_test_auth_state(db.clone()).await;
-    let app = create_test_router(state).await;
-
-    // Request without auth token
-    let request = get_request("/api/v1/books/with-errors");
-    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
-
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
-}
-
-// ============================================================================
 // Recently Read Books Tests
 // ============================================================================
 
@@ -3089,7 +2679,7 @@ use codex::api::routes::v1::dto::book::{
 use codex::db::entities::book_error::{BookError, BookErrorType};
 
 /// Helper to create a book with structured errors (v2 - using analysis_errors JSON field)
-async fn create_test_book_with_error_v2(
+async fn create_test_book_with_error(
     db: &sea_orm::DatabaseConnection,
     series_id: uuid::Uuid,
     library_id: uuid::Uuid,
@@ -3131,7 +2721,7 @@ async fn test_list_books_with_errors_v2() {
         .unwrap();
 
     // Create books with different error types
-    let book1 = create_test_book_with_error_v2(
+    let book1 = create_test_book_with_error(
         &db,
         series.id,
         library.id,
@@ -3142,7 +2732,7 @@ async fn test_list_books_with_errors_v2() {
     )
     .await;
 
-    let book2 = create_test_book_with_error_v2(
+    let book2 = create_test_book_with_error(
         &db,
         series.id,
         library.id,
@@ -3213,7 +2803,7 @@ async fn test_list_books_with_errors_v2_filter_by_type() {
         .unwrap();
 
     // Create books with different error types
-    let _book1 = create_test_book_with_error_v2(
+    let _book1 = create_test_book_with_error(
         &db,
         series.id,
         library.id,
@@ -3224,7 +2814,7 @@ async fn test_list_books_with_errors_v2_filter_by_type() {
     )
     .await;
 
-    let book2 = create_test_book_with_error_v2(
+    let book2 = create_test_book_with_error(
         &db,
         series.id,
         library.id,
@@ -3275,7 +2865,7 @@ async fn test_retry_book_errors() {
         .unwrap();
 
     // Create a book with parser error
-    let book = create_test_book_with_error_v2(
+    let book = create_test_book_with_error(
         &db,
         series.id,
         library.id,
@@ -3423,7 +3013,7 @@ async fn test_retry_all_book_errors() {
         .unwrap();
 
     // Create multiple books with errors
-    let _book1 = create_test_book_with_error_v2(
+    let _book1 = create_test_book_with_error(
         &db,
         series.id,
         library.id,
@@ -3434,7 +3024,7 @@ async fn test_retry_all_book_errors() {
     )
     .await;
 
-    let _book2 = create_test_book_with_error_v2(
+    let _book2 = create_test_book_with_error(
         &db,
         series.id,
         library.id,
@@ -3481,7 +3071,7 @@ async fn test_retry_all_book_errors_filter_by_type() {
         .unwrap();
 
     // Create multiple books with errors
-    let _book1 = create_test_book_with_error_v2(
+    let _book1 = create_test_book_with_error(
         &db,
         series.id,
         library.id,
@@ -3492,7 +3082,7 @@ async fn test_retry_all_book_errors_filter_by_type() {
     )
     .await;
 
-    let _book2 = create_test_book_with_error_v2(
+    let _book2 = create_test_book_with_error(
         &db,
         series.id,
         library.id,
@@ -3543,7 +3133,7 @@ async fn test_list_books_with_errors_v2_single_error_type() {
         .unwrap();
 
     // Create multiple books with only parser errors (single error type)
-    let book1 = create_test_book_with_error_v2(
+    let book1 = create_test_book_with_error(
         &db,
         series.id,
         library.id,
@@ -3554,7 +3144,7 @@ async fn test_list_books_with_errors_v2_single_error_type() {
     )
     .await;
 
-    let book2 = create_test_book_with_error_v2(
+    let book2 = create_test_book_with_error(
         &db,
         series.id,
         library.id,
@@ -3627,7 +3217,7 @@ async fn test_list_books_with_errors_v2_long_error_message() {
     );
 
     // Create a book with a very long error message
-    let book = create_test_book_with_error_v2(
+    let book = create_test_book_with_error(
         &db,
         series.id,
         library.id,
@@ -3867,7 +3457,7 @@ async fn test_retry_all_book_errors_filter_by_library() {
         .unwrap();
 
     // Create errored books in both libraries
-    let _book1 = create_test_book_with_error_v2(
+    let _book1 = create_test_book_with_error(
         &db,
         series1.id,
         library1.id,
@@ -3878,7 +3468,7 @@ async fn test_retry_all_book_errors_filter_by_library() {
     )
     .await;
 
-    let _book2 = create_test_book_with_error_v2(
+    let _book2 = create_test_book_with_error(
         &db,
         series2.id,
         library2.id,
@@ -3926,7 +3516,7 @@ async fn test_list_books_with_errors_v2_pagination() {
 
     // Create 25 books with errors to test pagination (default page size is usually 20-50)
     for i in 0..25 {
-        let _book = create_test_book_with_error_v2(
+        let _book = create_test_book_with_error(
             &db,
             series.id,
             library.id,
@@ -4013,7 +3603,7 @@ async fn test_list_books_with_errors_v2_all_error_types() {
     ];
 
     for (i, (error_type, message)) in error_types.iter().enumerate() {
-        let _book = create_test_book_with_error_v2(
+        let _book = create_test_book_with_error(
             &db,
             series.id,
             library.id,

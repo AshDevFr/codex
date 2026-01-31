@@ -100,6 +100,13 @@ const config: Config = {
 
         language: ["en"],
 
+        // Index both main docs and dev docs
+        docsDir: ['docs', 'dev'],
+        docsRouteBasePath: ['docs', 'dev'],
+
+        // Exclude API docs from search indexing
+        ignoreFiles: [/docs\/api\/.*/],
+
         // Customize the keyboard shortcut to focus search bar (default is "mod+k"):
         // searchBarShortcutKeymap: "s", // Use 'S' key
         // searchBarShortcutKeymap: "ctrl+shift+f", // Use Ctrl+Shift+F

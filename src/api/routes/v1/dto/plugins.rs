@@ -624,6 +624,11 @@ pub struct PluginFailureDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context: Option<serde_json::Value>,
 
+    /// Sanitized summary of request parameters (sensitive fields redacted)
+    #[schema(example = "query: \"One Piece\", limit: 10")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_summary: Option<String>,
+
     /// When the failure occurred
     pub occurred_at: DateTime<Utc>,
 }
@@ -636,6 +641,7 @@ impl From<plugin_failures::Model> for PluginFailureDto {
             error_code: model.error_code,
             method: model.method,
             context: model.context,
+            request_summary: model.request_summary,
             occurred_at: model.occurred_at,
         }
     }

@@ -7,6 +7,7 @@ pub mod inflight_thumbnails;
 pub mod metadata;
 pub mod pdf_cache;
 pub mod plugin;
+pub mod plugin_metrics;
 pub mod rate_limiter;
 pub mod read_progress;
 pub mod settings;
@@ -28,3 +29,4 @@ pub use task_metrics::TaskMetricsService;
 pub use thumbnail::ThumbnailService;
 
 pub use plugin::encryption::CredentialEncryption;
+pub use plugin_metrics::{PluginHealthStatus, PluginMetricsService};

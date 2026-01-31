@@ -29,12 +29,14 @@ use crate::services::metadata::{ApplyOptions, MetadataApplier};
 use crate::services::plugin::protocol::{
     MetadataContentType, MetadataGetParams, MetadataMatchParams, MetadataSearchParams,
 };
+use crate::services::plugin::PluginManagerError;
 use crate::tasks::types::TaskType;
 use axum::{
     extract::{Path, Query, State},
     Json,
 };
 use serde::Deserialize;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 use utoipa::OpenApi;
@@ -117,9 +119,16 @@ pub struct PluginActionsQuery {
 )]
 pub async fn get_plugin_actions(
     State(state): State<Arc<AppState>>,
-    _auth: AuthContext,
+    auth: AuthContext,
     Query(query): Query<PluginActionsQuery>,
 ) -> Result<Json<PluginActionsResponse>, ApiError> {
+    // Require LibrariesRead permission to view plugin actions.
+    // This prevents users without library access from enumerating plugins.
+    auth.require_permission(&Permission::LibrariesRead)?;
+
+    // Get user's effective permissions for filtering plugins by capability
+    let user_permissions = auth.effective_permissions();
+
     // Parse and validate scope
     let scope = parse_scope(&query.scope).ok_or_else(|| {
         ApiError::BadRequest(format!(
@@ -127,6 +136,18 @@ pub async fn get_plugin_actions(
             query.scope
         ))
     })?;
+
+    // If library_id is provided, verify the library exists
+    if let Some(library_id) = query.library_id {
+        let library_exists = LibraryRepository::get_by_id(&state.db, library_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to check library: {}", e)))?
+            .is_some();
+
+        if !library_exists {
+            return Err(ApiError::NotFound("Library not found".to_string()));
+        }
+    }
 
     // Get plugins that support this scope, optionally filtered by library
     let plugins = match query.library_id {
@@ -139,7 +160,7 @@ pub async fn get_plugin_actions(
         None => state.plugin_manager.plugins_by_scope(&scope).await,
     };
 
-    // Build actions list
+    // Build actions list, filtering by user permissions
     let mut actions = Vec::new();
 
     for plugin in plugins {
@@ -149,13 +170,22 @@ pub async fn get_plugin_actions(
         }
 
         // Check if plugin has metadata provider capability from its cached manifest
-        // Only plugins with a valid manifest that reports series metadata capability are included
-        let has_series_metadata = plugin
-            .cached_manifest()
-            .map(|m| m.capabilities.can_provide_series_metadata())
-            .unwrap_or(false);
+        let manifest = match plugin.cached_manifest() {
+            Some(m) => m,
+            None => continue, // No manifest = can't determine capabilities
+        };
 
-        if has_series_metadata {
+        // Get the content types this plugin supports
+        let supported_content_types = &manifest.capabilities.metadata_provider;
+
+        // Skip plugins the user doesn't have permission to use
+        // User needs write permission for at least one of the plugin's content types
+        if !user_can_use_plugin(supported_content_types, &user_permissions) {
+            continue;
+        }
+
+        // Check if plugin can provide series metadata
+        if manifest.capabilities.can_provide_series_metadata() {
             // Add metadata search action
             actions.push(PluginActionDto {
                 plugin_id: plugin.id,
@@ -179,8 +209,8 @@ pub async fn get_plugin_actions(
 /// Execute a plugin action
 ///
 /// Invokes a plugin action and returns the result. Actions are typed by plugin type:
-/// - `metadata`: search, get, match (requires content_type: series or book)
-/// - `ping`: health check (works for any plugin)
+/// - `metadata`: search, get, match (requires write permission for the content_type)
+/// - `ping`: health check (requires PluginsManage permission)
 #[utoipa::path(
     post,
     path = "/api/v1/plugins/{id}/execute",
@@ -192,6 +222,7 @@ pub async fn get_plugin_actions(
         (status = 200, description = "Action executed", body = ExecutePluginResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Insufficient permission for this action"),
         (status = 404, description = "Plugin not found"),
     ),
     security(
@@ -202,11 +233,24 @@ pub async fn get_plugin_actions(
 )]
 pub async fn execute_plugin(
     State(state): State<Arc<AppState>>,
-    _auth: AuthContext,
+    auth: AuthContext,
     Path(plugin_id): Path<Uuid>,
     Json(request): Json<ExecutePluginRequest>,
 ) -> Result<Json<ExecutePluginResponse>, ApiError> {
     let start = Instant::now();
+
+    // Check permission based on action type
+    match &request.action {
+        PluginActionRequest::Metadata { content_type, .. } => {
+            // Metadata actions require write permission for the content type
+            let required_permission = permission_for_content_type(content_type);
+            auth.require_permission(&required_permission)?;
+        }
+        PluginActionRequest::Ping => {
+            // Ping is an admin operation (health check)
+            auth.require_permission(&Permission::PluginsManage)?;
+        }
+    }
 
     // Get plugin from database to verify it exists
     let plugin = PluginsRepository::get_by_id(&state.db, plugin_id)
@@ -241,7 +285,7 @@ pub async fn execute_plugin(
             Err(e) => Ok(Json(ExecutePluginResponse {
                 success: false,
                 result: None,
-                error: Some(e.to_string()),
+                error: Some(sanitize_plugin_error(&e)),
                 latency_ms: start.elapsed().as_millis() as u64,
             })),
         },
@@ -277,7 +321,7 @@ async fn execute_metadata_action(
                 Err(e) => Ok(Json(ExecutePluginResponse {
                     success: false,
                     result: None,
-                    error: Some(e.to_string()),
+                    error: Some(sanitize_plugin_error(&e)),
                     latency_ms: start.elapsed().as_millis() as u64,
                 })),
             }
@@ -305,7 +349,7 @@ async fn execute_metadata_action(
                 Err(e) => Ok(Json(ExecutePluginResponse {
                     success: false,
                     result: None,
-                    error: Some(e.to_string()),
+                    error: Some(sanitize_plugin_error(&e)),
                     latency_ms: start.elapsed().as_millis() as u64,
                 })),
             }
@@ -329,7 +373,7 @@ async fn execute_metadata_action(
                 Err(e) => Ok(Json(ExecutePluginResponse {
                     success: false,
                     result: None,
-                    error: Some(e.to_string()),
+                    error: Some(sanitize_plugin_error(&e)),
                     latency_ms: start.elapsed().as_millis() as u64,
                 })),
             }
@@ -1198,8 +1242,126 @@ fn build_field_preview(
 }
 
 // =============================================================================
+// Permission Helpers for Plugin Visibility
+// =============================================================================
+
+/// Map a metadata content type to the required permission.
+///
+/// This determines what permission a user needs to use a plugin for a given content type:
+/// - Series metadata plugins require `SeriesWrite`
+/// - Book metadata plugins require `BooksWrite`
+/// - Library metadata plugins require `LibrariesWrite` (future)
+fn permission_for_content_type(content_type: &MetadataContentType) -> Permission {
+    match content_type {
+        MetadataContentType::Series => Permission::SeriesWrite,
+        // When Book and Library are added:
+        // MetadataContentType::Book => Permission::BooksWrite,
+        // MetadataContentType::Library => Permission::LibrariesWrite,
+    }
+}
+
+/// Check if a user has permission to use a plugin based on its metadata capabilities.
+///
+/// A user can use a plugin if they have the required write permission for at least
+/// one of the content types the plugin supports.
+fn user_can_use_plugin(
+    plugin_capabilities: &[MetadataContentType],
+    user_permissions: &HashSet<Permission>,
+) -> bool {
+    plugin_capabilities
+        .iter()
+        .map(permission_for_content_type)
+        .any(|perm| user_permissions.contains(&perm))
+}
+
+/// Sanitize plugin error messages for client responses.
+///
+/// This prevents exposing internal error details to clients while preserving
+/// user-actionable information. The full error is logged server-side.
+fn sanitize_plugin_error(error: &PluginManagerError) -> String {
+    // Log the full error server-side for debugging
+    tracing::warn!(error = %error, "Plugin operation failed");
+
+    match error {
+        // User-actionable errors - return sanitized messages
+        PluginManagerError::PluginNotFound(id) => format!("Plugin {} not found", id),
+        PluginManagerError::PluginNotEnabled(id) => format!("Plugin {} is not enabled", id),
+        PluginManagerError::NoPluginsForScope(_) => {
+            "No plugins available for this operation".to_string()
+        }
+        PluginManagerError::RateLimited { .. } => {
+            "Plugin rate limit exceeded, please try again later".to_string()
+        }
+
+        // Nested plugin errors - extract and sanitize
+        PluginManagerError::Plugin(plugin_error) => sanitize_nested_plugin_error(plugin_error),
+
+        // Internal errors - don't expose details
+        PluginManagerError::Database(_) | PluginManagerError::Encryption(_) => {
+            "An internal plugin error occurred".to_string()
+        }
+    }
+}
+
+/// Sanitize nested PluginError messages
+///
+/// Since the nested error types (PluginError, RpcError) are not part of the public API,
+/// we pattern match on the error string to provide user-friendly messages.
+fn sanitize_nested_plugin_error(error: &crate::services::plugin::handle::PluginError) -> String {
+    use crate::services::plugin::handle::PluginError;
+    use crate::services::plugin::rpc::RpcError;
+
+    match error {
+        PluginError::NotInitialized => "Plugin is not ready, please try again".to_string(),
+        PluginError::Disabled { .. } => "Plugin is disabled".to_string(),
+        PluginError::HealthCheckFailed(_) => "Plugin is temporarily unavailable".to_string(),
+        PluginError::SpawnFailed(_) => {
+            "Failed to start plugin, please contact an administrator".to_string()
+        }
+        PluginError::InvalidManifest(_) => "Plugin configuration error".to_string(),
+
+        // RPC errors - these may contain more detail
+        PluginError::Rpc(rpc_error) => match rpc_error {
+            RpcError::Timeout(_) => "Plugin request timed out, please try again".to_string(),
+            RpcError::PluginError { code, message, .. } => {
+                // JSON-RPC errors from the plugin are user-visible
+                // but we sanitize the data field which may contain internal details
+                format!("Plugin error ({}): {}", code, message)
+            }
+            RpcError::RateLimited { .. } => {
+                "Plugin rate limit exceeded, please try again later".to_string()
+            }
+            RpcError::Cancelled => "Plugin request was cancelled".to_string(),
+            // User-friendly errors from plugin - pass through the message
+            RpcError::NotFound(msg) => format!("Not found: {}", msg),
+            RpcError::AuthFailed(_) => {
+                "Plugin authentication failed, please check credentials".to_string()
+            }
+            RpcError::ApiError(msg) => format!("External API error: {}", msg),
+            RpcError::ConfigError(_) => "Plugin configuration error".to_string(),
+            // Internal RPC errors - don't expose details
+            RpcError::Serialization(_) | RpcError::InvalidResponse(_) | RpcError::Process(_) => {
+                "Plugin communication error, please try again".to_string()
+            }
+        },
+
+        // Process errors - don't expose command details
+        PluginError::Process(_) => "Plugin communication error, please try again".to_string(),
+    }
+}
+
+// =============================================================================
 // Task-based Auto-Match Endpoints (Background Processing)
 // =============================================================================
+
+/// Maximum number of series that can be enqueued in a single bulk request.
+/// This prevents worker queue overload through excessive task creation.
+const MAX_BULK_SERIES_COUNT: usize = 100;
+
+/// Maximum number of series that can be enqueued for a library auto-match.
+/// Libraries with more series will be rejected with an error suggesting
+/// to use the bulk endpoint in batches instead.
+const MAX_LIBRARY_SERIES_COUNT: usize = 1000;
 
 /// Enqueue a plugin auto-match task for a single series
 ///
@@ -1311,6 +1473,16 @@ pub async fn enqueue_bulk_auto_match_tasks(
         return Err(ApiError::BadRequest(
             "At least one series ID is required".to_string(),
         ));
+    }
+
+    // Limit bulk request size to prevent worker queue DoS
+    if request.series_ids.len() > MAX_BULK_SERIES_COUNT {
+        return Err(ApiError::BadRequest(format!(
+            "Too many series in bulk request. Maximum is {}, got {}. \
+             Please split into smaller batches.",
+            MAX_BULK_SERIES_COUNT,
+            request.series_ids.len()
+        )));
     }
 
     // Verify plugin exists and is enabled
@@ -1468,6 +1640,16 @@ pub async fn enqueue_library_auto_match_tasks(
             task_ids: vec![],
             message: "No series in library".to_string(),
         }));
+    }
+
+    // Limit library auto-match to prevent worker queue DoS
+    if series_list.len() > MAX_LIBRARY_SERIES_COUNT {
+        return Err(ApiError::BadRequest(format!(
+            "Library has too many series ({}) for auto-match. Maximum is {}. \
+             Please use the bulk endpoint to process in batches.",
+            series_list.len(),
+            MAX_LIBRARY_SERIES_COUNT
+        )));
     }
 
     // Create tasks for each series

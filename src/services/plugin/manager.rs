@@ -47,12 +47,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use sea_orm::DatabaseConnection;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::db::entities::plugins;
 use crate::db::repositories::{FailureContext, PluginFailuresRepository, PluginsRepository};
+use crate::services::PluginMetricsService;
 
 use super::handle::{PluginConfig, PluginError, PluginHandle};
 use super::process::PluginProcessConfig;
@@ -237,6 +238,10 @@ struct PluginEntry {
     handle: Option<Arc<PluginHandle>>,
     /// Rate limiter (if rate limit is configured)
     rate_limiter: Option<TokenBucketRateLimiter>,
+    /// Spawn mutex to prevent concurrent spawn operations for the same plugin.
+    /// This prevents a race condition where the write lock is released during
+    /// the async `is_running()` check, allowing duplicate processes to spawn.
+    spawn_mutex: Arc<Mutex<()>>,
 }
 
 impl PluginEntry {
@@ -251,6 +256,7 @@ impl PluginEntry {
             db_config: plugin,
             handle: None,
             rate_limiter,
+            spawn_mutex: Arc::new(Mutex::new(())),
         }
     }
 
@@ -279,8 +285,13 @@ pub struct PluginManager {
     /// When the plugin cache was last refreshed from database
     /// Used for TTL-based cache invalidation in multi-pod deployments
     cache_loaded_at: RwLock<Option<Instant>>,
+    /// Mutex to prevent thundering herd on cache refresh.
+    /// Only one task can refresh the cache at a time; others wait for it to complete.
+    cache_refresh_mutex: Mutex<()>,
     /// Health check task handle
     health_check_handle: RwLock<Option<tokio::task::JoinHandle<()>>>,
+    /// Optional metrics service for recording plugin operation metrics
+    metrics_service: Option<Arc<PluginMetricsService>>,
 }
 
 impl PluginManager {
@@ -291,13 +302,26 @@ impl PluginManager {
             config,
             plugins: Arc::new(RwLock::new(HashMap::new())),
             cache_loaded_at: RwLock::new(None),
+            cache_refresh_mutex: Mutex::new(()),
             health_check_handle: RwLock::new(None),
+            metrics_service: None,
         }
     }
 
     /// Create a new plugin manager with default configuration
     pub fn with_defaults(db: Arc<DatabaseConnection>) -> Self {
         Self::new(db, PluginManagerConfig::default())
+    }
+
+    /// Set the metrics service for recording plugin operation metrics
+    pub fn with_metrics_service(mut self, metrics_service: Arc<PluginMetricsService>) -> Self {
+        self.metrics_service = Some(metrics_service);
+        self
+    }
+
+    /// Get a reference to the metrics service if configured
+    pub fn metrics_service(&self) -> Option<&Arc<PluginMetricsService>> {
+        self.metrics_service.as_ref()
     }
 
     /// Load all enabled plugins from database
@@ -353,12 +377,30 @@ impl PluginManager {
     ///
     /// This is called automatically by `plugins_by_scope` and similar methods
     /// to ensure multi-pod deployments eventually see plugin changes.
+    ///
+    /// Uses double-checked locking to prevent thundering herd:
+    /// 1. Quick check without lock (fast path for fresh cache)
+    /// 2. Acquire mutex and re-check (handles concurrent refresh attempts)
+    /// 3. Refresh only if still stale after acquiring mutex
     async fn refresh_if_stale(&self) -> Result<(), PluginManagerError> {
+        // Fast path: check if cache is stale without acquiring the refresh mutex
+        let loaded_at = *self.cache_loaded_at.read().await;
+        if !self.is_cache_stale(loaded_at) {
+            return Ok(());
+        }
+
+        // Slow path: acquire the refresh mutex to prevent thundering herd
+        let _refresh_guard = self.cache_refresh_mutex.lock().await;
+
+        // Re-check after acquiring mutex - another task may have refreshed while we waited
         let loaded_at = *self.cache_loaded_at.read().await;
         if self.is_cache_stale(loaded_at) {
             debug!("Plugin cache is stale, refreshing from database");
             self.load_all().await?;
+        } else {
+            debug!("Plugin cache was refreshed by another task while waiting");
         }
+
         Ok(())
     }
 
@@ -418,26 +460,81 @@ impl PluginManager {
     }
 
     /// Get or spawn a plugin, returning a handle for operations
+    ///
+    /// This method uses a per-plugin spawn mutex to prevent race conditions where
+    /// multiple concurrent callers could spawn duplicate plugin processes. The
+    /// pattern is:
+    /// 1. Check if handle exists and is running (fast path, read lock only)
+    /// 2. If not, acquire the spawn mutex to serialize spawn operations
+    /// 3. Re-check under mutex in case another caller spawned while we waited
+    /// 4. Spawn if still needed
     pub async fn get_or_spawn(
         &self,
         plugin_id: Uuid,
     ) -> Result<Arc<PluginHandle>, PluginManagerError> {
-        // Check if plugin exists and is enabled
+        // Fast path: check with read lock if we already have a running handle
+        {
+            let plugins = self.plugins.read().await;
+            let entry = plugins
+                .get(&plugin_id)
+                .ok_or(PluginManagerError::PluginNotFound(plugin_id))?;
+
+            if !entry.db_config.enabled {
+                return Err(PluginManagerError::PluginNotEnabled(plugin_id));
+            }
+
+            if let Some(ref handle) = entry.handle {
+                if handle.is_running().await {
+                    return Ok(Arc::clone(handle));
+                }
+            }
+        }
+
+        // Slow path: need to potentially spawn the plugin.
+        // First, get the spawn mutex to serialize spawn operations for this plugin.
+        // This prevents the race condition where multiple callers could see
+        // "not running" and all try to spawn.
+        let spawn_mutex = {
+            let plugins = self.plugins.read().await;
+            let entry = plugins
+                .get(&plugin_id)
+                .ok_or(PluginManagerError::PluginNotFound(plugin_id))?;
+            Arc::clone(&entry.spawn_mutex)
+        };
+
+        // Hold the spawn mutex while we check again and potentially spawn.
+        // This ensures only one caller can spawn at a time.
+        let _spawn_guard = spawn_mutex.lock().await;
+
+        // Re-check now that we hold the spawn mutex - another caller may have
+        // spawned while we were waiting for the mutex.
+        {
+            let plugins = self.plugins.read().await;
+            let entry = plugins
+                .get(&plugin_id)
+                .ok_or(PluginManagerError::PluginNotFound(plugin_id))?;
+
+            if !entry.db_config.enabled {
+                return Err(PluginManagerError::PluginNotEnabled(plugin_id));
+            }
+
+            if let Some(ref handle) = entry.handle {
+                if handle.is_running().await {
+                    return Ok(Arc::clone(handle));
+                }
+            }
+        }
+
+        // Now get write lock and spawn
         let mut plugins = self.plugins.write().await;
 
         let entry = plugins
             .get_mut(&plugin_id)
             .ok_or(PluginManagerError::PluginNotFound(plugin_id))?;
 
+        // Final check under write lock (in case of config change)
         if !entry.db_config.enabled {
             return Err(PluginManagerError::PluginNotEnabled(plugin_id));
-        }
-
-        // If we already have a running handle, return it
-        if let Some(ref handle) = entry.handle {
-            if handle.is_running().await {
-                return Ok(Arc::clone(handle));
-            }
         }
 
         // Need to spawn/initialize the plugin
@@ -547,21 +644,30 @@ impl PluginManager {
         plugins.values().map(|e| e.db_config.clone()).collect()
     }
 
-    /// Check rate limit for a plugin. Returns Ok(()) if allowed, Err if rate limited.
-    async fn check_rate_limit(&self, plugin_id: Uuid) -> Result<(), PluginManagerError> {
+    /// Check rate limit for a plugin. Returns Ok(plugin_name) if allowed, Err if rate limited.
+    async fn check_rate_limit(&self, plugin_id: Uuid) -> Result<String, PluginManagerError> {
         let plugins = self.plugins.read().await;
         if let Some(entry) = plugins.get(&plugin_id) {
             if let Some(ref rate_limiter) = entry.rate_limiter {
                 if !rate_limiter.try_acquire() {
                     let rate = entry.db_config.rate_limit_requests_per_minute.unwrap_or(0);
+                    let plugin_name = entry.db_config.name.clone();
+
+                    // Record rate limit rejection in metrics
+                    if let Some(ref metrics) = self.metrics_service {
+                        metrics.record_rate_limit(plugin_id, &plugin_name).await;
+                    }
+
                     return Err(PluginManagerError::RateLimited {
                         plugin_id,
                         requests_per_minute: rate,
                     });
                 }
             }
+            Ok(entry.db_config.name.clone())
+        } else {
+            Ok(String::new())
         }
-        Ok(())
     }
 
     /// Search for series metadata using a specific plugin
@@ -571,17 +677,45 @@ impl PluginManager {
         params: MetadataSearchParams,
     ) -> Result<MetadataSearchResponse, PluginManagerError> {
         // Check rate limit before making the request
-        self.check_rate_limit(plugin_id).await?;
+        let plugin_name = self.check_rate_limit(plugin_id).await?;
 
+        let start = Instant::now();
         let handle = self.get_or_spawn(plugin_id).await?;
-        let result = handle.search_series(params).await?;
+        let result = handle.search_series(params).await;
+        let duration_ms = start.elapsed().as_millis() as u64;
 
-        // Update health status on success
-        if self.config.auto_sync_health {
-            let _ = PluginsRepository::record_success(&self.db, plugin_id).await;
+        match &result {
+            Ok(_) => {
+                // Update health status on success
+                if self.config.auto_sync_health {
+                    let _ = PluginsRepository::record_success(&self.db, plugin_id).await;
+                }
+
+                // Record success in metrics
+                if let Some(ref metrics) = self.metrics_service {
+                    metrics
+                        .record_success(plugin_id, &plugin_name, "search", duration_ms)
+                        .await;
+                }
+            }
+            Err(e) => {
+                // Record failure in metrics
+                if let Some(ref metrics) = self.metrics_service {
+                    let error_code = self.error_to_code(e);
+                    metrics
+                        .record_failure(
+                            plugin_id,
+                            &plugin_name,
+                            "search",
+                            duration_ms,
+                            Some(error_code),
+                        )
+                        .await;
+                }
+            }
         }
 
-        Ok(result)
+        Ok(result?)
     }
 
     /// Get series metadata using a specific plugin
@@ -591,17 +725,45 @@ impl PluginManager {
         params: MetadataGetParams,
     ) -> Result<PluginSeriesMetadata, PluginManagerError> {
         // Check rate limit before making the request
-        self.check_rate_limit(plugin_id).await?;
+        let plugin_name = self.check_rate_limit(plugin_id).await?;
 
+        let start = Instant::now();
         let handle = self.get_or_spawn(plugin_id).await?;
-        let result = handle.get_series_metadata(params).await?;
+        let result = handle.get_series_metadata(params).await;
+        let duration_ms = start.elapsed().as_millis() as u64;
 
-        // Update health status on success
-        if self.config.auto_sync_health {
-            let _ = PluginsRepository::record_success(&self.db, plugin_id).await;
+        match &result {
+            Ok(_) => {
+                // Update health status on success
+                if self.config.auto_sync_health {
+                    let _ = PluginsRepository::record_success(&self.db, plugin_id).await;
+                }
+
+                // Record success in metrics
+                if let Some(ref metrics) = self.metrics_service {
+                    metrics
+                        .record_success(plugin_id, &plugin_name, "get_metadata", duration_ms)
+                        .await;
+                }
+            }
+            Err(e) => {
+                // Record failure in metrics
+                if let Some(ref metrics) = self.metrics_service {
+                    let error_code = self.error_to_code(e);
+                    metrics
+                        .record_failure(
+                            plugin_id,
+                            &plugin_name,
+                            "get_metadata",
+                            duration_ms,
+                            Some(error_code),
+                        )
+                        .await;
+                }
+            }
         }
 
-        Ok(result)
+        Ok(result?)
     }
 
     /// Find best series match using a specific plugin
@@ -611,17 +773,45 @@ impl PluginManager {
         params: MetadataMatchParams,
     ) -> Result<Option<SearchResult>, PluginManagerError> {
         // Check rate limit before making the request
-        self.check_rate_limit(plugin_id).await?;
+        let plugin_name = self.check_rate_limit(plugin_id).await?;
 
+        let start = Instant::now();
         let handle = self.get_or_spawn(plugin_id).await?;
-        let result = handle.match_series(params).await?;
+        let result = handle.match_series(params).await;
+        let duration_ms = start.elapsed().as_millis() as u64;
 
-        // Update health status on success
-        if self.config.auto_sync_health {
-            let _ = PluginsRepository::record_success(&self.db, plugin_id).await;
+        match &result {
+            Ok(_) => {
+                // Update health status on success
+                if self.config.auto_sync_health {
+                    let _ = PluginsRepository::record_success(&self.db, plugin_id).await;
+                }
+
+                // Record success in metrics
+                if let Some(ref metrics) = self.metrics_service {
+                    metrics
+                        .record_success(plugin_id, &plugin_name, "match", duration_ms)
+                        .await;
+                }
+            }
+            Err(e) => {
+                // Record failure in metrics
+                if let Some(ref metrics) = self.metrics_service {
+                    let error_code = self.error_to_code(e);
+                    metrics
+                        .record_failure(
+                            plugin_id,
+                            &plugin_name,
+                            "match",
+                            duration_ms,
+                            Some(error_code),
+                        )
+                        .await;
+                }
+            }
         }
 
-        Ok(result)
+        Ok(result?)
     }
 
     /// Ping a plugin to check health
@@ -888,6 +1078,19 @@ impl PluginManager {
             credentials,
         })
     }
+
+    /// Convert a PluginError to an error code for metrics
+    fn error_to_code(&self, error: &PluginError) -> &'static str {
+        match error {
+            PluginError::Process(_) => "PROCESS_ERROR",
+            PluginError::Rpc(_) => "RPC_ERROR",
+            PluginError::NotInitialized => "NOT_INITIALIZED",
+            PluginError::Disabled { .. } => "DISABLED",
+            PluginError::HealthCheckFailed(_) => "HEALTH_CHECK_FAILED",
+            PluginError::SpawnFailed(_) => "SPAWN_FAILED",
+            PluginError::InvalidManifest(_) => "INVALID_MANIFEST",
+        }
+    }
 }
 
 #[cfg(test)]
@@ -996,6 +1199,29 @@ mod tests {
 
         // Total acquired should be exactly 100 (the capacity)
         assert_eq!(total_acquired, 100);
+    }
+
+    #[test]
+    fn test_is_cache_stale() {
+        use std::sync::Arc;
+
+        // Create a manager with a short TTL for testing
+        let db = Arc::new(sea_orm::DatabaseConnection::Disconnected);
+        let config = PluginManagerConfig {
+            cache_ttl: Duration::from_millis(100),
+            ..Default::default()
+        };
+        let manager = PluginManager::new(db, config);
+
+        // No loaded_at means stale
+        assert!(manager.is_cache_stale(None));
+
+        // Just loaded means fresh
+        assert!(!manager.is_cache_stale(Some(Instant::now())));
+
+        // Old timestamp means stale
+        let old = Instant::now() - Duration::from_millis(200);
+        assert!(manager.is_cache_stale(Some(old)));
     }
 
     // Integration tests require a database connection

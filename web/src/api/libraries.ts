@@ -70,4 +70,46 @@ export const librariesApi = {
 		);
 		return response.data;
 	},
+
+	// Generate missing thumbnails for all books in a library
+	generateMissingThumbnails: async (
+		id: string,
+	): Promise<{ task_id: string }> => {
+		const response = await api.post<{ task_id: string }>(
+			`/libraries/${id}/books/thumbnails/generate`,
+			{ force: false },
+		);
+		return response.data;
+	},
+
+	// Regenerate all thumbnails for all books in a library (force)
+	regenerateAllThumbnails: async (id: string): Promise<{ task_id: string }> => {
+		const response = await api.post<{ task_id: string }>(
+			`/libraries/${id}/books/thumbnails/generate`,
+			{ force: true },
+		);
+		return response.data;
+	},
+
+	// Generate missing series thumbnails for all series in a library
+	generateMissingSeriesThumbnails: async (
+		id: string,
+	): Promise<{ task_id: string }> => {
+		const response = await api.post<{ task_id: string }>(
+			`/libraries/${id}/series/thumbnails/generate`,
+			{ force: false },
+		);
+		return response.data;
+	},
+
+	// Regenerate all series thumbnails for all series in a library (force)
+	regenerateAllSeriesThumbnails: async (
+		id: string,
+	): Promise<{ task_id: string }> => {
+		const response = await api.post<{ task_id: string }>(
+			`/libraries/${id}/series/thumbnails/generate`,
+			{ force: true },
+		);
+		return response.data;
+	},
 };

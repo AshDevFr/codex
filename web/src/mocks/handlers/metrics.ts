@@ -3,11 +3,16 @@
  */
 
 import { delay, HttpResponse, http } from "msw";
+import type { components } from "@/types/api.generated";
 import {
 	createInventoryMetrics,
+	createPluginMethodMetrics,
+	createPluginMetrics,
 	createTaskMetrics,
 	createTaskTypeMetrics,
 } from "../data/factories";
+
+type PluginMetricsResponse = components["schemas"]["PluginMetricsResponse"];
 
 export const metricsHandlers = [
 	// Get inventory metrics
@@ -264,5 +269,156 @@ export const metricsHandlers = [
 		return HttpResponse.json({
 			deleted_count: Math.floor(Math.random() * 10000),
 		});
+	}),
+
+	// Get plugin metrics
+	http.get("/api/v1/metrics/plugins", async () => {
+		await delay(100);
+
+		// Create realistic plugin metrics with method breakdowns
+		const mangabakaMetrics = createPluginMetrics({
+			plugin_id: "plugin-mangabaka",
+			plugin_name: "MangaBaka",
+			requests_total: 1250,
+			requests_success: 1198,
+			requests_failed: 52,
+			avg_duration_ms: 285.5,
+			rate_limit_rejections: 8,
+			error_rate_pct: 4.16,
+			health_status: "healthy",
+			last_success: new Date(Date.now() - 300000).toISOString(), // 5 min ago
+			last_failure: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+			by_method: {
+				search: createPluginMethodMetrics({
+					method: "search",
+					requests_total: 450,
+					requests_success: 438,
+					requests_failed: 12,
+					avg_duration_ms: 320.5,
+				}),
+				get: createPluginMethodMetrics({
+					method: "get",
+					requests_total: 680,
+					requests_success: 665,
+					requests_failed: 15,
+					avg_duration_ms: 245.2,
+				}),
+				match: createPluginMethodMetrics({
+					method: "match",
+					requests_total: 120,
+					requests_success: 95,
+					requests_failed: 25,
+					avg_duration_ms: 380.8,
+				}),
+			},
+			failure_counts: {
+				TIMEOUT: 28,
+				RPC_ERROR: 15,
+				RATE_LIMITED: 9,
+			},
+		});
+
+		const comicvineMetrics = createPluginMetrics({
+			plugin_id: "plugin-comicvine",
+			plugin_name: "ComicVine",
+			requests_total: 340,
+			requests_success: 285,
+			requests_failed: 55,
+			avg_duration_ms: 425.3,
+			rate_limit_rejections: 22,
+			error_rate_pct: 16.18,
+			health_status: "degraded",
+			last_success: new Date(Date.now() - 1800000).toISOString(), // 30 min ago
+			last_failure: new Date(Date.now() - 600000).toISOString(), // 10 min ago
+			by_method: {
+				search: createPluginMethodMetrics({
+					method: "search",
+					requests_total: 200,
+					requests_success: 165,
+					requests_failed: 35,
+					avg_duration_ms: 480.2,
+				}),
+				get: createPluginMethodMetrics({
+					method: "get",
+					requests_total: 140,
+					requests_success: 120,
+					requests_failed: 20,
+					avg_duration_ms: 350.1,
+				}),
+			},
+			failure_counts: {
+				RATE_LIMITED: 32,
+				TIMEOUT: 18,
+				AUTH_FAILED: 5,
+			},
+		});
+
+		const anilistMetrics = createPluginMetrics({
+			plugin_id: "plugin-anilist",
+			plugin_name: "AniList",
+			requests_total: 890,
+			requests_success: 888,
+			requests_failed: 2,
+			avg_duration_ms: 125.8,
+			rate_limit_rejections: 0,
+			error_rate_pct: 0.22,
+			health_status: "healthy",
+			last_success: new Date(Date.now() - 60000).toISOString(), // 1 min ago
+			last_failure: null,
+			by_method: {
+				search: createPluginMethodMetrics({
+					method: "search",
+					requests_total: 520,
+					requests_success: 519,
+					requests_failed: 1,
+					avg_duration_ms: 115.3,
+				}),
+				get: createPluginMethodMetrics({
+					method: "get",
+					requests_total: 370,
+					requests_success: 369,
+					requests_failed: 1,
+					avg_duration_ms: 140.2,
+				}),
+			},
+			failure_counts: {
+				TIMEOUT: 2,
+			},
+		});
+
+		const plugins = [mangabakaMetrics, comicvineMetrics, anilistMetrics];
+
+		// Calculate summary from plugins
+		const totalRequests = plugins.reduce((sum, p) => sum + p.requests_total, 0);
+		const totalSuccess = plugins.reduce(
+			(sum, p) => sum + p.requests_success,
+			0,
+		);
+		const totalFailed = plugins.reduce((sum, p) => sum + p.requests_failed, 0);
+		const totalRateLimitRejections = plugins.reduce(
+			(sum, p) => sum + p.rate_limit_rejections,
+			0,
+		);
+
+		const response: PluginMetricsResponse = {
+			updated_at: new Date().toISOString(),
+			summary: {
+				total_plugins: plugins.length,
+				healthy_plugins: plugins.filter((p) => p.health_status === "healthy")
+					.length,
+				degraded_plugins: plugins.filter((p) => p.health_status === "degraded")
+					.length,
+				unhealthy_plugins: plugins.filter(
+					(p) => p.health_status === "unhealthy",
+				).length,
+				total_requests: totalRequests,
+				total_success: totalSuccess,
+				total_failed: totalFailed,
+				total_rate_limit_rejections: totalRateLimitRejections,
+			},
+			plugins,
+		};
+
+		return HttpResponse.json(response);
 	}),
 ];
