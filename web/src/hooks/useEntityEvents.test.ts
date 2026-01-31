@@ -375,6 +375,102 @@ describe("useEntityEvents", () => {
 		});
 	});
 
+	it("should invalidate and refetch plugin queries on plugin events", async () => {
+		let capturedCallback: ((event: EntityChangeEvent) => void) | undefined;
+
+		vi.spyOn(eventsApi.eventsApi, "subscribeToEntityEvents").mockImplementation(
+			(onEvent) => {
+				capturedCallback = onEvent;
+				return mockUnsubscribe;
+			},
+		);
+
+		const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+		const refetchSpy = vi.spyOn(queryClient, "refetchQueries");
+
+		renderHook(() => useEntityEvents(), { wrapper });
+
+		await waitFor(() => {
+			expect(capturedCallback).toBeDefined();
+		});
+
+		// Test plugin_created event
+		const createdEvent: EntityChangeEvent = {
+			type: "plugin_created",
+			plugin_id: "plugin-123",
+			timestamp: "2026-01-31T12:00:00Z",
+			user_id: "user-1",
+		};
+
+		if (capturedCallback) {
+			capturedCallback(createdEvent);
+		}
+
+		await waitFor(() => {
+			// Should invalidate plugins list
+			expect(invalidateSpy).toHaveBeenCalledWith({
+				queryKey: ["plugins"],
+			});
+			// Should force refetch of active plugin-actions queries
+			expect(refetchSpy).toHaveBeenCalledWith({
+				queryKey: ["plugin-actions"],
+				type: "active",
+			});
+		});
+
+		// Reset spies
+		invalidateSpy.mockClear();
+		refetchSpy.mockClear();
+
+		// Test plugin_enabled event
+		const enabledEvent: EntityChangeEvent = {
+			type: "plugin_enabled",
+			plugin_id: "plugin-456",
+			timestamp: "2026-01-31T12:00:00Z",
+			user_id: "user-1",
+		};
+
+		if (capturedCallback) {
+			capturedCallback(enabledEvent);
+		}
+
+		await waitFor(() => {
+			expect(invalidateSpy).toHaveBeenCalledWith({
+				queryKey: ["plugins"],
+			});
+			expect(refetchSpy).toHaveBeenCalledWith({
+				queryKey: ["plugin-actions"],
+				type: "active",
+			});
+		});
+
+		// Reset spies
+		invalidateSpy.mockClear();
+		refetchSpy.mockClear();
+
+		// Test plugin_disabled event
+		const disabledEvent: EntityChangeEvent = {
+			type: "plugin_disabled",
+			plugin_id: "plugin-789",
+			timestamp: "2026-01-31T12:00:00Z",
+			user_id: "user-1",
+		};
+
+		if (capturedCallback) {
+			capturedCallback(disabledEvent);
+		}
+
+		await waitFor(() => {
+			expect(invalidateSpy).toHaveBeenCalledWith({
+				queryKey: ["plugins"],
+			});
+			expect(refetchSpy).toHaveBeenCalledWith({
+				queryKey: ["plugin-actions"],
+				type: "active",
+			});
+		});
+	});
+
 	it("should handle errors gracefully", async () => {
 		const consoleError = vi
 			.spyOn(console, "error")

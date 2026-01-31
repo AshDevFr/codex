@@ -12,6 +12,7 @@ use super::super::dto::{
 use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission, AppState};
 use crate::db::entities::plugins::PluginPermission;
 use crate::db::repositories::{PluginFailuresRepository, PluginsRepository};
+use crate::events::{EntityChangeEvent, EntityEvent};
 use crate::services::plugin::process::{allowed_commands_description, is_command_allowed};
 use crate::services::plugin::protocol::PluginScope;
 use crate::services::PluginHealthStatus;
@@ -234,6 +235,11 @@ pub async fn create_plugin(
     if let Err(e) = state.plugin_manager.reload(plugin_id).await {
         tracing::warn!("Failed to reload plugin manager after create: {}", e);
     }
+
+    // Broadcast plugin created event
+    let event =
+        EntityChangeEvent::new(EntityEvent::PluginCreated { plugin_id }, Some(auth.user_id));
+    let _ = state.event_broadcaster.emit(event);
 
     // Perform automatic health check if plugin is enabled
     if is_enabled {
@@ -462,6 +468,13 @@ pub async fn update_plugin(
             tracing::warn!("Failed to reload plugin manager after update: {}", e);
         }
 
+        // Broadcast plugin updated event
+        let event = EntityChangeEvent::new(
+            EntityEvent::PluginUpdated { plugin_id: id },
+            Some(auth.user_id),
+        );
+        let _ = state.event_broadcaster.emit(event);
+
         // Re-fetch to get updated plugin
         let updated = PluginsRepository::get_by_id(&state.db, id)
             .await
@@ -474,6 +487,13 @@ pub async fn update_plugin(
     if let Err(e) = state.plugin_manager.reload(id).await {
         tracing::warn!("Failed to reload plugin manager after update: {}", e);
     }
+
+    // Broadcast plugin updated event
+    let event = EntityChangeEvent::new(
+        EntityEvent::PluginUpdated { plugin_id: id },
+        Some(auth.user_id),
+    );
+    let _ = state.event_broadcaster.emit(event);
 
     Ok(Json(plugin.into()))
 }
@@ -518,6 +538,14 @@ pub async fn delete_plugin(
         state.plugin_manager.remove(id).await;
         // Remove the plugin's metrics
         state.plugin_metrics_service.remove_plugin(id).await;
+
+        // Broadcast plugin deleted event
+        let event = EntityChangeEvent::new(
+            EntityEvent::PluginDeleted { plugin_id: id },
+            Some(auth.user_id),
+        );
+        let _ = state.event_broadcaster.emit(event);
+
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(ApiError::NotFound("Plugin not found".to_string()))
@@ -566,6 +594,13 @@ pub async fn enable_plugin(
     if let Err(e) = state.plugin_manager.reload(id).await {
         tracing::warn!("Failed to reload plugin manager after enable: {}", e);
     }
+
+    // Broadcast plugin enabled event
+    let event = EntityChangeEvent::new(
+        EntityEvent::PluginEnabled { plugin_id: id },
+        Some(auth.user_id),
+    );
+    let _ = state.event_broadcaster.emit(event);
 
     // Perform automatic health check
     let start = Instant::now();
@@ -646,6 +681,13 @@ pub async fn disable_plugin(
     if let Err(e) = state.plugin_manager.reload(id).await {
         tracing::warn!("Failed to reload plugin manager after disable: {}", e);
     }
+
+    // Broadcast plugin disabled event
+    let event = EntityChangeEvent::new(
+        EntityEvent::PluginDisabled { plugin_id: id },
+        Some(auth.user_id),
+    );
+    let _ = state.event_broadcaster.emit(event);
 
     // Mark plugin as unhealthy in metrics
     state

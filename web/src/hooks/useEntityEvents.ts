@@ -210,6 +210,24 @@ function handleEntityEvent(
 			break;
 		}
 
+		case "plugin_created":
+		case "plugin_updated":
+		case "plugin_enabled":
+		case "plugin_disabled":
+		case "plugin_deleted": {
+			// Invalidate plugin list queries
+			queryClient.invalidateQueries({
+				queryKey: ["plugins"],
+			});
+			// Force immediate refetch of active plugin-actions queries
+			// This ensures the sidebar and other components see the changes immediately
+			queryClient.refetchQueries({
+				queryKey: ["plugin-actions"],
+				type: "active",
+			});
+			break;
+		}
+
 		default:
 			log("Unknown event type:", event);
 	}

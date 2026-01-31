@@ -7,7 +7,7 @@
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
     },
-    "version": "1.1.0"
+    "version": "1.2.0"
   },
   "paths": {
     "/api/v1/admin/cleanup-orphans": {
@@ -16064,6 +16064,106 @@
                 "type": "string",
                 "enum": [
                   "library_deleted"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A plugin was created",
+            "required": [
+              "plugin_id",
+              "type"
+            ],
+            "properties": {
+              "plugin_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "plugin_created"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A plugin was updated (configuration changed)",
+            "required": [
+              "plugin_id",
+              "type"
+            ],
+            "properties": {
+              "plugin_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "plugin_updated"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A plugin was enabled",
+            "required": [
+              "plugin_id",
+              "type"
+            ],
+            "properties": {
+              "plugin_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "plugin_enabled"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A plugin was disabled",
+            "required": [
+              "plugin_id",
+              "type"
+            ],
+            "properties": {
+              "plugin_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "plugin_disabled"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A plugin was deleted",
+            "required": [
+              "plugin_id",
+              "type"
+            ],
+            "properties": {
+              "plugin_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "plugin_deleted"
                 ]
               }
             }

@@ -108,6 +108,16 @@ pub enum EntityEvent {
     LibraryUpdated { library_id: Uuid },
     /// A library was deleted
     LibraryDeleted { library_id: Uuid },
+    /// A plugin was created
+    PluginCreated { plugin_id: Uuid },
+    /// A plugin was updated (configuration changed)
+    PluginUpdated { plugin_id: Uuid },
+    /// A plugin was enabled
+    PluginEnabled { plugin_id: Uuid },
+    /// A plugin was disabled
+    PluginDisabled { plugin_id: Uuid },
+    /// A plugin was deleted
+    PluginDeleted { plugin_id: Uuid },
     /// Internal signal to indicate shutdown (not sent to clients)
     #[serde(skip)]
     Shutdown,
@@ -150,7 +160,12 @@ impl EntityChangeEvent {
             | EntityEvent::LibraryUpdated { library_id }
             | EntityEvent::LibraryDeleted { library_id } => Some(*library_id),
             EntityEvent::CoverUpdated { library_id, .. } => *library_id,
-            EntityEvent::Shutdown => None,
+            EntityEvent::PluginCreated { .. }
+            | EntityEvent::PluginUpdated { .. }
+            | EntityEvent::PluginEnabled { .. }
+            | EntityEvent::PluginDisabled { .. }
+            | EntityEvent::PluginDeleted { .. }
+            | EntityEvent::Shutdown => None,
         }
     }
 

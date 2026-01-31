@@ -6149,6 +6149,31 @@ export interface components {
             library_id: string;
             /** @enum {string} */
             type: "library_deleted";
+        } | {
+            /** Format: uuid */
+            plugin_id: string;
+            /** @enum {string} */
+            type: "plugin_created";
+        } | {
+            /** Format: uuid */
+            plugin_id: string;
+            /** @enum {string} */
+            type: "plugin_updated";
+        } | {
+            /** Format: uuid */
+            plugin_id: string;
+            /** @enum {string} */
+            type: "plugin_enabled";
+        } | {
+            /** Format: uuid */
+            plugin_id: string;
+            /** @enum {string} */
+            type: "plugin_disabled";
+        } | {
+            /** Format: uuid */
+            plugin_id: string;
+            /** @enum {string} */
+            type: "plugin_deleted";
         };
         /**
          * @description Type of entity that was changed

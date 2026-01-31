@@ -160,6 +160,23 @@ export function isLibraryEvent(
 	return event.type === "library_updated" || event.type === "library_deleted";
 }
 
+export function isPluginEvent(event: EntityEvent): event is EntityEvent & {
+	type:
+		| "plugin_created"
+		| "plugin_updated"
+		| "plugin_enabled"
+		| "plugin_disabled"
+		| "plugin_deleted";
+} {
+	return (
+		event.type === "plugin_created" ||
+		event.type === "plugin_updated" ||
+		event.type === "plugin_enabled" ||
+		event.type === "plugin_disabled" ||
+		event.type === "plugin_deleted"
+	);
+}
+
 // =============================================================================
 // Re-export the raw generated types for advanced use cases
 // =============================================================================
