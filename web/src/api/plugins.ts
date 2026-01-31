@@ -92,7 +92,7 @@ export type PluginHealthStatus =
 // Credential delivery methods
 export type CredentialDelivery = "env" | "init_message" | "both";
 
-// Plugin scopes
+// Plugin scopes (must match backend PluginScope enum)
 export type PluginScope =
 	| "series:detail"
 	| "series:bulk"

@@ -27,6 +27,7 @@ import {
 	IconDotsVertical,
 	IconDownload,
 	IconEdit,
+	IconInfoCircle,
 	IconPhoto,
 	IconSearch,
 	IconWand,
@@ -42,6 +43,7 @@ import {
 import { seriesApi } from "@/api/series";
 import { settingsApi } from "@/api/settings";
 import { sharingTagsApi } from "@/api/sharingTags";
+import { BulkSelectionToolbar } from "@/components/library/BulkSelectionToolbar";
 import { MetadataApplyFlow } from "@/components/metadata";
 import {
 	AlternateTitles,
@@ -51,6 +53,7 @@ import {
 	ExternalRatings,
 	GenreTagChips,
 	SeriesBookList,
+	SeriesInfoModal,
 	SeriesMetadataEditModal,
 	SeriesRating,
 } from "@/components/series";
@@ -85,6 +88,8 @@ export function SeriesDetail() {
 	const canEditSeries = hasPermission(PERMISSIONS.SERIES_WRITE);
 	const [summaryOpened, { toggle: toggleSummary }] = useDisclosure(false);
 	const [editModalOpened, { open: openEditModal, close: closeEditModal }] =
+		useDisclosure(false);
+	const [infoModalOpened, { open: openInfoModal, close: closeInfoModal }] =
 		useDisclosure(false);
 
 	// Get cover update timestamp for cache-busting (forces image reload when cover is regenerated via SSE)
@@ -622,7 +627,7 @@ export function SeriesDetail() {
 								<AlternateTitles titles={series.alternateTitles} compact />
 							)}
 
-							{/* Download button */}
+							{/* Action buttons */}
 							<Group gap="sm" mt="xs">
 								<Button
 									size="xs"
@@ -633,6 +638,15 @@ export function SeriesDetail() {
 								>
 									Download
 								</Button>
+								<Tooltip label="Series Info">
+									<ActionIcon
+										variant="subtle"
+										size="md"
+										onClick={openInfoModal}
+									>
+										<IconInfoCircle size={18} />
+									</ActionIcon>
+								</Tooltip>
 							</Group>
 
 							{/* Summary - show preview with expand if long */}
@@ -773,6 +787,9 @@ export function SeriesDetail() {
 					)}
 				</Stack>
 
+				{/* Bulk Selection Toolbar - shows when items are selected */}
+				<BulkSelectionToolbar />
+
 				{/* Books list */}
 				<SeriesBookList
 					seriesId={series.id}
@@ -801,6 +818,13 @@ export function SeriesDetail() {
 					onApplySuccess={handleMetadataApplySuccess}
 				/>
 			)}
+
+			{/* Series Info Modal */}
+			<SeriesInfoModal
+				opened={infoModalOpened}
+				onClose={closeInfoModal}
+				series={series}
+			/>
 		</Box>
 	);
 }

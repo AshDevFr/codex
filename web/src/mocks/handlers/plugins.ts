@@ -660,6 +660,61 @@ export const pluginsHandlers = [
 			});
 		},
 	),
+
+	// Enqueue auto-match task for a single series
+	http.post(
+		"/api/v1/series/:seriesId/metadata/auto-match/task",
+		async ({ params }) => {
+			await delay(100);
+			const taskId = `task-${Date.now()}`;
+			return HttpResponse.json({
+				success: true,
+				tasksEnqueued: 1,
+				taskIds: [taskId],
+				message: `Enqueued auto-match task for series ${params.seriesId}`,
+			});
+		},
+	),
+
+	// Bulk enqueue auto-match tasks for multiple series
+	http.post(
+		"/api/v1/series/metadata/auto-match/task/bulk",
+		async ({ request }) => {
+			await delay(200);
+			const body = (await request.json()) as {
+				pluginId: string;
+				seriesIds: string[];
+			};
+			const taskIds = body.seriesIds.map(
+				(_, i) => `task-bulk-${Date.now()}-${i}`,
+			);
+			return HttpResponse.json({
+				success: true,
+				tasksEnqueued: body.seriesIds.length,
+				taskIds,
+				message: `Enqueued ${body.seriesIds.length} auto-match task(s)`,
+			});
+		},
+	),
+
+	// Enqueue auto-match tasks for all series in a library
+	http.post(
+		"/api/v1/libraries/:libraryId/metadata/auto-match/task",
+		async () => {
+			await delay(300);
+			// Simulate enqueueing tasks for 10 series
+			const taskIds = Array.from(
+				{ length: 10 },
+				(_, i) => `task-lib-${Date.now()}-${i}`,
+			);
+			return HttpResponse.json({
+				success: true,
+				tasksEnqueued: 10,
+				taskIds,
+				message: "Enqueued 10 auto-match task(s) for library",
+			});
+		},
+	),
 ];
 
 // Export mock data for testing

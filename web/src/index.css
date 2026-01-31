@@ -179,3 +179,48 @@ button:focus-visible {
 	opacity: 1;
 	pointer-events: auto;
 }
+
+/* Hide read button overlay when in selection mode.
+   !important is needed to override the :hover pseudo-class specificity. */
+.media-card--selection-mode .media-card-read-overlay {
+	display: none !important;
+}
+
+/* ============================================
+   Bulk Selection Styles
+   ============================================ */
+
+/* Selection checkbox - positioned top-left of card cover */
+.media-card-checkbox {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	z-index: 5;
+	opacity: 0;
+	transition: opacity 0.15s ease;
+}
+
+/* Show checkbox on card hover */
+.media-card-cover:hover .media-card-checkbox {
+	opacity: 1;
+}
+
+/* Always show checkbox when in selection mode */
+.media-card-checkbox--visible {
+	opacity: 1;
+}
+
+/* Always show checkbox when selected */
+.media-card-checkbox--selected {
+	opacity: 1;
+}
+
+/* Disabled card styling (type mismatch during selection) */
+.media-card--disabled {
+	opacity: 0.5;
+}
+
+/* Selected card styling - orange border applied via inline style */
+.media-card--selected {
+	/* Border applied via inline style for better specificity with isNew state */
+}

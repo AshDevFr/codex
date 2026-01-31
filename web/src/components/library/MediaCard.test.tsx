@@ -188,4 +188,266 @@ describe("MediaCard", () => {
 			expect(progressBar).not.toBeInTheDocument();
 		});
 	});
+
+	describe("selection functionality", () => {
+		beforeEach(() => {
+			mockNavigate.mockClear();
+		});
+
+		it("should not show checkbox when onSelect is not provided", () => {
+			const book = createBook();
+
+			renderWithProviders(<MediaCard type="book" data={book} />);
+
+			// Checkbox should not be present
+			expect(
+				screen.queryByRole("checkbox", { name: /select/i }),
+			).not.toBeInTheDocument();
+		});
+
+		it("should show checkbox when onSelect is provided", () => {
+			const book = createBook({ title: "Test Book" });
+			const onSelect = vi.fn();
+
+			renderWithProviders(
+				<MediaCard type="book" data={book} onSelect={onSelect} />,
+			);
+
+			// Checkbox should be present
+			expect(
+				screen.getByRole("checkbox", { name: /select test book/i }),
+			).toBeInTheDocument();
+		});
+
+		it("should call onSelect when checkbox is clicked", async () => {
+			const user = userEvent.setup();
+			const book = createBook({ id: "book-123", title: "Test Book" });
+			const onSelect = vi.fn();
+
+			renderWithProviders(
+				<MediaCard type="book" data={book} onSelect={onSelect} />,
+			);
+
+			const checkbox = screen.getByRole("checkbox", {
+				name: /select test book/i,
+			});
+			await user.click(checkbox);
+
+			expect(onSelect).toHaveBeenCalledWith("book-123", false, undefined);
+		});
+
+		it("should show checkbox as checked when isSelected is true", () => {
+			const book = createBook({ title: "Test Book" });
+			const onSelect = vi.fn();
+
+			renderWithProviders(
+				<MediaCard
+					type="book"
+					data={book}
+					onSelect={onSelect}
+					isSelected={true}
+				/>,
+			);
+
+			const checkbox = screen.getByRole("checkbox", {
+				name: /select test book/i,
+			});
+			expect(checkbox).toBeChecked();
+		});
+
+		it("should show checkbox as unchecked when isSelected is false", () => {
+			const book = createBook({ title: "Test Book" });
+			const onSelect = vi.fn();
+
+			renderWithProviders(
+				<MediaCard
+					type="book"
+					data={book}
+					onSelect={onSelect}
+					isSelected={false}
+				/>,
+			);
+
+			const checkbox = screen.getByRole("checkbox", {
+				name: /select test book/i,
+			});
+			expect(checkbox).not.toBeChecked();
+		});
+
+		it("should disable checkbox when canBeSelected is false", () => {
+			const book = createBook({ title: "Test Book" });
+			const onSelect = vi.fn();
+
+			renderWithProviders(
+				<MediaCard
+					type="book"
+					data={book}
+					onSelect={onSelect}
+					canBeSelected={false}
+				/>,
+			);
+
+			const checkbox = screen.getByRole("checkbox", {
+				name: /select test book/i,
+			});
+			expect(checkbox).toBeDisabled();
+		});
+
+		it("should not call onSelect when checkbox is clicked and canBeSelected is false", async () => {
+			const user = userEvent.setup();
+			const book = createBook({ title: "Test Book" });
+			const onSelect = vi.fn();
+
+			renderWithProviders(
+				<MediaCard
+					type="book"
+					data={book}
+					onSelect={onSelect}
+					canBeSelected={false}
+				/>,
+			);
+
+			const checkbox = screen.getByRole("checkbox", {
+				name: /select test book/i,
+			});
+			await user.click(checkbox);
+
+			expect(onSelect).not.toHaveBeenCalled();
+		});
+
+		it("should navigate to book when card is clicked and not in selection mode", async () => {
+			const user = userEvent.setup();
+			const book = createBook({ id: "book-123", title: "Navigate Test Book" });
+			const onSelect = vi.fn();
+
+			renderWithProviders(
+				<MediaCard
+					type="book"
+					data={book}
+					onSelect={onSelect}
+					isSelectionMode={false}
+				/>,
+			);
+
+			// Click on the card itself
+			const card = document.querySelector(".mantine-Card-root");
+			if (card) {
+				await user.click(card);
+			}
+
+			expect(mockNavigate).toHaveBeenCalledWith("/books/book-123");
+			expect(onSelect).not.toHaveBeenCalled();
+		});
+
+		it("should call onSelect when card is clicked in selection mode", async () => {
+			const user = userEvent.setup();
+			const book = createBook({
+				id: "book-123",
+				title: "Selection Mode Click Test",
+			});
+			const onSelect = vi.fn();
+
+			renderWithProviders(
+				<MediaCard
+					type="book"
+					data={book}
+					onSelect={onSelect}
+					isSelectionMode={true}
+					canBeSelected={true}
+				/>,
+			);
+
+			// Click on the card itself (via the Card element)
+			const card = document.querySelector(".mantine-Card-root");
+			if (card) {
+				await user.click(card);
+			}
+
+			expect(onSelect).toHaveBeenCalledWith("book-123", false, undefined);
+			expect(mockNavigate).not.toHaveBeenCalled();
+		});
+
+		it("should not call onSelect when card is clicked in selection mode but canBeSelected is false", async () => {
+			const user = userEvent.setup();
+			const book = createBook({
+				id: "book-123",
+				title: "Disabled Selection Test",
+			});
+			const onSelect = vi.fn();
+
+			renderWithProviders(
+				<MediaCard
+					type="book"
+					data={book}
+					onSelect={onSelect}
+					isSelectionMode={true}
+					canBeSelected={false}
+				/>,
+			);
+
+			// Click on the card itself
+			const card = document.querySelector(".mantine-Card-root");
+			if (card) {
+				await user.click(card);
+			}
+
+			expect(onSelect).not.toHaveBeenCalled();
+			// Should also not navigate when canBeSelected is false
+			expect(mockNavigate).not.toHaveBeenCalled();
+		});
+
+		it("should have orange border when selected", () => {
+			const book = createBook();
+			const onSelect = vi.fn();
+
+			renderWithProviders(
+				<MediaCard
+					type="book"
+					data={book}
+					onSelect={onSelect}
+					isSelected={true}
+				/>,
+			);
+
+			const card = document.querySelector(".mantine-Card-root");
+			expect(card).toHaveStyle({
+				border: "3px solid var(--mantine-color-orange-6)",
+			});
+		});
+
+		it("should apply selection mode class when isSelectionMode is true", () => {
+			const book = createBook();
+			const onSelect = vi.fn();
+
+			renderWithProviders(
+				<MediaCard
+					type="book"
+					data={book}
+					onSelect={onSelect}
+					isSelectionMode={true}
+				/>,
+			);
+
+			const card = document.querySelector(".mantine-Card-root");
+			expect(card).toHaveClass("media-card--selection-mode");
+		});
+
+		it("should apply disabled class when in selection mode and canBeSelected is false", () => {
+			const book = createBook();
+			const onSelect = vi.fn();
+
+			renderWithProviders(
+				<MediaCard
+					type="book"
+					data={book}
+					onSelect={onSelect}
+					isSelectionMode={true}
+					canBeSelected={false}
+				/>,
+			);
+
+			const card = document.querySelector(".mantine-Card-root");
+			expect(card).toHaveClass("media-card--disabled");
+		});
+	});
 });

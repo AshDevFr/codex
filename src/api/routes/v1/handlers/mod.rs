@@ -42,6 +42,7 @@ pub fn paginated_response<T: Serialize>(data: T, link_builder: &PaginationLinkBu
 pub mod api_keys;
 pub mod auth;
 pub mod books;
+pub mod bulk;
 pub mod cleanup;
 pub mod duplicates;
 pub mod events;
@@ -67,6 +68,7 @@ pub mod users;
 
 pub use auth::*;
 pub use books::*;
+pub use bulk::*;
 pub use duplicates::*;
 pub use events::*;
 pub use filesystem::*;

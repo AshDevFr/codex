@@ -103,3 +103,66 @@ pub struct MarkReadResponse {
     #[schema(example = "Marked 5 books as read")]
     pub message: String,
 }
+
+// ============================================================================
+// Bulk Operations DTOs
+// ============================================================================
+
+/// Request to perform bulk operations on multiple books
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkBooksRequest {
+    /// List of book IDs to operate on
+    #[schema(example = json!(["550e8400-e29b-41d4-a716-446655440001", "550e8400-e29b-41d4-a716-446655440002"]))]
+    pub book_ids: Vec<Uuid>,
+}
+
+/// Request to perform bulk analyze operations on multiple books
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkAnalyzeBooksRequest {
+    /// List of book IDs to analyze
+    #[schema(example = json!(["550e8400-e29b-41d4-a716-446655440001", "550e8400-e29b-41d4-a716-446655440002"]))]
+    pub book_ids: Vec<Uuid>,
+
+    /// Whether to force re-analysis of already analyzed books
+    #[serde(default)]
+    #[schema(example = false)]
+    pub force: bool,
+}
+
+/// Request to perform bulk operations on multiple series
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkSeriesRequest {
+    /// List of series IDs to operate on
+    #[schema(example = json!(["550e8400-e29b-41d4-a716-446655440001", "550e8400-e29b-41d4-a716-446655440002"]))]
+    pub series_ids: Vec<Uuid>,
+}
+
+/// Request to perform bulk analyze operations on multiple series
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkAnalyzeSeriesRequest {
+    /// List of series IDs to analyze
+    #[schema(example = json!(["550e8400-e29b-41d4-a716-446655440001", "550e8400-e29b-41d4-a716-446655440002"]))]
+    pub series_ids: Vec<Uuid>,
+
+    /// Whether to force re-analysis of already analyzed books
+    #[serde(default)]
+    #[schema(example = false)]
+    pub force: bool,
+}
+
+/// Response for bulk analyze operations
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkAnalyzeResponse {
+    /// Number of analysis tasks enqueued
+    #[schema(example = 5)]
+    pub tasks_enqueued: usize,
+
+    /// Message describing the operation
+    #[schema(example = "Enqueued 5 analysis tasks")]
+    pub message: String,
+}

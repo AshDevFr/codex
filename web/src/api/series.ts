@@ -345,6 +345,52 @@ export const seriesApi = {
 		);
 		return response.data;
 	},
+
+	// ==================== Bulk Operations API ====================
+
+	/**
+	 * Mark all books in multiple series as read in bulk
+	 * @param seriesIds - Array of series IDs to mark as read
+	 */
+	bulkMarkAsRead: async (
+		seriesIds: string[],
+	): Promise<{ count: number; message: string }> => {
+		const response = await api.post<{ count: number; message: string }>(
+			"/series/bulk/read",
+			{ seriesIds },
+		);
+		return response.data;
+	},
+
+	/**
+	 * Mark all books in multiple series as unread in bulk
+	 * @param seriesIds - Array of series IDs to mark as unread
+	 */
+	bulkMarkAsUnread: async (
+		seriesIds: string[],
+	): Promise<{ count: number; message: string }> => {
+		const response = await api.post<{ count: number; message: string }>(
+			"/series/bulk/unread",
+			{ seriesIds },
+		);
+		return response.data;
+	},
+
+	/**
+	 * Queue analysis for all books in multiple series in bulk
+	 * @param seriesIds - Array of series IDs to analyze
+	 * @param force - Whether to force re-analysis of already analyzed books (default: true)
+	 */
+	bulkAnalyze: async (
+		seriesIds: string[],
+		force = true,
+	): Promise<{ tasksEnqueued: number; message: string }> => {
+		const response = await api.post<{ tasksEnqueued: number; message: string }>(
+			"/series/bulk/analyze",
+			{ seriesIds, force },
+		);
+		return response.data;
+	},
 };
 
 /** Alphabetical group with count */

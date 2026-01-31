@@ -31,12 +31,14 @@ import {
 	IconDownload,
 	IconEdit,
 	IconEyeOff,
+	IconInfoCircle,
 	IconPhoto,
 	IconTrash,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { booksApi } from "@/api/books";
+import { BookInfoModal } from "@/components/book";
 import { BookMetadataEditModal } from "@/components/books/BookMetadataEditModal";
 import { usePermissions } from "@/hooks/usePermissions";
 import { PERMISSIONS } from "@/types/permissions";
@@ -74,6 +76,8 @@ export function BookDetail() {
 	const queryClient = useQueryClient();
 	const [summaryOpened, { toggle: toggleSummary }] = useDisclosure(false);
 	const [editModalOpened, { open: openEditModal, close: closeEditModal }] =
+		useDisclosure(false);
+	const [infoModalOpened, { open: openInfoModal, close: closeInfoModal }] =
 		useDisclosure(false);
 	const isWideScreen = useMediaQuery("(min-width: 768px)");
 
@@ -494,6 +498,15 @@ export function BookDetail() {
 								>
 									Download
 								</Button>
+								<Tooltip label="Book Info">
+									<ActionIcon
+										variant="subtle"
+										size="md"
+										onClick={openInfoModal}
+									>
+										<IconInfoCircle size={18} />
+									</ActionIcon>
+								</Tooltip>
 							</Group>
 
 							{/* Summary - show preview with expand if long */}
@@ -715,6 +728,13 @@ export function BookDetail() {
 				onClose={closeEditModal}
 				bookId={book.id}
 				bookTitle={book.title}
+			/>
+
+			{/* Book Info Modal */}
+			<BookInfoModal
+				opened={infoModalOpened}
+				onClose={closeInfoModal}
+				book={book}
 			/>
 		</Box>
 	);

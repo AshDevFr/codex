@@ -1,6 +1,7 @@
 import {
 	ActionIcon,
 	Card,
+	Checkbox,
 	Group,
 	Image,
 	Menu,
@@ -20,7 +21,7 @@ import {
 	IconTrash,
 } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { booksApi } from "@/api/books";
 import { seriesApi } from "@/api/series";
@@ -34,12 +35,27 @@ interface MediaCardProps {
 	type: "book" | "series";
 	data: Book | Series;
 	hideSeriesName?: boolean;
+	/** Callback when item is selected/deselected. Receives id, shiftKey, and optional index. */
+	onSelect?: (id: string, shiftKey: boolean, index?: number) => void;
+	/** Whether this item is currently selected */
+	isSelected?: boolean;
+	/** Whether bulk selection mode is active (at least one item selected) */
+	isSelectionMode?: boolean;
+	/** Whether this item can be selected (type matches current selection) */
+	canBeSelected?: boolean;
+	/** Index of this item in the grid (for range selection) */
+	index?: number;
 }
 
-export function MediaCard({
+export const MediaCard = memo(function MediaCard({
 	type,
 	data,
 	hideSeriesName = false,
+	onSelect,
+	isSelected = false,
+	isSelectionMode = false,
+	canBeSelected = true,
+	index,
 }: MediaCardProps) {
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
@@ -52,11 +68,23 @@ export function MediaCard({
 		(state) => state.updates[data.id],
 	);
 
-	// Handle card click navigation
+	// Handle card click navigation or selection
 	const handleCardClick = (e: React.MouseEvent) => {
-		// Don't navigate if clicking the menu button or dropdown
+		// Don't navigate if clicking the menu button, dropdown, or checkbox
 		if ((e.target as HTMLElement).closest("[data-menu]")) return;
+		if ((e.target as HTMLElement).closest("[data-selection-checkbox]")) return;
 
+		// In selection mode, clicking the card toggles selection (if allowed)
+		// or does nothing (if type mismatch)
+		if (isSelectionMode && onSelect) {
+			if (canBeSelected) {
+				onSelect(data.id, e.shiftKey, index);
+			}
+			// In selection mode, don't navigate regardless of canBeSelected
+			return;
+		}
+
+		// Normal navigation (only when not in selection mode)
 		if (type === "series") {
 			navigate(`/series/${(data as Series).id}`);
 		} else {
@@ -339,6 +367,15 @@ export function MediaCard({
 		: series?.title || "";
 	const altText = book ? book.title : series?.title || "";
 
+	// Build class names for selection state
+	const cardClassNames = [
+		isSelectionMode && "media-card--selection-mode",
+		isSelected && "media-card--selected",
+		isSelectionMode && !canBeSelected && "media-card--disabled",
+	]
+		.filter(Boolean)
+		.join(" ");
+
 	return (
 		<Card
 			shadow="sm"
@@ -346,6 +383,7 @@ export function MediaCard({
 			radius="md"
 			withBorder
 			onClick={handleCardClick}
+			className={cardClassNames || undefined}
 			style={{
 				height: "100%",
 				display: "flex",
@@ -354,8 +392,12 @@ export function MediaCard({
 				width: "100%", // Ensure full width of grid cell
 				boxSizing: "border-box", // Include border in width calculation
 				animation: isNew ? "fadeIn 0.5s ease-in" : undefined,
-				border: isNew ? "2px solid var(--mantine-color-blue-6)" : undefined,
-				cursor: "pointer",
+				border: isNew
+					? "2px solid var(--mantine-color-blue-6)"
+					: isSelected
+						? "3px solid var(--mantine-color-orange-6)"
+						: undefined,
+				cursor: isSelectionMode && !canBeSelected ? "not-allowed" : "pointer",
 			}}
 		>
 			<Stack gap={0} style={{ height: "100%", minHeight: 0 }}>
@@ -422,6 +464,38 @@ export function MediaCard({
 								fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300'%3E%3Crect fill='%23ddd' width='200' height='300'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Cover%3C/text%3E%3C/svg%3E"
 							/>
 						</>
+					)}
+					{/* Selection checkbox - top left */}
+					{onSelect && (
+						<div
+							data-selection-checkbox
+							className={`media-card-checkbox ${isSelected ? "media-card-checkbox--selected" : ""} ${isSelectionMode ? "media-card-checkbox--visible" : ""}`}
+						>
+							<Checkbox
+								checked={isSelected}
+								onChange={(e) => {
+									// Prevent event from bubbling to card click handler
+									e.stopPropagation();
+									if (canBeSelected && onSelect) {
+										// Get the native event to check for shift key
+										const nativeEvent = e.nativeEvent as unknown as MouseEvent;
+										onSelect(data.id, nativeEvent?.shiftKey ?? false, index);
+									}
+								}}
+								disabled={!canBeSelected}
+								color="orange"
+								size="md"
+								aria-label={`Select ${type === "book" ? book?.title : series?.title}`}
+								styles={{
+									input: {
+										cursor: canBeSelected ? "pointer" : "not-allowed",
+										backgroundColor: isSelected
+											? undefined
+											: "rgba(255, 255, 255, 0.9)",
+									},
+								}}
+							/>
+						</div>
 					)}
 					{/* Unread indicator - Triangle for books, Square for series */}
 					{type === "book" && book && !book.readProgress && (
@@ -751,4 +825,4 @@ export function MediaCard({
 			</Stack>
 		</Card>
 	);
-}
+});

@@ -6,18 +6,22 @@ import {
 	Menu,
 	Pagination,
 	Select,
-	SimpleGrid,
 	Stack,
 	Text,
 	Title,
 } from "@mantine/core";
 import { IconSortAscending } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { seriesApi } from "@/api/series";
 import { MediaCard } from "@/components/library/MediaCard";
+import {
+	selectCanSelectType,
+	selectIsSelectionMode,
+	useBulkSelectionStore,
+} from "@/store/bulkSelectionStore";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
+import type { Book } from "@/types";
 
 interface SeriesBookListProps {
 	seriesId: string;
@@ -47,10 +51,28 @@ export function SeriesBookList({
 	seriesName: _seriesName,
 	bookCount,
 }: SeriesBookListProps) {
-	const navigate = useNavigate();
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(20);
 	const [sort, setSort] = useState("number,asc");
+
+	// Bulk selection state - use stable selectors to minimize re-renders
+	const isSelectionMode = useBulkSelectionStore(selectIsSelectionMode);
+	const canSelectBooks = useBulkSelectionStore(selectCanSelectType("book"));
+	const toggleSelection = useBulkSelectionStore(
+		(state) => state.toggleSelection,
+	);
+	const selectRange = useBulkSelectionStore((state) => state.selectRange);
+	const getLastSelectedIndex = useBulkSelectionStore(
+		(state) => state.getLastSelectedIndex,
+	);
+	// Get the Set directly for O(1) lookups - only re-renders when the Set changes
+	const selectedIds = useBulkSelectionStore((state) => state.selectedIds);
+
+	// Grid ID for range selection tracking
+	const gridId = `series-books-${seriesId}`;
+
+	// Ref for storing books data for range selection (updated after query)
+	const booksDataRef = useRef<Book[]>([]);
 
 	// Get show deleted preference from user preferences store
 	const showDeletedBooks = useUserPreferencesStore((state) =>
@@ -112,11 +134,40 @@ export function SeriesBookList({
 		[paginatedBooks, sortedBooks.length],
 	);
 
+	// Update booksDataRef when data changes (for range selection)
+	if (paginatedBooks) {
+		booksDataRef.current = paginatedBooks;
+	}
+
 	const totalPages = data ? Math.ceil(data.total / pageSize) : 1;
 
-	const handleBookClick = (bookId: string) => {
-		navigate(`/books/${bookId}`);
-	};
+	// Handle selection with shift+click range support
+	const handleSelect = useCallback(
+		(id: string, shiftKey: boolean, index?: number) => {
+			if (shiftKey && isSelectionMode && index !== undefined) {
+				// Shift+click: select range from last selected to current
+				const lastIndex = getLastSelectedIndex(gridId);
+				if (lastIndex !== undefined && lastIndex !== index) {
+					const start = Math.min(lastIndex, index);
+					const end = Math.max(lastIndex, index);
+					const rangeIds = booksDataRef.current
+						.slice(start, end + 1)
+						.map((item) => item.id);
+					selectRange(rangeIds, "book");
+					return;
+				}
+			}
+			// Normal click: toggle selection
+			toggleSelection(id, "book", gridId, index);
+		},
+		[
+			toggleSelection,
+			selectRange,
+			getLastSelectedIndex,
+			gridId,
+			isSelectionMode,
+		],
+	);
 
 	const currentSortLabel =
 		SORT_OPTIONS.find((opt) => opt.value === sort)?.label || "Sort";
@@ -194,23 +245,28 @@ export function SeriesBookList({
 				<Text c="dimmed">No books in this series</Text>
 			) : (
 				<>
-					<SimpleGrid
-						cols={{ base: 2, xs: 3, sm: 4, md: 5, lg: 6, xl: 7 }}
-						spacing="md"
+					<div
 						style={{
+							display: "grid",
 							gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+							gap: "var(--mantine-spacing-md)",
+							width: "100%",
 						}}
 					>
-						{data?.data.map((book) => (
-							<Box
+						{data?.data.map((book, index) => (
+							<MediaCard
 								key={book.id}
-								onClick={() => handleBookClick(book.id)}
-								style={{ cursor: "pointer" }}
-							>
-								<MediaCard type="book" data={book} hideSeriesName />
-							</Box>
+								type="book"
+								data={book}
+								hideSeriesName
+								index={index}
+								onSelect={handleSelect}
+								isSelected={selectedIds.has(book.id)}
+								isSelectionMode={isSelectionMode}
+								canBeSelected={canSelectBooks}
+							/>
 						))}
-					</SimpleGrid>
+					</div>
 
 					{totalPages > 1 && (
 						<Center mt="md">

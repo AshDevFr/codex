@@ -300,6 +300,12 @@ plugins-check: ## Run lint, typecheck, and tests on all plugins
 	@$(MAKE) plugins-test
 	@echo "$(GREEN)All plugin checks passed!$(NC)"
 
+plugins-check-fix: ## Run lint:fix, typecheck, and tests on all plugins
+	@$(MAKE) plugins-lint-fix
+	@$(MAKE) plugins-typecheck
+	@$(MAKE) plugins-test
+	@echo "$(GREEN)All plugin checks passed!$(NC)"
+
 plugins-clean: ## Clean build artifacts from all plugins
 	@echo "$(BLUE)Cleaning plugins...$(NC)"
 	@for dir in $(PLUGIN_DIRS); do \

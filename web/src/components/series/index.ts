@@ -5,6 +5,7 @@ export { ExternalLinks } from "./ExternalLinks";
 export { ExternalRatings } from "./ExternalRatings";
 export { GenreTagChips } from "./GenreTagChips";
 export { SeriesBookList } from "./SeriesBookList";
+export { SeriesInfoModal } from "./SeriesInfoModal";
 export { SeriesMetadata } from "./SeriesMetadata";
 export { SeriesMetadataEditModal } from "./SeriesMetadataEditModal";
 export { SeriesRating } from "./SeriesRating";

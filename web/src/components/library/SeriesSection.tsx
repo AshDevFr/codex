@@ -8,7 +8,7 @@ import {
 	Text,
 } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { seriesApi } from "@/api/series";
 import { ActiveFilters } from "@/components/library/ActiveFilters";
@@ -19,6 +19,11 @@ import {
 } from "@/components/library/AlphabetFilter";
 import { MediaCard } from "@/components/library/MediaCard";
 import { useSeriesFilterState } from "@/hooks/useSeriesFilterState";
+import {
+	selectCanSelectType,
+	selectIsSelectionMode,
+	useBulkSelectionStore,
+} from "@/store/bulkSelectionStore";
 import type { SeriesCondition } from "@/types";
 
 /** Fixed skeleton IDs to avoid array index keys */
@@ -72,6 +77,25 @@ export function SeriesSection({
 }: SeriesSectionProps) {
 	const navigate = useNavigate();
 	const [, setSearchParams] = useSearchParams();
+
+	// Bulk selection state - use stable selectors to minimize re-renders
+	const isSelectionMode = useBulkSelectionStore(selectIsSelectionMode);
+	const canSelectSeries = useBulkSelectionStore(selectCanSelectType("series"));
+	const toggleSelection = useBulkSelectionStore(
+		(state) => state.toggleSelection,
+	);
+	const selectRange = useBulkSelectionStore((state) => state.selectRange);
+	const getLastSelectedIndex = useBulkSelectionStore(
+		(state) => state.getLastSelectedIndex,
+	);
+	// Get the Set directly for O(1) lookups - only re-renders when the Set changes
+	const selectedIds = useBulkSelectionStore((state) => state.selectedIds);
+
+	// Grid ID for range selection tracking
+	const gridId = `series-${libraryId}`;
+
+	// Ref for storing series data for range selection (updated after query)
+	const seriesDataRef = useRef<{ id: string }[]>([]);
 
 	// Get filter state from URL (uses the advanced filtering system)
 	// Filters are only applied when user clicks "Apply" in FilterPanel,
@@ -217,6 +241,40 @@ export function SeriesSection({
 		}
 	}, [seriesData, onTotalChange]);
 
+	// Update seriesDataRef when data changes (for range selection)
+	if (seriesData?.data) {
+		seriesDataRef.current = seriesData.data;
+	}
+
+	// Handle selection with shift+click range support
+	// This callback is stable because it uses refs for data that changes
+	const handleSelect = useCallback(
+		(id: string, shiftKey: boolean, index?: number) => {
+			if (shiftKey && isSelectionMode && index !== undefined) {
+				// Shift+click: select range from last selected to current
+				const lastIndex = getLastSelectedIndex(gridId);
+				if (lastIndex !== undefined && lastIndex !== index) {
+					const start = Math.min(lastIndex, index);
+					const end = Math.max(lastIndex, index);
+					const rangeIds = seriesDataRef.current
+						.slice(start, end + 1)
+						.map((item) => item.id);
+					selectRange(rangeIds, "series");
+					return;
+				}
+			}
+			// Normal click: toggle selection
+			toggleSelection(id, "series", gridId, index);
+		},
+		[
+			toggleSelection,
+			selectRange,
+			getLastSelectedIndex,
+			gridId,
+			isSelectionMode,
+		],
+	);
+
 	// Handle alphabet filter selection
 	const handleLetterSelect = useCallback(
 		(letter: AlphabetLetter | null) => {
@@ -273,8 +331,17 @@ export function SeriesSection({
 							width: "100%",
 						}}
 					>
-						{seriesData.data.map((series) => (
-							<MediaCard key={series.id} type="series" data={series} />
+						{seriesData.data.map((series, index) => (
+							<MediaCard
+								key={series.id}
+								type="series"
+								data={series}
+								index={index}
+								onSelect={handleSelect}
+								isSelected={selectedIds.has(series.id)}
+								isSelectionMode={isSelectionMode}
+								canBeSelected={canSelectSeries}
+							/>
 						))}
 					</div>
 

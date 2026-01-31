@@ -235,6 +235,16 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/series/:series_id/unread",
             post(handlers::mark_series_as_unread),
         )
+        // Bulk operations
+        .route(
+            "/series/bulk/read",
+            post(handlers::bulk_mark_series_as_read),
+        )
+        .route(
+            "/series/bulk/unread",
+            post(handlers::bulk_mark_series_as_unread),
+        )
+        .route("/series/bulk/analyze", post(handlers::bulk_analyze_series))
         // Series metadata from plugins (Phase 4)
         .route(
             "/series/:series_id/metadata/preview",
