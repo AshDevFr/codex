@@ -517,9 +517,42 @@ impl PluginProcess {
     /// Check if the process is still running
     pub fn is_running(&mut self) -> bool {
         match self.child.try_wait() {
-            Ok(None) => true,     // Still running
-            Ok(Some(_)) => false, // Exited
-            Err(_) => false,      // Error checking status
+            Ok(None) => true, // Still running
+            Ok(Some(status)) => {
+                // Process exited - log details for debugging
+                let pid = self.child.id();
+                if let Some(code) = status.code() {
+                    debug!(
+                        pid = ?pid,
+                        exit_code = code,
+                        "Plugin process has exited with code"
+                    );
+                } else {
+                    // On Unix, this means the process was killed by a signal
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::process::ExitStatusExt;
+                        if let Some(signal) = status.signal() {
+                            warn!(
+                                pid = ?pid,
+                                signal = signal,
+                                "Plugin process was killed by signal"
+                            );
+                        } else {
+                            debug!(pid = ?pid, "Plugin process exited without code or signal");
+                        }
+                    }
+                    #[cfg(not(unix))]
+                    {
+                        debug!(pid = ?pid, "Plugin process exited without code");
+                    }
+                }
+                false
+            }
+            Err(e) => {
+                warn!(error = %e, "Error checking plugin process status");
+                false
+            }
         }
     }
 
@@ -565,9 +598,14 @@ async fn stdin_writer_task(mut stdin: ChildStdin, mut rx: mpsc::Receiver<String>
             format!("{}\n", line)
         };
 
-        // Log the message being sent (truncate for readability)
+        // Log the message being sent (truncate for readability, respecting UTF-8 char boundaries)
         let log_preview = if line.len() > 200 {
-            format!("{}...", &line[..200])
+            // Find a valid UTF-8 char boundary at or before position 200
+            let mut end = 200;
+            while end > 0 && !line.is_char_boundary(end) {
+                end -= 1;
+            }
+            format!("{}...", &line[..end])
         } else {
             line.clone()
         };
@@ -605,11 +643,11 @@ async fn stdout_reader_task(stdout: ChildStdout, tx: mpsc::Sender<String>) {
         line.clear();
         match reader.read_line(&mut line).await {
             Ok(0) => {
-                // EOF - process closed stdout
-                debug!(
+                // EOF - process closed stdout (process likely exited or crashed)
+                warn!(
                     total_lines = line_count,
                     total_bytes = total_bytes,
-                    "Plugin stdout closed (EOF)"
+                    "Plugin stdout closed (EOF) - process may have crashed or exited"
                 );
                 break;
             }
@@ -638,9 +676,14 @@ async fn stdout_reader_task(stdout: ChildStdout, tx: mpsc::Sender<String>) {
                     output.truncate(MAX_LINE_LENGTH);
                 }
 
-                // Log the response (truncate for readability)
+                // Log the response (truncate for readability, respecting UTF-8 char boundaries)
                 let log_preview = if output.len() > 200 {
-                    format!("{}...", &output[..200])
+                    // Find a valid UTF-8 char boundary at or before position 200
+                    let mut end = 200;
+                    while end > 0 && !output.is_char_boundary(end) {
+                        end -= 1;
+                    }
+                    format!("{}...", &output[..end])
                 } else {
                     output.clone()
                 };

@@ -11,7 +11,7 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -112,6 +112,10 @@ pub struct RpcClient {
     default_timeout: Duration,
     /// Response reader task handle
     reader_handle: Option<tokio::task::JoinHandle<()>>,
+    /// Flag indicating if the process is still alive.
+    /// Set to false when the response reader task detects process termination.
+    /// This prevents writing to a dead process, which would cause EPIPE errors.
+    process_alive: Arc<AtomicBool>,
 }
 
 impl RpcClient {
@@ -120,13 +124,15 @@ impl RpcClient {
         let process = Arc::new(Mutex::new(process));
         let pending: Arc<Mutex<HashMap<i64, PendingRequest>>> =
             Arc::new(Mutex::new(HashMap::new()));
+        let process_alive = Arc::new(AtomicBool::new(true));
 
         // Start the response reader task
         let reader_handle = {
             let process = Arc::clone(&process);
             let pending = Arc::clone(&pending);
+            let process_alive = Arc::clone(&process_alive);
             tokio::spawn(async move {
-                response_reader_task(process, pending).await;
+                response_reader_task(process, pending, process_alive).await;
             })
         };
 
@@ -136,6 +142,7 @@ impl RpcClient {
             pending,
             default_timeout,
             reader_handle: Some(reader_handle),
+            process_alive,
         }
     }
 
@@ -160,6 +167,16 @@ impl RpcClient {
         P: Serialize,
         R: DeserializeOwned,
     {
+        // Check if the process is still alive before attempting to send.
+        // This prevents EPIPE errors when trying to write to a dead process.
+        if !self.process_alive.load(Ordering::Acquire) {
+            debug!(
+                method = method,
+                "Skipping RPC request - process is not alive"
+            );
+            return Err(RpcError::Process(ProcessError::ProcessTerminated));
+        }
+
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let params_value = serde_json::to_value(params)?;
 
@@ -189,7 +206,11 @@ impl RpcClient {
             pending.insert(id, PendingRequest { tx });
         }
 
-        // Send request
+        // Send request (double-check process is alive to handle race conditions)
+        if !self.process_alive.load(Ordering::Acquire) {
+            self.remove_pending(id).await;
+            return Err(RpcError::Process(ProcessError::ProcessTerminated));
+        }
         {
             let process = self.process.lock().await;
             process.write_line(&request_json).await?;
@@ -264,6 +285,10 @@ impl RpcClient {
 
     /// Check if the underlying process is still running
     pub async fn is_running(&self) -> bool {
+        // First check the fast atomic flag - if marked dead, don't bother checking process
+        if !self.process_alive.load(Ordering::Acquire) {
+            return false;
+        }
         let mut process = self.process.lock().await;
         process.is_running()
     }
@@ -276,6 +301,9 @@ impl RpcClient {
 
     /// Shutdown the RPC client and kill the process
     pub async fn shutdown(&mut self, timeout_duration: Duration) -> Result<i32, ProcessError> {
+        // Mark process as not alive immediately to prevent new requests
+        self.process_alive.store(false, Ordering::Release);
+
         // Cancel the reader task
         if let Some(handle) = self.reader_handle.take() {
             handle.abort();
@@ -305,6 +333,7 @@ impl RpcClient {
 async fn response_reader_task(
     process: Arc<Mutex<PluginProcess>>,
     pending: Arc<Mutex<HashMap<i64, PendingRequest>>>,
+    process_alive: Arc<AtomicBool>,
 ) {
     debug!("RPC response reader task started");
     loop {
@@ -315,7 +344,10 @@ async fn response_reader_task(
             match tokio::time::timeout(Duration::from_millis(100), process.read_line()).await {
                 Ok(Ok(line)) => Some(line),
                 Ok(Err(e)) => {
-                    debug!("Response reader stopping: {}", e);
+                    warn!(
+                        error = %e,
+                        "Response reader stopping due to read error - plugin process may have crashed"
+                    );
                     break;
                 }
                 Err(_) => None, // Timeout - release lock and retry
@@ -332,9 +364,14 @@ async fn response_reader_task(
             continue;
         }
 
-        // Log the response (truncate for readability)
+        // Log the response (truncate for readability, respecting UTF-8 char boundaries)
         let log_preview = if line.len() > 200 {
-            format!("{}...", &line[..200])
+            // Find a valid UTF-8 char boundary at or before position 200
+            let mut end = 200;
+            while end > 0 && !line.is_char_boundary(end) {
+                end -= 1;
+            }
+            format!("{}...", &line[..end])
         } else {
             line.clone()
         };
@@ -396,8 +433,23 @@ async fn response_reader_task(
         }
     }
 
+    // Mark the process as no longer alive.
+    // This prevents new requests from being sent to the dead process,
+    // which would cause EPIPE errors.
+    warn!(
+        "Response reader task ending - marking plugin process as not alive to prevent EPIPE errors"
+    );
+    process_alive.store(false, Ordering::Release);
+
     // Process ended - cancel all pending requests
     let mut pending_map = pending.lock().await;
+    let pending_count = pending_map.len();
+    if pending_count > 0 {
+        warn!(
+            pending_count = pending_count,
+            "Cancelling pending RPC requests due to plugin process exit"
+        );
+    }
     for (id, req) in pending_map.drain() {
         debug!("Cancelling pending request {} due to process exit", id);
         let _ = req
