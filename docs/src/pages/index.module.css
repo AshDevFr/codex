@@ -3,7 +3,11 @@
   text-align: center;
   position: relative;
   overflow: hidden;
-  background: linear-gradient(135deg, #0d9488 0%, #115e59 50%, #134e4a 100%);
+  background: linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.8)),
+    url('/img/codex-banner.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   color: white;
 }
 
