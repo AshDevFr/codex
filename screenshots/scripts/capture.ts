@@ -79,18 +79,25 @@ async function main(): Promise<void> {
     }
 
     try {
+      const navigation = await import("./scenarios/navigation.js");
+      scenarios.push({ name: "Navigation", run: navigation.run });
+    } catch {
+      console.log("⚠️  Navigation scenario not found, skipping");
+    }
+
+    try {
       const plugins = await import("./scenarios/plugins.js");
       scenarios.push({ name: "Plugins", run: plugins.run });
     } catch {
       console.log("⚠️  Plugins scenario not found, skipping");
     }
 
-    // Navigation runs last since it logs out
+    // Logout runs last since it logs out and captures the login page
     try {
-      const navigation = await import("./scenarios/navigation.js");
-      scenarios.push({ name: "Navigation", run: navigation.run });
+      const logout = await import("./scenarios/logout.js");
+      scenarios.push({ name: "Logout", run: logout.run });
     } catch {
-      console.log("⚠️  Navigation scenario not found, skipping");
+      console.log("⚠️  Logout scenario not found, skipping");
     }
 
     if (scenarios.length === 0) {

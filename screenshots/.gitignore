@@ -3,6 +3,7 @@ node_modules/
 
 # Output (generated screenshots)
 output/*
+!output/.gitkeep
 
 # Fixtures (user-provided sample files)
 fixtures/books/*

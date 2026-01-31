@@ -474,8 +474,8 @@ screenshots-clean: ## Remove generated screenshots
 
 screenshots-move-to-docs: ## Move screenshots to docs/screenshots
 	mkdir -p docs/docs/screenshots
-	cp -r screenshots/output/* docs/docs/screenshots/
-	@echo "$(GREEN)Screenshots moved to docs/docs/screenshots$(NC)"
+	cp -r screenshots/output/* docs/screenshots/
+	@echo "$(GREEN)Screenshots moved to docs/screenshots$(NC)"
 
 # =============================================================================
 # Binary Distribution (cargo-dist)

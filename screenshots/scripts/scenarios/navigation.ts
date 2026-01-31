@@ -1,11 +1,10 @@
 import { Page, BrowserContext } from "playwright";
 import { captureScreenshot } from "../utils/screenshot.js";
 import { waitForPageReady, waitForImages } from "../utils/wait.js";
-import { logout } from "../utils/auth.js";
 
 /**
  * Navigation and miscellaneous pages scenario
- * Captures login page, search results, and other general views
+ * Captures search results and other general views
  */
 export async function run(page: Page, _context: BrowserContext): Promise<void> {
   console.log("  🧭 Capturing navigation pages...");
@@ -29,13 +28,9 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
     await settingsNavItem.click();
     await page.waitForTimeout(300);
     await captureScreenshot(page, "navigation/sidebar-settings-expanded");
+  } else {
+    console.log("    ⚠️  Settings nav item not found");
   }
-
-  // Capture login page (logout first)
-  console.log("    📷 Login page");
-  await logout(page);
-  await waitForPageReady(page);
-  await captureScreenshot(page, "navigation/login-page");
 }
 
 /**
