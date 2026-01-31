@@ -139,11 +139,18 @@ impl ScanningStrategyImpl for CalibreStrategy {
                 s
             });
 
-            // Set series path if not already set (use parent folder's relative path)
+            // Set series path if not already set
+            // For ByAuthor mode, use the author folder (grandparent)
+            // For other modes, use the book folder (parent)
             if series.path.is_none() {
-                if let Some(parent) = file_path.parent() {
-                    if let Ok(rel_parent) = parent.strip_prefix(library_path) {
-                        series.path = Some(rel_parent.to_string_lossy().to_string());
+                let target_folder = match self.config.series_mode {
+                    CalibreSeriesMode::ByAuthor => file_path.parent().and_then(|p| p.parent()),
+                    _ => file_path.parent(),
+                };
+
+                if let Some(folder) = target_folder {
+                    if let Ok(rel_path) = folder.strip_prefix(library_path) {
+                        series.path = Some(rel_path.to_string_lossy().to_string());
                     }
                 }
             }
@@ -256,6 +263,12 @@ mod tests {
         assert_eq!(result.len(), 2);
         assert!(result.contains_key("Mistborn"));
         assert!(result.contains_key("The Well of Ascension"));
+
+        // Series path should be the book folder (parent)
+        assert_eq!(
+            result["Mistborn"].path,
+            Some("Brandon Sanderson/Mistborn (45)".to_string())
+        );
     }
 
     #[test]
@@ -282,6 +295,16 @@ mod tests {
 
         assert_eq!(result["Brandon Sanderson"].books.len(), 2);
         assert_eq!(result["George R. R. Martin"].books.len(), 1);
+
+        // Series path should be the author folder (grandparent), not the book folder
+        assert_eq!(
+            result["Brandon Sanderson"].path,
+            Some("Brandon Sanderson".to_string())
+        );
+        assert_eq!(
+            result["George R. R. Martin"].path,
+            Some("George R. R. Martin".to_string())
+        );
     }
 
     #[test]
