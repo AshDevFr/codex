@@ -44,6 +44,9 @@ interface UseDraftSeriesFilterStateReturn {
 	setSharingTagState: (value: string, state: TriState) => void;
 	setSharingTagMode: (mode: FilterMode) => void;
 
+	// Actions for completion filter
+	setCompletionState: (state: TriState) => void;
+
 	// Bulk actions on draft
 	clearAllDraft: () => void;
 	clearGroupDraft: (group: keyof SeriesFilterState) => void;
@@ -86,6 +89,7 @@ function cloneFilterState(state: SeriesFilterState): SeriesFilterState {
 			mode: state.sharingTags.mode,
 			values: new Map(state.sharingTags.values),
 		},
+		completion: state.completion,
 	};
 }
 
@@ -96,7 +100,11 @@ function filterStatesEqual(
 	a: SeriesFilterState,
 	b: SeriesFilterState,
 ): boolean {
-	const groups: (keyof SeriesFilterState)[] = [
+	// Compare simple TriState fields first
+	if (a.completion !== b.completion) return false;
+
+	// Compare FilterGroupState fields
+	const groups: (keyof Omit<SeriesFilterState, "completion">)[] = [
 		"genres",
 		"tags",
 		"status",
@@ -165,7 +173,7 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
 	// Helper to update a single group in draft
 	const updateGroup = useCallback(
 		(
-			group: keyof SeriesFilterState,
+			group: keyof Omit<SeriesFilterState, "completion">,
 			updater: (current: FilterGroupState) => FilterGroupState,
 		) => {
 			updateDraft((current) => ({
@@ -337,6 +345,17 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
 		[updateGroup],
 	);
 
+	// Completion actions
+	const setCompletionState = useCallback(
+		(state: TriState) => {
+			updateDraft((current) => ({
+				...current,
+				completion: state,
+			}));
+		},
+		[updateDraft],
+	);
+
 	// Clear all draft filters
 	const clearAllDraft = useCallback(() => {
 		setDraftFilters(createEmptySeriesFilterState());
@@ -361,6 +380,7 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
 		newParams.delete("pf");
 		newParams.delete("lf");
 		newParams.delete("stf");
+		newParams.delete("cf");
 
 		// Add new filter params (will be empty for cleared filters)
 		for (const [key, value] of filterParams) {
@@ -383,10 +403,17 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
 
 	// Clear a specific group in draft
 	const clearGroupDraft = useCallback((group: keyof SeriesFilterState) => {
-		setDraftFilters((current) => ({
-			...current,
-			[group]: { ...current[group], values: new Map() },
-		}));
+		if (group === "completion") {
+			setDraftFilters((current) => ({
+				...current,
+				completion: "neutral",
+			}));
+		} else {
+			setDraftFilters((current) => ({
+				...current,
+				[group]: { ...current[group], values: new Map() },
+			}));
+		}
 	}, []);
 
 	// Apply draft to URL
@@ -404,6 +431,7 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
 		newParams.delete("pf");
 		newParams.delete("lf");
 		newParams.delete("stf");
+		newParams.delete("cf");
 
 		// Add new filter params
 		for (const [key, value] of filterParams) {
@@ -431,6 +459,7 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
 			publisher: countActiveFilters(draftFilters.publisher),
 			language: countActiveFilters(draftFilters.language),
 			sharingTags: countActiveFilters(draftFilters.sharingTags),
+			completion: draftFilters.completion !== "neutral" ? 1 : 0,
 		}),
 		[draftFilters],
 	);
@@ -462,6 +491,7 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
 		setLanguageMode,
 		setSharingTagState,
 		setSharingTagMode,
+		setCompletionState,
 		clearAllDraft,
 		clearGroupDraft,
 		clearAllAndApply,

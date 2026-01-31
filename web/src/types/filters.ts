@@ -61,7 +61,8 @@ export type SeriesCondition =
 	| { name: FieldOperator }
 	| { titleSort: FieldOperator }
 	| { readStatus: FieldOperator }
-	| { sharingTag: FieldOperator };
+	| { sharingTag: FieldOperator }
+	| { completion: BoolOperator };
 
 // =============================================================================
 // Book conditions (matches backend BookCondition)
@@ -129,6 +130,7 @@ export interface SeriesFilterState {
 	publisher: FilterGroupState;
 	language: FilterGroupState;
 	sharingTags: FilterGroupState;
+	completion: TriState;
 }
 
 /**
@@ -167,6 +169,7 @@ export function createEmptySeriesFilterState(): SeriesFilterState {
 		publisher: createEmptyFilterGroup(),
 		language: createEmptyFilterGroup(),
 		sharingTags: createEmptyFilterGroup(),
+		completion: "neutral",
 	};
 }
 
@@ -310,6 +313,13 @@ export function seriesFilterStateToCondition(
 	allConditions.push(
 		...filterGroupToConditions(state.sharingTags, "sharingTag"),
 	);
+
+	// Add completion condition
+	if (state.completion === "include") {
+		allConditions.push({ completion: { operator: "isTrue" } });
+	} else if (state.completion === "exclude") {
+		allConditions.push({ completion: { operator: "isFalse" } });
+	}
 
 	// Return combined condition
 	if (allConditions.length === 0) {
@@ -496,6 +506,7 @@ export const FILTER_PARAM_KEYS = {
 	publisher: "pf",
 	language: "lf",
 	sharingTags: "stf",
+	completion: "cf",
 } as const;
 
 /**
@@ -529,6 +540,10 @@ export function serializeSeriesFilters(
 	if (sharingTagParam)
 		params.set(FILTER_PARAM_KEYS.sharingTags, sharingTagParam);
 
+	if (state.completion !== "neutral") {
+		params.set(FILTER_PARAM_KEYS.completion, state.completion);
+	}
+
 	return params;
 }
 
@@ -536,6 +551,7 @@ export function serializeSeriesFilters(
  * Parse series filter state from URL search params
  */
 export function parseSeriesFilters(params: URLSearchParams): SeriesFilterState {
+	const completionParam = params.get(FILTER_PARAM_KEYS.completion);
 	return {
 		genres: parseFilterGroup(params.get(FILTER_PARAM_KEYS.genres)),
 		tags: parseFilterGroup(params.get(FILTER_PARAM_KEYS.tags)),
@@ -544,6 +560,10 @@ export function parseSeriesFilters(params: URLSearchParams): SeriesFilterState {
 		publisher: parseFilterGroup(params.get(FILTER_PARAM_KEYS.publisher)),
 		language: parseFilterGroup(params.get(FILTER_PARAM_KEYS.language)),
 		sharingTags: parseFilterGroup(params.get(FILTER_PARAM_KEYS.sharingTags)),
+		completion:
+			completionParam === "include" || completionParam === "exclude"
+				? completionParam
+				: "neutral",
 	};
 }
 

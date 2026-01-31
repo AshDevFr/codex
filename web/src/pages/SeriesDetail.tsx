@@ -619,7 +619,8 @@ export function SeriesDetail() {
 
 							{/* Book count */}
 							<Text size="sm" c="dimmed">
-								{series.bookCount ?? 0} / {series.bookCount ?? 0} books
+								{series.bookCount ?? 0} /{" "}
+								{series.metadata?.totalBookCount ?? series.bookCount ?? 0} books
 							</Text>
 
 							{/* Alternate titles inline */}

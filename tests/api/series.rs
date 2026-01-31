@@ -2693,7 +2693,7 @@ async fn test_list_series_filter_empty_string_ignored() {
 // ============================================================================
 
 use codex::api::routes::v1::dto::filter::{
-    FieldOperator, SeriesCondition, SeriesListRequest, UuidOperator,
+    BoolOperator, FieldOperator, SeriesCondition, SeriesListRequest, UuidOperator,
 };
 
 #[tokio::test]
@@ -4419,4 +4419,168 @@ async fn test_get_series_books_with_full() {
     for book in &books {
         let _ = book.metadata.locks.summary_lock;
     }
+}
+
+// ============================================================================
+// Completion Filter Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_series_filtered_by_completion_complete() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    use codex::db::repositories::SeriesMetadataRepository;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create a complete series (3 books out of 3 expected)
+    let complete_series = SeriesRepository::create(&db, library.id, "Complete Series", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_total_book_count(&db, complete_series.id, Some(3))
+        .await
+        .unwrap();
+    for i in 1..=3 {
+        let book = create_test_book(
+            complete_series.id,
+            library.id,
+            &format!("/lib/complete/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            None,
+        );
+        BookRepository::create(&db, &book, None).await.unwrap();
+    }
+
+    // Create an incomplete series (2 books out of 5 expected)
+    let incomplete_series = SeriesRepository::create(&db, library.id, "Incomplete Series", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_total_book_count(&db, incomplete_series.id, Some(5))
+        .await
+        .unwrap();
+    for i in 1..=2 {
+        let book = create_test_book(
+            incomplete_series.id,
+            library.id,
+            &format!("/lib/incomplete/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            None,
+        );
+        BookRepository::create(&db, &book, None).await.unwrap();
+    }
+
+    // Create a series without total_book_count (should be excluded from both filters)
+    let no_count_series = SeriesRepository::create(&db, library.id, "No Count Series", None)
+        .await
+        .unwrap();
+    let book = create_test_book(
+        no_count_series.id,
+        library.id,
+        "/lib/nocount/book1.cbz",
+        "book1.cbz",
+        None,
+    );
+    BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Filter by completion = true (complete series)
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Completion {
+            completion: BoolOperator::IsTrue,
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].title, "Complete Series");
+
+    // Filter by completion = false (incomplete series, i.e., missing books)
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Completion {
+            completion: BoolOperator::IsFalse,
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].title, "Incomplete Series");
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_by_completion_with_no_total_book_count() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series without total_book_count
+    let series1 = SeriesRepository::create(&db, library.id, "Series Without Count", None)
+        .await
+        .unwrap();
+    let book = create_test_book(
+        series1.id,
+        library.id,
+        "/lib/series1/book1.cbz",
+        "book1.cbz",
+        None,
+    );
+    BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Filter by completion = true should return empty (no series have total_book_count)
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Completion {
+            completion: BoolOperator::IsTrue,
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(
+        series_list.data.len(),
+        0,
+        "Series without total_book_count should not appear in complete filter"
+    );
+
+    // Filter by completion = false should also return empty
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Completion {
+            completion: BoolOperator::IsFalse,
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(
+        series_list.data.len(),
+        0,
+        "Series without total_book_count should not appear in incomplete filter"
+    );
 }

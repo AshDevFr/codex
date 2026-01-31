@@ -215,6 +215,26 @@ export function SeriesFilterPanel() {
 									showModeToggle={false}
 								/>
 
+								{/* Collection Completion Filter */}
+								<FilterGroup
+									title="Collection"
+									options={[{ value: "complete", label: "Complete" }]}
+									state={{
+										mode: "allOf",
+										values:
+											draftState.draftFilters.completion !== "neutral"
+												? new Map([
+														["complete", draftState.draftFilters.completion],
+													])
+												: new Map(),
+									}}
+									onValueChange={(_value, state) =>
+										draftState.setCompletionState(state)
+									}
+									onModeChange={() => {}}
+									showModeToggle={false}
+								/>
+
 								{/* Metadata Section - Only show if there's data */}
 								{hasMetadataFilters && (
 									<>

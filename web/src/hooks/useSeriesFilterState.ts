@@ -45,6 +45,9 @@ interface UseSeriesFilterStateReturn {
 	setSharingTagState: (value: string, state: TriState) => void;
 	setSharingTagMode: (mode: FilterMode) => void;
 
+	// Actions for completion filter
+	setCompletionState: (state: TriState) => void;
+
 	// Bulk actions
 	clearAll: () => void;
 	clearGroup: (group: keyof SeriesFilterState) => void;
@@ -95,6 +98,7 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
 			newParams.delete("pf");
 			newParams.delete("lf");
 			newParams.delete("stf");
+			newParams.delete("cf");
 
 			// Add new filter params
 			for (const [key, value] of filterParams) {
@@ -109,10 +113,10 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
 		[searchParams, setSearchParams],
 	);
 
-	// Helper to update a single group
+	// Helper to update a single group (only for FilterGroupState fields)
 	const updateGroup = useCallback(
 		(
-			group: keyof SeriesFilterState,
+			group: keyof Omit<SeriesFilterState, "completion">,
 			updater: (current: FilterGroupState) => FilterGroupState,
 		) => {
 			const newFilters = { ...filters };
@@ -283,6 +287,15 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
 		[updateGroup],
 	);
 
+	// Completion actions
+	const setCompletionState = useCallback(
+		(state: TriState) => {
+			const newFilters = { ...filters, completion: state };
+			updateFilters(newFilters);
+		},
+		[filters, updateFilters],
+	);
+
 	// Clear all filters
 	const clearAll = useCallback(() => {
 		updateFilters(createEmptySeriesFilterState());
@@ -291,12 +304,17 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
 	// Clear a specific group
 	const clearGroup = useCallback(
 		(group: keyof SeriesFilterState) => {
-			updateGroup(group, (current) => ({
-				...current,
-				values: new Map(),
-			}));
+			if (group === "completion") {
+				const newFilters = { ...filters, completion: "neutral" as const };
+				updateFilters(newFilters);
+			} else {
+				updateGroup(group, (current) => ({
+					...current,
+					values: new Map(),
+				}));
+			}
 		},
-		[updateGroup],
+		[filters, updateFilters, updateGroup],
 	);
 
 	// Computed values
@@ -309,6 +327,7 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
 			publisher: countActiveFilters(filters.publisher),
 			language: countActiveFilters(filters.language),
 			sharingTags: countActiveFilters(filters.sharingTags),
+			completion: filters.completion !== "neutral" ? 1 : 0,
 		}),
 		[filters],
 	);
@@ -340,6 +359,7 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
 		setLanguageMode,
 		setSharingTagState,
 		setSharingTagMode,
+		setCompletionState,
 		clearAll,
 		clearGroup,
 		hasActiveFilters,

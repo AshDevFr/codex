@@ -95,6 +95,8 @@ pub enum SeriesCondition {
         #[serde(rename = "sharingTag")]
         sharing_tag: FieldOperator,
     },
+    /// Filter by series completion status (complete/incomplete based on book_count vs total_book_count)
+    Completion { completion: BoolOperator },
 }
 
 /// Book-level search conditions
@@ -508,5 +510,40 @@ mod tests {
         assert!(json.contains(r#""allOf""#));
         assert!(json.contains(r#""titleSort""#));
         assert!(json.contains(r#""genre""#));
+    }
+
+    #[test]
+    fn test_completion_condition_is_true() {
+        let condition = SeriesCondition::Completion {
+            completion: BoolOperator::IsTrue,
+        };
+
+        let json = serde_json::to_string(&condition).unwrap();
+        assert!(json.contains(r#""completion""#));
+        assert!(json.contains(r#""operator":"isTrue""#));
+    }
+
+    #[test]
+    fn test_completion_condition_is_false() {
+        let condition = SeriesCondition::Completion {
+            completion: BoolOperator::IsFalse,
+        };
+
+        let json = serde_json::to_string(&condition).unwrap();
+        assert!(json.contains(r#""completion""#));
+        assert!(json.contains(r#""operator":"isFalse""#));
+    }
+
+    #[test]
+    fn test_completion_condition_deserialization() {
+        let json = r#"{"completion":{"operator":"isTrue"}}"#;
+        let condition: SeriesCondition = serde_json::from_str(json).unwrap();
+
+        match condition {
+            SeriesCondition::Completion {
+                completion: BoolOperator::IsTrue,
+            } => {}
+            _ => panic!("Expected Completion condition with IsTrue operator"),
+        }
     }
 }

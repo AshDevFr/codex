@@ -23740,6 +23740,18 @@
                 "$ref": "#/components/schemas/FieldOperator"
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Filter by series completion status (complete/incomplete based on book_count vs total_book_count)",
+            "required": [
+              "completion"
+            ],
+            "properties": {
+              "completion": {
+                "$ref": "#/components/schemas/BoolOperator"
+              }
+            }
           }
         ],
         "description": "Series-level search conditions\n\nConditions can be composed using `allOf` (AND) and `anyOf` (OR).\nUses untagged enum for cleaner JSON without explicit type field."

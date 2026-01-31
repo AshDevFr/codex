@@ -10395,6 +10395,8 @@ export interface components {
             readStatus: components["schemas"]["FieldOperator"];
         } | {
             sharingTag: components["schemas"]["FieldOperator"];
+        } | {
+            completion: components["schemas"]["BoolOperator"];
         };
         /** @description Series cover data transfer object */
         SeriesCoverDto: {

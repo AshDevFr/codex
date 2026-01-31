@@ -35,6 +35,8 @@ describe("Filter Types - Helper Functions", () => {
 			expect(state.readStatus.values.size).toBe(0);
 			expect(state.publisher.values.size).toBe(0);
 			expect(state.language.values.size).toBe(0);
+			expect(state.sharingTags.values.size).toBe(0);
+			expect(state.completion).toBe("neutral");
 		});
 	});
 
@@ -269,6 +271,55 @@ describe("Filter Types - Condition Building", () => {
 			const allOf = (condition as { allOf: SeriesCondition[] }).allOf;
 			expect(allOf).toHaveLength(2);
 		});
+
+		it("should create completion condition with isTrue for include", () => {
+			const state = createEmptySeriesFilterState();
+			state.completion = "include";
+
+			const condition = seriesFilterStateToCondition(state);
+
+			expect(condition).toEqual({
+				completion: { operator: "isTrue" },
+			});
+		});
+
+		it("should create completion condition with isFalse for exclude", () => {
+			const state = createEmptySeriesFilterState();
+			state.completion = "exclude";
+
+			const condition = seriesFilterStateToCondition(state);
+
+			expect(condition).toEqual({
+				completion: { operator: "isFalse" },
+			});
+		});
+
+		it("should not create completion condition for neutral", () => {
+			const state = createEmptySeriesFilterState();
+			state.completion = "neutral";
+
+			const condition = seriesFilterStateToCondition(state);
+
+			expect(condition).toBeUndefined();
+		});
+
+		it("should combine completion with other conditions", () => {
+			const state = createEmptySeriesFilterState();
+			state.genres.values.set("action", "include");
+			state.completion = "include";
+
+			const condition = seriesFilterStateToCondition(state);
+
+			expect(condition).toHaveProperty("allOf");
+			const allOf = (condition as { allOf: SeriesCondition[] }).allOf;
+			expect(allOf).toHaveLength(2);
+			expect(allOf).toContainEqual({
+				genre: { operator: "is", value: "action" },
+			});
+			expect(allOf).toContainEqual({
+				completion: { operator: "isTrue" },
+			});
+		});
 	});
 });
 
@@ -402,6 +453,67 @@ describe("Filter Types - URL Serialization", () => {
 			expect(parsed.genres.values.get("action")).toBe("include");
 			expect(parsed.tags.values.get("favorite")).toBe("include");
 			expect(parsed.status.values.get("ongoing")).toBe("include");
+		});
+
+		it("should serialize completion include state", () => {
+			const state = createEmptySeriesFilterState();
+			state.completion = "include";
+
+			const params = serializeSeriesFilters(state);
+
+			expect(params.get("cf")).toBe("include");
+		});
+
+		it("should serialize completion exclude state", () => {
+			const state = createEmptySeriesFilterState();
+			state.completion = "exclude";
+
+			const params = serializeSeriesFilters(state);
+
+			expect(params.get("cf")).toBe("exclude");
+		});
+
+		it("should not serialize completion neutral state", () => {
+			const state = createEmptySeriesFilterState();
+			state.completion = "neutral";
+
+			const params = serializeSeriesFilters(state);
+
+			expect(params.has("cf")).toBe(false);
+		});
+
+		it("should parse completion include state", () => {
+			const params = new URLSearchParams("cf=include");
+			const parsed = parseSeriesFilters(params);
+
+			expect(parsed.completion).toBe("include");
+		});
+
+		it("should parse completion exclude state", () => {
+			const params = new URLSearchParams("cf=exclude");
+			const parsed = parseSeriesFilters(params);
+
+			expect(parsed.completion).toBe("exclude");
+		});
+
+		it("should default to neutral for missing or invalid completion param", () => {
+			const params1 = new URLSearchParams();
+			expect(parseSeriesFilters(params1).completion).toBe("neutral");
+
+			const params2 = new URLSearchParams("cf=invalid");
+			expect(parseSeriesFilters(params2).completion).toBe("neutral");
+		});
+
+		it("should roundtrip completion state", () => {
+			const state = createEmptySeriesFilterState();
+			state.completion = "include";
+			state.genres.values.set("action", "include");
+
+			const params = serializeSeriesFilters(state);
+			const parsed = parseSeriesFilters(params);
+
+			expect(parsed.completion).toBe("include");
+			expect(parsed.genres.values.get("action")).toBe("include");
 		});
 	});
 });

@@ -126,6 +126,10 @@ impl FilterService {
                 SeriesCondition::SharingTag { sharing_tag } => {
                     Self::filter_by_sharing_tag(db, sharing_tag, candidate_ids).await
                 }
+
+                SeriesCondition::Completion { completion } => {
+                    Self::filter_by_completion(db, completion, candidate_ids).await
+                }
             }
         })
     }
@@ -643,6 +647,91 @@ impl FilterService {
                 }
             }
         }
+    }
+
+    /// Filter series by completion status
+    ///
+    /// A series is considered "complete" when:
+    /// - It has a total_book_count set in metadata AND
+    /// - The actual book_count equals total_book_count
+    ///
+    /// A series is considered "incomplete" (missing books) when:
+    /// - It has a total_book_count set in metadata AND
+    /// - The actual book_count is less than total_book_count
+    ///
+    /// Series without total_book_count are excluded from both filters.
+    async fn filter_by_completion(
+        db: &DatabaseConnection,
+        operator: &BoolOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use crate::db::entities::{books, series_metadata};
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        // Get all series with total_book_count set
+        let series_with_total: Vec<(Uuid, i32)> = series_metadata::Entity::find()
+            .filter(series_metadata::Column::TotalBookCount.is_not_null())
+            .select_only()
+            .column(series_metadata::Column::SeriesId)
+            .column(series_metadata::Column::TotalBookCount)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        if series_with_total.is_empty() {
+            return Ok(HashSet::new());
+        }
+
+        // Filter by candidates if provided
+        let series_with_total: Vec<(Uuid, i32)> = if let Some(candidates) = candidate_ids {
+            series_with_total
+                .into_iter()
+                .filter(|(id, _)| candidates.contains(id))
+                .collect()
+        } else {
+            series_with_total
+        };
+
+        if series_with_total.is_empty() {
+            return Ok(HashSet::new());
+        }
+
+        // Get actual book counts for these series
+        let series_ids: Vec<Uuid> = series_with_total.iter().map(|(id, _)| *id).collect();
+
+        // Count non-deleted books for each series
+        let book_counts: Vec<(Uuid, i64)> = books::Entity::find()
+            .filter(books::Column::SeriesId.is_in(series_ids.clone()))
+            .filter(books::Column::Deleted.eq(false))
+            .select_only()
+            .column(books::Column::SeriesId)
+            .column_as(books::Column::Id.count(), "count")
+            .group_by(books::Column::SeriesId)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        let book_count_map: std::collections::HashMap<Uuid, i64> =
+            book_counts.into_iter().collect();
+
+        // Determine which series match the completion filter
+        let mut result = HashSet::new();
+
+        for (series_id, total_book_count) in series_with_total {
+            let actual_count = book_count_map.get(&series_id).copied().unwrap_or(0);
+            let is_complete = actual_count >= total_book_count as i64;
+
+            let matches = match operator {
+                BoolOperator::IsTrue => is_complete,
+                BoolOperator::IsFalse => !is_complete,
+            };
+
+            if matches {
+                result.insert(series_id);
+            }
+        }
+
+        Ok(result)
     }
 
     async fn filter_by_status(
