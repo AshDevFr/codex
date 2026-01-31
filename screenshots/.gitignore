@@ -2,8 +2,7 @@
 node_modules/
 
 # Output (generated screenshots)
-output/*.png
-output/*.jpg
+output/*
 
 # Fixtures (user-provided sample files)
 fixtures/books/*
