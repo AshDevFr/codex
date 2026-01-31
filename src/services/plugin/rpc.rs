@@ -175,7 +175,12 @@ impl RpcClient {
         };
 
         let request_json = serde_json::to_string(&request)?;
-        trace!(id, method, "Sending RPC request");
+        debug!(
+            id = id,
+            method = method,
+            request_len = request_json.len(),
+            "Sending RPC request"
+        );
 
         // Create response channel
         let (tx, rx) = oneshot::channel();
@@ -191,15 +196,30 @@ impl RpcClient {
         }
 
         // Wait for response with timeout
+        debug!(
+            id = id,
+            timeout_ms = request_timeout.as_millis(),
+            "Waiting for RPC response"
+        );
         let result = match timeout(request_timeout, rx).await {
-            Ok(Ok(result)) => result,
+            Ok(Ok(result)) => {
+                debug!(id = id, "RPC response received");
+                result
+            }
             Ok(Err(_)) => {
                 // Channel was closed (cancelled)
+                debug!(id = id, "RPC request cancelled (channel closed)");
                 self.remove_pending(id).await;
                 return Err(RpcError::Cancelled);
             }
             Err(_) => {
                 // Timeout
+                error!(
+                    id = id,
+                    timeout_ms = request_timeout.as_millis(),
+                    method = method,
+                    "RPC request timed out"
+                );
                 self.remove_pending(id).await;
                 return Err(RpcError::Timeout(request_timeout));
             }
@@ -207,6 +227,7 @@ impl RpcClient {
 
         // Parse the result
         let value = result?;
+        debug!(id = id, "RPC response parsed successfully");
         let parsed: R = serde_json::from_value(value)?;
         Ok(parsed)
     }
@@ -285,6 +306,7 @@ async fn response_reader_task(
     process: Arc<Mutex<PluginProcess>>,
     pending: Arc<Mutex<HashMap<i64, PendingRequest>>>,
 ) {
+    debug!("RPC response reader task started");
     loop {
         // Acquire lock briefly and use timeout to prevent holding lock while waiting
         // This allows write operations to acquire the lock between read attempts
@@ -310,13 +332,19 @@ async fn response_reader_task(
             continue;
         }
 
-        trace!(line = %line, "Received line from plugin");
+        // Log the response (truncate for readability)
+        let log_preview = if line.len() > 200 {
+            format!("{}...", &line[..200])
+        } else {
+            line.clone()
+        };
+        debug!(bytes = line.len(), preview = %log_preview, "Received line from plugin");
 
         // Parse the response
         let response: JsonRpcResponse = match serde_json::from_str(&line) {
             Ok(r) => r,
             Err(e) => {
-                warn!("Failed to parse plugin response: {} - line: {}", e, line);
+                warn!(error = %e, line = %line, "Failed to parse plugin response as JSON-RPC");
                 continue;
             }
         };

@@ -85,7 +85,7 @@ async function createPluginScreenshots(page: Page): Promise<void> {
 
     // Fill arguments - find by placeholder that contains "mangabaka" (the args textarea)
     const argsTextarea = page.locator('textarea[placeholder*="mangabaka"]').first();
-    await argsTextarea.fill("-y @ashdev/codex-plugin-metadata-echo@1.0.0");
+    await argsTextarea.fill("-y\n@ashdev/codex-plugin-metadata-echo@1.0.0");
     await page.waitForTimeout(100);
 
     // Capture Execution tab with npx command

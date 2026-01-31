@@ -60,18 +60,37 @@ The easiest way to run plugins is via `npx`, which downloads and runs the plugin
 2. Click **Add Plugin**
 3. Configure:
    - **Command**: `npx`
-   - **Arguments**: `-y @ashdev/codex-plugin-metadata-mangabaka@1.0.0`
+   - **Arguments** (one per line):
+     ```
+     -y
+     @ashdev/codex-plugin-metadata-mangabaka@1.0.0
+     ```
 4. Add your credentials (API keys, etc.)
 5. Click **Save** and **Enable**
 
+:::warning Arguments Format
+**Each argument must be on its own line.** Do NOT combine arguments like `-y @package@1.0.0` on one line.
+
+✅ Correct:
+```
+-y
+@ashdev/codex-plugin-metadata-mangabaka@1.0.0
+```
+
+❌ Wrong:
+```
+-y @ashdev/codex-plugin-metadata-mangabaka@1.0.0
+```
+:::
+
 ### npx Options
 
-| Option | Example | Description |
+| Option | Arguments (one per line) | Description |
 |--------|---------|-------------|
-| Latest version | `-y @ashdev/codex-plugin-metadata-mangabaka` | Always uses latest |
-| Specific version | `-y @ashdev/codex-plugin-metadata-mangabaka@1.0.0` | Pins to exact version |
-| Version range | `-y @ashdev/codex-plugin-metadata-mangabaka@^1.0.0` | Allows compatible updates |
-| Faster startup | `-y --prefer-offline @ashdev/codex-plugin-metadata-mangabaka@1.0.0` | Skips version check if cached |
+| Latest version | `-y`<br/>`@ashdev/codex-plugin-metadata-mangabaka` | Always uses latest |
+| Specific version | `-y`<br/>`@ashdev/codex-plugin-metadata-mangabaka@1.0.0` | Pins to exact version |
+| Version range | `-y`<br/>`@ashdev/codex-plugin-metadata-mangabaka@^1.0.0` | Allows compatible updates |
+| Faster startup | `-y`<br/>`--prefer-offline`<br/>`@ashdev/codex-plugin-metadata-mangabaka@1.0.0` | Skips version check if cached |
 
 **Flags explained:**
 - `-y` (or `--yes`): Auto-confirms installation, required for non-interactive environments like containers
@@ -83,7 +102,10 @@ For containers, use `--prefer-offline` with a pinned version for fast, predictab
 
 ```
 Command: npx
-Arguments: -y --prefer-offline @ashdev/codex-plugin-metadata-mangabaka@1.0.0
+Arguments (one per line):
+  -y
+  --prefer-offline
+  @ashdev/codex-plugin-metadata-mangabaka@1.0.0
 ```
 
 You can pre-warm the npx cache in your Dockerfile:

@@ -49,6 +49,10 @@ const DEFAULT_ALLOWED_COMMANDS: &[&str] = &["node", "npx", "python", "python3", 
 /// Path prefixes that are always allowed (for absolute paths to plugin binaries)
 const ALLOWED_PATH_PREFIXES: &[&str] = &["/opt/codex/plugins/"];
 
+/// Standard binary directories where allowed commands can be found
+/// This allows using absolute paths like `/usr/bin/npx` for commands in the allowlist
+const STANDARD_BIN_DIRS: &[&str] = &["/usr/bin/", "/usr/local/bin/", "/bin/"];
+
 /// Cached allowlist (initialized once on first use)
 static COMMAND_ALLOWLIST: OnceLock<Vec<String>> = OnceLock::new();
 
@@ -190,7 +194,9 @@ fn get_command_allowlist() -> &'static Vec<String> {
 ///
 /// A command is allowed if:
 /// 1. It matches an entry in the allowlist (e.g., "node", "python")
-/// 2. It's an absolute path starting with an allowed prefix (e.g., "/opt/codex/plugins/")
+/// 2. It's an absolute path to an allowed command in a standard bin directory
+///    (e.g., "/usr/bin/npx", "/usr/local/bin/node")
+/// 3. It's an absolute path starting with an allowed prefix (e.g., "/opt/codex/plugins/")
 ///
 /// # Security
 ///
@@ -200,14 +206,29 @@ fn get_command_allowlist() -> &'static Vec<String> {
 pub fn is_command_allowed(command: &str) -> bool {
     let allowlist = get_command_allowlist();
 
-    // Check if command matches an allowlist entry
+    // Check if command matches an allowlist entry (bare command name)
     if allowlist.iter().any(|allowed| allowed == command) {
         return true;
     }
 
-    // Check if command is an absolute path under an allowed prefix
+    // Check if command is an absolute path
     if command.starts_with('/') {
         let path = Path::new(command);
+
+        // Check if this is an absolute path to an allowed command in a standard bin directory
+        // e.g., "/usr/bin/npx" -> extract "npx" and check if it's in allowlist
+        if let Some(cmd_name) = path.file_name().and_then(|n| n.to_str()) {
+            for bin_dir in STANDARD_BIN_DIRS {
+                if command.starts_with(bin_dir)
+                    && allowlist.iter().any(|allowed| allowed == cmd_name)
+                {
+                    // Verify the path exists and resolves correctly
+                    if path.canonicalize().is_ok() {
+                        return true;
+                    }
+                }
+            }
+        }
 
         // Resolve symlinks to prevent bypass attacks
         // e.g., /opt/codex/plugins/malicious -> /bin/rm
@@ -438,10 +459,23 @@ impl PluginProcess {
         debug!(
             command = %config.command,
             args = ?config.args,
+            env_count = filtered_env.len(),
+            working_directory = ?config.working_directory,
             "Spawning plugin process"
         );
 
-        let mut child = cmd.spawn()?;
+        let mut child = cmd.spawn().map_err(|e| {
+            error!(
+                command = %config.command,
+                args = ?config.args,
+                error = %e,
+                "Failed to spawn plugin process"
+            );
+            e
+        })?;
+
+        let pid = child.id();
+        debug!(pid = ?pid, "Plugin process spawned successfully");
 
         // Take ownership of stdio handles
         let stdin = child.stdin.take().ok_or(ProcessError::StdinUnavailable)?;
@@ -523,23 +557,33 @@ impl PluginProcess {
 
 /// Task that writes lines to the process stdin
 async fn stdin_writer_task(mut stdin: ChildStdin, mut rx: mpsc::Receiver<String>) {
+    debug!("Plugin stdin writer task started");
     while let Some(line) = rx.recv().await {
         let line_with_newline = if line.ends_with('\n') {
-            line
+            line.clone()
         } else {
             format!("{}\n", line)
         };
 
+        // Log the message being sent (truncate for readability)
+        let log_preview = if line.len() > 200 {
+            format!("{}...", &line[..200])
+        } else {
+            line.clone()
+        };
+        debug!(bytes = line_with_newline.len(), preview = %log_preview, "Writing to plugin stdin");
+
         if let Err(e) = stdin.write_all(line_with_newline.as_bytes()).await {
-            error!("Failed to write to plugin stdin: {}", e);
+            error!(error = %e, "Failed to write to plugin stdin");
             break;
         }
 
         if let Err(e) = stdin.flush().await {
-            error!("Failed to flush plugin stdin: {}", e);
+            error!(error = %e, "Failed to flush plugin stdin");
             break;
         }
     }
+    debug!("Plugin stdin writer task ended");
 }
 
 /// Task that reads lines from the process stdout with size limits
@@ -551,26 +595,34 @@ async fn stdin_writer_task(mut stdin: ChildStdin, mut rx: mpsc::Receiver<String>
 ///
 /// These limits protect against memory exhaustion from malicious or buggy plugins.
 async fn stdout_reader_task(stdout: ChildStdout, tx: mpsc::Sender<String>) {
+    debug!("Plugin stdout reader task started");
     let mut reader = BufReader::new(stdout);
     let mut line = String::new();
     let mut total_bytes: usize = 0;
+    let mut line_count: usize = 0;
 
     loop {
         line.clear();
         match reader.read_line(&mut line).await {
             Ok(0) => {
                 // EOF - process closed stdout
-                debug!("Plugin stdout closed (EOF)");
+                debug!(
+                    total_lines = line_count,
+                    total_bytes = total_bytes,
+                    "Plugin stdout closed (EOF)"
+                );
                 break;
             }
             Ok(bytes_read) => {
                 total_bytes = total_bytes.saturating_add(bytes_read);
+                line_count += 1;
 
                 // Check total output limit
                 if total_bytes > MAX_TOTAL_OUTPUT {
                     error!(
-                        "Plugin output exceeded size limit ({} bytes, max {} bytes)",
-                        total_bytes, MAX_TOTAL_OUTPUT
+                        total_bytes = total_bytes,
+                        max_bytes = MAX_TOTAL_OUTPUT,
+                        "Plugin output exceeded size limit"
                     );
                     break;
                 }
@@ -579,20 +631,29 @@ async fn stdout_reader_task(stdout: ChildStdout, tx: mpsc::Sender<String>) {
                 let mut output = line.trim_end().to_string();
                 if output.len() > MAX_LINE_LENGTH {
                     warn!(
-                        "Plugin output line truncated ({} bytes, max {} bytes)",
-                        output.len(),
-                        MAX_LINE_LENGTH
+                        line_length = output.len(),
+                        max_length = MAX_LINE_LENGTH,
+                        "Plugin output line truncated"
                     );
                     output.truncate(MAX_LINE_LENGTH);
                 }
 
+                // Log the response (truncate for readability)
+                let log_preview = if output.len() > 200 {
+                    format!("{}...", &output[..200])
+                } else {
+                    output.clone()
+                };
+                debug!(bytes = bytes_read, line = line_count, preview = %log_preview, "Read from plugin stdout");
+
                 if tx.send(output).await.is_err() {
                     // Receiver dropped
+                    debug!("Plugin stdout receiver dropped");
                     break;
                 }
             }
             Err(e) => {
-                error!("Failed to read from plugin stdout: {}", e);
+                error!(error = %e, "Failed to read from plugin stdout");
                 break;
             }
         }
@@ -645,9 +706,26 @@ mod tests {
         assert!(!is_command_allowed("/opt/codex/plugins/metadata/mangabaka"));
 
         // Paths not under allowed prefix should also be blocked
-        assert!(!is_command_allowed("/usr/bin/node"));
         assert!(!is_command_allowed("/home/user/malicious"));
         assert!(!is_command_allowed("/opt/other/plugins/plugin"));
+    }
+
+    #[test]
+    fn test_absolute_paths_to_allowed_commands() {
+        // Absolute paths to allowed commands in standard bin directories should work
+        // if the file exists. On most systems, /usr/bin/env exists.
+        // Note: This test may behave differently on systems without these binaries.
+
+        // /usr/bin/env is not in our allowlist, so it should be blocked
+        assert!(!is_command_allowed("/usr/bin/env"));
+
+        // Nonexistent paths to allowed commands should be blocked
+        assert!(!is_command_allowed("/usr/bin/nonexistent-node"));
+        assert!(!is_command_allowed("/usr/local/bin/nonexistent-npx"));
+
+        // Paths to disallowed commands should still be blocked even in standard dirs
+        assert!(!is_command_allowed("/usr/bin/rm"));
+        assert!(!is_command_allowed("/usr/bin/curl"));
     }
 
     #[test]

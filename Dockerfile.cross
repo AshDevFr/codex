@@ -178,8 +178,14 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Create directories
-RUN mkdir -p /app/data /app/config && \
+# - /app/data, /app/config: Application data and config
+# - /app/.npm: npm cache for npx plugins (avoids permission issues with /.npm)
+RUN mkdir -p /app/data /app/config /app/.npm && \
     chown -R codex:codex /app
+
+# Set npm cache location to avoid permission issues when running as non-root
+# This is needed for npx-based plugins to download packages
+ENV npm_config_cache=/app/.npm
 
 # Environment variables for user mapping (defaults)
 ENV PUID=1000

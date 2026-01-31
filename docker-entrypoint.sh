@@ -22,7 +22,8 @@ if [ "$(id -u)" = "0" ]; then
     fi
 
     # Ensure ownership of app directories
-    chown -R codex:codex /app/data /app/config 2>/dev/null || true
+    # Include .npm for npx plugin cache
+    chown -R codex:codex /app/data /app/config /app/.npm 2>/dev/null || true
 
     echo "Running as codex (UID=$PUID, GID=$PGID)"
     exec su-exec codex "$@"

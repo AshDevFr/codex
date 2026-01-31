@@ -195,12 +195,27 @@ impl PluginHandle {
             *state = PluginState::Starting;
         }
 
-        debug!("Starting plugin process");
+        debug!(
+            command = %self.config.process.command,
+            args = ?self.config.process.args,
+            working_directory = ?self.config.process.working_directory,
+            has_credentials = self.config.credentials.is_some(),
+            "Starting plugin process"
+        );
 
         // Spawn the process
         let process = match PluginProcess::spawn(&self.config.process).await {
-            Ok(p) => p,
+            Ok(p) => {
+                debug!("Plugin process spawned, creating RPC client");
+                p
+            }
             Err(e) => {
+                error!(
+                    error = %e,
+                    command = %self.config.process.command,
+                    args = ?self.config.process.args,
+                    "Failed to spawn plugin process"
+                );
                 let mut state = self.state.write().await;
                 *state = PluginState::Stopped;
                 return Err(PluginError::SpawnFailed(e.to_string()));
@@ -209,6 +224,7 @@ impl PluginHandle {
 
         // Create RPC client
         let mut client = RpcClient::new(process, self.config.request_timeout);
+        debug!("RPC client created, sending initialize request");
 
         // Initialize the plugin
         // Convert SecretValue to Value for the init message
@@ -217,10 +233,16 @@ impl PluginHandle {
             credentials: self.config.credentials.as_ref().map(|s| s.inner().clone()),
         };
 
+        debug!(
+            has_config = init_params.config.is_some(),
+            has_credentials = init_params.credentials.is_some(),
+            "Sending initialize request to plugin"
+        );
+
         let manifest: PluginManifest = match client.call(methods::INITIALIZE, init_params).await {
             Ok(m) => m,
             Err(e) => {
-                error!("Plugin initialization failed: {}", e);
+                error!(error = %e, "Plugin initialization failed");
                 let _ = client.shutdown(self.config.shutdown_timeout).await;
                 let mut state = self.state.write().await;
                 *state = PluginState::Stopped;
