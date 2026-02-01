@@ -116,7 +116,10 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
 	// Helper to update a single group (only for FilterGroupState fields)
 	const updateGroup = useCallback(
 		(
-			group: keyof Omit<SeriesFilterState, "completion">,
+			group: keyof Omit<
+				SeriesFilterState,
+				"completion" | "hasExternalSourceId"
+			>,
 			updater: (current: FilterGroupState) => FilterGroupState,
 		) => {
 			const newFilters = { ...filters };
@@ -307,6 +310,12 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
 			if (group === "completion") {
 				const newFilters = { ...filters, completion: "neutral" as const };
 				updateFilters(newFilters);
+			} else if (group === "hasExternalSourceId") {
+				const newFilters = {
+					...filters,
+					hasExternalSourceId: "neutral" as const,
+				};
+				updateFilters(newFilters);
 			} else {
 				updateGroup(group, (current) => ({
 					...current,
@@ -328,6 +337,7 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
 			language: countActiveFilters(filters.language),
 			sharingTags: countActiveFilters(filters.sharingTags),
 			completion: filters.completion !== "neutral" ? 1 : 0,
+			hasExternalSourceId: filters.hasExternalSourceId !== "neutral" ? 1 : 0,
 		}),
 		[filters],
 	);

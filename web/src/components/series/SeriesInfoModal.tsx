@@ -10,7 +10,12 @@ import {
 	Text,
 	Tooltip,
 } from "@mantine/core";
-import { IconCheck, IconCopy, IconInfoCircle } from "@tabler/icons-react";
+import {
+	IconCheck,
+	IconCopy,
+	IconExternalLink,
+	IconInfoCircle,
+} from "@tabler/icons-react";
 import type { FullSeries } from "@/types";
 
 export interface SeriesInfoModalProps {
@@ -27,6 +32,25 @@ function formatDateTime(dateString: string): string {
 		hour: "2-digit",
 		minute: "2-digit",
 	});
+}
+
+function formatSourceName(source: string): string {
+	// Handle plugin sources: "plugin:mangabaka" -> "Mangabaka"
+	if (source.startsWith("plugin:")) {
+		const pluginName = source.slice(7);
+		return pluginName.charAt(0).toUpperCase() + pluginName.slice(1);
+	}
+	// Handle known sources
+	switch (source) {
+		case "comicinfo":
+			return "ComicInfo";
+		case "epub":
+			return "EPUB";
+		case "manual":
+			return "Manual";
+		default:
+			return source.charAt(0).toUpperCase() + source.slice(1);
+	}
 }
 
 interface InfoRowProps {
@@ -59,7 +83,11 @@ function InfoRow({ label, value, copyable, monospace }: InfoRowProps) {
 					</Code>
 					<CopyButton value={displayValue}>
 						{({ copied, copy }) => (
-							<Tooltip label={copied ? "Copied" : "Copy"} withArrow>
+							<Tooltip
+								label={copied ? "Copied" : "Copy"}
+								withArrow
+								zIndex={1100}
+							>
 								<ActionIcon
 									size="xs"
 									variant="subtle"
@@ -179,7 +207,7 @@ export function SeriesInfoModal({
 							{metadata?.language && (
 								<InfoRow label="Language" value={metadata.language} />
 							)}
-							{metadata?.ageRating && (
+							{metadata?.ageRating != null && (
 								<InfoRow label="Age Rating" value={`${metadata.ageRating}+`} />
 							)}
 						</Stack>
@@ -247,6 +275,78 @@ export function SeriesInfoModal({
 						)}
 					</Stack>
 				</Paper>
+
+				{/* External Sources */}
+				{series.externalIds && series.externalIds.length > 0 && (
+					<Paper p="sm" radius="sm" withBorder>
+						<Stack gap="xs">
+							<Text size="sm" fw={600} c="dimmed" tt="uppercase">
+								External Sources
+							</Text>
+							{series.externalIds.map((extId) => (
+								<Group
+									key={extId.id}
+									justify="space-between"
+									wrap="nowrap"
+									gap="md"
+								>
+									<Text size="sm" c="dimmed" style={{ flexShrink: 0 }}>
+										{formatSourceName(extId.source)}
+									</Text>
+									<Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+										<Code
+											style={{
+												wordBreak: "break-all",
+												whiteSpace: "normal",
+											}}
+										>
+											{extId.externalId}
+										</Code>
+										<CopyButton value={extId.externalId}>
+											{({ copied, copy }) => (
+												<Tooltip
+													label={copied ? "Copied" : "Copy"}
+													withArrow
+													zIndex={1100}
+												>
+													<ActionIcon
+														size="xs"
+														variant="subtle"
+														color={copied ? "teal" : "gray"}
+														onClick={copy}
+														style={{ flexShrink: 0 }}
+													>
+														{copied ? (
+															<IconCheck size={14} />
+														) : (
+															<IconCopy size={14} />
+														)}
+													</ActionIcon>
+												</Tooltip>
+											)}
+										</CopyButton>
+										{extId.externalUrl && (
+											<Tooltip label="Open in new tab" withArrow zIndex={1100}>
+												<ActionIcon
+													size="xs"
+													variant="subtle"
+													color="blue"
+													component="a"
+													href={extId.externalUrl}
+													target="_blank"
+													rel="noopener noreferrer"
+													style={{ flexShrink: 0 }}
+												>
+													<IconExternalLink size={14} />
+												</ActionIcon>
+											</Tooltip>
+										)}
+									</Group>
+								</Group>
+							))}
+						</Stack>
+					</Paper>
+				)}
 
 				{/* Identifiers */}
 				<Paper p="sm" radius="sm" withBorder>

@@ -97,6 +97,11 @@ pub enum SeriesCondition {
     },
     /// Filter by series completion status (complete/incomplete based on book_count vs total_book_count)
     Completion { completion: BoolOperator },
+    /// Filter by whether the series has an external source ID linked
+    HasExternalSourceId {
+        #[serde(rename = "hasExternalSourceId")]
+        has_external_source_id: BoolOperator,
+    },
 }
 
 /// Book-level search conditions
@@ -544,6 +549,41 @@ mod tests {
                 completion: BoolOperator::IsTrue,
             } => {}
             _ => panic!("Expected Completion condition with IsTrue operator"),
+        }
+    }
+
+    #[test]
+    fn test_has_external_source_id_condition_is_true() {
+        let condition = SeriesCondition::HasExternalSourceId {
+            has_external_source_id: BoolOperator::IsTrue,
+        };
+
+        let json = serde_json::to_string(&condition).unwrap();
+        assert!(json.contains(r#""hasExternalSourceId""#));
+        assert!(json.contains(r#""operator":"isTrue""#));
+    }
+
+    #[test]
+    fn test_has_external_source_id_condition_is_false() {
+        let condition = SeriesCondition::HasExternalSourceId {
+            has_external_source_id: BoolOperator::IsFalse,
+        };
+
+        let json = serde_json::to_string(&condition).unwrap();
+        assert!(json.contains(r#""hasExternalSourceId""#));
+        assert!(json.contains(r#""operator":"isFalse""#));
+    }
+
+    #[test]
+    fn test_has_external_source_id_condition_deserialization() {
+        let json = r#"{"hasExternalSourceId":{"operator":"isTrue"}}"#;
+        let condition: SeriesCondition = serde_json::from_str(json).unwrap();
+
+        match condition {
+            SeriesCondition::HasExternalSourceId {
+                has_external_source_id: BoolOperator::IsTrue,
+            } => {}
+            _ => panic!("Expected HasExternalSourceId condition with IsTrue operator"),
         }
     }
 }

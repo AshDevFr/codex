@@ -62,7 +62,8 @@ export type SeriesCondition =
 	| { titleSort: FieldOperator }
 	| { readStatus: FieldOperator }
 	| { sharingTag: FieldOperator }
-	| { completion: BoolOperator };
+	| { completion: BoolOperator }
+	| { hasExternalSourceId: BoolOperator };
 
 // =============================================================================
 // Book conditions (matches backend BookCondition)
@@ -131,6 +132,7 @@ export interface SeriesFilterState {
 	language: FilterGroupState;
 	sharingTags: FilterGroupState;
 	completion: TriState;
+	hasExternalSourceId: TriState;
 }
 
 /**
@@ -170,6 +172,7 @@ export function createEmptySeriesFilterState(): SeriesFilterState {
 		language: createEmptyFilterGroup(),
 		sharingTags: createEmptyFilterGroup(),
 		completion: "neutral",
+		hasExternalSourceId: "neutral",
 	};
 }
 
@@ -319,6 +322,13 @@ export function seriesFilterStateToCondition(
 		allConditions.push({ completion: { operator: "isTrue" } });
 	} else if (state.completion === "exclude") {
 		allConditions.push({ completion: { operator: "isFalse" } });
+	}
+
+	// Add hasExternalSourceId condition
+	if (state.hasExternalSourceId === "include") {
+		allConditions.push({ hasExternalSourceId: { operator: "isTrue" } });
+	} else if (state.hasExternalSourceId === "exclude") {
+		allConditions.push({ hasExternalSourceId: { operator: "isFalse" } });
 	}
 
 	// Return combined condition
@@ -507,6 +517,7 @@ export const FILTER_PARAM_KEYS = {
 	language: "lf",
 	sharingTags: "stf",
 	completion: "cf",
+	hasExternalSourceId: "esf",
 } as const;
 
 /**
@@ -544,6 +555,13 @@ export function serializeSeriesFilters(
 		params.set(FILTER_PARAM_KEYS.completion, state.completion);
 	}
 
+	if (state.hasExternalSourceId !== "neutral") {
+		params.set(
+			FILTER_PARAM_KEYS.hasExternalSourceId,
+			state.hasExternalSourceId,
+		);
+	}
+
 	return params;
 }
 
@@ -552,6 +570,9 @@ export function serializeSeriesFilters(
  */
 export function parseSeriesFilters(params: URLSearchParams): SeriesFilterState {
 	const completionParam = params.get(FILTER_PARAM_KEYS.completion);
+	const hasExternalSourceIdParam = params.get(
+		FILTER_PARAM_KEYS.hasExternalSourceId,
+	);
 	return {
 		genres: parseFilterGroup(params.get(FILTER_PARAM_KEYS.genres)),
 		tags: parseFilterGroup(params.get(FILTER_PARAM_KEYS.tags)),
@@ -563,6 +584,11 @@ export function parseSeriesFilters(params: URLSearchParams): SeriesFilterState {
 		completion:
 			completionParam === "include" || completionParam === "exclude"
 				? completionParam
+				: "neutral",
+		hasExternalSourceId:
+			hasExternalSourceIdParam === "include" ||
+			hasExternalSourceIdParam === "exclude"
+				? hasExternalSourceIdParam
 				: "neutral",
 	};
 }

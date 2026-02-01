@@ -93,15 +93,15 @@ export const MediaCard = memo(function MediaCard({
 	};
 
 	// Use API endpoint directly - browser will send auth cookie automatically
-	// Add cache-busting timestamp when a cover_updated SSE event is received,
-	// to force the browser to reload the image instead of using a cached placeholder.
+	// Add cache-busting parameter to force the browser to reload the image when
+	// the cover changes. We use SSE event timestamp if available (real-time update),
+	// otherwise fall back to updatedAt from the entity data.
 	const baseCoverUrl =
 		type === "book"
 			? `/api/v1/books/${(data as Book).id}/thumbnail`
 			: `/api/v1/series/${(data as Series).id}/thumbnail`;
-	const coverUrl = coverTimestamp
-		? `${baseCoverUrl}?t=${coverTimestamp}`
-		: baseCoverUrl;
+	const coverCacheBuster = coverTimestamp ?? data.updatedAt;
+	const coverUrl = `${baseCoverUrl}?v=${encodeURIComponent(String(coverCacheBuster))}`;
 
 	const book = type === "book" ? (data as Book) : null;
 	const series = type === "series" ? (data as Series) : null;
@@ -110,13 +110,13 @@ export const MediaCard = memo(function MediaCard({
 	const [imageLoaded, setImageLoaded] = useState(false);
 	const [_imageError, setImageError] = useState(false);
 
-	// Reset loading state when the item ID or cover timestamp changes
-	// (e.g., different book/series, or cover was regenerated via SSE event)
-	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset on ID/timestamp change
+	// Reset loading state when the item ID or cover cache buster changes
+	// (e.g., different book/series, or cover was regenerated via SSE event or data refetch)
+	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset on ID/cache buster change
 	useEffect(() => {
 		setImageLoaded(false);
 		setImageError(false);
-	}, [data.id, coverTimestamp]);
+	}, [data.id, coverCacheBuster]);
 
 	const handleImageLoad = useCallback(() => {
 		setImageLoaded(true);

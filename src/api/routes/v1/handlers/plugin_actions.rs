@@ -22,8 +22,8 @@ use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permissi
 use crate::db::entities::plugins::PluginPermission;
 use crate::db::repositories::{
     AlternateTitleRepository, ExternalLinkRepository, ExternalRatingRepository, GenreRepository,
-    LibraryRepository, PluginsRepository, SeriesMetadataRepository, SeriesRepository,
-    TagRepository, TaskRepository,
+    LibraryRepository, PluginsRepository, SeriesExternalIdRepository, SeriesMetadataRepository,
+    SeriesRepository, TagRepository, TaskRepository,
 };
 use crate::services::metadata::preprocessing::{
     apply_rules, render_template, PreprocessingRule, SeriesContextBuilder,
@@ -1134,6 +1134,25 @@ pub async fn apply_series_metadata(
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to apply metadata: {}", e)))?;
+
+    // Store/update external ID for future lookups (matches auto-match behavior)
+    if let Err(e) = SeriesExternalIdRepository::upsert_for_plugin(
+        &state.db,
+        series_id,
+        &plugin.name,
+        &plugin_metadata.external_id,
+        Some(&plugin_metadata.external_url),
+        None, // metadata_hash - could be computed if needed
+    )
+    .await
+    {
+        tracing::warn!(
+            "Failed to store external ID for series {}: {}",
+            series_id,
+            e
+        );
+        // Don't fail the request - metadata was still applied successfully
+    }
 
     // Convert SkippedField types
     let skipped_fields: Vec<SkippedField> = result

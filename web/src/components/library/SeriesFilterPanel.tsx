@@ -235,6 +235,29 @@ export function SeriesFilterPanel() {
 									showModeToggle={false}
 								/>
 
+								{/* External Source ID Filter */}
+								<FilterGroup
+									title="Metadata Source"
+									options={[{ value: "linked", label: "Has External ID" }]}
+									state={{
+										mode: "allOf",
+										values:
+											draftState.draftFilters.hasExternalSourceId !== "neutral"
+												? new Map([
+														[
+															"linked",
+															draftState.draftFilters.hasExternalSourceId,
+														],
+													])
+												: new Map(),
+									}}
+									onValueChange={(_value, state) =>
+										draftState.setHasExternalSourceIdState(state)
+									}
+									onModeChange={() => {}}
+									showModeToggle={false}
+								/>
+
 								{/* Metadata Section - Only show if there's data */}
 								{hasMetadataFilters && (
 									<>

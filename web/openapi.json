@@ -24896,6 +24896,18 @@
                 "$ref": "#/components/schemas/BoolOperator"
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Filter by whether the series has an external source ID linked",
+            "required": [
+              "hasExternalSourceId"
+            ],
+            "properties": {
+              "hasExternalSourceId": {
+                "$ref": "#/components/schemas/BoolOperator"
+              }
+            }
           }
         ],
         "description": "Series-level search conditions\n\nConditions can be composed using `allOf` (AND) and `anyOf` (OR).\nUses untagged enum for cleaner JSON without explicit type field."

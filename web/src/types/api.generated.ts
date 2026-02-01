@@ -11033,6 +11033,8 @@ export interface components {
             sharingTag: components["schemas"]["FieldOperator"];
         } | {
             completion: components["schemas"]["BoolOperator"];
+        } | {
+            hasExternalSourceId: components["schemas"]["BoolOperator"];
         };
         /**
          * @description Series context for template and condition evaluation.

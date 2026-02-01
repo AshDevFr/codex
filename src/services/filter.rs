@@ -130,6 +130,17 @@ impl FilterService {
                 SeriesCondition::Completion { completion } => {
                     Self::filter_by_completion(db, completion, candidate_ids).await
                 }
+
+                SeriesCondition::HasExternalSourceId {
+                    has_external_source_id,
+                } => {
+                    Self::filter_by_has_external_source_id(
+                        db,
+                        has_external_source_id,
+                        candidate_ids,
+                    )
+                    .await
+                }
             }
         })
     }
@@ -732,6 +743,72 @@ impl FilterService {
         }
 
         Ok(result)
+    }
+
+    /// Filter series by whether they have an external source ID linked
+    ///
+    /// A series "has external source ID" if there's at least one entry in the
+    /// series_external_ids table for that series.
+    ///
+    /// - IsTrue: return series that have at least one external source ID
+    /// - IsFalse: return series that have no external source IDs
+    async fn filter_by_has_external_source_id(
+        db: &DatabaseConnection,
+        operator: &BoolOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use crate::db::entities::{series, series_external_ids};
+        use sea_orm::{EntityTrait, QuerySelect};
+
+        // Get all series IDs that have at least one external ID
+        let series_with_external_ids: HashSet<Uuid> = series_external_ids::Entity::find()
+            .select_only()
+            .column(series_external_ids::Column::SeriesId)
+            .distinct()
+            .into_tuple()
+            .all(db)
+            .await?
+            .into_iter()
+            .collect();
+
+        match operator {
+            BoolOperator::IsTrue => {
+                // Return series WITH external IDs
+                if let Some(candidates) = candidate_ids {
+                    Ok(series_with_external_ids
+                        .intersection(candidates)
+                        .cloned()
+                        .collect())
+                } else {
+                    Ok(series_with_external_ids)
+                }
+            }
+            BoolOperator::IsFalse => {
+                // Return series WITHOUT external IDs
+                if let Some(candidates) = candidate_ids {
+                    Ok(candidates
+                        .iter()
+                        .filter(|id| !series_with_external_ids.contains(id))
+                        .cloned()
+                        .collect())
+                } else {
+                    // Need all series, then exclude those with external IDs
+                    let all_series: HashSet<Uuid> = series::Entity::find()
+                        .select_only()
+                        .column(series::Column::Id)
+                        .into_tuple()
+                        .all(db)
+                        .await?
+                        .into_iter()
+                        .collect();
+
+                    Ok(all_series
+                        .into_iter()
+                        .filter(|id| !series_with_external_ids.contains(id))
+                        .collect())
+                }
+            }
+        }
     }
 
     async fn filter_by_status(
@@ -2175,6 +2252,38 @@ mod tests {
                 assert!(matches!(sharing_tag, FieldOperator::IsNotNull));
             }
             _ => panic!("Expected SharingTag condition"),
+        }
+    }
+
+    #[test]
+    fn test_series_condition_has_external_source_id_is_true() {
+        let condition = SeriesCondition::HasExternalSourceId {
+            has_external_source_id: BoolOperator::IsTrue,
+        };
+
+        match condition {
+            SeriesCondition::HasExternalSourceId {
+                has_external_source_id,
+            } => {
+                assert!(matches!(has_external_source_id, BoolOperator::IsTrue));
+            }
+            _ => panic!("Expected HasExternalSourceId condition"),
+        }
+    }
+
+    #[test]
+    fn test_series_condition_has_external_source_id_is_false() {
+        let condition = SeriesCondition::HasExternalSourceId {
+            has_external_source_id: BoolOperator::IsFalse,
+        };
+
+        match condition {
+            SeriesCondition::HasExternalSourceId {
+                has_external_source_id,
+            } => {
+                assert!(matches!(has_external_source_id, BoolOperator::IsFalse));
+            }
+            _ => panic!("Expected HasExternalSourceId condition"),
         }
     }
 }

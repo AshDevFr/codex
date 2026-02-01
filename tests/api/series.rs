@@ -4586,6 +4586,96 @@ async fn test_list_series_filtered_by_completion_with_no_total_book_count() {
 }
 
 // ============================================================================
+// HasExternalSourceId Filter Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_series_filtered_by_has_external_source_id() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    use codex::db::repositories::SeriesExternalIdRepository;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create a series WITH an external source ID
+    let series_with_id = SeriesRepository::create(&db, library.id, "Series With External ID", None)
+        .await
+        .unwrap();
+    SeriesExternalIdRepository::upsert(
+        &db,
+        series_with_id.id,
+        "plugin:mangabaka",
+        "12345",
+        Some("https://example.com/manga/12345"),
+        None, // metadata_hash
+    )
+    .await
+    .unwrap();
+
+    // Create another series WITH a different external source ID
+    let series_with_id2 =
+        SeriesRepository::create(&db, library.id, "Series With ComicInfo ID", None)
+            .await
+            .unwrap();
+    SeriesExternalIdRepository::upsert(
+        &db,
+        series_with_id2.id,
+        "comicinfo",
+        "CVD-98765",
+        None, // external_url
+        None, // metadata_hash
+    )
+    .await
+    .unwrap();
+
+    // Create a series WITHOUT an external source ID
+    let _series_without_id =
+        SeriesRepository::create(&db, library.id, "Series Without External ID", None)
+            .await
+            .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Filter by hasExternalSourceId = true (series WITH external IDs)
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::HasExternalSourceId {
+            has_external_source_id: BoolOperator::IsTrue,
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 2);
+    let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
+    assert!(titles.contains(&"Series With External ID"));
+    assert!(titles.contains(&"Series With ComicInfo ID"));
+
+    // Filter by hasExternalSourceId = false (series WITHOUT external IDs)
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::HasExternalSourceId {
+            has_external_source_id: BoolOperator::IsFalse,
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].title, "Series Without External ID");
+}
+
+// ============================================================================
 // Reprocess Title Tests
 // ============================================================================
 

@@ -372,13 +372,17 @@ export function SeriesMetadataEditModal({
 			}
 
 			// Update metadata
-			// Note: status is not supported in PatchSeriesMetadataRequest yet
 			await seriesMetadataApi.patchMetadata(seriesId, {
 				titleSort: formState.titleSort || null,
 				summary: formState.summary || null,
-				// status: formState.status || undefined, // Not yet in API
-				readingDirection: formState.readingDirection || undefined,
+				status: formState.status || null,
+				readingDirection: formState.readingDirection || null,
 				publisher: formState.publisher || null,
+				imprint: formState.imprint || null,
+				language: formState.language || null,
+				ageRating: formState.ageRating
+					? Number.parseInt(formState.ageRating, 10)
+					: null,
 				year: formState.year ? Number.parseInt(formState.year, 10) : null,
 				totalBookCount: formState.totalBookCount
 					? Number.parseInt(formState.totalBookCount, 10)

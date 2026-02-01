@@ -527,6 +527,11 @@ export function SeriesDetail() {
 												{readingDirection}
 											</Badge>
 										)}
+										{metadata?.ageRating != null && metadata.ageRating > 0 && (
+											<Badge size="sm" variant="outline" color="orange">
+												{metadata.ageRating}+
+											</Badge>
+										)}
 									</Group>
 								</Box>
 
