@@ -439,13 +439,28 @@ impl TaskWorker {
         };
 
         // Claim next available task
-        let task =
-            match TaskRepository::claim_next(&self.db, &self.worker_id, 300, prioritize_scans)
-                .await?
-            {
-                Some(t) => t,
-                None => return Ok(false), // No tasks available
-            };
+        // Note: claim_next can fail due to race conditions (multiple workers competing
+        // for the same task). This is expected behavior, not an error - treat it as
+        // "no task available" and retry on the next poll interval.
+        let task = match TaskRepository::claim_next(
+            &self.db,
+            &self.worker_id,
+            300,
+            prioritize_scans,
+        )
+        .await
+        {
+            Ok(Some(t)) => t,
+            Ok(None) => return Ok(false), // No tasks available
+            Err(e) => {
+                // Race condition or transient DB error - log at debug level and retry
+                debug!(
+                    "Worker {} failed to claim task (likely race condition): {}",
+                    self.worker_id, e
+                );
+                return Ok(false);
+            }
+        };
 
         let started_at = Utc::now();
 
