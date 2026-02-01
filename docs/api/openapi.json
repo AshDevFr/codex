@@ -27972,11 +27972,7 @@
             "description": "Preprocessing rules for search queries (JSON array of regex rules)"
           },
           "searchQueryTemplate": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Handlebars template for customizing search queries"
+            "description": "Handlebars template for customizing search queries (null = clear template)"
           },
           "useExistingExternalId": {
             "type": [

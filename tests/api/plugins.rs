@@ -391,6 +391,88 @@ async fn test_update_plugin_permissions() {
         .contains(&"metadata:write:genres".to_string()));
 }
 
+#[tokio::test]
+async fn test_update_plugin_clear_search_template() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Create a plugin with a search template
+    let app = create_test_router(state.clone()).await;
+    let body = json!({
+        "name": "search-template-test",
+        "displayName": "Search Template Test",
+        "command": "node",
+        "searchQueryTemplate": "{{clean metadata.title}}"
+    });
+    let request = post_json_request_with_auth("/api/v1/admin/plugins", &body, &token);
+    let (status, created): (StatusCode, Option<PluginStatusResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::CREATED);
+    let created = created.unwrap().plugin;
+    assert_eq!(
+        created.search_query_template,
+        Some("{{clean metadata.title}}".to_string())
+    );
+
+    // Clear the search template by setting it to null
+    let app = create_test_router(state.clone()).await;
+    let update_body = json!({
+        "searchQueryTemplate": null
+    });
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/admin/plugins/{}", created.id),
+        &update_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<PluginDto>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let response = response.expect("Expected response body");
+    assert_eq!(response.search_query_template, None);
+}
+
+#[tokio::test]
+async fn test_update_plugin_clear_search_template_with_empty_string() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Create a plugin with a search template
+    let app = create_test_router(state.clone()).await;
+    let body = json!({
+        "name": "search-template-empty-test",
+        "displayName": "Search Template Empty Test",
+        "command": "node",
+        "searchQueryTemplate": "{{metadata.title}}"
+    });
+    let request = post_json_request_with_auth("/api/v1/admin/plugins", &body, &token);
+    let (status, created): (StatusCode, Option<PluginStatusResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::CREATED);
+    let created = created.unwrap().plugin;
+    assert_eq!(
+        created.search_query_template,
+        Some("{{metadata.title}}".to_string())
+    );
+
+    // Clear the search template by setting it to empty string
+    let app = create_test_router(state.clone()).await;
+    let update_body = json!({
+        "searchQueryTemplate": ""
+    });
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/admin/plugins/{}", created.id),
+        &update_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<PluginDto>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let response = response.expect("Expected response body");
+    assert_eq!(response.search_query_template, None);
+}
+
 // =============================================================================
 // Delete Plugin Tests
 // =============================================================================

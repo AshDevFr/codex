@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::common::is_false;
 use super::patch::PatchValue;
 use super::ScanningConfigDto;
 use crate::models::{BookStrategy, NumberStrategy, SeriesStrategy};
@@ -182,10 +183,6 @@ pub struct CreateLibraryRequest {
     /// Controls when auto-matching runs for this library
     #[serde(skip_serializing_if = "Option::is_none")]
     pub auto_match_conditions: Option<serde_json::Value>,
-}
-
-fn is_false(b: &bool) -> bool {
-    !b
 }
 
 /// Update library request

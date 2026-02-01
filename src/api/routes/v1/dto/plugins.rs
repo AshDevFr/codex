@@ -15,6 +15,8 @@ use crate::services::plugin::protocol::{
     CredentialField, MetadataContentType, PluginCapabilities, PluginScope,
 };
 
+use super::common::deserialize_optional_nullable;
+
 // =============================================================================
 // Plugin Response DTOs
 // =============================================================================
@@ -527,9 +529,13 @@ pub struct UpdatePluginRequest {
     #[schema(example = 60)]
     pub rate_limit_requests_per_minute: Option<Option<i32>>,
 
-    /// Handlebars template for customizing search queries
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub search_query_template: Option<String>,
+    /// Handlebars template for customizing search queries (null = clear template)
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_nullable"
+    )]
+    pub search_query_template: Option<serde_json::Value>,
 
     /// Preprocessing rules for search queries (JSON array of regex rules)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1375,5 +1381,46 @@ mod tests {
         let json = serde_json::to_value(&result).unwrap();
         assert_eq!(json["success"], true);
         assert_eq!(json["latencyMs"], 150);
+    }
+
+    #[test]
+    fn test_update_plugin_request_search_template_deserialization() {
+        // Test 1: null value should deserialize as Some(Value::Null)
+        let json1 = r#"{"searchQueryTemplate": null}"#;
+        let parsed1: UpdatePluginRequest = serde_json::from_str(json1).unwrap();
+        assert!(
+            parsed1.search_query_template.is_some(),
+            "null should deserialize as Some(Value::Null)"
+        );
+        assert!(
+            parsed1.search_query_template.as_ref().unwrap().is_null(),
+            "inner value should be null"
+        );
+
+        // Test 2: missing field should deserialize as None
+        let json2 = r#"{}"#;
+        let parsed2: UpdatePluginRequest = serde_json::from_str(json2).unwrap();
+        assert!(
+            parsed2.search_query_template.is_none(),
+            "missing field should deserialize as None"
+        );
+
+        // Test 3: string value should deserialize as Some(Value::String)
+        let json3 = r#"{"searchQueryTemplate": "{{title}}"}"#;
+        let parsed3: UpdatePluginRequest = serde_json::from_str(json3).unwrap();
+        assert!(parsed3.search_query_template.is_some());
+        assert_eq!(
+            parsed3.search_query_template.as_ref().unwrap().as_str(),
+            Some("{{title}}")
+        );
+
+        // Test 4: empty string should deserialize as Some(Value::String(""))
+        let json4 = r#"{"searchQueryTemplate": ""}"#;
+        let parsed4: UpdatePluginRequest = serde_json::from_str(json4).unwrap();
+        assert!(parsed4.search_query_template.is_some());
+        assert_eq!(
+            parsed4.search_query_template.as_ref().unwrap().as_str(),
+            Some("")
+        );
     }
 }

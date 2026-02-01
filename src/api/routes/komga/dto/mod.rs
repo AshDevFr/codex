@@ -11,6 +11,9 @@ pub mod series;
 pub mod stubs;
 pub mod user;
 
+// Re-export serde helpers from crate-level utils for convenience
+pub use crate::utils::default_true;
+
 // Re-export commonly used types for the public Komga-compatible API.
 // These may not all be used internally but are part of the API contract.
 #[allow(unused_imports)]

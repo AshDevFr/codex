@@ -537,10 +537,27 @@ pub async fn update_plugin(
             }
         });
 
+        // Handle search_query_template: None = don't update, Some(null) = clear, Some("") = clear, Some(value) = set
+        let search_query_template = request.search_query_template.map(|v| {
+            if v.is_null() {
+                None
+            } else if let Some(s) = v.as_str() {
+                let trimmed = s.trim();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed.to_string())
+                }
+            } else {
+                // Non-string, non-null value - try to convert to string
+                Some(v.to_string())
+            }
+        });
+
         PluginsRepository::update_search_config(
             &state.db,
             id,
-            request.search_query_template.map(Some),
+            search_query_template,
             search_preprocessing_rules,
             auto_match_conditions,
             request.use_existing_external_id,

@@ -12744,8 +12744,8 @@ export interface components {
             scopes?: string[] | null;
             /** @description Preprocessing rules for search queries (JSON array of regex rules) */
             searchPreprocessingRules?: unknown;
-            /** @description Handlebars template for customizing search queries */
-            searchQueryTemplate?: string | null;
+            /** @description Handlebars template for customizing search queries (null = clear template) */
+            searchQueryTemplate?: unknown;
             /** @description Whether to skip search when external ID exists for this plugin */
             useExistingExternalId?: boolean | null;
             /** @description Updated working directory */

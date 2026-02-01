@@ -5,6 +5,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::default_true;
+
 /// Komga user DTO
 ///
 /// Response for GET /api/v1/users/me
@@ -33,10 +35,6 @@ pub struct KomgaUserDto {
     /// User's content restrictions
     #[serde(default)]
     pub content_restrictions: KomgaContentRestrictionsDto,
-}
-
-fn default_true() -> bool {
-    true
 }
 
 impl Default for KomgaUserDto {

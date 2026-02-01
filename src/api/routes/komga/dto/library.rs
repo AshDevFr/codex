@@ -5,6 +5,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::default_true;
+
 /// Komga library DTO
 ///
 /// Based on actual Komic traffic analysis - includes all fields observed in responses.
@@ -98,10 +100,6 @@ pub struct KomgaLibraryDto {
     /// Whether library is unavailable (path doesn't exist)
     #[serde(default)]
     pub unavailable: bool,
-}
-
-fn default_true() -> bool {
-    true
 }
 
 fn default_scan_interval() -> String {

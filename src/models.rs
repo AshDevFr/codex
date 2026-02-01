@@ -9,6 +9,8 @@ use std::fmt;
 use std::str::FromStr;
 use utoipa::ToSchema;
 
+use crate::utils::default_true;
+
 // ============================================================================
 // Series Scanning Strategy
 // ============================================================================
@@ -455,10 +457,6 @@ impl CustomBookConfig {
     fn default_fallback() -> String {
         "filename".to_string()
     }
-}
-
-fn default_true() -> bool {
-    true
 }
 
 // ============================================================================
