@@ -14,6 +14,17 @@ import type {
 import type { MbContentRating, MbSeries, MbSeriesType, MbStatus } from "./types.js";
 
 /**
+ * Strip HTML tags from text, converting <br> to newlines
+ */
+function stripHtml(html: string | undefined | null): string | undefined {
+  if (!html) return undefined;
+  return html
+    .replace(/<br\s*\/?>/gi, "\n") // Convert <br> to newlines
+    .replace(/<[^>]*>/g, "") // Strip remaining HTML tags
+    .trim();
+}
+
+/**
  * Map MangaBaka status to protocol SeriesStatus
  * MangaBaka uses: cancelled, completed, hiatus, releasing, unknown, upcoming
  * Codex uses: ongoing, ended, hiatus, abandoned, unknown
@@ -153,7 +164,7 @@ export function mapSearchResult(series: MbSeries): SearchResult {
       status: mapStatus(series.status),
       genres: (series.genres ?? []).slice(0, 3).map(formatGenre),
       rating: extractRating(series.rating),
-      description: series.description?.slice(0, 200) ?? undefined,
+      description: stripHtml(series.description)?.slice(0, 200) ?? undefined,
     },
   };
 }
@@ -291,7 +302,7 @@ export function mapSeriesMetadata(series: MbSeries): PluginSeriesMetadata {
     externalUrl: `https://mangabaka.org/${series.id}`,
     title: series.title,
     alternateTitles,
-    summary: series.description ?? undefined,
+    summary: stripHtml(series.description),
     status: mapStatus(series.status),
     year: series.year ?? undefined,
     // Extended metadata
