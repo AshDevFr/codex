@@ -15,7 +15,7 @@ use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use crate::db::entities::tasks;
@@ -313,11 +313,43 @@ impl TaskHandler for PluginAutoMatchHandler {
                     cursor: None,
                 };
 
-                let search_response = self
+                debug!(
+                    task_id = %task.id,
+                    plugin_id = %plugin_id,
+                    query = %search_query,
+                    "Sending search request to plugin"
+                );
+
+                let search_response = match self
                     .plugin_manager
                     .search_series(plugin_id, search_params)
                     .await
-                    .context("Failed to search for metadata")?;
+                {
+                    Ok(response) => {
+                        debug!(
+                            task_id = %task.id,
+                            plugin_id = %plugin_id,
+                            result_count = response.results.len(),
+                            "Search completed successfully"
+                        );
+                        response
+                    }
+                    Err(e) => {
+                        error!(
+                            task_id = %task.id,
+                            plugin_id = %plugin_id,
+                            series_id = %series_id,
+                            query = %search_query,
+                            error = %e,
+                            error_debug = ?e,
+                            "Plugin search failed"
+                        );
+                        return Err(e).context(format!(
+                            "Failed to search for metadata (plugin: {}, query: '{}')",
+                            plugin_id, search_query
+                        ));
+                    }
+                };
 
                 if search_response.results.is_empty() {
                     info!("Task {}: No matches found for '{}'", task.id, search_query);

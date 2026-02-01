@@ -170,9 +170,9 @@ impl RpcClient {
         // Check if the process is still alive before attempting to send.
         // This prevents EPIPE errors when trying to write to a dead process.
         if !self.process_alive.load(Ordering::Acquire) {
-            debug!(
+            error!(
                 method = method,
-                "Skipping RPC request - process is not alive"
+                "RPC request failed - plugin process is not alive (terminated or crashed)"
             );
             return Err(RpcError::Process(ProcessError::ProcessTerminated));
         }
@@ -208,6 +208,11 @@ impl RpcClient {
 
         // Send request (double-check process is alive to handle race conditions)
         if !self.process_alive.load(Ordering::Acquire) {
+            error!(
+                id = id,
+                method = method,
+                "RPC request failed - plugin process died between check and send"
+            );
             self.remove_pending(id).await;
             return Err(RpcError::Process(ProcessError::ProcessTerminated));
         }
@@ -228,8 +233,13 @@ impl RpcClient {
                 result
             }
             Ok(Err(_)) => {
-                // Channel was closed (cancelled)
-                debug!(id = id, "RPC request cancelled (channel closed)");
+                // Channel was closed - likely because the plugin process died
+                // and the response reader task cancelled all pending requests
+                error!(
+                    id = id,
+                    method = method,
+                    "RPC request cancelled - response channel closed (plugin process may have died)"
+                );
                 self.remove_pending(id).await;
                 return Err(RpcError::Cancelled);
             }
@@ -436,22 +446,24 @@ async fn response_reader_task(
     // Mark the process as no longer alive.
     // This prevents new requests from being sent to the dead process,
     // which would cause EPIPE errors.
-    warn!(
-        "Response reader task ending - marking plugin process as not alive to prevent EPIPE errors"
-    );
+    error!("Plugin process ended unexpectedly - marking as not alive to prevent further requests");
     process_alive.store(false, Ordering::Release);
 
     // Process ended - cancel all pending requests
     let mut pending_map = pending.lock().await;
     let pending_count = pending_map.len();
     if pending_count > 0 {
-        warn!(
+        error!(
             pending_count = pending_count,
-            "Cancelling pending RPC requests due to plugin process exit"
+            "Cancelling {} pending RPC requests due to plugin process exit - these tasks will fail",
+            pending_count
         );
     }
     for (id, req) in pending_map.drain() {
-        debug!("Cancelling pending request {} due to process exit", id);
+        error!(
+            request_id = id,
+            "Cancelling pending request due to plugin process exit"
+        );
         let _ = req
             .tx
             .send(Err(RpcError::Process(ProcessError::ProcessTerminated)));

@@ -15426,6 +15426,69 @@
           }
         }
       },
+      "ConfigFieldDto": {
+        "type": "object",
+        "description": "Configuration field definition for documenting plugin config options",
+        "required": [
+          "key",
+          "label",
+          "type"
+        ],
+        "properties": {
+          "default": {
+            "description": "Default value if not provided"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Description of what this field does"
+          },
+          "example": {
+            "description": "Example value for documentation"
+          },
+          "key": {
+            "type": "string",
+            "description": "Field name (key in JSON config)"
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable label"
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Whether this field is required"
+          },
+          "type": {
+            "type": "string",
+            "description": "Field type: \"number\", \"string\", or \"boolean\""
+          }
+        }
+      },
+      "ConfigSchemaDto": {
+        "type": "object",
+        "description": "Plugin configuration schema - documents available config options",
+        "required": [
+          "fields"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Human-readable description of the configuration"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigFieldDto"
+            },
+            "description": "List of configuration fields"
+          }
+        }
+      },
       "ConfigureSettingsRequest": {
         "type": "object",
         "description": "Configure initial settings request",
@@ -22902,6 +22965,17 @@
           "capabilities": {
             "$ref": "#/components/schemas/PluginCapabilitiesDto",
             "description": "Plugin capabilities"
+          },
+          "configSchema": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConfigSchemaDto",
+                "description": "Configuration schema documenting available config options"
+              }
+            ]
           },
           "contentTypes": {
             "type": "array",

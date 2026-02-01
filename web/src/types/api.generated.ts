@@ -5899,6 +5899,30 @@ export interface components {
              */
             thumbnails_deleted: number;
         };
+        /** @description Configuration field definition for documenting plugin config options */
+        ConfigFieldDto: {
+            /** @description Default value if not provided */
+            default?: unknown;
+            /** @description Description of what this field does */
+            description?: string | null;
+            /** @description Example value for documentation */
+            example?: unknown;
+            /** @description Field name (key in JSON config) */
+            key: string;
+            /** @description Human-readable label */
+            label: string;
+            /** @description Whether this field is required */
+            required?: boolean;
+            /** @description Field type: "number", "string", or "boolean" */
+            type: string;
+        };
+        /** @description Plugin configuration schema - documents available config options */
+        ConfigSchemaDto: {
+            /** @description Human-readable description of the configuration */
+            description?: string | null;
+            /** @description List of configuration fields */
+            fields: components["schemas"]["ConfigFieldDto"][];
+        };
         /** @description Configure initial settings request */
         ConfigureSettingsRequest: {
             /** @description Settings to configure (key-value pairs) */
@@ -9958,6 +9982,7 @@ export interface components {
             author?: string | null;
             /** @description Plugin capabilities */
             capabilities: components["schemas"]["PluginCapabilitiesDto"];
+            configSchema?: null | components["schemas"]["ConfigSchemaDto"];
             /** @description Supported content types */
             contentTypes: string[];
             /** @description Description */

@@ -8,6 +8,7 @@
 
 import {
   createMetadataPlugin,
+  type InitializeParams,
   type MetadataContentType,
   type MetadataGetParams,
   type MetadataMatchParams,
@@ -18,6 +19,14 @@ import {
   type PluginManifest,
   type PluginSeriesMetadata,
 } from "@ashdev/codex-plugin-sdk";
+
+// Default config values
+const DEFAULT_MAX_RESULTS = 5;
+
+// Plugin configuration (set during initialization)
+const config = {
+  maxResults: DEFAULT_MAX_RESULTS,
+};
 
 const manifest = {
   name: "metadata-echo",
@@ -30,40 +39,56 @@ const manifest = {
   capabilities: {
     metadataProvider: ["series"] as MetadataContentType[],
   },
+  configSchema: {
+    description: "Configuration options for the Echo test plugin",
+    fields: [
+      {
+        key: "maxResults",
+        label: "Maximum Results",
+        description: "Maximum number of results to return for search queries (1-20)",
+        type: "number" as const,
+        required: false,
+        default: DEFAULT_MAX_RESULTS,
+        example: 10,
+      },
+    ],
+  },
 } as const satisfies PluginManifest & {
   capabilities: { metadataProvider: MetadataContentType[] };
 };
 
+// Generate echo results based on config
+function generateEchoResults(query: string, maxResults: number) {
+  const results = [];
+  const count = Math.min(Math.max(1, maxResults), 20); // Clamp between 1-20
+
+  for (let i = 1; i <= count; i++) {
+    results.push({
+      externalId: `echo-${i}`,
+      title: i === 1 ? `Echo: ${query}` : `Echo Result ${i} for: ${query}`,
+      alternateTitles: i === 1 ? [`Echoed Query: ${query}`] : [],
+      year: new Date().getFullYear(),
+      relevanceScore: Math.max(0.1, 1.0 - (i - 1) * 0.1), // Decreasing relevance
+      preview: {
+        status: i % 2 === 0 ? "ongoing" : "ended",
+        genres: i === 1 ? ["Test", "Echo"] : ["Test"],
+        rating: i === 1 ? 10.0 : undefined,
+        description:
+          i === 1
+            ? `Search query echoed: "${query}"`
+            : `Result ${i} for testing (maxResults=${count})`,
+      },
+    });
+  }
+
+  return results;
+}
+
 const provider: MetadataProvider = {
   async search(params: MetadataSearchParams): Promise<MetadataSearchResponse> {
-    // Echo back the query as search results
+    // Echo back the query as search results, respecting maxResults config
     return {
-      results: [
-        {
-          externalId: "echo-1",
-          title: `Echo: ${params.query}`,
-          alternateTitles: [`Echoed Query: ${params.query}`],
-          year: new Date().getFullYear(),
-          relevanceScore: 1.0, // Perfect match for echo
-          preview: {
-            status: "ended",
-            genres: ["Test", "Echo"],
-            rating: 10.0,
-            description: `Search query echoed: "${params.query}"`,
-          },
-        },
-        {
-          externalId: "echo-2",
-          title: `Echo Result 2 for: ${params.query}`,
-          alternateTitles: [],
-          relevanceScore: 0.8,
-          preview: {
-            status: "ongoing",
-            genres: ["Test"],
-            description: "A second result for testing pagination",
-          },
-        },
-      ],
+      results: generateEchoResults(params.query, config.maxResults),
     };
   },
 
@@ -186,4 +211,12 @@ createMetadataPlugin({
   manifest,
   provider,
   logLevel: "debug",
+  onInitialize(params: InitializeParams) {
+    // Read config from initialization params
+    const maxResults = params.config?.maxResults as number | undefined;
+    if (maxResults !== undefined) {
+      config.maxResults = Math.min(Math.max(1, maxResults), 20); // Clamp 1-20
+    }
+    console.log(`Echo plugin initialized (maxResults: ${config.maxResults})`);
+  },
 });

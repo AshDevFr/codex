@@ -22,6 +22,20 @@ export const manifest = {
       placeholder: "mb-...",
     },
   ],
+  configSchema: {
+    description: "Optional configuration for the MangaBaka plugin",
+    fields: [
+      {
+        key: "timeout",
+        label: "Request Timeout",
+        description: "HTTP request timeout in seconds for API calls to MangaBaka",
+        type: "number",
+        required: false,
+        default: 60,
+        example: 30,
+      },
+    ],
+  },
 } as const satisfies PluginManifest & {
   capabilities: { metadataProvider: MetadataContentType[] };
 };

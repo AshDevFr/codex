@@ -40,6 +40,36 @@ export interface PluginCapabilities {
 }
 
 /**
+ * Configuration field definition for documenting plugin config options
+ */
+export interface ConfigField {
+  /** Field name (key in JSON config) */
+  key: string;
+  /** Human-readable label */
+  label: string;
+  /** Description of what this field does */
+  description?: string;
+  /** Field type */
+  type: "number" | "string" | "boolean";
+  /** Whether this field is required */
+  required?: boolean;
+  /** Default value if not provided */
+  default?: number | string | boolean;
+  /** Example value for documentation */
+  example?: number | string | boolean;
+}
+
+/**
+ * Plugin configuration schema - documents available config options
+ */
+export interface ConfigSchema {
+  /** Human-readable description of the configuration */
+  description?: string;
+  /** List of configuration fields */
+  fields: ConfigField[];
+}
+
+/**
  * Plugin manifest returned by the `initialize` method
  */
 export interface PluginManifest {
@@ -66,6 +96,12 @@ export interface PluginManifest {
 
   /** Credentials required from admin */
   requiredCredentials?: CredentialField[];
+
+  /**
+   * Configuration schema documenting available config options.
+   * This is displayed in the admin UI to help users configure the plugin.
+   */
+  configSchema?: ConfigSchema;
 }
 
 // =============================================================================

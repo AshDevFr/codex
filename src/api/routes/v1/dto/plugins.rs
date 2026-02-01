@@ -199,6 +199,42 @@ impl From<plugins::Model> for PluginDto {
     }
 }
 
+/// Configuration field definition for documenting plugin config options
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigFieldDto {
+    /// Field name (key in JSON config)
+    pub key: String,
+    /// Human-readable label
+    pub label: String,
+    /// Description of what this field does
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Field type: "number", "string", or "boolean"
+    #[serde(rename = "type")]
+    pub field_type: String,
+    /// Whether this field is required
+    #[serde(default)]
+    pub required: bool,
+    /// Default value if not provided
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<serde_json::Value>,
+    /// Example value for documentation
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub example: Option<serde_json::Value>,
+}
+
+/// Plugin configuration schema - documents available config options
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigSchemaDto {
+    /// Human-readable description of the configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// List of configuration fields
+    pub fields: Vec<ConfigFieldDto>,
+}
+
 /// Plugin manifest from the plugin itself
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -230,6 +266,9 @@ pub struct PluginManifestDto {
     /// Supported scopes
     #[serde(default)]
     pub scopes: Vec<String>,
+    /// Configuration schema documenting available config options
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config_schema: Option<ConfigSchemaDto>,
 }
 
 impl From<crate::services::plugin::protocol::PluginManifest> for PluginManifestDto {
@@ -252,6 +291,11 @@ impl From<crate::services::plugin::protocol::PluginManifest> for PluginManifestD
             vec![]
         };
 
+        // Parse config_schema from JSON Value to typed ConfigSchemaDto
+        let config_schema = m
+            .config_schema
+            .and_then(|v| serde_json::from_value::<ConfigSchemaDto>(v).ok());
+
         Self {
             name: m.name,
             display_name: m.display_name,
@@ -268,6 +312,7 @@ impl From<crate::services::plugin::protocol::PluginManifest> for PluginManifestD
                 .map(CredentialFieldDto::from)
                 .collect(),
             scopes,
+            config_schema,
         }
     }
 }

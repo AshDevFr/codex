@@ -48,7 +48,7 @@ use std::time::{Duration, Instant};
 
 use sea_orm::DatabaseConnection;
 use tokio::sync::{Mutex, RwLock};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::db::entities::plugins;
@@ -679,13 +679,31 @@ impl PluginManager {
         // Check rate limit before making the request
         let plugin_name = self.check_rate_limit(plugin_id).await?;
 
+        let timeout_ms = self.config.default_request_timeout.as_millis();
+        debug!(
+            plugin_id = %plugin_id,
+            plugin_name = %plugin_name,
+            query = %params.query,
+            timeout_ms = timeout_ms,
+            "Starting plugin search request"
+        );
+
         let start = Instant::now();
         let handle = self.get_or_spawn(plugin_id).await?;
-        let result = handle.search_series(params).await;
+        let result = handle.search_series(params.clone()).await;
         let duration_ms = start.elapsed().as_millis() as u64;
 
         match &result {
-            Ok(_) => {
+            Ok(response) => {
+                debug!(
+                    plugin_id = %plugin_id,
+                    plugin_name = %plugin_name,
+                    query = %params.query,
+                    duration_ms = duration_ms,
+                    result_count = response.results.len(),
+                    "Plugin search completed successfully"
+                );
+
                 // Update health status on success
                 if self.config.auto_sync_health {
                     let _ = PluginsRepository::record_success(&self.db, plugin_id).await;
@@ -699,6 +717,17 @@ impl PluginManager {
                 }
             }
             Err(e) => {
+                error!(
+                    plugin_id = %plugin_id,
+                    plugin_name = %plugin_name,
+                    query = %params.query,
+                    duration_ms = duration_ms,
+                    timeout_ms = timeout_ms,
+                    error = %e,
+                    error_debug = ?e,
+                    "Plugin search failed"
+                );
+
                 // Record failure in metrics
                 if let Some(ref metrics) = self.metrics_service {
                     let error_code = self.error_to_code(e);
@@ -1022,9 +1051,11 @@ impl PluginManager {
         &self,
         plugin: &plugins::Model,
     ) -> Result<PluginConfig, PluginManagerError> {
-        // Build process config
+        // Build process config with plugin name for logging context
         let mut process_config = PluginProcessConfig::new(&plugin.command);
-        process_config = process_config.args(plugin.args_vec());
+        process_config = process_config
+            .plugin_name(&plugin.name)
+            .args(plugin.args_vec());
 
         // Add environment variables from config
         for (key, value) in plugin.env_vec() {

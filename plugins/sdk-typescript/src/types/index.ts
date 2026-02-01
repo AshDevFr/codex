@@ -16,7 +16,13 @@ export type {
 } from "./capabilities.js";
 
 // From manifest - plugin configuration types
-export type { CredentialField, PluginCapabilities, PluginManifest } from "./manifest.js";
+export type {
+  ConfigField,
+  ConfigSchema,
+  CredentialField,
+  PluginCapabilities,
+  PluginManifest,
+} from "./manifest.js";
 export { hasBookMetadataProvider, hasSeriesMetadataProvider } from "./manifest.js";
 
 // From protocol - JSON-RPC protocol types (these match Rust exactly)

@@ -723,6 +723,7 @@ export function PluginsSettings() {
 						setSelectedPlugin(null);
 					}}
 					libraries={libraries}
+					manifest={selectedPlugin?.manifest}
 				/>
 			</Modal>
 
@@ -927,6 +928,10 @@ function PluginDetails({
 							</Badge>
 						)}
 					</Group>
+
+					{plugin.manifest.configSchema && (
+						<ConfigSchemaHelp schema={plugin.manifest.configSchema} />
+					)}
 				</>
 			)}
 
@@ -1171,6 +1176,68 @@ function FailureCard({
 	);
 }
 
+// Config schema help component - displays available configuration options
+function ConfigSchemaHelp({
+	schema,
+}: {
+	schema: NonNullable<PluginDto["manifest"]>["configSchema"];
+}) {
+	if (!schema || !schema.fields || schema.fields.length === 0) {
+		return null;
+	}
+
+	return (
+		<Alert variant="light" color="blue" title="Available Configuration Options">
+			{schema.description && (
+				<Text size="sm" mb="xs">
+					{schema.description}
+				</Text>
+			)}
+			<Table withTableBorder={false} fz="sm">
+				<Table.Thead>
+					<Table.Tr>
+						<Table.Th>Option</Table.Th>
+						<Table.Th>Type</Table.Th>
+						<Table.Th>Default</Table.Th>
+						<Table.Th>Description</Table.Th>
+					</Table.Tr>
+				</Table.Thead>
+				<Table.Tbody>
+					{schema.fields.map((field) => (
+						<Table.Tr key={field.key}>
+							<Table.Td>
+								<Code>{field.key}</Code>
+								{field.required && (
+									<Text component="span" c="red" size="xs" ml={4}>
+										*
+									</Text>
+								)}
+							</Table.Td>
+							<Table.Td>
+								<Badge size="xs" variant="light">
+									{field.type}
+								</Badge>
+							</Table.Td>
+							<Table.Td>
+								{field.default !== undefined && field.default !== null ? (
+									<Code>{JSON.stringify(field.default)}</Code>
+								) : (
+									<Text size="xs" c="dimmed">
+										-
+									</Text>
+								)}
+							</Table.Td>
+							<Table.Td>
+								<Text size="xs">{field.description || "-"}</Text>
+							</Table.Td>
+						</Table.Tr>
+					))}
+				</Table.Tbody>
+			</Table>
+		</Alert>
+	);
+}
+
 // Plugin form component
 interface PluginFormProps {
 	form: ReturnType<typeof useForm<PluginFormValues>>;
@@ -1179,6 +1246,7 @@ interface PluginFormProps {
 	onCancel: () => void;
 	isCreate?: boolean;
 	libraries: { id: string; name: string }[];
+	manifest?: PluginDto["manifest"];
 }
 
 function PluginForm({
@@ -1188,6 +1256,7 @@ function PluginForm({
 	onCancel,
 	isCreate,
 	libraries,
+	manifest,
 }: PluginFormProps) {
 	const [activeTab, setActiveTab] = useState<string | null>("general");
 	const [nameManuallyEdited, setNameManuallyEdited] = useState(false);
@@ -1309,11 +1378,14 @@ function PluginForm({
 							/>
 							<Textarea
 								label="Configuration"
-								placeholder='{"rate_limit": 60}'
+								placeholder='{"timeout": 30}'
 								description="Optional JSON configuration passed to the plugin"
 								rows={3}
 								{...form.getInputProps("config")}
 							/>
+							{manifest?.configSchema && (
+								<ConfigSchemaHelp schema={manifest.configSchema} />
+							)}
 							<Divider label="Rate Limiting" labelPosition="center" />
 							<Switch
 								label="Enable Rate Limiting"

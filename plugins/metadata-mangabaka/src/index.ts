@@ -60,8 +60,12 @@ createMetadataPlugin({
     if (!apiKey) {
       throw new ConfigError("api_key credential is required");
     }
-    client = new MangaBakaClient(apiKey);
-    logger.info("MangaBaka client initialized");
+
+    // Get optional timeout from config (in seconds)
+    const timeout = params.config?.timeout as number | undefined;
+
+    client = new MangaBakaClient(apiKey, { timeout });
+    logger.info(`MangaBaka client initialized (timeout: ${timeout ?? "default"}s)`);
   },
 });
 

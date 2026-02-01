@@ -27,9 +27,9 @@ use std::path::Path;
 use std::process::Stdio;
 use std::sync::OnceLock;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin, ChildStdout, Command};
+use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command};
 use tokio::sync::mpsc;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 // =============================================================================
 // Command Allowlist
@@ -310,6 +310,8 @@ pub struct PluginProcessConfig {
     pub env: HashMap<String, String>,
     /// Working directory for the process
     pub working_directory: Option<String>,
+    /// Plugin name for logging context (optional, falls back to command)
+    pub plugin_name: Option<String>,
 }
 
 impl PluginProcessConfig {
@@ -320,7 +322,19 @@ impl PluginProcessConfig {
             args: Vec::new(),
             env: HashMap::new(),
             working_directory: None,
+            plugin_name: None,
         }
+    }
+
+    /// Set the plugin name for logging context
+    pub fn plugin_name(mut self, name: impl Into<String>) -> Self {
+        self.plugin_name = Some(name.into());
+        self
+    }
+
+    /// Get the display name for logging (plugin_name or command)
+    pub fn display_name(&self) -> &str {
+        self.plugin_name.as_deref().unwrap_or(&self.command)
     }
 
     /// Add an argument
@@ -395,6 +409,9 @@ pub enum ProcessError {
     #[error("Process stdout not available")]
     StdoutUnavailable,
 
+    #[error("Process stderr not available")]
+    StderrUnavailable,
+
     #[error("Failed to write to process stdin: {0}")]
     WriteFailed(std::io::Error),
 
@@ -450,10 +467,10 @@ impl PluginProcess {
             cmd.current_dir(dir);
         }
 
-        // Configure stdio
+        // Configure stdio - capture all streams for structured logging
         cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit()) // Plugin stderr goes to Codex logs
+            .stderr(Stdio::piped())
             .kill_on_drop(true);
 
         debug!(
@@ -475,11 +492,13 @@ impl PluginProcess {
         })?;
 
         let pid = child.id();
-        debug!(pid = ?pid, "Plugin process spawned successfully");
+        let plugin_name = config.display_name().to_string();
+        debug!(pid = ?pid, plugin = %plugin_name, "Plugin process spawned successfully");
 
         // Take ownership of stdio handles
         let stdin = child.stdin.take().ok_or(ProcessError::StdinUnavailable)?;
         let stdout = child.stdout.take().ok_or(ProcessError::StdoutUnavailable)?;
+        let stderr = child.stderr.take().ok_or(ProcessError::StderrUnavailable)?;
 
         // Create channels for async IO
         let (stdin_tx, stdin_rx) = mpsc::channel::<String>(32);
@@ -490,6 +509,9 @@ impl PluginProcess {
 
         // Spawn stdout reader task
         tokio::spawn(stdout_reader_task(stdout, stdout_tx));
+
+        // Spawn stderr reader task for logging plugin errors with context
+        tokio::spawn(stderr_reader_task(stderr, plugin_name));
 
         Ok(Self {
             child,
@@ -705,6 +727,255 @@ async fn stdout_reader_task(stdout: ChildStdout, tx: mpsc::Sender<String>) {
     debug!(
         "Plugin stdout reader finished (total: {} bytes)",
         total_bytes
+    );
+}
+
+/// Detected log level from plugin stderr output
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PluginLogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+/// Detect log level from a plugin stderr line and return the cleaned message
+///
+/// Looks for common log level patterns like:
+/// - `[ERROR]`, `[WARN]`, `[INFO]`, `[DEBUG]`, `[TRACE]`
+/// - `ERROR:`, `WARN:`, `INFO:`, `DEBUG:`, `TRACE:`
+/// - Case-insensitive matching
+///
+/// Returns a tuple of (detected level, cleaned message with level and timestamp stripped)
+fn detect_and_clean_log_level(line: &str) -> (PluginLogLevel, String) {
+    // First, strip any leading ISO timestamp (e.g., "2026-02-01T19:34:21.953Z")
+    let line = strip_iso_timestamp(line);
+
+    // Patterns to check and their corresponding levels
+    // Order matters: check longer patterns first (WARNING before WARN)
+    let bracketed_patterns = [
+        ("[ERROR]", PluginLogLevel::Error),
+        ("[ERR]", PluginLogLevel::Error),
+        ("[WARNING]", PluginLogLevel::Warn),
+        ("[WARN]", PluginLogLevel::Warn),
+        ("[INFO]", PluginLogLevel::Info),
+        ("[DEBUG]", PluginLogLevel::Debug),
+        ("[TRACE]", PluginLogLevel::Trace),
+    ];
+
+    let colon_patterns = [
+        ("ERROR:", PluginLogLevel::Error),
+        ("ERR:", PluginLogLevel::Error),
+        ("WARNING:", PluginLogLevel::Warn),
+        ("WARN:", PluginLogLevel::Warn),
+        ("INFO:", PluginLogLevel::Info),
+        ("DEBUG:", PluginLogLevel::Debug),
+        ("TRACE:", PluginLogLevel::Trace),
+    ];
+
+    let upper = line.to_uppercase();
+
+    // Check bracketed format first
+    for (pattern, level) in bracketed_patterns {
+        if let Some(pos) = upper.find(pattern) {
+            // Remove the pattern from the original line (preserving case of rest)
+            let before = line[..pos].trim_end();
+            let after = line[pos + pattern.len()..].trim_start();
+            // Join with a space if both parts are non-empty
+            let cleaned = if before.is_empty() {
+                after.to_string()
+            } else if after.is_empty() {
+                before.to_string()
+            } else {
+                format!("{} {}", before, after)
+            };
+            return (level, cleaned);
+        }
+    }
+
+    // Check colon format
+    for (pattern, level) in colon_patterns {
+        if let Some(pos) = upper.find(pattern) {
+            let before = line[..pos].trim_end();
+            let after = line[pos + pattern.len()..].trim_start();
+            // Join with a space if both parts are non-empty
+            let cleaned = if before.is_empty() {
+                after.to_string()
+            } else if after.is_empty() {
+                before.to_string()
+            } else {
+                format!("{} {}", before, after)
+            };
+            return (level, cleaned);
+        }
+    }
+
+    // Default to info for unrecognized format
+    (PluginLogLevel::Info, line.to_string())
+}
+
+/// Strip leading ISO 8601 timestamp from a log line
+///
+/// Matches patterns like:
+/// - `2026-02-01T19:34:21.953Z `
+/// - `2026-02-01T19:34:21Z `
+/// - `2026-02-01 19:34:21 `
+fn strip_iso_timestamp(line: &str) -> &str {
+    let bytes = line.as_bytes();
+
+    // Check for ISO timestamp pattern: YYYY-MM-DD(T| )HH:MM:SS
+    // Minimum length: "2026-02-01T19:34:21" = 19 chars
+    if bytes.len() < 19 {
+        return line;
+    }
+
+    // Check date part: YYYY-MM-DD
+    if !(bytes[0].is_ascii_digit()
+        && bytes[1].is_ascii_digit()
+        && bytes[2].is_ascii_digit()
+        && bytes[3].is_ascii_digit()
+        && bytes[4] == b'-'
+        && bytes[5].is_ascii_digit()
+        && bytes[6].is_ascii_digit()
+        && bytes[7] == b'-'
+        && bytes[8].is_ascii_digit()
+        && bytes[9].is_ascii_digit())
+    {
+        return line;
+    }
+
+    // Check separator (T or space)
+    if bytes[10] != b'T' && bytes[10] != b' ' {
+        return line;
+    }
+
+    // Check time part: HH:MM:SS
+    if !(bytes[11].is_ascii_digit()
+        && bytes[12].is_ascii_digit()
+        && bytes[13] == b':'
+        && bytes[14].is_ascii_digit()
+        && bytes[15].is_ascii_digit()
+        && bytes[16] == b':'
+        && bytes[17].is_ascii_digit()
+        && bytes[18].is_ascii_digit())
+    {
+        return line;
+    }
+
+    // Find where the timestamp ends (after optional milliseconds and timezone)
+    let mut end = 19;
+
+    // Optional milliseconds: .NNN
+    if bytes.len() > end && bytes[end] == b'.' {
+        end += 1;
+        while end < bytes.len() && bytes[end].is_ascii_digit() {
+            end += 1;
+        }
+    }
+
+    // Optional timezone: Z or +HH:MM or -HH:MM
+    if end < bytes.len() {
+        if bytes[end] == b'Z' {
+            end += 1;
+        } else if (bytes[end] == b'+' || bytes[end] == b'-') && bytes.len() >= end + 6 {
+            // +HH:MM or -HH:MM
+            end += 6;
+        }
+    }
+
+    // Skip trailing whitespace after timestamp
+    while end < bytes.len() && bytes[end] == b' ' {
+        end += 1;
+    }
+
+    &line[end..]
+}
+
+/// Task that reads lines from the process stderr and logs them with plugin context
+///
+/// This provides visibility into plugin errors and diagnostics without mixing
+/// with the JSON-RPC stdout communication channel.
+///
+/// # Logging Behavior
+///
+/// - Log level is detected from the line content (e.g., `[DEBUG]`, `[ERROR]`)
+/// - Each line is logged at the appropriate level with the plugin name
+/// - Lines are truncated to MAX_LINE_LENGTH for safety
+async fn stderr_reader_task(stderr: ChildStderr, plugin_name: String) {
+    debug!(plugin = %plugin_name, "Plugin stderr reader task started");
+    let mut reader = BufReader::new(stderr);
+    let mut line = String::new();
+    let mut line_count: usize = 0;
+
+    loop {
+        line.clear();
+        match reader.read_line(&mut line).await {
+            Ok(0) => {
+                // EOF - process closed stderr
+                if line_count > 0 {
+                    debug!(
+                        plugin = %plugin_name,
+                        total_lines = line_count,
+                        "Plugin stderr closed (EOF)"
+                    );
+                }
+                break;
+            }
+            Ok(_bytes_read) => {
+                line_count += 1;
+
+                // Truncate oversized lines
+                let mut output = line.trim_end().to_string();
+                if output.len() > MAX_LINE_LENGTH {
+                    output.truncate(MAX_LINE_LENGTH);
+                    output.push_str("... (truncated)");
+                }
+
+                // Skip empty lines
+                if output.is_empty() {
+                    continue;
+                }
+
+                // Detect log level and clean the message (remove redundant level prefix)
+                let (level, message) = detect_and_clean_log_level(&output);
+
+                // Skip if message is empty after cleaning
+                if message.is_empty() {
+                    continue;
+                }
+
+                match level {
+                    PluginLogLevel::Error => {
+                        error!(plugin = %plugin_name, "{}", message);
+                    }
+                    PluginLogLevel::Warn => {
+                        warn!(plugin = %plugin_name, "{}", message);
+                    }
+                    PluginLogLevel::Info => {
+                        info!(plugin = %plugin_name, "{}", message);
+                    }
+                    PluginLogLevel::Debug | PluginLogLevel::Trace => {
+                        debug!(plugin = %plugin_name, "{}", message);
+                    }
+                }
+            }
+            Err(e) => {
+                // Log read errors but don't treat as fatal - process may have exited
+                debug!(
+                    plugin = %plugin_name,
+                    error = %e,
+                    "Error reading from plugin stderr"
+                );
+                break;
+            }
+        }
+    }
+
+    debug!(
+        plugin = %plugin_name,
+        "Plugin stderr reader finished (total: {} lines)",
+        line_count
     );
 }
 
@@ -1013,5 +1284,196 @@ mod tests {
         let filtered = filter_blocked_env_vars(&env);
         assert_eq!(filtered.len(), 2);
         assert_eq!(filtered.get("API_KEY"), Some(&"secret".to_string()));
+    }
+
+    // =========================================================================
+    // Plugin Name Tests
+    // =========================================================================
+
+    #[test]
+    fn test_plugin_name_config() {
+        let config = PluginProcessConfig::new("node")
+            .plugin_name("my-metadata-plugin")
+            .arg("index.js");
+
+        assert_eq!(config.plugin_name, Some("my-metadata-plugin".to_string()));
+        assert_eq!(config.display_name(), "my-metadata-plugin");
+    }
+
+    #[test]
+    fn test_display_name_fallback_to_command() {
+        let config = PluginProcessConfig::new("node").arg("script.js");
+
+        // When plugin_name is not set, display_name should return the command
+        assert_eq!(config.plugin_name, None);
+        assert_eq!(config.display_name(), "node");
+    }
+
+    #[test]
+    fn test_display_name_with_plugin_name() {
+        let config = PluginProcessConfig::new("python3")
+            .plugin_name("anilist-metadata")
+            .arg("main.py");
+
+        // When plugin_name is set, display_name should return it
+        assert_eq!(config.display_name(), "anilist-metadata");
+    }
+
+    // =========================================================================
+    // Log Level Detection Tests
+    // =========================================================================
+
+    #[test]
+    fn test_detect_log_level_bracketed_format() {
+        // Standard bracketed format: [LEVEL] - timestamp and level are stripped
+        let (level, msg) =
+            detect_and_clean_log_level("2026-01-01T00:00:00Z [ERROR] Something failed");
+        assert_eq!(level, PluginLogLevel::Error);
+        assert_eq!(msg, "Something failed");
+
+        let (level, msg) =
+            detect_and_clean_log_level("2026-01-01T00:00:00Z [WARN] Warning message");
+        assert_eq!(level, PluginLogLevel::Warn);
+        assert_eq!(msg, "Warning message");
+
+        let (level, msg) = detect_and_clean_log_level("2026-01-01T00:00:00Z [INFO] Info message");
+        assert_eq!(level, PluginLogLevel::Info);
+        assert_eq!(msg, "Info message");
+
+        let (level, msg) = detect_and_clean_log_level("2026-01-01T00:00:00Z [DEBUG] Debug message");
+        assert_eq!(level, PluginLogLevel::Debug);
+        assert_eq!(msg, "Debug message");
+
+        let (level, msg) = detect_and_clean_log_level("2026-01-01T00:00:00Z [TRACE] Trace message");
+        assert_eq!(level, PluginLogLevel::Trace);
+        assert_eq!(msg, "Trace message");
+    }
+
+    #[test]
+    fn test_detect_log_level_colon_format() {
+        // Colon format: LEVEL:
+        let (level, msg) = detect_and_clean_log_level("ERROR: Something went wrong");
+        assert_eq!(level, PluginLogLevel::Error);
+        assert_eq!(msg, "Something went wrong");
+
+        let (level, msg) = detect_and_clean_log_level("WARN: Be careful");
+        assert_eq!(level, PluginLogLevel::Warn);
+        assert_eq!(msg, "Be careful");
+
+        let (level, msg) = detect_and_clean_log_level("INFO: Starting up");
+        assert_eq!(level, PluginLogLevel::Info);
+        assert_eq!(msg, "Starting up");
+
+        let (level, msg) = detect_and_clean_log_level("DEBUG: Variable x = 42");
+        assert_eq!(level, PluginLogLevel::Debug);
+        assert_eq!(msg, "Variable x = 42");
+    }
+
+    #[test]
+    fn test_detect_log_level_case_insensitive() {
+        let (level, _) = detect_and_clean_log_level("[error] lowercase");
+        assert_eq!(level, PluginLogLevel::Error);
+
+        let (level, _) = detect_and_clean_log_level("[Error] Mixed case");
+        assert_eq!(level, PluginLogLevel::Error);
+
+        let (level, _) = detect_and_clean_log_level("debug: lowercase colon");
+        assert_eq!(level, PluginLogLevel::Debug);
+    }
+
+    #[test]
+    fn test_detect_log_level_alternative_names() {
+        // ERR instead of ERROR
+        let (level, msg) = detect_and_clean_log_level("[ERR] Short error");
+        assert_eq!(level, PluginLogLevel::Error);
+        assert_eq!(msg, "Short error");
+
+        // WARNING instead of WARN
+        let (level, msg) = detect_and_clean_log_level("[WARNING] Full warning");
+        assert_eq!(level, PluginLogLevel::Warn);
+        assert_eq!(msg, "Full warning");
+    }
+
+    #[test]
+    fn test_detect_log_level_default_to_info() {
+        // Unknown format defaults to Info, message unchanged
+        let (level, msg) = detect_and_clean_log_level("Some random output without level");
+        assert_eq!(level, PluginLogLevel::Info);
+        assert_eq!(msg, "Some random output without level");
+
+        let (level, msg) = detect_and_clean_log_level("Stack trace line here");
+        assert_eq!(level, PluginLogLevel::Info);
+        assert_eq!(msg, "Stack trace line here");
+    }
+
+    #[test]
+    fn test_detect_log_level_real_plugin_output() {
+        // Real example from mangabaka plugin - both timestamp and level stripped
+        let (level, msg) = detect_and_clean_log_level(
+            "2026-02-01T19:24:20.476Z [DEBUG] [mangabaka-search] Search params received",
+        );
+        assert_eq!(level, PluginLogLevel::Debug);
+        assert_eq!(msg, "[mangabaka-search] Search params received");
+    }
+
+    #[test]
+    fn test_detect_log_level_preserves_other_brackets() {
+        // Should only strip the log level bracket, not other brackets like module names
+        let (level, msg) = detect_and_clean_log_level(
+            "2026-02-01T19:24:20.476Z [INFO] [my-module] Starting service",
+        );
+        assert_eq!(level, PluginLogLevel::Info);
+        assert_eq!(msg, "[my-module] Starting service");
+    }
+
+    // =========================================================================
+    // Timestamp Stripping Tests
+    // =========================================================================
+
+    #[test]
+    fn test_strip_iso_timestamp_with_z() {
+        assert_eq!(
+            strip_iso_timestamp("2026-02-01T19:34:21Z [INFO] message"),
+            "[INFO] message"
+        );
+    }
+
+    #[test]
+    fn test_strip_iso_timestamp_with_milliseconds() {
+        assert_eq!(
+            strip_iso_timestamp("2026-02-01T19:34:21.953Z [INFO] message"),
+            "[INFO] message"
+        );
+    }
+
+    #[test]
+    fn test_strip_iso_timestamp_with_space_separator() {
+        assert_eq!(
+            strip_iso_timestamp("2026-02-01 19:34:21 [INFO] message"),
+            "[INFO] message"
+        );
+    }
+
+    #[test]
+    fn test_strip_iso_timestamp_no_timestamp() {
+        // No timestamp - return unchanged
+        assert_eq!(
+            strip_iso_timestamp("[INFO] message without timestamp"),
+            "[INFO] message without timestamp"
+        );
+    }
+
+    #[test]
+    fn test_strip_iso_timestamp_short_string() {
+        // String too short to contain timestamp
+        assert_eq!(strip_iso_timestamp("short"), "short");
+    }
+
+    #[test]
+    fn test_strip_iso_timestamp_with_timezone_offset() {
+        assert_eq!(
+            strip_iso_timestamp("2026-02-01T19:34:21+00:00 [INFO] message"),
+            "[INFO] message"
+        );
     }
 }

@@ -13,16 +13,25 @@ import {
 import type { MbGetSeriesResponse, MbSearchResponse, MbSeries } from "./types.js";
 
 const BASE_URL = "https://api.mangabaka.dev";
+const DEFAULT_TIMEOUT_SECONDS = 60;
 const logger = createLogger({ name: "mangabaka-api", level: "debug" });
+
+export interface MangaBakaClientOptions {
+  /** Request timeout in seconds (default: 15) */
+  timeout?: number;
+}
 
 export class MangaBakaClient {
   private readonly apiKey: string;
+  private readonly timeoutMs: number;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, options?: MangaBakaClientOptions) {
     if (!apiKey) {
       throw new AuthError("API key is required");
     }
     this.apiKey = apiKey;
+    this.timeoutMs = (options?.timeout ?? DEFAULT_TIMEOUT_SECONDS) * 1000;
+    logger.debug(`MangaBakaClient initialized with timeout: ${this.timeoutMs}ms`);
   }
 
   /**
@@ -72,10 +81,16 @@ export class MangaBakaClient {
       Accept: "application/json",
     };
 
+    // Set up timeout using AbortController
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+
     try {
+      logger.debug(`Request: ${path} (timeout: ${this.timeoutMs}ms)`);
       const response = await fetch(url, {
         method: "GET",
         headers,
+        signal: controller.signal,
       });
 
       // Handle rate limiting
@@ -104,6 +119,12 @@ export class MangaBakaClient {
 
       return response.json() as Promise<T>;
     } catch (error) {
+      // Handle timeout (abort)
+      if (error instanceof Error && error.name === "AbortError") {
+        logger.error(`Request timed out after ${this.timeoutMs}ms: ${path}`);
+        throw new ApiError(`Request timed out after ${this.timeoutMs / 1000}s`);
+      }
+
       // Re-throw plugin errors
       if (
         error instanceof RateLimitError ||
@@ -118,6 +139,8 @@ export class MangaBakaClient {
       const message = error instanceof Error ? error.message : "Unknown error";
       logger.error("Request failed", error);
       throw new ApiError(`Request failed: ${message}`);
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 }

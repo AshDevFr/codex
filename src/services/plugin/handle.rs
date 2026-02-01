@@ -344,12 +344,39 @@ impl PluginHandle {
         self.ensure_running().await?;
         let client_guard = self.client.read().await;
         let client = client_guard.as_ref().ok_or(PluginError::NotInitialized)?;
-        match client.call(methods::METADATA_SERIES_SEARCH, params).await {
+
+        let timeout_ms = self.config.request_timeout.as_millis();
+        debug!(
+            query = %params.query,
+            timeout_ms = timeout_ms,
+            "Plugin handle: sending search request"
+        );
+
+        match client
+            .call::<_, MetadataSearchResponse>(methods::METADATA_SERIES_SEARCH, params.clone())
+            .await
+        {
             Ok(response) => {
                 self.health.record_success().await;
+                debug!(
+                    query = %params.query,
+                    result_count = response.results.len(),
+                    "Plugin handle: search succeeded"
+                );
                 Ok(response)
             }
             Err(e) => {
+                let health_state = self.health.state().await;
+                error!(
+                    query = %params.query,
+                    timeout_ms = timeout_ms,
+                    error = %e,
+                    error_debug = ?e,
+                    health_status = %health_state.status,
+                    consecutive_failures = health_state.consecutive_failures,
+                    max_failures = self.config.max_failures,
+                    "Plugin handle: search failed"
+                );
                 self.health.record_failure().await;
                 self.check_and_disable().await;
                 Err(PluginError::Rpc(e))
