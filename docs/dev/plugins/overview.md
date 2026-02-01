@@ -201,7 +201,7 @@ Conditions can be set at library level (applies to all plugins) and plugin level
 
 Enable `use_existing_external_id` on a plugin to skip searching when the series already has an external ID for that plugin. The plugin will directly fetch updated metadata using the existing ID.
 
-For detailed configuration options, see the [Preprocessing Rules Guide](/docs/preprocessing-rules.md).
+For detailed configuration options, see the [Preprocessing Rules Guide](/docs/preprocessing-rules).
 
 ## Security
 
@@ -215,4 +215,4 @@ For detailed configuration options, see the [Preprocessing Rules Guide](/docs/pr
 - [Writing Plugins](./writing-plugins.md) - Create your own plugin
 - [Plugin Protocol](./protocol.md) - Technical protocol specification
 - [Plugin SDK](./sdk.md) - TypeScript SDK documentation
-- [Preprocessing Rules Guide](/docs/preprocessing-rules.md) - Configure search preprocessing and conditions
+- [Preprocessing Rules Guide](/docs/preprocessing-rules) - Configure search preprocessing and conditions

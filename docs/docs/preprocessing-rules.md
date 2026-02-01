@@ -43,6 +43,8 @@ Preprocessing rules use regex patterns to clean up series titles. They're applie
 - **Library Settings** → Preprocessing tab
 - Applied when new series are created during scan
 
+![Library Preprocessing Settings](../screenshots/libraries/add-library-preprocessing-comics.png)
+
 ### Rule Structure
 
 ```json
@@ -169,6 +171,8 @@ Plugins can use Handlebars templates to customize the search query sent to metad
 
 - **Admin Settings** → **Plugins** → Edit plugin → **Search Template**
 
+![Plugin Search Template Settings](../screenshots/plugins/search-config-template.png)
+
 ### Template Syntax
 
 Templates use [Handlebars](https://handlebarsjs.com/) syntax with access to series metadata.
@@ -271,6 +275,8 @@ Additional regex rules can be applied to the search query after template renderi
 
 - **Admin Settings** → **Plugins** → Edit plugin → **Search Preprocessing**
 
+![Plugin Search Preprocessing Settings](../screenshots/plugins/search-config-preprocessing.png)
+
 ### Use Cases
 
 - Remove characters that break specific provider searches
@@ -299,6 +305,10 @@ Control when auto-matching should occur based on series state. Conditions preven
 
 - **Library Settings** → Auto-match conditions (applies to all plugins)
 - **Admin Settings** → **Plugins** → Edit plugin → Conditions (applies to this plugin only)
+
+![Library Auto-Match Conditions](../screenshots/libraries/add-library-conditions-comics.png)
+
+![Plugin Auto-Match Conditions](../screenshots/plugins/search-config-conditions.png)
 
 ### Condition Structure
 
@@ -619,4 +629,4 @@ When enabled:
 
 - [Libraries & Scanning](./libraries.md) - Library configuration
 - [Custom Metadata](./custom-metadata.md) - Template syntax reference
-- [Plugin Overview](/dev/plugins/overview.md) - Plugin system architecture
+- [Plugin Overview](/dev/plugins/overview) - Plugin system architecture

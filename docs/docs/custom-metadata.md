@@ -10,7 +10,7 @@ Codex allows you to store and display custom metadata for your series beyond the
 Custom metadata is a flexible JSON object that can contain any data you want to associate with a series. It's displayed on the series detail page using a configurable Handlebars template that renders to Markdown.
 
 Templates have access to two data sources:
-- **`custom_metadata`** - Your custom JSON data stored on the series
+- **`customMetadata`** - Your custom JSON data stored on the series
 - **`metadata`** - Built-in series metadata (title, genres, publisher, ratings, etc.)
 
 **Use cases:**
@@ -35,7 +35,7 @@ Custom metadata can be any valid JSON object:
   "status": "In Progress",
   "rating": 8.5,
   "priority": 5,
-  "started_date": "2024-01-15",
+  "startedDate": "2024-01-15",
   "notes": "Great series, highly recommended!",
   "links": [
     { "name": "MyAnimeList", "url": "https://myanimelist.net/manga/1" },
@@ -55,7 +55,7 @@ PATCH /api/v1/series/{id}
 Content-Type: application/json
 
 {
-  "custom_metadata": {
+  "customMetadata": {
     "status": "Completed",
     "rating": 9
   }
@@ -68,7 +68,7 @@ Custom metadata is rendered on the series detail page using a Handlebars templat
 
 ### How Templates Work
 
-1. Your custom metadata is passed to the template as `custom_metadata`
+1. Your custom metadata is passed to the template as `customMetadata`
 2. Built-in series metadata is passed as `metadata`
 3. The template is rendered using Handlebars syntax
 4. The output (Markdown) is displayed using styled components
@@ -82,10 +82,10 @@ The default template displays genres from built-in metadata and custom fields as
 **Genres:** {{join metadata.genres " • "}}
 {{/if}}
 
-{{#if custom_metadata}}
+{{#if customMetadata}}
 ## Additional Information
 
-{{#each custom_metadata}}
+{{#each customMetadata}}
 - **{{@key}}**: {{this}}
 {{/each}}
 {{/if}}
@@ -111,20 +111,20 @@ Templates use [Handlebars](https://handlebarsjs.com/) syntax with additional cus
 
 ```handlebars
 {{!-- Output a value --}}
-{{custom_metadata.title}}
+{{customMetadata.title}}
 
 {{!-- Conditional block --}}
-{{#if custom_metadata.rating}}
-Rating: {{custom_metadata.rating}}/10
+{{#if customMetadata.rating}}
+Rating: {{customMetadata.rating}}/10
 {{/if}}
 
 {{!-- Iterate over arrays --}}
-{{#each custom_metadata.tags}}
+{{#each customMetadata.tags}}
 - {{this}}
 {{/each}}
 
 {{!-- Iterate over objects --}}
-{{#each custom_metadata}}
+{{#each customMetadata}}
 - **{{@key}}**: {{this}}
 {{/each}}
 ```
@@ -159,8 +159,8 @@ Codex provides these custom helpers:
 **Date Formatting:**
 
 ```handlebars
-{{#if custom_metadata.started_date}}
-Started: {{formatDate custom_metadata.started_date "MMMM d, yyyy"}}
+{{#if customMetadata.startedDate}}
+Started: {{formatDate customMetadata.startedDate "MMMM d, yyyy"}}
 {{/if}}
 ```
 
@@ -173,10 +173,10 @@ Date formats use [date-fns format strings](https://date-fns.org/docs/format):
 **Conditional Display:**
 
 ```handlebars
-{{#gt custom_metadata.rating 8}}
+{{#gt customMetadata.rating 8}}
 🔥 Highly Rated!
 {{else}}
-{{#gt custom_metadata.rating 5}}
+{{#gt customMetadata.rating 5}}
 👍 Worth Reading
 {{else}}
 🤔 Mixed Reviews
@@ -188,27 +188,27 @@ Date formats use [date-fns format strings](https://date-fns.org/docs/format):
 
 ```handlebars
 {{!-- Join array items --}}
-**Tags:** {{join custom_metadata.tags ", "}}
+**Tags:** {{join customMetadata.tags ", "}}
 
 {{!-- Show only first 3 items --}}
-{{#first custom_metadata.characters 3}}
+{{#first customMetadata.characters 3}}
 - {{this.name}}: {{this.role}}
 {{/first}}
 
 {{!-- Show count --}}
-Total: {{length custom_metadata.items}} items
+Total: {{length customMetadata.items}} items
 ```
 
 **Default Values:**
 
 ```handlebars
-Status: {{default custom_metadata.status "Not started"}}
-Rating: {{default custom_metadata.rating "—"}}/10
+Status: {{default customMetadata.status "Not started"}}
+Rating: {{default customMetadata.rating "—"}}/10
 ```
 
 ## Built-in Metadata Fields
 
-In addition to `custom_metadata`, templates have access to the series' built-in metadata via the `metadata` object. This allows you to combine your custom tracking data with standard series information.
+In addition to `customMetadata`, templates have access to the series' built-in metadata via the `metadata` object. This allows you to combine your custom tracking data with standard series information.
 
 ### Available Fields
 
@@ -277,13 +277,13 @@ In addition to `custom_metadata`, templates have access to the series' built-in 
 {{/if}}
 {{/if}}
 
-{{#if custom_metadata}}
+{{#if customMetadata}}
 ---
 ## My Progress
 
-**Status:** {{default custom_metadata.status "Not started"}}
-{{#if custom_metadata.current_volume}}
-**Currently on:** Volume {{custom_metadata.current_volume}}{{#if metadata.totalBookCount}} of {{metadata.totalBookCount}}{{/if}}
+**Status:** {{default customMetadata.status "Not started"}}
+{{#if customMetadata.currentVolume}}
+**Currently on:** Volume {{customMetadata.currentVolume}}{{#if metadata.totalBookCount}} of {{metadata.totalBookCount}}{{/if}}
 {{/if}}
 {{/if}}
 ```
@@ -381,10 +381,10 @@ Basic key-value display with optional genres from built-in metadata:
 **Genres:** {{join metadata.genres " • "}}
 {{/if}}
 
-{{#if custom_metadata}}
+{{#if customMetadata}}
 ## Additional Information
 
-{{#each custom_metadata}}
+{{#each customMetadata}}
 - **{{@key}}**: {{this}}
 {{/each}}
 {{/if}}
@@ -395,28 +395,28 @@ Basic key-value display with optional genres from built-in metadata:
 Track reading progress and ratings:
 
 ```handlebars
-{{#if custom_metadata}}
+{{#if customMetadata}}
 ## Reading Info
 
-{{#if custom_metadata.status}}
-**Status:** {{custom_metadata.status}}
+{{#if customMetadata.status}}
+**Status:** {{customMetadata.status}}
 {{/if}}
 
-{{#if custom_metadata.rating}}
-**My Rating:** {{custom_metadata.rating}}/10
+{{#if customMetadata.rating}}
+**My Rating:** {{customMetadata.rating}}/10
 {{/if}}
 
-{{#if custom_metadata.started_date}}
-**Started:** {{formatDate custom_metadata.started_date "MMM d, yyyy"}}
+{{#if customMetadata.startedDate}}
+**Started:** {{formatDate customMetadata.startedDate "MMM d, yyyy"}}
 {{/if}}
 
-{{#if custom_metadata.completed_date}}
-**Completed:** {{formatDate custom_metadata.completed_date "MMM d, yyyy"}}
+{{#if customMetadata.completedDate}}
+**Completed:** {{formatDate customMetadata.completedDate "MMM d, yyyy"}}
 {{/if}}
 
-{{#if custom_metadata.notes}}
+{{#if customMetadata.notes}}
 ### Notes
-{{custom_metadata.notes}}
+{{customMetadata.notes}}
 {{/if}}
 {{/if}}
 ```
@@ -426,18 +426,18 @@ Track reading progress and ratings:
 Link to external databases:
 
 ```handlebars
-{{#if custom_metadata}}
-{{#if custom_metadata.links}}
+{{#if customMetadata}}
+{{#if customMetadata.links}}
 ## External Links
 
-{{#each custom_metadata.links}}
+{{#each customMetadata.links}}
 - [{{this.name}}]({{this.url}})
 {{/each}}
 {{/if}}
 
-{{#if custom_metadata.ids}}
+{{#if customMetadata.ids}}
 ### Database IDs
-{{#each custom_metadata.ids}}
+{{#each customMetadata.ids}}
 - **{{@key}}**: `{{this}}`
 {{/each}}
 {{/if}}
@@ -449,27 +449,27 @@ Link to external databases:
 Track physical collection details:
 
 ```handlebars
-{{#if custom_metadata}}
+{{#if customMetadata}}
 ## Collection Details
 
-{{#if custom_metadata.format}}
-**Format:** {{custom_metadata.format}}
+{{#if customMetadata.format}}
+**Format:** {{customMetadata.format}}
 {{/if}}
 
-{{#if custom_metadata.edition}}
-**Edition:** {{custom_metadata.edition}}
+{{#if customMetadata.edition}}
+**Edition:** {{customMetadata.edition}}
 {{/if}}
 
-{{#if custom_metadata.condition}}
-**Condition:** {{custom_metadata.condition}}
+{{#if customMetadata.condition}}
+**Condition:** {{customMetadata.condition}}
 {{/if}}
 
-{{#if custom_metadata.purchase_date}}
-**Purchased:** {{formatDate custom_metadata.purchase_date "MMM d, yyyy"}}
+{{#if customMetadata.purchaseDate}}
+**Purchased:** {{formatDate customMetadata.purchaseDate "MMM d, yyyy"}}
 {{/if}}
 
-{{#if custom_metadata.location}}
-**Location:** {{custom_metadata.location}}
+{{#if customMetadata.location}}
+**Location:** {{customMetadata.location}}
 {{/if}}
 {{/if}}
 ```
@@ -479,13 +479,13 @@ Track physical collection details:
 Display data in tables:
 
 ```handlebars
-{{#if custom_metadata}}
-{{#and custom_metadata.status custom_metadata.rating}}
+{{#if customMetadata}}
+{{#and customMetadata.status customMetadata.rating}}
 ## Reading Status
 
 | Status | Rating | Priority |
 |--------|--------|----------|
-| {{default custom_metadata.status "Not started"}} | {{default custom_metadata.rating "—"}}/10 | {{default custom_metadata.priority "—"}} |
+| {{default customMetadata.status "Not started"}} | {{default customMetadata.rating "—"}}/10 | {{default customMetadata.priority "—"}} |
 
 {{/and}}
 {{/if}}
@@ -549,26 +549,26 @@ Combine custom tracking data with built-in series metadata:
 {{/and}}
 {{/if}}
 
-{{#if custom_metadata}}
+{{#if customMetadata}}
 ---
 
 ## My Progress
 
-{{#if custom_metadata.status}}
-**Status:** {{custom_metadata.status}}
+{{#if customMetadata.status}}
+**Status:** {{customMetadata.status}}
 {{/if}}
 
-{{#if custom_metadata.rating}}
-**My Rating:** {{custom_metadata.rating}}/10
+{{#if customMetadata.rating}}
+**My Rating:** {{customMetadata.rating}}/10
 {{/if}}
 
-{{#if custom_metadata.current_volume}}
-**Currently on:** Volume {{custom_metadata.current_volume}}{{#if metadata.totalBookCount}} of {{metadata.totalBookCount}}{{/if}}
+{{#if customMetadata.currentVolume}}
+**Currently on:** Volume {{customMetadata.currentVolume}}{{#if metadata.totalBookCount}} of {{metadata.totalBookCount}}{{/if}}
 {{/if}}
 
-{{#if custom_metadata.notes}}
+{{#if customMetadata.notes}}
 ### Notes
-{{custom_metadata.notes}}
+{{customMetadata.notes}}
 {{/if}}
 {{/if}}
 
@@ -591,7 +591,7 @@ Combine custom tracking data with built-in series metadata:
 
 ### Data Structure
 
-1. **Use consistent keys**: Stick to a naming convention (snake_case recommended)
+1. **Use consistent keys**: Stick to a naming convention (camelCase recommended)
 2. **Use ISO dates**: Store dates as ISO strings (e.g., `2024-01-15`) for reliable formatting
 3. **Group related data**: Use nested objects for related information
 4. **Use arrays for lists**: Store multiple items as arrays for easy iteration
@@ -619,7 +619,7 @@ If custom metadata isn't showing:
 
 1. Verify the series has custom metadata set
 2. Check that your template handles the data structure correctly
-3. Ensure conditional blocks match your data (e.g., `custom_metadata.field` vs `custom_metadata.nested.field`)
+3. Ensure conditional blocks match your data (e.g., `customMetadata.field` vs `customMetadata.nested.field`)
 
 ### Styling Issues
 

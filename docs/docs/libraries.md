@@ -70,6 +70,14 @@ Codex supports multiple scanning strategies for different organizational pattern
 
 ![Add Library - Scanning Settings](../screenshots/libraries/add-library-scanning-comics.png)
 
+6. Configure **Preprocessing** rules for title cleanup during scanning
+
+![Add Library - Preprocessing Settings](../screenshots/libraries/add-library-preprocessing-comics.png)
+
+7. Configure **Conditions** for auto-match behavior
+
+![Add Library - Conditions Settings](../screenshots/libraries/add-library-conditions-comics.png)
+
 ### Via API
 
 ```bash

@@ -299,20 +299,46 @@ async function seriesDetailPluginScreenshots(page: Page): Promise<void> {
     return;
   }
 
-  await actionsMenu.click();
-  await page.waitForTimeout(500);
+  // Retry mechanism: open menu and wait for plugin to appear (handles TTL/cache delays)
+  const maxRetries = 10;
+  const retryDelay = 5000; // 5 seconds between retries
+  let fetchMetadataEcho: Awaited<ReturnType<typeof page.$>> = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    // Reload the page on retry attempts to refresh plugin cache
+    if (attempt > 1) {
+      console.log(`      🔄 Reloading page (attempt ${attempt}/${maxRetries})...`);
+      await page.reload();
+      await waitForPageReady(page);
+      await page.waitForTimeout(500);
+    }
+
+    await actionsMenu.click();
+    await page.waitForTimeout(500);
+
+    // Check if Echo plugin is in the menu
+    fetchMetadataEcho = await page.$('[role="menuitem"]:has-text("Echo"), .mantine-Menu-item:has-text("Echo")');
+
+    if (fetchMetadataEcho) {
+      console.log(`      ✓ Echo plugin found on attempt ${attempt}`);
+      break;
+    }
+
+    // Plugin not found, close menu and wait before retry
+    console.log(`      ⏳ Echo plugin not found (attempt ${attempt}/${maxRetries}), waiting...`);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(retryDelay);
+  }
+
+  if (!fetchMetadataEcho) {
+    console.log("      ⚠️  Echo plugin not found in menu after all retries");
+    return;
+  }
 
   // Capture dropdown showing plugin options
   await captureScreenshot(page, "plugins/series-detail-plugin-dropdown");
 
   // Click on "Echo" plugin in "Fetch Metadata" section
-  const fetchMetadataEcho = await page.$('[role="menuitem"]:has-text("Echo"), .mantine-Menu-item:has-text("Echo")');
-  if (!fetchMetadataEcho) {
-    console.log("      ⚠️  Echo plugin not found in menu");
-    // Close menu
-    await page.keyboard.press("Escape");
-    return;
-  }
 
   await fetchMetadataEcho.click();
   await page.waitForTimeout(500);

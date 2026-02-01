@@ -2,6 +2,21 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.3.0] - 2026-02-01
+
+### 🚀 Features
+
+- *(events)* Add SSE events for plugin configuration changes
+- Add preprocessing rules, search templates, auto-match conditions, and external ID tracking
+
+### 🐛 Bug Fixes
+
+- *(docker)* Support custom user directive in docker-compose
+
+### 📚 Documentation
+
+- Add branded social card and hero banner images
+
 ## [1.2.0] - 2026-01-31
 
 ### 🚀 Features

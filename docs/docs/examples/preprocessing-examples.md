@@ -450,4 +450,4 @@ curl -X POST "http://localhost:8080/api/v1/admin/test-preprocessing" \
 
 - [Preprocessing Rules Guide](../preprocessing-rules.md) - Full reference
 - [Libraries & Scanning](../libraries.md) - Library setup
-- [Plugin Overview](/dev/plugins/overview.md) - Plugin system
+- [Plugin Overview](/dev/plugins/overview) - Plugin system
