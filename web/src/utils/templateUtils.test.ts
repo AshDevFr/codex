@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { FullSeries, FullSeriesMetadata } from "@/types";
 import {
+	SAMPLE_SERIES_CONTEXT,
+	type SeriesContext,
 	transformFullSeriesToMetadataForTemplate,
 	transformToMetadataForTemplate,
 } from "./templateUtils";
@@ -408,6 +410,7 @@ describe("templateUtils", () => {
 				path: "/media/series/test",
 				genres: [],
 				tags: [],
+				externalIds: [],
 				externalRatings: [],
 				externalLinks: [],
 				alternateTitles: [],
@@ -669,6 +672,157 @@ describe("templateUtils", () => {
 			expect(Array.isArray(result.tags)).toBe(true);
 			expect(result.genres.every((g) => typeof g === "string")).toBe(true);
 			expect(result.tags.every((t) => typeof t === "string")).toBe(true);
+		});
+	});
+
+	describe("SAMPLE_SERIES_CONTEXT", () => {
+		it("should have correct top-level structure matching backend SeriesContext", () => {
+			// Verify all required top-level fields exist
+			expect(SAMPLE_SERIES_CONTEXT).toHaveProperty("seriesId");
+			expect(SAMPLE_SERIES_CONTEXT).toHaveProperty("bookCount");
+			expect(SAMPLE_SERIES_CONTEXT).toHaveProperty("metadata");
+			expect(SAMPLE_SERIES_CONTEXT).toHaveProperty("externalIds");
+			expect(SAMPLE_SERIES_CONTEXT).toHaveProperty("customMetadata");
+		});
+
+		it("should use camelCase for all structured field names", () => {
+			// Top-level fields should be camelCase
+			expect("seriesId" in SAMPLE_SERIES_CONTEXT).toBe(true);
+			expect("bookCount" in SAMPLE_SERIES_CONTEXT).toBe(true);
+			expect("externalIds" in SAMPLE_SERIES_CONTEXT).toBe(true);
+			expect("customMetadata" in SAMPLE_SERIES_CONTEXT).toBe(true);
+
+			// Should NOT have snake_case versions
+			expect("series_id" in SAMPLE_SERIES_CONTEXT).toBe(false);
+			expect("book_count" in SAMPLE_SERIES_CONTEXT).toBe(false);
+			expect("external_ids" in SAMPLE_SERIES_CONTEXT).toBe(false);
+			expect("custom_metadata" in SAMPLE_SERIES_CONTEXT).toBe(false);
+		});
+
+		it("should have metadata with camelCase field names", () => {
+			const { metadata } = SAMPLE_SERIES_CONTEXT;
+			expect(metadata).toBeDefined();
+			if (!metadata) return;
+
+			// Core metadata fields should be camelCase
+			expect("titleSort" in metadata).toBe(true);
+			expect("ageRating" in metadata).toBe(true);
+			expect("readingDirection" in metadata).toBe(true);
+			expect("totalBookCount" in metadata).toBe(true);
+
+			// Should NOT have snake_case versions
+			expect("title_sort" in metadata).toBe(false);
+			expect("age_rating" in metadata).toBe(false);
+			expect("reading_direction" in metadata).toBe(false);
+			expect("total_book_count" in metadata).toBe(false);
+		});
+
+		it("should have metadata lock fields with camelCase names", () => {
+			const { metadata } = SAMPLE_SERIES_CONTEXT;
+			expect(metadata).toBeDefined();
+			if (!metadata) return;
+
+			// Lock fields should be camelCase
+			expect("titleLock" in metadata).toBe(true);
+			expect("titleSortLock" in metadata).toBe(true);
+			expect("summaryLock" in metadata).toBe(true);
+			expect("ageRatingLock" in metadata).toBe(true);
+			expect("readingDirectionLock" in metadata).toBe(true);
+			expect("totalBookCountLock" in metadata).toBe(true);
+			expect("genresLock" in metadata).toBe(true);
+			expect("tagsLock" in metadata).toBe(true);
+			expect("customMetadataLock" in metadata).toBe(true);
+
+			// Should NOT have snake_case versions
+			expect("title_lock" in metadata).toBe(false);
+			expect("title_sort_lock" in metadata).toBe(false);
+		});
+
+		it("should have genres and tags as string arrays in metadata", () => {
+			const { metadata } = SAMPLE_SERIES_CONTEXT;
+			expect(metadata).toBeDefined();
+			if (!metadata) return;
+
+			expect(Array.isArray(metadata.genres)).toBe(true);
+			expect(Array.isArray(metadata.tags)).toBe(true);
+			expect(metadata.genres?.length).toBeGreaterThan(0);
+			expect(metadata.tags?.length).toBeGreaterThan(0);
+			expect(metadata.genres?.every((g) => typeof g === "string")).toBe(true);
+			expect(metadata.tags?.every((t) => typeof t === "string")).toBe(true);
+		});
+
+		it("should have externalIds with proper structure", () => {
+			const { externalIds } = SAMPLE_SERIES_CONTEXT;
+			expect(externalIds).toBeDefined();
+			if (!externalIds) return;
+
+			// Should have at least one external ID
+			expect(Object.keys(externalIds).length).toBeGreaterThan(0);
+
+			// Each external ID should have id, url, and hash fields
+			for (const [source, context] of Object.entries(externalIds)) {
+				expect(typeof source).toBe("string");
+				expect(context).toHaveProperty("id");
+				expect(typeof context.id).toBe("string");
+			}
+		});
+
+		it("should have customMetadata preserved as-is (no case transformation)", () => {
+			const { customMetadata } = SAMPLE_SERIES_CONTEXT;
+
+			expect(customMetadata).not.toBeNull();
+			expect(customMetadata).not.toBeUndefined();
+
+			// customMetadata should preserve user-defined field names exactly
+			// This includes both camelCase and snake_case as defined by the user
+			expect(customMetadata).toHaveProperty("myField");
+			expect(customMetadata).toHaveProperty("some_snake_field");
+
+			// Nested objects should also be preserved
+			expect(customMetadata).toHaveProperty("source");
+			expect((customMetadata as Record<string, unknown>).source).toHaveProperty(
+				"name",
+			);
+		});
+
+		it("should be serializable to JSON matching backend format", () => {
+			// Serialize to JSON and parse back
+			const json = JSON.stringify(SAMPLE_SERIES_CONTEXT);
+			const parsed = JSON.parse(json) as SeriesContext;
+
+			// Verify structure survives serialization
+			expect(parsed.seriesId).toBe(SAMPLE_SERIES_CONTEXT.seriesId);
+			expect(parsed.bookCount).toBe(SAMPLE_SERIES_CONTEXT.bookCount);
+			expect(parsed.metadata).toBeDefined();
+			expect(SAMPLE_SERIES_CONTEXT.metadata).toBeDefined();
+			if (!parsed.metadata || !SAMPLE_SERIES_CONTEXT.metadata) return;
+			expect(parsed.metadata.title).toBe(SAMPLE_SERIES_CONTEXT.metadata.title);
+			expect(parsed.metadata.genres).toEqual(
+				SAMPLE_SERIES_CONTEXT.metadata.genres,
+			);
+			expect(parsed.metadata.tags).toEqual(SAMPLE_SERIES_CONTEXT.metadata.tags);
+		});
+
+		it("should have all boolean lock fields set to false by default", () => {
+			const { metadata } = SAMPLE_SERIES_CONTEXT;
+			expect(metadata).toBeDefined();
+			if (!metadata) return;
+
+			// All lock fields should be false in the sample
+			expect(metadata.titleLock).toBe(false);
+			expect(metadata.titleSortLock).toBe(false);
+			expect(metadata.summaryLock).toBe(false);
+			expect(metadata.publisherLock).toBe(false);
+			expect(metadata.imprintLock).toBe(false);
+			expect(metadata.statusLock).toBe(false);
+			expect(metadata.ageRatingLock).toBe(false);
+			expect(metadata.languageLock).toBe(false);
+			expect(metadata.readingDirectionLock).toBe(false);
+			expect(metadata.yearLock).toBe(false);
+			expect(metadata.totalBookCountLock).toBe(false);
+			expect(metadata.genresLock).toBe(false);
+			expect(metadata.tagsLock).toBe(false);
+			expect(metadata.customMetadataLock).toBe(false);
 		});
 	});
 });

@@ -58,6 +58,8 @@ async fn test_task_type_priority_ordering() {
         TaskType::GenerateThumbnails {
             library_id: Some(library_id),
             series_id: None,
+            series_ids: None,
+            book_ids: None,
             force: false,
         },
         0,

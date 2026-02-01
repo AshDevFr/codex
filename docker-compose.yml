@@ -267,7 +267,7 @@ services:
       timeout: 3s
       retries: 3
     networks:
-      - codex-network
+      - codex-test-network
     profiles:
       - test
 
@@ -402,4 +402,6 @@ volumes:
 
 networks:
   codex-network:
+    driver: bridge
+  codex-test-network:
     driver: bridge

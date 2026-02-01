@@ -258,6 +258,76 @@ async function createLibrary(page: Page, libraryConfig: LibraryConfig): Promise<
     await captureScreenshot(page, `libraries/add-library-scanning-${nameLower}`);
   }
 
+  // === PREPROCESSING TAB ===
+  // Capture the Preprocessing tab with title transformation rules
+  const preprocessingTab = await page.$('button[role="tab"]:has-text("Preprocessing")');
+  if (preprocessingTab) {
+    await preprocessingTab.click();
+    await page.waitForTimeout(300);
+
+    // Add a sample preprocessing rule using the quick add button
+    // When no rules exist, the component shows quick add buttons for common patterns
+    const digitalButton = await page.$('button:has-text("Remove (Digital) suffix")');
+    if (digitalButton) {
+      await digitalButton.click();
+      await page.waitForTimeout(300);
+
+      // Fill in test input to show preview
+      const testInput = await page.$('input[placeholder="Enter a test title to preview..."]');
+      if (testInput) {
+        await testInput.fill("One Piece (Digital)");
+        await page.waitForTimeout(200);
+      }
+    }
+
+    // Capture Preprocessing tab
+    await captureScreenshot(page, `libraries/add-library-preprocessing-${nameLower}`);
+  }
+
+  // === CONDITIONS TAB ===
+  // Capture the Conditions tab with auto-match conditions
+  const conditionsTab = await page.$('button[role="tab"]:has-text("Conditions")');
+  if (conditionsTab) {
+    await conditionsTab.click();
+    await page.waitForTimeout(300);
+
+    // Add a sample auto-match condition to demonstrate the feature
+    const addConditionButton = await page.$('button:has-text("Add Condition")');
+    if (addConditionButton) {
+      await addConditionButton.click();
+      await page.waitForTimeout(300);
+
+      // Select a field from the dropdown (click the first Select in the condition card)
+      const fieldSelect = await page.$('.mantine-Card-root:last-of-type .mantine-Select-input');
+      if (fieldSelect) {
+        await fieldSelect.click();
+        await page.waitForTimeout(300);
+        // Select "Book Count" from the dropdown
+        await page.click('[role="option"]:has-text("Book Count")');
+        await page.waitForTimeout(200);
+      }
+
+      // Change operator to "Greater or equal"
+      const operatorSelect = await page.$$('.mantine-Card-root:last-of-type .mantine-Select-input');
+      if (operatorSelect.length >= 2) {
+        await operatorSelect[1].click();
+        await page.waitForTimeout(300);
+        await page.click('[role="option"]:has-text("Greater or equal")');
+        await page.waitForTimeout(200);
+      }
+
+      // Fill in the value
+      const valueInput = await page.$('.mantine-Card-root:last-of-type .mantine-NumberInput-input');
+      if (valueInput) {
+        await valueInput.fill("1");
+        await page.waitForTimeout(200);
+      }
+    }
+
+    // Capture Conditions tab
+    await captureScreenshot(page, `libraries/add-library-conditions-${nameLower}`);
+  }
+
   // Click Create Library button
   await page.click('button:has-text("Create Library")');
 

@@ -790,6 +790,74 @@ pub struct ExternalLinkListResponse {
     pub links: Vec<ExternalLinkDto>,
 }
 
+/// External ID from a metadata provider (plugin, comicinfo, etc.)
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesExternalIdDto {
+    /// External ID record ID
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440070")]
+    pub id: uuid::Uuid,
+
+    /// Series ID
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]
+    pub series_id: uuid::Uuid,
+
+    /// Source identifier (e.g., "plugin:mangabaka", "comicinfo", "epub")
+    #[schema(example = "plugin:mangabaka")]
+    pub source: String,
+
+    /// External ID value from the source
+    #[schema(example = "12345")]
+    pub external_id: String,
+
+    /// URL to the external source (if available)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "https://mangabaka.com/manga/12345")]
+    pub external_url: Option<String>,
+
+    /// Hash of the last fetched metadata (for change detection)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata_hash: Option<String>,
+
+    /// When the metadata was last synced from this source
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "2024-01-15T10:30:00Z")]
+    pub last_synced_at: Option<DateTime<Utc>>,
+
+    /// When the external ID was created
+    #[schema(example = "2024-01-01T00:00:00Z")]
+    pub created_at: DateTime<Utc>,
+
+    /// When the external ID was last updated
+    #[schema(example = "2024-01-15T10:30:00Z")]
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<crate::db::entities::series_external_ids::Model> for SeriesExternalIdDto {
+    fn from(model: crate::db::entities::series_external_ids::Model) -> Self {
+        Self {
+            id: model.id,
+            series_id: model.series_id,
+            source: model.source,
+            external_id: model.external_id,
+            external_url: model.external_url,
+            metadata_hash: model.metadata_hash,
+            last_synced_at: model.last_synced_at,
+            created_at: model.created_at,
+            updated_at: model.updated_at,
+        }
+    }
+}
+
+/// Response containing a list of external IDs
+#[allow(dead_code)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesExternalIdListResponse {
+    /// List of external IDs
+    pub external_ids: Vec<SeriesExternalIdDto>,
+}
+
 /// Request to create or update an external link for a series
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -1091,6 +1159,9 @@ pub struct FullSeriesResponse {
     /// External links to other sites
     pub external_links: Vec<ExternalLinkDto>,
 
+    /// External IDs from metadata providers (plugins, comicinfo, etc.)
+    pub external_ids: Vec<SeriesExternalIdDto>,
+
     /// When the series was created
     #[schema(example = "2024-01-01T00:00:00Z")]
     pub created_at: DateTime<Utc>,
@@ -1279,4 +1350,407 @@ pub struct SeriesUpdateResponse {
     /// Last update timestamp
     #[schema(example = "2024-01-15T10:30:00Z")]
     pub updated_at: DateTime<Utc>,
+}
+
+// ============================================================================
+// Reprocess Title DTOs
+// ============================================================================
+
+/// Request to reprocess series title using library preprocessing rules
+#[derive(Debug, Default, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReprocessTitleRequest {
+    /// If true, only preview changes without applying them
+    #[serde(default)]
+    #[schema(example = false)]
+    pub dry_run: bool,
+}
+
+/// Result of reprocessing a single series title
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReprocessTitleResult {
+    /// Series ID
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]
+    pub series_id: uuid::Uuid,
+
+    /// Original title before reprocessing
+    #[schema(example = "One Piece (Digital)")]
+    pub original_title: String,
+
+    /// New title after applying preprocessing rules
+    #[schema(example = "One Piece")]
+    pub new_title: String,
+
+    /// Whether title_sort was cleared (set to None) because title changed
+    #[schema(example = true)]
+    pub title_sort_cleared: bool,
+
+    /// Whether the title was actually changed
+    #[schema(example = true)]
+    pub changed: bool,
+
+    /// Whether this series was skipped (e.g., due to lock)
+    #[schema(example = false)]
+    pub skipped: bool,
+
+    /// Reason for skipping (if skipped)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "title_locked")]
+    pub skip_reason: Option<String>,
+}
+
+/// Response for library-wide title reprocessing
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReprocessLibraryTitlesResponse {
+    /// Library ID
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
+    pub library_id: uuid::Uuid,
+
+    /// Total number of series in the library
+    #[schema(example = 150)]
+    pub total_series: usize,
+
+    /// Number of series processed (not skipped)
+    #[schema(example = 120)]
+    pub processed: usize,
+
+    /// Number of series where title was changed
+    #[schema(example = 45)]
+    pub changed: usize,
+
+    /// Number of series skipped (due to locks)
+    #[schema(example = 30)]
+    pub skipped: usize,
+
+    /// Detailed results for each series (only included if < 100 series)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub results: Option<Vec<ReprocessTitleResult>>,
+}
+
+// ============================================================================
+// Reprocess Title Task DTOs
+// ============================================================================
+
+/// Request to enqueue a reprocess title task
+#[derive(Debug, Default, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EnqueueReprocessTitleRequest {
+    /// If true, only preview changes without applying them (synchronous, no task)
+    #[serde(default)]
+    #[schema(example = false)]
+    pub dry_run: bool,
+}
+
+// ============================================================================
+// Series Context DTOs (for template evaluation)
+// ============================================================================
+
+/// External ID context for template evaluation.
+///
+/// Represents an external ID from a metadata provider (plugin, comicinfo, etc.)
+/// in a simplified format suitable for template access.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalIdContextDto {
+    /// External ID value
+    #[schema(example = "12345")]
+    pub id: String,
+
+    /// External URL (if available)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "https://mangabaka.com/series/12345")]
+    pub url: Option<String>,
+
+    /// Metadata hash for change detection (if available)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hash: Option<String>,
+}
+
+/// Metadata context for template evaluation.
+///
+/// Contains series metadata fields in a flat structure suitable for
+/// template access via `metadata.*` syntax.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MetadataContextDto {
+    /// Series title
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "One Piece")]
+    pub title: Option<String>,
+
+    /// Custom sort name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "One Piece")]
+    pub title_sort: Option<String>,
+
+    /// Series description/summary
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Follow Monkey D. Luffy on his adventure...")]
+    pub summary: Option<String>,
+
+    /// Publisher name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Shueisha")]
+    pub publisher: Option<String>,
+
+    /// Imprint (sub-publisher)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Jump Comics")]
+    pub imprint: Option<String>,
+
+    /// Series status (ongoing, ended, hiatus, abandoned, unknown)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "ongoing")]
+    pub status: Option<String>,
+
+    /// Age rating (e.g., 13, 16, 18)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 13)]
+    pub age_rating: Option<i32>,
+
+    /// Language code (BCP47 format)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "ja")]
+    pub language: Option<String>,
+
+    /// Reading direction (ltr, rtl, ttb, webtoon)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "rtl")]
+    pub reading_direction: Option<String>,
+
+    /// Publication year
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 1997)]
+    pub year: Option<i32>,
+
+    /// Expected total book count
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 110)]
+    pub total_book_count: Option<i32>,
+
+    /// Genre names
+    #[serde(default)]
+    #[schema(example = json!(["Action", "Adventure", "Comedy"]))]
+    pub genres: Vec<String>,
+
+    /// Tag names
+    #[serde(default)]
+    #[schema(example = json!(["pirates", "treasure", "friendship"]))]
+    pub tags: Vec<String>,
+
+    // Lock fields
+    /// Whether title is locked
+    #[serde(default)]
+    pub title_lock: bool,
+
+    /// Whether title_sort is locked
+    #[serde(default)]
+    pub title_sort_lock: bool,
+
+    /// Whether summary is locked
+    #[serde(default)]
+    pub summary_lock: bool,
+
+    /// Whether publisher is locked
+    #[serde(default)]
+    pub publisher_lock: bool,
+
+    /// Whether imprint is locked
+    #[serde(default)]
+    pub imprint_lock: bool,
+
+    /// Whether status is locked
+    #[serde(default)]
+    pub status_lock: bool,
+
+    /// Whether age_rating is locked
+    #[serde(default)]
+    pub age_rating_lock: bool,
+
+    /// Whether language is locked
+    #[serde(default)]
+    pub language_lock: bool,
+
+    /// Whether reading_direction is locked
+    #[serde(default)]
+    pub reading_direction_lock: bool,
+
+    /// Whether year is locked
+    #[serde(default)]
+    pub year_lock: bool,
+
+    /// Whether total_book_count is locked
+    #[serde(default)]
+    pub total_book_count_lock: bool,
+
+    /// Whether genres are locked
+    #[serde(default)]
+    pub genres_lock: bool,
+
+    /// Whether tags are locked
+    #[serde(default)]
+    pub tags_lock: bool,
+
+    /// Whether custom_metadata is locked
+    #[serde(default)]
+    pub custom_metadata_lock: bool,
+}
+
+/// Series context for template and condition evaluation.
+///
+/// This structure provides a unified interface for evaluating templates
+/// and conditions against series data. It aggregates data from various
+/// sources (series, metadata, external IDs, book count) into a single
+/// context object.
+///
+/// ## Template Usage
+///
+/// In Handlebars templates, fields are accessible via:
+/// - `{{seriesId}}` - Series UUID
+/// - `{{bookCount}}` - Number of books
+/// - `{{metadata.title}}` - Series title
+/// - `{{metadata.genres}}` - Genre array
+/// - `{{externalIds.plugin:mangabaka.id}}` - External ID from a source
+/// - `{{customMetadata.myField}}` - Custom metadata field
+///
+/// ## JSON Structure
+///
+/// ```json
+/// {
+///   "seriesId": "550e8400-e29b-41d4-a716-446655440000",
+///   "bookCount": 5,
+///   "metadata": {
+///     "title": "One Piece",
+///     "genres": ["Action", "Adventure"],
+///     "tags": ["pirates"]
+///   },
+///   "externalIds": {
+///     "plugin:mangabaka": { "id": "12345", "url": "..." }
+///   },
+///   "customMetadata": { "myField": "value" }
+/// }
+/// ```
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesContextDto {
+    /// Series UUID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
+    pub series_id: Option<uuid::Uuid>,
+
+    /// Number of books in the series
+    #[schema(example = 5)]
+    pub book_count: i64,
+
+    /// Series metadata
+    #[serde(default)]
+    pub metadata: MetadataContextDto,
+
+    /// External IDs mapped by source name.
+    /// Keys are source identifiers (e.g., "plugin:mangabaka", "comicinfo").
+    #[serde(default)]
+    #[schema(
+        value_type = std::collections::HashMap<String, ExternalIdContextDto>,
+        example = json!({
+            "plugin:mangabaka": { "id": "12345", "url": "https://mangabaka.com/series/12345" }
+        })
+    )]
+    pub external_ids: std::collections::HashMap<String, ExternalIdContextDto>,
+
+    /// Custom metadata fields (preserved as-is, no case transformation).
+    /// Can contain any JSON structure defined by the user.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Object, nullable = true, example = json!({"myField": "value", "rating": 9.5}))]
+    pub custom_metadata: Option<serde_json::Value>,
+}
+
+// Conversion from internal SeriesContext to DTO
+impl From<crate::services::metadata::preprocessing::context::SeriesContext> for SeriesContextDto {
+    fn from(ctx: crate::services::metadata::preprocessing::context::SeriesContext) -> Self {
+        Self {
+            series_id: ctx.series_id,
+            book_count: ctx.book_count,
+            metadata: MetadataContextDto {
+                title: ctx.metadata.title,
+                title_sort: ctx.metadata.title_sort,
+                summary: ctx.metadata.summary,
+                publisher: ctx.metadata.publisher,
+                imprint: ctx.metadata.imprint,
+                status: ctx.metadata.status,
+                age_rating: ctx.metadata.age_rating,
+                language: ctx.metadata.language,
+                reading_direction: ctx.metadata.reading_direction,
+                year: ctx.metadata.year,
+                total_book_count: ctx.metadata.total_book_count,
+                genres: ctx.metadata.genres,
+                tags: ctx.metadata.tags,
+                title_lock: ctx.metadata.title_lock,
+                title_sort_lock: ctx.metadata.title_sort_lock,
+                summary_lock: ctx.metadata.summary_lock,
+                publisher_lock: ctx.metadata.publisher_lock,
+                imprint_lock: ctx.metadata.imprint_lock,
+                status_lock: ctx.metadata.status_lock,
+                age_rating_lock: ctx.metadata.age_rating_lock,
+                language_lock: ctx.metadata.language_lock,
+                reading_direction_lock: ctx.metadata.reading_direction_lock,
+                year_lock: ctx.metadata.year_lock,
+                total_book_count_lock: ctx.metadata.total_book_count_lock,
+                genres_lock: ctx.metadata.genres_lock,
+                tags_lock: ctx.metadata.tags_lock,
+                custom_metadata_lock: ctx.metadata.custom_metadata_lock,
+            },
+            external_ids: ctx
+                .external_ids
+                .into_iter()
+                .map(|(k, v)| {
+                    (
+                        k,
+                        ExternalIdContextDto {
+                            id: v.id,
+                            url: v.url,
+                            hash: v.hash,
+                        },
+                    )
+                })
+                .collect(),
+            custom_metadata: ctx.custom_metadata,
+        }
+    }
+}
+
+/// Request to reprocess series titles in a scope
+#[derive(Debug, Default, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReprocessSeriesTitlesRequest {
+    /// If set, only series in this library
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
+    pub library_id: Option<uuid::Uuid>,
+
+    /// If set, only these specific series (takes precedence over library_id)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = json!(["550e8400-e29b-41d4-a716-446655440001", "550e8400-e29b-41d4-a716-446655440002"]))]
+    pub series_ids: Option<Vec<uuid::Uuid>>,
+}
+
+/// Response for enqueued reprocess title task(s)
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EnqueueReprocessTitleResponse {
+    /// Whether the operation succeeded
+    #[schema(example = true)]
+    pub success: bool,
+
+    /// Number of tasks enqueued
+    #[schema(example = 1)]
+    pub tasks_enqueued: usize,
+
+    /// Task IDs that were created
+    pub task_ids: Vec<uuid::Uuid>,
+
+    /// Message describing the result
+    #[schema(example = "Reprocess title task enqueued")]
+    pub message: String,
 }

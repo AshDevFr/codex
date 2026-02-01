@@ -184,6 +184,122 @@ export const libraryHandlers = [
 			},
 		});
 	}),
+
+	// Reprocess all series titles in a library using preprocessing rules
+	http.post(
+		"/api/v1/libraries/:id/series/titles/reprocess",
+		async ({ params, request }) => {
+			await delay(200);
+			const library = mockLibraries.find((l) => l.id === params.id);
+
+			if (!library) {
+				return HttpResponse.json(
+					{ error: "Library not found" },
+					{ status: 404 },
+				);
+			}
+
+			const body = (await request.json().catch(() => ({}))) as {
+				dryRun?: boolean;
+			};
+
+			if (body.dryRun) {
+				// Return synchronous preview with sample results
+				return HttpResponse.json({
+					results: [
+						{
+							seriesId: "series-1",
+							originalTitle: "One Piece (Digital)",
+							newTitle: "One Piece",
+							changed: true,
+							skipped: false,
+							skipReason: null,
+							titleSortCleared: true,
+						},
+						{
+							seriesId: "series-2",
+							originalTitle: "Naruto",
+							newTitle: "Naruto",
+							changed: false,
+							skipped: false,
+							skipReason: null,
+							titleSortCleared: false,
+						},
+						{
+							seriesId: "series-3",
+							originalTitle: "Attack on Titan [Digital]",
+							newTitle: "Attack on Titan",
+							changed: true,
+							skipped: false,
+							skipReason: null,
+							titleSortCleared: true,
+						},
+					],
+					summary: {
+						total: 3,
+						changed: 2,
+						unchanged: 1,
+						skipped: 0,
+					},
+				});
+			}
+
+			// Return task ID for async processing
+			return HttpResponse.json({
+				taskId: `reprocess-library-titles-${params.id}-${Date.now()}`,
+			});
+		},
+	),
+
+	// Generate book thumbnails for all books in a library
+	http.post(
+		"/api/v1/libraries/:id/books/thumbnails/generate",
+		async ({ params, request }) => {
+			await delay(100);
+			const library = mockLibraries.find((l) => l.id === params.id);
+
+			if (!library) {
+				return HttpResponse.json(
+					{ error: "Library not found" },
+					{ status: 404 },
+				);
+			}
+
+			const body = (await request.json().catch(() => ({}))) as {
+				force?: boolean;
+			};
+
+			return HttpResponse.json({
+				task_id: `gen-book-thumbs-${params.id}-${Date.now()}`,
+				force: body.force || false,
+			});
+		},
+	),
+
+	// Generate series thumbnails for all series in a library
+	http.post(
+		"/api/v1/libraries/:id/series/thumbnails/generate",
+		async ({ params, request }) => {
+			await delay(100);
+			const library = mockLibraries.find((l) => l.id === params.id);
+
+			if (!library) {
+				return HttpResponse.json(
+					{ error: "Library not found" },
+					{ status: 404 },
+				);
+			}
+
+			const body = (await request.json().catch(() => ({}))) as {
+				force?: boolean;
+			};
+
+			return HttpResponse.json({
+				task_id: `gen-series-thumbs-${params.id}-${Date.now()}`,
+				force: body.force || false,
+			});
+		},
+	),
 ];
 
 // Helper to get current mock libraries (for testing)

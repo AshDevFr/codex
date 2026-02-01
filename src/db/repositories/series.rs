@@ -86,12 +86,44 @@ impl SeriesRepository {
 
     /// Create a new series with optional fingerprint and required path
     /// Also creates the corresponding series_metadata record
+    ///
+    /// The `metadata_title` parameter allows specifying a preprocessed title for the metadata.
+    /// If None, the `name` will be used as the metadata title.
     pub async fn create_with_fingerprint(
         db: &DatabaseConnection,
         library_id: Uuid,
         name: &str,
         fingerprint: Option<String>,
         path: String,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
+    ) -> Result<series::Model> {
+        Self::create_with_fingerprint_and_title(
+            db,
+            library_id,
+            name,
+            fingerprint,
+            path,
+            None, // Use name as metadata title
+            event_broadcaster,
+        )
+        .await
+    }
+
+    /// Create a new series with optional fingerprint, path, and custom metadata title
+    /// Also creates the corresponding series_metadata record
+    ///
+    /// - `name`: Directory name (preserved for file recognition in `series.name`)
+    /// - `metadata_title`: Title for `series_metadata.title` (defaults to `name` if None)
+    ///
+    /// This allows preprocessing rules to clean the title (e.g., removing "(Digital)" suffix)
+    /// while preserving the original directory name for file matching.
+    pub async fn create_with_fingerprint_and_title(
+        db: &DatabaseConnection,
+        library_id: Uuid,
+        name: &str,
+        fingerprint: Option<String>,
+        path: String,
+        metadata_title: Option<&str>,
         event_broadcaster: Option<&Arc<EventBroadcaster>>,
     ) -> Result<series::Model> {
         let now = Utc::now();
@@ -111,10 +143,13 @@ impl SeriesRepository {
 
         let created_series = series.insert(db).await.context("Failed to create series")?;
 
+        // Use metadata_title if provided, otherwise use name
+        let title = metadata_title.unwrap_or(name);
+
         // Create the corresponding series_metadata record
         let metadata = series_metadata::ActiveModel {
             series_id: Set(series_id),
-            title: Set(name.to_string()),
+            title: Set(title.to_string()),
             title_sort: Set(None),
             summary: Set(None),
             publisher: Set(None),
@@ -205,6 +240,22 @@ impl SeriesRepository {
             .context("Failed to get existing series IDs")?;
 
         Ok(existing.into_iter().collect())
+    }
+
+    /// Get series by their IDs (simple, no pagination)
+    ///
+    /// Returns all series matching the given IDs. This is useful for batch operations
+    /// where all matching series need to be processed.
+    pub async fn get_by_ids(db: &DatabaseConnection, ids: &[Uuid]) -> Result<Vec<series::Model>> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        Series::find()
+            .filter(series::Column::Id.is_in(ids.to_vec()))
+            .all(db)
+            .await
+            .context("Failed to get series by IDs")
     }
 
     /// Get series with its metadata
@@ -2064,5 +2115,86 @@ mod tests {
             .await
             .unwrap();
         assert!(existing.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_create_with_fingerprint_and_title() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Create series with different name and metadata title
+        // This simulates preprocessing where "(Digital)" suffix is removed
+        let series = SeriesRepository::create_with_fingerprint_and_title(
+            db.sea_orm_connection(),
+            library.id,
+            "One Piece (Digital)", // Original directory name
+            Some("fingerprint123".to_string()),
+            "/test/path/One Piece (Digital)".to_string(),
+            Some("One Piece"), // Preprocessed title
+            None,
+        )
+        .await
+        .unwrap();
+
+        // series.name should be the original directory name
+        assert_eq!(series.name, "One Piece (Digital)");
+
+        // series_metadata.title should be the preprocessed title
+        let metadata = crate::db::repositories::SeriesMetadataRepository::get_by_series_id(
+            db.sea_orm_connection(),
+            series.id,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(metadata.title, "One Piece");
+    }
+
+    #[tokio::test]
+    async fn test_create_with_fingerprint_and_title_none() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Create series without preprocessed title (metadata_title = None)
+        let series = SeriesRepository::create_with_fingerprint_and_title(
+            db.sea_orm_connection(),
+            library.id,
+            "One Piece",
+            Some("fingerprint456".to_string()),
+            "/test/path/One Piece".to_string(),
+            None, // No preprocessing
+            None,
+        )
+        .await
+        .unwrap();
+
+        // series.name should be the original name
+        assert_eq!(series.name, "One Piece");
+
+        // series_metadata.title should also be the original name
+        let metadata = crate::db::repositories::SeriesMetadataRepository::get_by_series_id(
+            db.sea_orm_connection(),
+            series.id,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(metadata.title, "One Piece");
     }
 }

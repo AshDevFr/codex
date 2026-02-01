@@ -30,6 +30,14 @@ pub struct Model {
     pub default_reading_direction: String,
     pub allowed_formats: Option<String>,
     pub excluded_patterns: Option<String>,
+    /// Title preprocessing rules as JSON array of regex rules
+    /// Applied during scan to clean series titles before search
+    #[sea_orm(column_type = "Text")]
+    pub title_preprocessing_rules: Option<String>,
+    /// Auto-match conditions as JSON object
+    /// Controls when auto-matching runs for this library
+    #[sea_orm(column_type = "Text")]
+    pub auto_match_conditions: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub last_scanned_at: Option<DateTime<Utc>>,

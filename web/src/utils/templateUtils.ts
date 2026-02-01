@@ -1,4 +1,168 @@
-import type { FullSeries, FullSeriesMetadata } from "@/types";
+import type {
+	ExternalIdContext,
+	FullSeries,
+	FullSeriesMetadata,
+	MetadataContext,
+	SeriesContext,
+} from "@/types";
+
+// =============================================================================
+// Re-export types from @/types for convenience
+// =============================================================================
+
+// Re-export the generated types for backwards compatibility with existing imports
+export type { ExternalIdContext, MetadataContext, SeriesContext };
+
+// =============================================================================
+// Sample Series Context
+// =============================================================================
+
+/**
+ * Sample series context matching the backend `SeriesContext` structure exactly.
+ *
+ * This sample uses camelCase for all structured fields (matching backend serde serialization).
+ * `customMetadata` contents are preserved as-is (user-defined, no case transformation).
+ *
+ * Use this sample for:
+ * - Template editor previews
+ * - Condition editor test data
+ * - Frontend validation
+ */
+/**
+ * Extended SeriesContext type that allows any JSON value in customMetadata.
+ * The generated type is too restrictive (Record<string, never>), so we override it.
+ */
+export type SeriesContextWithCustomMetadata = Omit<
+	SeriesContext,
+	"customMetadata"
+> & {
+	customMetadata?: Record<string, unknown> | null;
+};
+
+export const SAMPLE_SERIES_CONTEXT: SeriesContextWithCustomMetadata = {
+	seriesId: "550e8400-e29b-41d4-a716-446655440000",
+	bookCount: 5,
+	metadata: {
+		title: "One Piece",
+		titleSort: "One Piece",
+		summary:
+			"Follow Monkey D. Luffy and his crew on their epic journey to find the legendary One Piece treasure and become the Pirate King.",
+		publisher: "Shueisha",
+		imprint: "Jump Comics",
+		status: "ongoing",
+		ageRating: 13,
+		language: "ja",
+		readingDirection: "rtl",
+		year: 1997,
+		totalBookCount: 110,
+		genres: ["Action", "Adventure", "Comedy", "Fantasy"],
+		tags: ["pirates", "treasure", "friendship", "manga"],
+		titleLock: false,
+		titleSortLock: false,
+		summaryLock: false,
+		publisherLock: false,
+		imprintLock: false,
+		statusLock: false,
+		ageRatingLock: false,
+		languageLock: false,
+		readingDirectionLock: false,
+		yearLock: false,
+		totalBookCountLock: false,
+		genresLock: false,
+		tagsLock: false,
+		customMetadataLock: false,
+	},
+	externalIds: {
+		"plugin:mangabaka": {
+			id: "12345",
+			url: "https://mangabaka.com/series/12345",
+			hash: "abc123def456",
+		},
+		"plugin:anilist": {
+			id: "21",
+			url: "https://anilist.co/manga/21",
+			hash: null,
+		},
+	},
+	customMetadata: {
+		myField: "preserved as-is",
+		some_snake_field: 123,
+		source: {
+			name: "MySource",
+			confidence: 0.95,
+		},
+	},
+};
+
+// =============================================================================
+// Transform Functions
+// =============================================================================
+
+/**
+ * Transforms a FullSeries response into a SeriesContext object.
+ *
+ * This is the primary transform function for template evaluation.
+ * It converts the API response structure into the flat SeriesContext
+ * structure expected by templates.
+ *
+ * @param series - The full series response from the API
+ * @returns A SeriesContext object for template rendering
+ */
+export function transformFullSeriesToSeriesContext(
+	series: FullSeries,
+): SeriesContextWithCustomMetadata {
+	const metadata = series.metadata;
+
+	// Build external IDs map from array
+	const externalIds: Record<string, ExternalIdContext> = {};
+	for (const eid of series.externalIds) {
+		externalIds[eid.source] = {
+			id: eid.externalId,
+			url: eid.externalUrl ?? null,
+			hash: eid.metadataHash ?? null,
+		};
+	}
+
+	return {
+		seriesId: series.id,
+		bookCount: series.bookCount,
+		metadata: {
+			title: metadata.title,
+			titleSort: metadata.titleSort ?? null,
+			summary: metadata.summary ?? null,
+			publisher: metadata.publisher ?? null,
+			imprint: metadata.imprint ?? null,
+			status: metadata.status ?? null,
+			ageRating: metadata.ageRating ?? null,
+			language: metadata.language ?? null,
+			readingDirection: metadata.readingDirection ?? null,
+			year: metadata.year ?? null,
+			totalBookCount: metadata.totalBookCount ?? null,
+			genres: series.genres.map((g) => g.name),
+			tags: series.tags.map((t) => t.name),
+			titleLock: metadata.locks.title ?? false,
+			titleSortLock: metadata.locks.titleSort ?? false,
+			summaryLock: metadata.locks.summary ?? false,
+			publisherLock: metadata.locks.publisher ?? false,
+			imprintLock: metadata.locks.imprint ?? false,
+			statusLock: metadata.locks.status ?? false,
+			ageRatingLock: metadata.locks.ageRating ?? false,
+			languageLock: metadata.locks.language ?? false,
+			readingDirectionLock: metadata.locks.readingDirection ?? false,
+			yearLock: metadata.locks.year ?? false,
+			totalBookCountLock: metadata.locks.totalBookCount ?? false,
+			genresLock: metadata.locks.genres ?? false,
+			tagsLock: metadata.locks.tags ?? false,
+			customMetadataLock: metadata.locks.customMetadata ?? false,
+		},
+		externalIds,
+		customMetadata: metadata.customMetadata as Record<string, unknown> | null,
+	};
+}
+
+// =============================================================================
+// Legacy MetadataForTemplate (for backwards compatibility)
+// =============================================================================
 
 /**
  * Simplified metadata type for use in templates.
@@ -8,6 +172,9 @@ import type { FullSeries, FullSeriesMetadata } from "@/types";
  * - genres/tags are arrays of strings (just names, not full objects)
  * - externalRatings/externalLinks are simplified objects
  * - alternateTitles are simplified objects
+ *
+ * @deprecated Use `SeriesContext` for new code. This interface is kept for
+ * backwards compatibility with `CustomMetadataDisplay` and other existing components.
  */
 export interface MetadataForTemplate {
 	/** Series title */
@@ -90,6 +257,7 @@ export const SAMPLE_METADATA_FOR_TEMPLATE: MetadataForTemplate = {
  * - Simplifies external ratings, links, and alternate titles to clean objects
  * - Omits internal fields like IDs, timestamps, and locks
  *
+ * @deprecated Use `transformFullSeriesToSeriesContext` instead.
  * @param metadata - The full series metadata from the API
  * @returns A simplified metadata object for template rendering
  */
@@ -146,6 +314,7 @@ export function transformToMetadataForTemplate(
  * - Scalar metadata fields are in `series.metadata`
  * - Arrays (genres, tags, etc.) are at the top level of the response
  *
+ * @deprecated Use `transformFullSeriesToSeriesContext` instead.
  * @param series - The full series response from the API
  * @returns A simplified metadata object for template rendering
  */

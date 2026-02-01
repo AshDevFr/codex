@@ -391,6 +391,64 @@ export const seriesApi = {
 		);
 		return response.data;
 	},
+
+	/**
+	 * Reprocess series title using library preprocessing rules (queues a background task)
+	 * @param seriesId - Series ID to reprocess title for
+	 */
+	reprocessTitle: async (seriesId: string): Promise<{ taskId: string }> => {
+		const response = await api.post<{ taskId: string }>(
+			`/series/${seriesId}/title/reprocess`,
+			{},
+		);
+		return response.data;
+	},
+
+	/**
+	 * Queue thumbnail generation for series covers in bulk
+	 * @param seriesIds - Array of series IDs to generate thumbnails for
+	 * @param force - Whether to regenerate thumbnails even if they exist (default: false)
+	 */
+	bulkGenerateSeriesThumbnails: async (
+		seriesIds: string[],
+		force = false,
+	): Promise<{ taskId: string; message: string }> => {
+		const response = await api.post<{ taskId: string; message: string }>(
+			"/series/bulk/thumbnails/generate",
+			{ seriesIds, force },
+		);
+		return response.data;
+	},
+
+	/**
+	 * Queue thumbnail generation for all books in multiple series
+	 * @param seriesIds - Array of series IDs whose books should have thumbnails generated
+	 * @param force - Whether to regenerate thumbnails even if they exist (default: false)
+	 */
+	bulkGenerateBookThumbnails: async (
+		seriesIds: string[],
+		force = false,
+	): Promise<{ taskId: string; message: string }> => {
+		const response = await api.post<{ taskId: string; message: string }>(
+			"/series/bulk/thumbnails/books/generate",
+			{ seriesIds, force },
+		);
+		return response.data;
+	},
+
+	/**
+	 * Queue title reprocessing for multiple series in bulk
+	 * @param seriesIds - Array of series IDs to reprocess titles for
+	 */
+	bulkReprocessTitles: async (
+		seriesIds: string[],
+	): Promise<{ taskId: string; message: string }> => {
+		const response = await api.post<{ taskId: string; message: string }>(
+			"/series/bulk/titles/reprocess",
+			{ seriesIds },
+		);
+		return response.data;
+	},
 };
 
 /** Alphabetical group with count */

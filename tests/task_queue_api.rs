@@ -51,6 +51,8 @@ async fn test_api_list_tasks() {
         TaskType::GenerateThumbnails {
             library_id: None,
             series_id: None,
+            series_ids: None,
+            book_ids: None,
             force: false,
         },
         0,
@@ -101,6 +103,8 @@ async fn test_api_get_task() {
         TaskType::GenerateThumbnails {
             library_id: None,
             series_id: None,
+            series_ids: None,
+            book_ids: None,
             force: false,
         },
         0,
@@ -240,6 +244,8 @@ async fn test_api_cancel_task() {
         TaskType::GenerateThumbnails {
             library_id: None,
             series_id: None,
+            series_ids: None,
+            book_ids: None,
             force: false,
         },
         0,
@@ -289,6 +295,8 @@ async fn test_api_unlock_task() {
         TaskType::GenerateThumbnails {
             library_id: None,
             series_id: None,
+            series_ids: None,
+            book_ids: None,
             force: false,
         },
         0,

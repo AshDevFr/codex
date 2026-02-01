@@ -16,7 +16,7 @@ use super::super::dto::{
     MetadataAction, MetadataApplyRequest, MetadataApplyResponse, MetadataAutoMatchRequest,
     MetadataAutoMatchResponse, MetadataFieldPreview, MetadataPreviewRequest,
     MetadataPreviewResponse, PluginActionDto, PluginActionRequest, PluginActionsResponse,
-    PluginSearchResponse, PluginSearchResultDto, PreviewSummary, SkippedField,
+    PluginSearchResponse, PluginSearchResultDto, PreviewSummary, SearchTitleResponse, SkippedField,
 };
 use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission, AppState};
 use crate::db::entities::plugins::PluginPermission;
@@ -24,6 +24,9 @@ use crate::db::repositories::{
     AlternateTitleRepository, ExternalLinkRepository, ExternalRatingRepository, GenreRepository,
     LibraryRepository, PluginsRepository, SeriesMetadataRepository, SeriesRepository,
     TagRepository, TaskRepository,
+};
+use crate::services::metadata::preprocessing::{
+    apply_rules, render_template, PreprocessingRule, SeriesContextBuilder,
 };
 use crate::services::metadata::{ApplyOptions, MetadataApplier};
 use crate::services::plugin::protocol::{
@@ -50,6 +53,7 @@ use uuid::Uuid;
         preview_series_metadata,
         apply_series_metadata,
         auto_match_series_metadata,
+        get_series_search_title,
         enqueue_auto_match_task,
         enqueue_bulk_auto_match_tasks,
         enqueue_library_auto_match_tasks,
@@ -73,6 +77,7 @@ use uuid::Uuid;
         SkippedField,
         MetadataAutoMatchRequest,
         MetadataAutoMatchResponse,
+        SearchTitleResponse,
         EnqueueAutoMatchRequest,
         EnqueueAutoMatchResponse,
         EnqueueBulkAutoMatchRequest,
@@ -383,6 +388,124 @@ async fn execute_metadata_action(
           // (MetadataAction::Get, MetadataContentType::Book) => { ... }
           // (MetadataAction::Match, MetadataContentType::Book) => { ... }
     }
+}
+
+/// Query parameters for getting the search title
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchTitleQuery {
+    /// Plugin ID to get preprocessing rules from
+    pub plugin_id: Uuid,
+}
+
+/// Get the preprocessed search title for a series
+///
+/// Returns the series title after applying plugin and library preprocessing rules.
+/// Use this to get the correct search query before opening the metadata search modal.
+#[utoipa::path(
+    get,
+    path = "/api/v1/series/{id}/metadata/search-title",
+    params(
+        ("id" = Uuid, Path, description = "Series ID"),
+        SearchTitleQuery
+    ),
+    responses(
+        (status = 200, description = "Preprocessed search title", body = SearchTitleResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Series or plugin not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Plugin Actions"
+)]
+pub async fn get_series_search_title(
+    State(state): State<Arc<AppState>>,
+    _auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+    Query(query): Query<SearchTitleQuery>,
+) -> Result<Json<SearchTitleResponse>, ApiError> {
+    // Get the series
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Get the plugin
+    let plugin = PluginsRepository::get_by_id(&state.db, query.plugin_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Plugin not found".to_string()))?;
+
+    // Get the library for library-level preprocessing rules
+    let library = LibraryRepository::get_by_id(&state.db, series.library_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get library: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
+
+    // Build the full series context using the new builder
+    // This includes metadata, genres, tags, book count, external IDs, and custom metadata
+    let series_context = SeriesContextBuilder::new(series_id)
+        .build(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to build series context: {}", e)))?;
+
+    // Get original title from context
+    let original_title = series_context
+        .metadata
+        .title
+        .clone()
+        .unwrap_or_else(|| series.name.clone());
+
+    // Step 1: Apply search query template if configured
+    let templated_title =
+        if let Some(template) = PluginsRepository::get_search_query_template(&plugin) {
+            // Convert series context to JSON for template rendering
+            let context_json =
+                serde_json::to_value(&series_context).unwrap_or_else(|_| serde_json::json!({}));
+            match render_template(template, &context_json) {
+                Ok(rendered) => rendered,
+                Err(_) => original_title.clone(), // Fall back to original on template error
+            }
+        } else {
+            original_title.clone()
+        };
+
+    // Step 2: Apply preprocessing rules (plugin rules first, then library rules)
+    let plugin_rules = PluginsRepository::get_search_preprocessing_rules(&plugin);
+    let library_rules = LibraryRepository::get_preprocessing_rules(&library);
+    let total_rules = plugin_rules.len() + library_rules.len();
+    let search_title = apply_preprocessing_rules(&templated_title, &plugin_rules, &library_rules);
+
+    Ok(Json(SearchTitleResponse {
+        original_title,
+        search_title,
+        rules_applied: total_rules,
+    }))
+}
+
+/// Apply preprocessing rules to a query string
+///
+/// Plugin rules are applied first, then library rules.
+fn apply_preprocessing_rules(
+    query: &str,
+    plugin_rules: &[PreprocessingRule],
+    library_rules: &[PreprocessingRule],
+) -> String {
+    let mut result = query.to_string();
+
+    // Apply plugin rules first
+    if !plugin_rules.is_empty() {
+        result = apply_rules(&result, plugin_rules);
+    }
+
+    // Then apply library rules
+    if !library_rules.is_empty() {
+        result = apply_rules(&result, library_rules);
+    }
+
+    result
 }
 
 /// Preview metadata from a plugin for a series

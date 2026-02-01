@@ -21,6 +21,8 @@ async fn test_e2e_task_execution() {
         TaskType::GenerateThumbnails {
             library_id: None,
             series_id: None,
+            series_ids: None,
+            book_ids: None,
             force: false,
         },
         0,
@@ -99,6 +101,8 @@ async fn test_task_retry_on_failure() {
         TaskType::GenerateThumbnails {
             library_id: None,
             series_id: None,
+            series_ids: None,
+            book_ids: None,
             force: false,
         },
         0,
@@ -142,6 +146,8 @@ async fn test_concurrent_workers_skip_locked() {
         TaskType::GenerateThumbnails {
             library_id: None,
             series_id: None,
+            series_ids: None,
+            book_ids: None,
             force: false,
         },
         0,
@@ -240,6 +246,8 @@ async fn test_cancelled_task_not_executed() {
         TaskType::GenerateThumbnails {
             library_id: None,
             series_id: None,
+            series_ids: None,
+            book_ids: None,
             force: false,
         },
         0,
@@ -280,6 +288,8 @@ async fn test_stale_task_recovery() {
         TaskType::GenerateThumbnails {
             library_id: None,
             series_id: None,
+            series_ids: None,
+            book_ids: None,
             force: false,
         },
         0,

@@ -19,6 +19,7 @@ pub mod generate_thumbnail;
 pub mod generate_thumbnails;
 pub mod plugin_auto_match;
 pub mod purge_deleted;
+pub mod reprocess_series_titles;
 pub mod scan_library;
 
 pub use analyze_book::AnalyzeBookHandler;
@@ -34,6 +35,7 @@ pub use generate_thumbnail::GenerateThumbnailHandler;
 pub use generate_thumbnails::GenerateThumbnailsHandler;
 pub use plugin_auto_match::PluginAutoMatchHandler;
 pub use purge_deleted::PurgeDeletedHandler;
+pub use reprocess_series_titles::{ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler};
 pub use scan_library::ScanLibraryHandler;
 
 use std::future::Future;

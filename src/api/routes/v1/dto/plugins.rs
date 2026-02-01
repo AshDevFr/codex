@@ -122,6 +122,22 @@ pub struct PluginDto {
 
     /// When the plugin was last updated
     pub updated_at: DateTime<Utc>,
+
+    /// Handlebars template for customizing search queries
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_query_template: Option<String>,
+
+    /// Preprocessing rules for search queries (JSON array of regex rules)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_preprocessing_rules: Option<serde_json::Value>,
+
+    /// Auto-match conditions (JSON object with mode and rules)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_match_conditions: Option<serde_json::Value>,
+
+    /// Whether to skip search when external ID exists for this plugin
+    #[schema(example = true)]
+    pub use_existing_external_id: bool,
 }
 
 impl From<plugins::Model> for PluginDto {
@@ -169,6 +185,14 @@ impl From<plugins::Model> for PluginDto {
             rate_limit_requests_per_minute: model.rate_limit_requests_per_minute,
             created_at: model.created_at,
             updated_at: model.updated_at,
+            search_query_template: model.search_query_template,
+            search_preprocessing_rules: model
+                .search_preprocessing_rules
+                .and_then(|s| serde_json::from_str(&s).ok()),
+            auto_match_conditions: model
+                .auto_match_conditions
+                .and_then(|s| serde_json::from_str(&s).ok()),
+            use_existing_external_id: model.use_existing_external_id,
         }
     }
 }
@@ -403,6 +427,27 @@ pub struct CreatePluginRequest {
     #[serde(default = "default_rate_limit")]
     #[schema(example = 60)]
     pub rate_limit_requests_per_minute: Option<i32>,
+
+    /// Handlebars template for customizing search queries
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_query_template: Option<String>,
+
+    /// Preprocessing rules for search queries (JSON array of regex rules)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_preprocessing_rules: Option<serde_json::Value>,
+
+    /// Auto-match conditions (JSON object with mode and rules)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_match_conditions: Option<serde_json::Value>,
+
+    /// Whether to skip search when external ID exists for this plugin
+    #[serde(default = "default_use_existing_external_id")]
+    #[schema(example = true)]
+    pub use_existing_external_id: bool,
+}
+
+fn default_use_existing_external_id() -> bool {
+    true
 }
 
 fn default_rate_limit() -> Option<i32> {
@@ -481,6 +526,22 @@ pub struct UpdatePluginRequest {
     #[serde(default)]
     #[schema(example = 60)]
     pub rate_limit_requests_per_minute: Option<Option<i32>>,
+
+    /// Handlebars template for customizing search queries
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_query_template: Option<String>,
+
+    /// Preprocessing rules for search queries (JSON array of regex rules)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_preprocessing_rules: Option<serde_json::Value>,
+
+    /// Auto-match conditions (JSON object with mode and rules)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_match_conditions: Option<serde_json::Value>,
+
+    /// Whether to skip search when external ID exists for this plugin
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub use_existing_external_id: Option<bool>,
 }
 
 // =============================================================================
@@ -1063,6 +1124,20 @@ pub struct SkippedField {
 
     /// Reason for skipping
     pub reason: String,
+}
+
+/// Response containing the preprocessed search title for a series
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchTitleResponse {
+    /// Original title before preprocessing
+    pub original_title: String,
+
+    /// Title after preprocessing rules were applied
+    pub search_title: String,
+
+    /// Number of preprocessing rules that were applied
+    pub rules_applied: usize,
 }
 
 /// Request to auto-match and apply metadata from a plugin

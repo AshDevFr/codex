@@ -88,6 +88,19 @@ pub struct Model {
     /// Maximum requests per minute (default: 60, None = no limit)
     pub rate_limit_requests_per_minute: Option<i32>,
 
+    // Search configuration
+    /// Handlebars template for customizing search queries
+    #[sea_orm(column_type = "Text")]
+    pub search_query_template: Option<String>,
+    /// Preprocessing rules for search queries as JSON array
+    #[sea_orm(column_type = "Text")]
+    pub search_preprocessing_rules: Option<String>,
+    /// Auto-match conditions as JSON object
+    #[sea_orm(column_type = "Text")]
+    pub auto_match_conditions: Option<String>,
+    /// Whether to skip search when external ID exists for this plugin
+    pub use_existing_external_id: bool,
+
     // Timestamps
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -719,6 +732,10 @@ mod tests {
             last_success_at: None,
             disabled_reason: None,
             rate_limit_requests_per_minute: Some(60),
+            search_query_template: None,
+            search_preprocessing_rules: None,
+            auto_match_conditions: None,
+            use_existing_external_id: true,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             created_by: None,
@@ -762,6 +779,10 @@ mod tests {
             last_success_at: None,
             disabled_reason: None,
             rate_limit_requests_per_minute: Some(60),
+            search_query_template: None,
+            search_preprocessing_rules: None,
+            auto_match_conditions: None,
+            use_existing_external_id: true,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             created_by: None,

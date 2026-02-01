@@ -10,11 +10,11 @@ use super::super::dto::{
         ExternalRatingListResponse, FullSeriesListResponse, FullSeriesMetadataResponse,
         FullSeriesResponse, GenreDto, GenreListResponse, MetadataLocks, PatchSeriesMetadataRequest,
         PatchSeriesRequest, ReplaceSeriesMetadataRequest, SeriesAverageRatingResponse,
-        SeriesCoverDto, SeriesCoverListResponse, SeriesFullMetadata, SeriesMetadataResponse,
-        SeriesSortParam, SeriesUpdateResponse, SetSeriesGenresRequest, SetSeriesTagsRequest,
-        SetUserRatingRequest, TagDto, TagListResponse, TaxonomyCleanupResponse,
-        UpdateAlternateTitleRequest, UpdateMetadataLocksRequest, UserRatingsListResponse,
-        UserSeriesRatingDto,
+        SeriesCoverDto, SeriesCoverListResponse, SeriesExternalIdDto, SeriesFullMetadata,
+        SeriesMetadataResponse, SeriesSortParam, SeriesUpdateResponse, SetSeriesGenresRequest,
+        SetSeriesTagsRequest, SetUserRatingRequest, TagDto, TagListResponse,
+        TaxonomyCleanupResponse, UpdateAlternateTitleRequest, UpdateMetadataLocksRequest,
+        UserRatingsListResponse, UserSeriesRatingDto,
     },
     BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListRequest,
     SeriesListResponse,
@@ -29,7 +29,8 @@ use crate::db::entities::{series, series_metadata};
 use crate::db::repositories::{
     AlternateTitleRepository, BookRepository, ExternalLinkRepository, ExternalRatingRepository,
     GenreRepository, LibraryRepository, ReadProgressRepository, SeriesCoversRepository,
-    SeriesMetadataRepository, SeriesRepository, TagRepository, UserSeriesRatingRepository,
+    SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository, TagRepository,
+    UserSeriesRatingRepository,
 };
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
 use crate::require_permission;
@@ -223,6 +224,7 @@ async fn series_to_full_dtos_batched(
         alt_titles_map,
         ext_ratings_map,
         ext_links_map,
+        ext_ids_map,
     ) = tokio::join!(
         SeriesMetadataRepository::get_by_series_ids(db, &series_ids),
         SeriesRepository::get_book_counts_for_series_ids(db, &series_ids),
@@ -241,6 +243,7 @@ async fn series_to_full_dtos_batched(
         AlternateTitleRepository::get_for_series_ids(db, &series_ids),
         ExternalRatingRepository::get_for_series_ids(db, &series_ids),
         ExternalLinkRepository::get_for_series_ids(db, &series_ids),
+        SeriesExternalIdRepository::get_for_series_ids(db, &series_ids),
     );
 
     // Handle errors
@@ -266,6 +269,8 @@ async fn series_to_full_dtos_batched(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch external ratings: {}", e)))?;
     let ext_links_map = ext_links_map
         .map_err(|e| ApiError::Internal(format!("Failed to fetch external links: {}", e)))?;
+    let ext_ids_map = ext_ids_map
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch external IDs: {}", e)))?;
 
     // Build full responses
     let mut results = Vec::with_capacity(series_list.len());
@@ -377,6 +382,12 @@ async fn series_to_full_dtos_batched(
             })
             .unwrap_or_default();
 
+        // Convert external IDs to DTOs
+        let ext_id_dtos: Vec<SeriesExternalIdDto> = ext_ids_map
+            .get(&series_id)
+            .map(|ids| ids.iter().cloned().map(SeriesExternalIdDto::from).collect())
+            .unwrap_or_default();
+
         results.push(FullSeriesResponse {
             id: series.id,
             library_id: series.library_id,
@@ -423,6 +434,7 @@ async fn series_to_full_dtos_batched(
             alternate_titles: alt_title_dtos,
             external_ratings: ext_rating_dtos,
             external_links: ext_link_dtos,
+            external_ids: ext_id_dtos,
             created_at: series.created_at,
             updated_at: series.updated_at,
         });

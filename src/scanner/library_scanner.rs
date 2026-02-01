@@ -869,6 +869,9 @@ async fn process_series_batched(
         file_paths.len()
     );
 
+    // Get preprocessing rules from library
+    let preprocessing_rules = LibraryRepository::get_preprocessing_rules(library);
+
     // Find or create series with fingerprint
     let series_model = find_or_create_series(
         db,
@@ -877,6 +880,7 @@ async fn process_series_batched(
         Some(&fingerprint),
         series_path,
         all_series_paths,
+        &preprocessing_rules,
         event_broadcaster,
     )
     .await?;
@@ -1100,6 +1104,11 @@ fn calculate_series_fingerprint(file_paths: &[&PathBuf]) -> String {
 ///
 /// The `all_series_paths` parameter contains paths of all series detected in the current scan.
 /// This is used to distinguish between a rename (old path not in scan) vs a copy (old path in scan).
+///
+/// The `preprocessing_rules` parameter allows applying title preprocessing rules when creating
+/// a new series. The original name is preserved in `series.name` for file recognition, while
+/// the preprocessed title is stored in `series_metadata.title` for display and search.
+#[allow(clippy::too_many_arguments)]
 async fn find_or_create_series(
     db: &DatabaseConnection,
     library_id: Uuid,
@@ -1107,9 +1116,11 @@ async fn find_or_create_series(
     fingerprint: Option<&str>,
     path: &str,
     all_series_paths: &HashSet<String>,
+    preprocessing_rules: &[crate::services::metadata::preprocessing::PreprocessingRule],
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
 ) -> Result<series::Model> {
     use crate::db::repositories::SeriesMetadataRepository;
+    use crate::services::metadata::preprocessing::apply_rules;
 
     debug!(
         "find_or_create_series: name='{}', path='{}', fingerprint={:?}",
@@ -1117,6 +1128,21 @@ async fn find_or_create_series(
         path,
         fingerprint.map(|f| &f[..16.min(f.len())])
     );
+
+    // Apply preprocessing rules to get the metadata title
+    let preprocessed_title = if preprocessing_rules.is_empty() {
+        series_name.to_string()
+    } else {
+        apply_rules(series_name, preprocessing_rules)
+    };
+    let title_was_preprocessed = preprocessed_title != series_name;
+
+    if title_was_preprocessed {
+        debug!(
+            "Title preprocessed: '{}' -> '{}'",
+            series_name, preprocessed_title
+        );
+    }
 
     // Step 1: Path match (same directory = same series)
     // This is the primary matching key - if the path matches, it's definitely the same series
@@ -1261,15 +1287,24 @@ async fn find_or_create_series(
     // Step 4: Create new series with fingerprint (title stored in series_metadata)
     debug!("Step 3 failed, proceeding to Step 4: create new series");
     info!(
-        "Creating new series: {} at path {} with fingerprint {:?}",
-        series_name, path, fingerprint
+        "Creating new series: name='{}', title='{}' at path {} with fingerprint {:?}",
+        series_name, preprocessed_title, path, fingerprint
     );
-    SeriesRepository::create_with_fingerprint(
+
+    // Create series with preprocessed title
+    // - series.name = original directory name (for file recognition)
+    // - series_metadata.title = preprocessed title (for display and search)
+    SeriesRepository::create_with_fingerprint_and_title(
         db,
         library_id,
         series_name,
         fingerprint.map(String::from),
         path.to_string(),
+        if title_was_preprocessed {
+            Some(&preprocessed_title)
+        } else {
+            None
+        },
         event_broadcaster,
     )
     .await
@@ -1568,6 +1603,8 @@ mod tests {
             default_reading_direction: "ltr".to_string(),
             allowed_formats: None,
             excluded_patterns,
+            title_preprocessing_rules: None,
+            auto_match_conditions: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_scanned_at: None,

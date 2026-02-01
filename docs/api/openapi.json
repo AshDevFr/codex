@@ -1958,6 +1958,52 @@
         ]
       }
     },
+    "/api/v1/books/bulk/thumbnails/generate": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk generate thumbnails for books (by book IDs)",
+        "description": "Enqueues a fan-out task that will generate thumbnails for the specified books.\nThis is useful for regenerating thumbnails after changing thumbnail settings or fixing\ncorrupt thumbnails.",
+        "operationId": "bulk_generate_book_thumbnails",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkGenerateBookThumbnailsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Thumbnail generation task queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkTaskResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/bulk/unread": {
       "post": {
         "tags": [
@@ -2639,7 +2685,7 @@
           "Thumbnails"
         ],
         "summary": "Generate thumbnails for books in a scope",
-        "description": "This queues a fan-out task that enqueues individual thumbnail generation tasks for each book.\n\n**Scope priority:**\n1. If `series_id` is provided, only books in that series\n2. If `library_id` is provided, only books in that library\n3. If neither is provided, all books in all libraries\n\n**Force behavior:**\n- `force: false` (default): Only generates thumbnails for books that don't have one\n- `force: true`: Regenerates all thumbnails, replacing existing ones\n\n# Permission Required\n- `tasks:write`",
+        "description": "This queues a fan-out task that enqueues individual thumbnail generation tasks for each book.\n\n**Scope priority:**\n1. If `book_ids` is provided, only those specific books\n2. If `series_ids` is provided, only books in those specific series\n3. If `series_id` is provided, only books in that series\n4. If `library_id` is provided, only books in that library\n5. If none provided, all books in all libraries\n\n**Force behavior:**\n- `force: false` (default): Only generates thumbnails for books that don't have one\n- `force: true`: Regenerates all thumbnails, replacing existing ones\n\n# Permission Required\n- `tasks:write`",
         "operationId": "generate_book_thumbnails",
         "requestBody": {
           "content": {
@@ -5524,6 +5570,64 @@
         ]
       }
     },
+    "/api/v1/libraries/{library_id}/series/titles/reprocess": {
+      "post": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Reprocess all series titles in a library using preprocessing rules",
+        "description": "Applies the library's preprocessing rules to all series' original directory names\nto regenerate the display titles. This is useful when preprocessing rules are added\nor changed after series have already been created.\n\nEach series title will only be updated if:\n- The `title_lock` is false (respects user edits)\n- The preprocessing rules produce a different title\n\nIf a title is changed and `title_sort_lock` is false, the `title_sort` will be\ncleared (set to None) to let it fall back to the new title for sorting.\n\n- With `dryRun: true`: Returns a synchronous preview of what would change\n- With `dryRun: false` (default): Enqueues a background task to process\n\n# Permission Required\n- `libraries:write`",
+        "operationId": "reprocess_library_series_titles",
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "description": "Library ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReprocessTitleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Task enqueued or dry run preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnqueueReprocessTitleResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Library not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/metrics/inventory": {
       "get": {
         "tags": [
@@ -6201,6 +6305,144 @@
         ]
       }
     },
+    "/api/v1/series/bulk/thumbnails/books/generate": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk generate thumbnails for books in multiple series",
+        "description": "Enqueues a fan-out task that will generate thumbnails for all books in the specified series.\nThis is useful for regenerating thumbnails after changing thumbnail settings or fixing\ncorrupt thumbnails.",
+        "operationId": "bulk_generate_series_book_thumbnails",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkGenerateSeriesBookThumbnailsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Thumbnail generation task queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkTaskResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/bulk/thumbnails/generate": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk generate series thumbnails",
+        "description": "Enqueues a fan-out task that will generate thumbnails for the specified series.\nSeries thumbnails are derived from the first book's cover in each series.",
+        "operationId": "bulk_generate_series_thumbnails",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkGenerateSeriesThumbnailsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Series thumbnail generation task queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkTaskResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/bulk/titles/reprocess": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk reprocess series titles",
+        "description": "Enqueues a fan-out task that will reprocess titles for the specified series\nusing their library's preprocessing rules. This is useful when preprocessing\nrules are added or changed after series have already been created.",
+        "operationId": "bulk_reprocess_series_titles",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkReprocessSeriesTitlesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Title reprocessing task queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkTaskResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/bulk/unread": {
       "post": {
         "tags": [
@@ -6686,7 +6928,7 @@
           "Thumbnails"
         ],
         "summary": "Generate thumbnails for series in a scope",
-        "description": "This queues a fan-out task that enqueues individual series thumbnail generation tasks.\nSeries thumbnails are the cover images displayed for each series (derived from the first book's cover).\n\n**Scope:**\n- If `library_id` is provided, only series in that library\n- If not provided, all series in all libraries\n\n**Force behavior:**\n- `force: false` (default): Only generates thumbnails for series that don't have one\n- `force: true`: Regenerates all thumbnails, replacing existing ones\n\n# Permission Required\n- `tasks:write`",
+        "description": "This queues a fan-out task that enqueues individual series thumbnail generation tasks.\nSeries thumbnails are the cover images displayed for each series (derived from the first book's cover).\n\n**Scope priority:**\n1. If `series_ids` is provided, only those specific series\n2. If `library_id` is provided, only series in that library\n3. If neither provided, all series in all libraries\n\n**Force behavior:**\n- `force: false` (default): Only generates thumbnails for series that don't have one\n- `force: true`: Regenerates all thumbnails, replacing existing ones\n\n# Permission Required\n- `tasks:write`",
         "operationId": "generate_series_thumbnails",
         "requestBody": {
           "content": {
@@ -6711,6 +6953,52 @@
           },
           "403": {
             "description": "Permission denied"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/titles/reprocess": {
+      "post": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Reprocess series titles in a scope",
+        "description": "This queues a fan-out task that enqueues individual series title reprocessing tasks.\nApplies the library's preprocessing rules to regenerate display titles.\n\n**Scope priority:**\n1. If `series_ids` is provided, only those specific series\n2. If `library_id` is provided, only series in that library\n3. If neither provided, all series in all libraries\n\n**Lock behavior:**\n- Series with `title_lock: true` are skipped\n- If title changes and `title_sort_lock` is false, `title_sort` is cleared\n\n# Permission Required\n- `series:write`",
+        "operationId": "reprocess_series_titles",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReprocessSeriesTitlesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Task enqueued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnqueueReprocessTitleResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Forbidden"
           }
         },
         "security": [
@@ -6964,6 +7252,64 @@
           },
           "403": {
             "description": "No permission to edit series"
+          },
+          "404": {
+            "description": "Series or plugin not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{id}/metadata/search-title": {
+      "get": {
+        "tags": [
+          "Plugin Actions"
+        ],
+        "summary": "Get the preprocessed search title for a series",
+        "description": "Returns the series title after applying plugin and library preprocessing rules.\nUse this to get the correct search query before opening the metadata search modal.",
+        "operationId": "get_series_search_title",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "pluginId",
+            "in": "query",
+            "description": "Plugin ID to get preprocessing rules from",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Preprocessed search title",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchTitleResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "404": {
             "description": "Series or plugin not found"
@@ -9438,6 +9784,64 @@
           },
           "403": {
             "description": "Permission denied"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{series_id}/title/reprocess": {
+      "post": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Reprocess a series title using library preprocessing rules",
+        "description": "Applies the library's preprocessing rules to the series' original directory name\nto regenerate the display title. This is useful when preprocessing rules are added\nor changed after series have already been created.\n\nThe title will only be updated if:\n- The `title_lock` is false (respects user edits)\n- The preprocessing rules produce a different title\n\nIf the title is changed and `title_sort_lock` is false, the `title_sort` will be\ncleared (set to None) to let it fall back to the new title for sorting.\n\n- With `dryRun: true`: Returns a synchronous preview of what would change\n- With `dryRun: false` (default): Enqueues a background task to process\n\n# Permission Required\n- `series:write`",
+        "operationId": "reprocess_series_title",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnqueueReprocessTitleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Task enqueued or dry run preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnqueueReprocessTitleResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Series not found"
@@ -14738,6 +15142,105 @@
           }
         }
       },
+      "BulkGenerateBookThumbnailsRequest": {
+        "type": "object",
+        "description": "Request to generate thumbnails for books in bulk (by book IDs)",
+        "required": [
+          "bookIds"
+        ],
+        "properties": {
+          "bookIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "List of book IDs to generate thumbnails for",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440001",
+              "550e8400-e29b-41d4-a716-446655440002"
+            ]
+          },
+          "force": {
+            "type": "boolean",
+            "description": "If true, regenerate thumbnails even if they exist",
+            "example": false
+          }
+        }
+      },
+      "BulkGenerateSeriesBookThumbnailsRequest": {
+        "type": "object",
+        "description": "Request to generate book thumbnails for multiple series in bulk",
+        "required": [
+          "seriesIds"
+        ],
+        "properties": {
+          "force": {
+            "type": "boolean",
+            "description": "If true, regenerate thumbnails even if they exist",
+            "example": false
+          },
+          "seriesIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "List of series IDs to generate book thumbnails for",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440001",
+              "550e8400-e29b-41d4-a716-446655440002"
+            ]
+          }
+        }
+      },
+      "BulkGenerateSeriesThumbnailsRequest": {
+        "type": "object",
+        "description": "Request to generate series thumbnails in bulk",
+        "required": [
+          "seriesIds"
+        ],
+        "properties": {
+          "force": {
+            "type": "boolean",
+            "description": "If true, regenerate thumbnails even if they exist",
+            "example": false
+          },
+          "seriesIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "List of series IDs to generate thumbnails for",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440001",
+              "550e8400-e29b-41d4-a716-446655440002"
+            ]
+          }
+        }
+      },
+      "BulkReprocessSeriesTitlesRequest": {
+        "type": "object",
+        "description": "Request to reprocess series titles in bulk",
+        "required": [
+          "seriesIds"
+        ],
+        "properties": {
+          "seriesIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "List of series IDs to reprocess titles for",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440001",
+              "550e8400-e29b-41d4-a716-446655440002"
+            ]
+          }
+        }
+      },
       "BulkSeriesRequest": {
         "type": "object",
         "description": "Request to perform bulk operations on multiple series",
@@ -14797,6 +15300,27 @@
             "type": "string",
             "description": "New value for the setting",
             "example": "4"
+          }
+        }
+      },
+      "BulkTaskResponse": {
+        "type": "object",
+        "description": "Response for bulk task operations",
+        "required": [
+          "taskId",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message describing the operation",
+            "example": "Thumbnail generation task queued for 5 series"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the fan-out task that was created",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
           }
         }
       },
@@ -15120,6 +15644,9 @@
               "EPUB"
             ]
           },
+          "autoMatchConditions": {
+            "description": "Auto-match conditions (JSON object with mode and rules)\nControls when auto-matching runs for this library"
+          },
           "bookConfig": {
             "description": "Book strategy-specific configuration (JSON, mutable after creation)"
           },
@@ -15211,6 +15738,9 @@
                 "description": "Series detection strategy (immutable after creation)\nOptions: series_volume, series_volume_chapter, flat, publisher_hierarchy, calibre, custom"
               }
             ]
+          },
+          "titlePreprocessingRules": {
+            "description": "Title preprocessing rules (JSON array of regex rules)\nApplied during scan to clean series titles before metadata search"
           }
         }
       },
@@ -15232,6 +15762,9 @@
             "example": [
               "/opt/codex/plugins/mangabaka/dist/index.js"
             ]
+          },
+          "autoMatchConditions": {
+            "description": "Auto-match conditions (JSON object with mode and rules)"
           },
           "command": {
             "type": "string",
@@ -15326,6 +15859,21 @@
               "series:detail",
               "series:bulk"
             ]
+          },
+          "searchPreprocessingRules": {
+            "description": "Preprocessing rules for search queries (JSON array of regex rules)"
+          },
+          "searchQueryTemplate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Handlebars template for customizing search queries"
+          },
+          "useExistingExternalId": {
+            "type": "boolean",
+            "description": "Whether to skip search when external ID exists for this plugin",
+            "example": true
           },
           "workingDirectory": {
             "type": [
@@ -15709,6 +16257,53 @@
             "type": "string",
             "format": "uuid",
             "description": "Plugin ID to use for matching"
+          }
+        }
+      },
+      "EnqueueReprocessTitleRequest": {
+        "type": "object",
+        "description": "Request to enqueue a reprocess title task",
+        "properties": {
+          "dryRun": {
+            "type": "boolean",
+            "description": "If true, only preview changes without applying them (synchronous, no task)",
+            "example": false
+          }
+        }
+      },
+      "EnqueueReprocessTitleResponse": {
+        "type": "object",
+        "description": "Response for enqueued reprocess title task(s)",
+        "required": [
+          "success",
+          "tasksEnqueued",
+          "taskIds",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message describing the result",
+            "example": "Reprocess title task enqueued"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Whether the operation succeeded",
+            "example": true
+          },
+          "taskIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task IDs that were created"
+          },
+          "tasksEnqueued": {
+            "type": "integer",
+            "description": "Number of tasks enqueued",
+            "example": 1,
+            "minimum": 0
           }
         }
       },
@@ -16287,6 +16882,35 @@
           "success": {
             "type": "boolean",
             "description": "Whether the execution succeeded"
+          }
+        }
+      },
+      "ExternalIdContextDto": {
+        "type": "object",
+        "description": "External ID context for template evaluation.\n\nRepresents an external ID from a metadata provider (plugin, comicinfo, etc.)\nin a simplified format suitable for template access.",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "hash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Metadata hash for change detection (if available)"
+          },
+          "id": {
+            "type": "string",
+            "description": "External ID value",
+            "example": "12345"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "External URL (if available)",
+            "example": "https://mangabaka.com/series/12345"
           }
         }
       },
@@ -17046,6 +17670,7 @@
           "alternateTitles",
           "externalRatings",
           "externalLinks",
+          "externalIds",
           "createdAt",
           "updatedAt"
         ],
@@ -17068,6 +17693,13 @@
             "format": "date-time",
             "description": "When the series was created",
             "example": "2024-01-01T00:00:00Z"
+          },
+          "externalIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeriesExternalIdDto"
+            },
+            "description": "External IDs from metadata providers (plugins, comicinfo, etc.)"
           },
           "externalLinks": {
             "type": "array",
@@ -17163,6 +17795,17 @@
         "type": "object",
         "description": "Request body for batch book thumbnail generation",
         "properties": {
+          "book_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Optional: specific book IDs to generate thumbnails for (takes precedence over all other scopes)"
+          },
           "force": {
             "type": "boolean",
             "description": "If true, regenerate all thumbnails even if they exist. If false (default), only generate missing thumbnails.",
@@ -17185,6 +17828,17 @@
             "format": "uuid",
             "description": "Optional: scope to a specific series (within library if both provided)",
             "example": "550e8400-e29b-41d4-a716-446655440001"
+          },
+          "series_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Optional: specific series IDs to generate thumbnails for books within (takes precedence over series_id and library_id)"
           }
         }
       },
@@ -17205,6 +17859,17 @@
             "format": "uuid",
             "description": "Optional: scope to a specific library",
             "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "series_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Optional: specific series IDs to generate thumbnails for (takes precedence over library_id)"
           }
         }
       },
@@ -18877,6 +19542,9 @@
               "PDF"
             ]
           },
+          "autoMatchConditions": {
+            "description": "Auto-match conditions (JSON object with mode and rules)\nControls when auto-matching runs for this library"
+          },
           "bookConfig": {
             "description": "Book strategy-specific configuration (JSON)"
           },
@@ -18983,6 +19651,9 @@
           "seriesStrategy": {
             "$ref": "#/components/schemas/SeriesStrategy",
             "description": "Series detection strategy (series_volume, series_volume_chapter, flat, etc.)"
+          },
+          "titlePreprocessingRules": {
+            "description": "Title preprocessing rules (JSON array of regex rules)\nApplied during scan to clean series titles before metadata search"
           },
           "updatedAt": {
             "type": "string",
@@ -19330,6 +20001,183 @@
         "enum": [
           "series"
         ]
+      },
+      "MetadataContextDto": {
+        "type": "object",
+        "description": "Metadata context for template evaluation.\n\nContains series metadata fields in a flat structure suitable for\ntemplate access via `metadata.*` syntax.",
+        "properties": {
+          "ageRating": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Age rating (e.g., 13, 16, 18)",
+            "example": 13
+          },
+          "ageRatingLock": {
+            "type": "boolean",
+            "description": "Whether age_rating is locked"
+          },
+          "customMetadataLock": {
+            "type": "boolean",
+            "description": "Whether custom_metadata is locked"
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Genre names",
+            "example": [
+              "Action",
+              "Adventure",
+              "Comedy"
+            ]
+          },
+          "genresLock": {
+            "type": "boolean",
+            "description": "Whether genres are locked"
+          },
+          "imprint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Imprint (sub-publisher)",
+            "example": "Jump Comics"
+          },
+          "imprintLock": {
+            "type": "boolean",
+            "description": "Whether imprint is locked"
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Language code (BCP47 format)",
+            "example": "ja"
+          },
+          "languageLock": {
+            "type": "boolean",
+            "description": "Whether language is locked"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Publisher name",
+            "example": "Shueisha"
+          },
+          "publisherLock": {
+            "type": "boolean",
+            "description": "Whether publisher is locked"
+          },
+          "readingDirection": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reading direction (ltr, rtl, ttb, webtoon)",
+            "example": "rtl"
+          },
+          "readingDirectionLock": {
+            "type": "boolean",
+            "description": "Whether reading_direction is locked"
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Series status (ongoing, ended, hiatus, abandoned, unknown)",
+            "example": "ongoing"
+          },
+          "statusLock": {
+            "type": "boolean",
+            "description": "Whether status is locked"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Series description/summary",
+            "example": "Follow Monkey D. Luffy on his adventure..."
+          },
+          "summaryLock": {
+            "type": "boolean",
+            "description": "Whether summary is locked"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tag names",
+            "example": [
+              "pirates",
+              "treasure",
+              "friendship"
+            ]
+          },
+          "tagsLock": {
+            "type": "boolean",
+            "description": "Whether tags are locked"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Series title",
+            "example": "One Piece"
+          },
+          "titleLock": {
+            "type": "boolean",
+            "description": "Whether title is locked"
+          },
+          "titleSort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Custom sort name",
+            "example": "One Piece"
+          },
+          "titleSortLock": {
+            "type": "boolean",
+            "description": "Whether title_sort is locked"
+          },
+          "totalBookCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Expected total book count",
+            "example": 110
+          },
+          "totalBookCountLock": {
+            "type": "boolean",
+            "description": "Whether total_book_count is locked"
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Publication year",
+            "example": 1997
+          },
+          "yearLock": {
+            "type": "boolean",
+            "description": "Whether year is locked"
+          }
+        }
       },
       "MetadataFieldPreview": {
         "type": "object",
@@ -20416,6 +21264,9 @@
                     "PDF"
                   ]
                 },
+                "autoMatchConditions": {
+                  "description": "Auto-match conditions (JSON object with mode and rules)\nControls when auto-matching runs for this library"
+                },
                 "bookConfig": {
                   "description": "Book strategy-specific configuration (JSON)"
                 },
@@ -20522,6 +21373,9 @@
                 "seriesStrategy": {
                   "$ref": "#/components/schemas/SeriesStrategy",
                   "description": "Series detection strategy (series_volume, series_volume_chapter, flat, etc.)"
+                },
+                "titlePreprocessingRules": {
+                  "description": "Title preprocessing rules (JSON array of regex rules)\nApplied during scan to clean series titles before metadata search"
                 },
                 "updatedAt": {
                   "type": "string",
@@ -21666,7 +22520,8 @@
           "healthStatus",
           "failureCount",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "useExistingExternalId"
         ],
         "properties": {
           "args": {
@@ -21678,6 +22533,9 @@
             "example": [
               "/opt/codex/plugins/mangabaka/dist/index.js"
             ]
+          },
+          "autoMatchConditions": {
+            "description": "Auto-match conditions (JSON object with mode and rules)"
           },
           "command": {
             "type": "string",
@@ -21824,10 +22682,25 @@
               "series:bulk"
             ]
           },
+          "searchPreprocessingRules": {
+            "description": "Preprocessing rules for search queries (JSON array of regex rules)"
+          },
+          "searchQueryTemplate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Handlebars template for customizing search queries"
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time",
             "description": "When the plugin was last updated"
+          },
+          "useExistingExternalId": {
+            "type": "boolean",
+            "description": "Whether to skip search when external ID exists for this plugin",
+            "example": true
           },
           "workingDirectory": {
             "type": [
@@ -23382,6 +24255,153 @@
           }
         }
       },
+      "ReprocessLibraryTitlesResponse": {
+        "type": "object",
+        "description": "Response for library-wide title reprocessing",
+        "required": [
+          "libraryId",
+          "totalSeries",
+          "processed",
+          "changed",
+          "skipped"
+        ],
+        "properties": {
+          "changed": {
+            "type": "integer",
+            "description": "Number of series where title was changed",
+            "example": 45,
+            "minimum": 0
+          },
+          "libraryId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Library ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "processed": {
+            "type": "integer",
+            "description": "Number of series processed (not skipped)",
+            "example": 120,
+            "minimum": 0
+          },
+          "results": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ReprocessTitleResult"
+            },
+            "description": "Detailed results for each series (only included if < 100 series)"
+          },
+          "skipped": {
+            "type": "integer",
+            "description": "Number of series skipped (due to locks)",
+            "example": 30,
+            "minimum": 0
+          },
+          "totalSeries": {
+            "type": "integer",
+            "description": "Total number of series in the library",
+            "example": 150,
+            "minimum": 0
+          }
+        }
+      },
+      "ReprocessSeriesTitlesRequest": {
+        "type": "object",
+        "description": "Request to reprocess series titles in a scope",
+        "properties": {
+          "libraryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "If set, only series in this library",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "seriesIds": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "If set, only these specific series (takes precedence over library_id)",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440001",
+              "550e8400-e29b-41d4-a716-446655440002"
+            ]
+          }
+        }
+      },
+      "ReprocessTitleRequest": {
+        "type": "object",
+        "description": "Request to reprocess series title using library preprocessing rules",
+        "properties": {
+          "dryRun": {
+            "type": "boolean",
+            "description": "If true, only preview changes without applying them",
+            "example": false
+          }
+        }
+      },
+      "ReprocessTitleResult": {
+        "type": "object",
+        "description": "Result of reprocessing a single series title",
+        "required": [
+          "seriesId",
+          "originalTitle",
+          "newTitle",
+          "titleSortCleared",
+          "changed",
+          "skipped"
+        ],
+        "properties": {
+          "changed": {
+            "type": "boolean",
+            "description": "Whether the title was actually changed",
+            "example": true
+          },
+          "newTitle": {
+            "type": "string",
+            "description": "New title after applying preprocessing rules",
+            "example": "One Piece"
+          },
+          "originalTitle": {
+            "type": "string",
+            "description": "Original title before reprocessing",
+            "example": "One Piece (Digital)"
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Series ID",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "skipReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reason for skipping (if skipped)",
+            "example": "title_locked"
+          },
+          "skipped": {
+            "type": "boolean",
+            "description": "Whether this series was skipped (e.g., due to lock)",
+            "example": false
+          },
+          "titleSortCleared": {
+            "type": "boolean",
+            "description": "Whether title_sort was cleared (set to None) because title changed",
+            "example": true
+          }
+        }
+      },
       "ResendVerificationRequest": {
         "type": "object",
         "description": "Resend verification email request",
@@ -23651,6 +24671,30 @@
           }
         }
       },
+      "SearchTitleResponse": {
+        "type": "object",
+        "description": "Response containing the preprocessed search title for a series",
+        "required": [
+          "originalTitle",
+          "searchTitle",
+          "rulesApplied"
+        ],
+        "properties": {
+          "originalTitle": {
+            "type": "string",
+            "description": "Original title before preprocessing"
+          },
+          "rulesApplied": {
+            "type": "integer",
+            "description": "Number of preprocessing rules that were applied",
+            "minimum": 0
+          },
+          "searchTitle": {
+            "type": "string",
+            "description": "Title after preprocessing rules were applied"
+          }
+        }
+      },
       "SelectCoverSourceRequest": {
         "type": "object",
         "description": "Request to select which cover source to use",
@@ -23855,6 +24899,57 @@
           }
         ],
         "description": "Series-level search conditions\n\nConditions can be composed using `allOf` (AND) and `anyOf` (OR).\nUses untagged enum for cleaner JSON without explicit type field."
+      },
+      "SeriesContextDto": {
+        "type": "object",
+        "description": "Series context for template and condition evaluation.\n\nThis structure provides a unified interface for evaluating templates\nand conditions against series data. It aggregates data from various\nsources (series, metadata, external IDs, book count) into a single\ncontext object.\n\n## Template Usage\n\nIn Handlebars templates, fields are accessible via:\n- `{{seriesId}}` - Series UUID\n- `{{bookCount}}` - Number of books\n- `{{metadata.title}}` - Series title\n- `{{metadata.genres}}` - Genre array\n- `{{externalIds.plugin:mangabaka.id}}` - External ID from a source\n- `{{customMetadata.myField}}` - Custom metadata field\n\n## JSON Structure\n\n```json\n{\n  \"seriesId\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"bookCount\": 5,\n  \"metadata\": {\n    \"title\": \"One Piece\",\n    \"genres\": [\"Action\", \"Adventure\"],\n    \"tags\": [\"pirates\"]\n  },\n  \"externalIds\": {\n    \"plugin:mangabaka\": { \"id\": \"12345\", \"url\": \"...\" }\n  },\n  \"customMetadata\": { \"myField\": \"value\" }\n}\n```",
+        "required": [
+          "bookCount"
+        ],
+        "properties": {
+          "bookCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of books in the series",
+            "example": 5
+          },
+          "customMetadata": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Custom metadata fields (preserved as-is, no case transformation).\nCan contain any JSON structure defined by the user."
+          },
+          "externalIds": {
+            "type": "object",
+            "description": "External IDs mapped by source name.\nKeys are source identifiers (e.g., \"plugin:mangabaka\", \"comicinfo\").",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ExternalIdContextDto"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "example": {
+              "plugin:mangabaka": {
+                "id": "12345",
+                "url": "https://mangabaka.com/series/12345"
+              }
+            }
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MetadataContextDto",
+            "description": "Series metadata"
+          },
+          "seriesId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Series UUID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        }
       },
       "SeriesCoverDto": {
         "type": "object",
@@ -24062,6 +25157,78 @@
             "format": "int32",
             "description": "Release year",
             "example": 1987
+          }
+        }
+      },
+      "SeriesExternalIdDto": {
+        "type": "object",
+        "description": "External ID from a metadata provider (plugin, comicinfo, etc.)",
+        "required": [
+          "id",
+          "seriesId",
+          "source",
+          "externalId",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the external ID was created",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "externalId": {
+            "type": "string",
+            "description": "External ID value from the source",
+            "example": "12345"
+          },
+          "externalUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "URL to the external source (if available)",
+            "example": "https://mangabaka.com/manga/12345"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "External ID record ID",
+            "example": "550e8400-e29b-41d4-a716-446655440070"
+          },
+          "lastSyncedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the metadata was last synced from this source",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "metadataHash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Hash of the last fetched metadata (for change detection)"
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Series ID",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "source": {
+            "type": "string",
+            "description": "Source identifier (e.g., \"plugin:mangabaka\", \"comicinfo\", \"epub\")",
+            "example": "plugin:mangabaka"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the external ID was last updated",
+            "example": "2024-01-15T10:30:00Z"
           }
         }
       },
@@ -25587,11 +26754,21 @@
           },
           {
             "type": "object",
-            "description": "Generate thumbnails for books in a scope (library, series, or all)\nThis is a fan-out task that enqueues individual GenerateThumbnail tasks",
+            "description": "Generate thumbnails for books in a scope (library, series, specific books, or all)\nThis is a fan-out task that enqueues individual GenerateThumbnail tasks",
             "required": [
               "type"
             ],
             "properties": {
+              "book_ids": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
               "force": {
                 "type": "boolean"
               },
@@ -25608,6 +26785,16 @@
                   "null"
                 ],
                 "format": "uuid"
+              },
+              "series_ids": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
               },
               "type": {
                 "type": "string",
@@ -25665,7 +26852,7 @@
           },
           {
             "type": "object",
-            "description": "Generate thumbnails for series in a scope (library or all)\nThis is a fan-out task that enqueues individual GenerateSeriesThumbnail tasks",
+            "description": "Generate thumbnails for series in a scope (library, specific series, or all)\nThis is a fan-out task that enqueues individual GenerateSeriesThumbnail tasks",
             "required": [
               "type"
             ],
@@ -25679,6 +26866,16 @@
                   "null"
                 ],
                 "format": "uuid"
+              },
+              "series_ids": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
               },
               "type": {
                 "type": "string",
@@ -25816,6 +27013,58 @@
                 "type": "string",
                 "enum": [
                   "plugin_auto_match"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Reprocess a single series title using library preprocessing rules",
+            "required": [
+              "series_id",
+              "type"
+            ],
+            "properties": {
+              "series_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "reprocess_series_title"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Reprocess series titles in a scope (library, bulk selection, or specific series)\nThis is a fan-out task that enqueues individual ReprocessSeriesTitle tasks",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "library_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "series_ids": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "reprocess_series_titles"
                 ]
               }
             }
@@ -26384,6 +27633,13 @@
               "CBR"
             ]
           },
+          "autoMatchConditions": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Auto-match conditions (JSON object with mode and rules)\nControls when auto-matching runs for this library.\n- Omit field: keep existing value\n- Set to null: clear the conditions\n- Set to value: update the conditions"
+          },
           "bookConfig": {
             "description": "Book strategy-specific configuration (JSON, mutable)"
           },
@@ -26470,6 +27726,13 @@
                 "description": "Scanning configuration"
               }
             ]
+          },
+          "titlePreprocessingRules": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Title preprocessing rules (JSON array of regex rules)\nApplied during scan to clean series titles before metadata search.\n- Omit field: keep existing value\n- Set to null: clear the rules\n- Set to value: update the rules"
           }
         }
       },
@@ -26605,6 +27868,9 @@
             },
             "description": "Updated command arguments"
           },
+          "autoMatchConditions": {
+            "description": "Auto-match conditions (JSON object with mode and rules)"
+          },
           "command": {
             "type": [
               "string",
@@ -26689,6 +27955,23 @@
               "type": "string"
             },
             "description": "Updated scopes"
+          },
+          "searchPreprocessingRules": {
+            "description": "Preprocessing rules for search queries (JSON array of regex rules)"
+          },
+          "searchQueryTemplate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Handlebars template for customizing search queries"
+          },
+          "useExistingExternalId": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to skip search when external ID exists for this plugin"
           },
           "workingDirectory": {
             "type": [

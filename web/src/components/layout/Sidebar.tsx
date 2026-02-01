@@ -19,7 +19,6 @@ import {
 	IconClipboardList,
 	IconCopy,
 	IconDotsVertical,
-	IconEdit,
 	IconFileTypePdf,
 	IconHome,
 	IconLogout,
@@ -31,22 +30,16 @@ import {
 	IconServer,
 	IconSettings,
 	IconShare,
-	IconTrash,
 	IconTrashX,
 	IconUser,
 	IconUsers,
-	IconWand,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { librariesApi } from "@/api/libraries";
-import {
-	type PluginActionDto,
-	pluginActionsApi,
-	pluginsApi,
-} from "@/api/plugins";
 import { LibraryModal } from "@/components/forms/LibraryModal";
+import { LibraryActionsMenu } from "@/components/library/LibraryActionsMenu";
 import { TaskNotificationBadge } from "@/components/TaskNotificationBadge";
 import { useAppInfo } from "@/hooks/useAppInfo";
 import { useAppName } from "@/hooks/useAppName";
@@ -95,15 +88,8 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 		queryFn: librariesApi.getAll,
 	});
 
-	// Fetch available plugin actions for library:detail scope
-	const { data: pluginActions } = useQuery({
-		queryKey: ["plugin-actions", "library:detail"],
-		queryFn: () => pluginsApi.getActions("library:detail"),
-		staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-		enabled: canEditLibrary, // Only fetch if user can edit libraries
-	});
-
-	const scanMutation = useMutation({
+	// Mutations for "All Libraries" actions
+	const scanAllMutation = useMutation({
 		mutationFn: ({
 			libraryId,
 			mode,
@@ -117,7 +103,6 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 				message: `${variables.mode === "deep" ? "Deep" : "Normal"} scan has been initiated`,
 				color: "blue",
 			});
-			// Use refetchQueries to force immediate refetch, bypassing staleTime
 			queryClient.refetchQueries({ queryKey: ["libraries"] });
 		},
 		onError: (error: Error) => {
@@ -137,7 +122,6 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 				message: "Library deleted successfully",
 				color: "green",
 			});
-			// Use refetchQueries to force immediate refetch, bypassing staleTime
 			queryClient.refetchQueries({ queryKey: ["libraries"] });
 			setDeleteConfirmOpened(false);
 			setLibraryToDelete(null);
@@ -159,7 +143,6 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 				message: `Purged ${count} deleted book${count !== 1 ? "s" : ""} from library`,
 				color: "green",
 			});
-			// Use refetchQueries to force immediate refetch, bypassing staleTime
 			queryClient.refetchQueries({ queryKey: ["libraries"] });
 			setPurgeConfirmOpened(false);
 			setLibraryToPurge(null);
@@ -173,41 +156,8 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 		},
 	});
 
-	// Auto-match mutation for library-wide metadata matching
-	const autoMatchMutation = useMutation({
-		mutationFn: ({
-			libraryId,
-			pluginId,
-		}: {
-			libraryId: string;
-			pluginId: string;
-		}) => pluginActionsApi.enqueueLibraryAutoMatchTasks(libraryId, pluginId),
-		onSuccess: (data) => {
-			if (data.success) {
-				notifications.show({
-					title: "Auto-match started",
-					message: data.message,
-					color: "blue",
-				});
-			} else {
-				notifications.show({
-					title: "Auto-match",
-					message: data.message,
-					color: "yellow",
-				});
-			}
-		},
-		onError: (error: Error) => {
-			notifications.show({
-				title: "Auto-match failed",
-				message: error.message || "Failed to start auto-match",
-				color: "red",
-			});
-		},
-	});
-
-	// Generate missing thumbnails mutation
-	const generateMissingThumbnailsMutation = useMutation({
+	// "All Libraries" thumbnail mutations
+	const generateMissingThumbnailsAllMutation = useMutation({
 		mutationFn: (libraryId: string) =>
 			librariesApi.generateMissingThumbnails(libraryId),
 		onSuccess: () => {
@@ -226,8 +176,7 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 		},
 	});
 
-	// Regenerate all thumbnails mutation (force)
-	const regenerateAllThumbnailsMutation = useMutation({
+	const regenerateAllThumbnailsAllMutation = useMutation({
 		mutationFn: (libraryId: string) =>
 			librariesApi.regenerateAllThumbnails(libraryId),
 		onSuccess: () => {
@@ -246,8 +195,7 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 		},
 	});
 
-	// Generate missing series thumbnails mutation
-	const generateMissingSeriesThumbnailsMutation = useMutation({
+	const generateMissingSeriesThumbnailsAllMutation = useMutation({
 		mutationFn: (libraryId: string) =>
 			librariesApi.generateMissingSeriesThumbnails(libraryId),
 		onSuccess: () => {
@@ -266,8 +214,7 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 		},
 	});
 
-	// Regenerate all series thumbnails mutation (force)
-	const regenerateAllSeriesThumbnailsMutation = useMutation({
+	const regenerateAllSeriesThumbnailsAllMutation = useMutation({
 		mutationFn: (libraryId: string) =>
 			librariesApi.regenerateAllSeriesThumbnails(libraryId),
 		onSuccess: () => {
@@ -289,60 +236,43 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 
 	const handleScanAll = (mode: "normal" | "deep") => {
 		if (!libraries) return;
-
 		libraries.forEach((library) => {
-			scanMutation.mutate({ libraryId: library.id, mode });
+			scanAllMutation.mutate({ libraryId: library.id, mode });
 		});
 	};
 
 	const handleGenerateAllMissingThumbnails = () => {
 		if (!libraries) return;
-
 		libraries.forEach((library) => {
-			generateMissingThumbnailsMutation.mutate(library.id);
+			generateMissingThumbnailsAllMutation.mutate(library.id);
 		});
 	};
 
 	const handleRegenerateAllThumbnails = () => {
 		if (!libraries) return;
-
 		libraries.forEach((library) => {
-			regenerateAllThumbnailsMutation.mutate(library.id);
+			regenerateAllThumbnailsAllMutation.mutate(library.id);
 		});
 	};
 
 	const handleGenerateAllMissingSeriesThumbnails = () => {
 		if (!libraries) return;
-
 		libraries.forEach((library) => {
-			generateMissingSeriesThumbnailsMutation.mutate(library.id);
+			generateMissingSeriesThumbnailsAllMutation.mutate(library.id);
 		});
 	};
 
 	const handleRegenerateAllSeriesThumbnails = () => {
 		if (!libraries) return;
-
 		libraries.forEach((library) => {
-			regenerateAllSeriesThumbnailsMutation.mutate(library.id);
+			regenerateAllSeriesThumbnailsAllMutation.mutate(library.id);
 		});
 	};
 
 	const handlePurgeAllDeleted = () => {
 		if (!libraries) return;
-
 		libraries.forEach((library) => {
 			purgeMutation.mutate(library.id);
-		});
-	};
-
-	// Handler for library auto-match action
-	const handleLibraryAutoMatch = (
-		library: Library,
-		plugin: PluginActionDto,
-	) => {
-		autoMatchMutation.mutate({
-			libraryId: library.id,
-			pluginId: plugin.pluginId,
 		});
 	};
 
@@ -447,7 +377,7 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 															leftSection={<IconPhoto size={16} />}
 															onClick={handleGenerateAllMissingThumbnails}
 															disabled={
-																generateMissingThumbnailsMutation.isPending
+																generateMissingThumbnailsAllMutation.isPending
 															}
 														>
 															Generate Missing
@@ -456,7 +386,7 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 															leftSection={<IconPhoto size={16} />}
 															onClick={handleRegenerateAllThumbnails}
 															disabled={
-																regenerateAllThumbnailsMutation.isPending
+																regenerateAllThumbnailsAllMutation.isPending
 															}
 														>
 															Regenerate All
@@ -467,7 +397,7 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 															leftSection={<IconPhoto size={16} />}
 															onClick={handleGenerateAllMissingSeriesThumbnails}
 															disabled={
-																generateMissingSeriesThumbnailsMutation.isPending
+																generateMissingSeriesThumbnailsAllMutation.isPending
 															}
 														>
 															Generate Missing
@@ -476,7 +406,7 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 															leftSection={<IconPhoto size={16} />}
 															onClick={handleRegenerateAllSeriesThumbnails}
 															disabled={
-																regenerateAllSeriesThumbnailsMutation.isPending
+																regenerateAllSeriesThumbnailsAllMutation.isPending
 															}
 														>
 															Regenerate All
@@ -525,158 +455,12 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
 														<IconDotsVertical size={14} />
 													</ActionIcon>
 												</Menu.Target>
-
-												<Menu.Dropdown>
-													{canEditLibrary && (
-														<>
-															<Menu.Item
-																leftSection={<IconScan size={16} />}
-																onClick={() =>
-																	scanMutation.mutate({
-																		libraryId: library.id,
-																		mode: "normal",
-																	})
-																}
-															>
-																Scan Library
-															</Menu.Item>
-															<Menu.Item
-																leftSection={<IconRadar size={16} />}
-																onClick={() =>
-																	scanMutation.mutate({
-																		libraryId: library.id,
-																		mode: "deep",
-																	})
-																}
-															>
-																Scan Library (Deep)
-															</Menu.Item>
-															<Menu.Divider />
-															<Menu.Item
-																leftSection={<IconEdit size={16} />}
-																onClick={() => handleEditLibrary(library)}
-															>
-																Edit Library
-															</Menu.Item>
-															{canWriteTasks && (
-																<>
-																	<Menu.Divider />
-																	<Menu.Label>Book Thumbnails</Menu.Label>
-																	<Menu.Item
-																		leftSection={<IconPhoto size={16} />}
-																		onClick={() =>
-																			generateMissingThumbnailsMutation.mutate(
-																				library.id,
-																			)
-																		}
-																		disabled={
-																			generateMissingThumbnailsMutation.isPending
-																		}
-																	>
-																		Generate Missing
-																	</Menu.Item>
-																	<Menu.Item
-																		leftSection={<IconPhoto size={16} />}
-																		onClick={() =>
-																			regenerateAllThumbnailsMutation.mutate(
-																				library.id,
-																			)
-																		}
-																		disabled={
-																			regenerateAllThumbnailsMutation.isPending
-																		}
-																	>
-																		Regenerate All
-																	</Menu.Item>
-																	<Menu.Divider />
-																	<Menu.Label>Series Thumbnails</Menu.Label>
-																	<Menu.Item
-																		leftSection={<IconPhoto size={16} />}
-																		onClick={() =>
-																			generateMissingSeriesThumbnailsMutation.mutate(
-																				library.id,
-																			)
-																		}
-																		disabled={
-																			generateMissingSeriesThumbnailsMutation.isPending
-																		}
-																	>
-																		Generate Missing
-																	</Menu.Item>
-																	<Menu.Item
-																		leftSection={<IconPhoto size={16} />}
-																		onClick={() =>
-																			regenerateAllSeriesThumbnailsMutation.mutate(
-																				library.id,
-																			)
-																		}
-																		disabled={
-																			regenerateAllSeriesThumbnailsMutation.isPending
-																		}
-																	>
-																		Regenerate All
-																	</Menu.Item>
-																</>
-															)}
-															{/* Plugin actions for library-wide auto-match */}
-															{(() => {
-																// Filter plugin actions to only show those that apply to this library
-																// Empty libraryIds means plugin applies to all libraries
-																const libraryPluginActions =
-																	pluginActions?.actions.filter((action) => {
-																		const libIds = action.libraryIds ?? [];
-																		return (
-																			libIds.length === 0 ||
-																			libIds.includes(library.id)
-																		);
-																	}) ?? [];
-
-																return (
-																	libraryPluginActions.length > 0 && (
-																		<>
-																			<Menu.Divider />
-																			<Menu.Label>
-																				Auto-Apply Metadata
-																			</Menu.Label>
-																			{libraryPluginActions.map((action) => (
-																				<Menu.Item
-																					key={`auto-match-${action.pluginId}`}
-																					leftSection={<IconWand size={16} />}
-																					onClick={() =>
-																						handleLibraryAutoMatch(
-																							library,
-																							action,
-																						)
-																					}
-																					disabled={autoMatchMutation.isPending}
-																				>
-																					{action.pluginDisplayName}
-																				</Menu.Item>
-																			))}
-																		</>
-																	)
-																);
-															})()}
-															<Menu.Divider />
-															<Menu.Item
-																leftSection={<IconTrashX size={16} />}
-																color="orange"
-																onClick={() => handlePurgeDeleted(library)}
-															>
-																Purge Deleted Books
-															</Menu.Item>
-														</>
-													)}
-													{canDeleteLibrary && (
-														<Menu.Item
-															leftSection={<IconTrash size={16} />}
-															color="red"
-															onClick={() => handleDeleteLibrary(library)}
-														>
-															Delete Library
-														</Menu.Item>
-													)}
-												</Menu.Dropdown>
+												<LibraryActionsMenu
+													library={library}
+													onEdit={() => handleEditLibrary(library)}
+													onDelete={() => handleDeleteLibrary(library)}
+													onPurge={() => handlePurgeDeleted(library)}
+												/>
 											</Menu>
 										)
 									}

@@ -117,6 +117,23 @@ impl BookRepository {
         Ok(existing.into_iter().collect())
     }
 
+    /// Get books by their IDs (simple, no pagination)
+    ///
+    /// Returns all books matching the given IDs. This is useful for batch operations
+    /// where all matching books need to be processed.
+    pub async fn get_by_ids(db: &DatabaseConnection, ids: &[Uuid]) -> Result<Vec<books::Model>> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        Books::find()
+            .filter(books::Column::Id.is_in(ids.to_vec()))
+            .filter(books::Column::Deleted.eq(false))
+            .all(db)
+            .await
+            .context("Failed to get books by IDs")
+    }
+
     /// Get a book by file hash (for duplicate detection)
     pub async fn get_by_hash(db: &DatabaseConnection, hash: &str) -> Result<Option<books::Model>> {
         Books::find()
@@ -165,6 +182,25 @@ impl BookRepository {
             .all(db)
             .await
             .context("Failed to list books by series")
+    }
+
+    /// Get all books in multiple series
+    ///
+    /// Returns all non-deleted books that belong to any of the specified series.
+    pub async fn list_by_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+    ) -> Result<Vec<books::Model>> {
+        if series_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        Books::find()
+            .filter(books::Column::SeriesId.is_in(series_ids.to_vec()))
+            .filter(books::Column::Deleted.eq(false))
+            .all(db)
+            .await
+            .context("Failed to list books by series IDs")
     }
 
     /// Count books in a series (excluding deleted)

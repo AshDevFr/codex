@@ -38,11 +38,15 @@ pub enum TaskType {
         source: String, // "comicvine", "openlibrary", etc.
     },
 
-    /// Generate thumbnails for books in a scope (library, series, or all)
+    /// Generate thumbnails for books in a scope (library, series, specific books, or all)
     /// This is a fan-out task that enqueues individual GenerateThumbnail tasks
     GenerateThumbnails {
         library_id: Option<Uuid>, // If set, only books in this library
         series_id: Option<Uuid>, // If set, only books in this series (takes precedence over library_id)
+        #[serde(default)]
+        series_ids: Option<Vec<Uuid>>, // If set, only books in these specific series (takes precedence over series_id and library_id)
+        #[serde(default)]
+        book_ids: Option<Vec<Uuid>>, // If set, only these specific books (takes precedence over all other scopes)
         #[serde(default)]
         force: bool, // If true, regenerate all thumbnails; if false, only missing ones
     },
@@ -61,10 +65,12 @@ pub enum TaskType {
         force: bool, // If true, regenerate even if thumbnail exists
     },
 
-    /// Generate thumbnails for series in a scope (library or all)
+    /// Generate thumbnails for series in a scope (library, specific series, or all)
     /// This is a fan-out task that enqueues individual GenerateSeriesThumbnail tasks
     GenerateSeriesThumbnails {
         library_id: Option<Uuid>, // If set, only series in this library
+        #[serde(default)]
+        series_ids: Option<Vec<Uuid>>, // If set, only these specific series (takes precedence over library_id)
         #[serde(default)]
         force: bool, // If true, regenerate all thumbnails; if false, only missing ones
     },
@@ -100,6 +106,17 @@ pub enum TaskType {
         #[serde(default)]
         source_scope: Option<String>, // "series:detail", "series:bulk", "library:detail", "library:scan"
     },
+
+    /// Reprocess a single series title using library preprocessing rules
+    ReprocessSeriesTitle { series_id: Uuid },
+
+    /// Reprocess series titles in a scope (library, bulk selection, or specific series)
+    /// This is a fan-out task that enqueues individual ReprocessSeriesTitle tasks
+    ReprocessSeriesTitles {
+        library_id: Option<Uuid>, // If set, process all series in this library
+        #[serde(default)]
+        series_ids: Option<Vec<Uuid>>, // If set, process only these specific series (bulk selection)
+    },
 }
 
 fn default_mode() -> String {
@@ -125,6 +142,8 @@ impl TaskType {
             TaskType::CleanupOrphanedFiles => "cleanup_orphaned_files",
             TaskType::CleanupPdfCache => "cleanup_pdf_cache",
             TaskType::PluginAutoMatch { .. } => "plugin_auto_match",
+            TaskType::ReprocessSeriesTitle { .. } => "reprocess_series_title",
+            TaskType::ReprocessSeriesTitles { .. } => "reprocess_series_titles",
         }
     }
 
@@ -135,6 +154,7 @@ impl TaskType {
             TaskType::PurgeDeleted { library_id } => Some(*library_id),
             TaskType::GenerateThumbnails { library_id, .. } => *library_id,
             TaskType::GenerateSeriesThumbnails { library_id, .. } => *library_id,
+            TaskType::ReprocessSeriesTitles { library_id, .. } => *library_id,
             _ => None,
         }
     }
@@ -154,8 +174,13 @@ impl TaskType {
             TaskType::RefreshMetadata { source, .. } => {
                 serde_json::json!({ "source": source })
             }
-            TaskType::GenerateThumbnails { force, .. } => {
-                serde_json::json!({ "force": force })
+            TaskType::GenerateThumbnails {
+                force,
+                book_ids,
+                series_ids,
+                ..
+            } => {
+                serde_json::json!({ "force": force, "book_ids": book_ids, "series_ids": series_ids })
             }
             TaskType::GenerateThumbnail { force, .. } => {
                 serde_json::json!({ "force": force })
@@ -163,8 +188,10 @@ impl TaskType {
             TaskType::GenerateSeriesThumbnail { force, .. } => {
                 serde_json::json!({ "force": force })
             }
-            TaskType::GenerateSeriesThumbnails { force, .. } => {
-                serde_json::json!({ "force": force })
+            TaskType::GenerateSeriesThumbnails {
+                force, series_ids, ..
+            } => {
+                serde_json::json!({ "force": force, "series_ids": series_ids })
             }
             TaskType::CleanupBookFiles {
                 book_id,
@@ -185,6 +212,9 @@ impl TaskType {
             } => {
                 serde_json::json!({ "plugin_id": plugin_id, "source_scope": source_scope })
             }
+            TaskType::ReprocessSeriesTitles { series_ids, .. } => {
+                serde_json::json!({ "series_ids": series_ids })
+            }
             _ => serde_json::json!({}),
         }
     }
@@ -197,6 +227,7 @@ impl TaskType {
             TaskType::GenerateThumbnails { series_id, .. } => *series_id,
             TaskType::GenerateSeriesThumbnail { series_id, .. } => Some(*series_id),
             TaskType::PluginAutoMatch { series_id, .. } => Some(*series_id),
+            TaskType::ReprocessSeriesTitle { series_id } => Some(*series_id),
             // CleanupSeriesFiles intentionally NOT included - series_id is stored in params
             // because the series may already be deleted when the task runs
             _ => None,
@@ -394,6 +425,8 @@ mod tests {
         let task = TaskType::GenerateThumbnails {
             library_id: Some(library_id),
             series_id: None,
+            series_ids: None,
+            book_ids: None,
             force: false,
         };
         assert_eq!(task.type_string(), "generate_thumbnails");
@@ -408,6 +441,8 @@ mod tests {
         let task = TaskType::GenerateThumbnails {
             library_id: None,
             series_id: Some(series_id),
+            series_ids: None,
+            book_ids: None,
             force: true,
         };
         assert_eq!(task.library_id(), None);
@@ -420,6 +455,8 @@ mod tests {
         let task = TaskType::GenerateThumbnails {
             library_id: None,
             series_id: None,
+            series_ids: None,
+            book_ids: None,
             force: false,
         };
         assert_eq!(task.library_id(), None);
@@ -479,6 +516,8 @@ mod tests {
         let task = TaskType::GenerateThumbnails {
             library_id: Some(library_id),
             series_id: Some(series_id),
+            series_ids: None,
+            book_ids: None,
             force: true,
         };
 
@@ -498,6 +537,7 @@ mod tests {
         // Library scope
         let task = TaskType::GenerateSeriesThumbnails {
             library_id: Some(library_id),
+            series_ids: None,
             force: false,
         };
         assert_eq!(task.type_string(), "generate_series_thumbnails");
@@ -511,6 +551,7 @@ mod tests {
         // All scope
         let task = TaskType::GenerateSeriesThumbnails {
             library_id: None,
+            series_ids: None,
             force: true,
         };
         assert_eq!(task.library_id(), None);
@@ -526,6 +567,7 @@ mod tests {
 
         let task = TaskType::GenerateSeriesThumbnails {
             library_id: Some(library_id),
+            series_ids: None,
             force: true,
         };
 

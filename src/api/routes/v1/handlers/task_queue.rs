@@ -9,10 +9,16 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::db::repositories::TaskRepository;
+use crate::db::repositories::{
+    LibraryRepository, SeriesMetadataRepository, SeriesRepository, TaskRepository,
+};
 use crate::require_permission;
 use crate::tasks::types::{TaskStats, TaskType};
 
+use super::super::dto::series::{
+    EnqueueReprocessTitleRequest, EnqueueReprocessTitleResponse, ReprocessSeriesTitlesRequest,
+    ReprocessTitleRequest,
+};
 use crate::api::AppState;
 
 // DTOs
@@ -540,6 +546,14 @@ pub struct GenerateBookThumbnailsRequest {
     /// Optional: scope to a specific series (within library if both provided)
     #[schema(example = "550e8400-e29b-41d4-a716-446655440001")]
     pub series_id: Option<Uuid>,
+
+    /// Optional: specific series IDs to generate thumbnails for books within (takes precedence over series_id and library_id)
+    #[serde(default)]
+    pub series_ids: Option<Vec<Uuid>>,
+
+    /// Optional: specific book IDs to generate thumbnails for (takes precedence over all other scopes)
+    #[serde(default)]
+    pub book_ids: Option<Vec<Uuid>>,
 }
 
 /// Request body for batch series thumbnail generation
@@ -553,6 +567,10 @@ pub struct GenerateSeriesThumbnailsRequest {
     /// Optional: scope to a specific library
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub library_id: Option<Uuid>,
+
+    /// Optional: specific series IDs to generate thumbnails for (takes precedence over library_id)
+    #[serde(default)]
+    pub series_ids: Option<Vec<Uuid>>,
 }
 
 /// Generate thumbnails for books in a scope
@@ -560,9 +578,11 @@ pub struct GenerateSeriesThumbnailsRequest {
 /// This queues a fan-out task that enqueues individual thumbnail generation tasks for each book.
 ///
 /// **Scope priority:**
-/// 1. If `series_id` is provided, only books in that series
-/// 2. If `library_id` is provided, only books in that library
-/// 3. If neither is provided, all books in all libraries
+/// 1. If `book_ids` is provided, only those specific books
+/// 2. If `series_ids` is provided, only books in those specific series
+/// 3. If `series_id` is provided, only books in that series
+/// 4. If `library_id` is provided, only books in that library
+/// 5. If none provided, all books in all libraries
 ///
 /// **Force behavior:**
 /// - `force: false` (default): Only generates thumbnails for books that don't have one
@@ -592,27 +612,30 @@ pub async fn generate_book_thumbnails(
     // Check permission
     auth.require_permission(&Permission::TasksWrite)?;
 
-    // If library_id provided, verify it exists
-    if let Some(library_id) = request.library_id {
-        use crate::db::repositories::LibraryRepository;
-        LibraryRepository::get_by_id(&state.db, library_id)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to check library: {}", e)))?
-            .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
-    }
+    // Validate scope IDs if no explicit book_ids or series_ids provided
+    if request.book_ids.is_none() && request.series_ids.is_none() {
+        if let Some(library_id) = request.library_id {
+            use crate::db::repositories::LibraryRepository;
+            LibraryRepository::get_by_id(&state.db, library_id)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to check library: {}", e)))?
+                .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
+        }
 
-    // If series_id provided, verify it exists
-    if let Some(series_id) = request.series_id {
-        use crate::db::repositories::SeriesRepository;
-        SeriesRepository::get_by_id(&state.db, series_id)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to check series: {}", e)))?
-            .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+        if let Some(series_id) = request.series_id {
+            use crate::db::repositories::SeriesRepository;
+            SeriesRepository::get_by_id(&state.db, series_id)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to check series: {}", e)))?
+                .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+        }
     }
 
     let task_type = TaskType::GenerateThumbnails {
         library_id: request.library_id,
         series_id: request.series_id,
+        series_ids: request.series_ids,
+        book_ids: request.book_ids,
         force: request.force,
     };
 
@@ -675,6 +698,8 @@ pub async fn generate_library_book_thumbnails(
     let task_type = TaskType::GenerateThumbnails {
         library_id: Some(library_id),
         series_id: None,
+        series_ids: None,
+        book_ids: None,
         force: request.force,
     };
 
@@ -802,9 +827,10 @@ pub async fn generate_series_thumbnail(
 /// This queues a fan-out task that enqueues individual series thumbnail generation tasks.
 /// Series thumbnails are the cover images displayed for each series (derived from the first book's cover).
 ///
-/// **Scope:**
-/// - If `library_id` is provided, only series in that library
-/// - If not provided, all series in all libraries
+/// **Scope priority:**
+/// 1. If `series_ids` is provided, only those specific series
+/// 2. If `library_id` is provided, only series in that library
+/// 3. If neither provided, all series in all libraries
 ///
 /// **Force behavior:**
 /// - `force: false` (default): Only generates thumbnails for series that don't have one
@@ -834,17 +860,20 @@ pub async fn generate_series_thumbnails(
     // Check permission
     auth.require_permission(&Permission::TasksWrite)?;
 
-    // If library_id provided, verify it exists
-    if let Some(library_id) = request.library_id {
-        use crate::db::repositories::LibraryRepository;
-        LibraryRepository::get_by_id(&state.db, library_id)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to check library: {}", e)))?
-            .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
+    // If library_id provided (and no series_ids), verify it exists
+    if request.series_ids.is_none() {
+        if let Some(library_id) = request.library_id {
+            use crate::db::repositories::LibraryRepository;
+            LibraryRepository::get_by_id(&state.db, library_id)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to check library: {}", e)))?
+                .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
+        }
     }
 
     let task_type = TaskType::GenerateSeriesThumbnails {
         library_id: request.library_id,
+        series_ids: request.series_ids,
         force: request.force,
     };
 
@@ -890,8 +919,6 @@ pub async fn generate_library_series_thumbnails(
     auth: AuthContext,
     Json(request): Json<ForceRequest>,
 ) -> Result<Json<CreateTaskResponse>, ApiError> {
-    use crate::db::repositories::LibraryRepository;
-
     // Check permission
     auth.require_permission(&Permission::TasksWrite)?;
 
@@ -903,6 +930,7 @@ pub async fn generate_library_series_thumbnails(
 
     let task_type = TaskType::GenerateSeriesThumbnails {
         library_id: Some(library_id),
+        series_ids: None,
         force: request.force,
     };
 
@@ -916,4 +944,350 @@ pub async fn generate_library_series_thumbnails(
         })?;
 
     Ok(Json(CreateTaskResponse { task_id }))
+}
+
+// =============================================================================
+// Reprocess Title Task Endpoints
+// =============================================================================
+
+/// Reprocess a series title using library preprocessing rules
+///
+/// Applies the library's preprocessing rules to the series' original directory name
+/// to regenerate the display title. This is useful when preprocessing rules are added
+/// or changed after series have already been created.
+///
+/// The title will only be updated if:
+/// - The `title_lock` is false (respects user edits)
+/// - The preprocessing rules produce a different title
+///
+/// If the title is changed and `title_sort_lock` is false, the `title_sort` will be
+/// cleared (set to None) to let it fall back to the new title for sorting.
+///
+/// - With `dryRun: true`: Returns a synchronous preview of what would change
+/// - With `dryRun: false` (default): Enqueues a background task to process
+///
+/// # Permission Required
+/// - `series:write`
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/{series_id}/title/reprocess",
+    params(
+        ("series_id" = Uuid, Path, description = "Series ID")
+    ),
+    request_body(content = EnqueueReprocessTitleRequest, content_type = "application/json"),
+    responses(
+        (status = 200, description = "Task enqueued or dry run preview", body = EnqueueReprocessTitleResponse),
+        (status = 404, description = "Series not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Tasks"
+)]
+pub async fn reprocess_series_title(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+    Json(request): Json<EnqueueReprocessTitleRequest>,
+) -> Result<Json<EnqueueReprocessTitleResponse>, ApiError> {
+    use crate::services::metadata::preprocessing::apply_rules;
+
+    auth.require_permission(&Permission::SeriesWrite)?;
+
+    // Verify series exists
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // If dry run, do synchronous preview
+    if request.dry_run {
+        // Fetch the series metadata
+        let metadata = SeriesMetadataRepository::get_by_series_id(&state.db, series_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+            .ok_or_else(|| ApiError::Internal("Series metadata not found".to_string()))?;
+
+        // Check if title is locked
+        if metadata.title_lock {
+            return Ok(Json(EnqueueReprocessTitleResponse {
+                success: true,
+                tasks_enqueued: 0,
+                task_ids: vec![],
+                message: format!(
+                    "Dry run: Series title is locked. Original: '{}', would remain unchanged.",
+                    metadata.title
+                ),
+            }));
+        }
+
+        // Fetch the library to get preprocessing rules
+        let library = LibraryRepository::get_by_id(&state.db, series.library_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+            .ok_or_else(|| ApiError::Internal("Library not found".to_string()))?;
+
+        // Get preprocessing rules from library
+        let rules = LibraryRepository::get_preprocessing_rules(&library);
+
+        // Apply rules to the series name (original directory name)
+        let new_title = if rules.is_empty() {
+            series.name.clone()
+        } else {
+            apply_rules(&series.name, &rules)
+        };
+
+        let original_title = metadata.title.clone();
+        let changed = new_title != original_title;
+
+        return Ok(Json(EnqueueReprocessTitleResponse {
+            success: true,
+            tasks_enqueued: 0,
+            task_ids: vec![],
+            message: if changed {
+                format!(
+                    "Dry run: Title would change from '{}' to '{}'",
+                    original_title, new_title
+                )
+            } else {
+                format!(
+                    "Dry run: Title would remain unchanged: '{}'",
+                    original_title
+                )
+            },
+        }));
+    }
+
+    // Enqueue the task
+    let task_type = TaskType::ReprocessSeriesTitle { series_id };
+
+    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
+
+    Ok(Json(EnqueueReprocessTitleResponse {
+        success: true,
+        tasks_enqueued: 1,
+        task_ids: vec![task_id],
+        message: "Reprocess title task enqueued".to_string(),
+    }))
+}
+
+/// Reprocess all series titles in a library using preprocessing rules
+///
+/// Applies the library's preprocessing rules to all series' original directory names
+/// to regenerate the display titles. This is useful when preprocessing rules are added
+/// or changed after series have already been created.
+///
+/// Each series title will only be updated if:
+/// - The `title_lock` is false (respects user edits)
+/// - The preprocessing rules produce a different title
+///
+/// If a title is changed and `title_sort_lock` is false, the `title_sort` will be
+/// cleared (set to None) to let it fall back to the new title for sorting.
+///
+/// - With `dryRun: true`: Returns a synchronous preview of what would change
+/// - With `dryRun: false` (default): Enqueues a background task to process
+///
+/// # Permission Required
+/// - `libraries:write`
+#[utoipa::path(
+    post,
+    path = "/api/v1/libraries/{library_id}/series/titles/reprocess",
+    params(
+        ("library_id" = Uuid, Path, description = "Library ID")
+    ),
+    request_body(content = ReprocessTitleRequest, content_type = "application/json"),
+    responses(
+        (status = 200, description = "Task enqueued or dry run preview", body = EnqueueReprocessTitleResponse),
+        (status = 404, description = "Library not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Tasks"
+)]
+pub async fn reprocess_library_series_titles(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(library_id): Path<Uuid>,
+    Json(request): Json<ReprocessTitleRequest>,
+) -> Result<Json<EnqueueReprocessTitleResponse>, ApiError> {
+    use crate::services::metadata::preprocessing::apply_rules;
+
+    auth.require_permission(&Permission::LibrariesWrite)?;
+
+    // Fetch the library
+    let library = LibraryRepository::get_by_id(&state.db, library_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
+
+    // If dry run, do synchronous preview
+    if request.dry_run {
+        // Get preprocessing rules from library
+        let rules = LibraryRepository::get_preprocessing_rules(&library);
+
+        // Fetch all series in library
+        let series_list = SeriesRepository::list_by_library(&state.db, library_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+
+        let total_series = series_list.len();
+
+        if series_list.is_empty() {
+            return Ok(Json(EnqueueReprocessTitleResponse {
+                success: true,
+                tasks_enqueued: 0,
+                task_ids: vec![],
+                message: "Dry run: No series in library".to_string(),
+            }));
+        }
+
+        // Batch fetch all metadata
+        let series_ids: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
+        let metadata_map = SeriesMetadataRepository::get_by_series_ids(&state.db, &series_ids)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+
+        let mut skipped = 0;
+        let mut changed = 0;
+
+        // Preview each series
+        for series in &series_list {
+            let metadata = match metadata_map.get(&series.id) {
+                Some(m) => m,
+                None => {
+                    skipped += 1;
+                    continue;
+                }
+            };
+
+            if metadata.title_lock {
+                skipped += 1;
+                continue;
+            }
+
+            let new_title = if rules.is_empty() {
+                series.name.clone()
+            } else {
+                apply_rules(&series.name, &rules)
+            };
+
+            if new_title != metadata.title {
+                changed += 1;
+            }
+        }
+
+        let processed = total_series - skipped;
+
+        return Ok(Json(EnqueueReprocessTitleResponse {
+            success: true,
+            tasks_enqueued: 0,
+            task_ids: vec![],
+            message: format!(
+                "Dry run: {} total series, {} would be processed, {} would change, {} would be skipped",
+                total_series, processed, changed, skipped
+            ),
+        }));
+    }
+
+    // Enqueue the fan-out task
+    let task_type = TaskType::ReprocessSeriesTitles {
+        library_id: Some(library_id),
+        series_ids: None,
+    };
+
+    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
+
+    Ok(Json(EnqueueReprocessTitleResponse {
+        success: true,
+        tasks_enqueued: 1,
+        task_ids: vec![task_id],
+        message: "Reprocess library titles task enqueued".to_string(),
+    }))
+}
+
+/// Reprocess series titles in a scope
+///
+/// This queues a fan-out task that enqueues individual series title reprocessing tasks.
+/// Applies the library's preprocessing rules to regenerate display titles.
+///
+/// **Scope priority:**
+/// 1. If `series_ids` is provided, only those specific series
+/// 2. If `library_id` is provided, only series in that library
+/// 3. If neither provided, all series in all libraries
+///
+/// **Lock behavior:**
+/// - Series with `title_lock: true` are skipped
+/// - If title changes and `title_sort_lock` is false, `title_sort` is cleared
+///
+/// # Permission Required
+/// - `series:write`
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/titles/reprocess",
+    request_body = ReprocessSeriesTitlesRequest,
+    responses(
+        (status = 200, description = "Task enqueued", body = EnqueueReprocessTitleResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Tasks"
+)]
+pub async fn reprocess_series_titles(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Json(request): Json<ReprocessSeriesTitlesRequest>,
+) -> Result<Json<EnqueueReprocessTitleResponse>, ApiError> {
+    auth.require_permission(&Permission::SeriesWrite)?;
+
+    // Limit bulk request size if series_ids provided
+    if let Some(ref series_ids) = request.series_ids {
+        const MAX_BULK_SERIES_COUNT: usize = 100;
+        if series_ids.len() > MAX_BULK_SERIES_COUNT {
+            return Err(ApiError::BadRequest(format!(
+                "Too many series in request. Maximum is {}, got {}. Please split into smaller batches.",
+                MAX_BULK_SERIES_COUNT,
+                series_ids.len()
+            )));
+        }
+    }
+
+    // If library_id provided (and no series_ids), verify it exists
+    if request.series_ids.is_none() {
+        if let Some(library_id) = request.library_id {
+            LibraryRepository::get_by_id(&state.db, library_id)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to check library: {}", e)))?
+                .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
+        }
+    }
+
+    // Enqueue the fan-out task
+    let task_type = TaskType::ReprocessSeriesTitles {
+        library_id: request.library_id,
+        series_ids: request.series_ids.clone(),
+    };
+
+    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
+
+    Ok(Json(EnqueueReprocessTitleResponse {
+        success: true,
+        tasks_enqueued: 1,
+        task_ids: vec![task_id],
+        message: "Reprocess series titles task enqueued".to_string(),
+    }))
 }

@@ -1038,3 +1038,129 @@ async fn test_generate_thumbnail_single_task() {
         panic!("Should have generate_thumbnail task type in stats");
     }
 }
+
+// ============================================================================
+// POST /api/v1/books/thumbnails/generate with book_ids Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_generate_book_thumbnails_with_book_ids() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Scan to detect files
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
+    worker.process_once().await.ok();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Get books
+    let series_list = SeriesRepository::list_by_library(&db, library.id)
+        .await
+        .unwrap();
+
+    if series_list.is_empty() {
+        return;
+    }
+
+    let books = BookRepository::list_by_series(&db, series_list[0].id, false)
+        .await
+        .unwrap();
+
+    if books.is_empty() {
+        return;
+    }
+
+    let book_ids: Vec<String> = books.iter().map(|b| b.id.to_string()).collect();
+
+    let app = create_test_router_with_app_state(state);
+
+    // Trigger with specific book_ids
+    let request_body = json!({
+        "book_ids": book_ids,
+        "force": true
+    });
+    let request =
+        post_json_request_with_auth("/api/v1/books/thumbnails/generate", &request_body, &token);
+
+    let (status, response): (StatusCode, Option<CreateTaskResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(response.is_some());
+}
+
+// ============================================================================
+// POST /api/v1/series/thumbnails/generate with series_ids Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_generate_series_thumbnails_with_series_ids() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    create_test_cbz_files_in_dir(temp_dir.path());
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Scan to detect files
+    trigger_scan_task(&state.db, library.id, ScanMode::Normal)
+        .await
+        .unwrap();
+
+    let worker = TaskWorker::new(db.clone()).with_poll_interval(Duration::from_millis(100));
+    worker.process_once().await.ok();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Get series
+    let series_list = SeriesRepository::list_by_library(&db, library.id)
+        .await
+        .unwrap();
+
+    if series_list.is_empty() {
+        return;
+    }
+
+    let series_ids: Vec<String> = series_list.iter().map(|s| s.id.to_string()).collect();
+
+    let app = create_test_router_with_app_state(state);
+
+    // Trigger with specific series_ids
+    let request_body = json!({
+        "series_ids": series_ids,
+        "force": true
+    });
+    let request =
+        post_json_request_with_auth("/api/v1/series/thumbnails/generate", &request_body, &token);
+
+    let (status, response): (StatusCode, Option<CreateTaskResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(response.is_some());
+}

@@ -39,6 +39,13 @@ const mockPlugins: PluginDto[] = [
 		credentialDelivery: "env",
 		hasCredentials: true,
 		config: { rate_limit: 60 },
+		// Search configuration
+		searchPreprocessingRules: [
+			{ pattern: "\\s*\\(Digital\\)\\s*$", replacement: "" },
+			{ pattern: "\\s*\\[Digital\\]\\s*$", replacement: "" },
+		],
+		searchQueryTemplate: "{{title}}",
+		useExistingExternalId: true,
 		enabled: true,
 		healthStatus: "healthy",
 		failureCount: 0,
@@ -93,6 +100,10 @@ const mockPlugins: PluginDto[] = [
 		credentialDelivery: "env",
 		hasCredentials: false,
 		config: {},
+		// Search configuration
+		searchPreprocessingRules: null,
+		searchQueryTemplate: null,
+		useExistingExternalId: false,
 		enabled: false,
 		healthStatus: "unhealthy",
 		failureCount: 3,

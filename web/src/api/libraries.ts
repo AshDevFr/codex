@@ -112,4 +112,13 @@ export const librariesApi = {
 		);
 		return response.data;
 	},
+
+	// Reprocess all series titles in a library using preprocessing rules
+	reprocessSeriesTitles: async (id: string): Promise<{ taskId: string }> => {
+		const response = await api.post<{ taskId: string }>(
+			`/libraries/${id}/series/titles/reprocess`,
+			{},
+		);
+		return response.data;
+	},
 };

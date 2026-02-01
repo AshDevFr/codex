@@ -14,18 +14,15 @@ import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { renderTemplate } from "@/utils/templateEngine";
-import type { MetadataForTemplate } from "@/utils/templateUtils";
+import type { SeriesContextWithCustomMetadata } from "@/utils/templateUtils";
 
 export interface CustomMetadataDisplayProps {
 	/**
-	 * The custom metadata object to display
+	 * The series context for template evaluation.
+	 * Contains seriesId, bookCount, metadata, externalIds, and customMetadata.
+	 * Use `transformFullSeriesToSeriesContext()` to create this from a FullSeries.
 	 */
-	customMetadata: Record<string, unknown> | null | undefined;
-	/**
-	 * Built-in series metadata for template access via `metadata.*` syntax.
-	 * Should be transformed using `transformToMetadataForTemplate()` before passing.
-	 */
-	metadata?: MetadataForTemplate | null;
+	context: SeriesContextWithCustomMetadata | null | undefined;
 	/**
 	 * The Handlebars template to use for rendering.
 	 * If empty or not provided, nothing will be rendered.
@@ -79,41 +76,39 @@ function parseListItemContent(children: ReactNode): {
 /**
  * Displays custom metadata rendered using a Handlebars template and Markdown
  *
- * Template context includes:
- * - `custom_metadata.*` - User-defined custom metadata fields
- * - `metadata.*` - Built-in series metadata (title, genres, tags, etc.)
+ * Template context matches the backend SeriesContext structure (camelCase):
+ * - `{{seriesId}}` - Series UUID
+ * - `{{bookCount}}` - Number of books in the series
+ * - `{{metadata.title}}` - Series title
+ * - `{{metadata.genres}}` - Genre array
+ * - `{{metadata.tags}}` - Tag array
+ * - `{{externalIds.plugin:source.id}}` - External ID from a source
+ * - `{{customMetadata.myField}}` - Custom metadata field
+ *
+ * For backwards compatibility, `custom_metadata.*` also works as an alias for `customMetadata.*`.
  */
 export function CustomMetadataDisplay({
-	customMetadata,
-	metadata,
+	context,
 	template,
 	showErrors = false,
 }: CustomMetadataDisplayProps) {
 	const result = useMemo(() => {
-		// Check if we have anything to render
-		const hasCustomMetadata =
-			customMetadata && Object.keys(customMetadata).length > 0;
-		const hasMetadata = metadata !== null && metadata !== undefined;
-
-		// If no template or no data at all, return empty result
-		if (!template || (!hasCustomMetadata && !hasMetadata)) {
+		// If no template or no context, return empty result
+		if (!template || !context) {
 			return { success: true, output: "" };
 		}
 
-		// Build the template context with both custom_metadata and metadata
-		const context: Record<string, unknown> = {};
+		// Build the template context from SeriesContext
+		// Add backwards compatibility alias for custom_metadata
+		const templateContext: Record<string, unknown> = {
+			...context,
+			// Backwards compatibility: snake_case alias for customMetadata
+			custom_metadata: context.customMetadata,
+		};
 
-		if (hasCustomMetadata) {
-			context.custom_metadata = customMetadata;
-		}
-
-		if (hasMetadata) {
-			context.metadata = metadata;
-		}
-
-		// Render the template with the combined context
-		return renderTemplate(template, context);
-	}, [customMetadata, metadata, template]);
+		// Render the template with the context
+		return renderTemplate(template, templateContext);
+	}, [context, template]);
 
 	// Nothing to display if empty
 	if (!result.output || result.output.trim() === "") {

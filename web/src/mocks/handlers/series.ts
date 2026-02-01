@@ -15,6 +15,7 @@ import { getSeriesByLibrary, mockSeries } from "../data/store";
 import coverSvg from "../fixtures/cover.svg?raw";
 
 type ExternalRatingDto = components["schemas"]["ExternalRatingDto"];
+type SeriesExternalIdDto = components["schemas"]["SeriesExternalIdDto"];
 
 /**
  * Sample custom metadata for specific series (by title match)
@@ -72,6 +73,67 @@ function getExternalRatingsForSeries(
 		rating: r.rating,
 		voteCount: r.voteCount,
 		fetchedAt: now,
+		createdAt: now,
+		updatedAt: now,
+	}));
+}
+
+/**
+ * Get external IDs for a series (from metadata providers like plugins)
+ */
+function getExternalIdsForSeries(
+	seriesId: string,
+	title: string,
+): SeriesExternalIdDto[] {
+	const now = new Date().toISOString();
+
+	// Define external IDs for popular series (simulating plugin matches)
+	const externalIdsData: Record<
+		string,
+		{ source: string; externalId: string; externalUrl?: string }[]
+	> = {
+		"One Piece": [
+			{
+				source: "plugin:mangabaka",
+				externalId: "13",
+				externalUrl: "https://www.mangaupdates.com/series/13",
+			},
+		],
+		"Attack on Titan": [
+			{
+				source: "plugin:mangabaka",
+				externalId: "23390",
+				externalUrl: "https://www.mangaupdates.com/series/23390",
+			},
+		],
+		Naruto: [
+			{
+				source: "plugin:mangabaka",
+				externalId: "11",
+				externalUrl: "https://www.mangaupdates.com/series/11",
+			},
+		],
+		"Batman: Year One": [
+			{
+				source: "plugin:comicvine",
+				externalId: "4050-4889",
+				externalUrl:
+					"https://comicvine.gamespot.com/batman-year-one/4050-4889/",
+			},
+		],
+	};
+
+	const ids = externalIdsData[title];
+	if (!ids) return [];
+
+	return ids.map((item, index) => ({
+		id: `ext-id-${seriesId}-${index}`,
+		seriesId,
+		source: item.source,
+		externalId: item.externalId,
+		externalUrl: item.externalUrl || null,
+		lastSyncedAt: now,
+		metadataHash: null,
 		createdAt: now,
 		updatedAt: now,
 	}));
@@ -1234,6 +1296,94 @@ export const seriesHandlers = [
 		return new HttpResponse(null, { status: 204 });
 	}),
 
+	// ============================================
+	// Preprocessing Rules / Search Title
+	// ============================================
+
+	// Get preprocessed search title for a series
+	http.get("/api/v1/series/:id/metadata/search-title", async ({ params }) => {
+		await delay(100);
+		const seriesItem = mockSeries.find((s) => s.id === params.id);
+
+		if (!seriesItem) {
+			return HttpResponse.json({ error: "Series not found" }, { status: 404 });
+		}
+
+		// Simulate preprocessing - remove common suffixes
+		let searchTitle = seriesItem.title;
+		const suffixesToRemove = [
+			/ \(Digital\)$/i,
+			/ \(Complete\)$/i,
+			/ \[Digital\]$/i,
+			/ - Complete$/i,
+		];
+		let rulesApplied = 0;
+		for (const suffix of suffixesToRemove) {
+			if (suffix.test(searchTitle)) {
+				searchTitle = searchTitle.replace(suffix, "");
+				rulesApplied++;
+			}
+		}
+
+		return HttpResponse.json({
+			originalTitle: seriesItem.title,
+			searchTitle,
+			rulesApplied,
+		});
+	}),
+
+	// Reprocess series title using library preprocessing rules
+	http.post(
+		"/api/v1/series/:id/title/reprocess",
+		async ({ params, request }) => {
+			await delay(150);
+			const seriesItem = mockSeries.find((s) => s.id === params.id);
+
+			if (!seriesItem) {
+				return HttpResponse.json(
+					{ error: "Series not found" },
+					{ status: 404 },
+				);
+			}
+
+			const body = (await request.json().catch(() => ({}))) as {
+				dryRun?: boolean;
+			};
+
+			// Simulate preprocessing - remove common suffixes
+			let newTitle = seriesItem.title;
+			const suffixesToRemove = [
+				/ \(Digital\)$/i,
+				/ \(Complete\)$/i,
+				/ \[Digital\]$/i,
+				/ - Complete$/i,
+			];
+			for (const suffix of suffixesToRemove) {
+				newTitle = newTitle.replace(suffix, "");
+			}
+
+			const changed = newTitle !== seriesItem.title;
+
+			if (body.dryRun) {
+				// Return synchronous preview
+				return HttpResponse.json({
+					seriesId: seriesItem.id,
+					originalTitle: seriesItem.title,
+					newTitle,
+					changed,
+					skipped: false,
+					skipReason: null,
+					titleSortCleared: changed,
+				});
+			}
+
+			// Return task ID for async processing
+			return HttpResponse.json({
+				taskId: `reprocess-title-${params.id}-${Date.now()}`,
+			});
+		},
+	),
+
 	// Get series by ID (must come AFTER specific routes like /in-progress, /recently-added, etc.)
 	// Supports ?full=true for full series response with metadata
 	http.get("/api/v1/series/:id", async ({ params, request }) => {
@@ -1439,6 +1589,7 @@ function toFullSeriesResponse(seriesItem: (typeof mockSeries)[number]) {
 			seriesItem.title,
 		),
 		externalLinks: [],
+		externalIds: getExternalIdsForSeries(seriesItem.id, seriesItem.title),
 	};
 }
 

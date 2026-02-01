@@ -629,6 +629,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/bulk/thumbnails/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk generate thumbnails for books (by book IDs)
+         * @description Enqueues a fan-out task that will generate thumbnails for the specified books.
+         *     This is useful for regenerating thumbnails after changing thumbnail settings or fixing
+         *     corrupt thumbnails.
+         */
+        post: operations["bulk_generate_book_thumbnails"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/bulk/unread": {
         parameters: {
             query?: never;
@@ -799,9 +821,11 @@ export interface paths {
          * @description This queues a fan-out task that enqueues individual thumbnail generation tasks for each book.
          *
          *     **Scope priority:**
-         *     1. If `series_id` is provided, only books in that series
-         *     2. If `library_id` is provided, only books in that library
-         *     3. If neither is provided, all books in all libraries
+         *     1. If `book_ids` is provided, only those specific books
+         *     2. If `series_ids` is provided, only books in those specific series
+         *     3. If `series_id` is provided, only books in that series
+         *     4. If `library_id` is provided, only books in that library
+         *     5. If none provided, all books in all libraries
          *
          *     **Force behavior:**
          *     - `force: false` (default): Only generates thumbnails for books that don't have one
@@ -1773,6 +1797,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/libraries/{library_id}/series/titles/reprocess": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reprocess all series titles in a library using preprocessing rules
+         * @description Applies the library's preprocessing rules to all series' original directory names
+         *     to regenerate the display titles. This is useful when preprocessing rules are added
+         *     or changed after series have already been created.
+         *
+         *     Each series title will only be updated if:
+         *     - The `title_lock` is false (respects user edits)
+         *     - The preprocessing rules produce a different title
+         *
+         *     If a title is changed and `title_sort_lock` is false, the `title_sort` will be
+         *     cleared (set to None) to let it fall back to the new title for sorting.
+         *
+         *     - With `dryRun: true`: Returns a synchronous preview of what would change
+         *     - With `dryRun: false` (default): Enqueues a background task to process
+         *
+         *     # Permission Required
+         *     - `libraries:write`
+         */
+        post: operations["reprocess_library_series_titles"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/metrics/inventory": {
         parameters: {
             query?: never;
@@ -2070,6 +2129,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/bulk/thumbnails/books/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk generate thumbnails for books in multiple series
+         * @description Enqueues a fan-out task that will generate thumbnails for all books in the specified series.
+         *     This is useful for regenerating thumbnails after changing thumbnail settings or fixing
+         *     corrupt thumbnails.
+         */
+        post: operations["bulk_generate_series_book_thumbnails"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/bulk/thumbnails/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk generate series thumbnails
+         * @description Enqueues a fan-out task that will generate thumbnails for the specified series.
+         *     Series thumbnails are derived from the first book's cover in each series.
+         */
+        post: operations["bulk_generate_series_thumbnails"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/bulk/titles/reprocess": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk reprocess series titles
+         * @description Enqueues a fan-out task that will reprocess titles for the specified series
+         *     using their library's preprocessing rules. This is useful when preprocessing
+         *     rules are added or changed after series have already been created.
+         */
+        post: operations["bulk_reprocess_series_titles"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/bulk/unread": {
         parameters: {
             query?: never;
@@ -2240,9 +2364,10 @@ export interface paths {
          * @description This queues a fan-out task that enqueues individual series thumbnail generation tasks.
          *     Series thumbnails are the cover images displayed for each series (derived from the first book's cover).
          *
-         *     **Scope:**
-         *     - If `library_id` is provided, only series in that library
-         *     - If not provided, all series in all libraries
+         *     **Scope priority:**
+         *     1. If `series_ids` is provided, only those specific series
+         *     2. If `library_id` is provided, only series in that library
+         *     3. If neither provided, all series in all libraries
          *
          *     **Force behavior:**
          *     - `force: false` (default): Only generates thumbnails for series that don't have one
@@ -2252,6 +2377,39 @@ export interface paths {
          *     - `tasks:write`
          */
         post: operations["generate_series_thumbnails"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/titles/reprocess": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reprocess series titles in a scope
+         * @description This queues a fan-out task that enqueues individual series title reprocessing tasks.
+         *     Applies the library's preprocessing rules to regenerate display titles.
+         *
+         *     **Scope priority:**
+         *     1. If `series_ids` is provided, only those specific series
+         *     2. If `library_id` is provided, only series in that library
+         *     3. If neither provided, all series in all libraries
+         *
+         *     **Lock behavior:**
+         *     - Series with `title_lock: true` are skipped
+         *     - If title changes and `title_sort_lock` is false, `title_sort` is cleared
+         *
+         *     # Permission Required
+         *     - `series:write`
+         */
+        post: operations["reprocess_series_titles"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2338,6 +2496,27 @@ export interface paths {
          *     series metadata, showing which fields will be applied, locked, or denied by RBAC.
          */
         post: operations["preview_series_metadata"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/metadata/search-title": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the preprocessed search title for a series
+         * @description Returns the series title after applying plugin and library preprocessing rules.
+         *     Use this to get the correct search query before opening the metadata search modal.
+         */
+        get: operations["get_series_search_title"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2958,6 +3137,41 @@ export interface paths {
          *     - `tasks:write`
          */
         post: operations["generate_series_thumbnail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{series_id}/title/reprocess": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reprocess a series title using library preprocessing rules
+         * @description Applies the library's preprocessing rules to the series' original directory name
+         *     to regenerate the display title. This is useful when preprocessing rules are added
+         *     or changed after series have already been created.
+         *
+         *     The title will only be updated if:
+         *     - The `title_lock` is false (respects user edits)
+         *     - The preprocessing rules produce a different title
+         *
+         *     If the title is changed and `title_sort_lock` is false, the `title_sort` will be
+         *     cleared (set to None) to let it fall back to the new title for sorting.
+         *
+         *     - With `dryRun: true`: Returns a synchronous preview of what would change
+         *     - With `dryRun: false` (default): Enqueues a background task to process
+         *
+         *     # Permission Required
+         *     - `series:write`
+         */
+        post: operations["reprocess_series_title"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5520,6 +5734,65 @@ export interface components {
              */
             bookIds: string[];
         };
+        /** @description Request to generate thumbnails for books in bulk (by book IDs) */
+        BulkGenerateBookThumbnailsRequest: {
+            /**
+             * @description List of book IDs to generate thumbnails for
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440001",
+             *       "550e8400-e29b-41d4-a716-446655440002"
+             *     ]
+             */
+            bookIds: string[];
+            /**
+             * @description If true, regenerate thumbnails even if they exist
+             * @example false
+             */
+            force?: boolean;
+        };
+        /** @description Request to generate book thumbnails for multiple series in bulk */
+        BulkGenerateSeriesBookThumbnailsRequest: {
+            /**
+             * @description If true, regenerate thumbnails even if they exist
+             * @example false
+             */
+            force?: boolean;
+            /**
+             * @description List of series IDs to generate book thumbnails for
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440001",
+             *       "550e8400-e29b-41d4-a716-446655440002"
+             *     ]
+             */
+            seriesIds: string[];
+        };
+        /** @description Request to generate series thumbnails in bulk */
+        BulkGenerateSeriesThumbnailsRequest: {
+            /**
+             * @description If true, regenerate thumbnails even if they exist
+             * @example false
+             */
+            force?: boolean;
+            /**
+             * @description List of series IDs to generate thumbnails for
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440001",
+             *       "550e8400-e29b-41d4-a716-446655440002"
+             *     ]
+             */
+            seriesIds: string[];
+        };
+        /** @description Request to reprocess series titles in bulk */
+        BulkReprocessSeriesTitlesRequest: {
+            /**
+             * @description List of series IDs to reprocess titles for
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440001",
+             *       "550e8400-e29b-41d4-a716-446655440002"
+             *     ]
+             */
+            seriesIds: string[];
+        };
         /** @description Request to perform bulk operations on multiple series */
         BulkSeriesRequest: {
             /**
@@ -5556,6 +5829,20 @@ export interface components {
              * @example 4
              */
             value: string;
+        };
+        /** @description Response for bulk task operations */
+        BulkTaskResponse: {
+            /**
+             * @description Message describing the operation
+             * @example Thumbnail generation task queued for 5 series
+             */
+            message: string;
+            /**
+             * Format: uuid
+             * @description ID of the fan-out task that was created
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            taskId: string;
         };
         /** @description Bulk update settings request */
         BulkUpdateSettingsRequest: {
@@ -5726,6 +6013,11 @@ export interface components {
              *     ]
              */
             allowedFormats?: string[] | null;
+            /**
+             * @description Auto-match conditions (JSON object with mode and rules)
+             *     Controls when auto-matching runs for this library
+             */
+            autoMatchConditions?: unknown;
             /** @description Book strategy-specific configuration (JSON, mutable after creation) */
             bookConfig?: unknown;
             bookStrategy?: null | components["schemas"]["BookStrategy"];
@@ -5767,6 +6059,11 @@ export interface components {
             /** @description Strategy-specific configuration (JSON, immutable after creation) */
             seriesConfig?: unknown;
             seriesStrategy?: null | components["schemas"]["SeriesStrategy"];
+            /**
+             * @description Title preprocessing rules (JSON array of regex rules)
+             *     Applied during scan to clean series titles before metadata search
+             */
+            titlePreprocessingRules?: unknown;
         };
         /** @description Request to create a new plugin */
         CreatePluginRequest: {
@@ -5777,6 +6074,8 @@ export interface components {
              *     ]
              */
             args?: string[];
+            /** @description Auto-match conditions (JSON object with mode and rules) */
+            autoMatchConditions?: unknown;
             /**
              * @description Command to spawn the plugin
              * @example node
@@ -5850,6 +6149,15 @@ export interface components {
              *     ]
              */
             scopes?: string[];
+            /** @description Preprocessing rules for search queries (JSON array of regex rules) */
+            searchPreprocessingRules?: unknown;
+            /** @description Handlebars template for customizing search queries */
+            searchQueryTemplate?: string | null;
+            /**
+             * @description Whether to skip search when external ID exists for this plugin
+             * @example true
+             */
+            useExistingExternalId?: boolean;
             /** @description Working directory for the plugin process */
             workingDirectory?: string | null;
         };
@@ -6044,6 +6352,34 @@ export interface components {
              */
             pluginId: string;
         };
+        /** @description Request to enqueue a reprocess title task */
+        EnqueueReprocessTitleRequest: {
+            /**
+             * @description If true, only preview changes without applying them (synchronous, no task)
+             * @example false
+             */
+            dryRun?: boolean;
+        };
+        /** @description Response for enqueued reprocess title task(s) */
+        EnqueueReprocessTitleResponse: {
+            /**
+             * @description Message describing the result
+             * @example Reprocess title task enqueued
+             */
+            message: string;
+            /**
+             * @description Whether the operation succeeded
+             * @example true
+             */
+            success: boolean;
+            /** @description Task IDs that were created */
+            taskIds: string[];
+            /**
+             * @description Number of tasks enqueued
+             * @example 1
+             */
+            tasksEnqueued: number;
+        };
         /** @description Complete entity change event with metadata */
         EntityChangeEvent: components["schemas"]["EntityEvent"] & {
             /**
@@ -6226,6 +6562,26 @@ export interface components {
             result?: unknown;
             /** @description Whether the execution succeeded */
             success: boolean;
+        };
+        /**
+         * @description External ID context for template evaluation.
+         *
+         *     Represents an external ID from a metadata provider (plugin, comicinfo, etc.)
+         *     in a simplified format suitable for template access.
+         */
+        ExternalIdContextDto: {
+            /** @description Metadata hash for change detection (if available) */
+            hash?: string | null;
+            /**
+             * @description External ID value
+             * @example 12345
+             */
+            id: string;
+            /**
+             * @description External URL (if available)
+             * @example https://mangabaka.com/series/12345
+             */
+            url?: string | null;
         };
         /** @description External link data transfer object */
         ExternalLinkDto: {
@@ -6644,6 +7000,8 @@ export interface components {
              * @example 2024-01-01T00:00:00Z
              */
             createdAt: string;
+            /** @description External IDs from metadata providers (plugins, comicinfo, etc.) */
+            externalIds: components["schemas"]["SeriesExternalIdDto"][];
             /** @description External links to other sites */
             externalLinks: components["schemas"]["ExternalLinkDto"][];
             /** @description External ratings from various sources */
@@ -6701,6 +7059,8 @@ export interface components {
         };
         /** @description Request body for batch book thumbnail generation */
         GenerateBookThumbnailsRequest: {
+            /** @description Optional: specific book IDs to generate thumbnails for (takes precedence over all other scopes) */
+            book_ids?: string[] | null;
             /**
              * @description If true, regenerate all thumbnails even if they exist. If false (default), only generate missing thumbnails.
              * @example false
@@ -6718,6 +7078,8 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440001
              */
             series_id?: string | null;
+            /** @description Optional: specific series IDs to generate thumbnails for books within (takes precedence over series_id and library_id) */
+            series_ids?: string[] | null;
         };
         /** @description Request body for batch series thumbnail generation */
         GenerateSeriesThumbnailsRequest: {
@@ -6732,6 +7094,8 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             library_id?: string | null;
+            /** @description Optional: specific series IDs to generate thumbnails for (takes precedence over library_id) */
+            series_ids?: string[] | null;
         };
         /** @description Genre data transfer object */
         GenreDto: {
@@ -7531,6 +7895,11 @@ export interface components {
              *     ]
              */
             allowedFormats?: string[] | null;
+            /**
+             * @description Auto-match conditions (JSON object with mode and rules)
+             *     Controls when auto-matching runs for this library
+             */
+            autoMatchConditions?: unknown;
             /** @description Book strategy-specific configuration (JSON) */
             bookConfig?: unknown;
             /**
@@ -7605,6 +7974,11 @@ export interface components {
             seriesCount?: number | null;
             /** @description Series detection strategy (series_volume, series_volume_chapter, flat, etc.) */
             seriesStrategy: components["schemas"]["SeriesStrategy"];
+            /**
+             * @description Title preprocessing rules (JSON array of regex rules)
+             *     Applied during scan to clean series titles before metadata search
+             */
+            titlePreprocessingRules?: unknown;
             /**
              * Format: date-time
              * @description When the library was last updated
@@ -7786,6 +8160,118 @@ export interface components {
          * @enum {string}
          */
         MetadataContentType: "series";
+        /**
+         * @description Metadata context for template evaluation.
+         *
+         *     Contains series metadata fields in a flat structure suitable for
+         *     template access via `metadata.*` syntax.
+         */
+        MetadataContextDto: {
+            /**
+             * Format: int32
+             * @description Age rating (e.g., 13, 16, 18)
+             * @example 13
+             */
+            ageRating?: number | null;
+            /** @description Whether age_rating is locked */
+            ageRatingLock?: boolean;
+            /** @description Whether custom_metadata is locked */
+            customMetadataLock?: boolean;
+            /**
+             * @description Genre names
+             * @example [
+             *       "Action",
+             *       "Adventure",
+             *       "Comedy"
+             *     ]
+             */
+            genres?: string[];
+            /** @description Whether genres are locked */
+            genresLock?: boolean;
+            /**
+             * @description Imprint (sub-publisher)
+             * @example Jump Comics
+             */
+            imprint?: string | null;
+            /** @description Whether imprint is locked */
+            imprintLock?: boolean;
+            /**
+             * @description Language code (BCP47 format)
+             * @example ja
+             */
+            language?: string | null;
+            /** @description Whether language is locked */
+            languageLock?: boolean;
+            /**
+             * @description Publisher name
+             * @example Shueisha
+             */
+            publisher?: string | null;
+            /** @description Whether publisher is locked */
+            publisherLock?: boolean;
+            /**
+             * @description Reading direction (ltr, rtl, ttb, webtoon)
+             * @example rtl
+             */
+            readingDirection?: string | null;
+            /** @description Whether reading_direction is locked */
+            readingDirectionLock?: boolean;
+            /**
+             * @description Series status (ongoing, ended, hiatus, abandoned, unknown)
+             * @example ongoing
+             */
+            status?: string | null;
+            /** @description Whether status is locked */
+            statusLock?: boolean;
+            /**
+             * @description Series description/summary
+             * @example Follow Monkey D. Luffy on his adventure...
+             */
+            summary?: string | null;
+            /** @description Whether summary is locked */
+            summaryLock?: boolean;
+            /**
+             * @description Tag names
+             * @example [
+             *       "pirates",
+             *       "treasure",
+             *       "friendship"
+             *     ]
+             */
+            tags?: string[];
+            /** @description Whether tags are locked */
+            tagsLock?: boolean;
+            /**
+             * @description Series title
+             * @example One Piece
+             */
+            title?: string | null;
+            /** @description Whether title is locked */
+            titleLock?: boolean;
+            /**
+             * @description Custom sort name
+             * @example One Piece
+             */
+            titleSort?: string | null;
+            /** @description Whether title_sort is locked */
+            titleSortLock?: boolean;
+            /**
+             * Format: int32
+             * @description Expected total book count
+             * @example 110
+             */
+            totalBookCount?: number | null;
+            /** @description Whether total_book_count is locked */
+            totalBookCountLock?: boolean;
+            /**
+             * Format: int32
+             * @description Publication year
+             * @example 1997
+             */
+            year?: number | null;
+            /** @description Whether year is locked */
+            yearLock?: boolean;
+        };
         /** @description A single field in the metadata preview */
         MetadataFieldPreview: {
             /** @description Current value in database */
@@ -8446,6 +8932,11 @@ export interface components {
                  *     ]
                  */
                 allowedFormats?: string[] | null;
+                /**
+                 * @description Auto-match conditions (JSON object with mode and rules)
+                 *     Controls when auto-matching runs for this library
+                 */
+                autoMatchConditions?: unknown;
                 /** @description Book strategy-specific configuration (JSON) */
                 bookConfig?: unknown;
                 /**
@@ -8520,6 +9011,11 @@ export interface components {
                 seriesCount?: number | null;
                 /** @description Series detection strategy (series_volume, series_volume_chapter, flat, etc.) */
                 seriesStrategy: components["schemas"]["SeriesStrategy"];
+                /**
+                 * @description Title preprocessing rules (JSON array of regex rules)
+                 *     Applied during scan to clean series titles before metadata search
+                 */
+                titlePreprocessingRules?: unknown;
                 /**
                  * Format: date-time
                  * @description When the library was last updated
@@ -9233,6 +9729,8 @@ export interface components {
              *     ]
              */
             args: string[];
+            /** @description Auto-match conditions (JSON object with mode and rules) */
+            autoMatchConditions?: unknown;
             /**
              * @description Command to spawn the plugin
              * @example node
@@ -9339,11 +9837,20 @@ export interface components {
              *     ]
              */
             scopes: string[];
+            /** @description Preprocessing rules for search queries (JSON array of regex rules) */
+            searchPreprocessingRules?: unknown;
+            /** @description Handlebars template for customizing search queries */
+            searchQueryTemplate?: string | null;
             /**
              * Format: date-time
              * @description When the plugin was last updated
              */
             updatedAt: string;
+            /**
+             * @description Whether to skip search when external ID exists for this plugin
+             * @example true
+             */
+            useExistingExternalId: boolean;
             /** @description Working directory for the plugin process */
             workingDirectory?: string | null;
         };
@@ -10213,6 +10720,101 @@ export interface components {
              */
             year?: number | null;
         };
+        /** @description Response for library-wide title reprocessing */
+        ReprocessLibraryTitlesResponse: {
+            /**
+             * @description Number of series where title was changed
+             * @example 45
+             */
+            changed: number;
+            /**
+             * Format: uuid
+             * @description Library ID
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            libraryId: string;
+            /**
+             * @description Number of series processed (not skipped)
+             * @example 120
+             */
+            processed: number;
+            /** @description Detailed results for each series (only included if < 100 series) */
+            results?: components["schemas"]["ReprocessTitleResult"][] | null;
+            /**
+             * @description Number of series skipped (due to locks)
+             * @example 30
+             */
+            skipped: number;
+            /**
+             * @description Total number of series in the library
+             * @example 150
+             */
+            totalSeries: number;
+        };
+        /** @description Request to reprocess series titles in a scope */
+        ReprocessSeriesTitlesRequest: {
+            /**
+             * Format: uuid
+             * @description If set, only series in this library
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            libraryId?: string | null;
+            /**
+             * @description If set, only these specific series (takes precedence over library_id)
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440001",
+             *       "550e8400-e29b-41d4-a716-446655440002"
+             *     ]
+             */
+            seriesIds?: string[] | null;
+        };
+        /** @description Request to reprocess series title using library preprocessing rules */
+        ReprocessTitleRequest: {
+            /**
+             * @description If true, only preview changes without applying them
+             * @example false
+             */
+            dryRun?: boolean;
+        };
+        /** @description Result of reprocessing a single series title */
+        ReprocessTitleResult: {
+            /**
+             * @description Whether the title was actually changed
+             * @example true
+             */
+            changed: boolean;
+            /**
+             * @description New title after applying preprocessing rules
+             * @example One Piece
+             */
+            newTitle: string;
+            /**
+             * @description Original title before reprocessing
+             * @example One Piece (Digital)
+             */
+            originalTitle: string;
+            /**
+             * Format: uuid
+             * @description Series ID
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            seriesId: string;
+            /**
+             * @description Reason for skipping (if skipped)
+             * @example title_locked
+             */
+            skipReason?: string | null;
+            /**
+             * @description Whether this series was skipped (e.g., due to lock)
+             * @example false
+             */
+            skipped: boolean;
+            /**
+             * @description Whether title_sort was cleared (set to None) because title changed
+             * @example true
+             */
+            titleSortCleared: boolean;
+        };
         /** @description Resend verification email request */
         ResendVerificationRequest: {
             /**
@@ -10370,6 +10972,15 @@ export interface components {
              */
             query: string;
         };
+        /** @description Response containing the preprocessed search title for a series */
+        SearchTitleResponse: {
+            /** @description Original title before preprocessing */
+            originalTitle: string;
+            /** @description Number of preprocessing rules that were applied */
+            rulesApplied: number;
+            /** @description Title after preprocessing rules were applied */
+            searchTitle: string;
+        };
         /** @description Request to select which cover source to use */
         SelectCoverSourceRequest: {
             /** @description Cover source: "default" (first book cover) or "custom" (uploaded cover) */
@@ -10422,6 +11033,76 @@ export interface components {
             sharingTag: components["schemas"]["FieldOperator"];
         } | {
             completion: components["schemas"]["BoolOperator"];
+        };
+        /**
+         * @description Series context for template and condition evaluation.
+         *
+         *     This structure provides a unified interface for evaluating templates
+         *     and conditions against series data. It aggregates data from various
+         *     sources (series, metadata, external IDs, book count) into a single
+         *     context object.
+         *
+         *     ## Template Usage
+         *
+         *     In Handlebars templates, fields are accessible via:
+         *     - `{{seriesId}}` - Series UUID
+         *     - `{{bookCount}}` - Number of books
+         *     - `{{metadata.title}}` - Series title
+         *     - `{{metadata.genres}}` - Genre array
+         *     - `{{externalIds.plugin:mangabaka.id}}` - External ID from a source
+         *     - `{{customMetadata.myField}}` - Custom metadata field
+         *
+         *     ## JSON Structure
+         *
+         *     ```json
+         *     {
+         *       "seriesId": "550e8400-e29b-41d4-a716-446655440000",
+         *       "bookCount": 5,
+         *       "metadata": {
+         *         "title": "One Piece",
+         *         "genres": ["Action", "Adventure"],
+         *         "tags": ["pirates"]
+         *       },
+         *       "externalIds": {
+         *         "plugin:mangabaka": { "id": "12345", "url": "..." }
+         *       },
+         *       "customMetadata": { "myField": "value" }
+         *     }
+         *     ```
+         */
+        SeriesContextDto: {
+            /**
+             * Format: int64
+             * @description Number of books in the series
+             * @example 5
+             */
+            bookCount: number;
+            /**
+             * @description Custom metadata fields (preserved as-is, no case transformation).
+             *     Can contain any JSON structure defined by the user.
+             */
+            customMetadata?: Record<string, never> | null;
+            /**
+             * @description External IDs mapped by source name.
+             *     Keys are source identifiers (e.g., "plugin:mangabaka", "comicinfo").
+             * @example {
+             *       "plugin:mangabaka": {
+             *         "id": "12345",
+             *         "url": "https://mangabaka.com/series/12345"
+             *       }
+             *     }
+             */
+            externalIds?: {
+                [key: string]: components["schemas"]["ExternalIdContextDto"];
+            };
+            /** @description Series metadata */
+            metadata?: components["schemas"]["MetadataContextDto"];
+            /**
+             * Format: uuid
+             * @description Series UUID
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            seriesId?: string | null;
         };
         /** @description Series cover data transfer object */
         SeriesCoverDto: {
@@ -10566,6 +11247,56 @@ export interface components {
              * @example 1987
              */
             year?: number | null;
+        };
+        /** @description External ID from a metadata provider (plugin, comicinfo, etc.) */
+        SeriesExternalIdDto: {
+            /**
+             * Format: date-time
+             * @description When the external ID was created
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * @description External ID value from the source
+             * @example 12345
+             */
+            externalId: string;
+            /**
+             * @description URL to the external source (if available)
+             * @example https://mangabaka.com/manga/12345
+             */
+            externalUrl?: string | null;
+            /**
+             * Format: uuid
+             * @description External ID record ID
+             * @example 550e8400-e29b-41d4-a716-446655440070
+             */
+            id: string;
+            /**
+             * Format: date-time
+             * @description When the metadata was last synced from this source
+             * @example 2024-01-15T10:30:00Z
+             */
+            lastSyncedAt?: string | null;
+            /** @description Hash of the last fetched metadata (for change detection) */
+            metadataHash?: string | null;
+            /**
+             * Format: uuid
+             * @description Series ID
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            seriesId: string;
+            /**
+             * @description Source identifier (e.g., "plugin:mangabaka", "comicinfo", "epub")
+             * @example plugin:mangabaka
+             */
+            source: string;
+            /**
+             * Format: date-time
+             * @description When the external ID was last updated
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
         };
         /** @description Nested metadata object for FullSeriesResponse */
         SeriesFullMetadata: {
@@ -11463,11 +12194,13 @@ export interface components {
             /** @enum {string} */
             type: "refresh_metadata";
         } | {
+            book_ids?: string[] | null;
             force?: boolean;
             /** Format: uuid */
             library_id?: string | null;
             /** Format: uuid */
             series_id?: string | null;
+            series_ids?: string[] | null;
             /** @enum {string} */
             type: "generate_thumbnails";
         } | {
@@ -11486,6 +12219,7 @@ export interface components {
             force?: boolean;
             /** Format: uuid */
             library_id?: string | null;
+            series_ids?: string[] | null;
             /** @enum {string} */
             type: "generate_series_thumbnails";
         } | {
@@ -11523,6 +12257,17 @@ export interface components {
             source_scope?: string | null;
             /** @enum {string} */
             type: "plugin_auto_match";
+        } | {
+            /** Format: uuid */
+            series_id: string;
+            /** @enum {string} */
+            type: "reprocess_series_title";
+        } | {
+            /** Format: uuid */
+            library_id?: string | null;
+            series_ids?: string[] | null;
+            /** @enum {string} */
+            type: "reprocess_series_titles";
         };
         /** @description Metrics for a specific task type */
         TaskTypeMetricsDto: {
@@ -11833,6 +12578,14 @@ export interface components {
              *     ]
              */
             allowedFormats?: string[] | null;
+            /**
+             * @description Auto-match conditions (JSON object with mode and rules)
+             *     Controls when auto-matching runs for this library.
+             *     - Omit field: keep existing value
+             *     - Set to null: clear the conditions
+             *     - Set to value: update the conditions
+             */
+            autoMatchConditions?: Record<string, never> | null;
             /** @description Book strategy-specific configuration (JSON, mutable) */
             bookConfig?: unknown;
             bookStrategy?: null | components["schemas"]["BookStrategy"];
@@ -11870,6 +12623,14 @@ export interface components {
              */
             path?: string | null;
             scanningConfig?: null | components["schemas"]["ScanningConfigDto"];
+            /**
+             * @description Title preprocessing rules (JSON array of regex rules)
+             *     Applied during scan to clean series titles before metadata search.
+             *     - Omit field: keep existing value
+             *     - Set to null: clear the rules
+             *     - Set to value: update the rules
+             */
+            titlePreprocessingRules?: Record<string, never> | null;
         };
         /** @description Request to update metadata lock states */
         UpdateMetadataLocksRequest: {
@@ -11948,6 +12709,8 @@ export interface components {
         UpdatePluginRequest: {
             /** @description Updated command arguments */
             args?: string[] | null;
+            /** @description Auto-match conditions (JSON object with mode and rules) */
+            autoMatchConditions?: unknown;
             /** @description Updated command */
             command?: string | null;
             /** @description Updated configuration */
@@ -11977,6 +12740,12 @@ export interface components {
             rateLimitRequestsPerMinute?: number | null;
             /** @description Updated scopes */
             scopes?: string[] | null;
+            /** @description Preprocessing rules for search queries (JSON array of regex rules) */
+            searchPreprocessingRules?: unknown;
+            /** @description Handlebars template for customizing search queries */
+            searchQueryTemplate?: string | null;
+            /** @description Whether to skip search when external ID exists for this plugin */
+            useExistingExternalId?: boolean | null;
             /** @description Updated working directory */
             workingDirectory?: string | null;
         };
@@ -13917,6 +14686,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarkReadResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_generate_book_thumbnails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkGenerateBookThumbnailsRequest"];
+            };
+        };
+        responses: {
+            /** @description Thumbnail generation task queued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkTaskResponse"];
                 };
             };
             /** @description Unauthorized */
@@ -16360,6 +17167,47 @@ export interface operations {
             };
         };
     };
+    reprocess_library_series_titles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Library ID */
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReprocessTitleRequest"];
+            };
+        };
+        responses: {
+            /** @description Task enqueued or dry run preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnqueueReprocessTitleResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Library not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_inventory_metrics: {
         parameters: {
             query?: never;
@@ -16870,6 +17718,120 @@ export interface operations {
             };
         };
     };
+    bulk_generate_series_book_thumbnails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkGenerateSeriesBookThumbnailsRequest"];
+            };
+        };
+        responses: {
+            /** @description Thumbnail generation task queued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkTaskResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_generate_series_thumbnails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkGenerateSeriesThumbnailsRequest"];
+            };
+        };
+        responses: {
+            /** @description Series thumbnail generation task queued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkTaskResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_reprocess_series_titles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkReprocessSeriesTitlesRequest"];
+            };
+        };
+        responses: {
+            /** @description Title reprocessing task queued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkTaskResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     bulk_mark_series_as_unread: {
         parameters: {
             query?: never;
@@ -17196,6 +18158,44 @@ export interface operations {
             };
         };
     };
+    reprocess_series_titles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReprocessSeriesTitlesRequest"];
+            };
+        };
+        responses: {
+            /** @description Task enqueued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnqueueReprocessTitleResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     apply_series_metadata: {
         parameters: {
             query?: never;
@@ -17402,6 +18402,46 @@ export interface operations {
             };
             /** @description No permission to edit series */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or plugin not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_series_search_title: {
+        parameters: {
+            query: {
+                /** @description Plugin ID to get preprocessing rules from */
+                pluginId: string;
+            };
+            header?: never;
+            path: {
+                /** @description Series ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preprocessed search title */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchTitleResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19277,6 +20317,47 @@ export interface operations {
                 };
             };
             /** @description Permission denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reprocess_series_title: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnqueueReprocessTitleRequest"];
+            };
+        };
+        responses: {
+            /** @description Task enqueued or dry run preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnqueueReprocessTitleResponse"];
+                };
+            };
+            /** @description Forbidden */
             403: {
                 headers: {
                     [name: string]: unknown;

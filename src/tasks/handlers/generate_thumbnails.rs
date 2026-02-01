@@ -36,16 +36,38 @@ impl TaskHandler for GenerateThumbnailsHandler {
             // Extract parameters from task
             let library_id = task.library_id;
             let series_id = task.series_id;
-            let force = task
-                .params
-                .as_ref()
+            let params = task.params.as_ref();
+            let force = params
                 .and_then(|p| p.get("force"))
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
+            let book_ids: Option<Vec<uuid::Uuid>> = params
+                .and_then(|p| p.get("book_ids"))
+                .and_then(|v| serde_json::from_value(v.clone()).ok());
+            let series_ids: Option<Vec<uuid::Uuid>> = params
+                .and_then(|p| p.get("series_ids"))
+                .and_then(|v| serde_json::from_value(v.clone()).ok());
 
             // Determine scope and get books
-            let books = if let Some(ser_id) = series_id {
-                // Series scope takes precedence
+            // Priority: book_ids > series_ids > series_id > library_id > all
+            let books = if let Some(ids) = &book_ids {
+                // Explicit book IDs take precedence
+                info!(
+                    "Generating thumbnails for {} specific books (force={})",
+                    ids.len(),
+                    force
+                );
+                BookRepository::get_by_ids(db, ids).await?
+            } else if let Some(ids) = &series_ids {
+                // Explicit series IDs take precedence over single series_id
+                info!(
+                    "Generating thumbnails for books in {} specific series (force={})",
+                    ids.len(),
+                    force
+                );
+                BookRepository::list_by_series_ids(db, ids).await?
+            } else if let Some(ser_id) = series_id {
+                // Single series scope
                 info!(
                     "Generating thumbnails for series {} (force={})",
                     ser_id, force

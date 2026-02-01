@@ -10,6 +10,7 @@ use codex::api::routes::v1::dto::common::PaginatedResponse;
 use codex::api::routes::v1::dto::library::{
     CreateLibraryRequest, LibraryDto, UpdateLibraryRequest,
 };
+use codex::api::routes::v1::dto::patch::PatchValue;
 use codex::db::repositories::{
     ApiKeyRepository, BookRepository, LibraryRepository, SeriesRepository, UserRepository,
 };
@@ -219,6 +220,8 @@ async fn test_create_library_success() {
         allowed_formats: None,
         excluded_patterns: None,
         default_reading_direction: None,
+        title_preprocessing_rules: None,
+        auto_match_conditions: None,
     };
 
     let request = post_json_request_with_auth("/api/v1/libraries", &create_request, &token);
@@ -254,6 +257,8 @@ async fn test_create_library_without_permission() {
         allowed_formats: None,
         excluded_patterns: None,
         default_reading_direction: None,
+        title_preprocessing_rules: None,
+        auto_match_conditions: None,
     };
 
     let request = post_json_request_with_auth("/api/v1/libraries", &create_request, &token);
@@ -305,6 +310,8 @@ async fn test_update_library_success() {
         allowed_formats: None,
         excluded_patterns: None,
         default_reading_direction: None,
+        title_preprocessing_rules: PatchValue::Absent,
+        auto_match_conditions: PatchValue::Absent,
     };
 
     let request = patch_json_request_with_auth(
@@ -346,6 +353,8 @@ async fn test_update_library_without_permission() {
         allowed_formats: None,
         excluded_patterns: None,
         default_reading_direction: None,
+        title_preprocessing_rules: PatchValue::Absent,
+        auto_match_conditions: PatchValue::Absent,
     };
 
     let request = patch_json_request_with_auth(
@@ -359,6 +368,156 @@ async fn test_update_library_without_permission() {
     assert_eq!(status, StatusCode::FORBIDDEN);
     let error = response.unwrap();
     assert_eq!(error.error, "Forbidden");
+}
+
+/// Test that sending an empty array clears preprocessing rules
+#[tokio::test]
+async fn test_update_library_clears_preprocessing_rules() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create temp directory
+    let library_path = temp_dir.path().join("library");
+    std::fs::create_dir(&library_path).unwrap();
+
+    // Create library with preprocessing rules
+    let mut params = codex::db::repositories::CreateLibraryParams::new(
+        "Test Library",
+        library_path.to_str().unwrap(),
+    );
+    params.title_preprocessing_rules =
+        Some(r#"[{"name":"Test Rule","pattern":"test","replacement":"replaced"}]"#.to_string());
+    let library = LibraryRepository::create_with_params(&db, params)
+        .await
+        .unwrap();
+
+    // Verify rules were set
+    let initial_library = LibraryRepository::get_by_id(&db, library.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(initial_library.title_preprocessing_rules.is_some());
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Send empty array to clear rules (using PatchValue::Value with empty array)
+    let update_request = UpdateLibraryRequest {
+        name: None,
+        path: None,
+        description: None,
+        is_active: None,
+        book_strategy: None,
+        book_config: None,
+        number_strategy: None,
+        number_config: None,
+        scanning_config: None,
+        allowed_formats: None,
+        excluded_patterns: None,
+        default_reading_direction: None,
+        title_preprocessing_rules: PatchValue::Value(serde_json::json!([])), // Empty array
+        auto_match_conditions: PatchValue::Absent,
+    };
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/libraries/{}", library.id),
+        &update_request,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<LibraryDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let updated = response.unwrap();
+    // Empty array or null should clear the rules
+    assert!(
+        updated.title_preprocessing_rules.is_none()
+            || updated
+                .title_preprocessing_rules
+                .as_ref()
+                .is_some_and(|v| v.as_array().is_some_and(|a| a.is_empty()))
+    );
+
+    // Verify in database
+    let db_library = LibraryRepository::get_by_id(&db, library.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(db_library.title_preprocessing_rules.is_none());
+}
+
+/// Test that sending null clears auto-match conditions
+#[tokio::test]
+async fn test_update_library_clears_auto_match_conditions() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create temp directory
+    let library_path = temp_dir.path().join("library");
+    std::fs::create_dir(&library_path).unwrap();
+
+    // Create library with auto-match conditions
+    let mut params = codex::db::repositories::CreateLibraryParams::new(
+        "Test Library",
+        library_path.to_str().unwrap(),
+    );
+    params.auto_match_conditions = Some(
+        r#"{"mode":"all","rules":[{"field":"book_count","operator":"gte","value":1}]}"#.to_string(),
+    );
+    let library = LibraryRepository::create_with_params(&db, params)
+        .await
+        .unwrap();
+
+    // Verify conditions were set
+    let initial_library = LibraryRepository::get_by_id(&db, library.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(initial_library.auto_match_conditions.is_some());
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Send null to clear conditions (using PatchValue::Null)
+    let update_request = UpdateLibraryRequest {
+        name: None,
+        path: None,
+        description: None,
+        is_active: None,
+        book_strategy: None,
+        book_config: None,
+        number_strategy: None,
+        number_config: None,
+        scanning_config: None,
+        allowed_formats: None,
+        excluded_patterns: None,
+        default_reading_direction: None,
+        title_preprocessing_rules: PatchValue::Absent,
+        auto_match_conditions: PatchValue::Null, // Null to clear
+    };
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/libraries/{}", library.id),
+        &update_request,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<LibraryDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let updated = response.unwrap();
+    assert!(
+        updated.auto_match_conditions.is_none(),
+        "Expected auto_match_conditions to be None, got: {:?}",
+        updated.auto_match_conditions
+    );
+
+    // Verify in database
+    let db_library = LibraryRepository::get_by_id(&db, library.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(db_library.auto_match_conditions.is_none());
 }
 
 // ============================================================================
@@ -715,6 +874,8 @@ async fn test_create_library_with_scheduler_succeeds_without_scheduler() {
         scanning_config: None,
         scan_immediately: false,
         default_reading_direction: None,
+        title_preprocessing_rules: None,
+        auto_match_conditions: None,
     };
 
     let request = post_json_request_with_auth("/api/v1/libraries", &request_body, &token);
@@ -763,6 +924,8 @@ async fn test_update_library_with_scheduler_succeeds_without_scheduler() {
         excluded_patterns: None,
         scanning_config: None,
         default_reading_direction: None,
+        title_preprocessing_rules: PatchValue::Absent,
+        auto_match_conditions: PatchValue::Absent,
     };
 
     let request = patch_json_request_with_auth(
@@ -802,4 +965,317 @@ async fn test_delete_library_with_scheduler_succeeds_without_scheduler() {
     // Verify library is deleted
     let deleted = LibraryRepository::get_by_id(&db, library.id).await.unwrap();
     assert!(deleted.is_none());
+}
+
+// ============================================================================
+// Reprocess Library Titles Tests
+// ============================================================================
+
+use codex::api::routes::v1::dto::series::{EnqueueReprocessTitleResponse, ReprocessTitleRequest};
+use codex::db::repositories::{SeriesMetadataRepository, TaskRepository};
+use codex::services::metadata::preprocessing::PreprocessingRule;
+use codex::tasks::handlers::{ReprocessSeriesTitlesHandler, TaskHandler};
+
+#[tokio::test]
+async fn test_reprocess_library_titles_success() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library with preprocessing rules
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Add preprocessing rules to the library
+    let rules = vec![PreprocessingRule::new(r"\s*\(Digital\)$", "")];
+    let rules_json = serde_json::to_string(&rules).unwrap();
+
+    use codex::db::entities::libraries;
+    use sea_orm::{ActiveModelTrait, EntityTrait, Set};
+    let library_model = libraries::Entity::find_by_id(library.id)
+        .one(&db)
+        .await
+        .unwrap()
+        .unwrap();
+    let mut active: libraries::ActiveModel = library_model.into();
+    active.title_preprocessing_rules = Set(Some(rules_json));
+    active.update(&db).await.unwrap();
+
+    // Create multiple series - some with "(Digital)" suffix, some without
+    SeriesRepository::create(&db, library.id, "One Piece (Digital)", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Naruto (Digital)", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Death Note", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Reprocess all titles (enqueues a fan-out task)
+    let request_body = ReprocessTitleRequest { dry_run: false };
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/libraries/{}/series/titles/reprocess", library.id),
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<EnqueueReprocessTitleResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let result = response.unwrap();
+    assert!(result.success);
+    assert_eq!(result.tasks_enqueued, 1);
+    assert_eq!(result.task_ids.len(), 1);
+
+    // Execute the fan-out task (which enqueues individual tasks)
+    let task = TaskRepository::get_by_id(&db, result.task_ids[0])
+        .await
+        .unwrap()
+        .unwrap();
+    let handler = ReprocessSeriesTitlesHandler::new();
+    let task_result = handler.handle(&task, &db, None).await.unwrap();
+
+    // The fan-out task should have enqueued 3 individual tasks
+    assert!(task_result.message.unwrap().contains("Enqueued 3"));
+}
+
+#[tokio::test]
+async fn test_reprocess_library_titles_dry_run() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library with preprocessing rules
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let rules = vec![PreprocessingRule::new(r"\s*\(Digital\)$", "")];
+    let rules_json = serde_json::to_string(&rules).unwrap();
+
+    use codex::db::entities::libraries;
+    use sea_orm::{ActiveModelTrait, EntityTrait, Set};
+    let library_model = libraries::Entity::find_by_id(library.id)
+        .one(&db)
+        .await
+        .unwrap()
+        .unwrap();
+    let mut active: libraries::ActiveModel = library_model.into();
+    active.title_preprocessing_rules = Set(Some(rules_json));
+    active.update(&db).await.unwrap();
+
+    // Create series
+    let series = SeriesRepository::create(&db, library.id, "Bleach (Digital)", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Dry run
+    let request_body = ReprocessTitleRequest { dry_run: true };
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/libraries/{}/series/titles/reprocess", library.id),
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<EnqueueReprocessTitleResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let result = response.unwrap();
+    assert!(result.success);
+    assert_eq!(result.tasks_enqueued, 0); // No task enqueued for dry run
+    assert!(result.message.contains("Dry run"));
+    assert!(result.message.contains("1 would change")); // 1 series would change
+
+    // Verify database was NOT updated
+    let metadata = SeriesMetadataRepository::get_by_series_id(&db, series.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(metadata.title, "Bleach (Digital)"); // Should still have the original title
+}
+
+#[tokio::test]
+async fn test_reprocess_library_titles_with_locked_series() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library with preprocessing rules
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let rules = vec![PreprocessingRule::new(r"\s*\(Digital\)$", "")];
+    let rules_json = serde_json::to_string(&rules).unwrap();
+
+    use codex::db::entities::libraries;
+    use sea_orm::{ActiveModelTrait, EntityTrait, Set};
+    let library_model = libraries::Entity::find_by_id(library.id)
+        .one(&db)
+        .await
+        .unwrap()
+        .unwrap();
+    let mut active: libraries::ActiveModel = library_model.into();
+    active.title_preprocessing_rules = Set(Some(rules_json));
+    active.update(&db).await.unwrap();
+
+    // Create series
+    let _series1 = SeriesRepository::create(&db, library.id, "One Piece (Digital)", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "Naruto (Digital)", None)
+        .await
+        .unwrap();
+
+    // Lock series2's title
+    use codex::db::entities::series_metadata;
+    let metadata = series_metadata::Entity::find_by_id(series2.id)
+        .one(&db)
+        .await
+        .unwrap()
+        .unwrap();
+    let mut active_meta: series_metadata::ActiveModel = metadata.into();
+    active_meta.title_lock = Set(true);
+    active_meta.update(&db).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Reprocess (enqueues a fan-out task)
+    let request_body = ReprocessTitleRequest { dry_run: false };
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/libraries/{}/series/titles/reprocess", library.id),
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<EnqueueReprocessTitleResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let result = response.unwrap();
+    assert!(result.success);
+    assert_eq!(result.tasks_enqueued, 1);
+
+    // Execute the fan-out task (which enqueues individual tasks)
+    let task = TaskRepository::get_by_id(&db, result.task_ids[0])
+        .await
+        .unwrap()
+        .unwrap();
+    let handler = ReprocessSeriesTitlesHandler::new();
+    let task_result = handler.handle(&task, &db, None).await.unwrap();
+    assert!(task_result.message.unwrap().contains("Enqueued 2")); // 2 individual tasks
+}
+
+#[tokio::test]
+async fn test_reprocess_library_titles_empty_library() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library with no series
+    let library =
+        LibraryRepository::create(&db, "Empty Library", "/lib", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = ReprocessTitleRequest { dry_run: false };
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/libraries/{}/series/titles/reprocess", library.id),
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<EnqueueReprocessTitleResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let result = response.unwrap();
+    assert!(result.success);
+    assert_eq!(result.tasks_enqueued, 1); // Still enqueues a task (which will find 0 series)
+
+    // Execute the fan-out task
+    let task = TaskRepository::get_by_id(&db, result.task_ids[0])
+        .await
+        .unwrap()
+        .unwrap();
+    let handler = ReprocessSeriesTitlesHandler::new();
+    let task_result = handler.handle(&task, &db, None).await.unwrap();
+    assert!(task_result
+        .message
+        .unwrap()
+        .contains("No series to process"));
+}
+
+#[tokio::test]
+async fn test_reprocess_library_titles_no_rules() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library WITHOUT preprocessing rules
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with "(Digital)" suffix
+    let _series = SeriesRepository::create(&db, library.id, "One Piece (Digital)", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Reprocess (enqueues a fan-out task)
+    let request_body = ReprocessTitleRequest { dry_run: false };
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/libraries/{}/series/titles/reprocess", library.id),
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<EnqueueReprocessTitleResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let result = response.unwrap();
+    assert!(result.success);
+    assert_eq!(result.tasks_enqueued, 1);
+
+    // Execute the fan-out task (which enqueues individual tasks)
+    let task = TaskRepository::get_by_id(&db, result.task_ids[0])
+        .await
+        .unwrap()
+        .unwrap();
+    let handler = ReprocessSeriesTitlesHandler::new();
+    let task_result = handler.handle(&task, &db, None).await.unwrap();
+    // No rules, so title won't change - but task should still be enqueued
+    assert!(task_result.message.unwrap().contains("Enqueued 1"));
+}
+
+#[tokio::test]
+async fn test_reprocess_library_titles_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = ReprocessTitleRequest { dry_run: false };
+    let non_existent_id = uuid::Uuid::new_v4();
+    let request = post_json_request_with_auth(
+        &format!(
+            "/api/v1/libraries/{}/series/titles/reprocess",
+            non_existent_id
+        ),
+        &request_body,
+        &token,
+    );
+    let (status, _response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }

@@ -37,6 +37,7 @@ import {
 	IconPlugConnected,
 	IconPlus,
 	IconRefresh,
+	IconSettings,
 	IconTrash,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -52,6 +53,7 @@ import {
 	type PluginHealthStatus,
 	pluginsApi,
 } from "@/api/plugins";
+import { SearchConfigModal } from "@/components/forms/SearchConfigModal";
 
 // Health status badge color mapping
 const healthStatusColors: Record<PluginHealthStatus, string> = {
@@ -150,6 +152,8 @@ export function PluginsSettings() {
 	] = useDisclosure(false);
 	const [selectedPlugin, setSelectedPlugin] = useState<PluginDto | null>(null);
 	const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+	const [searchConfigPlugin, setSearchConfigPlugin] =
+		useState<PluginDto | null>(null);
 
 	// Fetch plugins
 	const {
@@ -599,6 +603,21 @@ export function PluginsSettings() {
 																</ActionIcon>
 															</Tooltip>
 														)}
+														{plugin.manifest?.capabilities?.metadataProvider &&
+															plugin.manifest.capabilities.metadataProvider
+																.length > 0 && (
+																<Tooltip label="Configure Search">
+																	<ActionIcon
+																		variant="subtle"
+																		color="blue"
+																		onClick={() =>
+																			setSearchConfigPlugin(plugin)
+																		}
+																	>
+																		<IconSettings size={16} />
+																	</ActionIcon>
+																</Tooltip>
+															)}
 														<Tooltip label="Edit Plugin">
 															<ActionIcon
 																variant="subtle"
@@ -746,6 +765,15 @@ export function PluginsSettings() {
 					</Group>
 				</Stack>
 			</Modal>
+
+			{/* Search Config Modal */}
+			{searchConfigPlugin && (
+				<SearchConfigModal
+					plugin={searchConfigPlugin}
+					opened={!!searchConfigPlugin}
+					onClose={() => setSearchConfigPlugin(null)}
+				/>
+			)}
 		</Box>
 	);
 }

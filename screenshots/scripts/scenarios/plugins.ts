@@ -223,6 +223,40 @@ async function createPluginScreenshots(page: Page): Promise<void> {
   // Capture plugins list with new plugin (after test)
   await captureScreenshot(page, "plugins/settings-plugins-with-echo");
 
+  // === SEARCH CONFIG MODAL (Separate from creation, for metadata providers) ===
+  // Click the gear icon to open Search Configuration modal
+  const searchConfigButton = page.locator('button:has(svg.tabler-icon-settings)').first();
+  if ((await searchConfigButton.count()) > 0) {
+    await searchConfigButton.click();
+    await page.waitForSelector('[role="dialog"], .mantine-Modal-content', { state: "visible", timeout: 5000 });
+    await page.waitForTimeout(500);
+
+    // Capture Template tab (first tab, shown by default)
+    await captureScreenshot(page, "plugins/search-config-template");
+
+    // Click Preprocessing tab
+    const preprocessingTab = await page.$('button[role="tab"]:has-text("Preprocessing")');
+    if (preprocessingTab) {
+      await preprocessingTab.click();
+      await page.waitForTimeout(300);
+      await captureScreenshot(page, "plugins/search-config-preprocessing");
+    }
+
+    // Click Conditions tab
+    const conditionsTab = await page.$('button[role="tab"]:has-text("Conditions")');
+    if (conditionsTab) {
+      await conditionsTab.click();
+      await page.waitForTimeout(300);
+      await captureScreenshot(page, "plugins/search-config-conditions");
+    }
+
+    // Close the modal
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+  } else {
+    console.log("      ⚠️  Search Config button not found (plugin may not be a metadata provider)");
+  }
+
   console.log("      ✓ Plugin creation screenshots captured");
 }
 

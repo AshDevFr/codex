@@ -10,6 +10,12 @@
 
 use sea_orm::ActiveValue;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use utoipa::openapi::{RefOr, Schema};
+use utoipa::{PartialSchema, ToSchema};
+
+// Note: ComposeSchema is not implemented here because we use #[schema(value_type = ...)]
+// on the fields that use PatchValue, which tells utoipa to bypass the normal schema
+// derivation for those fields.
 
 /// Represents a field in a PATCH request that can be:
 /// - Absent (not included in JSON) -> Don't change
@@ -158,9 +164,22 @@ impl<T: Serialize> Serialize for PatchValue<T> {
     }
 }
 
-// Note: For OpenAPI schema support, the PatchSeriesMetadataRequest DTO
-// uses schema(nullable = true) annotations on PatchValue fields since
-// PatchValue<T> serializes as Option<T> (nullable type).
+// OpenAPI schema support: PatchValue<T> is represented as a nullable type
+// that can be omitted, set to null, or set to a value of type T.
+impl<T: PartialSchema> PartialSchema for PatchValue<T> {
+    fn schema() -> RefOr<Schema> {
+        // For OpenAPI, we represent PatchValue<T> as a nullable version of T's schema
+        // The field being optional (can be omitted) is handled by the parent struct
+        T::schema()
+    }
+}
+
+impl<T: ToSchema> ToSchema for PatchValue<T> {
+    fn name() -> std::borrow::Cow<'static, str> {
+        // Use the inner type's name since this is just a nullable wrapper
+        T::name()
+    }
+}
 
 #[cfg(test)]
 mod tests {

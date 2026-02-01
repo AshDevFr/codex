@@ -96,4 +96,9 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/libraries/:library_id/metadata/auto-match/task",
             post(handlers::plugin_actions::enqueue_library_auto_match_tasks),
         )
+        // Series title reprocessing
+        .route(
+            "/libraries/:library_id/series/titles/reprocess",
+            post(handlers::task_queue::reprocess_library_series_titles),
+        )
 }

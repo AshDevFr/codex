@@ -13,6 +13,8 @@ import {
 	IconBook,
 	IconBookOff,
 	IconChevronDown,
+	IconPhotoPlus,
+	IconRefresh,
 	IconWand,
 	IconX,
 } from "@tabler/icons-react";
@@ -33,7 +35,8 @@ import {
  * Shows:
  * - X button to clear selection
  * - Count of selected items
- * - Action buttons: Mark Read, Mark Unread, Analyze
+ * - Action buttons: Mark Read, Mark Unread
+ * - More menu: Analyze, Thumbnails (generate missing / regenerate all), Reprocess Titles
  * - Plugin actions dropdown for series:bulk scope
  *
  * Uses bulk API endpoints for efficient batch operations.
@@ -247,6 +250,101 @@ export function BulkSelectionToolbar() {
 		},
 	});
 
+	// Bulk generate book thumbnails (by book IDs)
+	const bulkGenerateBookThumbnailsMutation = useMutation({
+		mutationFn: ({ bookIds, force }: { bookIds: string[]; force: boolean }) =>
+			booksApi.bulkGenerateThumbnails(bookIds, force),
+		onSuccess: (data) => {
+			notifications.show({
+				title: "Thumbnail generation started",
+				message: data.message,
+				color: "blue",
+			});
+			clearSelection();
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Failed to start thumbnail generation",
+				message: error.message || "Failed to queue thumbnail generation",
+				color: "red",
+			});
+		},
+	});
+
+	// Bulk generate series thumbnails
+	const bulkGenerateSeriesThumbnailsMutation = useMutation({
+		mutationFn: ({
+			seriesIds,
+			force,
+		}: {
+			seriesIds: string[];
+			force: boolean;
+		}) => seriesApi.bulkGenerateSeriesThumbnails(seriesIds, force),
+		onSuccess: (data) => {
+			notifications.show({
+				title: "Series thumbnail generation started",
+				message: data.message,
+				color: "blue",
+			});
+			clearSelection();
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Failed to start thumbnail generation",
+				message: error.message || "Failed to queue thumbnail generation",
+				color: "red",
+			});
+		},
+	});
+
+	// Bulk generate book thumbnails for series
+	const bulkGenerateSeriesBookThumbnailsMutation = useMutation({
+		mutationFn: ({
+			seriesIds,
+			force,
+		}: {
+			seriesIds: string[];
+			force: boolean;
+		}) => seriesApi.bulkGenerateBookThumbnails(seriesIds, force),
+		onSuccess: (data) => {
+			notifications.show({
+				title: "Book thumbnail generation started",
+				message: data.message,
+				color: "blue",
+			});
+			clearSelection();
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Failed to start book thumbnail generation",
+				message: error.message || "Failed to queue book thumbnail generation",
+				color: "red",
+			});
+		},
+	});
+
+	// Bulk reprocess series titles
+	const bulkReprocessTitlesMutation = useMutation({
+		mutationFn: (seriesIds: string[]) =>
+			seriesApi.bulkReprocessTitles(seriesIds),
+		onSuccess: (data) => {
+			notifications.show({
+				title: "Title reprocessing started",
+				message: data.message,
+				color: "blue",
+			});
+			refetchAll();
+			clearSelection();
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Failed to start title reprocessing",
+				message: error.message || "Failed to queue title reprocessing",
+				color: "red",
+			});
+		},
+	});
+
 	// Keyboard shortcut: Escape to clear selection
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
@@ -272,15 +370,17 @@ export function BulkSelectionToolbar() {
 	const markUnreadMutation = isBooks
 		? bulkMarkBooksUnreadMutation
 		: bulkMarkSeriesUnreadMutation;
-	const analyzeMutation = isBooks
-		? bulkAnalyzeBooksMutation
-		: bulkAnalyzeSeriesMutation;
 
 	const isAnyPending =
 		markReadMutation.isPending ||
 		markUnreadMutation.isPending ||
-		analyzeMutation.isPending ||
-		bulkAutoMatchMutation.isPending;
+		bulkAnalyzeBooksMutation.isPending ||
+		bulkAnalyzeSeriesMutation.isPending ||
+		bulkAutoMatchMutation.isPending ||
+		bulkGenerateBookThumbnailsMutation.isPending ||
+		bulkGenerateSeriesThumbnailsMutation.isPending ||
+		bulkGenerateSeriesBookThumbnailsMutation.isPending ||
+		bulkReprocessTitlesMutation.isPending;
 
 	// Get available plugin actions based on selection type
 	const pluginActions = isBooks
@@ -320,6 +420,55 @@ export function BulkSelectionToolbar() {
 		} else {
 			bulkAnalyzeSeriesMutation.mutate(selectedIds);
 		}
+	};
+
+	// Book thumbnail handlers (for books selection)
+	const handleGenerateMissingBookThumbnails = () => {
+		bulkGenerateBookThumbnailsMutation.mutate({
+			bookIds: selectedIds,
+			force: false,
+		});
+	};
+
+	const handleRegenerateAllBookThumbnails = () => {
+		bulkGenerateBookThumbnailsMutation.mutate({
+			bookIds: selectedIds,
+			force: true,
+		});
+	};
+
+	// Series thumbnail handlers (for series selection)
+	const handleGenerateMissingSeriesThumbnails = () => {
+		bulkGenerateSeriesThumbnailsMutation.mutate({
+			seriesIds: selectedIds,
+			force: false,
+		});
+	};
+
+	const handleRegenerateAllSeriesThumbnails = () => {
+		bulkGenerateSeriesThumbnailsMutation.mutate({
+			seriesIds: selectedIds,
+			force: true,
+		});
+	};
+
+	// Books in series thumbnail handlers (for series selection)
+	const handleGenerateMissingBooksInSeriesThumbnails = () => {
+		bulkGenerateSeriesBookThumbnailsMutation.mutate({
+			seriesIds: selectedIds,
+			force: false,
+		});
+	};
+
+	const handleRegenerateAllBooksInSeriesThumbnails = () => {
+		bulkGenerateSeriesBookThumbnailsMutation.mutate({
+			seriesIds: selectedIds,
+			force: true,
+		});
+	};
+
+	const handleReprocessTitles = () => {
+		bulkReprocessTitlesMutation.mutate(selectedIds);
 	};
 
 	const itemLabel = isBooks
@@ -391,20 +540,132 @@ export function BulkSelectionToolbar() {
 					</Button>
 				</Tooltip>
 
-				<Tooltip label={`Analyze ${count} ${itemLabel}`}>
-					<Button
-						variant="white"
-						size="xs"
-						leftSection={<IconAnalyze size={16} />}
-						onClick={handleAnalyze}
-						disabled={isAnyPending}
-						loading={analyzeMutation.isPending}
-					>
-						Analyze
-					</Button>
-				</Tooltip>
+				{/* More actions menu - for books */}
+				{isBooks && (
+					<Menu shadow="md" width={220} position="bottom-end">
+						<Menu.Target>
+							<Tooltip label="More actions">
+								<Button
+									variant="white"
+									size="xs"
+									rightSection={<IconChevronDown size={14} />}
+									disabled={isAnyPending}
+									aria-label="More actions"
+								>
+									More
+								</Button>
+							</Tooltip>
+						</Menu.Target>
 
-				{/* Plugin actions menu (only for series) */}
+						<Menu.Dropdown>
+							<Menu.Label>Analysis</Menu.Label>
+							<Menu.Item
+								leftSection={<IconAnalyze size={16} />}
+								onClick={handleAnalyze}
+								disabled={isAnyPending}
+							>
+								Analyze
+							</Menu.Item>
+
+							<Menu.Divider />
+
+							<Menu.Label>Book Thumbnails</Menu.Label>
+							<Menu.Item
+								leftSection={<IconPhotoPlus size={16} />}
+								onClick={handleGenerateMissingBookThumbnails}
+								disabled={isAnyPending}
+							>
+								Generate Missing
+							</Menu.Item>
+							<Menu.Item
+								leftSection={<IconRefresh size={16} />}
+								onClick={handleRegenerateAllBookThumbnails}
+								disabled={isAnyPending}
+							>
+								Regenerate All
+							</Menu.Item>
+						</Menu.Dropdown>
+					</Menu>
+				)}
+
+				{/* More actions menu - for series */}
+				{!isBooks && (
+					<Menu shadow="md" width={220} position="bottom-end">
+						<Menu.Target>
+							<Tooltip label="More actions">
+								<Button
+									variant="white"
+									size="xs"
+									rightSection={<IconChevronDown size={14} />}
+									disabled={isAnyPending}
+									aria-label="More actions"
+								>
+									More
+								</Button>
+							</Tooltip>
+						</Menu.Target>
+
+						<Menu.Dropdown>
+							<Menu.Label>Analysis</Menu.Label>
+							<Menu.Item
+								leftSection={<IconAnalyze size={16} />}
+								onClick={handleAnalyze}
+								disabled={isAnyPending}
+							>
+								Analyze
+							</Menu.Item>
+
+							<Menu.Divider />
+
+							<Menu.Label>Series Thumbnails</Menu.Label>
+							<Menu.Item
+								leftSection={<IconPhotoPlus size={16} />}
+								onClick={handleGenerateMissingSeriesThumbnails}
+								disabled={isAnyPending}
+							>
+								Generate Missing
+							</Menu.Item>
+							<Menu.Item
+								leftSection={<IconRefresh size={16} />}
+								onClick={handleRegenerateAllSeriesThumbnails}
+								disabled={isAnyPending}
+							>
+								Regenerate All
+							</Menu.Item>
+
+							<Menu.Divider />
+
+							<Menu.Label>Books in Series Thumbnails</Menu.Label>
+							<Menu.Item
+								leftSection={<IconPhotoPlus size={16} />}
+								onClick={handleGenerateMissingBooksInSeriesThumbnails}
+								disabled={isAnyPending}
+							>
+								Generate Missing
+							</Menu.Item>
+							<Menu.Item
+								leftSection={<IconRefresh size={16} />}
+								onClick={handleRegenerateAllBooksInSeriesThumbnails}
+								disabled={isAnyPending}
+							>
+								Regenerate All
+							</Menu.Item>
+
+							<Menu.Divider />
+
+							<Menu.Label>Title Management</Menu.Label>
+							<Menu.Item
+								leftSection={<IconRefresh size={16} />}
+								onClick={handleReprocessTitles}
+								disabled={isAnyPending}
+							>
+								Reprocess Titles
+							</Menu.Item>
+						</Menu.Dropdown>
+					</Menu>
+				)}
+
+				{/* Plugin actions menu */}
 				{hasPluginActions && (
 					<Menu shadow="md" width={200} position="bottom-end">
 						<Menu.Target>

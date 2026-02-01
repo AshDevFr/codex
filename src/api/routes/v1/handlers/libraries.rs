@@ -83,6 +83,12 @@ async fn library_to_dto(db: &DatabaseConnection, library: libraries::Model) -> L
         allowed_formats,
         excluded_patterns: library.excluded_patterns,
         default_reading_direction: library.default_reading_direction,
+        title_preprocessing_rules: library
+            .title_preprocessing_rules
+            .and_then(|s| serde_json::from_str(&s).ok()),
+        auto_match_conditions: library
+            .auto_match_conditions
+            .and_then(|s| serde_json::from_str(&s).ok()),
     }
 }
 
@@ -276,6 +282,18 @@ pub async fn create_library(
         params.default_reading_direction = Some(direction.clone());
     }
 
+    if let Some(rules) = &request.title_preprocessing_rules {
+        let rules_json = serde_json::to_string(rules)
+            .map_err(|e| ApiError::BadRequest(format!("Invalid preprocessing rules: {}", e)))?;
+        params.title_preprocessing_rules = Some(rules_json);
+    }
+
+    if let Some(conditions) = &request.auto_match_conditions {
+        let conditions_json = serde_json::to_string(conditions)
+            .map_err(|e| ApiError::BadRequest(format!("Invalid auto-match conditions: {}", e)))?;
+        params.auto_match_conditions = Some(conditions_json);
+    }
+
     // Create library with all params at once
     let library = LibraryRepository::create_with_params(&state.db, params)
         .await
@@ -388,6 +406,39 @@ pub async fn update_library(
     // Handle number_config if provided (mutable)
     if let Some(number_config) = request.number_config {
         library.number_config = Some(number_config);
+    }
+    // Handle title_preprocessing_rules using PatchValue semantics:
+    // - Absent: keep existing value
+    // - Null or empty array: clear the rules
+    // - Value: set the rules
+    if let Some(maybe_rules) = request.title_preprocessing_rules.into_nested_option() {
+        match maybe_rules {
+            None => library.title_preprocessing_rules = None,
+            Some(rules) if rules.as_array().is_some_and(|arr| arr.is_empty()) => {
+                library.title_preprocessing_rules = None
+            }
+            Some(rules) => {
+                let rules_json = serde_json::to_string(&rules).map_err(|e| {
+                    ApiError::BadRequest(format!("Invalid preprocessing rules: {}", e))
+                })?;
+                library.title_preprocessing_rules = Some(rules_json);
+            }
+        }
+    }
+    // Handle auto_match_conditions using PatchValue semantics:
+    // - Absent: keep existing value
+    // - Null: clear the conditions
+    // - Value: set the conditions
+    if let Some(maybe_conditions) = request.auto_match_conditions.into_nested_option() {
+        match maybe_conditions {
+            None => library.auto_match_conditions = None,
+            Some(conditions) => {
+                let conditions_json = serde_json::to_string(&conditions).map_err(|e| {
+                    ApiError::BadRequest(format!("Invalid auto-match conditions: {}", e))
+                })?;
+                library.auto_match_conditions = Some(conditions_json);
+            }
+        }
     }
     // Note: description and is_active fields don't exist in the entity
     // Note: series_strategy and series_config are IMMUTABLE after creation

@@ -26,8 +26,8 @@ use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, CleanupBookFilesHandler, CleanupOrphanedFilesHandler,
     CleanupPdfCacheHandler, CleanupSeriesFilesHandler, FindDuplicatesHandler,
     GenerateSeriesThumbnailHandler, GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler,
-    GenerateThumbnailsHandler, PluginAutoMatchHandler, PurgeDeletedHandler, ScanLibraryHandler,
-    TaskHandler,
+    GenerateThumbnailsHandler, PluginAutoMatchHandler, PurgeDeletedHandler,
+    ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
 };
 
 /// Task worker that processes tasks from the queue
@@ -70,6 +70,15 @@ impl TaskWorker {
         handlers.insert(
             "find_duplicates".to_string(),
             Arc::new(FindDuplicatesHandler::new()),
+        );
+        // Reprocess series title handlers (no dependencies)
+        handlers.insert(
+            "reprocess_series_title".to_string(),
+            Arc::new(ReprocessSeriesTitleHandler::new()),
+        );
+        handlers.insert(
+            "reprocess_series_titles".to_string(),
+            Arc::new(ReprocessSeriesTitlesHandler::new()),
         );
 
         // Generate worker ID from hostname or random UUID

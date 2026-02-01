@@ -447,4 +447,20 @@ export const booksApi = {
 		);
 		return response.data;
 	},
+
+	/**
+	 * Queue thumbnail generation for multiple books in bulk
+	 * @param bookIds - Array of book IDs to generate thumbnails for
+	 * @param force - Whether to regenerate thumbnails even if they exist (default: false)
+	 */
+	bulkGenerateThumbnails: async (
+		bookIds: string[],
+		force = false,
+	): Promise<{ taskId: string; message: string }> => {
+		const response = await api.post<{ taskId: string; message: string }>(
+			"/books/bulk/thumbnails/generate",
+			{ bookIds, force },
+		);
+		return response.data;
+	},
 };

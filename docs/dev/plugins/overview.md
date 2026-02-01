@@ -135,6 +135,74 @@ Then configure:
 4. **Health Monitoring**: Failed requests are tracked; plugins auto-disable after repeated failures
 5. **Shutdown**: On server shutdown or plugin disable, Codex sends `shutdown` request
 
+## Advanced Configuration
+
+Codex provides advanced options to customize how plugins search for metadata and when auto-matching occurs.
+
+### Search Query Templates
+
+Plugins can use Handlebars templates to customize the search query. Configure a template per plugin:
+
+```
+{{metadata.title}} {{metadata.year}}
+```
+
+Available template fields:
+- `metadata.title` - Series title (cleaned by preprocessing)
+- `metadata.year` - Publication year
+- `metadata.publisher` - Publisher name
+- `metadata.language` - Language code
+- `book_count` - Number of books in the series
+
+See [Handlebars Helpers](#handlebars-helpers) for available template functions.
+
+### Search Preprocessing Rules
+
+Apply regex-based rules to clean search queries before sending to the plugin:
+
+```json
+[
+  {
+    "pattern": "\\s*\\(Digital\\)$",
+    "replacement": "",
+    "description": "Remove (Digital) suffix"
+  }
+]
+```
+
+Preprocessing can be configured at both library and plugin levels:
+- **Library rules**: Applied first, affect all plugins
+- **Plugin rules**: Applied after library rules, plugin-specific
+
+### Auto-Match Conditions
+
+Control when auto-matching occurs using condition rules:
+
+```json
+{
+  "mode": "all",
+  "rules": [
+    {
+      "field": "external_ids.plugin:mangabaka",
+      "operator": "is_null"
+    },
+    {
+      "field": "book_count",
+      "operator": "gte",
+      "value": 1
+    }
+  ]
+}
+```
+
+Conditions can be set at library level (applies to all plugins) and plugin level (applies to specific plugin).
+
+### External ID Reuse
+
+Enable `use_existing_external_id` on a plugin to skip searching when the series already has an external ID for that plugin. The plugin will directly fetch updated metadata using the existing ID.
+
+For detailed configuration options, see the [Preprocessing Rules Guide](/docs/preprocessing-rules.md).
+
 ## Security
 
 - **RBAC**: Plugins have configurable permissions (what metadata they can write)
@@ -147,3 +215,4 @@ Then configure:
 - [Writing Plugins](./writing-plugins.md) - Create your own plugin
 - [Plugin Protocol](./protocol.md) - Technical protocol specification
 - [Plugin SDK](./sdk.md) - TypeScript SDK documentation
+- [Preprocessing Rules Guide](/docs/preprocessing-rules.md) - Configure search preprocessing and conditions

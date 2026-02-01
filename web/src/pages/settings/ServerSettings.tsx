@@ -213,10 +213,6 @@ function CustomMetadataTemplateSection({
 }) {
 	// Local state for editing (not auto-saved)
 	const [localTemplate, setLocalTemplate] = useState(setting?.value ?? "");
-	// State for test data - synced when selecting example templates
-	const [testData, setTestData] = useState<Record<string, unknown> | undefined>(
-		undefined,
-	);
 
 	// Sync local state when setting value changes externally (e.g., from history restore)
 	useEffect(() => {
@@ -231,13 +227,13 @@ function CustomMetadataTemplateSection({
 		setLocalTemplate(setting?.value ?? "");
 	};
 
-	// Handle template selection - update local state and test data
+	// Handle template selection - update local state
+	// Note: sampleData is ignored as TemplateEditor now manages its own context
 	const handleTemplateSelect = (
 		template: string,
-		sampleData: Record<string, unknown>,
+		_sampleData: Record<string, unknown>,
 	) => {
 		setLocalTemplate(template);
-		setTestData(sampleData);
 	};
 
 	// Handle save
@@ -260,8 +256,6 @@ function CustomMetadataTemplateSection({
 				onChange={setLocalTemplate}
 				label="Custom Metadata Display Template"
 				description="Handlebars template for displaying custom metadata on series detail pages. The template is rendered as Markdown."
-				testData={testData}
-				onTestDataChange={setTestData}
 			/>
 			<Group justify="space-between">
 				<Group gap="xs">

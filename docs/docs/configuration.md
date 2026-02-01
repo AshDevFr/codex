@@ -700,6 +700,80 @@ Codex validates configuration at startup. Common errors:
 | Invalid port | Port outside 1-65535 range | Use a valid port number |
 | File permissions | Can't write to paths | Check directory permissions |
 
+## Library & Plugin Advanced Settings
+
+Libraries and plugins have advanced settings for metadata preprocessing and auto-match conditions. These are configured via the web UI or API, not the config file.
+
+### Library Settings
+
+Libraries support these optional settings for metadata processing:
+
+| Setting | Type | Description |
+|---------|------|-------------|
+| `title_preprocessing_rules` | JSON | Regex rules to clean series titles during scan |
+| `auto_match_conditions` | JSON | Conditions that must pass for auto-matching |
+
+#### Title Preprocessing Rules
+
+Clean up series directory names before they become display titles:
+
+```json
+[
+  {
+    "pattern": "\\s*\\(Digital\\)$",
+    "replacement": "",
+    "description": "Remove (Digital) suffix"
+  }
+]
+```
+
+Common patterns:
+- Remove "(Digital)" suffix: `\\s*\\(Digital\\)$` → ``
+- Remove "[Author]" prefix: `^\\[[^\\]]+\\]\\s*` → ``
+- Remove year suffix: `\\s*\\(\\d{4}\\)$` → ``
+
+#### Auto-Match Conditions
+
+Control when auto-matching occurs for series in this library:
+
+```json
+{
+  "mode": "all",
+  "rules": [
+    {
+      "field": "book_count",
+      "operator": "gte",
+      "value": 1
+    }
+  ]
+}
+```
+
+### Plugin Settings
+
+Plugins support these optional settings for search customization:
+
+| Setting | Type | Description |
+|---------|------|-------------|
+| `search_query_template` | string | Handlebars template for search query |
+| `search_preprocessing_rules` | JSON | Regex rules to clean search queries |
+| `auto_match_conditions` | JSON | Conditions that must pass for this plugin |
+| `use_existing_external_id` | boolean | Reuse existing external ID instead of searching |
+
+#### Search Query Template
+
+Customize the search query sent to the metadata provider:
+
+```handlebars
+{{metadata.title}}{{#if metadata.year}} ({{metadata.year}}){{/if}}
+```
+
+#### Use Existing External ID
+
+When enabled, if a series already has an external ID for this plugin, Codex will call `plugin.get(external_id)` directly instead of searching.
+
+For detailed configuration, see the [Preprocessing Rules Guide](./preprocessing-rules.md).
+
 ## Security Best Practices
 
 1. **Use strong JWT secrets** - Generate with `openssl rand -base64 32`
@@ -713,3 +787,4 @@ Codex validates configuration at startup. Common errors:
 - [Deploy Codex](./deployment)
 - [Set up your first library](./getting-started)
 - [Explore the API](./api)
+- [Configure Preprocessing Rules](./preprocessing-rules)

@@ -73,6 +73,13 @@ export interface EnqueueAutoMatchResponse {
 	message: string;
 }
 
+// Search title response (preprocessed title for metadata search)
+export interface SearchTitleResponse {
+	originalTitle: string;
+	searchTitle: string;
+	rulesApplied: number;
+}
+
 // Plugin Failure types
 export type PluginFailureDto = components["schemas"]["PluginFailureDto"];
 export type PluginFailuresResponse =
@@ -360,6 +367,21 @@ export const pluginsApi = {
  * Plugin Actions API for metadata operations on series and books
  */
 export const pluginActionsApi = {
+	/**
+	 * Get the preprocessed search title for a series
+	 * Applies plugin and library preprocessing rules to the series title
+	 */
+	getSearchTitle: async (
+		seriesId: string,
+		pluginId: string,
+	): Promise<SearchTitleResponse> => {
+		const response = await api.get<SearchTitleResponse>(
+			`/series/${seriesId}/metadata/search-title`,
+			{ params: { pluginId } },
+		);
+		return response.data;
+	},
+
 	/**
 	 * Preview metadata from a plugin for a series (dry run)
 	 * Returns field-by-field diff with status icons

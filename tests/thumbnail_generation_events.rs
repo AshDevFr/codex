@@ -59,6 +59,8 @@ async fn test_analyze_book_queues_thumbnail_task_on_cover_available() {
         let task_type = TaskType::GenerateThumbnails {
             library_id: Some(series.library_id),
             series_id: None,
+            series_ids: None,
+            book_ids: None,
             force: false,
         };
 

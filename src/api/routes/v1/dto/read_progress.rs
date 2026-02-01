@@ -166,3 +166,67 @@ pub struct BulkAnalyzeResponse {
     #[schema(example = "Enqueued 5 analysis tasks")]
     pub message: String,
 }
+
+/// Request to generate thumbnails for books in bulk (by book IDs)
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkGenerateBookThumbnailsRequest {
+    /// List of book IDs to generate thumbnails for
+    #[schema(example = json!(["550e8400-e29b-41d4-a716-446655440001", "550e8400-e29b-41d4-a716-446655440002"]))]
+    pub book_ids: Vec<Uuid>,
+
+    /// If true, regenerate thumbnails even if they exist
+    #[serde(default)]
+    #[schema(example = false)]
+    pub force: bool,
+}
+
+/// Request to generate book thumbnails for multiple series in bulk
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkGenerateSeriesBookThumbnailsRequest {
+    /// List of series IDs to generate book thumbnails for
+    #[schema(example = json!(["550e8400-e29b-41d4-a716-446655440001", "550e8400-e29b-41d4-a716-446655440002"]))]
+    pub series_ids: Vec<Uuid>,
+
+    /// If true, regenerate thumbnails even if they exist
+    #[serde(default)]
+    #[schema(example = false)]
+    pub force: bool,
+}
+
+/// Request to generate series thumbnails in bulk
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkGenerateSeriesThumbnailsRequest {
+    /// List of series IDs to generate thumbnails for
+    #[schema(example = json!(["550e8400-e29b-41d4-a716-446655440001", "550e8400-e29b-41d4-a716-446655440002"]))]
+    pub series_ids: Vec<Uuid>,
+
+    /// If true, regenerate thumbnails even if they exist
+    #[serde(default)]
+    #[schema(example = false)]
+    pub force: bool,
+}
+
+/// Request to reprocess series titles in bulk
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkReprocessSeriesTitlesRequest {
+    /// List of series IDs to reprocess titles for
+    #[schema(example = json!(["550e8400-e29b-41d4-a716-446655440001", "550e8400-e29b-41d4-a716-446655440002"]))]
+    pub series_ids: Vec<Uuid>,
+}
+
+/// Response for bulk task operations
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkTaskResponse {
+    /// ID of the fan-out task that was created
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
+    pub task_id: Uuid,
+
+    /// Message describing the operation
+    #[schema(example = "Thumbnail generation task queued for 5 series")]
+    pub message: String,
+}

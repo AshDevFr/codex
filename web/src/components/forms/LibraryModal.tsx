@@ -23,6 +23,7 @@ import {
 import { notifications } from "@mantine/notifications";
 import {
 	IconAlertCircle,
+	IconChecklist,
 	IconChevronRight,
 	IconFilter,
 	IconFolder,
@@ -31,6 +32,7 @@ import {
 	IconInfoCircle,
 	IconRefresh,
 	IconSettings,
+	IconTextSize,
 	IconWand,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -47,7 +49,12 @@ import type {
 	ScanningConfig,
 	SeriesStrategy,
 } from "@/types";
+import { type AutoMatchConditions, ConditionsEditor } from "./ConditionsEditor";
 import { CronInput } from "./CronInput";
+import {
+	type PreprocessingRule,
+	PreprocessingRulesEditor,
+} from "./PreprocessingRulesEditor";
 import { PreviewScanPanel } from "./PreviewScanPanel";
 import {
 	BookStrategySelector,
@@ -104,6 +111,14 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 	const [numberStrategy, setNumberStrategy] =
 		useState<NumberStrategy>("file_order");
 
+	// Metadata preprocessing state
+	const [preprocessingRules, setPreprocessingRules] = useState<
+		PreprocessingRule[]
+	>([]);
+	const [autoMatchConditions, setAutoMatchConditions] =
+		useState<AutoMatchConditions | null>(null);
+	const [testTitle, setTestTitle] = useState("");
+
 	// Load drives when modal opens (only for add mode)
 	const { data: drives, isLoading: drivesLoading } = useQuery({
 		queryKey: ["drives"],
@@ -158,6 +173,15 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 			setSeriesConfig((library.seriesConfig as Record<string, unknown>) || {});
 			setBookStrategy(library.bookStrategy || "filename");
 			setNumberStrategy(library.numberStrategy || "file_order");
+
+			// Initialize preprocessing state from library
+			setPreprocessingRules(
+				(library.titlePreprocessingRules as PreprocessingRule[]) || [],
+			);
+			setAutoMatchConditions(
+				(library.autoMatchConditions as AutoMatchConditions) || null,
+			);
+			setTestTitle("");
 		} else if (!isEditMode) {
 			// Reset form for add mode
 			setLibraryName("");
@@ -179,6 +203,10 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 			setSeriesConfig({});
 			setBookStrategy("filename");
 			setNumberStrategy("file_order");
+			// Reset preprocessing state
+			setPreprocessingRules([]);
+			setAutoMatchConditions(null);
+			setTestTitle("");
 		}
 	}, [opened, library, isEditMode]);
 
@@ -315,6 +343,10 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 						// Book naming and number strategies can be changed in edit mode
 						bookStrategy,
 						numberStrategy,
+						// Preprocessing fields - always send the value to allow clearing
+						// Empty array clears the rules, array with items sets them
+						titlePreprocessingRules: preprocessingRules,
+						autoMatchConditions: autoMatchConditions,
 					},
 				});
 			}
@@ -366,6 +398,10 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 					Object.keys(seriesConfig).length > 0 ? seriesConfig : undefined,
 				bookStrategy,
 				numberStrategy,
+				// Preprocessing fields
+				titlePreprocessingRules:
+					preprocessingRules.length > 0 ? preprocessingRules : undefined,
+				autoMatchConditions: autoMatchConditions || undefined,
 			});
 		}
 	};
@@ -685,6 +721,47 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 		</Stack>
 	);
 
+	// Preprocessing tab content
+	const renderPreprocessingTab = () => (
+		<Stack gap="md">
+			<Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+				<Text size="sm">
+					Configure how series titles are transformed before metadata search.
+					Rules are applied in order during library scans.
+				</Text>
+			</Alert>
+
+			<PreprocessingRulesEditor
+				value={preprocessingRules}
+				onChange={setPreprocessingRules}
+				testInput={testTitle}
+				onTestInputChange={setTestTitle}
+				label="Title Preprocessing Rules"
+				description="Transform series titles before metadata search. Rules are applied in order during library scans."
+			/>
+		</Stack>
+	);
+
+	// Conditions tab content
+	const renderConditionsTab = () => (
+		<Stack gap="md">
+			<Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+				<Text size="sm">
+					Define conditions that control when auto-matching runs for series in
+					this library. Without conditions, auto-matching will run for all
+					series.
+				</Text>
+			</Alert>
+
+			<ConditionsEditor
+				value={autoMatchConditions}
+				onChange={setAutoMatchConditions}
+				label="Auto-Match Conditions"
+				description="Define conditions that must be met for auto-matching to run on a series."
+			/>
+		</Stack>
+	);
+
 	// Strategy tab content
 	const renderStrategyTab = () => {
 		return (
@@ -790,6 +867,18 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 								>
 									Scanning
 								</Tabs.Tab>
+								<Tabs.Tab
+									value="preprocessing"
+									leftSection={<IconTextSize size={16} />}
+								>
+									Preprocessing
+								</Tabs.Tab>
+								<Tabs.Tab
+									value="conditions"
+									leftSection={<IconChecklist size={16} />}
+								>
+									Conditions
+								</Tabs.Tab>
 							</Tabs.List>
 
 							<Tabs.Panel value="general" pt="md">
@@ -806,6 +895,14 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 
 							<Tabs.Panel value="scanning" pt="md">
 								{renderScanningTab()}
+							</Tabs.Panel>
+
+							<Tabs.Panel value="preprocessing" pt="md">
+								{renderPreprocessingTab()}
+							</Tabs.Panel>
+
+							<Tabs.Panel value="conditions" pt="md">
+								{renderConditionsTab()}
 							</Tabs.Panel>
 						</Tabs>
 

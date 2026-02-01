@@ -285,6 +285,10 @@ impl PluginsRepository {
             last_success_at: Set(None),
             disabled_reason: Set(None),
             rate_limit_requests_per_minute: Set(rate_limit_requests_per_minute),
+            search_query_template: Set(None),
+            search_preprocessing_rules: Set(None),
+            auto_match_conditions: Set(None),
+            use_existing_external_id: Set(true),
             created_at: Set(now),
             updated_at: Set(now),
             created_by: Set(created_by),
@@ -381,6 +385,47 @@ impl PluginsRepository {
 
         if let Some(rate_limit) = rate_limit_requests_per_minute {
             active_model.rate_limit_requests_per_minute = Set(rate_limit);
+        }
+
+        let result = active_model.update(db).await?;
+        Ok(result)
+    }
+
+    /// Update plugin search configuration fields
+    ///
+    /// Updates the search-related fields: search_query_template, search_preprocessing_rules,
+    /// auto_match_conditions, and use_existing_external_id.
+    pub async fn update_search_config(
+        db: &DatabaseConnection,
+        id: Uuid,
+        search_query_template: Option<Option<String>>,
+        search_preprocessing_rules: Option<Option<String>>,
+        auto_match_conditions: Option<Option<String>>,
+        use_existing_external_id: Option<bool>,
+        updated_by: Option<Uuid>,
+    ) -> Result<plugins::Model> {
+        let existing = Self::get_by_id(db, id)
+            .await?
+            .ok_or_else(|| anyhow!("Plugin not found: {}", id))?;
+
+        let mut active_model: plugins::ActiveModel = existing.into();
+        active_model.updated_at = Set(Utc::now());
+        active_model.updated_by = Set(updated_by);
+
+        if let Some(template) = search_query_template {
+            active_model.search_query_template = Set(template);
+        }
+
+        if let Some(rules) = search_preprocessing_rules {
+            active_model.search_preprocessing_rules = Set(rules);
+        }
+
+        if let Some(conditions) = auto_match_conditions {
+            active_model.auto_match_conditions = Set(conditions);
+        }
+
+        if let Some(use_existing) = use_existing_external_id {
+            active_model.use_existing_external_id = Set(use_existing);
         }
 
         let result = active_model.update(db).await?;
@@ -594,6 +639,66 @@ impl PluginsRepository {
     /// Check if a plugin has credentials set
     pub fn has_credentials(plugin: &plugins::Model) -> bool {
         plugin.credentials.is_some()
+    }
+
+    // =========================================================================
+    // Search Configuration Operations
+    // =========================================================================
+
+    /// Get the search preprocessing rules for a plugin
+    ///
+    /// Parses the JSON `search_preprocessing_rules` column into a vector of rules.
+    /// Returns an empty vector if no rules are configured or if parsing fails.
+    pub fn get_search_preprocessing_rules(
+        plugin: &plugins::Model,
+    ) -> Vec<crate::services::metadata::preprocessing::PreprocessingRule> {
+        use crate::services::metadata::preprocessing::parse_preprocessing_rules;
+
+        match parse_preprocessing_rules(plugin.search_preprocessing_rules.as_deref()) {
+            Ok(rules) => rules,
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to parse search preprocessing rules for plugin {}: {}",
+                    plugin.id,
+                    e
+                );
+                Vec::new()
+            }
+        }
+    }
+
+    /// Get the auto-match conditions for a plugin
+    ///
+    /// Parses the JSON `auto_match_conditions` column.
+    /// Returns None if no conditions are configured or if parsing fails.
+    pub fn get_auto_match_conditions(
+        plugin: &plugins::Model,
+    ) -> Option<crate::services::metadata::preprocessing::AutoMatchConditions> {
+        use crate::services::metadata::preprocessing::parse_auto_match_conditions;
+
+        match parse_auto_match_conditions(plugin.auto_match_conditions.as_deref()) {
+            Ok(conditions) => conditions,
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to parse auto-match conditions for plugin {}: {}",
+                    plugin.id,
+                    e
+                );
+                None
+            }
+        }
+    }
+
+    /// Get the search query template for a plugin
+    ///
+    /// Returns the template string if configured, None otherwise.
+    pub fn get_search_query_template(plugin: &plugins::Model) -> Option<&str> {
+        plugin.search_query_template.as_deref()
+    }
+
+    /// Check if plugin should use existing external ID for direct metadata lookup
+    pub fn use_existing_external_id(plugin: &plugins::Model) -> bool {
+        plugin.use_existing_external_id
     }
 }
 

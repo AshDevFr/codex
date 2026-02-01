@@ -29,6 +29,8 @@ pub struct CreateLibraryParams {
     pub default_reading_direction: Option<String>,
     pub allowed_formats: Option<String>,
     pub excluded_patterns: Option<String>,
+    pub title_preprocessing_rules: Option<String>,
+    pub auto_match_conditions: Option<String>,
 }
 
 impl CreateLibraryParams {
@@ -47,6 +49,8 @@ impl CreateLibraryParams {
             default_reading_direction: None,
             allowed_formats: None,
             excluded_patterns: None,
+            title_preprocessing_rules: None,
+            auto_match_conditions: None,
         }
     }
 
@@ -84,6 +88,16 @@ impl CreateLibraryParams {
         self.scanning_config = config;
         self
     }
+
+    pub fn with_title_preprocessing_rules(mut self, rules: Option<String>) -> Self {
+        self.title_preprocessing_rules = rules;
+        self
+    }
+
+    pub fn with_auto_match_conditions(mut self, conditions: Option<String>) -> Self {
+        self.auto_match_conditions = conditions;
+        self
+    }
 }
 
 /// Repository for Library operations
@@ -113,6 +127,8 @@ impl LibraryRepository {
                 .unwrap_or_else(|| "LEFT_TO_RIGHT".to_string())),
             allowed_formats: Set(params.allowed_formats),
             excluded_patterns: Set(params.excluded_patterns),
+            title_preprocessing_rules: Set(params.title_preprocessing_rules),
+            auto_match_conditions: Set(params.auto_match_conditions),
             created_at: Set(now),
             updated_at: Set(now),
             last_scanned_at: Set(None),
@@ -199,6 +215,8 @@ impl LibraryRepository {
             default_reading_direction: Set(library.default_reading_direction.clone()),
             allowed_formats: Set(library.allowed_formats.clone()),
             excluded_patterns: Set(library.excluded_patterns.clone()),
+            title_preprocessing_rules: Set(library.title_preprocessing_rules.clone()),
+            auto_match_conditions: Set(library.auto_match_conditions.clone()),
             created_at: Set(library.created_at),
             updated_at: Set(Utc::now()),
             last_scanned_at: Set(library.last_scanned_at),
@@ -263,6 +281,50 @@ impl LibraryRepository {
             .number_strategy
             .parse::<NumberStrategy>()
             .unwrap_or_default()
+    }
+
+    /// Get the preprocessing rules for a library
+    ///
+    /// Parses the JSON `title_preprocessing_rules` column into a vector of rules.
+    /// Returns an empty vector if no rules are configured or if parsing fails.
+    pub fn get_preprocessing_rules(
+        library: &libraries::Model,
+    ) -> Vec<crate::services::metadata::preprocessing::PreprocessingRule> {
+        use crate::services::metadata::preprocessing::parse_preprocessing_rules;
+
+        match parse_preprocessing_rules(library.title_preprocessing_rules.as_deref()) {
+            Ok(rules) => rules,
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to parse preprocessing rules for library {}: {}",
+                    library.id,
+                    e
+                );
+                Vec::new()
+            }
+        }
+    }
+
+    /// Get the auto-match conditions for a library
+    ///
+    /// Parses the JSON `auto_match_conditions` column.
+    /// Returns None if no conditions are configured or if parsing fails.
+    pub fn get_auto_match_conditions(
+        library: &libraries::Model,
+    ) -> Option<crate::services::metadata::preprocessing::AutoMatchConditions> {
+        use crate::services::metadata::preprocessing::parse_auto_match_conditions;
+
+        match parse_auto_match_conditions(library.auto_match_conditions.as_deref()) {
+            Ok(conditions) => conditions,
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to parse auto-match conditions for library {}: {}",
+                    library.id,
+                    e
+                );
+                None
+            }
+        }
     }
 }
 
@@ -753,5 +815,147 @@ mod tests {
         assert_eq!(library.series_strategy, "series_volume_chapter");
         assert_eq!(library.book_strategy, "smart");
         assert_eq!(library.number_strategy, "filename");
+    }
+
+    #[tokio::test]
+    async fn test_get_preprocessing_rules_none() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // No preprocessing rules configured
+        let rules = LibraryRepository::get_preprocessing_rules(&library);
+        assert!(rules.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_preprocessing_rules_valid() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let mut library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Set preprocessing rules
+        library.title_preprocessing_rules = Some(
+            r#"[{"pattern": "\\s*\\(Digital\\)$", "replacement": "", "description": "Remove Digital suffix"}]"#
+                .to_string(),
+        );
+        LibraryRepository::update(db.sea_orm_connection(), &library)
+            .await
+            .unwrap();
+
+        let rules = LibraryRepository::get_preprocessing_rules(&library);
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].pattern, r"\s*\(Digital\)$");
+        assert_eq!(rules[0].replacement, "");
+        assert_eq!(
+            rules[0].description,
+            Some("Remove Digital suffix".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_preprocessing_rules_invalid_json() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let mut library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Set invalid JSON - should return empty vec
+        library.title_preprocessing_rules = Some("not valid json".to_string());
+
+        let rules = LibraryRepository::get_preprocessing_rules(&library);
+        assert!(rules.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_auto_match_conditions_none() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // No conditions configured
+        let conditions = LibraryRepository::get_auto_match_conditions(&library);
+        assert!(conditions.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_get_auto_match_conditions_valid() {
+        use crate::services::metadata::preprocessing::{ConditionMode, ConditionOperator};
+
+        let (db, _temp_dir) = create_test_db().await;
+
+        let mut library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Set auto-match conditions
+        library.auto_match_conditions = Some(
+            r#"{"mode": "all", "rules": [{"field": "book_count", "operator": "gte", "value": 1}]}"#
+                .to_string(),
+        );
+        LibraryRepository::update(db.sea_orm_connection(), &library)
+            .await
+            .unwrap();
+
+        let conditions = LibraryRepository::get_auto_match_conditions(&library);
+        assert!(conditions.is_some());
+
+        let conditions = conditions.unwrap();
+        assert_eq!(conditions.mode, ConditionMode::All);
+        assert_eq!(conditions.rules.len(), 1);
+        assert_eq!(conditions.rules[0].field, "book_count");
+        assert_eq!(conditions.rules[0].operator, ConditionOperator::Gte);
+    }
+
+    #[tokio::test]
+    async fn test_get_auto_match_conditions_invalid_json() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let mut library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Set invalid JSON - should return None
+        library.auto_match_conditions = Some("not valid json".to_string());
+
+        let conditions = LibraryRepository::get_auto_match_conditions(&library);
+        assert!(conditions.is_none());
     }
 }

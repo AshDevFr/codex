@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::patch::PatchValue;
 use super::ScanningConfigDto;
 use crate::models::{BookStrategy, NumberStrategy, SeriesStrategy};
 
@@ -91,6 +92,16 @@ pub struct LibraryDto {
     /// Default reading direction for books in this library (ltr, rtl, ttb or webtoon)
     #[schema(example = "ltr")]
     pub default_reading_direction: String,
+
+    /// Title preprocessing rules (JSON array of regex rules)
+    /// Applied during scan to clean series titles before metadata search
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title_preprocessing_rules: Option<serde_json::Value>,
+
+    /// Auto-match conditions (JSON object with mode and rules)
+    /// Controls when auto-matching runs for this library
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_match_conditions: Option<serde_json::Value>,
 }
 
 /// Create library request
@@ -161,6 +172,16 @@ pub struct CreateLibraryRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = "ltr")]
     pub default_reading_direction: Option<String>,
+
+    /// Title preprocessing rules (JSON array of regex rules)
+    /// Applied during scan to clean series titles before metadata search
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title_preprocessing_rules: Option<serde_json::Value>,
+
+    /// Auto-match conditions (JSON object with mode and rules)
+    /// Controls when auto-matching runs for this library
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_match_conditions: Option<serde_json::Value>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -227,6 +248,24 @@ pub struct UpdateLibraryRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = "rtl")]
     pub default_reading_direction: Option<String>,
+
+    /// Title preprocessing rules (JSON array of regex rules)
+    /// Applied during scan to clean series titles before metadata search.
+    /// - Omit field: keep existing value
+    /// - Set to null: clear the rules
+    /// - Set to value: update the rules
+    #[serde(default)]
+    #[schema(value_type = Option<Object>, nullable = true)]
+    pub title_preprocessing_rules: PatchValue<serde_json::Value>,
+
+    /// Auto-match conditions (JSON object with mode and rules)
+    /// Controls when auto-matching runs for this library.
+    /// - Omit field: keep existing value
+    /// - Set to null: clear the conditions
+    /// - Set to value: update the conditions
+    #[serde(default)]
+    #[schema(value_type = Option<Object>, nullable = true)]
+    pub auto_match_conditions: PatchValue<serde_json::Value>,
 }
 
 /// Preview scan request

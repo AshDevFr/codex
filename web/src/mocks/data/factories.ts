@@ -112,6 +112,12 @@ export const createLibrary = (
 		seriesStrategy: "series_volume",
 		bookStrategy: "smart",
 		numberStrategy: "smart",
+		// Title preprocessing rules for metadata search
+		titlePreprocessingRules: [
+			{ pattern: "\\s*\\(Digital\\)\\s*$", replacement: "" },
+			{ pattern: "\\s*\\[Digital\\]\\s*$", replacement: "" },
+			{ pattern: "\\s*- Complete\\s*$", replacement: "" },
+		],
 		...overrides,
 	};
 };

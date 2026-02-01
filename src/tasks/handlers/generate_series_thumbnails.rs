@@ -41,15 +41,26 @@ impl TaskHandler for GenerateSeriesThumbnailsHandler {
 
             // Extract parameters from task
             let library_id = task.library_id;
-            let force = task
-                .params
-                .as_ref()
+            let params = task.params.as_ref();
+            let force = params
                 .and_then(|p| p.get("force"))
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
+            let series_ids: Option<Vec<uuid::Uuid>> = params
+                .and_then(|p| p.get("series_ids"))
+                .and_then(|v| serde_json::from_value(v.clone()).ok());
 
             // Get series based on scope
-            let series_list = if let Some(lib_id) = library_id {
+            // Priority: series_ids > library_id > all
+            let series_list = if let Some(ids) = &series_ids {
+                // Explicit series IDs take precedence
+                info!(
+                    "Generating series thumbnails for {} specific series (force={})",
+                    ids.len(),
+                    force
+                );
+                SeriesRepository::get_by_ids(db, ids).await?
+            } else if let Some(lib_id) = library_id {
                 info!(
                     "Generating series thumbnails for library {} (force={})",
                     lib_id, force

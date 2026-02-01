@@ -1051,3 +1051,498 @@ async fn test_maintainer_can_use_plugin_actions() {
     let response = response.expect("Expected response body");
     assert_eq!(response.scope, "series:detail");
 }
+
+// =============================================================================
+// Search Title Endpoint Tests
+// =============================================================================
+
+use codex::api::routes::v1::dto::SearchTitleResponse;
+use codex::db::repositories::{LibraryRepository, SeriesRepository};
+use codex::db::ScanningStrategy;
+
+#[tokio::test]
+async fn test_get_search_title_requires_auth() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    let fake_series_id = uuid::Uuid::new_v4();
+    let fake_plugin_id = uuid::Uuid::new_v4();
+    let request = common::http::get_request(&format!(
+        "/api/v1/series/{}/metadata/search-title?pluginId={}",
+        fake_series_id, fake_plugin_id
+    ));
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_get_search_title_series_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let fake_series_id = uuid::Uuid::new_v4();
+    let fake_plugin_id = uuid::Uuid::new_v4();
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/series/{}/metadata/search-title?pluginId={}",
+            fake_series_id, fake_plugin_id
+        ),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_get_search_title_plugin_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Create a library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Try to get search title with non-existent plugin
+    let app = create_test_router(state.clone()).await;
+    let fake_plugin_id = uuid::Uuid::new_v4();
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/series/{}/metadata/search-title?pluginId={}",
+            series.id, fake_plugin_id
+        ),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_get_search_title_no_preprocessing() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Create a library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "My Test Series", None)
+        .await
+        .unwrap();
+
+    // Create a plugin without preprocessing rules
+    let app = create_test_router(state.clone()).await;
+    let body = json!({
+        "name": "no-preprocess-plugin",
+        "displayName": "No Preprocess Plugin",
+        "command": "node",
+        "permissions": ["metadata:read"]
+    });
+    let request = post_json_request_with_auth("/api/v1/admin/plugins", &body, &token);
+    let (_, created): (StatusCode, Option<PluginStatusResponse>) =
+        make_json_request(app, request).await;
+    let plugin = created.unwrap().plugin;
+
+    // Get search title
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/series/{}/metadata/search-title?pluginId={}",
+            series.id, plugin.id
+        ),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SearchTitleResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let response = response.expect("Expected response body");
+    assert_eq!(response.original_title, "My Test Series");
+    assert_eq!(response.search_title, "My Test Series");
+    assert_eq!(response.rules_applied, 0);
+}
+
+#[tokio::test]
+async fn test_get_search_title_with_preprocessing_rules() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Create a library and series with (Digital) suffix
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "One Piece (Digital)", None)
+        .await
+        .unwrap();
+
+    // Create a plugin with preprocessing rules to remove (Digital) suffix
+    let app = create_test_router(state.clone()).await;
+    let body = json!({
+        "name": "preprocess-plugin",
+        "displayName": "Preprocess Plugin",
+        "command": "node",
+        "permissions": ["metadata:read"],
+        "searchPreprocessingRules": [
+            {
+                "pattern": "\\s*\\(Digital\\)$",
+                "replacement": "",
+                "enabled": true
+            }
+        ]
+    });
+    let request = post_json_request_with_auth("/api/v1/admin/plugins", &body, &token);
+    let (status, created): (StatusCode, Option<PluginStatusResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::CREATED);
+    let plugin = created.unwrap().plugin;
+
+    // Get search title
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/series/{}/metadata/search-title?pluginId={}",
+            series.id, plugin.id
+        ),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SearchTitleResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let response = response.expect("Expected response body");
+    assert_eq!(response.original_title, "One Piece (Digital)");
+    assert_eq!(response.search_title, "One Piece");
+    assert_eq!(response.rules_applied, 1);
+}
+
+#[tokio::test]
+async fn test_get_search_title_with_search_query_template() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Create a library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Naruto", None)
+        .await
+        .unwrap();
+
+    // Create a plugin with a search query template
+    let app = create_test_router(state.clone()).await;
+    let body = json!({
+        "name": "template-plugin",
+        "displayName": "Template Plugin",
+        "command": "node",
+        "permissions": ["metadata:read"],
+        "searchQueryTemplate": "{{metadata.title}} manga"
+    });
+    let request = post_json_request_with_auth("/api/v1/admin/plugins", &body, &token);
+    let (status, created): (StatusCode, Option<PluginStatusResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::CREATED);
+    let plugin = created.unwrap().plugin;
+
+    // Get search title
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/series/{}/metadata/search-title?pluginId={}",
+            series.id, plugin.id
+        ),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SearchTitleResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let response = response.expect("Expected response body");
+    assert_eq!(response.original_title, "Naruto");
+    // Template should render: "Naruto manga"
+    assert_eq!(response.search_title, "Naruto manga");
+}
+
+// =============================================================================
+// Unified Series Context Integration Tests (Phase 4)
+// =============================================================================
+
+use codex::db::repositories::{GenreRepository, SeriesMetadataRepository, TagRepository};
+use codex::services::metadata::preprocessing::context::SeriesContextBuilder;
+
+#[tokio::test]
+async fn test_series_context_builder_full_flow() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create a library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "One Piece", None)
+        .await
+        .unwrap();
+
+    // Update metadata with full details using the replace method
+    // (metadata is automatically created when series is created)
+    SeriesMetadataRepository::replace(
+        &db,
+        series.id,
+        Some("One Piece".to_string()),                // title_sort
+        Some("A pirate adventure story".to_string()), // summary
+        Some("Shueisha".to_string()),                 // publisher
+        Some(1997),                                   // year
+        Some("rtl".to_string()),                      // reading_direction
+    )
+    .await
+    .unwrap();
+
+    // Add genres
+    GenreRepository::add_genre_to_series(&db, series.id, "Action")
+        .await
+        .unwrap();
+    GenreRepository::add_genre_to_series(&db, series.id, "Adventure")
+        .await
+        .unwrap();
+    GenreRepository::add_genre_to_series(&db, series.id, "Comedy")
+        .await
+        .unwrap();
+
+    // Add tags
+    TagRepository::add_tag_to_series(&db, series.id, "pirates")
+        .await
+        .unwrap();
+    TagRepository::add_tag_to_series(&db, series.id, "treasure")
+        .await
+        .unwrap();
+
+    // Build the series context using the new builder
+    let context = SeriesContextBuilder::new(series.id)
+        .build(&db)
+        .await
+        .unwrap();
+
+    // Verify context fields
+    assert_eq!(context.series_id, Some(series.id));
+    assert_eq!(context.metadata.title, Some("One Piece".to_string()));
+    assert_eq!(context.metadata.publisher, Some("Shueisha".to_string()));
+    assert_eq!(context.metadata.year, Some(1997));
+    assert_eq!(context.metadata.reading_direction, Some("rtl".to_string()));
+    // Verify genres and tags are populated
+    assert_eq!(context.metadata.genres.len(), 3);
+    assert!(context.metadata.genres.contains(&"Action".to_string()));
+    assert!(context.metadata.genres.contains(&"Adventure".to_string()));
+    assert!(context.metadata.genres.contains(&"Comedy".to_string()));
+    assert_eq!(context.metadata.tags.len(), 2);
+    assert!(context.metadata.tags.contains(&"pirates".to_string()));
+    assert!(context.metadata.tags.contains(&"treasure".to_string()));
+
+    // Serialize to JSON and verify camelCase field names
+    let json = serde_json::to_value(&context).unwrap();
+
+    // Top-level fields should be camelCase
+    assert!(json.get("seriesId").is_some(), "seriesId should exist");
+    assert!(json.get("bookCount").is_some(), "bookCount should exist");
+    assert!(
+        json.get("series_id").is_none(),
+        "series_id should not exist"
+    );
+    assert!(
+        json.get("book_count").is_none(),
+        "book_count should not exist"
+    );
+
+    // Metadata fields should be camelCase
+    let metadata = json.get("metadata").unwrap();
+    assert!(
+        metadata.get("titleSort").is_some(),
+        "titleSort should exist"
+    );
+    assert!(
+        metadata.get("readingDirection").is_some(),
+        "readingDirection should exist"
+    );
+    assert!(
+        metadata.get("title_sort").is_none(),
+        "title_sort should not exist"
+    );
+
+    // Verify genres and tags arrays are included
+    assert_eq!(metadata["genres"].as_array().unwrap().len(), 3);
+    assert_eq!(metadata["tags"].as_array().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn test_series_context_template_rendering() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Create a library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Dragon Ball", None)
+        .await
+        .unwrap();
+
+    // Update metadata with year and publisher
+    // (metadata is automatically created when series is created)
+    SeriesMetadataRepository::replace(
+        &db,
+        series.id,
+        None,                         // title_sort
+        None,                         // summary
+        Some("Shueisha".to_string()), // publisher
+        Some(1984),                   // year
+        None,                         // reading_direction
+    )
+    .await
+    .unwrap();
+
+    // Add genre
+    GenreRepository::add_genre_to_series(&db, series.id, "Action")
+        .await
+        .unwrap();
+
+    // Create a plugin with a template that uses camelCase fields
+    // Template: "{{metadata.title}} ({{metadata.year}}) - {{metadata.publisher}}"
+    let app = create_test_router(state.clone()).await;
+    let body = json!({
+        "name": "context-test-plugin",
+        "displayName": "Context Test Plugin",
+        "command": "node",
+        "permissions": ["metadata:read"],
+        "searchQueryTemplate": "{{metadata.title}} ({{metadata.year}}) {{metadata.publisher}}"
+    });
+    let request = post_json_request_with_auth("/api/v1/admin/plugins", &body, &token);
+    let (status, created): (StatusCode, Option<PluginStatusResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::CREATED);
+    let plugin = created.unwrap().plugin;
+
+    // Get search title - should render the template with camelCase field access
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/series/{}/metadata/search-title?pluginId={}",
+            series.id, plugin.id
+        ),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SearchTitleResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let response = response.expect("Expected response body");
+    assert_eq!(response.original_title, "Dragon Ball");
+    // Template should render: "Dragon Ball (1984) Shueisha"
+    assert_eq!(response.search_title, "Dragon Ball (1984) Shueisha");
+}
+
+#[tokio::test]
+async fn test_series_context_field_access_dual_path_support() {
+    use codex::services::metadata::preprocessing::context::{
+        FieldValue, MetadataContext, SeriesContext,
+    };
+
+    // Create a context with various fields
+    let metadata = MetadataContext {
+        title: Some("Test Series".to_string()),
+        title_sort: Some("Test Series".to_string()),
+        age_rating: Some(13),
+        reading_direction: Some("rtl".to_string()),
+        total_book_count: Some(50),
+        genres: vec!["Action".to_string(), "Drama".to_string()],
+        tags: vec!["fantasy".to_string()],
+        title_lock: true,
+        ..Default::default()
+    };
+
+    let context = SeriesContext::new()
+        .book_count(10)
+        .metadata(metadata)
+        .external_id("plugin:test", "12345");
+
+    // Test camelCase paths work
+    assert_eq!(
+        context.get_field("bookCount"),
+        Some(FieldValue::Number(10.0))
+    );
+    assert_eq!(
+        context.get_field("metadata.titleSort"),
+        Some(FieldValue::String("Test Series".to_string()))
+    );
+    assert_eq!(
+        context.get_field("metadata.ageRating"),
+        Some(FieldValue::Number(13.0))
+    );
+    assert_eq!(
+        context.get_field("metadata.readingDirection"),
+        Some(FieldValue::String("rtl".to_string()))
+    );
+    assert_eq!(
+        context.get_field("metadata.totalBookCount"),
+        Some(FieldValue::Number(50.0))
+    );
+    assert_eq!(
+        context.get_field("metadata.titleLock"),
+        Some(FieldValue::Bool(true))
+    );
+    assert_eq!(
+        context.get_field("externalIds.plugin:test"),
+        Some(FieldValue::String("12345".to_string()))
+    );
+    assert_eq!(
+        context.get_field("externalIds.count"),
+        Some(FieldValue::Number(1.0))
+    );
+
+    // Test snake_case paths also work (backwards compatibility)
+    assert_eq!(
+        context.get_field("book_count"),
+        Some(FieldValue::Number(10.0))
+    );
+    assert_eq!(
+        context.get_field("metadata.title_sort"),
+        Some(FieldValue::String("Test Series".to_string()))
+    );
+    assert_eq!(
+        context.get_field("metadata.age_rating"),
+        Some(FieldValue::Number(13.0))
+    );
+    assert_eq!(
+        context.get_field("external_ids.plugin:test"),
+        Some(FieldValue::String("12345".to_string()))
+    );
+    assert_eq!(
+        context.get_field("external_ids.count"),
+        Some(FieldValue::Number(1.0))
+    );
+
+    // Test genres and tags field access
+    let genres = context.get_field("metadata.genres");
+    assert!(matches!(genres, Some(FieldValue::Array(ref arr)) if arr.len() == 2));
+    let tags = context.get_field("metadata.tags");
+    assert!(matches!(tags, Some(FieldValue::Array(ref arr)) if arr.len() == 1));
+}

@@ -56,6 +56,19 @@ export type FullSeriesMetadata = Schemas["FullSeriesMetadataResponse"];
 export type SeriesFullMetadata = Schemas["SeriesFullMetadata"];
 
 // =============================================================================
+// Series Context types (for template evaluation)
+// =============================================================================
+/**
+ * Series context for template and condition evaluation.
+ * Used by CustomMetadataDisplay and template editors.
+ */
+export type SeriesContext = Schemas["SeriesContextDto"];
+/** Metadata context within SeriesContext */
+export type MetadataContext = Schemas["MetadataContextDto"];
+/** External ID context within SeriesContext */
+export type ExternalIdContext = Schemas["ExternalIdContextDto"];
+
+// =============================================================================
 // Book types
 // =============================================================================
 export type Book = Schemas["BookDto"];

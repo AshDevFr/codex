@@ -35,64 +35,9 @@ import "prismjs/components/prism-markdown";
 import { CustomMetadataDisplay } from "@/components/series";
 import { getAvailableHelpers, validateTemplate } from "@/utils/templateEngine";
 import {
-	type MetadataForTemplate,
-	SAMPLE_METADATA_FOR_TEMPLATE,
+	SAMPLE_SERIES_CONTEXT,
+	type SeriesContextWithCustomMetadata,
 } from "@/utils/templateUtils";
-
-// Sample data for preview - comprehensive example showcasing various data types
-const SAMPLE_METADATA = {
-	// Reading tracking
-	status: "In Progress",
-	priority: 8,
-	rating: 9.2,
-	started_date: "2024-01-15",
-	last_read: "2024-12-20",
-	current_volume: 12,
-	total_volumes: 25,
-
-	// Personal notes
-	notes:
-		"One of my all-time favorites! The character development is incredible and the plot twists are unexpected.",
-	highlights: [
-		"Amazing art style in volume 5",
-		"Plot twist in chapter 42 was mind-blowing",
-		"Character development for the protagonist",
-	],
-
-	// Categorization
-	tags: ["action", "adventure", "fantasy", "completed-anime"],
-	genres: ["Shonen", "Action", "Adventure"],
-	themes: ["Friendship", "Coming of Age", "Good vs Evil"],
-
-	// External links and IDs
-	links: [
-		{ name: "MyAnimeList", url: "https://myanimelist.net/manga/13" },
-		{ name: "AniList", url: "https://anilist.co/manga/30013" },
-		{ name: "MangaUpdates", url: "https://mangaupdates.com/series/abc123" },
-	],
-	external_ids: {
-		mal_id: "30013",
-		anilist_id: "30013",
-		isbn: "978-1-421-50096-9",
-		comicvine_id: "4050-12345",
-	},
-
-	// Collection info
-	collection: {
-		format: "Paperback",
-		edition: "Viz 3-in-1 Edition",
-		condition: "Near Mint",
-		location: "Shelf 2, Row 3",
-		purchase_date: "2023-06-15",
-		purchase_price: 14.99,
-		signed: false,
-	},
-
-	// Flags
-	is_favorite: true,
-	is_complete: false,
-	has_anime: true,
-};
 
 type LayoutMode = "side-by-side" | "stacked";
 type TestDataViewMode = "tree" | "json";
@@ -119,26 +64,18 @@ export interface TemplateEditorProps {
 	 */
 	description?: string;
 	/**
-	 * Initial sample data for preview (defaults to SAMPLE_METADATA)
+	 * Initial sample series context for preview (defaults to SAMPLE_SERIES_CONTEXT).
+	 * The customMetadata field is editable, while other fields are read-only.
 	 */
-	initialSampleData?: Record<string, unknown>;
+	initialContext?: SeriesContextWithCustomMetadata;
 	/**
-	 * Externally controlled test data (when provided, overrides internal state)
+	 * Externally controlled series context (when provided, overrides internal state)
 	 */
-	testData?: Record<string, unknown>;
+	context?: SeriesContextWithCustomMetadata;
 	/**
-	 * Callback when test data changes (for external control)
+	 * Callback when context changes (for external control)
 	 */
-	onTestDataChange?: (data: Record<string, unknown>) => void;
-	/**
-	 * Mock metadata for template testing (defaults to SAMPLE_METADATA_FOR_TEMPLATE).
-	 * This is displayed in a read-only section and passed to the preview.
-	 */
-	metadataTestData?: MetadataForTemplate;
-	/**
-	 * Whether to show the metadata section (defaults to true)
-	 */
-	showMetadataSection?: boolean;
+	onContextChange?: (context: SeriesContextWithCustomMetadata) => void;
 }
 
 /**
@@ -150,11 +87,9 @@ export function TemplateEditor({
 	disabled = false,
 	label = "Template",
 	description,
-	initialSampleData = SAMPLE_METADATA,
-	testData: externalTestData,
-	onTestDataChange,
-	metadataTestData = SAMPLE_METADATA_FOR_TEMPLATE,
-	showMetadataSection = true,
+	initialContext = SAMPLE_SERIES_CONTEXT,
+	context: externalContext,
+	onContextChange,
 }: TemplateEditorProps) {
 	const colorScheme = useComputedColorScheme("dark");
 	const [helpOpened, { toggle: toggleHelp }] = useDisclosure(false);
@@ -165,18 +100,24 @@ export function TemplateEditor({
 	const [rawJson, setRawJson] = useState<string>("");
 	const [jsonError, setJsonError] = useState<string | null>(null);
 
-	// Test data state - use external if provided, otherwise internal
-	const [internalTestData, setInternalTestData] =
-		useState<Record<string, unknown>>(initialSampleData);
+	// Context state - use external if provided, otherwise internal
+	const [internalContext, setInternalContext] =
+		useState<SeriesContextWithCustomMetadata>(initialContext);
 
-	// Use external test data if provided, otherwise use internal
-	const testData = externalTestData ?? internalTestData;
-	const setTestData = (data: Record<string, unknown>) => {
-		if (onTestDataChange) {
-			onTestDataChange(data);
+	// Use external context if provided, otherwise use internal
+	const context = externalContext ?? internalContext;
+	const setContext = (ctx: SeriesContextWithCustomMetadata) => {
+		if (onContextChange) {
+			onContextChange(ctx);
 		} else {
-			setInternalTestData(data);
+			setInternalContext(ctx);
 		}
+	};
+
+	// For backwards compatibility with the JsonEditor, expose customMetadata as testData
+	const testData = context.customMetadata ?? {};
+	const setTestData = (data: Record<string, unknown>) => {
+		setContext({ ...context, customMetadata: data });
 	};
 
 	// Sync local value with prop
@@ -334,10 +275,11 @@ export function TemplateEditor({
 						variant="subtle"
 						size="xs"
 						onClick={() => {
-							setTestData(initialSampleData);
+							const initialCustomMetadata = initialContext.customMetadata ?? {};
+							setTestData(initialCustomMetadata);
 							// Also reset rawJson directly since the effect may not trigger
 							// if testData value doesn't change (e.g., when external state was undefined)
-							setRawJson(JSON.stringify(initialSampleData, null, 2));
+							setRawJson(JSON.stringify(initialCustomMetadata, null, 2));
 							setJsonError(null);
 						}}
 					>
@@ -427,9 +369,9 @@ export function TemplateEditor({
 		</Box>
 	);
 
-	// Metadata section - read-only display of sample built-in metadata
+	// Context section - read-only display of full series context (metadata, externalIds, etc.)
 	const [metadataOpened, { toggle: toggleMetadata }] = useDisclosure(false);
-	const metadataSection = showMetadataSection ? (
+	const metadataSection = (
 		<Card withBorder padding="sm">
 			<Group
 				onClick={toggleMetadata}
@@ -438,10 +380,11 @@ export function TemplateEditor({
 			>
 				<Group gap="xs">
 					<Text size="sm" fw={500}>
-						Series Metadata (Mock)
+						Series Context (Mock)
 					</Text>
 					<Text size="xs" c="dimmed">
-						Available as <code>metadata.*</code> in templates
+						Available as <code>seriesId</code>, <code>bookCount</code>,{" "}
+						<code>metadata.*</code>, <code>externalIds.*</code>
 					</Text>
 				</Group>
 				{metadataOpened ? (
@@ -469,7 +412,14 @@ export function TemplateEditor({
 					className="metadata-json-editor"
 				>
 					<JsonEditor
-						data={metadataTestData as unknown as Record<string, unknown>}
+						data={
+							{
+								seriesId: context.seriesId,
+								bookCount: context.bookCount,
+								metadata: context.metadata,
+								externalIds: context.externalIds,
+							} as unknown as Record<string, unknown>
+						}
 						setData={() => {}}
 						theme={{
 							...jsonTheme,
@@ -486,7 +436,7 @@ export function TemplateEditor({
 							},
 						}}
 						maxWidth="100%"
-						rootName="metadata"
+						rootName="context"
 						collapse={1}
 						enableClipboard={false}
 						restrictEdit={true}
@@ -496,13 +446,14 @@ export function TemplateEditor({
 					/>
 				</Box>
 				<Text size="xs" c="dimmed" mt="xs">
-					This mock data represents the built-in series metadata available in
-					templates. Use <code>{"{{metadata.title}}"}</code>,{" "}
-					<code>{"{{metadata.genres}}"}</code>, etc.
+					This mock data represents the series context available in templates.
+					Use <code>{"{{seriesId}}"}</code>, <code>{"{{bookCount}}"}</code>,{" "}
+					<code>{"{{metadata.title}}"}</code>,{" "}
+					<code>{"{{externalIds.plugin:source.id}}"}</code>, etc.
 				</Text>
 			</Collapse>
 		</Card>
-	) : null;
+	);
 
 	// Preview component - uses CustomMetadataDisplay to show exactly how it will render
 	const previewSection = (
@@ -533,8 +484,7 @@ export function TemplateEditor({
 					</Text>
 				) : (
 					<CustomMetadataDisplay
-						customMetadata={testData}
-						metadata={metadataTestData}
+						context={context}
 						template={localValue}
 						showErrors
 					/>
@@ -641,7 +591,7 @@ export function TemplateEditor({
 										<code>{"{{field}}"}</code> - Output a field value
 									</li>
 									<li>
-										<code>{"{{custom_metadata.field}}"}</code> - Access nested
+										<code>{"{{customMetadata.field}}"}</code> - Access nested
 										fields
 									</li>
 									<li>
@@ -695,27 +645,35 @@ export function TemplateEditor({
 							<Text size="xs" c="dimmed" component="div">
 								<ul style={{ margin: 0, paddingLeft: 20 }}>
 									<li>
-										<code>{'{{formatDate started_date "MMM d, yyyy"}}'}</code> -
-										Format dates
+										<code>
+											{
+												'{{formatDate customMetadata.started_date "MMM d, yyyy"}}'
+											}
+										</code>{" "}
+										- Format dates
 									</li>
 									<li>
-										<code>{'{{truncate notes 50 "..."}}'}</code> - Truncate text
+										<code>{'{{truncate metadata.summary 50 "..."}}'}</code> -
+										Truncate text
 									</li>
 									<li>
-										<code>{'{{join tags ", "}}'}</code> - Join array items
+										<code>{'{{join metadata.genres ", "}}'}</code> - Join array
+										items
 									</li>
 									<li>
-										<code>{"{{json custom_metadata}}"}</code> - Output as JSON
+										<code>{"{{json customMetadata}}"}</code> - Output as JSON
 									</li>
 									<li>
 										<code>
-											{'{{#ifEquals status "active"}}...{{/ifEquals}}'}
+											{
+												'{{#ifEquals metadata.status "ongoing"}}...{{/ifEquals}}'
+											}
 										</code>{" "}
 										- Compare values
 									</li>
 									<li>
-										<code>{'{{default rating "N/A"}}'}</code> - Default for
-										missing values
+										<code>{'{{default metadata.publisher "Unknown"}}'}</code> -
+										Default for missing values
 									</li>
 								</ul>
 							</Text>
@@ -723,20 +681,27 @@ export function TemplateEditor({
 
 						<Box>
 							<Text size="sm" fw={500} mb="xs">
-								Available Data Sources
+								Available Variables
 							</Text>
 							<Text size="xs" c="dimmed" component="div">
 								<p style={{ margin: "0 0 8px 0" }}>
-									Templates have access to two data sources:
+									Templates have access to the full series context:
 								</p>
 								<ul style={{ margin: 0, paddingLeft: 20 }}>
 									<li>
-										<code>custom_metadata.*</code> - User-defined custom fields
-										(editable)
+										<code>seriesId</code> - Series UUID
+									</li>
+									<li>
+										<code>bookCount</code> - Number of books in the series
 									</li>
 									<li>
 										<code>metadata.*</code> - Built-in series metadata
-										(read-only)
+									</li>
+									<li>
+										<code>externalIds.*</code> - External IDs from plugins
+									</li>
+									<li>
+										<code>customMetadata.*</code> - User-defined custom fields
 									</li>
 								</ul>
 							</Text>
@@ -768,17 +733,23 @@ export function TemplateEditor({
 										<code>metadata.genres</code>, <code>metadata.tags</code> -
 										Arrays of strings
 									</li>
+								</ul>
+							</Text>
+						</Box>
+
+						<Box>
+							<Text size="sm" fw={500} mb="xs">
+								External IDs
+							</Text>
+							<Text size="xs" c="dimmed" component="div">
+								<ul style={{ margin: 0, paddingLeft: 20 }}>
 									<li>
-										<code>metadata.externalRatings</code> - Array of{" "}
-										{"{source, rating, votes}"}
+										<code>{"externalIds.plugin:source.id"}</code> - External ID
+										value
 									</li>
 									<li>
-										<code>metadata.externalLinks</code> - Array of{" "}
-										{"{source, url}"}
-									</li>
-									<li>
-										<code>metadata.alternateTitles</code> - Array of{" "}
-										{"{title, label}"}
+										<code>{"externalIds.plugin:source.url"}</code> - External
+										URL
 									</li>
 								</ul>
 							</Text>

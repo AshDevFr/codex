@@ -231,6 +231,44 @@ pub async fn create_plugin(
 
     let plugin_id = plugin.id;
 
+    // Update search config fields if any are provided
+    let has_search_config = request.search_query_template.is_some()
+        || request.search_preprocessing_rules.is_some()
+        || request.auto_match_conditions.is_some()
+        || !request.use_existing_external_id; // Default is true, so only update if set to false
+
+    if has_search_config {
+        // Convert JSON values to strings for storage
+        // - null or empty array → None (clear the field)
+        // - valid value → Some(json_string)
+        let search_preprocessing_rules = request.search_preprocessing_rules.map(|v| {
+            if v.is_null() || v.as_array().is_some_and(|arr| arr.is_empty()) {
+                None
+            } else {
+                serde_json::to_string(&v).ok()
+            }
+        });
+        let auto_match_conditions = request.auto_match_conditions.map(|v| {
+            if v.is_null() {
+                None
+            } else {
+                serde_json::to_string(&v).ok()
+            }
+        });
+
+        PluginsRepository::update_search_config(
+            &state.db,
+            plugin_id,
+            request.search_query_template.map(Some),
+            search_preprocessing_rules,
+            auto_match_conditions,
+            Some(request.use_existing_external_id),
+            Some(auth.user_id),
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to update search config: {}", e)))?;
+    }
+
     // Reload the plugin manager to pick up the new plugin
     if let Err(e) = state.plugin_manager.reload(plugin_id).await {
         tracing::warn!("Failed to reload plugin manager after create: {}", e);
@@ -280,10 +318,20 @@ pub async fn create_plugin(
     }
 
     // Plugin created disabled - no health check
+    // Re-fetch plugin if search config was updated to return the latest data
+    let final_plugin = if has_search_config {
+        PluginsRepository::get_by_id(&state.db, plugin_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to get updated plugin: {}", e)))?
+            .ok_or_else(|| ApiError::NotFound("Plugin not found".to_string()))?
+    } else {
+        plugin
+    };
+
     Ok((
         StatusCode::CREATED,
         Json(PluginStatusResponse {
-            plugin: plugin.into(),
+            plugin: final_plugin.into(),
             message: "Plugin created (disabled)".to_string(),
             health_check_performed: false,
             health_check_passed: None,
@@ -462,26 +510,55 @@ pub async fn update_plugin(
         )
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to update credentials: {}", e)))?;
+    }
 
-        // Reload the plugin manager to pick up the updated plugin
-        if let Err(e) = state.plugin_manager.reload(id).await {
-            tracing::warn!("Failed to reload plugin manager after update: {}", e);
-        }
+    // Update search config fields if any are provided
+    let has_search_config_updates = request.search_query_template.is_some()
+        || request.search_preprocessing_rules.is_some()
+        || request.auto_match_conditions.is_some()
+        || request.use_existing_external_id.is_some();
 
-        // Broadcast plugin updated event
-        let event = EntityChangeEvent::new(
-            EntityEvent::PluginUpdated { plugin_id: id },
+    if has_search_config_updates {
+        // Convert JSON values to strings for storage
+        // - null or empty array → None (clear the field)
+        // - valid value → Some(json_string)
+        let search_preprocessing_rules = request.search_preprocessing_rules.map(|v| {
+            if v.is_null() || v.as_array().is_some_and(|arr| arr.is_empty()) {
+                None
+            } else {
+                serde_json::to_string(&v).ok()
+            }
+        });
+        let auto_match_conditions = request.auto_match_conditions.map(|v| {
+            if v.is_null() {
+                None
+            } else {
+                serde_json::to_string(&v).ok()
+            }
+        });
+
+        PluginsRepository::update_search_config(
+            &state.db,
+            id,
+            request.search_query_template.map(Some),
+            search_preprocessing_rules,
+            auto_match_conditions,
+            request.use_existing_external_id,
             Some(auth.user_id),
-        );
-        let _ = state.event_broadcaster.emit(event);
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to update search config: {}", e)))?;
+    }
 
-        // Re-fetch to get updated plugin
-        let updated = PluginsRepository::get_by_id(&state.db, id)
+    // Re-fetch if credentials or search config were updated
+    let final_plugin = if request.credentials.is_some() || has_search_config_updates {
+        PluginsRepository::get_by_id(&state.db, id)
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to get updated plugin: {}", e)))?
-            .ok_or_else(|| ApiError::NotFound("Plugin not found".to_string()))?;
-        return Ok(Json(updated.into()));
-    }
+            .ok_or_else(|| ApiError::NotFound("Plugin not found".to_string()))?
+    } else {
+        plugin
+    };
 
     // Reload the plugin manager to pick up the updated plugin
     if let Err(e) = state.plugin_manager.reload(id).await {
@@ -495,7 +572,7 @@ pub async fn update_plugin(
     );
     let _ = state.event_broadcaster.emit(event);
 
-    Ok(Json(plugin.into()))
+    Ok(Json(final_plugin.into()))
 }
 
 /// Delete a plugin

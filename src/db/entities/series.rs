@@ -48,6 +48,8 @@ pub enum Relation {
     SeriesTags,
     #[sea_orm(has_many = "super::series_alternate_titles::Entity")]
     SeriesAlternateTitles,
+    #[sea_orm(has_many = "super::series_external_ids::Entity")]
+    SeriesExternalIds,
     #[sea_orm(has_many = "super::series_external_ratings::Entity")]
     SeriesExternalRatings,
     #[sea_orm(has_many = "super::series_external_links::Entity")]
@@ -99,6 +101,12 @@ impl Related<super::series_tags::Entity> for Entity {
 impl Related<super::series_alternate_titles::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::SeriesAlternateTitles.def()
+    }
+}
+
+impl Related<super::series_external_ids::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::SeriesExternalIds.def()
     }
 }
 

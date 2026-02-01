@@ -284,9 +284,13 @@ The following paths are exempt from rate limiting:
         v1::handlers::bulk_mark_books_as_read,
         v1::handlers::bulk_mark_books_as_unread,
         v1::handlers::bulk_analyze_books,
+        v1::handlers::bulk_generate_book_thumbnails,
         v1::handlers::bulk_mark_series_as_read,
         v1::handlers::bulk_mark_series_as_unread,
         v1::handlers::bulk_analyze_series,
+        v1::handlers::bulk_generate_series_thumbnails,
+        v1::handlers::bulk_generate_series_book_thumbnails,
+        v1::handlers::bulk_reprocess_series_titles,
 
         // User endpoints
         v1::handlers::list_users,
@@ -332,13 +336,17 @@ The following paths are exempt from rate limiting:
         v1::handlers::task_queue::purge_old_tasks,
         v1::handlers::task_queue::nuke_all_tasks,
         // Book thumbnail endpoints
-        v1::handlers::task_queue::generate_book_thumbnails,
         v1::handlers::task_queue::generate_book_thumbnail,
+        v1::handlers::task_queue::generate_book_thumbnails,
         v1::handlers::task_queue::generate_library_book_thumbnails,
         // Series thumbnail endpoints
-        v1::handlers::task_queue::generate_series_thumbnails,
         v1::handlers::task_queue::generate_series_thumbnail,
+        v1::handlers::task_queue::generate_series_thumbnails,
         v1::handlers::task_queue::generate_library_series_thumbnails,
+        // Reprocess title endpoints
+        v1::handlers::task_queue::reprocess_series_title,
+        v1::handlers::task_queue::reprocess_series_titles,
+        v1::handlers::task_queue::reprocess_library_series_titles,
 
         // Filesystem endpoints
         v1::handlers::browse_filesystem,
@@ -370,6 +378,7 @@ The following paths are exempt from rate limiting:
         // Plugin Actions endpoints
         v1::handlers::plugin_actions::get_plugin_actions,
         v1::handlers::plugin_actions::execute_plugin,
+        v1::handlers::plugin_actions::get_series_search_title,
         v1::handlers::plugin_actions::preview_series_metadata,
         v1::handlers::plugin_actions::apply_series_metadata,
         v1::handlers::plugin_actions::auto_match_series_metadata,
@@ -512,6 +521,17 @@ The following paths are exempt from rate limiting:
             v1::dto::FullSeriesResponse,
             v1::dto::MetadataLocks,
             v1::dto::UpdateMetadataLocksRequest,
+            v1::dto::ReprocessTitleRequest,
+            v1::dto::ReprocessTitleResult,
+            v1::dto::ReprocessLibraryTitlesResponse,
+            v1::dto::EnqueueReprocessTitleRequest,
+            v1::dto::ReprocessSeriesTitlesRequest,
+            v1::dto::EnqueueReprocessTitleResponse,
+
+            // Series Context DTOs (for template evaluation)
+            v1::dto::SeriesContextDto,
+            v1::dto::MetadataContextDto,
+            v1::dto::ExternalIdContextDto,
 
             // Genre DTOs
             v1::dto::GenreDto,
@@ -649,6 +669,11 @@ The following paths are exempt from rate limiting:
             v1::dto::BulkSeriesRequest,
             v1::dto::BulkAnalyzeSeriesRequest,
             v1::dto::BulkAnalyzeResponse,
+            v1::dto::BulkGenerateBookThumbnailsRequest,
+            v1::dto::BulkGenerateSeriesBookThumbnailsRequest,
+            v1::dto::BulkGenerateSeriesThumbnailsRequest,
+            v1::dto::BulkReprocessSeriesTitlesRequest,
+            v1::dto::BulkTaskResponse,
 
             // Filesystem DTOs
             v1::handlers::filesystem::FileSystemEntry,
@@ -698,6 +723,7 @@ The following paths are exempt from rate limiting:
             v1::dto::SkippedField,
             v1::dto::MetadataAutoMatchRequest,
             v1::dto::MetadataAutoMatchResponse,
+            v1::dto::SearchTitleResponse,
             v1::dto::EnqueueAutoMatchRequest,
             v1::dto::EnqueueAutoMatchResponse,
             v1::dto::EnqueueBulkAutoMatchRequest,

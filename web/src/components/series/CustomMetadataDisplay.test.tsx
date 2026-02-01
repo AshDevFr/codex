@@ -1,47 +1,64 @@
 import { describe, expect, it } from "vitest";
 import { renderWithProviders, screen } from "@/test/utils";
-import type { MetadataForTemplate } from "@/utils/templateUtils";
+import type { SeriesContextWithCustomMetadata } from "@/utils/templateUtils";
 import { CustomMetadataDisplay } from "./CustomMetadataDisplay";
 
 /**
- * Creates a mock MetadataForTemplate for testing
+ * Creates a mock SeriesContext for testing
  */
-function createMockTemplateMetadata(
-	overrides: Partial<MetadataForTemplate> = {},
-): MetadataForTemplate {
+function createMockContext(
+	overrides: Partial<SeriesContextWithCustomMetadata> = {},
+): SeriesContextWithCustomMetadata {
 	return {
-		title: "Test Series",
-		summary: null,
-		publisher: null,
-		imprint: null,
-		year: null,
-		ageRating: null,
-		language: null,
-		status: null,
-		readingDirection: null,
-		totalBookCount: null,
-		titleSort: null,
-		genres: [],
-		tags: [],
-		externalRatings: [],
-		externalLinks: [],
-		alternateTitles: [],
+		seriesId: "550e8400-e29b-41d4-a716-446655440000",
+		bookCount: 5,
+		metadata: {
+			title: "Test Series",
+			titleSort: null,
+			summary: null,
+			publisher: null,
+			imprint: null,
+			year: null,
+			ageRating: null,
+			language: null,
+			status: null,
+			readingDirection: null,
+			totalBookCount: null,
+			genres: [],
+			tags: [],
+			titleLock: false,
+			titleSortLock: false,
+			summaryLock: false,
+			publisherLock: false,
+			imprintLock: false,
+			statusLock: false,
+			ageRatingLock: false,
+			languageLock: false,
+			readingDirectionLock: false,
+			yearLock: false,
+			totalBookCountLock: false,
+			genresLock: false,
+			tagsLock: false,
+			customMetadataLock: false,
+		},
+		externalIds: {},
+		customMetadata: null,
 		...overrides,
 	};
 }
 
 describe("CustomMetadataDisplay", () => {
 	describe("rendering", () => {
-		it("should render nothing when customMetadata is null", () => {
+		it("should render nothing when context is null", () => {
 			const { container } = renderWithProviders(
-				<CustomMetadataDisplay customMetadata={null} />,
+				<CustomMetadataDisplay context={null} />,
 			);
 			expect(container.querySelector(".custom-metadata-display")).toBeNull();
 		});
 
-		it("should render nothing when customMetadata is undefined", () => {
+		it("should render nothing when context is undefined", () => {
 			const { container } = renderWithProviders(
-				<CustomMetadataDisplay customMetadata={undefined} />,
+				<CustomMetadataDisplay context={undefined} />,
 			);
 			expect(container.querySelector(".custom-metadata-display")).toBeNull();
 		});
@@ -49,10 +66,12 @@ describe("CustomMetadataDisplay", () => {
 		it("should render nothing when template is not provided", () => {
 			const { container } = renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={{
-						status: "reading",
-						rating: 8.5,
-					}}
+					context={createMockContext({
+						customMetadata: {
+							status: "reading",
+							rating: 8.5,
+						},
+					})}
 				/>,
 			);
 
@@ -63,13 +82,15 @@ describe("CustomMetadataDisplay", () => {
 		it("should render custom metadata with provided template", () => {
 			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={{
-						status: "reading",
-						rating: 8.5,
-					}}
+					context={createMockContext({
+						customMetadata: {
+							status: "reading",
+							rating: 8.5,
+						},
+					})}
 					template={`## Additional Information
 
-{{#each custom_metadata}}
+{{#each customMetadata}}
 - **{{@key}}**: {{this}}
 {{/each}}`}
 				/>,
@@ -83,8 +104,10 @@ describe("CustomMetadataDisplay", () => {
 		it("should render custom metadata with custom template", () => {
 			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={{ name: "Test" }}
-					template="Hello {{custom_metadata.name}}!"
+					context={createMockContext({
+						customMetadata: { name: "Test" },
+					})}
+					template="Hello {{customMetadata.name}}!"
 				/>,
 			);
 
@@ -94,37 +117,89 @@ describe("CustomMetadataDisplay", () => {
 		it("should handle nested custom metadata", () => {
 			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={{
-						info: {
-							nested: "value",
+					context={createMockContext({
+						customMetadata: {
+							info: {
+								nested: "value",
+							},
 						},
-					}}
-					template="{{custom_metadata.info.nested}}"
+					})}
+					template="{{customMetadata.info.nested}}"
 				/>,
 			);
 
 			expect(screen.getByText("value")).toBeInTheDocument();
 		});
-	});
 
-	describe("empty states", () => {
-		it("should render nothing for empty object", () => {
-			const { container } = renderWithProviders(
+		it("should support backwards compatible custom_metadata syntax", () => {
+			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={{}}
-					template="{{#each custom_metadata}}- {{@key}}: {{this}}{{/each}}"
+					context={createMockContext({
+						customMetadata: { name: "Test" },
+					})}
+					template="Hello {{custom_metadata.name}}!"
 				/>,
 			);
 
-			// Component returns null when customMetadata is empty
-			expect(container.querySelector(".custom-metadata-display")).toBeNull();
+			expect(screen.getByText("Hello Test!")).toBeInTheDocument();
+		});
+	});
+
+	describe("series context fields", () => {
+		it("should render seriesId", () => {
+			renderWithProviders(
+				<CustomMetadataDisplay
+					context={createMockContext({
+						seriesId: "test-series-id-123",
+					})}
+					template="ID: {{seriesId}}"
+				/>,
+			);
+
+			expect(screen.getByText(/test-series-id-123/)).toBeInTheDocument();
 		});
 
+		it("should render bookCount", () => {
+			renderWithProviders(
+				<CustomMetadataDisplay
+					context={createMockContext({
+						bookCount: 42,
+					})}
+					template="Books: {{bookCount}}"
+				/>,
+			);
+
+			expect(screen.getByText(/42/)).toBeInTheDocument();
+		});
+
+		it("should render externalIds", () => {
+			renderWithProviders(
+				<CustomMetadataDisplay
+					context={createMockContext({
+						externalIds: {
+							"plugin:mangabaka": {
+								id: "12345",
+								url: "https://example.com/12345",
+								hash: null,
+							},
+						},
+					})}
+					template="External ID: {{externalIds.plugin:mangabaka.id}}"
+				/>,
+			);
+
+			expect(screen.getByText(/12345/)).toBeInTheDocument();
+		});
+	});
+
+	describe("empty states", () => {
 		it("should render nothing when template produces empty output", () => {
 			const { container } = renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={{ value: "test" }}
-					template="{{#if custom_metadata.missing}}Show{{/if}}"
+					context={createMockContext({
+						customMetadata: { value: "test" },
+					})}
+					template="{{#if customMetadata.missing}}Show{{/if}}"
 				/>,
 			);
 
@@ -137,7 +212,9 @@ describe("CustomMetadataDisplay", () => {
 		it("should not show errors by default", () => {
 			const { container } = renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={{ test: "value" }}
+					context={createMockContext({
+						customMetadata: { test: "value" },
+					})}
 					template="{{#if}}invalid{{/if}}"
 					showErrors={false}
 				/>,
@@ -151,7 +228,9 @@ describe("CustomMetadataDisplay", () => {
 			// Use a template that actually fails at runtime
 			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={{ test: "value" }}
+					context={createMockContext({
+						customMetadata: { test: "value" },
+					})}
 					template="{{#badHelper}}invalid{{/badHelper}}"
 					showErrors={true}
 				/>,
@@ -168,7 +247,9 @@ describe("CustomMetadataDisplay", () => {
 		it("should render content from template", () => {
 			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={{ title: "Test" }}
+					context={createMockContext({
+						customMetadata: { title: "Test" },
+					})}
 					template="Heading Content"
 				/>,
 			);
@@ -180,8 +261,10 @@ describe("CustomMetadataDisplay", () => {
 		it("should render template with each loop output", () => {
 			const { container } = renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={{ items: ["a", "b", "c"] }}
-					template="Items: {{#each custom_metadata.items}}{{this}} {{/each}}"
+					context={createMockContext({
+						customMetadata: { items: ["a", "b", "c"] },
+					})}
+					template="Items: {{#each customMetadata.items}}{{this}} {{/each}}"
 				/>,
 			);
 
@@ -194,7 +277,9 @@ describe("CustomMetadataDisplay", () => {
 		it("should render markdown links with target blank for external links", () => {
 			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={{ url: "https://example.com" }}
+					context={createMockContext({
+						customMetadata: { url: "https://example.com" },
+					})}
 					template="[Link](https://example.com)"
 				/>,
 			);
@@ -208,7 +293,9 @@ describe("CustomMetadataDisplay", () => {
 		it("should render markdown bold text", () => {
 			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={{ value: "test" }}
+					context={createMockContext({
+						customMetadata: { value: "test" },
+					})}
 					template="**Bold** text"
 				/>,
 			);
@@ -222,8 +309,10 @@ describe("CustomMetadataDisplay", () => {
 		it("should support formatDate helper", () => {
 			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={{ date: "2024-01-15T12:00:00Z" }}
-					template='Date: {{formatDate custom_metadata.date "yyyy-MM-dd"}}'
+					context={createMockContext({
+						customMetadata: { date: "2024-01-15T12:00:00Z" },
+					})}
+					template='Date: {{formatDate customMetadata.date "yyyy-MM-dd"}}'
 				/>,
 			);
 
@@ -234,8 +323,10 @@ describe("CustomMetadataDisplay", () => {
 		it("should support join helper", () => {
 			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={{ tags: ["action", "comedy", "drama"] }}
-					template='Tags: {{join custom_metadata.tags ", "}}'
+					context={createMockContext({
+						customMetadata: { tags: ["action", "comedy", "drama"] },
+					})}
+					template='Tags: {{join customMetadata.tags ", "}}'
 				/>,
 			);
 
@@ -245,8 +336,10 @@ describe("CustomMetadataDisplay", () => {
 		it("should support default helper for missing values", () => {
 			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={{ other: "test" }}
-					template='Status: {{default custom_metadata.status "Unknown"}}'
+					context={createMockContext({
+						customMetadata: { other: "test" },
+					})}
+					template='Status: {{default customMetadata.status "Unknown"}}'
 				/>,
 			);
 
@@ -256,11 +349,13 @@ describe("CustomMetadataDisplay", () => {
 		it("should support truncate helper", () => {
 			const { container } = renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={{
-						description:
-							"This is a very long description that should be truncated",
-					}}
-					template='{{truncate custom_metadata.description 20 "..."}}'
+					context={createMockContext({
+						customMetadata: {
+							description:
+								"This is a very long description that should be truncated",
+						},
+					})}
+					template='{{truncate customMetadata.description 20 "..."}}'
 				/>,
 			);
 
@@ -274,8 +369,10 @@ describe("CustomMetadataDisplay", () => {
 		it("should escape HTML in custom metadata values", () => {
 			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={{ script: "<script>alert('xss')</script>" }}
-					template="{{custom_metadata.script}}"
+					context={createMockContext({
+						customMetadata: { script: "<script>alert('xss')</script>" },
+					})}
+					template="{{customMetadata.script}}"
 				/>,
 			);
 
@@ -290,16 +387,39 @@ describe("CustomMetadataDisplay", () => {
 
 	describe("built-in metadata support", () => {
 		it("should render metadata fields via metadata.* syntax", () => {
-			const metadata = createMockTemplateMetadata({
-				title: "Attack on Titan",
-				publisher: "Kodansha",
-				year: 2009,
-			});
-
 			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={null}
-					metadata={metadata}
+					context={createMockContext({
+						metadata: {
+							title: "Attack on Titan",
+							titleSort: null,
+							summary: null,
+							publisher: "Kodansha",
+							imprint: null,
+							year: 2009,
+							ageRating: null,
+							language: null,
+							status: null,
+							readingDirection: null,
+							totalBookCount: null,
+							genres: [],
+							tags: [],
+							titleLock: false,
+							titleSortLock: false,
+							summaryLock: false,
+							publisherLock: false,
+							imprintLock: false,
+							statusLock: false,
+							ageRatingLock: false,
+							languageLock: false,
+							readingDirectionLock: false,
+							yearLock: false,
+							totalBookCountLock: false,
+							genresLock: false,
+							tagsLock: false,
+							customMetadataLock: false,
+						},
+					})}
 					template="**{{metadata.title}}** by {{metadata.publisher}} ({{metadata.year}})"
 				/>,
 			);
@@ -310,14 +430,39 @@ describe("CustomMetadataDisplay", () => {
 		});
 
 		it("should render genres as array of strings", () => {
-			const metadata = createMockTemplateMetadata({
-				genres: ["Action", "Dark Fantasy", "Drama"],
-			});
-
 			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={null}
-					metadata={metadata}
+					context={createMockContext({
+						metadata: {
+							title: "Test",
+							titleSort: null,
+							summary: null,
+							publisher: null,
+							imprint: null,
+							year: null,
+							ageRating: null,
+							language: null,
+							status: null,
+							readingDirection: null,
+							totalBookCount: null,
+							genres: ["Action", "Dark Fantasy", "Drama"],
+							tags: [],
+							titleLock: false,
+							titleSortLock: false,
+							summaryLock: false,
+							publisherLock: false,
+							imprintLock: false,
+							statusLock: false,
+							ageRatingLock: false,
+							languageLock: false,
+							readingDirectionLock: false,
+							yearLock: false,
+							totalBookCountLock: false,
+							genresLock: false,
+							tagsLock: false,
+							customMetadataLock: false,
+						},
+					})}
 					template='Genres: {{join metadata.genres ", "}}'
 				/>,
 			);
@@ -328,14 +473,39 @@ describe("CustomMetadataDisplay", () => {
 		});
 
 		it("should render tags as array of strings", () => {
-			const metadata = createMockTemplateMetadata({
-				tags: ["manga", "titans", "survival"],
-			});
-
 			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={null}
-					metadata={metadata}
+					context={createMockContext({
+						metadata: {
+							title: "Test",
+							titleSort: null,
+							summary: null,
+							publisher: null,
+							imprint: null,
+							year: null,
+							ageRating: null,
+							language: null,
+							status: null,
+							readingDirection: null,
+							totalBookCount: null,
+							genres: [],
+							tags: ["manga", "titans", "survival"],
+							titleLock: false,
+							titleSortLock: false,
+							summaryLock: false,
+							publisherLock: false,
+							imprintLock: false,
+							statusLock: false,
+							ageRatingLock: false,
+							languageLock: false,
+							readingDirectionLock: false,
+							yearLock: false,
+							totalBookCountLock: false,
+							genresLock: false,
+							tagsLock: false,
+							customMetadataLock: false,
+						},
+					})}
 					template='Tags: {{join metadata.tags ", "}}'
 				/>,
 			);
@@ -343,91 +513,45 @@ describe("CustomMetadataDisplay", () => {
 			expect(screen.getByText(/manga, titans, survival/)).toBeInTheDocument();
 		});
 
-		it("should render external ratings", () => {
-			const metadata = createMockTemplateMetadata({
-				externalRatings: [
-					{ source: "MyAnimeList", rating: 8.54, votes: 1250000 },
-					{ source: "AniList", rating: 84 },
-				],
-			});
-
+		it("should support combining customMetadata and metadata", () => {
 			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={null}
-					metadata={metadata}
-					template={`{{#each metadata.externalRatings}}
-- {{source}}: {{rating}}{{#if votes}} ({{votes}} votes){{/if}}
-{{/each}}`}
-				/>,
-			);
-
-			expect(screen.getByText(/MyAnimeList/)).toBeInTheDocument();
-			expect(screen.getByText(/8.54/)).toBeInTheDocument();
-			expect(screen.getByText(/1250000/)).toBeInTheDocument();
-			expect(screen.getByText(/AniList/)).toBeInTheDocument();
-		});
-
-		it("should render external links", () => {
-			const metadata = createMockTemplateMetadata({
-				externalLinks: [
-					{
-						source: "MyAnimeList",
-						url: "https://myanimelist.net/manga/23390",
-					},
-				],
-			});
-
-			renderWithProviders(
-				<CustomMetadataDisplay
-					customMetadata={null}
-					metadata={metadata}
-					template={`{{#each metadata.externalLinks}}[{{source}}]({{url}}){{/each}}`}
-				/>,
-			);
-
-			const link = screen.getByRole("link", { name: "MyAnimeList" });
-			expect(link).toHaveAttribute(
-				"href",
-				"https://myanimelist.net/manga/23390",
-			);
-		});
-
-		it("should render alternate titles", () => {
-			const metadata = createMockTemplateMetadata({
-				alternateTitles: [
-					{ title: "Shingeki no Kyojin", label: "Japanese" },
-					{ title: "進撃の巨人", label: "Native" },
-				],
-			});
-
-			renderWithProviders(
-				<CustomMetadataDisplay
-					customMetadata={null}
-					metadata={metadata}
-					template={`{{#each metadata.alternateTitles}}- {{label}}: {{title}}
-{{/each}}`}
-				/>,
-			);
-
-			expect(screen.getByText(/Japanese/)).toBeInTheDocument();
-			expect(screen.getByText(/Shingeki no Kyojin/)).toBeInTheDocument();
-			expect(screen.getByText(/Native/)).toBeInTheDocument();
-		});
-
-		it("should support combining custom_metadata and metadata", () => {
-			const metadata = createMockTemplateMetadata({
-				title: "Attack on Titan",
-				genres: ["Action", "Drama"],
-			});
-
-			renderWithProviders(
-				<CustomMetadataDisplay
-					customMetadata={{ myRating: 9.5, status: "reading" }}
-					metadata={metadata}
+					context={createMockContext({
+						metadata: {
+							title: "Attack on Titan",
+							titleSort: null,
+							summary: null,
+							publisher: null,
+							imprint: null,
+							year: null,
+							ageRating: null,
+							language: null,
+							status: null,
+							readingDirection: null,
+							totalBookCount: null,
+							genres: ["Action", "Drama"],
+							tags: [],
+							titleLock: false,
+							titleSortLock: false,
+							summaryLock: false,
+							publisherLock: false,
+							imprintLock: false,
+							statusLock: false,
+							ageRatingLock: false,
+							languageLock: false,
+							readingDirectionLock: false,
+							yearLock: false,
+							totalBookCountLock: false,
+							genresLock: false,
+							tagsLock: false,
+							customMetadataLock: false,
+						},
+						customMetadata: { myRating: 9.5, status: "reading" },
+					})}
 					template={`# {{metadata.title}}
 Genres: {{join metadata.genres ", "}}
-My Rating: {{custom_metadata.myRating}}
-Status: {{custom_metadata.status}}`}
+My Rating: {{customMetadata.myRating}}
+Status: {{customMetadata.status}}`}
 				/>,
 			);
 
@@ -437,16 +561,41 @@ Status: {{custom_metadata.status}}`}
 			expect(screen.getByText(/reading/)).toBeInTheDocument();
 		});
 
-		it("should render with only metadata (no custom_metadata)", () => {
-			const metadata = createMockTemplateMetadata({
-				title: "Solo Leveling",
-				status: "ended",
-			});
-
+		it("should render with only metadata (no customMetadata)", () => {
 			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={null}
-					metadata={metadata}
+					context={createMockContext({
+						metadata: {
+							title: "Solo Leveling",
+							titleSort: null,
+							summary: null,
+							publisher: null,
+							imprint: null,
+							year: null,
+							ageRating: null,
+							language: null,
+							status: "ended",
+							readingDirection: null,
+							totalBookCount: null,
+							genres: [],
+							tags: [],
+							titleLock: false,
+							titleSortLock: false,
+							summaryLock: false,
+							publisherLock: false,
+							imprintLock: false,
+							statusLock: false,
+							ageRatingLock: false,
+							languageLock: false,
+							readingDirectionLock: false,
+							yearLock: false,
+							totalBookCountLock: false,
+							genresLock: false,
+							tagsLock: false,
+							customMetadataLock: false,
+						},
+						customMetadata: null,
+					})}
 					template="{{metadata.title}} - {{metadata.status}}"
 				/>,
 			);
@@ -454,39 +603,48 @@ Status: {{custom_metadata.status}}`}
 			expect(screen.getByText(/Solo Leveling - ended/)).toBeInTheDocument();
 		});
 
-		it("should render nothing when only metadata is provided but template is empty", () => {
-			const metadata = createMockTemplateMetadata({ title: "Test" });
-
+		it("should render nothing when context is provided but template is empty", () => {
 			const { container } = renderWithProviders(
-				<CustomMetadataDisplay customMetadata={null} metadata={metadata} />,
+				<CustomMetadataDisplay context={createMockContext()} />,
 			);
 
 			expect(container.querySelector(".custom-metadata-display")).toBeNull();
 		});
 
-		it("should handle null metadata gracefully", () => {
-			const { container } = renderWithProviders(
-				<CustomMetadataDisplay
-					customMetadata={{ test: "value" }}
-					metadata={null}
-					template="{{custom_metadata.test}}"
-				/>,
-			);
-
-			expect(container.textContent).toContain("value");
-		});
-
 		it("should handle missing metadata fields gracefully", () => {
-			const metadata = createMockTemplateMetadata({
-				title: "Test",
-				summary: null,
-				publisher: null,
-			});
-
 			renderWithProviders(
 				<CustomMetadataDisplay
-					customMetadata={null}
-					metadata={metadata}
+					context={createMockContext({
+						metadata: {
+							title: "Test",
+							titleSort: null,
+							summary: null,
+							publisher: null,
+							imprint: null,
+							year: null,
+							ageRating: null,
+							language: null,
+							status: null,
+							readingDirection: null,
+							totalBookCount: null,
+							genres: [],
+							tags: [],
+							titleLock: false,
+							titleSortLock: false,
+							summaryLock: false,
+							publisherLock: false,
+							imprintLock: false,
+							statusLock: false,
+							ageRatingLock: false,
+							languageLock: false,
+							readingDirectionLock: false,
+							yearLock: false,
+							totalBookCountLock: false,
+							genresLock: false,
+							tagsLock: false,
+							customMetadataLock: false,
+						},
+					})}
 					template='Title: {{metadata.title}}, Publisher: {{default metadata.publisher "Unknown"}}'
 				/>,
 			);

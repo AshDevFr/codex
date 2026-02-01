@@ -125,7 +125,7 @@ describe("BulkSelectionToolbar", () => {
 	});
 
 	describe("action buttons", () => {
-		it("should display Mark Read, Mark Unread, and Analyze buttons", () => {
+		it("should display Mark Read, Mark Unread, and More buttons", () => {
 			useBulkSelectionStore.getState().toggleSelection("book-1", "book");
 
 			renderWithProviders(<BulkSelectionToolbar />);
@@ -136,8 +136,9 @@ describe("BulkSelectionToolbar", () => {
 			expect(
 				screen.getByRole("button", { name: /mark unread/i }),
 			).toBeInTheDocument();
+			// Analyze is now in the More dropdown menu
 			expect(
-				screen.getByRole("button", { name: /analyze/i }),
+				screen.getByRole("button", { name: /more actions/i }),
 			).toBeInTheDocument();
 		});
 
@@ -234,7 +235,13 @@ describe("BulkSelectionToolbar", () => {
 
 			renderWithProviders(<BulkSelectionToolbar />);
 
-			await user.click(screen.getByRole("button", { name: /analyze/i }));
+			// Open the More menu first, then click Analyze
+			await user.click(screen.getByRole("button", { name: /more actions/i }));
+			// Wait for the menu dropdown to appear in the portal
+			await waitFor(() => {
+				expect(screen.getByText("Analyze")).toBeInTheDocument();
+			});
+			await user.click(screen.getByText("Analyze"));
 
 			await waitFor(() => {
 				expect(booksApi.bulkAnalyze).toHaveBeenCalledWith(["book-1", "book-2"]);
@@ -285,7 +292,13 @@ describe("BulkSelectionToolbar", () => {
 
 			renderWithProviders(<BulkSelectionToolbar />);
 
-			await user.click(screen.getByRole("button", { name: /analyze/i }));
+			// Open the More menu first, then click Analyze
+			await user.click(screen.getByRole("button", { name: /more actions/i }));
+			// Wait for the menu dropdown to appear in the portal
+			await waitFor(() => {
+				expect(screen.getByText("Analyze")).toBeInTheDocument();
+			});
+			await user.click(screen.getByText("Analyze"));
 
 			await waitFor(() => {
 				expect(seriesApi.bulkAnalyze).toHaveBeenCalledWith(["series-1"]);
@@ -329,7 +342,13 @@ describe("BulkSelectionToolbar", () => {
 
 			renderWithProviders(<BulkSelectionToolbar />);
 
-			await user.click(screen.getByRole("button", { name: /analyze/i }));
+			// Open the More menu first, then click Analyze
+			await user.click(screen.getByRole("button", { name: /more actions/i }));
+			// Wait for the menu dropdown to appear in the portal
+			await waitFor(() => {
+				expect(screen.getByText("Analyze")).toBeInTheDocument();
+			});
+			await user.click(screen.getByText("Analyze"));
 
 			await waitFor(() => {
 				expect(useBulkSelectionStore.getState().selectedIds.size).toBe(0);

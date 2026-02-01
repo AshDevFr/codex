@@ -207,10 +207,12 @@ impl Scheduler {
             Box::pin(async move {
                 info!("Triggering scheduled book thumbnail generation");
 
-                // GenerateThumbnails with no library_id/series_id will process all books
+                // GenerateThumbnails with no scopes will process all books
                 let task_type = TaskType::GenerateThumbnails {
                     library_id: None,
                     series_id: None,
+                    series_ids: None,
+                    book_ids: None,
                     force: false, // Only generate missing thumbnails
                 };
 
@@ -260,6 +262,7 @@ impl Scheduler {
                 // Enqueue fan-out task that will filter and enqueue individual tasks
                 let task_type = TaskType::GenerateSeriesThumbnails {
                     library_id: None,
+                    series_ids: None,
                     force: false, // Only generate missing thumbnails
                 };
 

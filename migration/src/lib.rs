@@ -68,6 +68,11 @@ mod m20260130_000037_seed_thumbnail_cron_settings;
 // Update validation_rules for settings UI hints
 mod m20260130_000038_update_settings_validation_rules;
 
+// Metadata plugin extended features
+mod m20260131_000039_create_series_external_ids;
+mod m20260131_000040_add_library_preprocessing;
+mod m20260131_000041_add_plugin_search_config;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -126,6 +131,10 @@ impl MigratorTrait for Migrator {
             Box::new(m20260130_000037_seed_thumbnail_cron_settings::Migration),
             // Update validation_rules for settings UI hints
             Box::new(m20260130_000038_update_settings_validation_rules::Migration),
+            // Metadata plugin extended features
+            Box::new(m20260131_000039_create_series_external_ids::Migration),
+            Box::new(m20260131_000040_add_library_preprocessing::Migration),
+            Box::new(m20260131_000041_add_plugin_search_config::Migration),
         ]
     }
 }

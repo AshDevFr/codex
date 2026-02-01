@@ -29,6 +29,7 @@ import {
 	IconEdit,
 	IconInfoCircle,
 	IconPhoto,
+	IconRefresh,
 	IconSearch,
 	IconWand,
 } from "@tabler/icons-react";
@@ -49,6 +50,7 @@ import {
 	AlternateTitles,
 	CommunityRating,
 	CustomMetadataDisplay,
+	ExternalIds,
 	ExternalLinks,
 	ExternalRatings,
 	GenreTagChips,
@@ -60,7 +62,7 @@ import {
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import { PERMISSIONS } from "@/types/permissions";
-import { transformFullSeriesToMetadataForTemplate } from "@/utils/templateUtils";
+import { transformFullSeriesToSeriesContext } from "@/utils/templateUtils";
 
 // Helper to format reading direction
 function formatReadingDirection(dir?: string | null): string | null {
@@ -101,6 +103,9 @@ export function SeriesDetail() {
 	const [selectedPlugin, setSelectedPlugin] = useState<PluginActionDto | null>(
 		null,
 	);
+	const [preprocessedSearchTitle, setPreprocessedSearchTitle] = useState<
+		string | null
+	>(null);
 	const [
 		metadataFlowOpened,
 		{ open: openMetadataFlow, close: closeMetadataFlow },
@@ -139,32 +144,47 @@ export function SeriesDetail() {
 		enabled: canEditSeries && !!series, // Only fetch if user can edit series and series is loaded
 	});
 
-	// Handler for plugin action click (opens search modal)
+	// Mutation to fetch preprocessed search title before opening modal
+	const searchTitleMutation = useMutation({
+		mutationFn: (pluginId: string) => {
+			if (!seriesId) throw new Error("Series ID is required");
+			return pluginActionsApi.getSearchTitle(seriesId, pluginId);
+		},
+		onSuccess: (data) => {
+			setPreprocessedSearchTitle(data.searchTitle);
+			openMetadataFlow();
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Failed to get search title",
+				message: error.message,
+				color: "red",
+			});
+		},
+	});
+
+	// Handler for plugin action click (fetches preprocessed title, then opens search modal)
 	const handlePluginAction = (plugin: PluginActionDto) => {
 		setSelectedPlugin(plugin);
-		openMetadataFlow();
+		searchTitleMutation.mutate(plugin.pluginId);
 	};
 
-	// Auto-match mutation
+	// Auto-match mutation - uses task queue for proper preprocessing rule support
 	const autoMatchMutation = useMutation({
-		mutationFn: (pluginId: string) =>
-			pluginActionsApi.autoMatchSeriesMetadata(seriesId!, pluginId),
+		mutationFn: (pluginId: string) => {
+			if (!seriesId) throw new Error("Series ID is required");
+			return pluginActionsApi.enqueueAutoMatchTask(seriesId, pluginId);
+		},
 		onSuccess: (data) => {
-			if (data.success) {
-				notifications.show({
-					title: "Metadata Applied",
-					message: data.message,
-					color: "green",
-					icon: <IconCheck size={16} />,
-				});
-				queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
-			} else {
-				notifications.show({
-					title: "No Match Found",
-					message: data.message,
-					color: "yellow",
-				});
-			}
+			const taskId = data.taskIds[0];
+			notifications.show({
+				title: "Auto-match Started",
+				message: taskId
+					? `Task queued (ID: ${taskId.slice(0, 8)}...)`
+					: data.message,
+				color: "blue",
+			});
+			// Note: Series will be refreshed via SSE when the task completes
 		},
 		onError: (error: Error) => {
 			notifications.show({
@@ -351,6 +371,26 @@ export function SeriesDetail() {
 			notifications.show({
 				title: "Series cover regeneration started",
 				message: "Series cover thumbnail will be regenerated",
+				color: "blue",
+			});
+			queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
+		},
+		onError: (error: Error) => {
+			notifications.show({
+				title: "Failed",
+				message: error.message,
+				color: "red",
+			});
+		},
+	});
+
+	// Reprocess series title mutation (applies library preprocessing rules)
+	const reprocessTitleMutation = useMutation({
+		mutationFn: () => seriesApi.reprocessTitle(seriesId!),
+		onSuccess: () => {
+			notifications.show({
+				title: "Reprocessing title",
+				message: "Series title will be reprocessed using library rules",
 				color: "blue",
 			});
 			queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
@@ -583,6 +623,13 @@ export function SeriesDetail() {
 												>
 													Edit Metadata
 												</Menu.Item>
+												<Menu.Item
+													leftSection={<IconRefresh size={14} />}
+													onClick={() => reprocessTitleMutation.mutate()}
+													disabled={reprocessTitleMutation.isPending}
+												>
+													Reprocess Title
+												</Menu.Item>
 												{/* Plugin actions for metadata fetching */}
 												{pluginActions && pluginActions.actions.length > 0 && (
 													<>
@@ -747,6 +794,16 @@ export function SeriesDetail() {
 						</Group>
 					)}
 
+					{/* External IDs */}
+					{series.externalIds && series.externalIds.length > 0 && (
+						<Group gap="md" align="flex-start">
+							<Text size="sm" c="dimmed" w={100}>
+								EXTERNAL IDS
+							</Text>
+							<ExternalIds externalIds={series.externalIds} />
+						</Group>
+					)}
+
 					{/* External Links */}
 					{series.externalLinks && series.externalLinks.length > 0 && (
 						<Group gap="md" align="flex-start">
@@ -775,12 +832,9 @@ export function SeriesDetail() {
 					</Group>
 
 					{/* Custom Metadata */}
-					{(metadata?.customMetadata || series) && (
+					{series && (
 						<CustomMetadataDisplay
-							customMetadata={
-								metadata?.customMetadata as Record<string, unknown>
-							}
-							metadata={transformFullSeriesToMetadataForTemplate(series)}
+							context={transformFullSeriesToSeriesContext(series)}
 							template={
 								publicSettings?.["display.custom_metadata_template"]?.value
 							}
@@ -811,10 +865,13 @@ export function SeriesDetail() {
 			{selectedPlugin && (
 				<MetadataApplyFlow
 					opened={metadataFlowOpened}
-					onClose={closeMetadataFlow}
+					onClose={() => {
+						closeMetadataFlow();
+						setPreprocessedSearchTitle(null);
+					}}
 					plugin={selectedPlugin}
 					entityId={series.id}
-					entityTitle={seriesTitle}
+					entityTitle={preprocessedSearchTitle ?? seriesTitle}
 					contentType="series"
 					onApplySuccess={handleMetadataApplySuccess}
 				/>

@@ -245,7 +245,23 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             post(handlers::bulk_mark_series_as_unread),
         )
         .route("/series/bulk/analyze", post(handlers::bulk_analyze_series))
+        .route(
+            "/series/bulk/thumbnails/generate",
+            post(handlers::bulk_generate_series_thumbnails),
+        )
+        .route(
+            "/series/bulk/thumbnails/books/generate",
+            post(handlers::bulk_generate_series_book_thumbnails),
+        )
+        .route(
+            "/series/bulk/titles/reprocess",
+            post(handlers::bulk_reprocess_series_titles),
+        )
         // Series metadata from plugins (Phase 4)
+        .route(
+            "/series/:series_id/metadata/search-title",
+            get(handlers::plugin_actions::get_series_search_title),
+        )
         .route(
             "/series/:series_id/metadata/preview",
             post(handlers::plugin_actions::preview_series_metadata),
@@ -266,5 +282,15 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route(
             "/series/metadata/auto-match/task/bulk",
             post(handlers::plugin_actions::enqueue_bulk_auto_match_tasks),
+        )
+        // Reprocess series titles (batch)
+        .route(
+            "/series/titles/reprocess",
+            post(handlers::task_queue::reprocess_series_titles),
+        )
+        // Reprocess single series title
+        .route(
+            "/series/:series_id/title/reprocess",
+            post(handlers::task_queue::reprocess_series_title),
         )
 }

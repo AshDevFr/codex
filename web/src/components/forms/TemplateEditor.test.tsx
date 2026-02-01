@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderWithProviders, screen, userEvent } from "@/test/utils";
-import { SAMPLE_METADATA_FOR_TEMPLATE } from "@/utils/templateUtils";
+import {
+	SAMPLE_METADATA_FOR_TEMPLATE,
+	SAMPLE_SERIES_CONTEXT,
+} from "@/utils/templateUtils";
 import { TemplateEditor } from "./TemplateEditor";
 
 describe("TemplateEditor", () => {
@@ -39,81 +42,67 @@ describe("TemplateEditor", () => {
 		});
 	});
 
-	describe("metadata section", () => {
-		it("should show metadata section by default", () => {
+	describe("context section", () => {
+		it("should show series context section by default", () => {
 			renderWithProviders(<TemplateEditor value="" onChange={() => {}} />);
 
-			expect(screen.getByText("Series Metadata (Mock)")).toBeInTheDocument();
+			expect(screen.getByText("Series Context (Mock)")).toBeInTheDocument();
 		});
 
-		it("should show metadata hint text", () => {
+		it("should show context hint text with available variables", () => {
 			renderWithProviders(<TemplateEditor value="" onChange={() => {}} />);
 
-			expect(
-				screen.getByText(/Available as.*in templates/),
-			).toBeInTheDocument();
+			// The hint text includes variable names like seriesId, bookCount, metadata.*, externalIds.*
+			// Use getAllByText since seriesId appears in multiple places
+			expect(screen.getAllByText(/seriesId/).length).toBeGreaterThan(0);
 		});
 
-		it("should hide metadata section when showMetadataSection is false", () => {
-			renderWithProviders(
-				<TemplateEditor
-					value=""
-					onChange={() => {}}
-					showMetadataSection={false}
-				/>,
-			);
-
-			expect(
-				screen.queryByText("Series Metadata (Mock)"),
-			).not.toBeInTheDocument();
-		});
-
-		it("should expand metadata section on click", async () => {
+		it("should expand context section on click", async () => {
 			const user = userEvent.setup();
 			renderWithProviders(<TemplateEditor value="" onChange={() => {}} />);
 
-			// Click to expand the metadata section
-			await user.click(screen.getByText("Series Metadata (Mock)"));
+			// Click to expand the context section
+			await user.click(screen.getByText("Series Context (Mock)"));
 
-			// After expansion, should show the helpful text about metadata usage
+			// After expansion, should show the helpful text about context usage
 			expect(
 				screen.getByText(
-					/This mock data represents the built-in series metadata/,
+					/This mock data represents the series context available in templates/,
 				),
 			).toBeInTheDocument();
 		});
 
-		it("should display sample metadata when expanded", async () => {
+		it("should display sample context data when expanded", async () => {
 			const user = userEvent.setup();
 			renderWithProviders(<TemplateEditor value="" onChange={() => {}} />);
 
-			// Click to expand the metadata section
-			await user.click(screen.getByText("Series Metadata (Mock)"));
+			// Click to expand the context section
+			await user.click(screen.getByText("Series Context (Mock)"));
 
-			// Should show the metadata root name
-			expect(screen.getByText("metadata")).toBeInTheDocument();
+			// Should show context root name
+			expect(screen.getByText("context")).toBeInTheDocument();
 		});
 
-		it("should use custom metadataTestData when provided", async () => {
-			const customMetadata = {
-				...SAMPLE_METADATA_FOR_TEMPLATE,
-				title: "Custom Test Title For Metadata",
+		it("should use custom initialContext when provided", () => {
+			const customContext = {
+				...SAMPLE_SERIES_CONTEXT,
+				customMetadata: {
+					...SAMPLE_SERIES_CONTEXT.customMetadata,
+					uniqueCustomField: "Custom Test Value Here",
+				},
 			};
 
-			const user = userEvent.setup();
 			const { container } = renderWithProviders(
 				<TemplateEditor
 					value=""
 					onChange={() => {}}
-					metadataTestData={customMetadata}
+					initialContext={customContext}
 				/>,
 			);
 
-			// Click to expand the metadata section
-			await user.click(screen.getByText("Series Metadata (Mock)"));
-
-			// The JsonEditor renders the data - check that the custom title is in the DOM
-			expect(container.textContent).toContain("Custom Test Title For Metadata");
+			// The Test Data section shows customMetadata which should include our unique field
+			// Check that the custom metadata value appears in the tree view
+			expect(container.textContent).toContain("Custom Test Value Here");
 		});
 	});
 
@@ -143,13 +132,13 @@ describe("TemplateEditor", () => {
 			// Click to expand the help section
 			await user.click(screen.getByText("Template Syntax Help"));
 
-			// Should show the data sources section
-			expect(screen.getByText("Available Data Sources")).toBeInTheDocument();
+			// Should show the available variables section
+			expect(screen.getByText("Available Variables")).toBeInTheDocument();
 			// Should show the metadata fields section
 			expect(screen.getByText("Metadata Fields")).toBeInTheDocument();
 		});
 
-		it("should document both custom_metadata and metadata sources", async () => {
+		it("should document both customMetadata and metadata sources", async () => {
 			const user = userEvent.setup();
 			const { container } = renderWithProviders(
 				<TemplateEditor value="" onChange={() => {}} />,
@@ -159,7 +148,7 @@ describe("TemplateEditor", () => {
 			await user.click(screen.getByText("Template Syntax Help"));
 
 			// Should mention both data sources in the text content
-			expect(container.textContent).toContain("custom_metadata.*");
+			expect(container.textContent).toContain("customMetadata.*");
 			expect(container.textContent).toContain("metadata.*");
 		});
 	});
@@ -171,33 +160,35 @@ describe("TemplateEditor", () => {
 			);
 
 			// The preview should render the template with the sample metadata
-			expect(screen.getByText("Attack on Titan")).toBeInTheDocument();
+			// SAMPLE_SERIES_CONTEXT uses "One Piece" as the title
+			expect(screen.getByText("One Piece")).toBeInTheDocument();
 		});
 
 		it("should render template with custom metadata fields", () => {
 			renderWithProviders(
 				<TemplateEditor
-					value="Status: {{custom_metadata.status}}"
+					value="MyField: {{customMetadata.myField}}"
 					onChange={() => {}}
 				/>,
 			);
 
 			// The preview should render with the default sample custom metadata
-			expect(screen.getByText(/Status:.*In Progress/)).toBeInTheDocument();
+			// SAMPLE_SERIES_CONTEXT.customMetadata.myField = "preserved as-is"
+			expect(screen.getByText(/MyField:.*preserved as-is/)).toBeInTheDocument();
 		});
 
 		it("should render template combining both metadata sources", () => {
 			renderWithProviders(
 				<TemplateEditor
-					value="**{{metadata.title}}** - {{custom_metadata.status}}"
+					value="**{{metadata.title}}** - {{customMetadata.myField}}"
 					onChange={() => {}}
 				/>,
 			);
 
-			// Should render both the series title and custom status
-			expect(screen.getByText("Attack on Titan")).toBeInTheDocument();
-			// "In Progress" appears in multiple places (test data section too), so use getAllByText
-			expect(screen.getAllByText(/In Progress/).length).toBeGreaterThan(0);
+			// Should render both the series title and custom metadata
+			expect(screen.getByText("One Piece")).toBeInTheDocument();
+			// "preserved as-is" appears in multiple places (test data section too), so use getAllByText
+			expect(screen.getAllByText(/preserved as-is/).length).toBeGreaterThan(0);
 		});
 
 		it("should render metadata genres array", () => {
@@ -209,8 +200,9 @@ describe("TemplateEditor", () => {
 			);
 
 			// Should render the joined genres from sample metadata
+			// SAMPLE_SERIES_CONTEXT.metadata.genres = ["Action", "Adventure", "Comedy", "Fantasy"]
 			expect(
-				screen.getByText(/Genres:.*Action.*Dark Fantasy.*Post-Apocalyptic/),
+				screen.getByText(/Genres:.*Action.*Adventure.*Comedy.*Fantasy/),
 			).toBeInTheDocument();
 		});
 	});
@@ -219,7 +211,7 @@ describe("TemplateEditor", () => {
 		it("should show valid indicator for valid templates", () => {
 			renderWithProviders(
 				<TemplateEditor
-					value="Hello {{custom_metadata.name}}"
+					value="Hello {{customMetadata.myField}}"
 					onChange={() => {}}
 				/>,
 			);
