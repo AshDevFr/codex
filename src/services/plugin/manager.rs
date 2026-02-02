@@ -55,7 +55,7 @@ use crate::db::entities::plugins;
 use crate::db::repositories::{FailureContext, PluginFailuresRepository, PluginsRepository};
 use crate::services::PluginMetricsService;
 
-use super::handle::{PluginConfig, PluginError, PluginHandle, RetryConfig};
+use super::handle::{PluginConfig, PluginError, PluginHandle};
 use super::process::PluginProcessConfig;
 use super::protocol::{
     MetadataGetParams, MetadataMatchParams, MetadataSearchParams, MetadataSearchResponse,
@@ -267,6 +267,13 @@ impl PluginEntry {
         let new_rate = plugin.rate_limit_requests_per_minute;
 
         if old_rate != new_rate {
+            tracing::info!(
+                plugin_id = %plugin.id,
+                plugin_name = %plugin.name,
+                old_rate = ?old_rate,
+                new_rate = ?new_rate,
+                "Rate limit changed, recreating rate limiter"
+            );
             self.rate_limiter = new_rate.filter(|&r| r > 0).map(TokenBucketRateLimiter::new);
         }
 
@@ -645,13 +652,48 @@ impl PluginManager {
     }
 
     /// Check rate limit for a plugin. Returns Ok(plugin_name) if allowed, Err if rate limited.
+    ///
+    /// This method refreshes the plugin cache if it's stale, ensuring rate limit changes
+    /// made via the API are eventually picked up by worker processes.
     async fn check_rate_limit(&self, plugin_id: Uuid) -> Result<String, PluginManagerError> {
+        // Refresh cache if stale to pick up rate limit changes from other processes
+        if let Err(e) = self.refresh_if_stale().await {
+            warn!(
+                "Failed to refresh plugin cache before rate limit check: {}",
+                e
+            );
+        }
+
         let plugins = self.plugins.read().await;
         if let Some(entry) = plugins.get(&plugin_id) {
+            let rate_config = entry.db_config.rate_limit_requests_per_minute;
+            debug!(
+                plugin_id = %plugin_id,
+                plugin_name = %entry.db_config.name,
+                rate_limit_config = ?rate_config,
+                has_rate_limiter = entry.rate_limiter.is_some(),
+                "Checking rate limit"
+            );
+
             if let Some(ref rate_limiter) = entry.rate_limiter {
+                let available = rate_limiter.available_tokens();
+                debug!(
+                    plugin_id = %plugin_id,
+                    available_tokens = available,
+                    capacity = rate_limiter.capacity(),
+                    "Rate limiter state before acquire"
+                );
+
                 if !rate_limiter.try_acquire() {
                     let rate = entry.db_config.rate_limit_requests_per_minute.unwrap_or(0);
                     let plugin_name = entry.db_config.name.clone();
+
+                    warn!(
+                        plugin_id = %plugin_id,
+                        plugin_name = %plugin_name,
+                        rate_limit = rate,
+                        "Rate limit exceeded - request blocked"
+                    );
 
                     // Record rate limit rejection in metrics
                     if let Some(ref metrics) = self.metrics_service {
@@ -1107,7 +1149,6 @@ impl PluginManager {
             max_failures: self.config.failure_threshold,
             config: Some(plugin.config.clone()),
             credentials,
-            retry_config: RetryConfig::default(),
         })
     }
 
@@ -1254,6 +1295,145 @@ mod tests {
         // Old timestamp means stale
         let old = Instant::now() - Duration::from_millis(200);
         assert!(manager.is_cache_stale(Some(old)));
+    }
+
+    #[test]
+    fn test_rate_limiter_disabled_with_zero() {
+        use chrono::Utc;
+
+        // Create a plugin model with rate_limit = 0 (disabled)
+        let plugin = plugins::Model {
+            id: Uuid::new_v4(),
+            name: "test".to_string(),
+            display_name: "Test".to_string(),
+            description: None,
+            plugin_type: "system".to_string(),
+            command: "node".to_string(),
+            args: serde_json::json!([]),
+            env: serde_json::json!({}),
+            working_directory: None,
+            permissions: serde_json::json!([]),
+            scopes: serde_json::json!([]),
+            library_ids: serde_json::json!([]),
+            credentials: None,
+            credential_delivery: "env".to_string(),
+            config: serde_json::json!({}),
+            manifest: None,
+            enabled: true,
+            health_status: "healthy".to_string(),
+            failure_count: 0,
+            last_failure_at: None,
+            last_success_at: None,
+            disabled_reason: None,
+            rate_limit_requests_per_minute: Some(0), // 0 = disabled
+            search_query_template: None,
+            search_preprocessing_rules: None,
+            auto_match_conditions: None,
+            use_existing_external_id: true,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            created_by: None,
+            updated_by: None,
+        };
+
+        let entry = PluginEntry::new(plugin);
+        assert!(
+            entry.rate_limiter.is_none(),
+            "Rate limiter should be None when rate_limit is 0"
+        );
+    }
+
+    #[test]
+    fn test_rate_limiter_disabled_with_none() {
+        use chrono::Utc;
+
+        // Create a plugin model with rate_limit = None (disabled)
+        let plugin = plugins::Model {
+            id: Uuid::new_v4(),
+            name: "test".to_string(),
+            display_name: "Test".to_string(),
+            description: None,
+            plugin_type: "system".to_string(),
+            command: "node".to_string(),
+            args: serde_json::json!([]),
+            env: serde_json::json!({}),
+            working_directory: None,
+            permissions: serde_json::json!([]),
+            scopes: serde_json::json!([]),
+            library_ids: serde_json::json!([]),
+            credentials: None,
+            credential_delivery: "env".to_string(),
+            config: serde_json::json!({}),
+            manifest: None,
+            enabled: true,
+            health_status: "healthy".to_string(),
+            failure_count: 0,
+            last_failure_at: None,
+            last_success_at: None,
+            disabled_reason: None,
+            rate_limit_requests_per_minute: None, // None = disabled
+            search_query_template: None,
+            search_preprocessing_rules: None,
+            auto_match_conditions: None,
+            use_existing_external_id: true,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            created_by: None,
+            updated_by: None,
+        };
+
+        let entry = PluginEntry::new(plugin);
+        assert!(
+            entry.rate_limiter.is_none(),
+            "Rate limiter should be None when rate_limit is None"
+        );
+    }
+
+    #[test]
+    fn test_rate_limiter_enabled_with_positive_value() {
+        use chrono::Utc;
+
+        // Create a plugin model with rate_limit = 60 (enabled)
+        let plugin = plugins::Model {
+            id: Uuid::new_v4(),
+            name: "test".to_string(),
+            display_name: "Test".to_string(),
+            description: None,
+            plugin_type: "system".to_string(),
+            command: "node".to_string(),
+            args: serde_json::json!([]),
+            env: serde_json::json!({}),
+            working_directory: None,
+            permissions: serde_json::json!([]),
+            scopes: serde_json::json!([]),
+            library_ids: serde_json::json!([]),
+            credentials: None,
+            credential_delivery: "env".to_string(),
+            config: serde_json::json!({}),
+            manifest: None,
+            enabled: true,
+            health_status: "healthy".to_string(),
+            failure_count: 0,
+            last_failure_at: None,
+            last_success_at: None,
+            disabled_reason: None,
+            rate_limit_requests_per_minute: Some(60), // 60 = enabled
+            search_query_template: None,
+            search_preprocessing_rules: None,
+            auto_match_conditions: None,
+            use_existing_external_id: true,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            created_by: None,
+            updated_by: None,
+        };
+
+        let entry = PluginEntry::new(plugin);
+        assert!(
+            entry.rate_limiter.is_some(),
+            "Rate limiter should be Some when rate_limit is positive"
+        );
+        assert_eq!(entry.rate_limiter.as_ref().unwrap().capacity(), 60);
     }
 
     // Integration tests require a database connection

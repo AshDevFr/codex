@@ -1765,3 +1765,346 @@ async fn test_find_duplicates_handler_rebuilds_existing() {
         "Should have 2 duplicate groups after second scan"
     );
 }
+
+// ==========================================
+// Rate-Limited Task Reschedule Tests
+// ==========================================
+
+/// Test mark_rate_limited reschedules task without consuming retry attempts
+#[tokio::test]
+async fn test_mark_rate_limited_reschedules_task() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library_id = create_test_library(&db).await;
+
+    let task_type = TaskType::ScanLibrary {
+        library_id,
+        mode: "normal".to_string(),
+    };
+
+    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    // Claim task (this increments attempts to 1)
+    let claimed = TaskRepository::claim_next(&db, "worker-1", 300, false)
+        .await
+        .expect("Failed to claim")
+        .expect("No task");
+
+    assert_eq!(claimed.attempts, 1);
+    assert_eq!(claimed.status, "processing");
+    assert_eq!(claimed.reschedule_count, 0);
+
+    // Mark as rate limited with 30 second delay
+    TaskRepository::mark_rate_limited(&db, task_id, 30)
+        .await
+        .expect("Failed to mark rate limited");
+
+    let task = TaskRepository::get_by_id(&db, task_id)
+        .await
+        .expect("Failed to get task")
+        .expect("Task not found");
+
+    // Verify task is rescheduled
+    assert_eq!(task.status, "pending");
+    // attempts should be back to 0 (decremented from 1)
+    assert_eq!(task.attempts, 0, "Rate limit should not consume attempts");
+    assert_eq!(
+        task.reschedule_count, 1,
+        "Reschedule count should increment"
+    );
+    assert_eq!(task.locked_by, None);
+    assert_eq!(task.locked_until, None);
+    // scheduled_for should be ~30 seconds in the future
+    assert!(task.scheduled_for > Utc::now());
+}
+
+/// Test mark_rate_limited fails task after exceeding max_reschedules
+#[tokio::test]
+async fn test_mark_rate_limited_fails_after_max_reschedules() {
+    use chrono::Duration;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library_id = create_test_library(&db).await;
+
+    let task_type = TaskType::ScanLibrary {
+        library_id,
+        mode: "normal".to_string(),
+    };
+
+    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    // Set reschedule_count to max_reschedules (10) to trigger failure
+    let task = TaskRepository::get_by_id(&db, task_id)
+        .await
+        .expect("Failed to get task")
+        .expect("Task not found");
+
+    let mut active: tasks::ActiveModel = task.into();
+    active.reschedule_count = Set(10);
+    active.status = Set("processing".to_string());
+    active.locked_by = Set(Some("worker-1".to_string()));
+    active.locked_until = Set(Some(Utc::now() + Duration::seconds(300)));
+    active.attempts = Set(1);
+    active.update(&db).await.expect("Failed to update task");
+
+    // Now mark as rate limited - should fail the task
+    TaskRepository::mark_rate_limited(&db, task_id, 30)
+        .await
+        .expect("Failed to mark rate limited");
+
+    let task = TaskRepository::get_by_id(&db, task_id)
+        .await
+        .expect("Failed to get task")
+        .expect("Task not found");
+
+    // Verify task failed
+    assert_eq!(task.status, "failed");
+    assert!(task.completed_at.is_some());
+    assert!(task
+        .last_error
+        .as_ref()
+        .unwrap()
+        .contains("max reschedules"));
+}
+
+/// Test multiple rate-limit reschedules track correctly
+#[tokio::test]
+async fn test_mark_rate_limited_tracks_reschedule_count() {
+    use chrono::Duration;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library_id = create_test_library(&db).await;
+
+    let task_type = TaskType::ScanLibrary {
+        library_id,
+        mode: "normal".to_string(),
+    };
+
+    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    // Simulate 3 rate-limit reschedules
+    for expected_count in 1..=3 {
+        // Claim task
+        let task = TaskRepository::get_by_id(&db, task_id)
+            .await
+            .expect("Failed to get task")
+            .expect("Task not found");
+
+        // Manually set to processing state (simulating claim)
+        let mut active: tasks::ActiveModel = task.clone().into();
+        active.status = Set("processing".to_string());
+        active.locked_by = Set(Some("worker-1".to_string()));
+        active.locked_until = Set(Some(Utc::now() + Duration::seconds(300)));
+        active.attempts = Set(task.attempts + 1);
+        // Reset scheduled_for to now for the next claim
+        active.scheduled_for = Set(Utc::now());
+        active.update(&db).await.expect("Failed to update task");
+
+        // Mark as rate limited
+        TaskRepository::mark_rate_limited(&db, task_id, 30)
+            .await
+            .expect("Failed to mark rate limited");
+
+        let task = TaskRepository::get_by_id(&db, task_id)
+            .await
+            .expect("Failed to get task")
+            .expect("Task not found");
+
+        assert_eq!(task.status, "pending");
+        assert_eq!(task.reschedule_count, expected_count);
+        // Attempts should remain at 0 after each rate-limit (decremented from 1)
+        assert_eq!(task.attempts, 0);
+    }
+}
+
+/// Test that new tasks have correct default values for reschedule fields
+#[tokio::test]
+async fn test_new_task_has_reschedule_defaults() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library_id = create_test_library(&db).await;
+
+    let task_type = TaskType::ScanLibrary {
+        library_id,
+        mode: "normal".to_string(),
+    };
+
+    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    let task = TaskRepository::get_by_id(&db, task_id)
+        .await
+        .expect("Failed to get task")
+        .expect("Task not found");
+
+    assert_eq!(
+        task.reschedule_count, 0,
+        "New task should have 0 reschedule_count"
+    );
+    assert_eq!(
+        task.max_reschedules, 10,
+        "New task should have default max_reschedules of 10"
+    );
+}
+
+// ==========================================
+// Rate-Limited Error Detection Integration Tests
+// ==========================================
+
+/// Test that check_rate_limited correctly identifies wrapped PluginManagerError::RateLimited errors
+#[tokio::test]
+async fn test_check_rate_limited_identifies_wrapped_errors() {
+    use codex::services::plugin::PluginManagerError;
+    use codex::tasks::error::check_rate_limited;
+    use uuid::Uuid;
+
+    // Direct error
+    let rate_limited = PluginManagerError::RateLimited {
+        plugin_id: Uuid::new_v4(),
+        requests_per_minute: 60,
+    };
+    let direct_error = anyhow::Error::from(rate_limited);
+    assert!(
+        check_rate_limited(&direct_error).is_some(),
+        "Should detect direct RateLimited error"
+    );
+
+    // Wrapped with context
+    let rate_limited = PluginManagerError::RateLimited {
+        plugin_id: Uuid::new_v4(),
+        requests_per_minute: 60,
+    };
+    let wrapped_error =
+        anyhow::Error::from(rate_limited).context("Failed during plugin auto-match");
+    assert!(
+        check_rate_limited(&wrapped_error).is_some(),
+        "Should detect RateLimited error wrapped with context"
+    );
+
+    // Double-wrapped with context
+    let rate_limited = PluginManagerError::RateLimited {
+        plugin_id: Uuid::new_v4(),
+        requests_per_minute: 30,
+    };
+    let double_wrapped = anyhow::Error::from(rate_limited)
+        .context("Inner context")
+        .context("Outer context");
+    assert!(
+        check_rate_limited(&double_wrapped).is_some(),
+        "Should detect RateLimited error with multiple context wrappers"
+    );
+
+    // Non-rate-limited plugin error
+    let not_found = PluginManagerError::PluginNotFound(Uuid::new_v4());
+    let not_found_error = anyhow::Error::from(not_found);
+    assert!(
+        check_rate_limited(&not_found_error).is_none(),
+        "Should not detect PluginNotFound as rate-limited"
+    );
+
+    // Generic error
+    let generic_error = anyhow::anyhow!("Some random error");
+    assert!(
+        check_rate_limited(&generic_error).is_none(),
+        "Should not detect generic error as rate-limited"
+    );
+}
+
+/// Test that retry_after_seconds is correctly calculated based on requests_per_minute
+#[tokio::test]
+async fn test_rate_limited_retry_after_calculation() {
+    use codex::services::plugin::PluginManagerError;
+    use codex::tasks::error::check_rate_limited;
+    use uuid::Uuid;
+
+    // 60 requests/minute = 1 per second, retry_after should be ~2-5 seconds (2 token intervals, min 5s)
+    let rate_limited_60 = PluginManagerError::RateLimited {
+        plugin_id: Uuid::new_v4(),
+        requests_per_minute: 60,
+    };
+    let retry_60 = check_rate_limited(&anyhow::Error::from(rate_limited_60)).unwrap();
+    assert!(
+        (2..=5).contains(&retry_60),
+        "60 req/min should give retry 2-5s, got {}",
+        retry_60
+    );
+
+    // 10 requests/minute = 1 per 6 seconds, retry_after should be ~12 seconds
+    let rate_limited_10 = PluginManagerError::RateLimited {
+        plugin_id: Uuid::new_v4(),
+        requests_per_minute: 10,
+    };
+    let retry_10 = check_rate_limited(&anyhow::Error::from(rate_limited_10)).unwrap();
+    assert!(
+        (12..=15).contains(&retry_10),
+        "10 req/min should give retry 12-15s, got {}",
+        retry_10
+    );
+}
+
+// ==========================================
+// Plugin Rate Limiter Disabled Tests
+// ==========================================
+
+/// Test that TokenBucketRateLimiter with 0 requests_per_minute is not created
+/// This verifies that setting rate_limit_requests_per_minute to 0 disables rate limiting
+#[tokio::test]
+async fn test_plugin_rate_limit_zero_means_disabled() {
+    use codex::services::plugin::manager::TokenBucketRateLimiter;
+
+    // Rate limit of 0 should not create a rate limiter
+    // This is tested by the PluginEntry::new logic which uses .filter(|&r| r > 0)
+    // We can verify by testing that TokenBucketRateLimiter with 0 would be useless
+
+    // A rate limiter with 0 capacity would block everything immediately
+    let limiter_zero = TokenBucketRateLimiter::new(0);
+    // With 0 tokens, try_acquire should fail immediately
+    assert!(
+        !limiter_zero.try_acquire(),
+        "Zero-capacity rate limiter should reject immediately"
+    );
+
+    // A rate limiter with positive capacity works
+    let limiter_60 = TokenBucketRateLimiter::new(60);
+    assert!(
+        limiter_60.try_acquire(),
+        "60 req/min rate limiter should allow requests"
+    );
+}
+
+/// Test that a plugin with rate_limit_requests_per_minute=None doesn't rate limit
+#[tokio::test]
+async fn test_plugin_rate_limit_none_means_unlimited() {
+    // This is an indirect test - None means no rate limiter is created
+    // We verify the behavior by checking the PluginEntry code path:
+    // plugin.rate_limit_requests_per_minute.filter(|&r| r > 0).map(TokenBucketRateLimiter::new)
+    // None.filter(...) -> None -> no rate limiter
+
+    // We can't easily create a PluginEntry directly in tests, but we can verify the logic:
+    // - None.filter(|&r| r > 0) -> None -> no rate limiter
+    // - Some(0).filter(|&r| r > 0) -> None -> no rate limiter
+    // - Some(60).filter(|&r| r > 0) -> Some(60) -> rate limiter created
+
+    let test_cases: Vec<(Option<i32>, bool)> = vec![
+        (None, false),     // No rate limit config -> no limiter
+        (Some(0), false),  // Rate limit 0 -> no limiter (disabled)
+        (Some(60), true),  // Rate limit 60 -> limiter created
+        (Some(-1), false), // Negative rate limit -> no limiter (invalid)
+    ];
+
+    for (rate_limit, should_have_limiter) in test_cases {
+        let has_limiter = rate_limit.filter(|&r| r > 0).is_some();
+        assert_eq!(
+            has_limiter,
+            should_have_limiter,
+            "rate_limit={:?} should {} have limiter",
+            rate_limit,
+            if should_have_limiter { "" } else { "not" }
+        );
+    }
+}

@@ -85,7 +85,14 @@ pub struct Model {
     pub disabled_reason: Option<String>,
 
     // Rate Limiting
-    /// Maximum requests per minute (default: 60, None = no limit)
+    /// Maximum requests per minute for internal rate limiting
+    ///
+    /// - `None` or `Some(0)`: Rate limiting disabled, no restrictions applied
+    /// - `Some(n)` where n > 0: Limit to n requests per minute using token bucket
+    ///
+    /// This controls the internal rate limiter in PluginManager. When a request
+    /// exceeds this limit, `PluginManagerError::RateLimited` is returned and the
+    /// task can be rescheduled for later execution.
     pub rate_limit_requests_per_minute: Option<i32>,
 
     // Search configuration

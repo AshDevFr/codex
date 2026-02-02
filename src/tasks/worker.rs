@@ -22,6 +22,7 @@ use crate::events::{EventBroadcaster, RecordedEvent, TaskProgressEvent};
 use crate::services::plugin::PluginManager;
 use crate::services::PdfPageCache;
 use crate::services::{SettingsService, TaskMetricsService, ThumbnailService};
+use crate::tasks::error::check_rate_limited;
 use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, CleanupBookFilesHandler, CleanupOrphanedFilesHandler,
     CleanupPdfCacheHandler, CleanupSeriesFilesHandler, FindDuplicatesHandler,
@@ -632,7 +633,10 @@ impl TaskWorker {
         Ok(())
     }
 
-    /// Mark a task as failed
+    /// Handle a task failure, checking for rate-limited errors first
+    ///
+    /// If the error is a rate-limited error, the task is rescheduled without consuming
+    /// a retry attempt. Otherwise, the task is marked as failed normally.
     async fn fail_task(
         &self,
         task: &crate::db::entities::tasks::Model,
@@ -642,6 +646,65 @@ impl TaskWorker {
         let completed_at = Utc::now();
         let error_string = error.to_string();
 
+        // Check if this is a rate-limited error
+        if let Some(retry_after_secs) = check_rate_limited(&error) {
+            // Rate-limited: reschedule without consuming retry attempts
+            info!(
+                "Task {} rate-limited, rescheduling in {} seconds",
+                task.id, retry_after_secs
+            );
+
+            // Warn if approaching max reschedules
+            let reschedule_count = task.reschedule_count + 1;
+            if reschedule_count >= task.max_reschedules - 2 {
+                warn!(
+                    "Task {} approaching max reschedules ({}/{})",
+                    task.id, reschedule_count, task.max_reschedules
+                );
+            }
+
+            TaskRepository::mark_rate_limited(&self.db, task.id, retry_after_secs).await?;
+
+            // Record metrics for rate-limited task (as a "soft failure")
+            if let Some(ref metrics_service) = self.task_metrics_service {
+                let duration_ms = (completed_at - started_at).num_milliseconds();
+                let queue_wait_ms = task
+                    .started_at
+                    .map(|s| (s - task.created_at).num_milliseconds())
+                    .unwrap_or(0);
+
+                metrics_service
+                    .record(
+                        task.task_type.clone(),
+                        task.library_id,
+                        false, // not a success
+                        true,  // will be retried
+                        duration_ms,
+                        queue_wait_ms,
+                        0,
+                        0,
+                        Some("rate_limited".to_string()),
+                    )
+                    .await;
+            }
+
+            // Emit task rescheduled event (reuse task progress event with appropriate message)
+            if let Some(ref broadcaster) = self.event_broadcaster {
+                let _ = broadcaster.emit_task(TaskProgressEvent::failed(
+                    task.id,
+                    &task.task_type,
+                    format!("Rate-limited, rescheduled for {} seconds", retry_after_secs),
+                    started_at,
+                    task.library_id,
+                    task.series_id,
+                    task.book_id,
+                ));
+            }
+
+            return Ok(());
+        }
+
+        // Not rate-limited: handle as normal failure
         error!("Task {} failed: {}", task.id, error_string);
         TaskRepository::mark_failed(&self.db, task.id, error_string.clone()).await?;
 

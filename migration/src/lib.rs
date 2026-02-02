@@ -76,6 +76,9 @@ mod m20260131_000041_add_plugin_search_config;
 // Cover lock feature
 mod m20260201_000042_add_cover_lock;
 
+// Rate-limited task reschedule support
+mod m20260202_000043_add_task_reschedule_count;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -140,6 +143,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260131_000041_add_plugin_search_config::Migration),
             // Cover lock feature
             Box::new(m20260201_000042_add_cover_lock::Migration),
+            // Rate-limited task reschedule support
+            Box::new(m20260202_000043_add_task_reschedule_count::Migration),
         ]
     }
 }

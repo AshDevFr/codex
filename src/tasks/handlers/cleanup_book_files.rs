@@ -225,6 +225,8 @@ mod tests {
             attempts: 0,
             max_attempts: 3,
             last_error: None,
+            reschedule_count: 0,
+            max_reschedules: 10,
             result: None,
             scheduled_for: chrono::Utc::now(),
             created_at: chrono::Utc::now(),

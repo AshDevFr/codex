@@ -8,6 +8,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::db::entities::{prelude::*, tasks};
+use crate::tasks::error::DEFAULT_MAX_RESCHEDULES;
 use crate::tasks::types::{TaskStats, TaskType};
 
 /// Repository for Task operations
@@ -93,6 +94,8 @@ impl TaskRepository {
             attempts: Set(0),
             max_attempts: Set(3),
             last_error: Set(None),
+            reschedule_count: Set(0),
+            max_reschedules: Set(DEFAULT_MAX_RESCHEDULES),
             result: Set(None),
             scheduled_for: Set(scheduled_for.unwrap_or(now)),
             created_at: Set(now),
@@ -214,6 +217,8 @@ impl TaskRepository {
                 attempts: Set(0),
                 max_attempts: Set(3),
                 last_error: Set(None),
+                reschedule_count: Set(0),
+                max_reschedules: Set(DEFAULT_MAX_RESCHEDULES),
                 result: Set(None),
                 scheduled_for: Set(scheduled),
                 created_at: Set(now),
@@ -332,6 +337,8 @@ impl TaskRepository {
                                 attempts: row.try_get("", "attempts").ok()?,
                                 max_attempts: row.try_get("", "max_attempts").ok()?,
                                 last_error: row.try_get("", "last_error").ok()?,
+                                reschedule_count: row.try_get("", "reschedule_count").ok()?,
+                                max_reschedules: row.try_get("", "max_reschedules").ok()?,
                                 result: row.try_get("", "result").ok()?,
                                 scheduled_for: row.try_get("", "scheduled_for").ok()?,
                                 created_at: row.try_get("", "created_at").ok()?,
@@ -381,6 +388,8 @@ impl TaskRepository {
                                 attempts: row.try_get("", "attempts").ok()?,
                                 max_attempts: row.try_get("", "max_attempts").ok()?,
                                 last_error: row.try_get("", "last_error").ok()?,
+                                reschedule_count: row.try_get("", "reschedule_count").ok()?,
+                                max_reschedules: row.try_get("", "max_reschedules").ok()?,
                                 result: row.try_get("", "result").ok()?,
                                 scheduled_for: row.try_get("", "scheduled_for").ok()?,
                                 created_at: row.try_get("", "created_at").ok()?,
@@ -475,6 +484,71 @@ impl TaskRepository {
             .update(db)
             .await
             .context("Failed to mark task as failed")?;
+
+        Ok(())
+    }
+
+    /// Mark task as rate-limited (will reschedule with short delay)
+    ///
+    /// Unlike `mark_failed`, this does NOT consume retry attempts.
+    /// Instead, it increments `reschedule_count`. If `reschedule_count`
+    /// exceeds `max_reschedules`, the task is marked as failed.
+    ///
+    /// # Arguments
+    /// * `db` - Database connection
+    /// * `task_id` - Task ID
+    /// * `retry_after_secs` - Delay before rescheduling (default: 30 seconds)
+    pub async fn mark_rate_limited(
+        db: &DatabaseConnection,
+        task_id: Uuid,
+        retry_after_secs: u64,
+    ) -> Result<()> {
+        let task = Tasks::find_by_id(task_id)
+            .one(db)
+            .await
+            .context("Failed to find task")?
+            .ok_or_else(|| anyhow::anyhow!("Task not found"))?;
+
+        let mut active: tasks::ActiveModel = task.clone().into();
+        let new_reschedule_count = task.reschedule_count + 1;
+
+        // Check if we should reschedule or fail
+        if new_reschedule_count <= task.max_reschedules {
+            // Reschedule with the specified delay
+            active.status = Set("pending".to_string());
+            active.scheduled_for = Set(Utc::now() + Duration::seconds(retry_after_secs as i64));
+            active.locked_by = Set(None);
+            active.locked_until = Set(None);
+            active.reschedule_count = Set(new_reschedule_count);
+            // Decrement attempts since mark_rate_limited is called after claim_next incremented it
+            // and rate-limiting shouldn't consume retry attempts
+            active.attempts = Set(task.attempts - 1);
+
+            info!(
+                "Task {} rate-limited, rescheduled in {} seconds (reschedule {}/{})",
+                task_id, retry_after_secs, new_reschedule_count, task.max_reschedules
+            );
+        } else {
+            // Max reschedules reached - fail the task
+            active.status = Set("failed".to_string());
+            active.completed_at = Set(Some(Utc::now()));
+            active.locked_by = Set(None);
+            active.locked_until = Set(None);
+            active.last_error = Set(Some(format!(
+                "Exceeded max reschedules ({}) due to rate limiting",
+                task.max_reschedules
+            )));
+
+            warn!(
+                "Task {} failed permanently after {} rate-limit reschedules",
+                task_id, task.max_reschedules
+            );
+        }
+
+        active
+            .update(db)
+            .await
+            .context("Failed to mark task as rate-limited")?;
 
         Ok(())
     }

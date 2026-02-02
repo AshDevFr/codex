@@ -30,7 +30,7 @@ use crate::services::metadata::preprocessing::{
 };
 use crate::services::metadata::{ApplyOptions, MetadataApplier, SkippedField};
 use crate::services::plugin::protocol::{MetadataGetParams, MetadataSearchParams};
-use crate::services::plugin::PluginManager;
+use crate::services::plugin::{PluginManager, PluginManagerError};
 use crate::services::settings::SettingsService;
 use crate::services::ThumbnailService;
 use crate::tasks::handlers::TaskHandler;
@@ -335,15 +335,28 @@ impl TaskHandler for PluginAutoMatchHandler {
                         response
                     }
                     Err(e) => {
-                        error!(
-                            task_id = %task.id,
-                            plugin_id = %plugin_id,
-                            series_id = %series_id,
-                            query = %search_query,
-                            error = %e,
-                            error_debug = ?e,
-                            "Plugin search failed"
-                        );
+                        // Check if this is a rate limit error (expected, not an error)
+                        let is_rate_limited = matches!(&e, PluginManagerError::RateLimited { .. });
+
+                        if is_rate_limited {
+                            debug!(
+                                task_id = %task.id,
+                                plugin_id = %plugin_id,
+                                series_id = %series_id,
+                                query = %search_query,
+                                "Plugin search rate-limited, will be rescheduled"
+                            );
+                        } else {
+                            error!(
+                                task_id = %task.id,
+                                plugin_id = %plugin_id,
+                                series_id = %series_id,
+                                query = %search_query,
+                                error = %e,
+                                error_debug = ?e,
+                                "Plugin search failed"
+                            );
+                        }
                         return Err(e).context(format!(
                             "Failed to search for metadata (plugin: {}, query: '{}')",
                             plugin_id, search_query

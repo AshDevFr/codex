@@ -31,6 +31,10 @@ pub struct Model {
     pub max_attempts: i32,
     pub last_error: Option<String>,
 
+    // Rate-limit reschedule handling
+    pub reschedule_count: i32,
+    pub max_reschedules: i32,
+
     // Results (optional)
     pub result: Option<Json>,
 
