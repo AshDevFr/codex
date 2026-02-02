@@ -1491,7 +1491,7 @@ async fn test_komga_get_current_user() {
 
     assert_eq!(status, StatusCode::OK);
     let user = response.unwrap();
-    assert_eq!(user.email, "admin"); // username used as email in test
+    assert_eq!(user.email, "admin@example.com");
     assert!(user.roles.contains(&"ADMIN".to_string()));
     assert!(user.shared_all_libraries);
 }
@@ -1514,7 +1514,7 @@ async fn test_komga_get_current_user_basic_auth() {
 
     assert_eq!(status, StatusCode::OK);
     let user = response.unwrap();
-    assert_eq!(user.email, "admin");
+    assert_eq!(user.email, "admin@example.com");
     assert!(user.roles.contains(&"ADMIN".to_string()));
 }
 
@@ -1585,7 +1585,7 @@ async fn test_komga_v2_users_me_for_komic_connection_test() {
 
     assert_eq!(status, StatusCode::OK);
     let user = response.unwrap();
-    assert_eq!(user.email, "admin");
+    assert_eq!(user.email, "admin@example.com");
     assert!(user.roles.contains(&"ADMIN".to_string()));
 }
 

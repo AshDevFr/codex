@@ -10657,6 +10657,38 @@
         ]
       }
     },
+    "/api/v1/user": {
+      "get": {
+        "tags": [
+          "Current User"
+        ],
+        "summary": "Get the currently authenticated user's profile",
+        "operationId": "get_current_user",
+        "responses": {
+          "200": {
+            "description": "Current user's profile with sharing tags",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDetailDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/user/preferences": {
       "get": {
         "tags": [

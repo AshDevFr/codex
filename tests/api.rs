@@ -11,6 +11,7 @@ mod api {
     mod books;
     mod bulk_operations;
     mod covers;
+    mod current_user;
     mod duplicates;
     mod external_links;
     mod external_ratings;

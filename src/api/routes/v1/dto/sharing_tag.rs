@@ -84,7 +84,7 @@ pub struct UpdateSharingTagRequest {
 }
 
 /// User sharing tag grant data transfer object
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserSharingTagGrantDto {
     /// Unique grant identifier

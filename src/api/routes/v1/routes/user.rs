@@ -15,12 +15,15 @@ use std::sync::Arc;
 /// All routes are protected (authentication required).
 ///
 /// Routes:
+/// - Profile: /user (GET)
 /// - Preferences: /user/preferences
 /// - Ratings: /user/ratings
 /// - Sharing tags: /user/sharing-tags
 /// - API keys: /api-keys
 pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
+        // Current user profile route
+        .route("/user", get(handlers::get_current_user))
         // User ratings routes
         .route("/user/ratings", get(handlers::list_user_ratings))
         // Current user's sharing tags route

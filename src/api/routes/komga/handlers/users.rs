@@ -59,7 +59,7 @@ pub async fn get_current_user(
 
     // Convert Codex auth context to Komga user DTO
     // Note: auth.role is a UserRole enum, so we convert it to string
-    let user_dto = KomgaUserDto::from_codex(auth.user_id, &auth.username, &auth.role.to_string());
+    let user_dto = KomgaUserDto::from_codex(auth.user_id, &auth.email, &auth.role.to_string());
 
     Ok(Json(user_dto))
 }

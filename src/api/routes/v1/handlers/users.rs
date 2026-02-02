@@ -32,6 +32,59 @@ fn parse_permissions_json(json: &serde_json::Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Get the currently authenticated user's profile
+#[utoipa::path(
+    get,
+    path = "/api/v1/user",
+    responses(
+        (status = 200, description = "Current user's profile with sharing tags", body = UserDetailDto),
+        (status = 401, description = "Unauthorized"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Current User"
+)]
+pub async fn get_current_user(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+) -> Result<Json<UserDetailDto>, ApiError> {
+    // Fetch full user details from database (auth context has cached subset)
+    let user = UserRepository::get_by_id(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch user: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("User not found".to_string()))?;
+
+    // Fetch sharing tag grants for the user
+    let grants_with_tags =
+        SharingTagRepository::get_grants_with_tags_for_user(&state.db, auth.user_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch user sharing tags: {}", e)))?;
+
+    let sharing_tags: Vec<UserSharingTagGrantDto> = grants_with_tags
+        .into_iter()
+        .map(|(grant, tag)| UserSharingTagGrantDto::from_models(grant, tag))
+        .collect();
+
+    let role = user.get_role();
+    let permissions = parse_permissions_json(&user.permissions);
+    let dto = UserDetailDto {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role,
+        permissions,
+        is_active: user.is_active,
+        last_login_at: user.last_login_at,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+        sharing_tags,
+    };
+
+    Ok(Json(dto))
+}
+
 /// List all users (admin only) with pagination and filtering
 #[utoipa::path(
     get,

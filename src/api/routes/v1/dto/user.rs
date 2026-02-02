@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 /// User data transfer object
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserDto {
     /// Unique user identifier
@@ -46,7 +46,7 @@ pub struct UserDto {
 }
 
 /// User detail DTO with sharing tag grants (for single user view)
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserDetailDto {
     /// Unique user identifier

@@ -201,6 +201,9 @@ The following paths are exempt from rate limiting:
         v1::handlers::delete_tag,
         v1::handlers::cleanup_tags,
 
+        // Current user endpoint
+        v1::handlers::get_current_user,
+
         // User rating endpoints
         v1::handlers::get_series_rating,
         v1::handlers::set_series_rating,

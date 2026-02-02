@@ -19,6 +19,7 @@ const USER_CACHE_TTL_SECS: i64 = 60;
 #[derive(Clone)]
 struct CachedUser {
     username: String,
+    email: String,
     role: UserRole,
     custom_permissions: Vec<Permission>,
     is_active: bool,
@@ -58,6 +59,7 @@ impl UserAuthCache {
         &self,
         user_id: Uuid,
         username: String,
+        email: String,
         role: UserRole,
         permissions: Vec<Permission>,
         is_active: bool,
@@ -66,6 +68,7 @@ impl UserAuthCache {
             user_id,
             CachedUser {
                 username,
+                email,
                 role,
                 custom_permissions: permissions,
                 is_active,
@@ -92,6 +95,7 @@ impl UserAuthCache {
 pub struct AuthContext {
     pub user_id: Uuid,
     pub username: String,
+    pub email: String,
     /// User's role (Reader, Maintainer, Admin)
     pub role: UserRole,
     /// Custom permissions that extend the role's base permissions
@@ -274,6 +278,7 @@ async fn extract_from_jwt(token: &str, state: &AppState) -> Result<AuthContext, 
         return Ok(AuthContext {
             user_id,
             username: cached.username,
+            email: cached.email,
             role: cached.role,
             custom_permissions: cached.custom_permissions,
             auth_method: AuthMethod::Jwt,
@@ -298,6 +303,7 @@ async fn extract_from_jwt(token: &str, state: &AppState) -> Result<AuthContext, 
     state.user_auth_cache.insert(
         user_id,
         user.username.clone(),
+        user.email.clone(),
         role,
         custom_permissions.clone(),
         user.is_active,
@@ -313,6 +319,7 @@ async fn extract_from_jwt(token: &str, state: &AppState) -> Result<AuthContext, 
     Ok(AuthContext {
         user_id,
         username: user.username,
+        email: user.email,
         role,
         custom_permissions,
         auth_method: AuthMethod::Jwt,
@@ -383,6 +390,7 @@ async fn extract_from_api_key(api_key: &str, state: &AppState) -> Result<AuthCon
     Ok(AuthContext {
         user_id: user.id,
         username: user.username,
+        email: user.email,
         role,
         custom_permissions,
         auth_method: AuthMethod::ApiKey,
@@ -452,6 +460,7 @@ async fn extract_from_basic_auth(
     Ok(AuthContext {
         user_id: user.id,
         username: user.username,
+        email: user.email,
         role,
         custom_permissions,
         auth_method: AuthMethod::BasicAuth,
