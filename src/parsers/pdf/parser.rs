@@ -5,7 +5,7 @@ use crate::parsers::{BookMetadata, FileFormat, ImageFormat, PageInfo};
 use crate::utils::{hash_file, CodexError, Result};
 use chrono::{DateTime, Utc};
 use image::GenericImageView;
-use lopdf::Document;
+use lopdf::{Document, Object, ObjectId};
 use std::path::Path;
 
 /// Default DPI for rendering PDF pages when no embedded image is available
@@ -63,15 +63,23 @@ impl PdfParser {
         extract_isbns(&all_text, false)
     }
 
-    /// Extract images from a PDF page
+    /// Extract images from a PDF page by page index (0-based)
     fn extract_images_from_page(doc: &Document, page_num: u32) -> Result<Vec<PdfImageData>> {
-        let mut images = Vec::new();
+        // Get all page IDs using our custom method that handles indirect Kids arrays
+        let page_ids = Self::collect_page_ids(doc);
 
-        // Get the page dictionary
-        let page_id = match doc.page_iter().nth(page_num as usize) {
-            Some(id) => id,
-            None => return Ok(images),
+        // Get the page ID for this index
+        let page_id = match page_ids.get(page_num as usize) {
+            Some(id) => *id,
+            None => return Ok(Vec::new()),
         };
+
+        Self::extract_images_from_page_id(doc, page_id)
+    }
+
+    /// Extract images from a PDF page by page ObjectId
+    fn extract_images_from_page_id(doc: &Document, page_id: ObjectId) -> Result<Vec<PdfImageData>> {
+        let mut images = Vec::new();
 
         // Try to get the page object
         let page = match doc.get_object(page_id) {
@@ -236,7 +244,10 @@ impl FormatParser for PdfParser {
         let isbns = Self::extract_isbns_from_pdf(&doc);
 
         // Get the actual page count from the PDF
-        let page_count = doc.get_pages().len();
+        // Note: We use a custom page counter because lopdf's get_pages() doesn't handle
+        // PDFs where the Kids array is stored as an indirect reference (object reference)
+        // instead of an inline array. This is valid per PDF spec but lopdf doesn't support it.
+        let page_count = Self::count_pages(&doc);
 
         // Build page info for each PDF page
         // We create an entry for every page regardless of whether it has an embedded image
@@ -258,6 +269,156 @@ impl FormatParser for PdfParser {
 }
 
 impl PdfParser {
+    /// Count the total number of pages in the PDF document
+    ///
+    /// This function manually traverses the page tree to count pages because
+    /// lopdf's `get_pages()` method doesn't handle PDFs where the `Kids` array
+    /// in the Pages dictionary is stored as an indirect reference instead of
+    /// an inline array. This is a valid PDF structure per the PDF specification.
+    fn count_pages(doc: &Document) -> usize {
+        // First try lopdf's built-in method (works for most PDFs)
+        let lopdf_count = doc.get_pages().len();
+        if lopdf_count > 0 {
+            return lopdf_count;
+        }
+
+        // Fallback: manually traverse the page tree for PDFs with indirect Kids arrays
+        Self::count_pages_from_catalog(doc).unwrap_or(0)
+    }
+
+    /// Count pages by traversing from the catalog root
+    fn count_pages_from_catalog(doc: &Document) -> Option<usize> {
+        // Get Root -> Pages reference from trailer
+        let root_ref = doc.trailer.get(b"Root").ok()?.as_reference().ok()?;
+        let catalog = doc.get_object(root_ref).ok()?.as_dict().ok()?;
+        let pages_ref = catalog.get(b"Pages").ok()?.as_reference().ok()?;
+
+        Some(Self::count_pages_in_node(doc, pages_ref))
+    }
+
+    /// Recursively count pages in a page tree node
+    fn count_pages_in_node(doc: &Document, node_id: ObjectId) -> usize {
+        let node = match doc.get_object(node_id) {
+            Ok(obj) => obj,
+            Err(_) => return 0,
+        };
+
+        let node_dict = match node.as_dict() {
+            Ok(d) => d,
+            Err(_) => return 0,
+        };
+
+        // Check the Type field to determine if this is a Page or Pages node
+        let node_type = node_dict
+            .get(b"Type")
+            .ok()
+            .and_then(|t| t.as_name_str().ok())
+            .unwrap_or("");
+
+        match node_type {
+            "Page" => 1,
+            "Pages" => {
+                // Get Kids array - may be inline or an indirect reference
+                let kids = match node_dict.get(b"Kids") {
+                    Ok(Object::Array(arr)) => arr.clone(),
+                    Ok(Object::Reference(ref_id)) => {
+                        // Dereference the Kids array (this is the case lopdf doesn't handle)
+                        match doc.get_object(*ref_id) {
+                            Ok(obj) => match obj.as_array() {
+                                Ok(arr) => arr.clone(),
+                                Err(_) => return 0,
+                            },
+                            Err(_) => return 0,
+                        }
+                    }
+                    _ => return 0,
+                };
+
+                // Recursively count pages in all children
+                let mut count = 0;
+                for kid in kids {
+                    if let Ok(kid_id) = kid.as_reference() {
+                        count += Self::count_pages_in_node(doc, kid_id);
+                    }
+                }
+                count
+            }
+            _ => 0,
+        }
+    }
+
+    /// Collect all page object IDs in document order
+    ///
+    /// This function traverses the page tree and collects all Page object IDs,
+    /// handling the case where Kids arrays are indirect references.
+    fn collect_page_ids(doc: &Document) -> Vec<ObjectId> {
+        // First try lopdf's built-in method
+        let lopdf_pages = doc.get_pages();
+        if !lopdf_pages.is_empty() {
+            // get_pages() returns BTreeMap<page_number, ObjectId> - we want the ObjectIds in order
+            return lopdf_pages.values().copied().collect();
+        }
+
+        // Fallback: manually traverse the page tree
+        Self::collect_page_ids_from_catalog(doc).unwrap_or_default()
+    }
+
+    /// Collect page IDs by traversing from the catalog root
+    fn collect_page_ids_from_catalog(doc: &Document) -> Option<Vec<ObjectId>> {
+        let root_ref = doc.trailer.get(b"Root").ok()?.as_reference().ok()?;
+        let catalog = doc.get_object(root_ref).ok()?.as_dict().ok()?;
+        let pages_ref = catalog.get(b"Pages").ok()?.as_reference().ok()?;
+
+        let mut page_ids = Vec::new();
+        Self::collect_page_ids_in_node(doc, pages_ref, &mut page_ids);
+        Some(page_ids)
+    }
+
+    /// Recursively collect page IDs from a page tree node
+    fn collect_page_ids_in_node(doc: &Document, node_id: ObjectId, page_ids: &mut Vec<ObjectId>) {
+        let node = match doc.get_object(node_id) {
+            Ok(obj) => obj,
+            Err(_) => return,
+        };
+
+        let node_dict = match node.as_dict() {
+            Ok(d) => d,
+            Err(_) => return,
+        };
+
+        let node_type = node_dict
+            .get(b"Type")
+            .ok()
+            .and_then(|t| t.as_name_str().ok())
+            .unwrap_or("");
+
+        match node_type {
+            "Page" => {
+                page_ids.push(node_id);
+            }
+            "Pages" => {
+                let kids = match node_dict.get(b"Kids") {
+                    Ok(Object::Array(arr)) => arr.clone(),
+                    Ok(Object::Reference(ref_id)) => match doc.get_object(*ref_id) {
+                        Ok(obj) => match obj.as_array() {
+                            Ok(arr) => arr.clone(),
+                            Err(_) => return,
+                        },
+                        Err(_) => return,
+                    },
+                    _ => return,
+                };
+
+                for kid in kids {
+                    if let Ok(kid_id) = kid.as_reference() {
+                        Self::collect_page_ids_in_node(doc, kid_id, page_ids);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Build page info list for all PDF pages
     ///
     /// This creates a PageInfo entry for every page in the PDF. For pages with
@@ -424,8 +585,8 @@ fn try_extract_embedded_image<P: AsRef<Path>>(
 ) -> anyhow::Result<Vec<u8>> {
     let doc = Document::load(path).map_err(|e| anyhow::anyhow!("Failed to load PDF: {}", e))?;
 
-    // Validate page number
-    let page_count = doc.get_pages().len();
+    // Validate page number using our custom page counter that handles indirect Kids arrays
+    let page_count = PdfParser::count_pages(&doc);
     if page_number < 1 || page_number as usize > page_count {
         anyhow::bail!(
             "Page {} out of range (PDF has {} pages)",
@@ -569,6 +730,22 @@ mod tests {
         let path = Path::new("/test/file.pdf");
         let pages = PdfParser::build_page_info_list(&doc, path, 0);
         assert!(pages.is_empty());
+    }
+
+    #[test]
+    fn test_count_pages_empty_document() {
+        // Create a minimal PDF document with no pages
+        let doc = Document::with_version("1.4");
+        let count = PdfParser::count_pages(&doc);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_collect_page_ids_empty_document() {
+        // Create a minimal PDF document with no pages
+        let doc = Document::with_version("1.4");
+        let page_ids = PdfParser::collect_page_ids(&doc);
+        assert!(page_ids.is_empty());
     }
 
     // Note: Testing PDF page extraction with actual files requires
