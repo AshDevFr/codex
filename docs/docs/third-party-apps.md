@@ -106,7 +106,9 @@ When enabled, the following Komga-compatible endpoints are available at `/{prefi
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/books/{id}/read-progress` | PATCH | Update reading progress |
-| `/books/{id}/read-progress` | DELETE | Mark as unread |
+| `/books/{id}/read-progress` | DELETE | Mark book as unread |
+| `/series/{id}/read-progress` | POST | Mark all books in series as read |
+| `/series/{id}/read-progress` | DELETE | Mark all books in series as unread |
 
 ### Users
 

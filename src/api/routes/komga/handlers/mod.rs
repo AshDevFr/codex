@@ -18,7 +18,9 @@ pub use books::{
 };
 pub use libraries::{get_library, get_library_thumbnail, list_libraries};
 pub use pages::{get_page, get_page_thumbnail, list_pages};
-pub use read_progress::{delete_progress, update_progress};
+pub use read_progress::{
+    delete_progress, mark_series_as_read, mark_series_as_unread, update_progress,
+};
 pub use series::{
     get_series, get_series_books, get_series_new, get_series_thumbnail, get_series_updated,
     list_series, search_series,
@@ -45,7 +47,10 @@ pub use libraries::{__path_get_library, __path_get_library_thumbnail, __path_lis
 pub use pages::{__path_get_page, __path_get_page_thumbnail, __path_list_pages};
 #[doc(hidden)]
 #[allow(unused_imports)]
-pub use read_progress::{__path_delete_progress, __path_update_progress};
+pub use read_progress::{
+    __path_delete_progress, __path_mark_series_as_read, __path_mark_series_as_unread,
+    __path_update_progress,
+};
 #[doc(hidden)]
 #[allow(unused_imports)]
 pub use series::{

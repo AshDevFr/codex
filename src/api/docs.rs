@@ -462,6 +462,8 @@ The following paths are exempt from rate limiting:
         komga::handlers::get_page_thumbnail,
         komga::handlers::update_progress,
         komga::handlers::delete_progress,
+        komga::handlers::mark_series_as_read,
+        komga::handlers::mark_series_as_unread,
         komga::handlers::get_current_user,
     ),
     components(

@@ -1729,3 +1729,227 @@ async fn test_komga_authors_v2_empty() {
     let authors = response.unwrap();
     assert_eq!(authors.len(), 0);
 }
+
+// ============================================================================
+// Series Read Progress Tests
+// ============================================================================
+
+/// Test POST /series/{id}/read-progress marks all books in series as read
+#[tokio::test]
+async fn test_komga_mark_series_as_read() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create library, series, and multiple books
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+
+    // Create 3 books in the series
+    for i in 1..=3 {
+        let book = create_test_book(
+            series.id,
+            library.id,
+            &format!("/comics/Batman/issue{}.cbz", i),
+            &format!("issue{}.cbz", i),
+            &format!("hash{}", i),
+            "cbz",
+            50, // 50 pages each
+        );
+        BookRepository::create(&db, &book, None).await.unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Mark series as read
+    let uri = format!("/komga/api/v1/series/{}/read-progress", series.id);
+    let request = post_request_with_auth(&uri, &token);
+    let (status, _) = make_raw_request(app, request).await;
+
+    // Komga returns 204 No Content on success
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+/// Test POST /series/{id}/read-progress without auth returns 401
+#[tokio::test]
+async fn test_komga_mark_series_as_read_without_auth() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router_with_komga(state);
+
+    // Try to mark series as read without auth
+    let uri = format!("/komga/api/v1/series/{}/read-progress", series.id);
+    let request = post_request(&uri);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+/// Test POST /series/{id}/read-progress with non-existent series returns 404
+#[tokio::test]
+async fn test_komga_mark_series_as_read_not_found() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Try to mark non-existent series as read
+    let fake_id = uuid::Uuid::new_v4();
+    let uri = format!("/komga/api/v1/series/{}/read-progress", fake_id);
+    let request = post_request_with_auth(&uri, &token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+/// Test DELETE /series/{id}/read-progress marks all books in series as unread
+#[tokio::test]
+async fn test_komga_mark_series_as_unread() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create library, series, and multiple books
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+
+    // Create 3 books in the series
+    for i in 1..=3 {
+        let book = create_test_book(
+            series.id,
+            library.id,
+            &format!("/comics/Batman/issue{}.cbz", i),
+            &format!("issue{}.cbz", i),
+            &format!("hash{}", i),
+            "cbz",
+            50,
+        );
+        BookRepository::create(&db, &book, None).await.unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Mark series as unread
+    let uri = format!("/komga/api/v1/series/{}/read-progress", series.id);
+    let request = delete_request_with_auth(&uri, &token);
+    let (status, _) = make_raw_request(app, request).await;
+
+    // Komga returns 204 No Content on success
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+/// Test DELETE /series/{id}/read-progress without auth returns 401
+#[tokio::test]
+async fn test_komga_mark_series_as_unread_without_auth() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router_with_komga(state);
+
+    // Try to mark series as unread without auth
+    let uri = format!("/komga/api/v1/series/{}/read-progress", series.id);
+    let request = delete_request(&uri);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+/// Test DELETE /series/{id}/read-progress with non-existent series returns 404
+#[tokio::test]
+async fn test_komga_mark_series_as_unread_not_found() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Try to mark non-existent series as unread
+    let fake_id = uuid::Uuid::new_v4();
+    let uri = format!("/komga/api/v1/series/{}/read-progress", fake_id);
+    let request = delete_request_with_auth(&uri, &token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+/// Test that marking series as read is reflected in series response
+#[tokio::test]
+async fn test_komga_series_read_progress_reflected_in_response() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create library, series, and books
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+
+    // Create 3 books
+    for i in 1..=3 {
+        let book = create_test_book(
+            series.id,
+            library.id,
+            &format!("/comics/Batman/issue{}.cbz", i),
+            &format!("issue{}.cbz", i),
+            &format!("hash{}", i),
+            "cbz",
+            50,
+        );
+        BookRepository::create(&db, &book, None).await.unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // First, mark series as read
+    {
+        let app = create_test_router_with_komga(state.clone());
+        let uri = format!("/komga/api/v1/series/{}/read-progress", series.id);
+        let request = post_request_with_auth(&uri, &token);
+        let (status, _) = make_raw_request(app, request).await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+    }
+
+    // Then, verify the series shows all books as read
+    {
+        let app = create_test_router_with_komga(state);
+        let uri = format!("/komga/api/v1/series/{}", series.id);
+        let request = get_request_with_auth(&uri, &token);
+        let (status, response): (StatusCode, Option<KomgaSeriesDto>) =
+            make_json_request(app, request).await;
+
+        assert_eq!(status, StatusCode::OK);
+        let series_dto = response.unwrap();
+
+        // All books should be marked as read
+        assert_eq!(series_dto.books_count, 3);
+        assert_eq!(series_dto.books_read_count, 3);
+        assert_eq!(series_dto.books_unread_count, 0);
+        assert_eq!(series_dto.books_in_progress_count, 0);
+    }
+}

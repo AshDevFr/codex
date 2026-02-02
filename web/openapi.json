@@ -13336,6 +13336,104 @@
         ]
       }
     },
+    "/{prefix}/api/v1/series/{series_id}/read-progress": {
+      "post": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "Mark all books in a series as read",
+        "description": "Marks all books in a series as completed (read) for the current user.\nThis is equivalent to marking each book individually as completed.\n\n## Endpoint\n`POST /{prefix}/api/v1/series/{seriesId}/read-progress`\n\n## Response\n- 204 No Content on success (Komga behavior)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "komga_mark_series_as_read",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komga)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Series marked as read"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "Mark all books in a series as unread",
+        "description": "Removes all reading progress for all books in a series, effectively marking\nthe entire series as unread for the current user.\n\n## Endpoint\n`DELETE /{prefix}/api/v1/series/{seriesId}/read-progress`\n\n## Response\n- 204 No Content on success\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "komga_mark_series_as_unread",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komga)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Series marked as unread"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/{prefix}/api/v1/series/{series_id}/thumbnail": {
       "get": {
         "tags": [

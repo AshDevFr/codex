@@ -4628,6 +4628,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/{prefix}/api/v1/series/{series_id}/read-progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark all books in a series as read
+         * @description Marks all books in a series as completed (read) for the current user.
+         *     This is equivalent to marking each book individually as completed.
+         *
+         *     ## Endpoint
+         *     `POST /{prefix}/api/v1/series/{seriesId}/read-progress`
+         *
+         *     ## Response
+         *     - 204 No Content on success (Komga behavior)
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        post: operations["komga_mark_series_as_read"];
+        /**
+         * Mark all books in a series as unread
+         * @description Removes all reading progress for all books in a series, effectively marking
+         *     the entire series as unread for the current user.
+         *
+         *     ## Endpoint
+         *     `DELETE /{prefix}/api/v1/series/{seriesId}/read-progress`
+         *
+         *     ## Response
+         *     - 204 No Content on success
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        delete: operations["komga_mark_series_as_unread"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/{prefix}/api/v1/series/{series_id}/thumbnail": {
         parameters: {
             query?: never;
@@ -22825,6 +22873,80 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["KomgaPage_KomgaBookDto"];
                 };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    komga_mark_series_as_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komga) */
+                prefix: string;
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Series marked as read */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    komga_mark_series_as_unread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komga) */
+                prefix: string;
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Series marked as unread */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {

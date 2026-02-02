@@ -10,7 +10,7 @@ use crate::api::{
     extractors::{AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
-use crate::db::repositories::{BookRepository, ReadProgressRepository};
+use crate::db::repositories::{BookRepository, ReadProgressRepository, SeriesRepository};
 use crate::require_permission;
 use axum::{
     extract::{Path, State},
@@ -181,4 +181,138 @@ mod tests {
         assert!(dto.page.is_none());
         assert_eq!(dto.completed, Some(true));
     }
+}
+
+// ============================================================================
+// Series Read Progress Handlers
+// ============================================================================
+
+/// Mark all books in a series as read
+///
+/// Marks all books in a series as completed (read) for the current user.
+/// This is equivalent to marking each book individually as completed.
+///
+/// ## Endpoint
+/// `POST /{prefix}/api/v1/series/{seriesId}/read-progress`
+///
+/// ## Response
+/// - 204 No Content on success (Komga behavior)
+///
+/// ## Authentication
+/// - Bearer token (JWT)
+/// - Basic Auth
+/// - API Key
+#[utoipa::path(
+    post,
+    path = "/{prefix}/api/v1/series/{series_id}/read-progress",
+    responses(
+        (status = 204, description = "Series marked as read"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Series not found"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
+        ("series_id" = Uuid, Path, description = "Series ID")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Komga"
+)]
+pub async fn mark_series_as_read(
+    State(state): State<Arc<AuthState>>,
+    FlexibleAuthContext(auth): FlexibleAuthContext,
+    Path(series_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    let user_id = auth.user_id;
+
+    // Verify series exists
+    let _series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Get all books in the series (excluding deleted)
+    let books = BookRepository::list_by_series(&state.db, series_id, false)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?;
+
+    // Build list of (book_id, page_count) tuples for marking as read
+    let book_data: Vec<(Uuid, i32)> = books.iter().map(|b| (b.id, b.page_count)).collect();
+
+    // Mark all books as read
+    ReadProgressRepository::mark_series_as_read(&state.db, user_id, book_data)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to mark series as read: {}", e)))?;
+
+    // Komga returns 204 No Content on success
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Mark all books in a series as unread
+///
+/// Removes all reading progress for all books in a series, effectively marking
+/// the entire series as unread for the current user.
+///
+/// ## Endpoint
+/// `DELETE /{prefix}/api/v1/series/{seriesId}/read-progress`
+///
+/// ## Response
+/// - 204 No Content on success
+///
+/// ## Authentication
+/// - Bearer token (JWT)
+/// - Basic Auth
+/// - API Key
+#[utoipa::path(
+    delete,
+    path = "/{prefix}/api/v1/series/{series_id}/read-progress",
+    responses(
+        (status = 204, description = "Series marked as unread"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Series not found"),
+    ),
+    params(
+        ("prefix" = String, Path, description = "Komga API prefix (default: komga)"),
+        ("series_id" = Uuid, Path, description = "Series ID")
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Komga"
+)]
+pub async fn mark_series_as_unread(
+    State(state): State<Arc<AuthState>>,
+    FlexibleAuthContext(auth): FlexibleAuthContext,
+    Path(series_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    let user_id = auth.user_id;
+
+    // Verify series exists
+    let _series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Get all books in the series (excluding deleted)
+    let books = BookRepository::list_by_series(&state.db, series_id, false)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?;
+
+    // Get book IDs for deletion
+    let book_ids: Vec<Uuid> = books.iter().map(|b| b.id).collect();
+
+    // Delete all reading progress for these books
+    ReadProgressRepository::mark_series_as_unread(&state.db, user_id, book_ids)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to mark series as unread: {}", e)))?;
+
+    // Komga returns 204 No Content on success
+    Ok(StatusCode::NO_CONTENT)
 }
