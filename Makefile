@@ -550,6 +550,10 @@ release-prepare: ## Prepare a release (usage: make release-prepare VERSION=1.0.0
 	@cargo build --quiet 2>/dev/null || cargo build
 	@echo "$(GREEN)✓$(NC) Updated Cargo.lock"
 
+	@# Regenerate OpenAPI spec and TypeScript types
+	@$(MAKE) openapi-all
+	@echo "$(GREEN)✓$(NC) Regenerated OpenAPI spec and TypeScript types"
+
 	@# Generate changelog (skip if already modified)
 	@if git diff --quiet CHANGELOG.md 2>/dev/null && git diff --cached --quiet CHANGELOG.md 2>/dev/null; then \
 		$(MAKE) changelog-release VERSION=$(VERSION); \
